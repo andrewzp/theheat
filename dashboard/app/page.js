@@ -10,6 +10,8 @@ import { RunsTable } from "./components/RunsTable.js"
 import { SourcesView } from "./components/SourcesView.js"
 import { SourceHealthContent } from "./health/page.js"
 import { ProductHealthPanel } from "./components/ProductHealthPanel.js"
+import { CostPanel } from "./components/CostPanel.js"
+import { COST_SCENARIO } from "../lib/usage-cost-contract.js"
 import { SuppressedView } from "./components/SuppressedView.js"
 import { hot10IsStale, hot10StaleDays, timeAgo, todayTweetCount } from "../lib/format.js"
 import { draftReviewControls, draftTextLength, revisionKey } from "../lib/draft-review-ui.js"
@@ -74,7 +76,7 @@ export default function Dashboard() {
       const dashboardUrl = suppressionsSourceFilter
         ? `/api/dashboard?limit=50&source=${encodeURIComponent(suppressionsSourceFilter)}`
         : "/api/dashboard?limit=50"
-      const dashboardRes = await fetch(dashboardUrl)
+      const dashboardRes = await fetch(`${dashboardUrl}&cost_scenario=${encodeURIComponent(COST_SCENARIO.scenario)}`)
       if (!dashboardRes.ok) {
         throw new Error(`dashboard refresh failed: ${dashboardRes.status}`)
       }
@@ -86,6 +88,7 @@ export default function Dashboard() {
         runs: payload.runs || [],
         runsError: payload.runsError,
         productHealth: payload.productHealth,
+        costEvidence: payload.costEvidence,
         deployment: payload.deployment,
       })
       // Show the review queue in time order (newest first) — the API returns
@@ -393,7 +396,10 @@ export default function Dashboard() {
         )}
 
         {!loading && ["dashboard", "health"].includes(activeTab) && (
+          <>
           <ProductHealthPanel health={data?.productHealth} config={modelConfig} deployment={data?.deployment} stale={Boolean(refreshError)} />
+          <CostPanel evidence={data?.costEvidence} stale={Boolean(refreshError)} loading={loading} />
+          </>
         )}
 
         {loading ? (

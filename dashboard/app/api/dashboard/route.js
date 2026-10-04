@@ -7,6 +7,7 @@ import { projectStateForDashboard } from "../../../lib/projection.js"
 import { hasUnresolvedPublish, projectDraft } from "../../../lib/draft-revisions.js"
 import { buildRuntimeConfig, dashboardDeployment } from "../../../lib/runtime-inventory.js"
 import { buildProductHealth } from "../../../lib/product-health.js"
+import { buildCostEvidence } from "../../../lib/cost-evidence.js"
 
 export const runtime = "nodejs"
 
@@ -149,11 +150,13 @@ export async function GET(request) {
     config: buildRuntimeConfig(),
     deployment: dashboardDeployment(),
     productHealth: null,
+    costEvidence: buildCostEvidence(null),
     runs: [],
   }
 
   try {
     const state = await readStateStore()
+    results.costEvidence = buildCostEvidence(state, {scenario: url.searchParams.get("cost_scenario")})
     results.state = projectStateForDashboard(state)
     results.stateBackend = getStateBackend()
     results.drafts = { drafts: pendingDrafts(state), posted: postedDraftsWithMetrics(state) }

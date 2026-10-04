@@ -94,7 +94,7 @@ export function mergeUsageLedgers(base, incoming) {
   return result
 }
 
-export function summarizeUsage(state, { now = Date.now() } = {}) {
+export function summarizeUsage(state, { now = Date.now(), roundAmounts = true } = {}) {
   const today = new Date(now).toISOString().slice(0, 10), prefix = today.slice(0, 8)
   const ledger = object(state?.llm_usage) ? state.llm_usage : {}
   let recorded = 0, priced = 0, legacyUsd = 0, calls = 0, pricedCalls = 0, unpricedCalls = 0, missingUsage = 0, legacyCalls = 0
@@ -120,7 +120,7 @@ export function summarizeUsage(state, { now = Date.now() } = {}) {
   }
   if (![recorded, priced, legacyUsd].every(money) || !count(calls)) inconsistent += 1
   const available = rowCount > 0 && inconsistent === 0, hasEstimate = available && (pricedCalls > 0 || legacyUsd > 0)
-  const round = (value) => Number(value.toFixed(6))
+  const round = (value) => roundAmounts ? Number(value.toFixed(6)) : value
   return {
     coverage: inconsistent ? "inconsistent" : rowCount ? "partial" : "unavailable",
     pricing_coverage: inconsistent ? "inconsistent" : !rowCount ? "unavailable" : unpricedCalls || excluded || legacyRows ? "partial" : "priced",
