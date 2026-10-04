@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.108.73 — 2026-10-04
+
+- Validate threshold caches and downloads against their exact committed database identity. Recover only a missing legacy asset; preserve existing assets and publish new versions under content-addressed compressed names with verified server receipts.
+- Stop incremental maintenance on unknown or gapped baseline checkpoints before source mutation. Bound transfers and retention, preserve the old manifest on upload failure, and surface Git push conflicts instead of masking them. Artifact integrity does not establish scientific history or observed recovery.
+
 ## 0.9.108.72 — 2026-10-04
 
 - Show separate recorded and Google token cost evidence in the authenticated dashboard, with missing charges, observation dates, thinking tokens and stale/empty states. Reuse the existing state read; never present incomplete estimates as a bill, forecast or enforced cap.
