@@ -254,3 +254,34 @@ test("config endpoint reads the same actual bot snapshot and fails closed on una
     assert.equal((await failed.json()).writer_model, null)
   } finally { globalThis.fetch = originalFetch }
 })
+
+test("cost projection uses the single authenticated state read and never exposes raw usage", async () => {
+  setupEnv()
+  const state = {drafts: [], llm_usage_observations: {schema_version: 1, observations: [], truncated: true, invalid: false}}
+  const before = structuredClone(state), calls = [], originalFetch = globalThis.fetch
+  globalThis.fetch = async url => { calls.push(String(url)); return String(url).includes("/actions/runs") ? actionsResponse() : gistResponse(state) }
+  try {
+    const {GET} = await importFresh("app/api/dashboard/route.js")
+    const url = "http://localhost/api/dashboard?cost_scenario=google-standard-paid-2026-10-02"
+    assert.equal((await GET(new Request(url))).status, 401)
+    assert.equal(calls.length, 0)
+    const response = await GET(new Request(url, {headers: {authorization: basicAuth("reviewer", "secret-pass")}}))
+    const body = await response.json()
+    assert.equal(body.costEvidence.scenario.eligible_records, 0)
+    assert.equal(body.costEvidence.scenario.token_subtotal_usd, null)
+    assert.equal(body.costEvidence.recorded.priced_subtotal_usd, null)
+    assert.equal(body.state.llm_usage_observations, undefined)
+    assert.equal(calls.length, 2)
+    assert.deepEqual(state, before)
+    state.llm_usage_observations = {private: "PRIVATE"}
+    const bad = await (await GET(new Request(url, {headers: {authorization: basicAuth("reviewer", "secret-pass")}}))).json()
+    assert.equal(bad.costEvidence.scenario.error, "invalid_usage_window")
+    assert.ok(bad.state)
+    assert.equal(bad.stateError, undefined)
+    assert.equal(JSON.stringify(bad.costEvidence).includes("PRIVATE"), false)
+    globalThis.fetch = async () => {throw new Error("offline")}
+    const unavailable = await (await GET(new Request(url, {headers: {authorization: basicAuth("reviewer", "secret-pass")}}))).json()
+    assert.equal(unavailable.costEvidence.recorded.status, "unavailable")
+    assert.equal(unavailable.costEvidence.scenario.status, "unavailable")
+  } finally { globalThis.fetch = originalFetch }
+})

@@ -1,6 +1,6 @@
 """A dated token-price scenario for retained usage, never an invoice or allowance.
 
-No runtime callers, I/O, account-tier inference or historical-ledger rewriting.
+Read-only projection; no I/O, account-tier inference or historical-ledger rewriting.
 GenerateContent field semantics follow the pinned google-genai 2.25.0 SDK.
 """
 
@@ -45,6 +45,61 @@ _LIMITATIONS = [
     "retained_window_never_proves_complete_account_coverage",
     "not_a_monthly_forecast_spending_cap_or_savings_measurement",
 ]
+
+# Shared with the dashboard through scripts/gen_usage_cost_contract.py.
+CONTRACT_COST: dict[str, Any] = {
+    "schema_version": 2,
+    "identity_semantics": "validated_integer_fields_v2",
+    "scenario": SCENARIO,
+    "rates": _RATES,
+    "stages": sorted(_STAGES),
+    "required_counts": list(_COUNTS),
+    "limitations": _LIMITATIONS,
+    "pricing": {
+        "source": "https://ai.google.dev/gemini-api/docs/pricing",
+        "verified_on": "2026-10-02",
+        "rates_sha256": hashlib.sha256(canonical(_RATES).encode()).hexdigest(),
+        "interpretation": "fixed_standard_paid_text_token_scenario",
+    },
+}
+
+
+def _semantic_record(value: Any) -> Any:
+    """Version 2: normalize validated integer fields, never mutate stored evidence.
+
+    JSON number spellings (1/1.0/-0) have the same identity here. Other values are
+    left untouched for strict validation. The byte bound applies to this semantic
+    representation; this intentionally replaces v1's serialization identity.
+    """
+    if not isinstance(value, dict):
+        return value
+    # Do not traverse arbitrary malformed nesting just to normalize known fields.
+    row = dict(value)
+
+    def integer(raw):
+        return (
+            int(raw)
+            if type(raw) in (int, float) and 0 <= raw <= CONTRACT["count_limit"] and raw == int(raw)
+            else raw
+        )
+
+    if "schema_version" in row:
+        row["schema_version"] = integer(row["schema_version"])
+    if isinstance(row.get("counts"), dict) and len(row["counts"]) <= 9:
+        row["counts"] = {key: integer(raw) for key, raw in row["counts"].items()}
+    if isinstance(row.get("breakdowns"), dict) and len(row["breakdowns"]) <= 4:
+        row["breakdowns"] = {
+            key: [
+                {**item, "token_count": integer(item["token_count"])}
+                if isinstance(item, dict) and "token_count" in item
+                else item
+                for item in items
+            ]
+            if isinstance(items, list) and len(items) <= CONTRACT["modality_limit"]
+            else items
+            for key, items in row["breakdowns"].items()
+        }
+    return row
 
 
 def _money(nanodollars: int) -> str:
@@ -153,7 +208,7 @@ def project_usage_cost(window: Any, *, scenario: str) -> dict:
     """Project at most 32 observations; missing or conflicting usage never costs zero.
 
     Raises fixed ValueErrors for an absent/malformed envelope or unknown scenario.
-    Invalid rows remain counted. Exact duplicates are removed, but competing local
+    Invalid rows remain counted. Semantic duplicates are removed, but competing local
     or provider response identities are all excluded from monetary aggregation.
     """
     if scenario != SCENARIO:
@@ -176,6 +231,7 @@ def project_usage_cost(window: Any, *, scenario: str) -> dict:
     invalid_response_ids: set[tuple[str, str]] = set()
     invalid = duplicates = 0
     for row in window["observations"]:
+        row = _semantic_record(row)
         if not _safe_record(row):
             invalid += 1
             # Malformed competing evidence must not make its valid twin billable.
@@ -242,14 +298,10 @@ def project_usage_cost(window: Any, *, scenario: str) -> dict:
     for row in rows:
         groups[(row["stage"], row["model"])].append(row)
     report = {
-        "schema_version": 1,
+        "schema_version": CONTRACT_COST["schema_version"],
+        "identity_semantics": CONTRACT_COST["identity_semantics"],
         "scenario": SCENARIO,
-        "pricing": {
-            "source": "https://ai.google.dev/gemini-api/docs/pricing",
-            "verified_on": "2026-10-02",
-            "rates_sha256": hashlib.sha256(canonical(_RATES).encode()).hexdigest(),
-            "interpretation": "fixed_standard_paid_text_token_scenario",
-        },
+        "pricing": dict(CONTRACT_COST["pricing"]),
         "actual_cost_known": False,
         "complete_account_coverage": False,
         "window_truncated": window["truncated"],
@@ -257,6 +309,12 @@ def project_usage_cost(window: Any, *, scenario: str) -> dict:
         "input_records": len(window["observations"]),
         "invalid_records": invalid,
         "exact_duplicates": duplicates,
+        "observation_period": {
+            "first": min(row["observed_at"] for row in unique.values()),
+            "last": max(row["observed_at"] for row in unique.values()),
+        }
+        if unique
+        else None,
         **_summary(rows),
         "groups": [
             {"stage": stage, "model": model, **_summary(group)}

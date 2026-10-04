@@ -423,3 +423,22 @@ def test_cli_nonexistent_and_invalid_utf8_files_are_unavailable_without_path_lea
     assert cli.main(args) == 2
     result = capsys.readouterr()
     assert PRIVATE not in result.out + result.err
+
+
+def test_deep_malformed_row_does_not_hide_valid_rows_or_mutate_original():
+    nested = []
+    for _ in range(1500):
+        nested = [nested]
+    malformed = {"unexpected": nested}
+    result = project(row(), malformed)
+    assert result["invalid_records"] == 1 and result["eligible_records"] == 1
+    assert malformed["unexpected"] is nested
+
+
+def test_deep_malformed_counterpart_still_fences_valid_identity():
+    one = row()
+    bad = {"id": one["id"], "unexpected": []}
+    bad["unexpected"].append(bad)
+    result = project(one, bad)
+    assert result["invalid_records"] == 1 and result["conflicting_records"] == 1
+    assert amount(result) is None

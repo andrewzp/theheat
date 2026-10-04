@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.108.72 — 2026-10-04
+
+- Show separate recorded and Google token cost evidence in the authenticated dashboard, with missing charges, observation dates, thinking tokens and stale/empty states. Reuse the existing state read; never present incomplete estimates as a bill, forecast or enforced cap.
+- Pair Python and JavaScript scenario reports through generated rates and exact nano-USD arithmetic. Version numeric identity explicitly so integral JSON spellings agree while conflicting observations remain excluded. Preserve stored usage and runtime settings.
+
 ## 0.9.108.71 — 2026-10-02
 
 - Add an offline Google token-price scenario report using retained resolved models, separate thinking tokens and cache uncertainty. Require an explicit dated standard-paid scenario; keep excluded charges, incomplete history and actual billing unknown.
