@@ -152,7 +152,7 @@ def verify_database(path: Path, manifest: dict[str, str]) -> dict[str, str]:
 def pending_diff_dates(
     watermark: str | None, *, days: int, lag_days: int = 4, today: date | None = None
 ) -> list[date]:
-    """Plan only the contiguous, not-yet-processed interval of a known baseline."""
+    """Bound candidate snapshot endpoints after a known baseline through the lag cutoff."""
     if type(days) is not int or type(lag_days) is not int or not 1 <= lag_days <= days <= 31:
         fail("invalid_threshold_update_window")
     today = today or datetime.now(timezone.utc).date()
@@ -418,7 +418,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--db", type=Path, default=Path("data/station_thresholds.sqlite"))
     parser.add_argument("--manifest", type=Path, default=Path("data/station_thresholds.version"))
     parser.add_argument("--repo", default="andrewzp/theheat")
-    parser.add_argument("--days", type=int, default=8)
+    parser.add_argument("--days", type=int, default=12)
     args = parser.parse_args(argv)
     try:
         manifest = read_manifest(args.manifest)

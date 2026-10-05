@@ -21,7 +21,7 @@ cache refresh folds them into the threshold DB.
 Usage:
   python -m scripts.update_thresholds_incremental [--db PATH] [--days N] [--dry-run]
 
-  --days N   Look back N days (default: 8 — covers a full week + 1 buffer day).
+  --days N   Look back N days (default: 12 — a full week, 4-day lag and buffer).
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ from contextlib import closing
 import sqlite3
 import sys
 import time
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 import requests
@@ -60,27 +60,23 @@ STATION_DLY_URL = "https://www.ncei.noaa.gov/pub/data/ghcn/daily/all/{station_id
 META_WATERMARK_KEY = "last_diff_date"
 
 
-def _diff_urls_for_end_date(d: date, max_start_lag_days: int = 10) -> list[str]:
-    """Candidate URLs for superghcnd_diff tarballs ending on ``d``."""
-    end = d.strftime("%Y%m%d")
-    return [
-        f"{BASE_URL}/superghcnd_diff_{(d - timedelta(days=lag)).strftime('%Y%m%d')}_to_{end}.tar.gz"
-        for lag in range(1, max_start_lag_days + 1)
-    ]
+def _fetch_diff(start: date, end: date, timeout: int = 120) -> bytes | None:
+    """Fetch exactly the source interval requested, without alternate predecessors.
 
-
-def _fetch_diff(d: date, timeout: int = 120) -> bytes | None:
-    """Fetch one diff tarball ending on ``d``. Returns None if not found."""
-    for url in _diff_urls_for_end_date(d):
-        try:
-            resp = requests.get(url, timeout=timeout)
-            if resp.status_code == 404:
-                continue
-            resp.raise_for_status()
-            return resp.content
-        except requests.RequestException as e:
-            print(f"  WARNING: Failed to fetch {url}: {e}", file=sys.stderr)
-    return None
+    NOAA diffs describe changes between the two snapshot dates in their names.
+    An absent calendar-day endpoint may be covered by a later multi-day interval.
+    Only a 404 permits that bounded search; transport errors are not missing dates.
+    """
+    if not 0 < (end - start).days <= 31:
+        raise ArtifactError("invalid_threshold_diff_interval")
+    url = f"{BASE_URL}/superghcnd_diff_{start:%Y%m%d}_to_{end:%Y%m%d}.tar.gz"
+    resp = requests.get(url, timeout=timeout, allow_redirects=False)
+    if resp.status_code == 404:
+        return None
+    resp.raise_for_status()
+    if resp.status_code != 200:
+        raise ArtifactError("unexpected_threshold_diff_response")
+    return resp.content
 
 
 def _fetch_station_thresholds(station_id: str, timeout: int = 120):
@@ -93,25 +89,18 @@ def _fetch_station_thresholds(station_id: str, timeout: int = 120):
 
 def _resolve_new_watermark(
     *,
-    dates_to_fetch: list[date],
-    successful_dates: list[date],
+    successful_intervals: list[tuple[date, date]],
     current_watermark: date | None,
 ) -> date | None:
-    """Advance only across contiguous successful diff dates.
-
-    If a middle date is missing but a later date succeeded, do not skip the
-    gap forever by jumping the watermark over it.
-    """
-
-    if current_watermark is None or not successful_dates:
+    """Advance only over an exact chain of source snapshot intervals."""
+    if current_watermark is None:
         return current_watermark
-    successful = set(successful_dates)
     latest_contiguous = current_watermark
-    for d in sorted(set(dates_to_fetch)):
-        if d <= current_watermark:
+    for start, end in successful_intervals:
+        if end <= current_watermark:
             continue
-        if d == latest_contiguous + timedelta(days=1) and d in successful:
-            latest_contiguous = d
+        if start == latest_contiguous and end > start:
+            latest_contiguous = end
             continue
         break
     return latest_contiguous
@@ -140,7 +129,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--db", type=Path, default=DEFAULT_DB_PATH)
     parser.add_argument(
-        "--days", type=int, default=8, help="Number of days to look back (default: 8)"
+        "--days", type=int, default=12, help="Number of days to look back (default: 12)"
     )
     parser.add_argument(
         "--lag-days",
@@ -188,19 +177,23 @@ def main(argv: list[str] | None = None) -> int:
     # Accumulate obs per station across all diff files
     new_obs_by_station: dict[str, list[DailyObs]] = {}
     recompute_station_ids: set[str] = set()
-    successful_dates: list[date] = []
+    successful_intervals: list[tuple[date, date]] = []
+    cursor = watermark
 
     for d in dates_to_fetch:
-        content = _fetch_diff(d)
+        content = _fetch_diff(cursor, d)
+        if content is None:
+            # Probe later endpoints from the SAME predecessor, never silently
+            # choose a later start that would skip unprocessed changes.
+            continue
         if not content:
-            print(
-                f"ERROR: Required diff date {d} is unavailable; no update applied.", file=sys.stderr
-            )
+            print(f"ERROR: Diff interval ending {d} is empty; no update applied.", file=sys.stderr)
             return 1
 
         records = parse_superghcnd_diff_records_bytes(content)
         relevant_records = [r for r in records if r.station_id in active_ids]
-        successful_dates.append(d)
+        successful_intervals.append((cursor, d))
+        cursor = d
 
         for r in relevant_records:
             if r.action in {"update", "delete"}:
@@ -218,13 +211,18 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     new_watermark = _resolve_new_watermark(
-        dates_to_fetch=dates_to_fetch,
-        successful_dates=successful_dates,
+        successful_intervals=successful_intervals,
         current_watermark=watermark,
     )
-    if new_watermark != dates_to_fetch[-1]:
-        print("ERROR: Diff coverage is incomplete; no update applied.", file=sys.stderr)
+    if new_watermark is None or new_watermark == watermark:
+        print("ERROR: No connected diff interval available; no update applied.", file=sys.stderr)
         return 1
+    if new_watermark < dates_to_fetch[-1]:
+        print(
+            f"WARNING: Only a verified prefix through {new_watermark} is available; "
+            f"coverage through {dates_to_fetch[-1]} remains incomplete.",
+            file=sys.stderr,
+        )
 
     if not new_obs_by_station and not recompute_station_ids:
         print("No new observations to process.")

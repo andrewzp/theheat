@@ -1,12 +1,13 @@
 """Synthetic daily intervals only; no source, provider or release transport calls."""
 
 from contextlib import closing
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 import sqlite3
 
 import pytest
 import requests
+import yaml
 
 from scripts import update_thresholds_incremental as updater
 from scripts.threshold_artifacts import ArtifactError, pending_diff_dates
@@ -53,11 +54,15 @@ def set_watermark(path, watermark):
         conn.commit()
 
 
-def fake_source(monkeypatch, records=(), missing=None, payload=None):
+def fake_source(monkeypatch, records=(), missing=None, payload=None, bridges=()):
     calls = []
 
-    def fetch(day):
-        calls.append(day)
+    def fetch(start, day):
+        calls.append((start, day))
+        if (start, day) in bridges:
+            return b"invented multi-day interval"
+        if (day - start).days != 1:
+            return None
         if day == missing:
             return payload
         return b"invented parsed interval"
@@ -74,16 +79,11 @@ def record(action="insert", station="SYNTHETIC", qflag=""):
 def test_threshold_watermark_refuses_to_advance_past_missing_diff():
     from scripts.update_thresholds_incremental import _resolve_new_watermark
 
-    dates_to_fetch = [
-        date(2026, 5, 1),
-        date(2026, 5, 2),
-        date(2026, 5, 3),
-    ]
-    successful_dates = [date(2026, 5, 1), date(2026, 5, 3)]
-
     assert _resolve_new_watermark(
-        dates_to_fetch=dates_to_fetch,
-        successful_dates=successful_dates,
+        successful_intervals=[
+            (date(2026, 4, 30), date(2026, 5, 1)),
+            (date(2026, 5, 2), date(2026, 5, 3)),
+        ],
         current_watermark=date(2026, 4, 30),
     ) == date(2026, 5, 1)
 
@@ -92,8 +92,10 @@ def test_threshold_watermark_advances_when_successes_are_contiguous():
     from scripts.update_thresholds_incremental import _resolve_new_watermark
 
     assert _resolve_new_watermark(
-        dates_to_fetch=[date(2026, 5, 1), date(2026, 5, 2)],
-        successful_dates=[date(2026, 5, 1), date(2026, 5, 2)],
+        successful_intervals=[
+            (date(2026, 4, 30), date(2026, 5, 1)),
+            (date(2026, 5, 1), date(2026, 5, 2)),
+        ],
         current_watermark=date(2026, 4, 30),
     ) == date(2026, 5, 2)
 
@@ -101,8 +103,7 @@ def test_threshold_watermark_advances_when_successes_are_contiguous():
 @pytest.mark.parametrize("prior", [date(2026, 9, 26), date(2026, 9, 27)])
 def test_completed_dates_do_not_stall_new_contiguous_success(prior):
     assert updater._resolve_new_watermark(
-        dates_to_fetch=[date(2026, 9, 26), date(2026, 9, 27), date(2026, 9, 28)],
-        successful_dates=[date(2026, 9, 27), date(2026, 9, 28)],
+        successful_intervals=[(date(2026, 9, d - 1), date(2026, 9, d)) for d in (26, 27, 28)],
         current_watermark=prior,
     ) == date(2026, 9, 28)
 
@@ -111,8 +112,7 @@ def test_completed_dates_do_not_stall_new_contiguous_success(prior):
 def test_success_dates_cannot_fill_an_unknown_prior_gap(prior):
     assert (
         updater._resolve_new_watermark(
-            dates_to_fetch=[date(2026, 9, 26)],
-            successful_dates=[date(2026, 9, 26)],
+            successful_intervals=[(date(2026, 9, 25), date(2026, 9, 26))],
             current_watermark=prior,
         )
         == prior
@@ -142,8 +142,8 @@ def test_shared_plan_rejects_unbounded_or_ambiguous_windows(days, lag):
 @pytest.mark.parametrize("missing", [26, 28, 30])
 @pytest.mark.parametrize("has_records", [False, True])
 @pytest.mark.parametrize("empty", [False, True])
-def test_missing_or_empty_required_interval_preserves_all_database_bytes(
-    baseline, monkeypatch, missing, has_records, empty
+def test_uncovered_interval_never_advances_past_verified_prefix(
+    baseline, monkeypatch, capsys, missing, has_records, empty
 ):
     calls = fake_source(
         monkeypatch,
@@ -152,14 +152,22 @@ def test_missing_or_empty_required_interval_preserves_all_database_bytes(
         payload=b"" if empty else None,
     )
     before = baseline.read_bytes()
-    assert updater.main(["--db", str(baseline)]) == 1
-    assert calls == [date(2026, 9, d) for d in range(26, missing + 1)]
-    assert baseline.read_bytes() == before
-    assert read_watermark(baseline) == "2026-09-25"
+    result = updater.main(["--db", str(baseline)])
+    expected = [(date(2026, 9, d - 1), date(2026, 9, d)) for d in range(26, missing + 1)]
+    if not empty:
+        expected += [(date(2026, 9, missing - 1), date(2026, 9, d)) for d in range(missing + 1, 31)]
+    assert calls == expected
+    if empty or missing == 26:
+        assert result == 1 and baseline.read_bytes() == before
+        assert read_watermark(baseline) == "2026-09-25"
+    else:
+        assert result == 0
+        assert read_watermark(baseline) == f"2026-09-{missing - 1}"
+        assert "remains incomplete" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize(
-    "watermark", [None, "", "20260925", "2026-02-30", "2026-09-24", "2026-10-01"]
+    "watermark", [None, "", "20260925", "2026-02-30", "2026-09-20", "2026-10-01"]
 )
 def test_invalid_or_unknown_lineage_never_fetches_or_migrates(baseline, monkeypatch, watermark):
     set_watermark(baseline, watermark)
@@ -231,7 +239,7 @@ def test_complete_window_uses_one_checkpoint_for_all_observation_paths(baseline,
 
     monkeypatch.setattr(updater, "_fetch_station_thresholds", recompute)
     assert updater.main(["--db", str(baseline)]) == 0
-    assert calls == [date(2026, 9, d) for d in (28, 29, 30)]
+    assert calls == [(date(2026, 9, d - 1), date(2026, 9, d)) for d in (28, 29, 30)]
     assert read_watermark(baseline) == "2026-09-30"
     assert recomputed == (["SYNTHETIC"] if kind in {"update", "delete"} else [])
     with closing(sqlite3.connect(baseline)) as conn:
@@ -320,3 +328,84 @@ def test_failure_after_a_committed_chunk_retains_old_checkpoint_without_claiming
     with closing(sqlite3.connect(baseline)) as conn:
         assert load_thresholds(conn, "S000").all_time_max_c == 25
         assert load_thresholds(conn, "SYNTHETIC").all_time_max_c == 20
+
+
+@pytest.mark.parametrize("has_records", [False, True])
+def test_explicit_multiday_bridge_completes_without_inventing_a_missing_snapshot(
+    baseline, monkeypatch, has_records
+):
+    calls = fake_source(
+        monkeypatch,
+        [record()] if has_records else [],
+        missing=date(2026, 9, 27),
+        bridges=[(date(2026, 9, 26), date(2026, 9, 29))],
+    )
+    assert updater.main(["--db", str(baseline)]) == 0
+    assert calls == [
+        (date(2026, 9, 25), date(2026, 9, 26)),
+        (date(2026, 9, 26), date(2026, 9, 27)),
+        (date(2026, 9, 26), date(2026, 9, 28)),
+        (date(2026, 9, 26), date(2026, 9, 29)),
+        (date(2026, 9, 29), date(2026, 9, 30)),
+    ]
+    assert read_watermark(baseline) == "2026-09-30"
+
+
+def test_overlapping_interval_from_wrong_predecessor_is_not_accepted():
+    assert updater._resolve_new_watermark(
+        successful_intervals=[(date(2026, 9, 24), date(2026, 9, 30))],
+        current_watermark=date(2026, 9, 25),
+    ) == date(2026, 9, 25)
+
+
+@pytest.mark.parametrize("status", [200, 404, 301, 500])
+def test_transport_requests_one_exact_interval_and_never_redirects_or_retries(monkeypatch, status):
+    calls = []
+
+    def get(url, **kwargs):
+        calls.append((url, kwargs))
+        response = requests.Response()
+        response.status_code = status
+        response._content = b"invented interval"
+        return response
+
+    monkeypatch.setattr(updater.requests, "get", get)
+    start, end = date(2026, 9, 25), date(2026, 9, 28)
+    if status in {301, 500}:
+        with pytest.raises((ArtifactError, requests.HTTPError)):
+            updater._fetch_diff(start, end)
+    else:
+        assert updater._fetch_diff(start, end) == (None if status == 404 else b"invented interval")
+    assert calls == [
+        (
+            f"{updater.BASE_URL}/superghcnd_diff_20260925_to_20260928.tar.gz",
+            {"timeout": 120, "allow_redirects": False},
+        )
+    ]
+
+
+@pytest.mark.parametrize("length", [-1, 0, 32])
+def test_transport_invalid_interval_never_requests_source(monkeypatch, length):
+    monkeypatch.setattr(updater.requests, "get", lambda *a, **kw: pytest.fail("unexpected request"))
+    with pytest.raises(ArtifactError, match="invalid_threshold_diff_interval"):
+        updater._fetch_diff(date(2026, 9, 25), date(2026, 9, 25) + timedelta(days=length))
+
+
+def test_weekly_workflow_lookback_covers_prior_lagged_checkpoint(baseline, monkeypatch):
+    # Seven days since the previous run, whose four-day lag left Sept23 as its cutoff.
+    set_watermark(baseline, "2026-09-23")
+    calls = fake_source(monkeypatch)
+    assert updater.main(["--db", str(baseline)]) == 0
+    assert calls[0] == (date(2026, 9, 23), date(2026, 9, 24))
+    assert read_watermark(baseline) == "2026-09-30"
+    workflow = yaml.safe_load(
+        (
+            Path(__file__).resolve().parents[1] / ".github/workflows/refresh-thresholds.yml"
+        ).read_text()
+    )
+    # PyYAML's YAML1.1 parser reads the workflow's 'on' key as True.
+    assert workflow[True]["workflow_dispatch"]["inputs"]["days"]["default"] == "12"
+    steps = workflow["jobs"]["refresh"]["steps"]
+    for needle in (" require-lineage ", "scripts.update_thresholds_incremental"):
+        step = next(s for s in steps if needle in s.get("run", ""))
+        assert step["env"]["THRESHOLD_DAYS"] == "${{ github.event.inputs.days || '12' }}"
