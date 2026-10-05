@@ -18,7 +18,7 @@ import re
 import sqlite3
 import subprocess
 import tempfile
-from typing import Any
+from typing import Any, NoReturn
 import zlib
 
 MAX_DB_BYTES = 2 * 1024**3 - 1
@@ -40,7 +40,7 @@ class ArtifactError(ValueError):
     """Fixed public error labels only; never echo provider bodies or local data."""
 
 
-def fail(label: str) -> None:
+def fail(label: str) -> NoReturn:
     raise ArtifactError(label)
 
 
@@ -149,11 +149,13 @@ def verify_database(path: Path, manifest: dict[str, str]) -> dict[str, str]:
     return stats
 
 
-def require_lineage(path: Path, *, days: int, lag_days: int = 4, today: date | None = None) -> None:
-    if not 1 <= lag_days <= days <= 31:
+def pending_diff_dates(
+    watermark: str | None, *, days: int, lag_days: int = 4, today: date | None = None
+) -> list[date]:
+    """Plan only the contiguous, not-yet-processed interval of a known baseline."""
+    if type(days) is not int or type(lag_days) is not int or not 1 <= lag_days <= days <= 31:
         fail("invalid_threshold_update_window")
     today = today or datetime.now(timezone.utc).date()
-    watermark = database_stats(path)["last_diff_date"]
     if not watermark:
         fail("threshold_baseline_lineage_unknown")
     checkpoint = _day(watermark)
@@ -161,6 +163,14 @@ def require_lineage(path: Path, *, days: int, lag_days: int = 4, today: date | N
         fail("threshold_baseline_gap_requires_rebuild")
     if checkpoint > today - timedelta(days=lag_days):
         fail("threshold_checkpoint_ahead_of_update_window")
+    cutoff = today - timedelta(days=lag_days)
+    return [checkpoint + timedelta(days=i) for i in range(1, (cutoff - checkpoint).days + 1)]
+
+
+def require_lineage(path: Path, *, days: int, lag_days: int = 4, today: date | None = None) -> None:
+    pending_diff_dates(
+        database_stats(path)["last_diff_date"], days=days, lag_days=lag_days, today=today
+    )
 
 
 class GitHub:

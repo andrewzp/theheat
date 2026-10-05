@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.108.74 — 2026-10-05
+
+- Share one contiguous pending-date plan between threshold preflight and updating. Stop before applying observations when a required interval is missing or empty; skip completed dates without stalling, and use the same checkpoint for empty and nonempty observation paths.
+- Read baseline metadata without schema mutation, preserve unknown lineage, and refuse checkpoint advancement after unusable station recomputation. Test the existing partial-local-write boundary while retaining the last committed artifact on failure.
+
 ## 0.9.108.73 — 2026-10-04
 
 - Validate threshold caches and downloads against their exact committed database identity. Recover only a missing legacy asset; preserve existing assets and publish new versions under content-addressed compressed names with verified server receipts.

@@ -27,9 +27,11 @@ Usage:
 from __future__ import annotations
 
 import argparse
+from contextlib import closing
+import sqlite3
 import sys
 import time
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import requests
@@ -51,6 +53,7 @@ from src.data.ghcn_format import (
     parse_superghcnd_diff_records_bytes,
     update_thresholds_with_obs,
 )
+from scripts.threshold_artifacts import ArtifactError, pending_diff_dates
 
 BASE_URL = "https://www.ncei.noaa.gov/pub/data/ghcn/daily/superghcnd"
 STATION_DLY_URL = "https://www.ncei.noaa.gov/pub/data/ghcn/daily/all/{station_id}.dly"
@@ -100,30 +103,58 @@ def _resolve_new_watermark(
     gap forever by jumping the watermark over it.
     """
 
-    if not successful_dates:
+    if current_watermark is None or not successful_dates:
         return current_watermark
     successful = set(successful_dates)
     latest_contiguous = current_watermark
-    for d in sorted(dates_to_fetch):
-        if d in successful:
+    for d in sorted(set(dates_to_fetch)):
+        if d <= current_watermark:
+            continue
+        if d == latest_contiguous + timedelta(days=1) and d in successful:
             latest_contiguous = d
             continue
         break
     return latest_contiguous
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description="Incremental GHCN threshold update via superghcnd_diff.")
+def _read_baseline(path: Path) -> tuple[str | None, frozenset[str]]:
+    """Read without the schema creation/migration side effects of open_db."""
+    if not path.is_file() or path.is_symlink():
+        raise ArtifactError("threshold_database_unavailable")
+    for suffix in ("-wal", "-journal"):
+        journal = Path(str(path) + suffix)
+        if journal.exists() and journal.stat().st_size:
+            raise ArtifactError("threshold_database_uncheckpointed")
+    with closing(
+        sqlite3.connect(path.resolve().as_uri() + "?mode=ro&immutable=1", uri=True)
+    ) as conn:
+        conn.execute("PRAGMA query_only=ON")
+        watermark = get_meta(conn, META_WATERMARK_KEY)
+        rows = conn.execute("SELECT station_id FROM stations WHERE is_active = 1").fetchall()
+    return watermark, frozenset(r[0] for r in rows)
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        description="Incremental GHCN threshold update via superghcnd_diff."
+    )
     parser.add_argument("--db", type=Path, default=DEFAULT_DB_PATH)
-    parser.add_argument("--days", type=int, default=8,
-                        help="Number of days to look back (default: 8)")
-    parser.add_argument("--lag-days", type=int, default=4,
-                        help="Leave this many recent diff snapshot days out of the cache so the bot can detect them live")
+    parser.add_argument(
+        "--days", type=int, default=8, help="Number of days to look back (default: 8)"
+    )
+    parser.add_argument(
+        "--lag-days",
+        type=int,
+        default=4,
+        help="Leave this many recent diff snapshot days out of the cache so the bot can detect them live",
+    )
     parser.add_argument("--dry-run", action="store_true")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     if not args.db.exists():
-        print(f"ERROR: {args.db} not found. Run build_station_thresholds.py first.", file=sys.stderr)
+        print(
+            f"ERROR: {args.db} not found. Run build_station_thresholds.py first.", file=sys.stderr
+        )
         return 1
 
     print("=== GHCN-Daily incremental threshold update ===")
@@ -131,25 +162,27 @@ def main() -> int:
     print(f"Days:  last {args.days} days")
     print(f"Lag:   {args.lag_days} days (recent diffs left for hot-path detection)")
 
-    today = date.today()
-    cutoff = today - timedelta(days=args.lag_days)
-    dates_to_fetch = [
-        today - timedelta(days=i)
-        for i in range(args.days, 0, -1)
-        if today - timedelta(days=i) <= cutoff
-    ]
-
-    # 1. Load active station IDs for filtering
-    with open_db(args.db) as conn:
-        watermark_str = get_meta(conn, META_WATERMARK_KEY)
-        rows = conn.execute(
-            "SELECT station_id FROM stations WHERE is_active = 1"
-        ).fetchall()
-    active_ids = frozenset(r[0] for r in rows)
-
-    watermark = date.fromisoformat(watermark_str) if watermark_str else None
+    # 1. Validate lineage before any schema or threshold writes.
+    try:
+        watermark_str, active_ids = _read_baseline(args.db)
+        dates_to_fetch = pending_diff_dates(
+            watermark_str,
+            days=args.days,
+            lag_days=args.lag_days,
+            today=datetime.now(timezone.utc).date(),
+        )
+    except (ArtifactError, sqlite3.Error, OSError) as error:
+        label = str(error) if isinstance(error, ArtifactError) else "threshold_database_unavailable"
+        print(f"ERROR: {label}", file=sys.stderr)
+        return 1
+    # A successful plan requires an exact nonempty checkpoint.
+    assert watermark_str is not None
+    watermark = date.fromisoformat(watermark_str)
     print(f"Active stations: {len(active_ids):,}")
-    print(f"Watermark:       {watermark or 'none (first run)'}")
+    print(f"Watermark:       {watermark}")
+    if not dates_to_fetch:
+        print("No pending diff dates; baseline is already at the lag cutoff.")
+        return 0
 
     # 2. Fetch and parse diff files
     # Accumulate obs per station across all diff files
@@ -158,13 +191,12 @@ def main() -> int:
     successful_dates: list[date] = []
 
     for d in dates_to_fetch:
-        if watermark and d <= watermark:
-            continue  # Already processed
-
         content = _fetch_diff(d)
-        if content is None:
-            print(f"  {d}: not available (NOAA may not have published yet)", flush=True)
-            continue
+        if not content:
+            print(
+                f"ERROR: Required diff date {d} is unavailable; no update applied.", file=sys.stderr
+            )
+            return 1
 
         records = parse_superghcnd_diff_records_bytes(content)
         relevant_records = [r for r in records if r.station_id in active_ids]
@@ -185,15 +217,20 @@ def main() -> int:
             flush=True,
         )
 
-    if dates_to_fetch and not successful_dates:
-        print("ERROR: No diff files were fetched; refusing to advance watermark.", file=sys.stderr)
+    new_watermark = _resolve_new_watermark(
+        dates_to_fetch=dates_to_fetch,
+        successful_dates=successful_dates,
+        current_watermark=watermark,
+    )
+    if new_watermark != dates_to_fetch[-1]:
+        print("ERROR: Diff coverage is incomplete; no update applied.", file=sys.stderr)
         return 1
 
     if not new_obs_by_station and not recompute_station_ids:
         print("No new observations to process.")
-        if not args.dry_run and successful_dates:
+        if not args.dry_run:
             with open_db(args.db) as conn:
-                set_meta(conn, META_WATERMARK_KEY, max(successful_dates).isoformat())
+                set_meta(conn, META_WATERMARK_KEY, new_watermark.isoformat())
                 conn.commit()
         return 0
 
@@ -216,12 +253,17 @@ def main() -> int:
             except requests.RequestException as e:
                 print(f"ERROR: Failed to fetch full .dly for {station_id}: {e}", file=sys.stderr)
                 return 1
-            if t:
-                upsert_thresholds(conn, t)
-                updated_count += 1
+            if t is None:
+                print("ERROR: Station recompute returned no usable thresholds.", file=sys.stderr)
+                return 1
+            upsert_thresholds(conn, t)
+            updated_count += 1
             if i % 50 == 0:
                 conn.commit()
-                print(f"  {i:,}/{len(recompute_station_ids):,} full recomputes processed ...", flush=True)
+                print(
+                    f"  {i:,}/{len(recompute_station_ids):,} full recomputes processed ...",
+                    flush=True,
+                )
 
         for i, (station_id, obs_list) in enumerate(new_obs_by_station.items(), 1):
             if station_id in recompute_station_ids:
@@ -229,9 +271,11 @@ def main() -> int:
             existing = load_thresholds(conn, station_id)
             if existing is None:
                 t = _fetch_station_thresholds(station_id)
-                if t:
-                    upsert_thresholds(conn, t)
-                    new_station_count += 1
+                if t is None:
+                    print("ERROR: New station returned no usable thresholds.", file=sys.stderr)
+                    return 1
+                upsert_thresholds(conn, t)
+                new_station_count += 1
             else:
                 changed = update_thresholds_with_obs(existing, obs_list)
                 if changed:
@@ -242,20 +286,6 @@ def main() -> int:
                 conn.commit()
                 print(f"  {i:,}/{len(new_obs_by_station):,} processed ...", flush=True)
 
-        new_watermark = _resolve_new_watermark(
-            dates_to_fetch=dates_to_fetch,
-            successful_dates=successful_dates,
-            current_watermark=watermark,
-        )
-        if new_watermark is None:
-            print("ERROR: No successful diff date available for watermark.", file=sys.stderr)
-            return 1
-        if successful_dates and new_watermark < max(successful_dates):
-            print(
-                "WARNING: Not advancing watermark past missing diff date; "
-                f"safe watermark is {new_watermark}",
-                file=sys.stderr,
-            )
         set_meta(conn, META_WATERMARK_KEY, new_watermark.isoformat())
         conn.commit()
 
