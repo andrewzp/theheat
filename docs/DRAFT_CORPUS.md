@@ -11,6 +11,40 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-10-05 — Daily corpus grading (0 fresh drafts; 7 carry-overs from Oct 1–Oct 3, previously graded)
+
+**Context:** Step 0 hard-reset `main` (tip `9c1cc90`, PR #596). `daily-plan-current` picked up at
+`2b69123` (Oct 3); rebase onto main still conflicts (same Jul 7 commit) and was aborted per the
+fallback. Gist read via git-clone (success). **Queue: 7 pending — exact match to Oct 3's graded
+batch** (same text, same scores): Riyadh dust B-, Mecca dust B-, Cerrado fire C+, Riyadh PM2.5 B-,
+Taiz dust C+, Rachel Cat 2 C+, Rachel Cat 3 C+. Nothing new entered the queue Oct 3 → Oct 5; no
+re-grading, all grades stand.
+
+**A-rate:** — (no fresh drafts). Most recent graded cycle: **0%** (0/1, 2026-10-03; 0/6 Oct 1).
+
+**Staleness review (~15:10 UTC Oct 5):** all 7 are now >48h old (Rachel Cat 3 ~66h, newest;
+Sep 30 Riyadh/Mecca ~117h, oldest). Strict candidates (perishable status, not a completed
+measurement): **[6] Rachel Cat 2** (superseded by [7], ~100h) and **[7] Rachel Cat 3** (~66h;
+intensity status almost certainly outdated by now). The five dust/PM2.5/fire drafts are
+past-tense dated measurements — not policy triggers, though the Saudi trio is a same-city
+cluster. **Bulk-reject skipped:** `gh auth status` reports `GH_TOKEN` invalid and the
+sandbox blocks gist API paths (HTTP 403, repo-scoped endpoints only). Operator should reject
+[6] and [7] via the dashboard.
+
+### Patterns / notes
+
+1. **Queue static for a 2-day window** after the Oct 1 burst; writer output has stalled again
+   (1 draft Oct 2–3, 0 since). Operator: check suppression ledger / issue #500 for whether
+   Oct 1's recovery held.
+2. **No active-proposal evidence updates** (no fresh drafts). P_close, P_tier, P_dust, A4, A10
+   counts unchanged from Oct 3.
+
+### Followups
+
+- Operator: reject Rachel Cat 2 + Cat 3 via dashboard (stale, perishable).
+- Operator: confirm whether the writer stalled after Oct 3.
+- Truncated NHC URL ("…MIATCPEP3…") in [7] still unfixed (engineer flag from Oct 3).
+
 ## 2026-10-03 — Daily corpus grading (1 fresh draft; 6 carry-overs from Oct 1, previously graded)
 
 **Context:** Step 0 hard-reset `main` (tip `e22c123`, PR #592). The rolling `daily-plan-current`

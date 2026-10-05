@@ -2,6 +2,11 @@
 
 Living plan for closing the gap between the bot's current voice quality and the **resumption bar** (majority A-grade rate per cycle). Refined daily by the autonomous grading agent (cron `0 15 * * *`), reviewed and implemented by the human operator.
 
+> **Oct 5: 0 fresh drafts — queue is an exact match to Oct 3's 7 graded drafts; no re-grading.**
+> No proposal evidence updates (P_close, P_tier, P_dust, A4, A10 unchanged). Writer output appears
+> stalled again since Oct 3. All 7 pending now >48h; Rachel Cat 2 + Cat 3 are strict stale
+> candidates (perishable intensity status); bulk-reject skipped (`GH_TOKEN` invalid, gist API 403).
+>
 > **Oct 3: 1 fresh draft (Hurricane Rachel Cat 3, C+), 0% A-rate (n=1); 6 Oct 1 carry-overs stand.**
 > A10 continues (no mechanism/close). New observation filed under A10/A4: rapid intensification
 > (Cat 2→3 in ~10h) stranded across two independent `cyclone_tier_crossing` drafts; truncated NHC
