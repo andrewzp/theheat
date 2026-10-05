@@ -34,6 +34,25 @@ def _fresh_state():
     return deepcopy(DEFAULT_STATE)
 
 
+@pytest.fixture(autouse=True)
+def restore_compatibility_globals():
+    """The legacy facade copies patched globals into other modules on invocation.
+
+    Monkeypatch restores its direct targets only. Restore copied bindings too,
+    so later scientific tests see the real source modules in any file order.
+    """
+    import src.main as main
+    originals = [
+        (module, {name: getattr(module, name) for name in vars(main)
+                  if not name.startswith("__") and hasattr(module, name)})
+        for module in main._SYNC_MODULES
+    ]
+    yield
+    for module, values in originals:
+        for name, value in values.items():
+            setattr(module, name, value)
+
+
 class TestGhcnSourceStatus:
     @pytest.mark.parametrize("concurrent", ["0", "1"])
     def test_blocked_ghcn_does_not_stop_independent_hazards(

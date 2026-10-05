@@ -93,6 +93,15 @@ def test_actual_beacon_reports_blocked_repair_immediately(tmp_path, red, allowed
         "  shift\ndone\nexit 99\n"
     )
     gh.chmod(0o700)
+    # The shell is outside freezegun. Give its date command the same shifted
+    # clock as the Python observer while still executing the real workflow body.
+    clock = tmp_path / "date"
+    clock.write_text(
+        '#!/bin/bash\n[ "$*" = "-u +%Y-%m-%dT%H:%M:%SZ" ] || exit 99\n'
+        'printf "%s\\n" "$FIXTURE_NOW"\n'
+    )
+    clock.chmod(0o700)
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     beacon = tmp_path / "beacon.json"
     result = subprocess.run(
         ["bash", "-c", step["run"]],
@@ -103,6 +112,7 @@ def test_actual_beacon_reports_blocked_repair_immediately(tmp_path, red, allowed
             "BLOCKED_REASON": reason,
             "REPO": "offline/fixture",
             "BEACON": str(beacon),
+            "FIXTURE_NOW": now,
         },
         capture_output=True,
         text=True,
@@ -110,6 +120,7 @@ def test_actual_beacon_reports_blocked_repair_immediately(tmp_path, red, allowed
     )
     assert result.returncode == 0, result.stderr
     body = json.loads(beacon.read_text())
+    assert body["run_at"] == now
     assert body["outcome"] == outcome
     assert body["blocked_reason"] == reason
     assert body["failing"] == int(red)

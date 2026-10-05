@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.108.76 — 2026-10-05
+
+- Align shell heartbeat and JavaScript usage-report fixtures with the Python canary clock, and derive future place-event dates from the actual test observation. Preserve freshness and unknown-cost assertions under forward time shifts.
+- Restore globals copied by the legacy orchestrator test facade so later scientific tests do not inherit mocks when files run in a different order.
+
 ## 0.9.108.75 — 2026-10-05
 
 - Contain unavailable GHCN thresholds to that source. Only a successful artifact verifier permits GHCN reads; independent world and hazard feeds continue with explicit incomplete coverage, without replacing U.S. observations with forecasts.
