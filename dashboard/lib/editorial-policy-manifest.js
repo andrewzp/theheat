@@ -32,7 +32,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/media/joint_review.py": "54aff9dd95e9e85f7efbe5faa03742d3654ab2259bf2a39a36692b248a9be44b",
     "src/media/review_packet.py": "b3d254dfe5c57d201b600b664eeccf01710e25dd1dd6df0dba7bab4468e2a115",
     "src/orchestrator/posting.py": "2fa0ee90d6ab51c6212c816ec3d04e796fe436ad1440e6ad7337ed53e458cde6",
-    "src/orchestrator/sources/open_meteo.py": "c7ea30f8fa132cccd13023d3f1d1d6cb81b3c55b800b4e8b9c7b3691cb005ef1",
+    "src/orchestrator/sources/open_meteo.py": "2781e2de344e2f22c7afa7831e6cc42fd02024eab96f1c11839885040f961a7e",
     "src/orchestrator/two_bot_dispatch.py": "e7ee832f87fde0f04eb60a27d6b85498b4462d13933a0e9928a786b9354788fe",
     "src/storage/migrations/009_media_staging.sql": "50fda50ed8e36047b8580d897c1fc6ef5c5989c69e439a79bc04d3e694496c2c",
     "src/storage/migrations/010_media_commands.sql": "87941e603ce94900d3568fae261501850e8ff8766b9f75fb9adfac36a7338add",
@@ -74,5 +74,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "4a828a22e451889f630e994add6ba38c463d44369d24d2e22c2ff85e7f0387e5"
   },
   "schema_version": 1,
-  "source_sha256": "8cc3b7c561f624b460c46b33ab402e4ca86e615ae7556ff63fc30f4a80e50f5f"
+  "source_sha256": "b929959c47327d445d32ee1a47d4849941fd8c6aea7106a60d88f5ee3a13a9eb"
 }

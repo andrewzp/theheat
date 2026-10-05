@@ -35,6 +35,27 @@ def _fresh_state():
 
 
 class TestGhcnSourceStatus:
+    @pytest.mark.parametrize("concurrent", ["0", "1"])
+    def test_blocked_ghcn_does_not_stop_independent_hazards(
+        self, monkeypatch, mock_alerts_pipeline_sources, concurrent,
+    ):
+        monkeypatch.setenv("THEHEAT_SIGNALS_PROVIDER", "ghcn")
+        monkeypatch.setenv("THEHEAT_GHCN_THRESHOLD_VERIFICATION", "failure")
+        monkeypatch.setenv("THEHEAT_CONCURRENT_SOURCES", concurrent)
+        monkeypatch.setattr("src.main.open_meteo.load_cities", MagicMock(return_value=[]))
+        fires = MagicMock(return_value=[])
+        monkeypatch.setattr("src.main.firms.fetch_fires", fires)
+        monkeypatch.setattr("src.main.co2.fetch_co2_data", MagicMock(return_value=[]))
+        monkeypatch.setattr("src.main.co2.detect_milestone", MagicMock(return_value=None))
+        bot, run = _fresh_state(), {"sources": []}
+        run_alerts(bot, current_run=run)
+        mock_alerts_pipeline_sources.check_extreme_signals_for_stations.assert_not_called()
+        fires.assert_called_once()
+        sources = {s["source"]: s for s in run["sources"]}
+        assert sources["open_meteo_extreme_signals"]["status"] == "failed"
+        assert sources["firms"]["status"] == "success"
+        assert bot["source_health"]["open_meteo_extreme_signals"]["failed"] == 1
+
     def test_success_when_all_diff_dates_fetched(self):
         metrics = {
             "diff_dates_missing": 0,
@@ -85,6 +106,8 @@ class TestGhcnSourceStatus:
         mock_alerts_pipeline_sources,
     ):
         monkeypatch.setenv("THEHEAT_SIGNALS_PROVIDER", "ghcn")
+        # Explicit receipt for the injected offline GHCN source fixture.
+        monkeypatch.setenv("THEHEAT_GHCN_THRESHOLD_VERIFICATION", "success")
         monkeypatch.setattr("src.main.open_meteo.load_cities", MagicMock(return_value=[]))
         monkeypatch.setattr("src.main.firms.fetch_fires", MagicMock(return_value=[]))
         monkeypatch.setattr("src.main.co2.fetch_co2_data", MagicMock(return_value=[]))

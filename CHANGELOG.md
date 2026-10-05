@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.108.75 — 2026-10-05
+
+- Contain unavailable GHCN thresholds to that source. Only a successful artifact verifier permits GHCN reads; independent world and hazard feeds continue with explicit incomplete coverage, without replacing U.S. observations with forecasts.
+- Save only verified threshold caches, preserve record continuity during GHCN outages, and report fixed cache-validation reasons without private file contents or paths.
+- Regenerate the dashboard policy identity for the changed source boundary; existing scientific checks and publication controls remain required.
+
 ## 0.9.108.74 — 2026-10-05
 
 - Share a bounded snapshot range between threshold preflight and updating. Follow exact connected NOAA intervals, including multi-day changes; retain only verified progress with explicit incomplete-tail warnings. Extend the default lookback to cover the weekly cadence plus the existing lag.

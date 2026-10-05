@@ -544,6 +544,8 @@ def test_both_provider_runs_ghcn_for_us_and_open_meteo_for_world(monkeypatch):
     world_cities = [{"city": "Seville", "country": "Spain", "lat": "37.4", "lon": "-6.0"}]
 
     monkeypatch.setenv("THEHEAT_SIGNALS_PROVIDER", "both")
+    # Explicit receipt for the injected offline GHCN source fixture.
+    monkeypatch.setenv("THEHEAT_GHCN_THRESHOLD_VERIFICATION", "success")
     monkeypatch.setattr(
         runner.ghcn, "check_extreme_signals_for_stations",
         lambda *args, **kwargs: ([us_bundle], []),
@@ -694,6 +696,8 @@ def test_both_world_half_warms_then_evaluates_and_surfaces_metrics(monkeypatch):
     monkeypatch.setattr(world_cache, "read_cache", lambda: dict(store))
     monkeypatch.setattr(world_cache, "write_cache", lambda c: store.update(c) or True)
     monkeypatch.setenv("THEHEAT_SIGNALS_PROVIDER", "both")
+    # Explicit receipt for the injected offline GHCN source fixture.
+    monkeypatch.setenv("THEHEAT_GHCN_THRESHOLD_VERIFICATION", "success")
     monkeypatch.setattr(runner.ghcn, "check_extreme_signals_for_stations", lambda metrics_out, **kwargs: ([], []))
     monkeypatch.setattr(runner, "_fetch_city_archive", lambda c: {
         "time": ["1996-06-01"], "temperature_2m_max": [40.0], "temperature_2m_min": [10.0],

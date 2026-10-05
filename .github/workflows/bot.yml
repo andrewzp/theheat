@@ -206,17 +206,29 @@ jobs:
       - name: Restore station thresholds cache
         id: thresholds-cache
         if: steps.mode.outputs.mode == 'alerts' || steps.mode.outputs.mode == 'both'
-        uses: actions/cache@v4
+        continue-on-error: true
+        uses: actions/cache/restore@v4
         with:
           path: data/station_thresholds.sqlite
           key: ghcn-thresholds-${{ runner.os }}-${{ hashFiles('data/station_thresholds.version') }}
 
       - name: Validate or download checksum-bound station thresholds
+        id: thresholds-verify
         if: steps.mode.outputs.mode == 'alerts' || steps.mode.outputs.mode == 'both'
+        continue-on-error: true
+        timeout-minutes: 5
         env:
           GH_TOKEN: ${{ github.token }}
           THRESHOLD_REPO: ${{ github.repository }}
         run: python -m scripts.threshold_artifacts ensure --repo "$THRESHOLD_REPO"
+
+      - name: Save verified station thresholds cache
+        if: steps.thresholds-verify.outcome == 'success' && steps.thresholds-cache.outputs.cache-hit != 'true'
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: data/station_thresholds.sqlite
+          key: ghcn-thresholds-${{ runner.os }}-${{ hashFiles('data/station_thresholds.version') }}
 
       # Fast, deterministic guard that replaces the full-suite gate for production
       # runs: a genuinely broken main (syntax / bad import / circular import) still
@@ -230,6 +242,8 @@ jobs:
 
       - name: Run bot
         env:
+          # Only this verifier's actual outcome permits GHCN to read the file.
+          THEHEAT_GHCN_THRESHOLD_VERIFICATION: ${{ steps.thresholds-verify.outcome || 'unknown' }}
           # Keep already-written output visible if the runner exits abruptly.
           PYTHONUNBUFFERED: "1"
           TWITTER_API_KEY: ${{ secrets.TWITTER_API_KEY }}

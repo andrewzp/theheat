@@ -371,6 +371,31 @@ def _run_world_cached_half(world_cities: list[dict], metrics_out: dict, bot_stat
     return om_bundles, om_country
 
 
+def _verified_ghcn_signals(bot_state: BotState, metrics: dict) -> tuple[list, list]:
+    """Contain this source unless the invoking workflow verified its exact baseline.
+
+    Direct invocations without that receipt also withhold GHCN. The receipt is
+    artifact integrity only; the existing scientific eligibility gates still apply.
+    """
+    outcome = os.environ.get("THEHEAT_GHCN_THRESHOLD_VERIFICATION", "unknown")
+    if outcome not in {"success", "failure", "skipped", "cancelled"}:
+        outcome = "unknown"
+    metrics["threshold_verification"] = outcome
+    if outcome != "success":
+        metrics.update(status="failed", error="threshold_baseline_unavailable")
+        print(f"[alerts] GHCN unavailable: threshold verification {outcome}")
+        return [], []
+    try:
+        result = ghcn.check_extreme_signals_for_stations(metrics_out=metrics, bot_state=bot_state)
+    except Exception:
+        # Keep independent sources available without exposing provider bodies.
+        metrics.update(status="failed", error="ghcn_fetch_failed")
+        print("[alerts] GHCN unavailable: source fetch failed")
+        return [], []
+    metrics["status"] = _classify_ghcn_source_status(metrics)
+    return result
+
+
 def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: list[dict], us_city_state_map: dict[str, str], city_elevations: dict[tuple[str, str], int]) -> None:
     # 1. Extreme climate signals — dispatched by THEHEAT_SIGNALS_PROVIDER.
     # "open_meteo" (default): 638 curated cities via Open-Meteo archive API.
@@ -406,9 +431,7 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
                 f"got {_signals_provider!r}"
             )
         if _signals_provider == "ghcn":
-            bundles, country_records = ghcn.check_extreme_signals_for_stations(
-                metrics_out=ghcn_pipeline_metrics, bot_state=bot_state,
-            )
+            bundles, country_records = _verified_ghcn_signals(bot_state, ghcn_pipeline_metrics)
         elif _signals_provider == "open_meteo":
             bundles, country_records = _check_city_extreme_signals(
                 cities,
@@ -419,9 +442,7 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
             # owns the rest of the world (curated cities, incl. Europe). Run both
             # and partition by country so every place is sourced from exactly one
             # provider — no overlap, no fragile name/geo matching.
-            ghcn_bundles, ghcn_country = ghcn.check_extreme_signals_for_stations(
-                metrics_out=ghcn_pipeline_metrics, bot_state=bot_state,
-            )
+            ghcn_bundles, ghcn_country = _verified_ghcn_signals(bot_state, ghcn_pipeline_metrics)
             # Open-Meteo only needs the non-US cities — the US comes from GHCN —
             # so skip the US city fetches entirely.
             world_cities = [c for c in cities if not is_us_location(c.get("country"))]
@@ -1284,6 +1305,9 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
         details: dict | None = None
         if _signals_provider == "both":
             ghcn_funnel = (
+                f"status:{ghcn_pipeline_metrics['status']} "
+                f"verification:{ghcn_pipeline_metrics['threshold_verification']} "
+                f"error:{ghcn_pipeline_metrics.get('error', 'none')} "
                 f"active:{ghcn_pipeline_metrics.get('stations_active', '-')} "
                 f"obs:{ghcn_pipeline_metrics.get('stations_with_obs', '-')} "
                 f"checked:{ghcn_pipeline_metrics.get('stations_checked', '-')} "
@@ -1300,6 +1324,11 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
                 f"esat:{m.get('eval_saturated', False)} sat:{m.get('saturated', False)}] | {signal_breakdown}"
             )
             source_status = m.get("status", "success")
+            if ghcn_pipeline_metrics["status"] != "success":
+                source_status = (
+                    "failed" if source_status == "failed" and ghcn_pipeline_metrics["status"] == "failed"
+                    else "degraded"
+                )
             details = {
                 "provider": "both",
                 "ghcn_pipeline_metrics": dict(ghcn_pipeline_metrics),
@@ -1307,11 +1336,13 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
                 "events": ghcn_event_log[:200],
             }
         elif _signals_provider == "ghcn" and ghcn_pipeline_metrics:
-            source_status = _classify_ghcn_source_status(ghcn_pipeline_metrics)
+            source_status = ghcn_pipeline_metrics["status"]
             diff_attempted = ghcn_pipeline_metrics.get("diff_dates_attempted", "-")
             diff_fetched = ghcn_pipeline_metrics.get("diff_dates_fetched", "-")
             diff_missing = ghcn_pipeline_metrics.get("diff_dates_missing", "-")
             funnel = (
+                f"verification:{ghcn_pipeline_metrics['threshold_verification']} "
+                f"error:{ghcn_pipeline_metrics.get('error', 'none')} "
                 f"stations_active:{ghcn_pipeline_metrics.get('stations_active', '-')} "
                 f"stations_with_obs:{ghcn_pipeline_metrics.get('stations_with_obs', '-')} "
                 f"checked:{ghcn_pipeline_metrics.get('stations_checked', '-')} "
@@ -1353,7 +1384,7 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
             note += f" | source_archive_verification_gaps:{verification_gaps}"
         # Prune stale streaks only after a non-failed source cycle; a total
         # fetch failure should not erase continuity state.
-        if source_status != "failed":
+        if source_status != "failed" and ghcn_pipeline_metrics.get("status") != "failed":
             state.prune_stale_record_streaks(bot_state)
         if source_status == "failed":
             fail_count = state.increment_data_source_failure(bot_state, _signals_provider)
