@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.108.78 — 2026-10-06
+
+- Avoid rejecting a literal final Data/Source caption label when its primary source identity is present in both the evidence and the checker's exact named-entity inventory. All source, number, date and other material spans still require coverage; ambiguous syntax keeps the strict check.
+- Supply the same retained evidence to synchronous and queued response interpretation, and regenerate the dashboard policy identity. This changes no prompts, models, billing settings or publication controls.
+
 ## 0.9.108.77 — 2026-10-06
 
 - Add offline ingestion of an exact dated NOAA full CSV gzip into an isolated raw-observation candidate. Preserve flags and missing values, verify supplied receipt/hash/date consistency, bound resource use, and reject corruption, incomplete scope and duplicate observations before atomic no-clobber promotion.

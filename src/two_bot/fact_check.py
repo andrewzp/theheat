@@ -144,10 +144,12 @@ def prepare_request(tweet: str, bundle: StoryBundle, *, retry_suffix: str = "") 
     )
 
 
-def interpret_response(tweet: str, raw: str, state: BotState) -> FactCheckResult:
+def interpret_response(
+    tweet: str, raw: str, state: BotState, *, bundle: StoryBundle | None = None,
+) -> FactCheckResult:
     """Apply the actual strict inventory and reuse checks, without a retry."""
     passed, failures, claims = _parse_fact_check_json(raw, require_extracted_claims=True)
-    failures.extend(material_span_failures(tweet, claims))
+    failures.extend(material_span_failures(tweet, claims, bundle=bundle))
     failures.extend(_claim_reuse_failures(claims, state))
     return FactCheckResult(
         passed=passed and not failures, failures=failures, raw_response=raw, extracted_claims=claims,
@@ -286,7 +288,7 @@ def fact_check(
         try:
             # A prior extractor is context, not permission for this checker to
             # omit its inventory. Each completed factual check owns its claims.
-            return interpret_response(tweet, raw, state)
+            return interpret_response(tweet, raw, state, bundle=bundle)
         except ModelOutputContractError as exc:
             return FactCheckResult(
                 passed=False, failures=[f"Fact-check output contract rejected: {exc}"],

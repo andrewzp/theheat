@@ -180,7 +180,57 @@ def bundle_schema_issues(bundle) -> list[tuple[str, str, str]]:
     return issues
 
 
-def material_span_failures(tweet: str, claims: list) -> list[str]:
+def _source_caption_label(tweet: str, claims: list, bundle: Any) -> tuple[int, int] | None:
+    """Recognize only a literal caption with an inventoried primary source.
+
+    This exempts the label, never its source or facts. Ambiguous syntax stays
+    strict; even possessive apostrophes conservatively disable this exception.
+    Source identity is not source qualification or semantic entailment.
+    """
+    if bundle is None or any(char in tweet for char in "\"'“”‘’«»"):
+        return None
+    captions = list(re.finditer(r"(?<=[.;])[ \t]+(?P<label>Data|Source):[ \t]+(?=\S)", tweet))
+    if len(captions) != 1:
+        return None
+    caption = captions[0]
+    tail = tweet[caption.end():]
+    if not tweet[:caption.start() - 1].strip() or "\n" in tail or "\r" in tail:
+        return None
+    label = caption.group("label")
+    where = getattr(bundle, "where", None)
+    if not isinstance(where, str) or not where.strip() or re.search(rf"\b{label}\b", where, re.IGNORECASE):
+        return None
+
+    source_keys = {"source", "data_source", "source_name", "source_product"}
+    sources: list[Any] = []
+    raw = getattr(bundle, "raw_signal_dump", None)
+    if isinstance(raw, dict):
+        for primary in (raw, raw.get("evidence"), raw.get("source"), raw.get("provenance")):
+            if isinstance(primary, dict):
+                sources.extend(value for key, value in primary.items() if key in source_keys)
+    facts = getattr(bundle, "current_facts", None)
+    if isinstance(facts, list):
+        sources.extend(fact.get("value") for fact in facts if isinstance(fact, dict)
+                       and isinstance(fact.get("label"), str) and fact["label"] in source_keys)
+    for source in sources:
+        if (not isinstance(source, str) or not source.strip() or valid_url(source)
+                or re.search(rf"\b{label}\b", source, re.IGNORECASE)):
+            continue
+        name, via, provider = source.partition(" via ")
+        for claim in claims:
+            text = getattr(claim, "text", None)
+            if (getattr(claim, "kind", None) != "named_entity" or not isinstance(text, str)
+                    or not text.strip() or text != text.strip()):
+                continue
+            if text != source and not (via and provider.strip() and text == name):
+                continue
+            if (tail.startswith(text) and (len(tail) == len(text) or tail[len(text)] in " .,;()")
+                    and not re.search(r"[.!?;][ \t]+\S", tail[len(text):])):
+                return caption.span("label")
+    return None
+
+
+def material_span_failures(tweet: str, claims: list, *, bundle: Any = None) -> list[str]:
     """Require literal coverage of detectable numbers, dates and entity spans.
 
     This bounded independent check cannot prove coverage of every implication.
@@ -205,6 +255,10 @@ def material_span_failures(tweet: str, claims: list) -> list[str]:
             spans.append((start, start + len(claim.text)))
             start += len(claim.text)
     visible = re.sub(r"https?://\S+", lambda match: " " * len(match.group()), tweet)
+    caption_label = _source_caption_label(tweet, claims, bundle)
+    if caption_label is not None:
+        left, right = caption_label
+        visible = visible[:left] + " " * (right - left) + visible[right:]
     material = [(match.start(), match.end(), match.group()) for match in re.finditer(r"(?<!\w)[+-]?\d+(?:[.,]\d+)*(?:[eE][+-]?\d+)?", visible)]
     for match in re.finditer(r"\b[A-ZÀ-ÖØ-Þ][\wÀ-ÿ'’.-]*(?:\s+[A-ZÀ-ÖØ-Þ][\wÀ-ÿ'’.-]*)*", visible):
         token = match.group().rstrip(".,")
