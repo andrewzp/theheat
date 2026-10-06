@@ -168,12 +168,12 @@ def interpret_observation(packet: dict, stage: str, observation: dict, raw: byte
                 text += part["text"]
         if not text.strip() or len(text.encode()) > 65_536:
             raise ValueError("invalid_check_text")
-        _, _, state = retained_inputs(packet)
+        bundle, _, state = retained_inputs(packet)
         if stage == "safety":
             allowed = safety.interpret_response(text) == "allow"
             result = dict(passed=allowed)
         elif stage == "fact_check":
-            checked = fact_check.interpret_response(tweet, text, state)
+            checked = fact_check.interpret_response(tweet, text, state, bundle=bundle)
             allowed, result = checked.passed, checked.to_dict()
         elif stage == "critic":
             reviewed = critic._parse_critic_result(text, allow_revise=False)

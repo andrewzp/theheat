@@ -220,8 +220,9 @@ def test_local_checks_and_response_interpretation_receive_final_text(inputs, mon
     assert seen == [TEXT + "\n" + URL]
     from tests.test_check_executor import envelope
     from src.two_bot.types import FactCheckResult
-    def interpreted(tweet, *args):
+    def interpreted(tweet, *args, **kwargs):
         seen.append(tweet)
+        assert kwargs["bundle"].to_dict() == saved["bundle"]
         return FactCheckResult(passed=False, raw_response="{}", extracted_claims=[], failures=["fixture rejection"])
     monkeypatch.setattr(check_requests.fact_check, "interpret_response", interpreted)
     result = check_requests.interpret_observation(saved, "fact_check", {"complete": True, "http_status": 200}, envelope("{}"))
