@@ -13,6 +13,31 @@ from typing import Any, TypeGuard
 from src.two_bot.strict_contract import valid_date, valid_url
 
 
+# A bounded absence-of-classification statement is not a positive fire identity.
+# Match the whole clause: a distant negative, quotation or connective cannot
+# excuse an affirmative claim. The required checkers still assess its truth.
+_UNAVAILABLE_INCIDENT_CLAUSE = re.compile(
+    r"(?:^|[.;][ \t]+)"
+    r"(?P<clause>no[ \t]+(?:independently[ \t]+(?:sourced|verified)|independent)"
+    r"[ \t]+incident[ \t]+classification[ \t]+is[ \t]+available"
+    r"(?:[ \t]+to[ \t]+(?:confirm|establish)[ \t]+vegetation(?:-|[ \t]+)fire"
+    r"[ \t]+identity(?:[ \t]+(?:and|or)[ \t]+(?:extent|cause)"
+    r"|,[ \t]+extent(?:,?[ \t]+(?:and|or)[ \t]+cause)?)?)?)"
+    r"(?=[.;]|\Z)"
+)
+
+
+def _incident_classification_scan(text: str) -> str:
+    """Mask only complete recognized negative clauses in the temporary scan."""
+    if any(char in text for char in "\"'‘’“”«»‹›\r\n"):
+        return text
+    chars = list(text)
+    for match in _UNAVAILABLE_INCIDENT_CLAUSE.finditer(text):
+        start, end = match.span("clause")
+        chars[start:end] = " " * (end - start)
+    return "".join(chars)
+
+
 def _source_warrant(value: Any, bundle) -> TypeGuard[dict[str, Any]]:
     return (
         isinstance(value, dict)
@@ -80,7 +105,9 @@ def scientific_claim_failures(tweet: str, bundle) -> list[str]:
         # FRP is the satellite product's physical metric, not an incident
         # classification. Other fire assertions (including a satellite-
         # confirmed "fire") require an independently attributed incident.
-        classification_text = re.sub(r"\bfire[- ]radiative[- ]power\b", "", text)
+        classification_text = re.sub(
+            r"\bfire[- ]radiative[- ]power\b", "", _incident_classification_scan(text)
+        )
         if re.search(r"\b(?:fires?|wildfires?|burning forests?|burning vegetation)\b", classification_text):
             incident = evidence.get("incident")
             if not (_source_warrant(incident, bundle) and incident.get("evidence_type") == "verified_incident"
