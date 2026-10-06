@@ -23,6 +23,7 @@ from src.data.ocean_sst_anomaly import (
     fetch_region_sst,
 )
 from src.data.source_status import SourceFetchError
+from tests.crw_fixtures import csv_body, metadata_receipt, native_file, response
 from src.state import DEFAULT_STATE, update_sst_anom_tier, increment_sst_anom_annual_count
 
 
@@ -31,14 +32,24 @@ def _fake_griddap_csv(date_iso: str, cells: list[tuple[float, float, float | str
         "time,latitude,longitude,sea_surface_temperature_anomaly\n"
         "UTC,degrees_north,degrees_east,degree_C\n"
     )
-    body = "".join(
-        f"{date_iso}T12:00:00Z,{lat},{lon},{val}\n" for lat, lon, val in cells
-    )
+    body = "".join(f"{date_iso}T12:00:00Z,{lat},{lon},{val}\n" for lat, lon, val in cells)
     return head + body
 
 
 def _response(text: str) -> Mock:
-    return Mock(text=text)
+    return response(text)
+
+
+@pytest.fixture(autouse=True)
+def offline_dataset_metadata(monkeypatch):
+    # These are regional unit tests. The integration suite exercises HTTP metadata.
+    monkeypatch.setattr("src.data.ocean_sst_anomaly._primary_metadata", metadata_receipt)
+
+
+def _complete_csv(region, day, cells):
+    return csv_body(
+        region, day=day, selected={(lat, lon): value for lat, lon, value in cells}, offset=0
+    ).decode()
 
 
 def test_region_registry_exports_13_valid_unique_boxes():
@@ -100,10 +111,13 @@ def test_area_weighted_mean_downweights_high_latitude():
 
 
 def test_parse_griddap_csv_skips_nan_and_blank_rows():
-    text = _fake_griddap_csv(
-        "2026-06-06",
-        [(5.0, -160.0, 1.5), (5.0, -159.95, "NaN")],
-    ) + "\n"
+    text = (
+        _fake_griddap_csv(
+            "2026-06-06",
+            [(5.0, -160.0, 1.5), (5.0, -159.95, "NaN")],
+        )
+        + "\n"
+    )
 
     iso_date, cells = _parse_griddap_csv(text)
 
@@ -140,7 +154,8 @@ def test_detect_tier_boundaries():
 
 def test_fetch_region_sst_success_tier2(monkeypatch):
     region = RegionDef("nino34", "Nino 3.4", -5, 5, -170, -120)
-    text = _fake_griddap_csv(
+    text = _complete_csv(
+        region,
         "2026-06-06",
         [(0.0, -160.0, 3.6), (0.0, -159.0, 3.6), (0.0, -158.0, 3.6)],
     )
@@ -161,7 +176,8 @@ def test_fetch_region_sst_success_tier2(monkeypatch):
 
 def test_fetch_region_sst_uses_short_timeout_budget(monkeypatch):
     region = RegionDef("nino34", "Nino 3.4", -5, 5, -170, -120)
-    text = _fake_griddap_csv(
+    text = _complete_csv(
+        region,
         "2026-06-06",
         [(0.0, -160.0, 3.6), (0.0, -159.0, 3.6), (0.0, -158.0, 3.6)],
     )
@@ -180,7 +196,8 @@ def test_fetch_region_sst_uses_short_timeout_budget(monkeypatch):
 
 def test_fetch_region_sst_below_floor_returns_none(monkeypatch):
     region = RegionDef("nino34", "Nino 3.4", -5, 5, -170, -120)
-    text = _fake_griddap_csv(
+    text = _complete_csv(
+        region,
         "2026-06-06",
         [(0.0, -160.0, 1.0), (0.0, -159.0, 1.0), (0.0, -158.0, 1.0)],
     )
@@ -189,12 +206,13 @@ def test_fetch_region_sst_below_floor_returns_none(monkeypatch):
         lambda *args, **kwargs: _response(text),
     )
 
-    assert fetch_region_sst(region, min_valid_cells=3) is None
+    assert fetch_region_sst(region, min_valid_cells=3, today=date(2026, 6, 11)) is None
 
 
 def test_fetch_region_sst_returns_synthesis_floor_tier0(monkeypatch):
     region = RegionDef("coral_triangle", "Coral Triangle", -10, 10, 120, 150)
-    text = _fake_griddap_csv(
+    text = _complete_csv(
+        region,
         "2026-06-06",
         [(0.0, 140.0, 2.1), (0.0, 141.0, 2.1), (0.0, 142.0, 2.1)],
     )
@@ -213,13 +231,13 @@ def test_fetch_region_sst_returns_synthesis_floor_tier0(monkeypatch):
 
 def test_fetch_region_sst_rejects_low_valid_cell_coverage(monkeypatch):
     region = RegionDef("gbr", "Great Barrier Reef", -24, -10, 142, 154)
-    text = _fake_griddap_csv("2026-06-06", [(-18.0, 148.0, 4.0)])
+    text = _complete_csv(region, "2026-06-06", [(-18.0, 148.0, 4.0)])
     monkeypatch.setattr(
         "src.data.ocean_sst_anomaly.fetch_with_retry",
         lambda *args, **kwargs: _response(text),
     )
 
-    assert fetch_region_sst(region, min_valid_cells=2) is None
+    assert fetch_region_sst(region, min_valid_cells=2, today=date(2026, 6, 11)) is None
 
 
 def test_fetch_region_sst_http_failure_returns_none(monkeypatch):
@@ -246,7 +264,7 @@ def test_fetch_region_sst_http_failure_strict_raises(monkeypatch):
 
 
 def test_fetch_all_regions_defaults_to_per_region_degradation(monkeypatch):
-    def _fake_fetch_region(region, *, min_valid_cells=10):
+    def _fake_fetch_region(region, *, min_valid_cells=10, metadata=None):
         if region.slug == "north_atlantic":
             return RegionalSSTReading(
                 "north_atlantic",
@@ -273,7 +291,7 @@ def test_fetch_all_regions_defaults_to_per_region_degradation(monkeypatch):
 
 
 def test_fetch_all_regions_strict_raises_on_first_region_failure(monkeypatch):
-    def _fake_fetch_region(region, *, min_valid_cells=10):
+    def _fake_fetch_region(region, *, min_valid_cells=10, metadata=None):
         if region.slug == "north_atlantic":
             return RegionalSSTReading(
                 "north_atlantic",
@@ -297,14 +315,14 @@ def test_fetch_all_regions_strict_raises_on_first_region_failure(monkeypatch):
 def test_fetch_all_regions_returns_empty_when_all_regions_below_tier(monkeypatch):
     monkeypatch.setattr(
         "src.data.ocean_sst_anomaly._fetch_region_sst_strict",
-        lambda region, *, min_valid_cells=10: None,
+        lambda region, *, min_valid_cells=10, metadata=None: None,
     )
 
     assert fetch_all_regions() == []
 
 
 def test_fetch_all_regions_raises_when_all_regions_fail(monkeypatch):
-    def _raise(region, *, min_valid_cells=10):
+    def _raise(region, *, min_valid_cells=10, metadata=None):
         raise SourceFetchError(f"{region.slug} failed")
 
     monkeypatch.setattr("src.data.ocean_sst_anomaly._fetch_region_sst_strict", _raise)
@@ -314,7 +332,7 @@ def test_fetch_all_regions_raises_when_all_regions_fail(monkeypatch):
 
 
 def test_fetch_all_regions_uses_noaa_star_nc_when_erddap_times_out(monkeypatch):
-    def _raise(region, *, min_valid_cells=10):
+    def _raise(region, *, min_valid_cells=10, metadata=None):
         raise SourceFetchError(f"{region.slug} timed out")
 
     fallback = [
@@ -338,7 +356,7 @@ def test_fetch_all_regions_uses_noaa_star_nc_when_erddap_times_out(monkeypatch):
 
 
 def test_fetch_all_regions_all_failure_includes_sampled_causes(monkeypatch):
-    def _raise(region, *, min_valid_cells=10):
+    def _raise(region, *, min_valid_cells=10, metadata=None):
         raise SourceFetchError(f"{region.slug} schema drift")
 
     monkeypatch.setattr("src.data.ocean_sst_anomaly._fetch_region_sst_strict", _raise)
@@ -369,28 +387,19 @@ def test_noaa_star_netcdf_parser_computes_region_mean_and_tags_source_leg(tmp_pa
     from netCDF4 import Dataset
     import numpy as np
 
-    nc_path = tmp_path / "ssta.nc"
-    with Dataset(nc_path, "w") as dataset:
-        dataset.createDimension("time", 1)
-        dataset.createDimension("lat", 41)
-        dataset.createDimension("lon", 41)
-        dataset.createVariable("time", "i4", ("time",))[:] = [0]
-        dataset.createVariable("lat", "f4", ("lat",))[:] = np.linspace(1.0, -1.0, 41)
-        dataset.createVariable("lon", "f4", ("lon",))[:] = np.linspace(-1.0, 1.0, 41)
-        ssta = dataset.createVariable(
-            "sea_surface_temperature_anomaly",
-            "f4",
-            ("time", "lat", "lon"),
-            fill_value=-32768,
-        )
-        grid = np.full((41, 41), 3.6)
-        grid[20, :] = 3.8
-        ssta[0, :, :] = grid
+    region = RegionDef("test", "Test Region", -1, 2, -1, 2)
+    nc_path = native_file(tmp_path / "ssta.nc", region=region)
+    # Three sampled latitudes, with the middle row warmer. Native centers lie
+    # just inside the bounds; metadata and packing match the production product.
+    with Dataset(nc_path, "a") as dataset:
+        lats = dataset.variables["lat"][:]
+        index = int(np.flatnonzero((lats >= region.lat_s) & (lats <= region.lat_n))[0]) + 20
+        dataset.variables["sea_surface_temperature_anomaly"][0, index, :] = 3.8
 
     readings = _readings_from_noaa_star_netcdf_bytes(
         nc_path.read_bytes(),
         data_date="2026-06-14",
-        regions=(RegionDef("test", "Test Region", -1, 1, -1, 1),),
+        regions=(region,),
         min_valid_cells=3,
         today=date(2026, 6, 16),
     )

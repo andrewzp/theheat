@@ -169,6 +169,16 @@ def build_marine_heatwave_bundle(mhw: MarineHeatwaveStreakEvent) -> StoryBundle:
 
 def build_regional_sst_anomaly_bundle(event: RegionalSSTAnomalyEvent) -> StoryBundle:
     """A per-region SST anomaly event bundle."""
+    from src.data.crw_contract import qualified_provenance, PRODUCT_NAME, METHOD
+
+    raw = asdict(event)
+    supplied_provenance = raw.pop("provenance", None)
+    qualified = qualified_provenance(event)
+    if qualified:
+        raw["provenance"] = supplied_provenance
+    elif supplied_provenance is not None:
+        # Preserve the rejected record, without presenting it as primary evidence.
+        raw["unqualified_provenance"] = supplied_provenance
     current_facts: list[dict[str, Any]] = [
         {"label": "region_slug", "value": event.region_slug},
         {"label": "region_display_name", "value": event.region_display_name},
@@ -177,22 +187,26 @@ def build_regional_sst_anomaly_bundle(event: RegionalSSTAnomalyEvent) -> StoryBu
         {"label": "tier_threshold_c", "value": [2.5, 3.5, 4.5][event.tier - 1]},
         {
             "label": "spatial_aggregation",
-            "value": "cos-latitude area-weighted basin mean",
+            "value": METHOD,
         },
         {"label": "grid_cells_used", "value": event.cells_used},
-        {"label": "anomaly_basis", "value": "NOAA CRW published 5km SST anomaly"},
+        {"label": "anomaly_basis", "value": "NOAA CRW published 5km SST anomaly relative to its daily climatology"},
         {
             "label": "signal_note",
             "value": (
-                "Absolute area-weighted-mean anomaly vs CRW climatology. "
-                "NOT a Hobday duration/percentile MHW classification."
+                "Sampled regional mean of the CRW daily satellite-analysis anomaly. "
+                "The product timestamp is not a verified measurement interval. "
+                "Not a historical record or a Hobday duration/percentile MHW classification."
             ),
         },
     ]
-    if event.source_leg == "noaa_star_nc":
+    if qualified:
         current_facts.extend([
-            {"label": "data_source", "value": "NOAA STAR CRW SST anomaly NetCDF"},
-            {"label": "evidence_grade", "value": "observed_alt_host"},
+            {"label": "data_source", "value": PRODUCT_NAME},
+            {"label": "evidence_grade", "value": "satellite_analysis"},
+            {"label": "source_leg", "value": supplied_provenance["source_leg"]},
+            {"label": "sample_cells_total", "value": supplied_provenance["total_cells"]},
+            {"label": "sample_cells_excluded", "value": supplied_provenance["excluded_cells"]},
         ])
 
     return StoryBundle(
@@ -212,10 +226,10 @@ def build_regional_sst_anomaly_bundle(event: RegionalSSTAnomalyEvent) -> StoryBu
                 "NOAA Coral Reef Watch Daily Global 5km SST Anomaly "
                 "(ERDDAP noaacrwsstanomalyDaily)"
             ),
-            "spatial_aggregation": "cos-latitude area-weighted basin mean",
+            "spatial_aggregation": METHOD,
             "tier_thresholds": [2.5, 3.5, 4.5],
         },
-        raw_signal_dump=asdict(event),
+        raw_signal_dump=raw,
     )
 
 def build_extreme_wave_bundle(wave: ExtremeWaveEvent) -> StoryBundle:
