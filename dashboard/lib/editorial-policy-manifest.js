@@ -70,11 +70,11 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/two_bot/rejected_candidate.py": "f15a69f7ac1db8c6d97f487846e6af755575fa2d59aab7a8d89cbd33b2b6e993",
     "src/two_bot/scientific_claims.py": "b46d0f8ccd17c6f3ec6db052741806269bd2d8e3b8569e60970232dbe5aaf126",
     "src/two_bot/source_links.py": "d0cc31547cd714aa7760f7a2ff3659076c4198ce868bf9fa96aa313f98e5e0a0",
-    "src/two_bot/strict_contract.py": "4604e2042673122df591de7833a14b34a0f44d59fa99605646f34b4477dcaded",
+    "src/two_bot/strict_contract.py": "d4536268c08775cea808d3f2738226da9d33d7244a8c30988d5286d6dae83ca8",
     "src/two_bot/types.py": "1ca82f8ae83306bfc5e1693f6de14d3da0c0b51c8473429873bd7443cde08d02",
     "src/two_bot/writer.py": "41baa1223ef9e8ab36054dfa532f437c6b26ec1d6c6e4c0754edab96664f9abe",
     "src/voice/safety.py": "4a828a22e451889f630e994add6ba38c463d44369d24d2e22c2ff85e7f0387e5"
   },
   "schema_version": 1,
-  "source_sha256": "e9b571da6fa31d07ac1259efc3f062353b1c43224e2e94500b9cc52be93d17b8"
+  "source_sha256": "0c4b7ee2e9cd00504a32e5be69d121b408ede3fc2c08b46a9ba10b21feda8692"
 }

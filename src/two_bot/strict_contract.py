@@ -18,6 +18,17 @@ CLAIM_KINDS = frozenset({"number", "date", "named_entity", "comparison", "era_an
 _SOURCE_KEYS = frozenset({"source", "data_source", "source_name", "source_product", "source_url", "url"})
 _DATE_KEYS = frozenset({"date", "valid_date", "as_of", "issued_at", "retrieved_at", "signal_date", "start_date", "end_date", "valid_start", "valid_end", "cutoff", "verified_source_cutoff", "requested_cutoff", "comparison_before"})
 _OPENERS = frozenset({"A", "An", "The", "This", "That", "These", "Those", "Some", "Last", "First", "No", "Not", "It", "Its", "In", "At", "On", "For", "Over", "Under", "From", "By", "With", "Without", "But", "And", "Or", "If", "As"})
+_PERIOD_ABBREVIATIONS = frozenset({
+    "approx", "assoc", "brig", "capt", "cmdr", "co", "col", "corp", "dept", "dr", "etc", "fr", "ft",
+    "gen", "gov", "govt", "hon", "inc", "jr", "ltd", "lt", "maj", "messrs", "mr", "mrs", "ms", "mt", "mx",
+    "no", "nos", "pres", "prof", "rep", "rev", "sen", "sgt", "sr", "st", "supt", "univ", "vol", "vs",
+    "jan", "feb", "mar", "apr", "jun", "jul", "aug", "sep", "sept", "oct", "nov", "dec",
+})
+_ENTITY_SENTENCE_BOUNDARY = re.compile(
+    r"(?<![\w'’.-])[A-ZÀ-ÖØ-Þ][a-zà-öø-ÿ]+(?P<period>\.)[ \t]+(?:"
+    + "|".join(sorted(_OPENERS, key=lambda value: (-len(value), value)))
+    + r")(?=[ \t]+[a-zà-öø-ÿ])"
+)
 
 
 def valid_date(value: Any) -> bool:
@@ -230,6 +241,22 @@ def _source_caption_label(tweet: str, claims: list, bundle: Any) -> tuple[int, i
     return None
 
 
+def _entity_sentence_scan(visible: str, original: str) -> str:
+    """Keep sentence-opening function words separate without changing offsets.
+
+    Ambiguous names, initials, abbreviations and quoted text stay conservative.
+    This lexical heuristic does not replace semantic extraction or verification.
+    """
+    if any(char in original for char in "\"'‘’“”«»‹›\r\n"):
+        return visible
+    chars = list(visible)
+    for match in _ENTITY_SENTENCE_BOUNDARY.finditer(visible):
+        period = match.start("period")
+        if visible[match.start():period].lower() not in _PERIOD_ABBREVIATIONS:
+            chars[period] = ";"
+    return "".join(chars)
+
+
 def material_span_failures(tweet: str, claims: list, *, bundle: Any = None) -> list[str]:
     """Require literal coverage of detectable numbers, dates and entity spans.
 
@@ -260,7 +287,8 @@ def material_span_failures(tweet: str, claims: list, *, bundle: Any = None) -> l
         left, right = caption_label
         visible = visible[:left] + " " * (right - left) + visible[right:]
     material = [(match.start(), match.end(), match.group()) for match in re.finditer(r"(?<!\w)[+-]?\d+(?:[.,]\d+)*(?:[eE][+-]?\d+)?", visible)]
-    for match in re.finditer(r"\b[A-ZÀ-ÖØ-Þ][\wÀ-ÿ'’.-]*(?:\s+[A-ZÀ-ÖØ-Þ][\wÀ-ÿ'’.-]*)*", visible):
+    entity_visible = _entity_sentence_scan(visible, tweet)
+    for match in re.finditer(r"\b[A-ZÀ-ÖØ-Þ][\wÀ-ÿ'’.-]*(?:\s+[A-ZÀ-ÖØ-Þ][\wÀ-ÿ'’.-]*)*", entity_visible):
         token = match.group().rstrip(".,")
         if token not in _OPENERS:
             material.append((match.start(), match.start() + len(token), token))

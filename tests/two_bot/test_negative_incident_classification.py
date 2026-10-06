@@ -15,7 +15,7 @@ from tests.test_check_executor import envelope
 from tests.two_bot.conftest import _bundle
 from tests.two_bot.test_candidate_derivation import packet
 
-MEASUREMENT = "A satellite measured 312 MW near Luma today."
+MEASUREMENT = "A satellite measured 312 MW near Luma."
 ABSENCE = "No independent incident classification is available to establish vegetation-fire identity"
 TEXT = MEASUREMENT + " " + ABSENCE + "."
 
