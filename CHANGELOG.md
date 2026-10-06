@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.108.82 — 2026-10-06
+
+- Distinguish a narrowly scoped statement of unavailable independent incident classification from an affirmative vegetation-fire claim. Positive fire assertions still require their source-bound incident warrant, and all other factual checks remain mandatory.
+
 ## 0.9.108.81 — 2026-10-06
 
 - Report CRW regional source coverage from qualified samples, including valid quiet conditions, rather than the number of configured boxes. Preserve primary failures after backup recovery and distinguish inadequate samples from rejected source data.
