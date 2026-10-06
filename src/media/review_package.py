@@ -20,6 +20,7 @@ import subprocess
 from typing import Iterator
 import uuid
 
+from src.media.evidence_graphic import adapter_filename
 from src.media.review_packet import (
     MAX_JSON_BYTES,
     MAX_PNG_BYTES,
@@ -140,7 +141,7 @@ def _check_renderer(manifest: dict, rasterizer: Path) -> None:
     expected = {
         "implementation_sha256": media / "evidence_graphic_render.py",
         "contract_sha256": media / "evidence_graphic.py",
-        "adapter_sha256": media / "temperature_graphic_adapter.py",
+        "adapter_sha256": media / adapter_filename(manifest["binding"]["template"]),
         "font_sha256": media / "fonts" / "DejaVuSansMono.ttf",
         "rasterizer_sha256": rasterizer,
     }

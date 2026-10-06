@@ -14,7 +14,7 @@ import subprocess
 
 from src.editorial.revisions import fingerprint
 from src.media.evidence_graphic import (
-    HEIGHT, WIDTH, TEMPLATE_VERSION, VARIABLE_LABELS, build_alt_text, chart_title, date_only,
+    HEIGHT, WIDTH, template_version, adapter_filename, VARIABLE_LABELS, build_alt_text, chart_title, date_only,
     point_label, validate_graphic,
 )
 
@@ -50,8 +50,8 @@ def render_preview(template, evidence, *, expected_evidence_sha256, output_dir, 
                 "contract_sha256": _digest(Path(__file__).with_name("evidence_graphic.py")),
                 "font_sha256": _digest(FONT_PATH), "width": WIDTH, "height": HEIGHT}
     if "input_binding" in evidence:
-        renderer["adapter_sha256"] = _digest(Path(__file__).with_name("temperature_graphic_adapter.py"))
-    identity = {"template": template, "template_version": TEMPLATE_VERSION,
+        renderer["adapter_sha256"] = _digest(Path(__file__).with_name(adapter_filename(template)))
+    identity = {"template": template, "template_version": template_version(template),
                 "source_evidence_sha256": expected_evidence_sha256, "renderer": renderer}
     key = fingerprint(identity)
     folder = Path(output_dir).resolve() / key
@@ -117,123 +117,152 @@ def render_preview(template, evidence, *, expected_evidence_sha256, output_dir, 
 
     text(56, 1418, "THEHEAT", 48)
     text(1144, 1418, "SYNTHETIC DATA" if evidence["synthetic"] else "REVIEW PREVIEW", 40, "warm", "end")
-    text(56, 1312, chart_title(template, evidence), 48 if template == "temperature_trajectory" else 62)
-    location_bottom = block(1245, evidence["location"], color="text", bottom=1190)
-    as_of_label = datetime.fromisoformat(evidence["evidence_as_of"].replace("Z", "+00:00")).astimezone(timezone.utc).strftime("%Y-%m-%d %H:%MZ")
-    text(56, location_bottom - 12, "As of " + as_of_label, 40, "muted")
-    if template == "temperature_comparator":
-        text(56, location_bottom - 76, VARIABLE_LABELS[evidence["variable"]], 40, "muted")
-
-    plot = LinePlot()
-    plot.x, plot.y, plot.width, plot.height = 135, 755, 940, 280
-    plot.strokeColor = None
-    plot.xValueAxis.labels.fontName = plot.yValueAxis.labels.fontName = "TheHeatMono"
-    plot.xValueAxis.labels.fontSize = plot.yValueAxis.labels.fontSize = 40
-    plot.xValueAxis.labels.fillColor = plot.yValueAxis.labels.fillColor = colors["muted"]
-    plot.xValueAxis.strokeColor = plot.yValueAxis.strokeColor = colors["grid"]
-    plot.xValueAxis.tickDown = 8
-    plot.yValueAxis.visibleGrid = True
-    plot.yValueAxis.gridStrokeColor = colors["grid"]
-    plot.yValueAxis.gridStrokeWidth = 1
-    plot.yValueAxis.labels.dx = -16
-    points = evidence["points"]
-    source_products = []
-    for point in points:
-        if point["source"]["product"] not in source_products:
-            source_products.append(point["source"]["product"])
-
-    if template == "temperature_comparator":
-        baseline, current = evidence["baseline"], points[0]
-        prior = baseline["point"]
-        plot.x, plot.width, plot.height = 555, 515, 250
-        plot.yValueAxis.visible = False
-        plot.yValueAxis.visibleGrid = False
-        plot.yValueAxis.valueMin, plot.yValueAxis.valueMax = -0.5, 1.5
-        low, high = sorted((prior["value"], current["value"]))
-        padding = max(1.5, (high - low) * 0.75)
-        plot.xValueAxis.valueMin, plot.xValueAxis.valueMax = low - padding, high + padding
-        plot.xValueAxis.labelTextFormat = lambda value: f"{value:g}"
-        plot.xValueAxis.maximumTicks = 5
-        plot.data = [[(prior["value"], 0)], [(current["value"], 1)]]
-        plot.joinedLines = False
-        for index, kind in enumerate((prior["evidence_type"], current["evidence_type"])):
-            marker = makeMarker("Diamond" if kind == "forecast" else "FilledCircle")
-            marker.size = 30
-            marker.strokeColor = colors["warm"] if index else colors["text"]
-            marker.fillColor = colors["bg"] if kind == "forecast" else marker.strokeColor
-            marker.strokeWidth = 3
-            plot.lines[index].symbol = marker
-        text(56, 951, current["evidence_type"].capitalize(), 40)
-        text(56, 878, f"{current['value']:g}{evidence['unit']}", 62, "warm")
-        text(56, 792, "Comparator", 40)
-        text(56, 725, f"{prior['value']:g}{evidence['unit']}", 62)
-        text(1144, 1015, f"Difference {current['value'] - prior['value']:+g}{evidence['unit']}", 40, "warm", "end")
-        text(1144, 687, evidence["unit"], 40, "muted", "end")
-        source_products.append(prior["source"]["product"])
-        notes = ["Current: " + point_label(current, evidence),
-                 "Observed comparator: " + point_label(prior, evidence),
-                 "Archive: " + baseline["start"] + " to " + baseline["cutoff"],
-                 baseline["scope"], evidence["scope"]]
+    if template == "crw_regional_anomaly":
+        from src.media.crw_graphic_adapter import anomaly_axis_limit, signed_anomaly
+        from reportlab.graphics.shapes import Line
+        text(56, 1320, chart_title(template, evidence), 62)
+        block(1240, evidence["location"], size=48, color="text", bottom=1150)
+        text(56, 1090, "Product date " + evidence["valid_date"], 40, "muted")
+        text(56, 935, signed_anomaly(evidence["value"]) + "°C", 124, "warm")
+        limit = anomaly_axis_limit(evidence["value"])
+        center, half, axis_y = WIDTH / 2, 470, 795
+        endpoint = center + evidence["value"] / limit * half
+        drawing.add(Rect(min(center, endpoint), axis_y + 15, abs(endpoint - center), 50,
+                         fillColor=colors["warm"], strokeColor=None))
+        drawing.add(Line(center - half, axis_y, center + half, axis_y, strokeColor=colors["muted"], strokeWidth=2))
+        for x in (center - half, center, center + half):
+            drawing.add(Line(x, axis_y - 8, x, axis_y + 70, strokeColor=colors["muted"], strokeWidth=2))
+        text(center - half, axis_y - 65, f"−{limit}°C", 40, "muted")
+        text(center, axis_y - 65, "0", 40, "muted", "middle")
+        text(center + half, axis_y - 65, f"+{limit}°C", 40, "muted", "end")
+        notes = ["Relative to CRW daily climatology",
+                 "Reference: 1985–1990 + 1993",
+                 f"{evidence['valid_cells']} valid / {evidence['total_cells']} sampled cells",
+                 "Latitude-weighted satellite analysis; 1° sample spacing, not a full-grid regional average.",
+                 "Source: NOAA Coral Reef Watch v3.1"]
+        if evidence["synthetic"]:
+            notes.append("Illustrative values; not actual weather.")
+        bottom = 635
+        for note in notes:
+            bottom = block(bottom, note)
     else:
-        times = ([date.fromisoformat(point["valid_date"]) for point in points] if date_only(evidence) else
-                 [datetime.fromisoformat(point["valid_time"].replace("Z", "+00:00")).astimezone(timezone.utc) for point in points])
-        xs = [(value - times[0]).total_seconds() / 86400 for value in times]
-        padding = (xs[-1] - xs[0]) * 0.04
-        plot.xValueAxis.valueMin, plot.xValueAxis.valueMax = xs[0] - padding, xs[-1] + padding
-        days = [value.date() if isinstance(value, datetime) else value for value in times]
-        daily = len(set(days)) == len(times)
-        same_day = len(set(days)) == 1
-        time_format = "%m-%d" if daily else ("%H:%M" if same_day else "%m-%d %H:%M")
-        if not daily and len({value.strftime(time_format) for value in times}) != len(times):
-            time_format += ":%S"
-        labels = {x: value.strftime(time_format) for x, value in zip(xs, times)}
-        for left, right in zip(xs, xs[1:]):
-            gap = (right - left) / (plot.xValueAxis.valueMax - plot.xValueAxis.valueMin) * plot.width
-            label_space = sum(pdfmetrics.stringWidth(labels[x], "TheHeatMono", 40) for x in (left, right)) / 2
-            if gap < label_space + 12:
-                raise ValueError("Trajectory time labels would overlap; use fewer reviewed points")
-        plot.xValueAxis.valueSteps = xs
-        plot.xValueAxis.labelTextFormat = lambda value: labels.get(value, "")
-        values = [point["value"] for point in points]
-        plot.yValueAxis.valueMin, plot.yValueAxis.valueMax = min(values) - 2, max(values) + 2
-        plot.yValueAxis.maximumTicks = 5
-        plot.yValueAxis.labelTextFormat = lambda value: f"{value:g}"
-        series = []
-        for kind in dict.fromkeys(point["evidence_type"] for point in points):
-            series.append((kind, [(x, point["value"]) for x, point in zip(xs, points) if point["evidence_type"] == kind]))
-        if len(series) == 2:
-            series.append(("forecast-connector", [series[0][1][-1], series[1][1][0]]))
-        plot.data = [rows for _, rows in series]
-        plot.joinedLines = True
-        for index, (kind, _) in enumerate(series):
-            forecast = kind.startswith("forecast")
-            plot.lines[index].strokeColor = colors["warm"] if forecast else colors["text"]
-            plot.lines[index].strokeWidth = 5
-            plot.lines[index].strokeDashArray = [10, 7] if forecast else None
-            if kind != "forecast-connector":
-                marker = makeMarker("Diamond" if forecast else "FilledCircle")
-                marker.size = 24
-                marker.strokeColor = plot.lines[index].strokeColor
-                marker.fillColor = colors["bg"] if forecast else colors["text"]
-                marker.strokeWidth = 2.5
+        text(56, 1312, chart_title(template, evidence), 48 if template == "temperature_trajectory" else 62)
+        location_bottom = block(1245, evidence["location"], color="text", bottom=1190)
+        as_of_label = datetime.fromisoformat(evidence["evidence_as_of"].replace("Z", "+00:00")).astimezone(timezone.utc).strftime("%Y-%m-%d %H:%MZ")
+        text(56, location_bottom - 12, "As of " + as_of_label, 40, "muted")
+        if template == "temperature_comparator":
+            text(56, location_bottom - 76, VARIABLE_LABELS[evidence["variable"]], 40, "muted")
+
+        plot = LinePlot()
+        plot.x, plot.y, plot.width, plot.height = 135, 755, 940, 280
+        plot.strokeColor = None
+        plot.xValueAxis.labels.fontName = plot.yValueAxis.labels.fontName = "TheHeatMono"
+        plot.xValueAxis.labels.fontSize = plot.yValueAxis.labels.fontSize = 40
+        plot.xValueAxis.labels.fillColor = plot.yValueAxis.labels.fillColor = colors["muted"]
+        plot.xValueAxis.strokeColor = plot.yValueAxis.strokeColor = colors["grid"]
+        plot.xValueAxis.tickDown = 8
+        plot.yValueAxis.visibleGrid = True
+        plot.yValueAxis.gridStrokeColor = colors["grid"]
+        plot.yValueAxis.gridStrokeWidth = 1
+        plot.yValueAxis.labels.dx = -16
+        points = evidence["points"]
+        source_products = []
+        for point in points:
+            if point["source"]["product"] not in source_products:
+                source_products.append(point["source"]["product"])
+
+        if template == "temperature_comparator":
+            baseline, current = evidence["baseline"], points[0]
+            prior = baseline["point"]
+            plot.x, plot.width, plot.height = 555, 515, 250
+            plot.yValueAxis.visible = False
+            plot.yValueAxis.visibleGrid = False
+            plot.yValueAxis.valueMin, plot.yValueAxis.valueMax = -0.5, 1.5
+            low, high = sorted((prior["value"], current["value"]))
+            padding = max(1.5, (high - low) * 0.75)
+            plot.xValueAxis.valueMin, plot.xValueAxis.valueMax = low - padding, high + padding
+            plot.xValueAxis.labelTextFormat = lambda value: f"{value:g}"
+            plot.xValueAxis.maximumTicks = 5
+            plot.data = [[(prior["value"], 0)], [(current["value"], 1)]]
+            plot.joinedLines = False
+            for index, kind in enumerate((prior["evidence_type"], current["evidence_type"])):
+                marker = makeMarker("Diamond" if kind == "forecast" else "FilledCircle")
+                marker.size = 30
+                marker.strokeColor = colors["warm"] if index else colors["text"]
+                marker.fillColor = colors["bg"] if kind == "forecast" else marker.strokeColor
+                marker.strokeWidth = 3
                 plot.lines[index].symbol = marker
-        text(60, 1060, evidence["unit"], 40, "muted")
-        legend = "   ".join(("◇ " if kind == "forecast" else "● ") + kind.capitalize() for kind, _ in series if kind != "forecast-connector")
-        text(1144, 1070, legend, 40, "muted", "end")
-        notes = [evidence["scope"],
-                 "From " + point_label(points[0], evidence),
-                 "Through " + point_label(points[-1], evidence)]
-    drawing.add(plot)
-    notes.append("Source: " + " / ".join(dict.fromkeys(source_products)))
-    if date_only(evidence):
-        notes.append("Dates are source-calendar labels; reporting interval and timezone unknown.")
-    if template == "temperature_comparator" and "no official record" not in evidence["baseline"]["scope"].lower():
-        notes.append("Dated sample comparison; no official record.")
-    if evidence["synthetic"]:
-        notes.append("Illustrative values; not actual weather.")
-    bottom = 610
-    for note in notes:
-        bottom = block(bottom, note)
+            text(56, 951, current["evidence_type"].capitalize(), 40)
+            text(56, 878, f"{current['value']:g}{evidence['unit']}", 62, "warm")
+            text(56, 792, "Comparator", 40)
+            text(56, 725, f"{prior['value']:g}{evidence['unit']}", 62)
+            text(1144, 1015, f"Difference {current['value'] - prior['value']:+g}{evidence['unit']}", 40, "warm", "end")
+            text(1144, 687, evidence["unit"], 40, "muted", "end")
+            source_products.append(prior["source"]["product"])
+            notes = ["Current: " + point_label(current, evidence),
+                     "Observed comparator: " + point_label(prior, evidence),
+                     "Archive: " + baseline["start"] + " to " + baseline["cutoff"],
+                     baseline["scope"], evidence["scope"]]
+        else:
+            times = ([date.fromisoformat(point["valid_date"]) for point in points] if date_only(evidence) else
+                     [datetime.fromisoformat(point["valid_time"].replace("Z", "+00:00")).astimezone(timezone.utc) for point in points])
+            xs = [(value - times[0]).total_seconds() / 86400 for value in times]
+            padding = (xs[-1] - xs[0]) * 0.04
+            plot.xValueAxis.valueMin, plot.xValueAxis.valueMax = xs[0] - padding, xs[-1] + padding
+            days = [value.date() if isinstance(value, datetime) else value for value in times]
+            daily = len(set(days)) == len(times)
+            same_day = len(set(days)) == 1
+            time_format = "%m-%d" if daily else ("%H:%M" if same_day else "%m-%d %H:%M")
+            if not daily and len({value.strftime(time_format) for value in times}) != len(times):
+                time_format += ":%S"
+            labels = {x: value.strftime(time_format) for x, value in zip(xs, times)}
+            for left, right in zip(xs, xs[1:]):
+                gap = (right - left) / (plot.xValueAxis.valueMax - plot.xValueAxis.valueMin) * plot.width
+                label_space = sum(pdfmetrics.stringWidth(labels[x], "TheHeatMono", 40) for x in (left, right)) / 2
+                if gap < label_space + 12:
+                    raise ValueError("Trajectory time labels would overlap; use fewer reviewed points")
+            plot.xValueAxis.valueSteps = xs
+            plot.xValueAxis.labelTextFormat = lambda value: labels.get(value, "")
+            values = [point["value"] for point in points]
+            plot.yValueAxis.valueMin, plot.yValueAxis.valueMax = min(values) - 2, max(values) + 2
+            plot.yValueAxis.maximumTicks = 5
+            plot.yValueAxis.labelTextFormat = lambda value: f"{value:g}"
+            series = []
+            for kind in dict.fromkeys(point["evidence_type"] for point in points):
+                series.append((kind, [(x, point["value"]) for x, point in zip(xs, points) if point["evidence_type"] == kind]))
+            if len(series) == 2:
+                series.append(("forecast-connector", [series[0][1][-1], series[1][1][0]]))
+            plot.data = [rows for _, rows in series]
+            plot.joinedLines = True
+            for index, (kind, _) in enumerate(series):
+                forecast = kind.startswith("forecast")
+                plot.lines[index].strokeColor = colors["warm"] if forecast else colors["text"]
+                plot.lines[index].strokeWidth = 5
+                plot.lines[index].strokeDashArray = [10, 7] if forecast else None
+                if kind != "forecast-connector":
+                    marker = makeMarker("Diamond" if forecast else "FilledCircle")
+                    marker.size = 24
+                    marker.strokeColor = plot.lines[index].strokeColor
+                    marker.fillColor = colors["bg"] if forecast else colors["text"]
+                    marker.strokeWidth = 2.5
+                    plot.lines[index].symbol = marker
+            text(60, 1060, evidence["unit"], 40, "muted")
+            legend = "   ".join(("◇ " if kind == "forecast" else "● ") + kind.capitalize() for kind, _ in series if kind != "forecast-connector")
+            text(1144, 1070, legend, 40, "muted", "end")
+            notes = [evidence["scope"],
+                     "From " + point_label(points[0], evidence),
+                     "Through " + point_label(points[-1], evidence)]
+        drawing.add(plot)
+        notes.append("Source: " + " / ".join(dict.fromkeys(source_products)))
+        if date_only(evidence):
+            notes.append("Dates are source-calendar labels; reporting interval and timezone unknown.")
+        if template == "temperature_comparator" and "no official record" not in evidence["baseline"]["scope"].lower():
+            notes.append("Dated sample comparison; no official record.")
+        if evidence["synthetic"]:
+            notes.append("Illustrative values; not actual weather.")
+        bottom = 610
+        for note in notes:
+            bottom = block(bottom, note)
     (folder / "input.json").write_text(json.dumps({"template": template, "expected_evidence_sha256": expected_evidence_sha256, "evidence": evidence}, ensure_ascii=False, sort_keys=True, indent=2) + "\n")
     (folder / "alt.txt").write_text(build_alt_text(template, evidence) + "\n")
     renderPDF.drawToFile(drawing, str(folder / "preview.pdf"))

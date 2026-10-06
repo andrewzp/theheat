@@ -28,11 +28,13 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/data/temperature_evidence.py": "f656cee4dd86e6f6762932e98ea189e39e5965852c5d3e06299d8ffff3173046",
     "src/data/world_thresholds.py": "a817f8feabe3e41dac69ff3fef07ad9ac264843daa075caef2484fcf7fc5fe09",
     "src/editorial/approval.py": "7c74edff3e93cd2024522df5281dda73cef287c8b038f705f4e391ad8ebb89c3",
-    "src/editorial/policy.py": "23eecf9e8fed4e4ad2b14f243b613bf56436012376d202c4ee3eba9c4ee382f7",
+    "src/editorial/policy.py": "b6d77e03ba4092ccba8bd277b92081171ec76e85a4ac9742092cd1daf8b66c7d",
     "src/editorial/revisions.py": "98ac320899d602e4d4fff7e1b83a39f140009e7511d07ec4d34af4511c934f0b",
     "src/media/attachment.py": "119515f4136f9bfa35c9eb3dc2b6f4c9f5ba938cf70e9002d9ae7f9d7bdb8d12",
+    "src/media/crw_graphic_adapter.py": "d3792b885d73822784a3b54af75e69e7077cd6d6bb49a02c7519258bf8ff4e2f",
+    "src/media/evidence_graphic.py": "f1d14136cdbad194cd661050560c426b43a0cf7009d18fde81467221348b435a",
     "src/media/joint_review.py": "54aff9dd95e9e85f7efbe5faa03742d3654ab2259bf2a39a36692b248a9be44b",
-    "src/media/review_packet.py": "b3d254dfe5c57d201b600b664eeccf01710e25dd1dd6df0dba7bab4468e2a115",
+    "src/media/review_packet.py": "82193992caec4cad969e5dca8e6b8a147bdf8cc41045509bb754130a0070bd11",
     "src/orchestrator/posting.py": "2fa0ee90d6ab51c6212c816ec3d04e796fe436ad1440e6ad7337ed53e458cde6",
     "src/orchestrator/sources/open_meteo.py": "2781e2de344e2f22c7afa7831e6cc42fd02024eab96f1c11839885040f961a7e",
     "src/orchestrator/two_bot_dispatch.py": "e7ee832f87fde0f04eb60a27d6b85498b4462d13933a0e9928a786b9354788fe",
@@ -76,5 +78,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "4a828a22e451889f630e994add6ba38c463d44369d24d2e22c2ff85e7f0387e5"
   },
   "schema_version": 1,
-  "source_sha256": "0c4b7ee2e9cd00504a32e5be69d121b408ede3fc2c08b46a9ba10b21feda8692"
+  "source_sha256": "fb7a9d5dad4f1f2cbbef9847d45df4ac72e009c94275fde9d1604c95e13f5356"
 }

@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.108.84 — 2026-10-06
+
+- Build deterministic private CRW regional sea-temperature anomaly graphics from retained source bytes. Recalculate the sampled mean and retain the native climatology, product date, coverage and separate acquisition receipts.
+- Extend exact text/media review and private packaging to the qualified CRW adapter, preserving stale-review invalidation, GHCN compatibility and publication refusal. No image-model calls or production attachment/publishing activation.
+
 ## 0.9.108.83 — 2026-10-06
 
 - Keep a place name separate from an ordinary sentence opener in factual claim inventories. Preserve complete-name coverage for initials, abbreviations and ambiguous forms; number/date coverage and all required factual checks remain unchanged.
