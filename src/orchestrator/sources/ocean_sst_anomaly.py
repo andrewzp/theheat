@@ -5,7 +5,6 @@ from __future__ import annotations
 # ruff: noqa: F403,F405
 from functools import partial
 
-from src.data._witness import degraded_via
 from src.orchestrator.common import *
 from src.two_bot.intern import build_regional_sst_anomaly_bundle
 
@@ -14,7 +13,8 @@ def run_ocean_sst_anomaly(bot_state: BotState, current_run: dict | None) -> None
     print("[alerts] Checking per-region SST anomaly...")
     start = time.perf_counter()
     try:
-        readings = ocean_sst_anomaly.fetch_all_regions(strict=False)
+        collection = ocean_sst_anomaly.collect_all_regions(strict=False)
+        readings = collection.readings
         for reading in readings:
             state.record_synthesis_component(
                 bot_state,
@@ -61,7 +61,6 @@ def run_ocean_sst_anomaly(bot_state: BotState, current_run: dict | None) -> None
             if not _should_draft(score, event.event_id):
                 continue
 
-            source_promoted += 1
             review_context = _review_context(
                 source="NOAA Coral Reef Watch 5km SST anomaly (gridded)",
                 source_key="ocean_sst_anomaly",
@@ -93,7 +92,7 @@ def run_ocean_sst_anomaly(bot_state: BotState, current_run: dict | None) -> None
                 state.update_sst_anom_tier(_bs, _slug, _tier, _date)
                 state.increment_sst_anom_annual_count(_bs, _date)
 
-            _enqueue_story_candidate(
+            accepted = _enqueue_story_candidate(
                 bot_state,
                 bundle=bundle,
                 score=score,
@@ -107,28 +106,32 @@ def run_ocean_sst_anomaly(bot_state: BotState, current_run: dict | None) -> None
                 on_draft_success=_on_success,
                 annual_cap_check=partial(_sst_anom_annual_cap_reached, bot_state, event.date),
             )
+            source_promoted += int(accepted)
 
-        degraded_note = degraded_via(readings)
         _record_source_run(
             current_run,
             bot_state,
             "ocean_sst_anomaly",
             start,
-            status="degraded" if degraded_note else "success",
-            observed=len(ocean_sst_anomaly.REGION_REGISTRY),
+            status=collection.status,
+            observed=collection.observed,
             promoted=source_promoted,
             drafted=0,
-            note=degraded_note,
+            note=collection.note,
+            details=collection.details(),
         )
-    except Exception as exc:
-        print(f"[alerts] ocean_sst_anomaly error: {exc}")
-        state.log_error(bot_state, "ocean_sst_anomaly", str(exc))
+    except Exception:
+        # Source outcomes are fixed codes above. Unexpected runner errors must
+        # also avoid persisting arbitrary response/exception payloads.
+        error = "regional_sst_runner_error"
+        print(f"[alerts] ocean_sst_anomaly error: {error}")
+        state.log_error(bot_state, "ocean_sst_anomaly", error)
         _record_source_run(
             current_run,
             bot_state,
             "ocean_sst_anomaly",
             start,
             status="failed",
-            error=str(exc),
+            error=error,
         )
     return

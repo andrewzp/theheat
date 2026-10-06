@@ -22,11 +22,11 @@ from copy import deepcopy
 import math
 import re
 import time
-from collections.abc import Iterable, Mapping
+from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime, timedelta
-from typing import Any
+from typing import Any, Literal
 
 import requests
 
@@ -116,6 +116,119 @@ class RegionalSSTAnomalyEvent:
     event_id: str
     source_leg: str | None = None
     provenance: dict[str, Any] | None = None
+
+
+@dataclass(frozen=True)
+class RegionalSSTSample:
+    """One leg's outcome, including samples below the synthesis floor.
+
+    A candidate can be tier zero (synthesis only), not a publishable event.
+    Raw source bytes and exception text never enter the health projection.
+    """
+
+    region_slug: str
+    outcome: Literal[
+        "candidate", "below_floor", "insufficient_sample", "source_rejected", "transport_failure"
+    ]
+    source_leg: str
+    request_attempted: bool = True
+    product_date: str | None = None
+    total_cells: int | None = None
+    valid_cells: int | None = None
+    excluded_cells: int | None = None
+    diagnostic: str | None = None
+    reading: RegionalSSTReading | None = None
+
+    @property
+    def qualified(self) -> bool:
+        return self.outcome in {"candidate", "below_floor"}
+
+    def summary(self) -> dict:
+        return {
+            "outcome": self.outcome,
+            "source_leg": self.source_leg,
+            "request_attempted": self.request_attempted,
+            "product_date": self.product_date,
+            "total_cells": self.total_cells,
+            "valid_cells": self.valid_cells,
+            "excluded_cells": self.excluded_cells,
+            "diagnostic": self.diagnostic,
+        }
+
+
+class _SampleRejected(SourceFetchError):
+    """Retain already decoded counts/date without qualifying a rejected sample."""
+
+    def __init__(self, cause: SourceFetchError, sample: RegionalSSTSample):
+        super().__init__(str(cause))
+        self.sample = sample
+
+
+@dataclass(frozen=True)
+class RegionalSSTResult:
+    primary: RegionalSSTSample
+    final: RegionalSSTSample
+
+    @property
+    def recovered(self) -> bool:
+        return self.final.source_leg == NOAA_STAR_SSTA_LEG and self.final.qualified
+
+
+@dataclass(frozen=True)
+class RegionalSSTCollection:
+    regions: tuple[RegionalSSTResult, ...]
+
+    @property
+    def readings(self) -> list[RegionalSSTReading]:
+        return [row.final.reading for row in self.regions if row.final.reading is not None]
+
+    @property
+    def observed(self) -> int:
+        return sum(row.final.qualified for row in self.regions)
+
+    @property
+    def recovered(self) -> int:
+        return sum(row.recovered for row in self.regions)
+
+    @property
+    def fallback_attempted(self) -> int:
+        # Regions dependent on the shared native download, not HTTP request count.
+        return sum(row.final.source_leg == NOAA_STAR_SSTA_LEG for row in self.regions)
+
+    @property
+    def status(self) -> str:
+        if not self.observed:
+            return "failed"
+        if self.observed < len(self.regions):
+            return "partial_failure"
+        return "degraded" if self.recovered else "success"
+
+    @property
+    def note(self) -> str:
+        return (
+            f"Qualified regional samples: {self.observed}/{len(self.regions)}; "
+            f"fallback recovered: {self.recovered} (attempted: {self.fallback_attempted}); "
+            f"unresolved: {len(self.regions) - self.observed}"
+        )
+
+    def details(self) -> dict:
+        return {
+            "configured_regions": len(self.regions),
+            "qualified_regions": self.observed,
+            "fallback_regions": self.fallback_attempted,
+            "recovered_regions": self.recovered,
+            "unresolved_regions": len(self.regions) - self.observed,
+            "regions": [
+                {
+                    "region_slug": row.primary.region_slug,
+                    "primary": row.primary.summary(),
+                    "final": row.final.summary(),
+                    "serving_leg": row.final.source_leg if row.final.qualified else None,
+                    "recovered": row.recovered,
+                }
+                for row in self.regions
+            ],
+        }
 
 
 @dataclass(frozen=True)
@@ -237,7 +350,19 @@ def _fetch_region_sst_strict(
     today: date | None = None,
     metadata: dict | None = None,
 ) -> RegionalSSTReading | None:
-    """Fetch one region, raising for source errors and returning None below tier."""
+    """Compatibility projection of the shared collection/classification path."""
+    return _fetch_region_sample_strict(
+        region, min_valid_cells=min_valid_cells, today=today, metadata=metadata
+    ).reading
+
+
+def _fetch_region_sample_strict(
+    region: RegionDef,
+    *,
+    min_valid_cells: int = _MIN_VALID_CELLS,
+    today: date | None = None,
+    metadata: dict | None = None,
+) -> RegionalSSTSample:
 
     metadata = _primary_metadata() if metadata is None else metadata
     url = _build_url(region)
@@ -249,25 +374,33 @@ def _fetch_region_sst_strict(
         attempts=_FETCH_ATTEMPTS,
     )
     sample = contract.decode_csv(body.decode("latin-1"), region)
-    if not metadata["first_product_time"] <= sample.timestamp <= metadata["last_product_time"]:
-        contract.reject("sample outside metadata time range")
     iso_date, cells = sample.timestamp[:10], sample.cells
-    contract.fresh_day(iso_date, today)
+    result = RegionalSSTSample(
+        region.slug, "source_rejected", "coastwatch_erddap",
+        product_date=iso_date, total_cells=sample.total_cells, valid_cells=len(cells),
+        excluded_cells=sample.total_cells - len(cells), diagnostic="regional_source_rejected",
+    )
+    try:
+        if not metadata["first_product_time"] <= sample.timestamp <= metadata["last_product_time"]:
+            contract.reject("sample outside metadata time range")
+        contract.fresh_day(iso_date, today)
+    except SourceFetchError as exc:
+        raise _SampleRejected(exc, result) from exc
     if len(cells) < min_valid_cells:
         print(
             f"[sst_anom] {region.slug}: only {len(cells)} valid cells "
             f"(<{min_valid_cells}), skipping"
         )
-        return None
+        return replace(result, outcome="insufficient_sample", diagnostic="insufficient_valid_cells")
     mean = _area_weighted_mean(cells)
     if mean is None:
         raise SourceFetchError(f"ocean_sst_anomaly/{region.slug}: no valid cells")
     tier = _detect_tier(mean)
     if tier is None:
         if mean < _SYNTHESIS_ANOMALY_FLOOR_C:
-            return None
+            return replace(result, outcome="below_floor", diagnostic=None)
         tier = 0
-    return RegionalSSTReading(
+    reading = RegionalSSTReading(
         region_slug=region.slug,
         region_display_name=region.display_name,
         date=iso_date,
@@ -288,72 +421,89 @@ def _fetch_region_sst_strict(
             metadata=deepcopy(metadata),
         ),
     )
+    return replace(result, outcome="candidate", diagnostic=None, reading=reading)
 
 
 def fetch_all_regions(*, strict: bool = False) -> list[RegionalSSTReading]:
-    """Fetch all configured regions, degrading per region by default."""
+    """List compatibility API; health consumers must use the collection report."""
+    report = collect_all_regions(strict=strict)
+    if all(row.final.outcome in {"source_rejected", "transport_failure"} for row in report.regions):
+        samples = "; ".join(
+            f"{row.primary.region_slug}: {row.final.diagnostic}" for row in report.regions[:3]
+        )
+        raise SourceFetchError(f"ocean_sst_anomaly: all regions failed; samples: {samples}")
+    return report.readings
 
-    readings_by_index: dict[int, RegionalSSTReading] = {}
-    failures_by_index: dict[int, str] = {}
-    failures = 0
+
+def _failure_sample(
+    region: RegionDef, exc: Exception, *, leg: str = "coastwatch_erddap", metadata: bool = False
+) -> RegionalSSTSample:
+    if isinstance(exc, _SampleRejected):
+        return exc.sample
+    transport = isinstance(exc, requests.RequestException) or is_witness_eligible_failure(exc)
+    outcome: Literal["transport_failure", "source_rejected"] = (
+        "transport_failure" if transport else "source_rejected"
+    )
+    stage = "metadata" if metadata else "native" if leg == NOAA_STAR_SSTA_LEG else "regional"
+    return RegionalSSTSample(
+        region.slug, outcome, leg, request_attempted=not metadata,
+        diagnostic=f"{stage}_{outcome}",
+    )
+
+
+def collect_all_regions(*, strict: bool = False) -> RegionalSSTCollection:
+    """Collect once and retain every region's outcome before filtering candidates.
+
+    The native leg still runs only if *all* primary errors are fallback eligible.
+    Quiet and insufficient primary samples are never retried or replaced.
+    """
+
+    primary: dict[str, RegionalSSTSample] = {}
+    failures: dict[str, bool] = {}
     try:
         metadata = _primary_metadata()
     except (requests.RequestException, SourceFetchError, ValueError) as exc:
-        if strict or not is_witness_eligible_failure(exc):
+        if strict:
             raise
-        return _fetch_noaa_star_ssta_regions_strict(min_valid_cells=_MIN_VALID_CELLS, today=None)
-    worker_count = min(_FETCH_WORKERS, len(REGION_REGISTRY))
-    with ThreadPoolExecutor(max_workers=worker_count) as executor:
-        futures = {
-            executor.submit(_fetch_region_sst_strict, region, metadata=metadata): (index, region)
-            for index, region in enumerate(REGION_REGISTRY)
-        }
-        for future in as_completed(futures):
-            index, region = futures[future]
-            try:
-                reading = future.result()
-            except (requests.RequestException, SourceFetchError, ValueError) as exc:
-                if strict:
-                    raise SourceFetchError(
-                        f"ocean_sst_anomaly/{region.slug} fetch failed: {exc}"
-                    ) from exc
-                failures += 1
-                failures_by_index[index] = f"{region.slug}: {exc}"
-                print(f"[sst_anom] {region.slug}: fetch skipped ({exc})")
-                continue
-            if reading is not None:
-                readings_by_index[index] = reading
+        for region in REGION_REGISTRY:
+            primary[region.slug] = _failure_sample(region, exc, metadata=True)
+            failures[region.slug] = is_witness_eligible_failure(exc)
+    else:
+        with ThreadPoolExecutor(max_workers=min(_FETCH_WORKERS, len(REGION_REGISTRY))) as executor:
+            futures = {
+                executor.submit(_fetch_region_sample_strict, region, metadata=metadata): region
+                for region in REGION_REGISTRY
+            }
+            for future in as_completed(futures):
+                region = futures[future]
+                try:
+                    primary[region.slug] = future.result()
+                except (requests.RequestException, SourceFetchError, ValueError) as exc:
+                    if strict:
+                        raise SourceFetchError(
+                            f"ocean_sst_anomaly/{region.slug} fetch failed: {exc}"
+                        ) from exc
+                    primary[region.slug] = _failure_sample(region, exc)
+                    # Preserve the existing regional fallback eligibility check,
+                    # which classifies the aggregate's source-prefixed error.
+                    failures[region.slug] = is_witness_eligible_failure(
+                        SourceFetchError(f"{region.slug}: {exc}")
+                    )
 
-    if failures_by_index and _all_failures_star_eligible(failures_by_index.values()):
+    final = dict(primary)
+    if failures and all(failures.values()):
+        failed_regions = tuple(r for r in REGION_REGISTRY if r.slug in failures)
         try:
-            fallback_readings = _fetch_noaa_star_ssta_regions_strict(
-                min_valid_cells=_MIN_VALID_CELLS,
-                today=None,
+            fallback = _fetch_noaa_star_ssta_samples_strict(
+                regions=failed_regions, min_valid_cells=_MIN_VALID_CELLS, today=None,
             )
-            fallback_by_slug = {reading.region_slug: reading for reading in fallback_readings}
-            for index, region in enumerate(REGION_REGISTRY):
-                if index not in failures_by_index:
-                    continue
-                if region.slug in fallback_by_slug:
-                    readings_by_index[index] = fallback_by_slug[region.slug]
-            if failures >= len(REGION_REGISTRY):
-                return [readings_by_index[index] for index in sorted(readings_by_index)]
+            final.update({sample.region_slug: sample for sample in fallback})
         except (requests.RequestException, SourceFetchError, ValueError) as exc:
-            if failures >= len(REGION_REGISTRY):
-                samples = "; ".join(
-                    failures_by_index[index] for index in sorted(failures_by_index)[:3]
-                )
-                raise SourceFetchError(
-                    "ocean_sst_anomaly: all regions failed"
-                    f"; NOAA STAR fallback failed: {exc}"
-                    + (f"; samples: {samples}" if samples else "")
-                ) from exc
-
-    if failures >= len(REGION_REGISTRY):
-        samples = "; ".join(failures_by_index[index] for index in sorted(failures_by_index)[:3])
-        detail = f"; samples: {samples}" if samples else ""
-        raise SourceFetchError(f"ocean_sst_anomaly: all regions failed{detail}")
-    return [readings_by_index[index] for index in sorted(readings_by_index)]
+            for region in failed_regions:
+                final[region.slug] = _failure_sample(region, exc, leg=NOAA_STAR_SSTA_LEG)
+    return RegionalSSTCollection(tuple(
+        RegionalSSTResult(primary[r.slug], final[r.slug]) for r in REGION_REGISTRY
+    ))
 
 
 def detect_regional_sst_anomaly_events(
@@ -388,26 +538,20 @@ def detect_regional_sst_anomaly_events(
     return events
 
 
-def _all_failures_star_eligible(failures: Iterable[str]) -> bool:
-    messages: list[str] = [str(message) for message in failures]
-    if not messages:
-        return False
-    return all(is_witness_eligible_failure(SourceFetchError(str(message))) for message in messages)
-
-
-def _fetch_noaa_star_ssta_regions_strict(
+def _fetch_noaa_star_ssta_samples_strict(
     *,
+    regions: tuple[RegionDef, ...],
     min_valid_cells: int = _MIN_VALID_CELLS,
     today: date | None = None,
-) -> list[RegionalSSTReading]:
+) -> list[RegionalSSTSample]:
     selected = _latest_noaa_star_ssta_file(today=today)
     body, retrieved_at = _source_body(
         selected.url, limit=contract.NETCDF_LIMIT, timeout=30, attempts=2
     )
-    return _readings_from_noaa_star_netcdf_bytes(
+    return _samples_from_noaa_star_netcdf_bytes(
         body,
         data_date=selected.data_date,
-        regions=REGION_REGISTRY,
+        regions=regions,
         min_valid_cells=min_valid_cells,
         today=today,
         source_url=selected.url,
@@ -465,6 +609,25 @@ def _readings_from_noaa_star_netcdf_bytes(
     source_url: str | None = None,
     retrieved_at: str | None = None,
 ) -> list[RegionalSSTReading]:
+    """Compatibility projection; decoding and sampling happen only once."""
+    return [
+        sample.reading for sample in _samples_from_noaa_star_netcdf_bytes(
+            content, data_date=data_date, regions=regions, min_valid_cells=min_valid_cells,
+            today=today, source_url=source_url, retrieved_at=retrieved_at,
+        ) if sample.reading is not None
+    ]
+
+
+def _samples_from_noaa_star_netcdf_bytes(
+    content: bytes,
+    *,
+    data_date: str,
+    regions: tuple[RegionDef, ...] = REGION_REGISTRY,
+    min_valid_cells: int = _MIN_VALID_CELLS,
+    today: date | None = None,
+    source_url: str | None = None,
+    retrieved_at: str | None = None,
+) -> list[RegionalSSTSample]:
     try:
         from netCDF4 import Dataset
         import numpy as np
@@ -482,9 +645,9 @@ def _readings_from_noaa_star_netcdf_bytes(
             ssta = dataset.variables[_SST_ANOM_VAR]
             if ssta.ndim != 3:
                 raise SourceFetchError("NOAA STAR SST anomaly schema drift: SSTA grid was not 3D")
-            readings = []
+            samples = []
             for region in regions:
-                reading = _reading_from_noaa_star_grid(
+                sample = _sample_from_noaa_star_grid(
                     ssta,
                     latitudes,
                     longitudes,
@@ -493,14 +656,13 @@ def _readings_from_noaa_star_netcdf_bytes(
                     min_valid_cells=min_valid_cells,
                     np=np,
                 )
+                reading = sample.reading
                 if reading is not None:
                     lat_slice = _axis_window_slice(latitudes, region.lat_s, region.lat_n, np=np)
                     lon_slice = _axis_window_slice(longitudes, region.lon_w, region.lon_e, np=np)
                     lat, lon = latitudes[lat_slice], longitudes[lon_slice]
                     # Direct offline decoding without a transfer receipt stays unqualified.
                     if source_url is not None and retrieved_at is not None:
-                        from dataclasses import replace
-
                         reading = replace(
                             reading,
                             provenance=contract.provenance(
@@ -521,8 +683,9 @@ def _readings_from_noaa_star_netcdf_bytes(
                                 leg=NOAA_STAR_SSTA_LEG,
                             ),
                         )
-                    readings.append(reading)
-            return readings
+                    sample = replace(sample, reading=reading)
+                samples.append(sample)
+            return samples
     except KeyError as exc:
         raise SourceFetchError(f"NOAA STAR SST anomaly schema drift: missing {exc}") from exc
     except (OSError, RuntimeError) as exc:
@@ -606,7 +769,7 @@ def _native_metadata(dataset, data_date: str, *, np) -> str:
         contract.reject("invalid native coverage time")
 
 
-def _reading_from_noaa_star_grid(
+def _sample_from_noaa_star_grid(
     ssta,
     latitudes,
     longitudes,
@@ -615,24 +778,29 @@ def _reading_from_noaa_star_grid(
     data_date: str,
     min_valid_cells: int,
     np,
-) -> RegionalSSTReading | None:
+) -> RegionalSSTSample:
     lat_slice = _axis_window_slice(latitudes, region.lat_s, region.lat_n, np=np)
     lon_slice = _axis_window_slice(longitudes, region.lon_w, region.lon_e, np=np)
     grid = np.ma.array(ssta[0, lat_slice, lon_slice], dtype=float)
     grid = np.ma.masked_invalid(grid)
     grid = np.ma.masked_outside(grid, _VALID_RANGE[0], _VALID_RANGE[1])
     cells_used = int(np.ma.count(grid))
+    sample = RegionalSSTSample(
+        region.slug, "insufficient_sample", NOAA_STAR_SSTA_LEG,
+        product_date=data_date, total_cells=int(grid.size), valid_cells=cells_used,
+        excluded_cells=int(grid.size) - cells_used, diagnostic="insufficient_valid_cells",
+    )
     if cells_used < min_valid_cells:
-        return None
+        return sample
     mean = _weighted_grid_mean(grid, latitudes[lat_slice], np=np)
     if mean is None:
         raise SourceFetchError(f"NOAA STAR SST anomaly/{region.slug}: no valid cells")
     tier = _detect_tier(mean)
     if tier is None:
         if mean < _SYNTHESIS_ANOMALY_FLOOR_C:
-            return None
+            return replace(sample, outcome="below_floor", diagnostic=None)
         tier = 0
-    return RegionalSSTReading(
+    reading = RegionalSSTReading(
         region_slug=region.slug,
         region_display_name=region.display_name,
         date=data_date,
@@ -641,6 +809,7 @@ def _reading_from_noaa_star_grid(
         cells_used=cells_used,
         source_leg=NOAA_STAR_SSTA_LEG,
     )
+    return replace(sample, outcome="candidate", diagnostic=None, reading=reading)
 
 
 def _axis_window_slice(values, lower: float, upper: float, *, np) -> slice:

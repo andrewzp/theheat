@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.108.81 — 2026-10-06
+
+- Report CRW regional source coverage from qualified samples, including valid quiet conditions, rather than the number of configured boxes. Preserve primary failures after backup recovery and distinguish inadequate samples from rejected source data.
+- Count regional candidates as promoted only after the evidence gate accepts them. Keep source request bounds, scientific checks and publication controls unchanged.
+
 ## 0.9.108.80 — 2026-10-06
 
 - Patch dashboard transitives to sharp 0.35.5 (bundled librsvg 2.63.2) and source-map-js 1.2.2 for their published security advisories. Preserve the existing Next/React versions, platform constraints and application behavior.
