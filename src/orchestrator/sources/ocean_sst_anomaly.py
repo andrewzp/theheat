@@ -72,10 +72,10 @@ def run_ocean_sst_anomaly(bot_state: BotState, current_run: dict | None) -> None
                 current_run=current_run,
                 facts=[
                     _fact("Region", event.region_display_name),
-                    _fact("Area-weighted anomaly", f"{event.anomaly_c:+.2f}°C"),
+                    _fact("Sampled regional mean anomaly", f"{event.anomaly_c:+.2f}°C"),
                     _fact("Tier", str(event.tier)),
                     _fact("Grid cells", str(event.cells_used)),
-                    _fact("Signal type", "Area-weighted basin-mean anomaly; not Hobday MHW"),
+                    _fact("Signal type", "Satellite-analysis sample mean; not a record or Hobday MHW"),
                 ],
             )
             bundle = build_regional_sst_anomaly_bundle(event)

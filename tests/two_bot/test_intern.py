@@ -124,8 +124,8 @@ def test_build_regional_sst_anomaly_bundle_uses_regional_signal_kind():
         "value": 3.62,
         "unit": "°C",
     }
-    assert facts["spatial_aggregation"] == "cos-latitude area-weighted basin mean"
-    assert "NOT a Hobday" in facts["signal_note"]
+    assert facts["spatial_aggregation"] == "cos-latitude-weighted mean of valid strided sample cells"
+    assert "Hobday duration/percentile" in facts["signal_note"]
     assert bundle.historical_context["tier_thresholds"] == [2.5, 3.5, 4.5]
 
 

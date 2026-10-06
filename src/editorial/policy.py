@@ -38,6 +38,7 @@ POLICY_FILES = (
     "src/commands/schema.py", "src/commands/reducer.py", "src/media/joint_review.py",
     "src/commands/postgres_authority.py", "src/commands/sqlite_authority.py",
     "src/orchestrator/sources/open_meteo.py",
+    "src/data/ocean_sst_anomaly.py", "src/data/crw_contract.py",
 )
 MODEL_KEYS = {"writer", "writer_provider", "fact_check", "critic", "safety"}
 FLAG_KEYS = {"critic_enabled", "critic_revise_enabled", "writer_samples", "safety_llm_enabled"}

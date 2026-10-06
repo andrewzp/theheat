@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.108.79 — 2026-10-06
+
+- Preserve verified NOAA Coral Reef Watch source receipts through regional SST analysis and review. Validate primary CSV time, units and complete strided grids, and the native backup file's own product/date/encoding before using its values.
+- Bound downloads, retain sample and exclusion counts, and describe satellite-analysis sample means accurately. Legacy or mismatched provenance remains ineligible; fallback does not replace a successful below-threshold primary result. Regenerate the dashboard policy identity without changing models, prompts or publishing controls.
+
 ## 0.9.108.78 — 2026-10-06
 
 - Avoid rejecting a literal final Data/Source caption label when its primary source identity is present in both the evidence and the checker's exact named-entity inventory. All source, number, date and other material spans still require coverage; ambiguous syntax keeps the strict check.

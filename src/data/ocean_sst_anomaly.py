@@ -8,8 +8,8 @@ variable ``sea_surface_temperature_anomaly``, degree_C, 0.05 degree global,
 
 The anomaly is published by CRW, referenced to its own daily climatology. This
 module does not build or store any climatology. For each region box, it fetches
-a strided griddap CSV subset and computes the cos-latitude area-weighted mean
-anomaly over valid ocean cells.
+a strided griddap CSV subset and computes the cos-latitude-weighted mean
+anomaly over valid sampled cells. This is not a full-grid basin mean.
 
 This is not a Hobday marine-heatwave implementation. Tiers are provisional
 absolute basin-mean anomaly thresholds, not 90th-percentile categories.
@@ -17,40 +17,39 @@ absolute basin-mean anomaly thresholds, not 90th-percentile categories.
 
 from __future__ import annotations
 
-import csv
+from contextlib import closing
+from copy import deepcopy
 import math
 import re
+import time
 from collections.abc import Iterable, Mapping
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
-from datetime import date
-from io import StringIO
+from datetime import UTC, date, datetime, timedelta
+from typing import Any
 
 import requests
 
-from src.data._freshness import assert_freshness
 from src.data._http import fetch_with_retry
 from src.data._witness import is_witness_eligible_failure
 from src.data.ocean_sst import _REQUEST_HEADERS
-from src.data.source_status import SourceFetchError, assert_response_schema
+from src.data.source_status import SourceFetchError
+from src.data import crw_contract as contract
 
 _ERDDAP_BASE = "https://coastwatch.noaa.gov/erddap/griddap/noaacrwsstanomalyDaily.csv"
 NOAA_STAR_SSTA_LEG = "noaa_star_nc"
 NOAA_STAR_SSTA_BASE_URL = (
-    "https://www.star.nesdis.noaa.gov/pub/sod/mecb/crw/data/5km/"
-    "v3.1_op/nc/v1.0/daily/ssta"
+    "https://www.star.nesdis.noaa.gov/pub/sod/mecb/crw/data/5km/v3.1_op/nc/v1.0/daily/ssta"
 )
 _SST_ANOM_VAR = "sea_surface_temperature_anomaly"
 _GRID_DEG = 0.05
 _TARGET_DEG = 1.0
 _GRID_STRIDE = max(1, round(_TARGET_DEG / _GRID_DEG))
-_MAX_DATA_LAG_DAYS = 5
 _MIN_VALID_CELLS = 10
 _FETCH_WORKERS = 4
 _FETCH_TIMEOUT_SECONDS = 10
 _FETCH_ATTEMPTS = 1
 
-_FILL_VALUE = -327.68
 _VALID_RANGE = (-15.0, 15.0)
 _SYNTHESIS_ANOMALY_FLOOR_C = 2.0
 _NOAA_STAR_FILE_RE = re.compile(r"^ct5km_ssta_v3\.1_(\d{8})\.nc$")
@@ -103,6 +102,7 @@ class RegionalSSTReading:
     tier: int
     cells_used: int
     source_leg: str | None = None
+    provenance: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -115,6 +115,7 @@ class RegionalSSTAnomalyEvent:
     cells_used: int
     event_id: str
     source_leg: str | None = None
+    provenance: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -144,31 +145,52 @@ def _build_url(region: RegionDef, *, time_token: str = "last") -> str:
 
 
 def _parse_griddap_csv(text: str) -> tuple[str | None, list[tuple[float, float]]]:
-    """Return ``(YYYY-MM-DD, [(latitude, anomaly_c), ...])`` from CRW CSV."""
+    """Compatibility projection of the strict decoder; no scientific approval."""
+    sample = contract.decode_csv(text)
+    return sample.timestamp[:10], sample.cells
 
-    rows = csv.reader(StringIO(text))
-    iso_date: str | None = None
-    cells: list[tuple[float, float]] = []
-    for row_index, row in enumerate(rows):
-        if row_index < 2 or not row:
-            continue
-        if len(row) < 4:
-            continue
-        if iso_date is None and row[0]:
-            iso_date = row[0][:10]
-        try:
-            lat = float(row[1])
-            val = float(row[3])
-        except ValueError:
-            continue
-        if not math.isfinite(val):
-            continue
-        if val == _FILL_VALUE:
-            continue
-        if not (_VALID_RANGE[0] <= val <= _VALID_RANGE[1]):
-            continue
-        cells.append((lat, val))
-    return iso_date, cells
+
+def _source_body(
+    url: str, *, limit: int, timeout: int, attempts: int, headers=None
+) -> tuple[bytes, str]:
+    """Bound decoded identity bytes and close responses on every outcome."""
+    started = time.monotonic()
+    request_headers = dict(headers or {})
+    request_headers["Accept-Encoding"] = "identity"
+    with closing(
+        fetch_with_retry(
+            url,
+            timeout=timeout,
+            attempts=attempts,
+            headers=request_headers,
+            stream=True,
+            allow_redirects=False,
+        )
+    ) as response:
+        if (
+            response.status_code != 200
+            or response.headers.get("Content-Encoding", "identity").lower() != "identity"
+        ):
+            contract.reject("unexpected HTTP response")
+        data = bytearray()
+        for chunk in response.iter_content(65536):
+            if len(data) + len(chunk) > limit or time.monotonic() - started > 60:
+                contract.reject("response resource limit")
+            data.extend(chunk)
+    if not data or time.monotonic() - started > 60:
+        contract.reject("empty or overdue response")
+    return bytes(data), datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _primary_metadata() -> dict:
+    body, retrieved = _source_body(
+        contract.METADATA_URL, limit=contract.CSV_LIMIT, timeout=10, attempts=1
+    )
+    return {
+        **contract.metadata_contract(body),
+        "retrieved_at": retrieved,
+        "response_bytes": len(body),
+    }
 
 
 def _area_weighted_mean(cells: list[tuple[float, float]]) -> float | None:
@@ -213,28 +235,24 @@ def _fetch_region_sst_strict(
     *,
     min_valid_cells: int = _MIN_VALID_CELLS,
     today: date | None = None,
+    metadata: dict | None = None,
 ) -> RegionalSSTReading | None:
     """Fetch one region, raising for source errors and returning None below tier."""
 
-    response = fetch_with_retry(
-        _build_url(region),
+    metadata = _primary_metadata() if metadata is None else metadata
+    url = _build_url(region)
+    body, retrieved_at = _source_body(
+        url,
+        limit=contract.CSV_LIMIT,
         timeout=_FETCH_TIMEOUT_SECONDS,
         headers=_REQUEST_HEADERS,
         attempts=_FETCH_ATTEMPTS,
     )
-    text = response.text
-    assert_response_schema({"body": text}, ["body"], "ocean_sst_anomaly")
-    if not text.strip():
-        raise SourceFetchError(f"ocean_sst_anomaly/{region.slug}: empty response")
-    iso_date, cells = _parse_griddap_csv(text)
-    if iso_date is None or not cells:
-        raise SourceFetchError(f"ocean_sst_anomaly/{region.slug}: empty grid")
-    assert_freshness(
-        date.fromisoformat(iso_date),
-        "ocean_sst_anomaly",
-        _MAX_DATA_LAG_DAYS,
-        today=today,
-    )
+    sample = contract.decode_csv(body.decode("latin-1"), region)
+    if not metadata["first_product_time"] <= sample.timestamp <= metadata["last_product_time"]:
+        contract.reject("sample outside metadata time range")
+    iso_date, cells = sample.timestamp[:10], sample.cells
+    contract.fresh_day(iso_date, today)
     if len(cells) < min_valid_cells:
         print(
             f"[sst_anom] {region.slug}: only {len(cells)} valid cells "
@@ -256,6 +274,19 @@ def _fetch_region_sst_strict(
         anomaly_c=round(mean, 2),
         tier=tier,
         cells_used=len(cells),
+        provenance=contract.provenance(
+            body=body,
+            url=url,
+            retrieved_at=retrieved_at,
+            timestamp=sample.timestamp,
+            region=region,
+            mean=round(mean, 2),
+            valid_cells=len(cells),
+            total_cells=sample.total_cells,
+            sampled_bounds=sample.sampled_bounds,
+            leg="coastwatch_erddap",
+            metadata=deepcopy(metadata),
+        ),
     )
 
 
@@ -265,10 +296,16 @@ def fetch_all_regions(*, strict: bool = False) -> list[RegionalSSTReading]:
     readings_by_index: dict[int, RegionalSSTReading] = {}
     failures_by_index: dict[int, str] = {}
     failures = 0
+    try:
+        metadata = _primary_metadata()
+    except (requests.RequestException, SourceFetchError, ValueError) as exc:
+        if strict or not is_witness_eligible_failure(exc):
+            raise
+        return _fetch_noaa_star_ssta_regions_strict(min_valid_cells=_MIN_VALID_CELLS, today=None)
     worker_count = min(_FETCH_WORKERS, len(REGION_REGISTRY))
     with ThreadPoolExecutor(max_workers=worker_count) as executor:
         futures = {
-            executor.submit(_fetch_region_sst_strict, region): (index, region)
+            executor.submit(_fetch_region_sst_strict, region, metadata=metadata): (index, region)
             for index, region in enumerate(REGION_REGISTRY)
         }
         for future in as_completed(futures):
@@ -295,7 +332,7 @@ def fetch_all_regions(*, strict: bool = False) -> list[RegionalSSTReading]:
             )
             fallback_by_slug = {reading.region_slug: reading for reading in fallback_readings}
             for index, region in enumerate(REGION_REGISTRY):
-                if index in readings_by_index:
+                if index not in failures_by_index:
                     continue
                 if region.slug in fallback_by_slug:
                     readings_by_index[index] = fallback_by_slug[region.slug]
@@ -313,9 +350,7 @@ def fetch_all_regions(*, strict: bool = False) -> list[RegionalSSTReading]:
                 ) from exc
 
     if failures >= len(REGION_REGISTRY):
-        samples = "; ".join(
-            failures_by_index[index] for index in sorted(failures_by_index)[:3]
-        )
+        samples = "; ".join(failures_by_index[index] for index in sorted(failures_by_index)[:3])
         detail = f"; samples: {samples}" if samples else ""
         raise SourceFetchError(f"ocean_sst_anomaly: all regions failed{detail}")
     return [readings_by_index[index] for index in sorted(readings_by_index)]
@@ -344,10 +379,9 @@ def detect_regional_sst_anomaly_events(
                 anomaly_c=reading.anomaly_c,
                 tier=reading.tier,
                 cells_used=reading.cells_used,
-                event_id=(
-                    f"sst_anom_{reading.region_slug}_tier{reading.tier}_{reading.date}"
-                ),
+                event_id=(f"sst_anom_{reading.region_slug}_tier{reading.tier}_{reading.date}"),
                 source_leg=reading.source_leg,
+                provenance=deepcopy(reading.provenance),
             )
         )
     events.sort(key=lambda event: (event.tier, event.anomaly_c), reverse=True)
@@ -358,10 +392,7 @@ def _all_failures_star_eligible(failures: Iterable[str]) -> bool:
     messages: list[str] = [str(message) for message in failures]
     if not messages:
         return False
-    return all(
-        is_witness_eligible_failure(SourceFetchError(str(message)))
-        for message in messages
-    )
+    return all(is_witness_eligible_failure(SourceFetchError(str(message))) for message in messages)
 
 
 def _fetch_noaa_star_ssta_regions_strict(
@@ -370,34 +401,36 @@ def _fetch_noaa_star_ssta_regions_strict(
     today: date | None = None,
 ) -> list[RegionalSSTReading]:
     selected = _latest_noaa_star_ssta_file(today=today)
-    response = fetch_with_retry(selected.url, timeout=60, attempts=2, backoff_base=1.0)
+    body, retrieved_at = _source_body(
+        selected.url, limit=contract.NETCDF_LIMIT, timeout=30, attempts=2
+    )
     return _readings_from_noaa_star_netcdf_bytes(
-        response.content,
+        body,
         data_date=selected.data_date,
         regions=REGION_REGISTRY,
         min_valid_cells=min_valid_cells,
         today=today,
+        source_url=selected.url,
+        retrieved_at=retrieved_at,
     )
 
 
 def _latest_noaa_star_ssta_file(*, today: date | None = None) -> NoaaStarSstaFile:
-    current = today or date.today()
+    current = today or datetime.now(UTC).date()
     errors: list[str] = []
     for year in (current.year, current.year - 1):
         try:
-            response = fetch_with_retry(
+            body, _ = _source_body(
                 _noaa_star_year_index_url(year),
+                limit=contract.LISTING_LIMIT,
                 timeout=20,
                 attempts=2,
-                backoff_base=1.0,
             )
-            return _latest_noaa_star_file_from_index(response.text)
+            return _latest_noaa_star_file_from_index(body.decode("latin-1"))
         except (requests.RequestException, SourceFetchError) as exc:
             errors.append(f"{year}: {exc}")
             continue
-    raise SourceFetchError(
-        "NOAA STAR SST anomaly index lookup failed: " + "; ".join(errors)
-    )
+    raise SourceFetchError("NOAA STAR SST anomaly index lookup failed: " + "; ".join(errors))
 
 
 def _latest_noaa_star_file_from_index(index_html: str) -> NoaaStarSstaFile:
@@ -429,6 +462,8 @@ def _readings_from_noaa_star_netcdf_bytes(
     regions: tuple[RegionDef, ...] = REGION_REGISTRY,
     min_valid_cells: int = _MIN_VALID_CELLS,
     today: date | None = None,
+    source_url: str | None = None,
+    retrieved_at: str | None = None,
 ) -> list[RegionalSSTReading]:
     try:
         from netCDF4 import Dataset
@@ -436,14 +471,12 @@ def _readings_from_noaa_star_netcdf_bytes(
     except ImportError as exc:
         raise SourceFetchError("NOAA STAR SST anomaly fallback requires netCDF4/numpy") from exc
 
-    assert_freshness(
-        data_date,
-        "ocean_sst_anomaly",
-        _MAX_DATA_LAG_DAYS,
-        today=today,
-    )
+    contract.fresh_day(data_date, today)
+    if not isinstance(content, bytes) or not 0 < len(content) <= contract.NETCDF_LIMIT:
+        contract.reject("native file size")
     try:
         with Dataset("noaa_star_ssta.nc", memory=content) as dataset:
+            timestamp = _native_metadata(dataset, data_date, np=np)
             latitudes = np.asarray(dataset.variables["lat"][:], dtype=float)
             longitudes = np.asarray(dataset.variables["lon"][:], dtype=float)
             ssta = dataset.variables[_SST_ANOM_VAR]
@@ -461,12 +494,116 @@ def _readings_from_noaa_star_netcdf_bytes(
                     np=np,
                 )
                 if reading is not None:
+                    lat_slice = _axis_window_slice(latitudes, region.lat_s, region.lat_n, np=np)
+                    lon_slice = _axis_window_slice(longitudes, region.lon_w, region.lon_e, np=np)
+                    lat, lon = latitudes[lat_slice], longitudes[lon_slice]
+                    # Direct offline decoding without a transfer receipt stays unqualified.
+                    if source_url is not None and retrieved_at is not None:
+                        from dataclasses import replace
+
+                        reading = replace(
+                            reading,
+                            provenance=contract.provenance(
+                                body=content,
+                                url=source_url,
+                                retrieved_at=retrieved_at,
+                                timestamp=timestamp,
+                                region=region,
+                                mean=reading.anomaly_c,
+                                valid_cells=reading.cells_used,
+                                total_cells=len(lat) * len(lon),
+                                sampled_bounds=[
+                                    float(min(lat)),
+                                    float(max(lat)),
+                                    float(min(lon)),
+                                    float(max(lon)),
+                                ],
+                                leg=NOAA_STAR_SSTA_LEG,
+                            ),
+                        )
                     readings.append(reading)
             return readings
     except KeyError as exc:
         raise SourceFetchError(f"NOAA STAR SST anomaly schema drift: missing {exc}") from exc
     except (OSError, RuntimeError) as exc:
         raise SourceFetchError(f"NOAA STAR SST anomaly NetCDF read failed: {exc}") from exc
+    except (ValueError, TypeError, AttributeError, OverflowError):
+        contract.reject("invalid native metadata")
+
+
+def _native_metadata(dataset, data_date: str, *, np) -> str:
+    """Check native file semantics before reading any measurement slices."""
+    if (
+        getattr(dataset, "id", None) != "Satellite_Daily_Global_5km_SST_Anomaly"
+        or getattr(dataset, "product_version", None) != "3.1"
+        or getattr(dataset, "processing_level", None)
+        != "Derived from L4 satellite sea surface temperaure analysis"
+        or {k: len(dataset.dimensions[k]) for k in ("time", "lat", "lon")}
+        != {"time": 1, "lat": 3600, "lon": 7200}
+    ):
+        contract.reject("native product identity or dimensions")
+    for name, length, start, stop, unit in (
+        ("lat", 3600, 89.975, -89.975, "degrees_north"),
+        ("lon", 7200, -179.975, 179.975, "degrees_east"),
+    ):
+        axis = dataset.variables[name]
+        values = np.ma.asarray(axis[:], dtype=float)
+        if (
+            axis.dimensions != (name,)
+            or getattr(axis, "units", None) != unit
+            or values.shape != (length,)
+            or np.ma.getmaskarray(values).any()
+            or not np.isfinite(values).all()
+            or not np.allclose(values, np.linspace(start, stop, length), rtol=0, atol=0.0001)
+        ):
+            contract.reject("native coordinate axis")
+    variable = dataset.variables[_SST_ANOM_VAR]
+    if (
+        variable.dimensions != ("time", "lat", "lon")
+        or variable.dtype != np.dtype("int16")
+        or getattr(variable, "units", None) != "degrees_Celsius"
+        or not math.isclose(
+            float(getattr(variable, "scale_factor", float("nan"))), 0.01, rel_tol=0, abs_tol=1e-8
+        )
+        or getattr(variable, "add_offset", 0) != 0
+        or getattr(variable, "_FillValue", None) != -32768
+        or getattr(variable, "missing_value", -32768) != -32768
+        or getattr(variable, "_Unsigned", "false") != "false"
+        or not np.array_equal(getattr(variable, "valid_range", [-1500, 1500]), [-1500, 1500])
+        or getattr(variable, "valid_min", None) != -1500
+        or getattr(variable, "valid_max", None) != 1500
+    ):
+        contract.reject("native anomaly units or encoding")
+    reference = dataset.variables["time"]
+    if (
+        reference.dimensions != ("time",)
+        or reference.dtype != np.dtype("int32")
+        or getattr(reference, "units", None) != "seconds since 1981-01-01 00:00:00"
+        or getattr(reference, "calendar", "standard")
+        not in ("standard", "gregorian", "proleptic_gregorian")
+    ):
+        contract.reject("native time encoding")
+    seconds = np.ma.asarray(reference[:], dtype=float)
+    if seconds.shape != (1,) or np.ma.getmaskarray(seconds).any() or not np.isfinite(seconds).all():
+        contract.reject("native reference time")
+    try:
+        point = datetime(1981, 1, 1, tzinfo=UTC) + timedelta(seconds=float(seconds[0]))
+        coverage_start = datetime.strptime(dataset.time_coverage_start, "%Y%m%dT%H%M%SZ").replace(
+            tzinfo=UTC
+        )
+        coverage_end = datetime.strptime(dataset.time_coverage_end, "%Y%m%dT%H%M%SZ").replace(
+            tzinfo=UTC
+        )
+        if (
+            point.date().isoformat() != data_date
+            or coverage_start != point.replace(hour=0, minute=0, second=0, microsecond=0)
+            or not coverage_start <= point < coverage_end
+            or coverage_end - coverage_start != timedelta(days=1)
+        ):
+            contract.reject("native date does not match selected file")
+        return point.strftime("%Y-%m-%dT%H:%M:%SZ")
+    except (ValueError, TypeError, AttributeError, OverflowError):
+        contract.reject("invalid native coverage time")
 
 
 def _reading_from_noaa_star_grid(
