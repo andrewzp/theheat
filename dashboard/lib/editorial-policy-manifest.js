@@ -23,7 +23,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/data/ghcn.py": "930ad3248593f969e199631a5ec3e6d29f88b5fd3b012e3a1c925d91d6cbf715",
     "src/data/ghcn_format.py": "fd3636069b477a484194c9debd6da2ede228ac1ca747746db60b5d9eb656ea18",
     "src/data/nhc.py": "fb4dc35ca69778fe6be8f366bcf0541fe3932423ce8e2d6c8277447bf9905a31",
-    "src/data/ocean_sst_anomaly.py": "d377543716de1c0025ea95410ea9e182c51ab7c0848c6d34a7237391fdd07136",
+    "src/data/ocean_sst_anomaly.py": "837c013cfc1f50981c42b2929f08c0f86a73475d0dfe26694ad2056cc0f94401",
     "src/data/open_meteo.py": "58fa0a9135a526370e2daa3a832b290203615187d165b47d95ac05025523d508",
     "src/data/temperature_evidence.py": "f656cee4dd86e6f6762932e98ea189e39e5965852c5d3e06299d8ffff3173046",
     "src/data/world_thresholds.py": "a817f8feabe3e41dac69ff3fef07ad9ac264843daa075caef2484fcf7fc5fe09",
@@ -76,5 +76,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "4a828a22e451889f630e994add6ba38c463d44369d24d2e22c2ff85e7f0387e5"
   },
   "schema_version": 1,
-  "source_sha256": "035942aa6b26994ac6ab4e97389d557d024e3c169637cf872aa61079f1bb891c"
+  "source_sha256": "7325a269e0f33d174af6a379cf6c1781d444cb478afef9466ba52873dcf1dbc0"
 }

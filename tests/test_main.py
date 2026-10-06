@@ -1,3 +1,4 @@
+from tests.crw_fixtures import quiet_collection
 """Integration tests for main orchestrator with all externals mocked."""
 
 import json
@@ -328,7 +329,7 @@ def mock_alerts_pipeline_sources(monkeypatch):
     ocean_sst.fetch_global_sst.return_value = None
     ocean_sst.detect_streak_milestone.return_value = (None, None)
 
-    monkeypatch.setattr("src.main.ocean_sst_anomaly.fetch_all_regions", lambda strict=False: [])
+    monkeypatch.setattr("src.main.ocean_sst_anomaly.collect_all_regions", lambda strict=False: quiet_collection())
 
     water = MagicMock()
     monkeypatch.setattr("src.main.water_levels", water)
@@ -1612,7 +1613,7 @@ class TestRunAlerts:
         monkeypatch.setattr(main.ocean, "fetch_ocean_conditions", lambda: [])
         monkeypatch.setattr(main.ocean, "detect_extreme_waves", lambda r: [])
         monkeypatch.setattr(main.ocean_sst, "fetch_global_sst", lambda: obs)
-        monkeypatch.setattr(main.ocean_sst_anomaly, "fetch_all_regions", lambda strict=False: [])
+        monkeypatch.setattr(main.ocean_sst_anomaly, "collect_all_regions", lambda strict=False: quiet_collection())
         monkeypatch.setattr(main.water_levels, "fetch_water_levels", lambda: [])
         monkeypatch.setattr(main.water_levels, "detect_storm_surge", lambda r: [])
         monkeypatch.setattr(main.river_gauges, "fetch_river_levels", lambda: [])

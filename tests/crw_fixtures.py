@@ -117,3 +117,31 @@ def native_file(path, *, day=DAY, region=None, value=3.6):
         lon = np.flatnonzero((longitudes >= region.lon_w) & (longitudes <= region.lon_e))
         anomaly[0, lat[0] : lat[-1] + 1, lon[0] : lon[-1] + 1] = value
     return path
+
+
+def quiet_sample(region):
+    """Explicit invented quiet outcome for orchestration-only tests."""
+    from src.data.ocean_sst_anomaly import RegionalSSTSample
+    total = (int(region.lat_n - region.lat_s) + 1) * (int(region.lon_e - region.lon_w) + 1)
+    return RegionalSSTSample(
+        region.slug, "below_floor", "coastwatch_erddap", product_date=DAY,
+        total_cells=total, valid_cells=total, excluded_cells=0,
+    )
+
+
+def sample_with_reading(reading):
+    """Invented report only, not a source receipt or evidence qualification."""
+    from src.data.ocean_sst_anomaly import RegionalSSTSample
+    return RegionalSSTSample(
+        reading.region_slug, "candidate", reading.source_leg or "coastwatch_erddap",
+        product_date=reading.date, total_cells=reading.cells_used,
+        valid_cells=reading.cells_used, excluded_cells=0, reading=reading,
+    )
+
+
+def quiet_collection(readings=()):
+    """Explicitly stipulate valid quiet coverage in mocked runner tests."""
+    from src.data.ocean_sst_anomaly import REGION_REGISTRY, RegionalSSTCollection, RegionalSSTResult
+    by_slug = {reading.region_slug: sample_with_reading(reading) for reading in readings}
+    samples = [by_slug.get(region.slug) or quiet_sample(region) for region in REGION_REGISTRY]
+    return RegionalSSTCollection(tuple(RegionalSSTResult(sample, sample) for sample in samples))

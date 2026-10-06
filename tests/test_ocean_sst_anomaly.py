@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from tests.crw_fixtures import quiet_sample, sample_with_reading
+
 from copy import deepcopy
 from datetime import date
 from unittest.mock import Mock
@@ -266,20 +268,20 @@ def test_fetch_region_sst_http_failure_strict_raises(monkeypatch):
 def test_fetch_all_regions_defaults_to_per_region_degradation(monkeypatch):
     def _fake_fetch_region(region, *, min_valid_cells=10, metadata=None):
         if region.slug == "north_atlantic":
-            return RegionalSSTReading(
+            return sample_with_reading(RegionalSSTReading(
                 "north_atlantic",
                 "North Atlantic",
                 "2026-08-20",
                 3.6,
                 2,
                 120,
-            )
+            ))
         if region.slug == "mediterranean":
             raise SourceFetchError("mediterranean failed")
-        return None
+        return quiet_sample(region)
 
     monkeypatch.setattr(
-        "src.data.ocean_sst_anomaly._fetch_region_sst_strict",
+        "src.data.ocean_sst_anomaly._fetch_region_sample_strict",
         _fake_fetch_region,
     )
 
@@ -293,18 +295,18 @@ def test_fetch_all_regions_defaults_to_per_region_degradation(monkeypatch):
 def test_fetch_all_regions_strict_raises_on_first_region_failure(monkeypatch):
     def _fake_fetch_region(region, *, min_valid_cells=10, metadata=None):
         if region.slug == "north_atlantic":
-            return RegionalSSTReading(
+            return sample_with_reading(RegionalSSTReading(
                 "north_atlantic",
                 "North Atlantic",
                 "2026-08-20",
                 3.6,
                 2,
                 120,
-            )
+            ))
         raise SourceFetchError(f"{region.slug} failed")
 
     monkeypatch.setattr(
-        "src.data.ocean_sst_anomaly._fetch_region_sst_strict",
+        "src.data.ocean_sst_anomaly._fetch_region_sample_strict",
         _fake_fetch_region,
     )
 
@@ -314,8 +316,8 @@ def test_fetch_all_regions_strict_raises_on_first_region_failure(monkeypatch):
 
 def test_fetch_all_regions_returns_empty_when_all_regions_below_tier(monkeypatch):
     monkeypatch.setattr(
-        "src.data.ocean_sst_anomaly._fetch_region_sst_strict",
-        lambda region, *, min_valid_cells=10, metadata=None: None,
+        "src.data.ocean_sst_anomaly._fetch_region_sample_strict",
+        lambda region, *, min_valid_cells=10, metadata=None: quiet_sample(region),
     )
 
     assert fetch_all_regions() == []
@@ -325,7 +327,7 @@ def test_fetch_all_regions_raises_when_all_regions_fail(monkeypatch):
     def _raise(region, *, min_valid_cells=10, metadata=None):
         raise SourceFetchError(f"{region.slug} failed")
 
-    monkeypatch.setattr("src.data.ocean_sst_anomaly._fetch_region_sst_strict", _raise)
+    monkeypatch.setattr("src.data.ocean_sst_anomaly._fetch_region_sample_strict", _raise)
 
     with pytest.raises(SourceFetchError, match="all regions failed"):
         fetch_all_regions()
@@ -346,10 +348,13 @@ def test_fetch_all_regions_uses_noaa_star_nc_when_erddap_times_out(monkeypatch):
             source_leg=NOAA_STAR_SSTA_LEG,
         )
     ]
-    monkeypatch.setattr("src.data.ocean_sst_anomaly._fetch_region_sst_strict", _raise)
+    monkeypatch.setattr("src.data.ocean_sst_anomaly._fetch_region_sample_strict", _raise)
     monkeypatch.setattr(
-        "src.data.ocean_sst_anomaly._fetch_noaa_star_ssta_regions_strict",
-        lambda *, min_valid_cells=10, today=None: fallback,
+        "src.data.ocean_sst_anomaly._fetch_noaa_star_ssta_samples_strict",
+        lambda *, regions, min_valid_cells=10, today=None: [
+            sample_with_reading(fallback[0]) if r.slug == fallback[0].region_slug
+            else quiet_sample(r) for r in regions
+        ],
     )
 
     assert fetch_all_regions() == fallback
@@ -359,15 +364,15 @@ def test_fetch_all_regions_all_failure_includes_sampled_causes(monkeypatch):
     def _raise(region, *, min_valid_cells=10, metadata=None):
         raise SourceFetchError(f"{region.slug} schema drift")
 
-    monkeypatch.setattr("src.data.ocean_sst_anomaly._fetch_region_sst_strict", _raise)
+    monkeypatch.setattr("src.data.ocean_sst_anomaly._fetch_region_sample_strict", _raise)
 
     with pytest.raises(SourceFetchError) as exc_info:
         fetch_all_regions()
 
     msg = str(exc_info.value)
     assert "all regions failed" in msg
-    assert "north_atlantic schema drift" in msg
-    assert "subpolar_n_atlantic schema drift" in msg
+    assert "north_atlantic: regional_source_rejected" in msg
+    assert "subpolar_n_atlantic: regional_source_rejected" in msg
 
 
 def test_latest_noaa_star_file_from_index_ignores_md5_placeholders():

@@ -19,6 +19,8 @@ from src.two_bot.evidence_contract import audit_story_bundle
 from src.two_bot.intern.marine import build_regional_sst_anomaly_bundle
 from tests.crw_fixtures import (
     DAY,
+    quiet_sample,
+    sample_with_reading,
     RETRIEVED,
     csv_body,
     metadata_body,
@@ -90,7 +92,10 @@ def test_http_source_to_queue_without_injected_provenance(monkeypatch, clock):
 
     monkeypatch.setattr(source, "fetch_with_retry", get)
     bot_state = deepcopy(DEFAULT_STATE)
-    run_ocean_sst_anomaly(bot_state, {"sources": []})
+    current_run = {"sources": []}
+    run_ocean_sst_anomaly(bot_state, current_run)
+    assert current_run["sources"][0]["promoted"] == 1
+    assert current_run["sources"][0]["observed"] == 13
     candidates = bot_state["_triage_queue"]
     assert len(candidates) == 1
     bundle = candidates[0].bundle
@@ -452,7 +457,7 @@ def test_transport_fallback_uses_native_receipt(monkeypatch, native, clock):
 def test_schema_failure_does_not_try_backup(monkeypatch):
     monkeypatch.setattr(source, "fetch_with_retry", lambda *a, **k: response(b"wrong"))
     fallback = Mock(side_effect=AssertionError("backup must not hide schema failure"))
-    monkeypatch.setattr(source, "_fetch_noaa_star_ssta_regions_strict", fallback)
+    monkeypatch.setattr(source, "_fetch_noaa_star_ssta_samples_strict", fallback)
     with pytest.raises(SourceFetchError):
         source.fetch_all_regions()
     fallback.assert_not_called()
@@ -464,16 +469,16 @@ def test_backup_does_not_replace_successful_below_threshold(monkeypatch):
     def primary(region, **kwargs):
         if region.slug == REGION.slug:
             raise requests.Timeout("timed out")
-        return None
+        return quiet_sample(region)
 
-    monkeypatch.setattr(source, "_fetch_region_sst_strict", primary)
+    monkeypatch.setattr(source, "_fetch_region_sample_strict", primary)
     fallback = [
         source.RegionalSSTReading(
             r.slug, r.display_name, DAY, 3.6, 2, 30, source.NOAA_STAR_SSTA_LEG
         )
         for r in (REGION, source.REGION_REGISTRY[0])
     ]
-    monkeypatch.setattr(source, "_fetch_noaa_star_ssta_regions_strict", lambda **k: fallback)
+    monkeypatch.setattr(source, "_fetch_noaa_star_ssta_samples_strict", lambda **k: [sample_with_reading(fallback[0])])
     assert source.fetch_all_regions() == [fallback[0]]
 
 
@@ -505,7 +510,7 @@ def test_primary_csv_schema_error_never_falls_back(monkeypatch, clock):
     monkeypatch.setattr(source, "_primary_metadata", metadata_receipt)
     monkeypatch.setattr(source, "fetch_with_retry", lambda *a, **k: response(b"bad CSV"))
     fallback = Mock(side_effect=AssertionError("schema errors must remain visible"))
-    monkeypatch.setattr(source, "_fetch_noaa_star_ssta_regions_strict", fallback)
+    monkeypatch.setattr(source, "_fetch_noaa_star_ssta_samples_strict", fallback)
     with pytest.raises(SourceFetchError, match="all regions failed"):
         source.fetch_all_regions()
     fallback.assert_not_called()
@@ -522,9 +527,9 @@ def test_csv_time_outside_metadata_rejected(monkeypatch):
 
 def test_successful_low_readings_never_download_backup(monkeypatch):
     monkeypatch.setattr(source, "_primary_metadata", metadata_receipt)
-    monkeypatch.setattr(source, "_fetch_region_sst_strict", lambda *a, **k: None)
+    monkeypatch.setattr(source, "_fetch_region_sample_strict", lambda region, **k: quiet_sample(region))
     fallback = Mock(side_effect=AssertionError("no outage"))
-    monkeypatch.setattr(source, "_fetch_noaa_star_ssta_regions_strict", fallback)
+    monkeypatch.setattr(source, "_fetch_noaa_star_ssta_samples_strict", fallback)
     assert source.fetch_all_regions() == []
     fallback.assert_not_called()
 
@@ -590,3 +595,216 @@ def test_native_conflicting_mask_metadata_is_rejected(native, tmp_path, name, va
         ds.variables[source._SST_ANOM_VAR].setncattr(name, value)
     with pytest.raises(SourceFetchError, match="encoding"):
         decode_native(path.read_bytes())
+
+
+def install_collection_wire(monkeypatch, *, overrides=None, metadata=None, native_body=None):
+    """All outgoing requests are invented, counted, and restricted to known URLs."""
+    by_url = {source._build_url(r): r for r in source.REGION_REGISTRY}
+    calls = []
+    overrides = overrides or {}
+
+    def get(url, **kwargs):
+        calls.append((url, kwargs))
+        if url == contract.METADATA_URL:
+            value = metadata_body() if metadata is None else metadata
+        elif url in by_url:
+            region = by_url[url]
+            value = overrides.get(region.slug, csv_body(region, value=1.0))
+        elif native_body is not None and url == source._noaa_star_year_index_url(2026):
+            value = b'<a href="ct5km_ssta_v3.1_20260614.nc">invented</a>'
+        elif native_body is not None and url == URL:
+            value = native_body
+        else:
+            raise AssertionError(f"Unexpected source request: {url}")
+        if isinstance(value, Exception):
+            raise value
+        return response(value)
+
+    monkeypatch.setattr(source, "fetch_with_retry", get)
+    return calls
+
+
+@pytest.mark.parametrize("value,expected_candidates", [(1.0, 0), (2.1, 1), (3.6, 1)])
+def test_collection_counts_quiet_samples_and_synthesis_floor(monkeypatch, clock, value, expected_candidates):
+    calls = install_collection_wire(monkeypatch, overrides={REGION.slug: csv_body(REGION, value=value)})
+    decode = Mock(wraps=contract.decode_csv)
+    monkeypatch.setattr(contract, "decode_csv", decode)
+    report = source.collect_all_regions()
+    assert report.status == "success" and report.observed == 13
+    assert len(report.readings) == expected_candidates
+    assert report.recovered == report.fallback_attempted == 0
+    assert len(calls) == 14 and decode.call_count == 13
+    assert all(kwargs["attempts"] == 1 for _, kwargs in calls)
+    for row in report.regions:
+        assert row.primary is row.final and row.final.qualified
+        assert row.final.product_date == DAY
+        assert row.final.total_cells == row.final.valid_cells
+        assert row.final.excluded_cells == 0
+    assert len(json.dumps(report.details())) < 15000
+    assert "response_sha256" not in json.dumps(report.details())
+
+
+@pytest.mark.parametrize("case,kind", [
+    ("masked", "insufficient_sample"), ("schema", "source_rejected"),
+    ("transport", "transport_failure"),
+])
+def test_collection_partial_failures_count_only_qualified_regions(monkeypatch, clock, case, kind):
+    value = {
+        "masked": csv_body(REGION, selected={(5., -170. + i): 3.6 for i in range(9)}),
+        "schema": b"bad source contract",
+        "transport": requests.Timeout("timed out: private-error-payload"),
+    }[case]
+    calls = install_collection_wire(
+        monkeypatch, overrides={REGION.slug: value},
+        native_body=requests.Timeout("timed out: private-native-payload") if case == "transport" else None,
+    )
+    report = source.collect_all_regions()
+    assert report.status == "partial_failure" and report.observed == 12
+    row = report.regions[-1]
+    assert row.primary.outcome == kind and not row.final.qualified
+    assert report.details()["unresolved_regions"] == 1
+    assert "private-" not in json.dumps(report.details())
+    assert len(calls) == (16 if case == "transport" else 14)
+    if case == "masked":
+        assert row.final.valid_cells == 9 and row.final.total_cells == 561
+        assert row.final.excluded_cells == 552
+        assert row.final.product_date == DAY
+
+
+@pytest.fixture(scope="module")
+def quiet_native(tmp_path_factory):
+    return native_file(tmp_path_factory.mktemp("crw-quiet") / "quiet.nc", value=1.0).read_bytes()
+
+
+@pytest.mark.parametrize("backup", ["quiet", "candidate"])
+def test_collection_native_recovers_only_failed_region(monkeypatch, clock, quiet_native, native, backup):
+    body = quiet_native if backup == "quiet" else native.read_bytes()
+    calls = install_collection_wire(
+        monkeypatch, overrides={REGION.slug: requests.Timeout("timed out: private primary")}, native_body=body,
+    )
+    decode = Mock(wraps=source._samples_from_noaa_star_netcdf_bytes)
+    monkeypatch.setattr(source, "_samples_from_noaa_star_netcdf_bytes", decode)
+    report = source.collect_all_regions()
+    assert report.status == "degraded" and report.observed == 13
+    assert report.recovered == report.fallback_attempted == 1
+    assert len(report.readings) == (backup == "candidate")
+    assert len(calls) == 16
+    assert [kwargs["attempts"] for _, kwargs in calls].count(1) == 14
+    assert [kwargs["attempts"] for _, kwargs in calls].count(2) == 2
+    decode.assert_called_once()
+    assert decode.call_args.kwargs["regions"] == (REGION,)
+    for row in report.regions[:-1]:
+        assert row.primary is row.final and row.final.outcome == "below_floor"
+    row = report.regions[-1]
+    assert row.primary.outcome == "transport_failure"
+    assert row.primary.diagnostic == "regional_transport_failure"
+    assert row.recovered and row.final.source_leg == source.NOAA_STAR_SSTA_LEG
+    assert row.final.valid_cells == row.final.total_cells == 500
+    assert row.final.excluded_cells == 0 and row.final.product_date == DAY
+
+
+def test_collection_schema_error_prevents_mixed_transport_fallback(monkeypatch, clock):
+    calls = install_collection_wire(monkeypatch, overrides={
+        REGION.slug: requests.Timeout("timed out"), source.REGION_REGISTRY[0].slug: b"bad schema",
+    })
+    report = source.collect_all_regions()
+    assert report.observed == 11 and report.status == "partial_failure"
+    assert report.fallback_attempted == 0 and len(calls) == 14
+
+
+@pytest.mark.parametrize("failure", [b"bad schema", requests.Timeout("timed out: private transfer")])
+def test_collection_all_primary_failures_are_not_quiet(monkeypatch, clock, failure):
+    calls = install_collection_wire(
+        monkeypatch, overrides={r.slug: failure for r in source.REGION_REGISTRY},
+        native_body=b"bad native metadata" if isinstance(failure, Exception) else None,
+    )
+    report = source.collect_all_regions()
+    assert report.status == "failed" and report.observed == 0 and not report.readings
+    assert report.details()["unresolved_regions"] == 13
+    assert len(calls) == (16 if isinstance(failure, Exception) else 14)
+    assert "private transfer" not in json.dumps(report.details())
+
+
+def test_collection_metadata_rejection_does_not_invent_region_requests(monkeypatch, clock):
+    calls = install_collection_wire(monkeypatch, metadata=b"invalid metadata")
+    report = source.collect_all_regions()
+    assert len(calls) == 1 and report.status == "failed" and report.observed == 0
+    for row in report.regions:
+        assert row.primary is row.final and not row.primary.request_attempted
+        assert row.primary.outcome == "source_rejected"
+        assert row.primary.diagnostic == "metadata_source_rejected"
+        assert row.primary.total_cells is None
+
+
+@pytest.mark.parametrize("backup", ["quiet", "candidate", "masked", "rejected"])
+def test_collection_metadata_outage_retains_dependency_and_native_coverage(
+    monkeypatch, clock, quiet_native, native, backup, tmp_path,
+):
+    if backup == "masked":
+        body = native_file(tmp_path / "masked.nc", value=-327.68).read_bytes()
+    elif backup == "rejected":
+        body = b"bad native contract"
+    else:
+        body = quiet_native if backup == "quiet" else native.read_bytes()
+    calls = install_collection_wire(
+        monkeypatch, metadata=requests.Timeout("timed out: private metadata"), native_body=body,
+    )
+    report = source.collect_all_regions()
+    assert len(calls) == 3 and report.fallback_attempted == 13
+    # Only the invented Niño window contains data; all other native cells are masked.
+    assert report.observed == (1 if backup in {"quiet", "candidate"} else 0)
+    assert report.status == ("partial_failure" if report.observed else "failed")
+    assert len(report.readings) == (backup == "candidate")
+    for row in report.regions:
+        assert not row.primary.request_attempted and row.primary.valid_cells is None
+        assert row.primary.diagnostic == "metadata_transport_failure"
+        assert row.final.source_leg == source.NOAA_STAR_SSTA_LEG
+    if backup == "masked":
+        assert report.regions[-1].final.valid_cells == 0
+        assert report.regions[-1].final.excluded_cells == 500
+
+
+def test_collection_all_quiet_native_regions_recover_metadata_outage(monkeypatch, clock, tmp_path):
+    world = source.RegionDef("world", "Invented global grid", -90, 90, -180, 180)
+    body = native_file(tmp_path / "global-quiet.nc", region=world, value=1.0).read_bytes()
+    calls = install_collection_wire(monkeypatch, metadata=requests.Timeout("timed out"), native_body=body)
+    report = source.collect_all_regions()
+    assert len(calls) == 3
+    assert report.status == "degraded" and report.observed == report.recovered == 13
+    assert not report.readings
+
+
+@pytest.mark.parametrize("metadata", [requests.Timeout("timed out"), b"invalid contract"])
+def test_strict_collection_preserves_metadata_exceptions(monkeypatch, clock, metadata):
+    calls = install_collection_wire(monkeypatch, metadata=metadata)
+    expected = requests.Timeout if isinstance(metadata, Exception) else SourceFetchError
+    with pytest.raises(expected):
+        source.collect_all_regions(strict=True)
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize("day", ["2026-06-01", "2026-06-17"])
+def test_rejected_product_date_and_decoded_counts_remain_visible(monkeypatch, clock, day):
+    calls = install_collection_wire(monkeypatch, overrides={REGION.slug: csv_body(REGION, day=day)})
+    report = source.collect_all_regions()
+    row = report.regions[-1]
+    assert report.status == "partial_failure" and report.observed == 12
+    assert row.final.outcome == "source_rejected" and row.final.product_date == day
+    assert row.final.valid_cells == row.final.total_cells == 561
+    assert row.final.reading is None and len(calls) == 14
+
+
+def test_backup_does_not_retry_insufficient_primary_sample(monkeypatch, clock, native):
+    other = source.REGION_REGISTRY[0]
+    calls = install_collection_wire(monkeypatch, overrides={
+        REGION.slug: requests.Timeout("timed out"), other.slug: csv_body(other, selected={}),
+    }, native_body=native.read_bytes())
+    decode = Mock(wraps=source._samples_from_noaa_star_netcdf_bytes)
+    monkeypatch.setattr(source, "_samples_from_noaa_star_netcdf_bytes", decode)
+    report = source.collect_all_regions()
+    assert report.status == "partial_failure" and report.observed == 12
+    assert report.recovered == 1 and len(calls) == 16
+    assert decode.call_args.kwargs["regions"] == (REGION,)
+    row = report.regions[0]
+    assert row.primary is row.final and row.final.outcome == "insufficient_sample"
+    assert row.final.valid_cells == 0
