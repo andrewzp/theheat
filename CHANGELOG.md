@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.108.80 — 2026-10-06
+
+- Patch dashboard transitives to sharp 0.35.5 (bundled librsvg 2.63.2) and source-map-js 1.2.2 for their published security advisories. Preserve the existing Next/React versions, platform constraints and application behavior.
+
 ## 0.9.108.79 — 2026-10-06
 
 - Preserve verified NOAA Coral Reef Watch source receipts through regional SST analysis and review. Validate primary CSV time, units and complete strided grids, and the native backup file's own product/date/encoding before using its values.
