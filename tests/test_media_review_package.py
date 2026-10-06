@@ -47,7 +47,7 @@ def local(tmp_path, seed):
         "rasterizer_sha256": binary,
         "implementation_sha256": media / "evidence_graphic_render.py",
         "contract_sha256": media / "evidence_graphic.py",
-        "adapter_sha256": media / "temperature_graphic_adapter.py",
+        "adapter_sha256": media / package.adapter_filename(data["graphic_spec"]["template"]),
         "font_sha256": media / "fonts" / "DejaVuSansMono.ttf",
     }.items():
         renderer[key] = digest(path.read_bytes())

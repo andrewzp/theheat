@@ -16,10 +16,23 @@ from urllib.parse import urlparse
 from src.editorial.revisions import fingerprint
 
 TEMPLATE_VERSION = "p31-preview-3-mobile"
-TEMPLATES = frozenset({"temperature_comparator", "temperature_trajectory"})
+TEMPLATES = frozenset({"temperature_comparator", "temperature_trajectory", "crw_regional_anomaly"})
 VARIABLE_LABELS = {"daily_maximum_temperature": "Daily maximum temperature",
                    "daily_minimum_temperature": "Daily minimum temperature"}
 WIDTH, HEIGHT = 1200, 1500
+
+
+def template_version(template):
+    if template == "crw_regional_anomaly":
+        from src.media.crw_graphic_adapter import TEMPLATE_VERSION as version
+        return version
+    if template not in TEMPLATES:
+        raise ValueError("Unknown graphic template")
+    return TEMPLATE_VERSION
+
+
+def adapter_filename(template):
+    return "crw_graphic_adapter.py" if template == "crw_regional_anomaly" else "temperature_graphic_adapter.py"
 
 
 def _text(value, name, limit=160):
@@ -106,6 +119,10 @@ def validate_graphic(template, evidence, *, expected_evidence_sha256):
         raise ValueError("Graphic evidence differs from the expected review binding")
     if type(evidence.get("synthetic")) is not bool:
         raise ValueError("Synthetic status must be explicit")
+    if template == "crw_regional_anomaly":
+        from src.media.crw_graphic_adapter import validate_crw_adapter_binding
+        validate_crw_adapter_binding(evidence)
+        return deepcopy(evidence)
     if evidence.get("time_basis", "instant") not in {"instant", "source_calendar_date"}:
         raise ValueError("Unsupported graphic time basis")
     if date_only(evidence) and (
@@ -183,6 +200,8 @@ def validate_graphic(template, evidence, *, expected_evidence_sha256):
 
 
 def chart_title(template, evidence):
+    if template == "crw_regional_anomaly":
+        return "Sea temperature anomaly"
     if template == "temperature_trajectory":
         return VARIABLE_LABELS[evidence["variable"]] + " trajectory"
     point = evidence["points"][0]
@@ -190,6 +209,9 @@ def chart_title(template, evidence):
 
 
 def build_alt_text(template, evidence):
+    if template == "crw_regional_anomaly":
+        from src.media.crw_graphic_adapter import anomaly_alt_text
+        return anomaly_alt_text(evidence)
     prefix = "SYNTHETIC DEMONSTRATION; no actual weather. " if evidence["synthetic"] else ""
     rows = [f"{point_label(p, evidence)}: {p['value']:g}{p['unit']} {p['evidence_type']} ({p['source']['product']})" for p in evidence["points"]]
     text = prefix + f"{chart_title(template, evidence)} for {evidence['location']}. Variable: {VARIABLE_LABELS[evidence['variable']]}. Scope: {evidence['scope']}. Evidence as of {evidence['evidence_as_of']}. " + "; ".join(rows) + "."

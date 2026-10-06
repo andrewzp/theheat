@@ -10,7 +10,7 @@ import pytest
 
 from src.editorial.policy import current_editorial_policy
 from src.editorial.revisions import draft_identity, fingerprint, invalidate_text
-from src.media.evidence_graphic import HEIGHT, WIDTH, TEMPLATE_VERSION, build_alt_text
+from src.media.evidence_graphic import HEIGHT, WIDTH, template_version, build_alt_text
 from src.media.review_packet import (
     MAX_PNG_BYTES,
     MediaReviewError,
@@ -49,7 +49,7 @@ def manifest_for(spec, png):
     renderer.update(library="ReportLab", version="synthetic-fixture", width=WIDTH, height=HEIGHT)
     binding = {
         "template": spec["template"],
-        "template_version": TEMPLATE_VERSION,
+        "template_version": template_version(spec["template"]),
         "source_evidence_sha256": spec["expected_evidence_sha256"],
         "renderer": renderer,
     }

@@ -20,7 +20,7 @@ from src.editorial.revisions import draft_identity, fingerprint
 from src.media.evidence_graphic import (
     HEIGHT,
     WIDTH,
-    TEMPLATE_VERSION,
+    template_version,
     build_alt_text,
     validate_graphic,
 )
@@ -169,8 +169,8 @@ def _build(
     _require(valid_policy(policy), "Current editorial policy is unavailable")
     _require(
         set(spec) == {"template", "expected_evidence_sha256", "evidence"}
-        and spec["template"] == "temperature_comparator",
-        "Only a qualified comparator is supported",
+        and spec["template"] in {"temperature_comparator", "crw_regional_anomaly"},
+        "Only a qualified single-bundle graphic is supported",
     )
     _require(_sha(spec["expected_evidence_sha256"]), "Graphic evidence fingerprint is invalid")
     evidence = validate_graphic(
@@ -178,9 +178,11 @@ def _build(
         spec["evidence"],
         expected_evidence_sha256=spec["expected_evidence_sha256"],
     )
+    from src.media.crw_graphic_adapter import ADAPTER_VERSION as CRW_ADAPTER_VERSION
+    adapter_version = CRW_ADAPTER_VERSION if spec["template"] == "crw_regional_anomaly" else ADAPTER_VERSION
     input_binding = evidence["input_binding"]
     _require(
-        input_binding["adapter_version"] == ADAPTER_VERSION and len(input_binding["bundles"]) == 1,
+        input_binding["adapter_version"] == adapter_version and len(input_binding["bundles"]) == 1,
         "A current single-bundle adapter binding is required",
     )
     bound = input_binding["bundles"][0]
@@ -220,7 +222,7 @@ def _build(
     )
     _require(
         binding["template"] == spec["template"]
-        and binding["template_version"] == TEMPLATE_VERSION
+        and binding["template_version"] == template_version(spec["template"])
         and binding["source_evidence_sha256"] == spec["expected_evidence_sha256"]
         and manifest["cache_key"] == fingerprint(binding),
         "Rendered identity differs from current spec",
@@ -275,7 +277,7 @@ def _build(
         },
         "graphic_binding": {
             "template": spec["template"],
-            "template_version": TEMPLATE_VERSION,
+            "template_version": template_version(spec["template"]),
             "evidence_sha256": spec["expected_evidence_sha256"],
             "render_binding_sha256": fingerprint(binding),
             "render_manifest_sha256": fingerprint(manifest),
