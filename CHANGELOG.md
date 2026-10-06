@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.108.77 — 2026-10-06
+
+- Add offline ingestion of an exact dated NOAA full CSV gzip into an isolated raw-observation candidate. Preserve flags and missing values, verify supplied receipt/hash/date consistency, bound resource use, and reject corruption, incomplete scope and duplicate observations before atomic no-clobber promotion.
+- Keep candidate data distinct from production thresholds. No bulk download, source activation, scientific qualification or publication follows from a successful import.
+
 ## 0.9.108.76 — 2026-10-05
 
 - Align shell heartbeat and JavaScript usage-report fixtures with the Python canary clock, and derive future place-event dates from the actual test observation. Preserve freshness and unknown-cost assertions under forward time shifts.
