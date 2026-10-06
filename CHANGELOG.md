@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.108.83 — 2026-10-06
+
+- Keep a place name separate from an ordinary sentence opener in factual claim inventories. Preserve complete-name coverage for initials, abbreviations and ambiguous forms; number/date coverage and all required factual checks remain unchanged.
+
 ## 0.9.108.82 — 2026-10-06
 
 - Distinguish a narrowly scoped statement of unavailable independent incident classification from an affirmative vegetation-fire claim. Positive fire assertions still require their source-bound incident warrant, and all other factual checks remain mandatory.
