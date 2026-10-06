@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.108.76 — 2026-10-05
+
+- Align shell heartbeat and JavaScript usage-report fixtures with the Python canary clock, and derive future place-event dates from the actual test observation. Preserve freshness and unknown-cost assertions under forward time shifts.
+- Restore globals copied by the legacy orchestrator test facade so later scientific tests do not inherit mocks when files run in a different order.
+
+## 0.9.108.75 — 2026-10-05
+
+- Contain unavailable GHCN thresholds to that source. Only a successful artifact verifier permits GHCN reads; independent world and hazard feeds continue with explicit incomplete coverage, without replacing U.S. observations with forecasts.
+- Save only verified threshold caches, preserve record continuity during GHCN outages, and report fixed cache-validation reasons without private file contents or paths.
+- Regenerate the dashboard policy identity for the changed source boundary; existing scientific checks and publication controls remain required.
+
+## 0.9.108.74 — 2026-10-05
+
+- Share a bounded snapshot range between threshold preflight and updating. Follow exact connected NOAA intervals, including multi-day changes; retain only verified progress with explicit incomplete-tail warnings. Extend the default lookback to cover the weekly cadence plus the existing lag.
+- Read baseline metadata without schema mutation, preserve unknown lineage, and refuse checkpoint advancement after unusable station recomputation. Test the existing partial-local-write boundary while retaining the last committed artifact on failure.
+
 ## 0.9.108.73 — 2026-10-04
 
 - Validate threshold caches and downloads against their exact committed database identity. Recover only a missing legacy asset; preserve existing assets and publish new versions under content-addressed compressed names with verified server receipts.

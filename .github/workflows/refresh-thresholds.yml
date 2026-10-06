@@ -9,7 +9,7 @@ on:
       days:
         description: 'Days to look back in superghcnd_diff'
         required: false
-        default: '8'
+        default: '12'
         type: string
 
 concurrency:
@@ -53,7 +53,7 @@ jobs:
 
       - name: Require contiguous baseline lineage before mutation
         env:
-          THRESHOLD_DAYS: ${{ github.event.inputs.days || '8' }}
+          THRESHOLD_DAYS: ${{ github.event.inputs.days || '12' }}
         run: python -m scripts.threshold_artifacts require-lineage --days "$THRESHOLD_DAYS"
 
       - name: Refresh station inventory
@@ -61,7 +61,7 @@ jobs:
 
       - name: Apply incremental threshold updates
         env:
-          THRESHOLD_DAYS: ${{ github.event.inputs.days || '8' }}
+          THRESHOLD_DAYS: ${{ github.event.inputs.days || '12' }}
         run: |
           timeout 900 python -m scripts.update_thresholds_incremental \
             --db data/station_thresholds.sqlite \

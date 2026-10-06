@@ -3,7 +3,7 @@ from tests.temperature_helpers import provider_payload, dated_forecast, complete
 
 from copy import deepcopy
 import csv
-from datetime import date
+from datetime import date, timedelta
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -85,7 +85,7 @@ def test_real_pair_end_to_end_without_network(name, monkeypatch):
         candidate = SimpleNamespace(
             event_id=record.event_id,
             city=record.city,
-            tweet_date="2026-09-08",
+            tweet_date=record.signal_date.isoformat(),
             score=SimpleNamespace(total=80),
             cooldown_exempt=False,
         )
@@ -96,7 +96,7 @@ def test_real_pair_end_to_end_without_network(name, monkeypatch):
             "all_time_high",
             record.event_id,
             city=record.city,
-            tweet_date="2026-09-08",
+            tweet_date=record.signal_date.isoformat(),
             review_context={"two_bot": {"bundle": bundle.to_dict()}},
         )
     assert len(state["drafts"]) == 2
@@ -104,12 +104,13 @@ def test_real_pair_end_to_end_without_network(name, monkeypatch):
     state["posted_events"].append(records[0].event_id)
     assert not can_draft_candidate(state, SimpleNamespace(event_id=records[0].event_id))[0]
     # A fresh-date second-place candidate is not blocked by the first-place city cooldown.
+    future_day = records[1].signal_date + timedelta(days=365)
     assert can_draft_candidate(
         state,
         SimpleNamespace(
-            event_id=records[1].event_id.replace("2026-", "2027-"),
+            event_id=records[1].event_id.replace(records[1].signal_date.isoformat(), future_day.isoformat()),
             city=name,
-            tweet_date="2027-09-08",
+            tweet_date=future_day.isoformat(),
         ),
     )[0]
     assert len([k for k in saved if k != "_meta"]) == 2

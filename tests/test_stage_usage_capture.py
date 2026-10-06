@@ -236,9 +236,14 @@ def test_multistage_usage_survives_real_storage_roundtrip_with_legacy_and_receip
         assert actual[key] == state[key]
     assert ledger.drain_into_state(actual) == 0
     assert actual["llm_usage"][day]["writer|legacy"] == old
-    expected = summarize_usage(actual)
+    # Node's clock is outside freezegun. Both projections must use the same
+    # explicit reporting period as these retained usage receipts.
+    report_at = datetime.fromisoformat(f"{day}T12:00:00+00:00")
+    expected = summarize_usage(actual, now=report_at)
     js = node('''import {readFileSync} from "node:fs";
       import {summarizeUsage} from "./dashboard/lib/usage-ledger.js";
-      console.log(JSON.stringify(summarizeUsage(JSON.parse(readFileSync(0,"utf8")))));''', actual)
+      const input = JSON.parse(readFileSync(0,"utf8"));
+      console.log(JSON.stringify(summarizeUsage(input.state, {now: Date.parse(input.now)})));''',
+      {"state": actual, "now": report_at.isoformat()})
     assert expected == js and expected["unpriced_calls"] == 6
     assert expected["legacy_estimate_usd"] == 1.25 and expected["known_cost_usd"] is None

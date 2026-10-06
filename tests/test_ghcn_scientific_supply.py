@@ -96,6 +96,8 @@ def test_real_prepass_sees_six_stations_before_changed_individual_caps(monkeypat
     monkeypatch.setattr(source, "_should_draft", lambda *args, **kwargs: True)
     monkeypatch.setattr(source, "_enqueue_story_candidate", inspect_candidate)
     monkeypatch.setenv("THEHEAT_SIGNALS_PROVIDER", "ghcn")
+    # Explicit receipt for the injected offline GHCN source fixture.
+    monkeypatch.setenv("THEHEAT_GHCN_THRESHOLD_VERIFICATION", "success")
     monkeypatch.setenv("THEHEAT_RECORDS_CLUSTER_ENABLED", "1")
     state = deepcopy(DEFAULT_STATE)
     source.run_extreme_signals(state, None, [], {}, {})

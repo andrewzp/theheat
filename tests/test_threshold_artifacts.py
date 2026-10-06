@@ -3,6 +3,7 @@
 from datetime import date
 import gzip
 import hashlib
+import json
 from pathlib import Path
 import sqlite3
 import subprocess
@@ -88,6 +89,48 @@ def test_verified_cache_needs_no_network_and_keeps_all_bytes(baseline):
     github = FakeGitHub()
     assert artifact.ensure_database(db, manifest, github) == "verified_local_cache"
     assert github.calls == [] and before == (db.read_bytes(), path.read_bytes())
+
+
+@pytest.mark.parametrize("case,reason", [
+    ("missing", "missing"), ("digest", "digest_mismatch"),
+    ("metadata", "metadata_mismatch"), ("invalid", "metadata_invalid"),
+    ("empty", "empty"), ("journal", "not_replaceable"),
+])
+def test_cli_retains_fixed_cache_reason_when_recovery_fails(baseline, monkeypatch, capsys, case, reason):
+    db, path, manifest = baseline
+    if case == "missing":
+        db.unlink()
+    elif case in {"digest", "invalid", "empty"}:
+        db.write_bytes(b"" if case == "empty" else b"private synthetic file contents")
+        if case == "invalid":
+            manifest.update(sha256=artifact.digest(db)[0], bytes=str(db.stat().st_size))
+            save_manifest(path, manifest)
+    elif case == "metadata":
+        manifest["active_stations"] = "1001"
+        save_manifest(path, manifest)
+    elif case == "journal":
+        Path(str(db) + "-journal").write_bytes(b"private journal")
+    before = db.read_bytes() if db.exists() else None
+    github = FakeGitHub()
+    monkeypatch.setattr(artifact, "GitHub", lambda repo: github)
+    assert artifact.main(["ensure", "--db", str(db), "--manifest", str(path)]) == 1
+    output = capsys.readouterr().out
+    report = json.loads(output)
+    assert report["status"] == "blocked" and report["cache_validation"] == reason
+    assert "private" not in output and str(db) not in output
+    assert (db.read_bytes() if db.exists() else None) == before
+    assert not any(c[0] in {"download", "upload"} for c in github.calls)
+
+
+def test_recovered_cache_still_reports_initial_failure(baseline):
+    db, _, manifest = baseline
+    github = FakeGitHub()
+    github.add("station_thresholds.sqlite", db.read_bytes())
+    db.write_bytes(b"bad synthetic cache")
+    diagnostic = {}
+    assert artifact.ensure_database(db, manifest, github, diagnostics=diagnostic) == "verified_download"
+    assert diagnostic == {"cache_validation": "digest_mismatch"}
+    artifact.verify_database(db, manifest)
 
 
 @pytest.mark.parametrize(
@@ -388,7 +431,7 @@ def test_cli_reports_corrupt_deflate_without_provider_or_path_details(
 ):
     db, path, _ = baseline
 
-    def corrupt(*args):
+    def corrupt(*args, **kwargs):
         raise zlib.error("private-provider-body-or-path")
 
     monkeypatch.setattr(artifact, "ensure_database", corrupt)
@@ -449,7 +492,7 @@ def test_workflow_uses_exact_cache_and_guards_mutation_then_non_destructive_publ
     assert "restore-keys" not in cache["with"]
     assert (
         cache["with"]["key"]
-        == next(s for s in bot["jobs"]["run"]["steps"] if s.get("uses") == "actions/cache@v4")[
+        == next(s for s in bot["jobs"]["run"]["steps"] if s.get("uses") == "actions/cache/restore@v4")[
             "with"
         ]["key"]
     )
