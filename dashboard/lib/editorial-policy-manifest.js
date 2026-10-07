@@ -26,7 +26,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/data/fire_evidence.py": "cc270db0d383a5264270a001ba6a8e0ecdb1a7d22c808c4a09930fee7e86f7bf",
     "src/data/fire_identity.py": "badc8f086211c5ef2eb4cfb2812ce4bd3a70f0dee4c6340ed5d0d5ecf260b961",
     "src/data/fire_source_contract.py": "851fcf3800b742f89f0780b8c8348bd9aa701b1cc93771fd5433cd6fee3c3d72",
-    "src/data/firms.py": "f60554852b03ebe75b9df33a5f96bba662b836b455c753c7c09cbeb280c5e84c",
+    "src/data/firms.py": "3803f4078e9cbafaa146395a5c54b617eb78ed50e75dff594c8af9b3c490ada0",
     "src/data/gdacs.py": "8229c6d82fe002ded5fa8dbb1e76ed09e5072e694d1568760241e07ccebb785d",
     "src/data/ghcn.py": "930ad3248593f969e199631a5ec3e6d29f88b5fd3b012e3a1c925d91d6cbf715",
     "src/data/ghcn_format.py": "fd3636069b477a484194c9debd6da2ede228ac1ca747746db60b5d9eb656ea18",
@@ -67,7 +67,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/two_bot/intern/atmospheric.py": "6c7448b2e0e6bd2a45f447c9a29e5dd3cc295932b9482550eb9f76e5993ce572",
     "src/two_bot/intern/disasters.py": "a6f4d478a8475ee4106007aa4d6f038e0b27efa545d622ef781f8c7163c3841d",
     "src/two_bot/intern/drought.py": "2b6449d5ae3ae7dbdaafdcf47b2d56abab2cabda9d195bcfcdeac85345ee27ab",
-    "src/two_bot/intern/fire.py": "7173a9b19968596b0ab78af40077919695cb7a1b5925823e447bc85e2d2c4747",
+    "src/two_bot/intern/fire.py": "c8b04dc71cfdccdcc8425af8275c66197773264a8ed4ad342e47c1d62316876d",
     "src/two_bot/intern/marine.py": "ea332cc9cdeba3dd075d8980f1100b9df949dcdec2718e3393ea6703e8d86f42",
     "src/two_bot/intern/precipitation.py": "da903f54b66f50fcc19fac5a84187d388f1da8edf8d14493489901c8f06e3f06",
     "src/two_bot/intern/synthesis.py": "755fd682f60287e237f25d97a7a91a49ce9dc56773f7e84abfa7ea16fb684498",
@@ -91,5 +91,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "4a828a22e451889f630e994add6ba38c463d44369d24d2e22c2ff85e7f0387e5"
   },
   "schema_version": 1,
-  "source_sha256": "796742ac58e9e518d64c9bff0de82a1b4a4050bd1d1433a17dde23de75085697"
+  "source_sha256": "51d7573c97d0e82eb8b2046aba234cb072dc090ef1fdf4c3a1d8ea2c46e451c9"
 }

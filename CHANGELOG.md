@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.108.91 — 2026-10-07
+
+- Prefer qualified NOAA-21 fire detections, then NOAA-20 and MODIS, ahead of the announced S-NPP data retirement. Explicit NOAA-20 requests keep NOAA-21/MODIS alternatives; MODIS retains its single-product scope and the existing outage witness.
+- Stop explicit active S-NPP collection before any request, without narrowing historical source/receipt validation or changing retained evidence. Preserve source-specific chronology, confidence, outage/schema distinctions, bounded retries and publishing/model controls.
+
 ## 0.9.108.90 — 2026-10-07
 
 - Retain and validate each FIRMS/HMS acquisition minute, source product and selected-row receipt before thresholding. Keep categorical/numeric/unavailable confidence distinct, and redact public fetch diagnostics without changing source ordering or retry bounds.
