@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.108.86 — 2026-10-06
+
+- Stop assigning bleaching alert categories from the DHW-only coral backup. Retain accumulated heat stress and threshold events with explicit unknown alert status and point-sample limits.
+- Reject conflicting backup evidence and recognizable unsupported alert labels before paid checks. Marine synthesis headlines now describe the DHW threshold without inventing an alert class. Source requests, model settings and publishing controls are unchanged.
+
 ## 0.9.108.85 — 2026-10-06
 
 - Give qualified CRW sea-temperature writer evidence an explicit source-bound reference climate and interpretation limits, rejecting altered or unsupported context before generation without adding model calls.

@@ -39,6 +39,8 @@ POLICY_FILES = (
     "src/commands/postgres_authority.py", "src/commands/sqlite_authority.py",
     "src/orchestrator/sources/open_meteo.py",
     "src/data/ocean_sst_anomaly.py", "src/data/crw_contract.py",
+    "src/data/coral_dhw.py", "src/data/coral_evidence.py",
+    "src/editorial/synthesis.py", "src/editorial/thresholds.py",
     "src/media/crw_graphic_adapter.py", "src/media/evidence_graphic.py",
 )
 MODEL_KEYS = {"writer", "writer_provider", "fact_check", "critic", "safety"}
