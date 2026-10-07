@@ -178,12 +178,12 @@ def _build(
         spec["evidence"],
         expected_evidence_sha256=spec["expected_evidence_sha256"],
     )
-    from src.media.crw_graphic_adapter import ADAPTER_VERSION as CRW_ADAPTER_VERSION
-    adapter_version = CRW_ADAPTER_VERSION if spec["template"] == "crw_regional_anomaly" else ADAPTER_VERSION
+    from src.media.crw_graphic_adapter import SUPPORTED_ADAPTER_VERSIONS
+    adapter_versions = SUPPORTED_ADAPTER_VERSIONS if spec["template"] == "crw_regional_anomaly" else {ADAPTER_VERSION}
     input_binding = evidence["input_binding"]
     _require(
-        input_binding["adapter_version"] == adapter_version and len(input_binding["bundles"]) == 1,
-        "A current single-bundle adapter binding is required",
+        input_binding["adapter_version"] in adapter_versions and len(input_binding["bundles"]) == 1,
+        "A supported single-bundle adapter binding is required",
     )
     bound = input_binding["bundles"][0]
     bundle = draft["review_context"]["two_bot"]["bundle"]

@@ -168,8 +168,23 @@ def build_marine_heatwave_bundle(mhw: MarineHeatwaveStreakEvent) -> StoryBundle:
     )
 
 def build_regional_sst_anomaly_bundle(event: RegionalSSTAnomalyEvent) -> StoryBundle:
-    """A per-region SST anomaly event bundle."""
-    from src.data.crw_contract import qualified_provenance, PRODUCT_NAME, METHOD
+    """Current individual regional evidence, including qualified native climatology."""
+    return _regional_sst_anomaly_bundle(event, legacy_snapshot=False)
+
+
+def legacy_regional_sst_anomaly_snapshot(event: RegionalSSTAnomalyEvent) -> StoryBundle:
+    """Reconstruct the exact pre-climatology bundle for retained v1 graphics only.
+
+    This does not migrate an old snapshot, check or approval to current policy.
+    Preserve even the historical ERDDAP label; new native evidence corrects it.
+    """
+    return _regional_sst_anomaly_bundle(event, legacy_snapshot=True)
+
+
+def _regional_sst_anomaly_bundle(
+    event: RegionalSSTAnomalyEvent, *, legacy_snapshot: bool
+) -> StoryBundle:
+    from src.data.crw_contract import qualified_provenance, reference_climatology, PRODUCT_NAME, METHOD
 
     raw = asdict(event)
     supplied_provenance = raw.pop("provenance", None)
@@ -209,6 +224,19 @@ def build_regional_sst_anomaly_bundle(event: RegionalSSTAnomalyEvent) -> StoryBu
             {"label": "sample_cells_excluded", "value": supplied_provenance["excluded_cells"]},
         ])
 
+    history: dict[str, Any] = {
+        "scope": "noaa_crw_regional_sst_anomaly",
+        "source": (
+            "NOAA Coral Reef Watch Daily Global 5km SST Anomaly "
+            "(ERDDAP noaacrwsstanomalyDaily)"
+        ),
+        "spatial_aggregation": METHOD,
+        "tier_thresholds": [2.5, 3.5, 4.5],
+    }
+    if qualified and not legacy_snapshot:
+        history["source"] = PRODUCT_NAME
+        history["reference_climatology"] = reference_climatology(event)
+
     return StoryBundle(
         signal_kind="regional_sst_anomaly",
         where=event.region_display_name,
@@ -220,15 +248,7 @@ def build_regional_sst_anomaly_bundle(event: RegionalSSTAnomalyEvent) -> StoryBu
             "unit": "°C",
         },
         current_facts=current_facts,
-        historical_context={
-            "scope": "noaa_crw_regional_sst_anomaly",
-            "source": (
-                "NOAA Coral Reef Watch Daily Global 5km SST Anomaly "
-                "(ERDDAP noaacrwsstanomalyDaily)"
-            ),
-            "spatial_aggregation": METHOD,
-            "tier_thresholds": [2.5, 3.5, 4.5],
-        },
+        historical_context=history,
         raw_signal_dump=raw,
     )
 

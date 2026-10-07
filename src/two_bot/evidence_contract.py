@@ -189,6 +189,10 @@ def audit_story_bundle(bundle: StoryBundle) -> EvidenceAudit:
             )
 
     from src.data.temperature_evidence import temperature_aggregate_failures
+    from src.data.crw_contract import reference_climatology_failures
+
+    for reason in reference_climatology_failures(bundle):
+        issues.append(_issue("error", "crw_climatology_unqualified", "historical_context.reference_climatology", reason))
 
     for reason in temperature_aggregate_failures(bundle):
         issues.append(_issue("error", "temperature_aggregate_unqualified", "raw_signal_dump", reason))
@@ -310,6 +314,9 @@ def _check_nested_fact_dicts(
     field: str,
 ) -> None:
     for key, value in values.items():
+        if key == "reference_climatology":
+            # This versioned object has its own strict source/methodology check.
+            continue
         if not isinstance(value, dict):
             continue
         if "label" not in value or value["label"] in (None, ""):

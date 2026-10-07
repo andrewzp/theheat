@@ -19,10 +19,68 @@ PRODUCT_NAME = "NOAA Coral Reef Watch daily 5km SST anomaly v3.1"
 METADATA_URL = "https://coastwatch.noaa.gov/erddap/info/noaacrwsstanomalyDaily/index.json"
 CSV_BASE = "https://coastwatch.noaa.gov/erddap/griddap/noaacrwsstanomalyDaily.csv"
 METHOD = "cos-latitude-weighted mean of valid strided sample cells"
+METHODOLOGY_URL = "https://coralreefwatch.noaa.gov/product/5km/methodology.php"
 CSV_LIMIT = 1_048_576
 NETCDF_LIMIT = 67_108_864
 LISTING_LIMIT = 2_097_152
 CELL_TOLERANCE = 0.0251
+
+
+def reference_climatology(event: Any) -> dict | None:
+    """Product-specific documentation, bound to a qualified individual source.
+
+    NOAA's v3.1 methodology supplies these semantics; a response digest only
+    binds the input and does not independently verify its pixels or freshness.
+    Return a new object so neither callers nor stored bundles mutate the warrant.
+    """
+    if not qualified_provenance(event):
+        return None
+    return {
+        "schema_version": 1,
+        "source_product": PRODUCT,
+        "source_response_sha256": event.provenance["response_sha256"],
+        "methodology_url": METHODOLOGY_URL,
+        "reference_year_ranges": [[1985, 1990], [1993, 1993]],
+        "derivation_year_range": [1985, 2012],
+        "method": (
+            "Monthly climatology derived from 1985–2012 SST, linearly trend-recentered "
+            "to 1985–1990 plus 1993; daily climatology interpolated between monthly "
+            "values on the 15th. Anomaly = satellite-analysis SST minus daily climatology."
+        ),
+        "claim_limit": (
+            "Not a 1991–2020 normal anomaly or an ENSO classification. "
+            "This anomaly alone establishes no absolute SST, historical record, "
+            "duration/percentile classification or ecological impact."
+        ),
+    }
+
+
+def reference_climatology_failures(bundle: Any) -> list[str]:
+    """Reject altered/present warrants; absence preserves exact legacy evidence."""
+    history = bundle.historical_context
+    if not isinstance(history, dict) or "reference_climatology" not in history:
+        return []
+    try:
+        from src.data.ocean_sst_anomaly import RegionalSSTAnomalyEvent
+
+        if bundle.signal_kind != "regional_sst_anomaly":
+            raise ValueError
+        event = RegionalSSTAnomalyEvent(**bundle.raw_signal_dump)
+        expected = reference_climatology(event)
+        actual = history["reference_climatology"]
+        # Canonical JSON distinguishes bool/int and float/int and rejects NaN;
+        # whole-object comparison rejects unknown or missing fields as well.
+        if (
+            expected is None
+            or (bundle.event_id, bundle.where, bundle.when)
+            != (event.event_id, event.region_display_name, event.date)
+            or json.dumps(actual, sort_keys=True, allow_nan=False)
+            != json.dumps(expected, sort_keys=True, allow_nan=False)
+        ):
+            raise ValueError
+    except (TypeError, ValueError, KeyError, AttributeError, RecursionError, OverflowError, SourceFetchError):
+        return ["CRW reference climatology must match the qualified v3.1 source and methodology"]
+    return []
 
 
 def reject(reason: str) -> NoReturn:

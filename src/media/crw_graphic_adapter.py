@@ -21,13 +21,18 @@ from src.data.ocean_sst_anomaly import (
 from src.data.source_status import SourceFetchError
 from src.editorial.revisions import fingerprint
 from src.media.temperature_graphic_adapter import _StoredBundle, story_bundle_snapshot
-from src.two_bot.intern.marine import build_regional_sst_anomaly_bundle
+from src.two_bot.intern.marine import (
+    build_regional_sst_anomaly_bundle,
+    legacy_regional_sst_anomaly_snapshot,
+)
 
 TEMPLATE = "crw_regional_anomaly"
 TEMPLATE_VERSION = "p31-crw-anomaly-1"
-ADAPTER_VERSION = "p31-crw-erddap-1"
+LEGACY_ADAPTER_VERSION = "p31-crw-erddap-1"
+ADAPTER_VERSION = "p31-crw-erddap-2"
+SUPPORTED_ADAPTER_VERSIONS = frozenset({LEGACY_ADAPTER_VERSION, ADAPTER_VERSION})
 PACKET_LIMIT = 500_000
-METHODOLOGY = "https://coralreefwatch.noaa.gov/product/5km/methodology.php"
+METHODOLOGY = source.METHODOLOGY_URL
 CLIMATOLOGY = "CRW daily climatology: 1985–1990 + 1993 reference"
 
 
@@ -133,7 +138,9 @@ def _project(bundle, packet, expected_bundle_sha256, expected_packet_sha256, syn
         fingerprint(reconstructed) == fingerprint(p),
         "source bytes/calculation differ from the retained claim",
     )
-    rebuilt = story_bundle_snapshot(build_regional_sst_anomaly_bundle(event))
+    current = "reference_climatology" in snapshot["historical_context"]
+    constructor = build_regional_sst_anomaly_bundle if current else legacy_regional_sst_anomaly_snapshot
+    rebuilt = story_bundle_snapshot(constructor(event))
     _require(
         fingerprint(rebuilt) == fingerprint(snapshot),
         "bundle changes source-derived claims or includes unsupported context",
@@ -163,7 +170,7 @@ def _project(bundle, packet, expected_bundle_sha256, expected_packet_sha256, syn
         "source_product": source.PRODUCT,
         "source_url": p["source_url"],
         "input_binding": {
-            "adapter_version": ADAPTER_VERSION,
+            "adapter_version": ADAPTER_VERSION if current else LEGACY_ADAPTER_VERSION,
             "synthetic": synthetic,
             "bundles": [{"bundle_sha256": expected_bundle_sha256, "bundle": snapshot}],
             "source_packet_sha256": expected_packet_sha256,
@@ -205,7 +212,7 @@ def validate_crw_adapter_binding(evidence):
     try:
         binding = evidence["input_binding"]
         _require(
-            binding["adapter_version"] == ADAPTER_VERSION and len(binding["bundles"]) == 1,
+            binding["adapter_version"] in SUPPORTED_ADAPTER_VERSIONS and len(binding["bundles"]) == 1,
             "unsupported adapter or input count",
         )
         row = binding["bundles"][0]

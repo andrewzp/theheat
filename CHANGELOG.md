@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.108.85 — 2026-10-06
+
+- Give qualified CRW sea-temperature writer evidence an explicit source-bound reference climate and interpretation limits, rejecting altered or unsupported context before generation without adding model calls.
+- Preserve exact legacy graphic snapshots through a separate adapter version. New context changes evidence identity while keeping the chart unchanged; stale review and approval protections remain mandatory.
+
 ## 0.9.108.84 — 2026-10-06
 
 - Build deterministic private CRW regional sea-temperature anomaly graphics from retained source bytes. Recalculate the sampled mean and retain the native climatology, product date, coverage and separate acquisition receipts.
