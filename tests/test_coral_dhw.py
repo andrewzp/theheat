@@ -209,38 +209,29 @@ UTC,degrees_north,degrees_east,degree_Celsius_weeks
         region_full_name="Northern GBR",
         date=today.isoformat(),
         dhw_value=8.3,
-        stress_level="Bleaching Alert Level 2",
+        stress_level=coral_dhw.DHW_ONLY_STRESS_LEVEL,
         baa_7day_max=None,
         lat=-16.075,
         lon=145.975,
+        source_leg="crw_erddap",
     )
 
 
-@pytest.mark.parametrize(
-    ("dhw", "expected"),
-    [
-        # Below the bleaching floor.
-        (0.0, "No Stress"),
-        (3.9, "No Stress"),
-        # NOAA Coral Reef Watch Bleaching Alert Levels (matches
-        # fact_check_prompt.py:25 — 4→L1, 8→L2, 12→L3, 16→L4, 20→L5).
-        (4.0, "Bleaching Alert Level 1"),
-        (7.9, "Bleaching Alert Level 1"),
-        (8.0, "Bleaching Alert Level 2"),
-        (11.9, "Bleaching Alert Level 2"),
-        (12.0, "Bleaching Alert Level 3"),
-        (15.9, "Bleaching Alert Level 3"),
-        (16.0, "Bleaching Alert Level 4"),
-        (19.9, "Bleaching Alert Level 4"),
-        (20.0, "Bleaching Alert Level 5"),
-        (25.0, "Bleaching Alert Level 5"),  # scale tops out at Level 5
-    ],
-)
-def test_stress_level_for_dhw_full_noaa_scale(dhw, expected):
-    # #403: _stress_level_for_dhw once capped at "Bleaching Alert Level 2",
-    # under-labeling any reading >=12 C-weeks that NOAA (and the bot's own
-    # fact-check prompt) puts at Alert Level 3/4/5.
-    assert coral_dhw._stress_level_for_dhw(dhw) == expected
+@pytest.mark.parametrize("dhw", [0.0, 3.9, 4.0, 7.9, 8.0, 11.9, 12.0, 15.9, 16.0, 19.9, 20.0, 25.0])
+def test_dhw_only_backup_cannot_supply_any_current_alert_class(dhw):
+    # NOAA's alert categories require HotSpot too. The former DHW-only scale
+    # was an incorrect oracle, including the claim of No Stress below 4.
+    csv_text = (
+        "time,latitude,longitude,degree_heating_week\n"
+        "UTC,degrees_north,degrees_east,degree_Celsius_weeks\n"
+        f"{date.today().isoformat()}T12:00:00Z,-16.075,145.975,{dhw}\n"
+    )
+    reading = coral_dhw._reading_from_erddap_csv(
+        csv_text, coral_dhw.CRW_ERDDAP_STATIONS["gbr_northern"], max_age_days=5,
+    )
+    assert reading.dhw_value == dhw
+    assert reading.stress_level == coral_dhw.DHW_ONLY_STRESS_LEVEL
+    assert reading.baa_7day_max is None and reading.source_leg == "crw_erddap"
 
 
 def test_coral_erddap_accepts_documented_grid_lag():
@@ -282,7 +273,7 @@ def test_coral_falls_back_to_erddap_when_primary_raises(monkeypatch):
                 region_full_name="Northern GBR",
                 date=date.today().isoformat(),
                 dhw_value=8.3,
-                stress_level="Bleaching Alert Level 2",
+                stress_level=coral_dhw.DHW_ONLY_STRESS_LEVEL,
                 baa_7day_max=None,
                 lat=-16.075,
                 lon=145.975,
@@ -310,7 +301,7 @@ def test_detect_dhw_thresholds_propagates_coral_witness_source_leg():
             region_full_name="Northern GBR",
             date="2026-06-08",
             dhw_value=8.3,
-            stress_level="Bleaching Alert Level 2",
+            stress_level=coral_dhw.DHW_ONLY_STRESS_LEVEL,
             baa_7day_max=None,
             lat=-16.075,
             lon=145.975,
@@ -324,7 +315,7 @@ def test_detect_dhw_thresholds_propagates_coral_witness_source_leg():
     assert events[0].source_leg == "crw_erddap"
 
 
-def test_coral_erddap_bundle_marks_observed_alt_host():
+def test_coral_erddap_bundle_marks_satellite_point_scope():
     from src.two_bot.intern import build_coral_bleaching_bundle
 
     bundle = build_coral_bleaching_bundle(
@@ -335,7 +326,7 @@ def test_coral_erddap_bundle_marks_observed_alt_host():
             dhw_value=8.3,
             dhw_tier=8,
             bleaching_level="mass bleaching expected",
-            stress_level="Bleaching Alert Level 2",
+            stress_level=coral_dhw.DHW_ONLY_STRESS_LEVEL,
             lat=-16.075,
             lon=145.975,
             event_id="coral_dhw_gbr_northern_tier8",
@@ -343,7 +334,7 @@ def test_coral_erddap_bundle_marks_observed_alt_host():
         )
     )
 
-    assert {"label": "evidence_grade", "value": "observed_alt_host"} in bundle.current_facts
+    assert {"label": "evidence_grade", "value": "satellite_analysis"} in bundle.current_facts
 
 
 def test_run_coral_dhw_records_degraded_when_erddap_served(fresh_state, monkeypatch):
@@ -356,7 +347,7 @@ def test_run_coral_dhw_records_degraded_when_erddap_served(fresh_state, monkeypa
                 region_full_name="Northern GBR",
                 date=date.today().isoformat(),
                 dhw_value=8.3,
-                stress_level="Bleaching Alert Level 2",
+                stress_level=coral_dhw.DHW_ONLY_STRESS_LEVEL,
                 baa_7day_max=None,
                 lat=-16.075,
                 lon=145.975,

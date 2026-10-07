@@ -190,6 +190,10 @@ def audit_story_bundle(bundle: StoryBundle) -> EvidenceAudit:
 
     from src.data.temperature_evidence import temperature_aggregate_failures
     from src.data.crw_contract import reference_climatology_failures
+    from src.data.coral_evidence import dhw_only_bundle_failures
+
+    for reason in dhw_only_bundle_failures(bundle):
+        issues.append(_issue("error", "dhw_only_alert_unwarranted", "raw_signal_dump", reason))
 
     for reason in reference_climatology_failures(bundle):
         issues.append(_issue("error", "crw_climatology_unqualified", "historical_context.reference_climatology", reason))

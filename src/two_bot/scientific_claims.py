@@ -87,9 +87,24 @@ def scientific_claim_failures(tweet: str, bundle) -> list[str]:
         fact.get("label"): fact.get("value")
         for fact in bundle.current_facts if isinstance(fact, dict) and isinstance(fact.get("label"), str)
     } if isinstance(bundle.current_facts, list) else {}
-    failures = []
+    failures: list[str] = []
     signal = bundle.signal_kind
     text = tweet.lower()
+
+    from src.data.coral_evidence import is_dhw_only_bundle, dhw_only_bundle_failures
+
+    if is_dhw_only_bundle(bundle):
+        failures.extend("dhw_only_alert_unwarranted: " + reason for reason in dhw_only_bundle_failures(bundle))
+        normalized = re.sub(r"[\s\-\u2010-\u2015\u2212]+", " ", text)
+        # This deliberately bounded label check does not prove general semantic
+        # entailment. An unnumbered unknown-status statement remains reviewable.
+        if re.search(
+            r"\b(?:no stress|bleaching (?:watch|warning)|"
+            r"(?:bleaching )?(?:alert(?: level)?|level)\s*[:=]?\s*"
+            r"(?:\d+|[ivx]+|zero|one|two|three|four|five|six|seven|eight|nine|ten))\b",
+            normalized,
+        ):
+            failures.append("unwarranted_coral_alert: DHW alone does not establish a current bleaching alert class; HotSpot or qualified BAA evidence is missing")
 
     if signal.startswith("precipitation") and re.search(r"\b(?:record(?:[- ]breaking)?|wettest|all[- ]time)\b", text):
         # In particular, a `previous_record_mm` field copied from a threshold

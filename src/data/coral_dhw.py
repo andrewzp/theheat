@@ -18,6 +18,7 @@ from src.data._freshness import assert_freshness
 from src.data._http import fetch_with_retry
 from src.data._witness import tag_source_leg, with_witness
 from src.data.source_status import SourceFetchError, assert_response_schema
+from src.data.coral_evidence import DHW_ONLY_STRESS_LEVEL
 
 SOURCE_NAME = "NOAA Coral Reef Watch"
 STATION_INDEX_URL = "https://coralreefwatch.noaa.gov/product/vs/data.php"
@@ -343,10 +344,13 @@ def _reading_from_erddap_csv(
             region_full_name=station.region_full_name,
             date=observed_date,
             dhw_value=round(dhw, 1),
-            stress_level=_stress_level_for_dhw(dhw),
+            # This response contains neither HotSpot nor the BAA product.
+            # DHW can remain high after active heat stress has subsided.
+            stress_level=DHW_ONLY_STRESS_LEVEL,
             baa_7day_max=None,
             lat=lat,
             lon=lon,
+            source_leg=CRW_ERDDAP_LEG,
         )
     raise SourceFetchError(f"CRW ERDDAP schema drift for {station.region_id}: no data rows")
 
@@ -356,24 +360,6 @@ def _erddap_point_url(lat: float, lon: float) -> str:
         f"{CRW_ERDDAP_DATASET_URL}?"
         f"degree_heating_week%5B(last)%5D%5B({lat})%5D%5B({lon})%5D"
     )
-
-
-def _stress_level_for_dhw(dhw: float) -> str:
-    # NOAA Coral Reef Watch Bleaching Alert Levels (matches the fact-check
-    # prompt's documented scale): 4 -> L1, 8 -> L2, 12 -> L3, 16 -> L4, 20 -> L5.
-    # The scale tops out at Level 5; the bleaching_level tier (DHW_THRESHOLDS)
-    # is a separate, coarser field and is deliberately left unchanged.
-    if dhw >= 20:
-        return "Bleaching Alert Level 5"
-    if dhw >= 16:
-        return "Bleaching Alert Level 4"
-    if dhw >= 12:
-        return "Bleaching Alert Level 3"
-    if dhw >= 8:
-        return "Bleaching Alert Level 2"
-    if dhw >= 4:
-        return "Bleaching Alert Level 1"
-    return "No Stress"
 
 
 def _fetch_text(

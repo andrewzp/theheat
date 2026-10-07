@@ -21,7 +21,7 @@ RULE_MARINE_COMPOUND = "marine_compound"
 WINDOW_DAYS = 14
 MARINE_COMPOUND_COOLDOWN_DAYS = 60
 MARINE_SST_ANOMALY_MIN_C = 2.0
-CORAL_ALERT_LEVEL2_DHW_TIER = 8
+MARINE_DHW_MIN_C_WEEKS = 8
 D4_PCT_MIN = 1.0
 SNAPSHOT_TTL_DAYS = 14
 
@@ -195,7 +195,7 @@ def detect_marine_compound(bot_state: BotState) -> list[SynthesisSignal]:
                 region=coral_region_id,
                 since=since,
             )
-            if _component_float(coral, "dhw_tier") >= CORAL_ALERT_LEVEL2_DHW_TIER
+            if _component_float(coral, "dhw_tier") >= MARINE_DHW_MIN_C_WEEKS
         ]
         sst_anomalies = [
             sst
@@ -234,7 +234,7 @@ def detect_marine_compound(bot_state: BotState) -> list[SynthesisSignal]:
                 region=coral_region_id,
                 event_id=event_id,
                 headline=(
-                    f"{coral_name}: DHW Alert Level 2+ plus "
+                    f"{coral_name}: DHW at least {MARINE_DHW_MIN_C_WEEKS} °C-weeks plus "
                     f"{_component_float(peak_sst, 'anomaly_c'):+.1f}C {sst_name} SST anomaly"
                 ),
                 components=components,

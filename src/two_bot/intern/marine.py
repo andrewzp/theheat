@@ -12,6 +12,7 @@ from datetime import date
 from typing import Any
 
 from src.data.coral_dhw import CoralBleachingEvent
+from src.data.coral_evidence import DHW_POINT_SOURCE, DHW_POINT_SCOPE, DHW_ONLY_LIMIT
 
 from src.data.ice_mass import IceMassRecord
 
@@ -47,8 +48,11 @@ def build_coral_bleaching_bundle(event: CoralBleachingEvent) -> StoryBundle:
     ]
     if event.source_leg == "crw_erddap":
         current_facts.extend([
-            {"label": "data_source", "value": "NOAA Coral Reef Watch ERDDAP DHW grid"},
-            {"label": "evidence_grade", "value": "observed_alt_host"},
+            {"label": "data_source", "value": DHW_POINT_SOURCE},
+            {"label": "evidence_grade", "value": "satellite_analysis"},
+            {"label": "sample_scope", "value": DHW_POINT_SCOPE},
+            {"label": "bleaching_alert_status", "value": "unavailable"},
+            {"label": "claim_limit", "value": DHW_ONLY_LIMIT},
         ])
 
     return StoryBundle(
