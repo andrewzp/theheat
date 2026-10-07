@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+import json
 
 DHW_ONLY_STRESS_LEVEL = "Unavailable: HotSpot and bleaching alert data were not retrieved"
 DHW_POINT_SOURCE = "NOAA Coral Reef Watch ERDDAP DHW point sample"
@@ -23,7 +24,11 @@ def is_dhw_only_bundle(bundle: Any) -> bool:
     if bundle.signal_kind != "coral_bleaching":
         return False
     raw = bundle.raw_signal_dump if isinstance(bundle.raw_signal_dump, dict) else {}
-    return raw.get("source_leg") == "crw_erddap" or any(
+    provenance = raw.get("provenance")
+    identified_receipt = isinstance(provenance, dict) and (
+        provenance.get("source_leg") == "crw_erddap" or provenance.get("source_product") == "noaa-crw-dhw-v3.1"
+    )
+    return identified_receipt or raw.get("source_leg") == "crw_erddap" or any(
         f.get("label") == "data_source"
         and f.get("value") in (DHW_POINT_SOURCE, "NOAA Coral Reef Watch ERDDAP DHW grid")
         for f in _facts(bundle)
@@ -50,4 +55,29 @@ def dhw_only_bundle_failures(bundle: Any) -> list[str]:
         or any([f.get("value") for f in _facts(bundle) if f.get("label") == k] != [v] for k, v in required.items())
     ):
         return ["DHW-only backup must retain unknown alert status and its point-sample limits"]
+    return _point_binding_failures(bundle)
+
+
+def _point_binding_failures(bundle: Any) -> list[str]:
+    from src.data.coral_dhw import CoralBleachingEvent, _tier_for_dhw
+    from src.data.coral_source_contract import qualified_provenance
+    from src.two_bot.intern.marine import build_coral_bleaching_bundle
+
+    try:
+        event = CoralBleachingEvent(**bundle.raw_signal_dump)
+        if not qualified_provenance(event):
+            raise ValueError
+        tier, level = _tier_for_dhw(event.dhw_value)
+        if (
+            tier is None or type(event.dhw_tier) is not int or event.dhw_tier != tier
+            or event.bleaching_level != level
+            or event.event_id != f"coral_dhw_{event.region_id}_tier{tier}"
+        ):
+            raise ValueError
+        expected = build_coral_bleaching_bundle(event)
+        for key in ("where", "when", "event_id", "headline_metric", "current_facts", "historical_context", "raw_signal_dump"):
+            if json.dumps(getattr(bundle, key), sort_keys=True, allow_nan=False) != json.dumps(getattr(expected, key), sort_keys=True, allow_nan=False):
+                raise ValueError
+    except (TypeError, ValueError, KeyError, AttributeError, RecursionError, OverflowError):
+        return ["DHW point evidence must match its qualified source receipt, measurement and threshold"]
     return []

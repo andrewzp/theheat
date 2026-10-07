@@ -55,6 +55,10 @@ def build_coral_bleaching_bundle(event: CoralBleachingEvent) -> StoryBundle:
             {"label": "claim_limit", "value": DHW_ONLY_LIMIT},
         ])
 
+    raw = asdict(event)
+    if event.provenance is None:
+        # Preserve primary and legacy bundle bytes; absence never qualifies a point.
+        raw.pop("provenance")
     return StoryBundle(
         signal_kind="coral_bleaching",
         where=event.region_full_name,
@@ -70,7 +74,7 @@ def build_coral_bleaching_bundle(event: CoralBleachingEvent) -> StoryBundle:
             "scope": "coral_reef_watch_regional_dhw_threshold",
             "thresholds_c_weeks": [4, 8, 12],
         },
-        raw_signal_dump=asdict(event),
+        raw_signal_dump=raw,
     )
 
 def build_sea_ice_bundle(record: SeaIceRecord) -> StoryBundle:

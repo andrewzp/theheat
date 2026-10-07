@@ -9,7 +9,7 @@ import pytest
 
 from src.commands.postgres_authority import PostgresCommandAuthority, SCHEMA, NAMESPACE
 from src.commands.reducer import AutomaticPolicy
-from src.commands.schema import Command, CommandError, Principal, canonical_json
+from src.commands.schema import Command, CommandError, Principal, canonical_json, utc_text
 from src.commands.sqlite_authority import SQLiteAuthority
 from src.editorial.policy import current_editorial_policy
 from src.editorial.revisions import fingerprint
@@ -291,23 +291,23 @@ def test_connection_killed_before_commit(core, monkeypatch):
     assert store.consume(resolver, now=NOW)["status"] == "applied"
 
 
-def worker(opts, operation, item, barrier, queue):
+def worker(opts, operation, item, barrier, queue, clock):
     try:
         store = PostgresCommandAuthority(**opts)
         barrier.wait(timeout=20)
         if operation == "accept":
-            value = store.accept(item, EDITOR, now=NOW)
+            value = store.accept(item, EDITOR, now=clock)
         else:
-            value = store.consume(resolver, command_id=item, now=NOW)
+            value = store.consume(resolver, command_id=item, now=clock)
         queue.put(value)
     except BaseException as exc:
         queue.put({"error": type(exc).__name__, "code": getattr(exc, "code", str(exc))})
 
 
-def parallel(params, operation, items):
+def parallel(params, operation, items, *, clock=NOW):
     ctx = multiprocessing.get_context("spawn")
     barrier, queue = ctx.Barrier(len(items)), ctx.Queue()
-    children = [ctx.Process(target=worker, args=(options(params), operation, item, barrier, queue)) for item in items]
+    children = [ctx.Process(target=worker, args=(options(params), operation, item, barrier, queue, clock)) for item in items]
     try:
         for child in children:
             child.start()
@@ -511,3 +511,21 @@ def test_malformed_result_identity_not_accepted(core, change):
     admin(params, "ALTER TABLE theheat_commands.results ENABLE TRIGGER results_immutable")
     with pytest.raises(p.ProjectionError, match="corrupt_command_result"):
         store.result(cmd.command_id)
+
+
+def test_spawned_transactions_share_the_supplied_clock_not_child_import_time(core):
+    store, initial, _, params = core
+    clock = NOW - timedelta(hours=2)
+    row = request(initial["drafts"][0])
+    row.update(requested_at=utc_text(clock), expires_at=utc_text(clock + timedelta(hours=1)))
+    cmd = Command.from_request(row, EDITOR, environment="local", now=clock)
+    receipts = parallel(params, "accept", [cmd, cmd], clock=clock)
+    assert receipts[0] == receipts[1]
+    results = parallel(params, "consume", [cmd.command_id] * 2, clock=clock)
+    assert results[0] == results[1] and results[0]["status"] == "applied"
+    assert store.read()[0] == 1
+    # The real expiry gate is still enforced at an explicitly later instant.
+    expired = Command.from_request({**row, "command_id": str(uuid4())}, EDITOR, environment="local", now=clock)
+    with pytest.raises(CommandError) as failure:
+        store.accept(expired, EDITOR, now=clock + timedelta(hours=2))
+    assert failure.value.code == "command_expired"

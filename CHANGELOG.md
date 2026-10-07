@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.108.87 — 2026-10-07
+
+- Validate coral backup metadata and time-pinned point responses, with bounded reads, exact units/coordinates, finite DHW values and explicit failure on missing or stale evidence.
+- Preserve measurement precision before threshold selection. Bind compact source receipts through the event and writer/checker boundary; conflicting evidence is withheld, and changed receipts invalidate prior decisions. One metadata request is added per backup collection; model and publishing settings are unchanged.
+
+- Share the explicit fixture clock across spawned PostgreSQL test workers, avoiding import-time clock drift while preserving expiry assertions.
+
 ## 0.9.108.86 — 2026-10-06
 
 - Stop assigning bleaching alert categories from the DHW-only coral backup. Retain accumulated heat stress and threshold events with explicit unknown alert status and point-sample limits.

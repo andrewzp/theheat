@@ -16,14 +16,8 @@ from src.two_bot.types import MemorySlice
 
 
 def point_bundle(dhw=8.3):
-    text = (
-        "time,latitude,longitude,degree_heating_week\n"
-        "UTC,degrees_north,degrees_east,degree_Celsius_weeks\n"
-        f"{date.today().isoformat()}T12:00:00Z,-16.075,145.975,{dhw}\n"
-    )
-    reading = coral_dhw._reading_from_erddap_csv(
-        text, coral_dhw.CRW_ERDDAP_STATIONS["gbr_northern"], max_age_days=5,
-    )
+    from tests.coral_point_fixtures import reading as point_reading
+    reading = point_reading(dhw)
     event = coral_dhw.detect_dhw_thresholds([reading], {})[0]
     return build_coral_bleaching_bundle(event)
 
