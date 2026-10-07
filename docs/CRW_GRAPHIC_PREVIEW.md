@@ -42,6 +42,26 @@ from 1985–2012 data and recentered to 1985–1990 plus 1993; it is not the
 measurement. Cloud coverage limits confidence, particularly at high latitudes.
 See [NOAA's product methodology](https://coralreefwatch.noaa.gov/product/5km/methodology.php).
 
+New qualified individual CRW v3.1 writer bundles carry a versioned
+`historical_context.reference_climatology` warrant with these reference and
+derivation years, daily interpolation method, source-body hash and methodology
+link. It excludes inference of a modern-normal anomaly, ENSO classification,
+absolute SST, record or ecological impact from the anomaly alone. Primary ERDDAP
+and native NetCDF events share that product meaning while retaining their own
+source receipts. Unqualified products get no warrant. The writer boundary rejects
+altered, partial or unsupported warrants before calling a model. This supplies
+evidence, not an instruction to repeat all of it in every tweet.
+
+Graphics reconstruct the **entire** retained bundle with an explicit adapter:
+`p31-crw-erddap-1` preserves the original snapshot without that context;
+`p31-crw-erddap-2` requires the current context and product label. Presence of the
+context key selects the version; an empty or unknown context fails validation.
+No fields are silently removed to make a saved bundle fit. The plotted value,
+template version and visual baseline are unchanged, but new evidence changes its
+fingerprint. This compatibility permits readback, not reuse of stale checks or
+approvals: current policy, renderer hashes, exact draft identity and joint review
+are still required. Native NetCDF graphics remain unsupported.
+
 The figure includes the baseline, sample count and date at a readable size.
 Its alt text retains grid bounds, missing-cell counts and separate acquisition
 times. Matching earlier source bytes can support the same calculation without
