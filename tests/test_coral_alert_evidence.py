@@ -1,7 +1,6 @@
 """Invented DHW-only records; no source recovery or live model adjudication."""
 
 from copy import deepcopy
-from datetime import date
 from unittest.mock import Mock
 
 import pytest
@@ -103,18 +102,17 @@ def test_dhw_and_unknown_status_still_require_model_adjudication(tweet, monkeypa
     call.assert_called_once()
 
 
-@pytest.mark.parametrize("label", ["No Stress", "Bleaching Watch", "Alert Level 1", "Alert Level 2"])
-def test_primary_supplied_label_is_not_recomputed_from_dhw(label):
-    reading = coral_dhw.CoralDHWReading(
-        "gbr_northern", "Northern GBR", date.today().isoformat(), 12.5, label, 4,
-    )
-    event = coral_dhw.detect_dhw_thresholds([reading], {})[0]
+@pytest.mark.parametrize("code", range(5))
+def test_primary_supplied_label_is_not_recomputed_from_dhw(code):
+    from tests.coral_regional_fixtures import reading
+    from src.data.coral_regional_contract import LABELS
+    source_reading = reading(12.5, code)
+    event = coral_dhw.detect_dhw_thresholds([source_reading], {})[0]
     bundle = build_coral_bleaching_bundle(event)
-    assert event.stress_level == label
+    assert event.stress_level == LABELS[code] and event.baa_7day_max == code
     assert audit_story_bundle(bundle).prompt_ready
-    assert not any(f["label"] == "bleaching_alert_status" for f in bundle.current_facts)
-    # This new backup-only gate does not certify the primary label's source truth.
-    assert scientific_claim_failures(f"The primary reports {label}.", bundle) == []
+    assert scientific_claim_failures(f"The primary 7-day maximum was {LABELS[code]}.", bundle) == []
+    assert scientific_claim_failures(f"The primary reports {LABELS[code]}.", bundle)
 
 
 def test_legacy_inferred_event_is_retained_but_not_silently_repaired():

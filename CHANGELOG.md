@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.108.88 — 2026-10-07
+
+- Qualify primary coral regional readings with bounded index and file ranges, matching strong validators, strict dates/columns/finite values and source-bound receipts. Malformed packets stop before paid drafting; source precision is preserved through threshold selection and review.
+- Distinguish regional statistics, map markers, 12-week DHW and the supplied heritage seven-day alert maximum. Recognizable alert labels need the matching source code and adjacent window qualification; legacy or altered evidence cannot reuse prior checks or approval. Below-threshold selected stations now require a small header request; runtime model and publishing settings are unchanged.
+
 ## 0.9.108.87 — 2026-10-07
 
 - Validate coral backup metadata and time-pinned point responses, with bounded reads, exact units/coordinates, finite DHW values and explicit failure on missing or stale evidence.

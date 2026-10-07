@@ -506,8 +506,8 @@ def test_primary_bundle_does_not_gain_a_point_receipt():
     )
     event = coral_dhw.detect_dhw_thresholds([r], {})[0]
     b = build_coral_bleaching_bundle(event)
-    assert event.dhw_value == 8.3 and "provenance" not in b.raw_signal_dump
-    assert audit_story_bundle(b).prompt_ready
+    assert event.dhw_value == 8.34 and "provenance" not in b.raw_signal_dump
+    assert not audit_story_bundle(b).prompt_ready  # Legacy primary evidence is no longer qualified.
 
 
 @pytest.mark.parametrize("field", ["retrieved_at", "metadata_retrieved_at"])

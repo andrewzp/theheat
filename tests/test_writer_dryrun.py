@@ -203,12 +203,20 @@ class TestMarineFixture:
     milestone carry no human toll (see DEFAULTS comment convention for dust
     / cyclone_land_threat)."""
 
-    def test_coral_bleaching_shape_and_evidence(self):
+    def test_legacy_coral_fixture_remains_visible_but_unqualified(self, monkeypatch):
         bundle = _build_bundle(_args(type="coral_bleaching"))
         assert bundle.signal_kind == "coral_bleaching"
         assert bundle.historical_context["thresholds_c_weeks"] == [4, 8, 12]
         audit = audit_story_bundle(bundle)
-        assert audit.prompt_ready, [i.code for i in audit.issues if i.severity == "error"]
+        assert not audit.prompt_ready
+        assert "coral_regional_unqualified" in {i.code for i in audit.issues}
+        from unittest.mock import Mock
+        from src.two_bot import writer
+        from src.two_bot.types import MemorySlice
+        call = Mock()
+        monkeypatch.setattr(writer, "_call_writer_provider", call)
+        assert writer.write_tweet(bundle, MemorySlice()).tweet is None
+        call.assert_not_called()
 
     def test_coral_bleaching_no_impact(self):
         bundle = _build_bundle(_args(type="coral_bleaching"))

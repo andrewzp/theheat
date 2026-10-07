@@ -3,21 +3,19 @@ from __future__ import annotations
 """NOAA Coral Reef Watch regional DHW threshold detection."""
 
 from dataclasses import dataclass
-from datetime import date
 from copy import deepcopy
 from concurrent.futures import ThreadPoolExecutor, as_completed
-import html
-import re
+import hashlib
 from collections.abc import Mapping
 
 import requests
 
-from src.data._freshness import assert_freshness
 from src.data._http import fetch_with_retry
 from src.data._witness import tag_source_leg, with_witness
-from src.data.source_status import SourceFetchError, assert_response_schema
+from src.data.source_status import SourceFetchError
 from src.data.coral_evidence import DHW_ONLY_STRESS_LEVEL
 from src.data import coral_source_contract as point_contract
+from src.data import coral_regional_contract as regional_contract
 
 SOURCE_NAME = "NOAA Coral Reef Watch"
 STATION_INDEX_URL = "https://coralreefwatch.noaa.gov/product/vs/data.php"
@@ -29,39 +27,6 @@ CRW_ERDDAP_DATASET_URL = point_contract.CSV_BASE
 # witness-only budget tight, but wide enough for the documented grid cadence.
 CRW_ERDDAP_MAX_AGE_DAYS = point_contract.MAX_AGE_DAYS
 _REQUEST_HEADERS = {"User-Agent": "theheat-bot/1.0"}
-
-_LATEST_DATE_RE = re.compile(
-    r"Latest Data Date:\s*([A-Za-z]+)\.\s*(\d{1,2}),\s*(\d{4})",
-    re.IGNORECASE,
-)
-_DATA_ROW_RE = re.compile(r"^\s*(\d{4})\s+(\d{1,2})\s+(\d{1,2})\s+")
-
-_MONTHS = {
-    "jan": 1,
-    "january": 1,
-    "feb": 2,
-    "february": 2,
-    "mar": 3,
-    "march": 3,
-    "apr": 4,
-    "april": 4,
-    "may": 5,
-    "jun": 6,
-    "june": 6,
-    "jul": 7,
-    "july": 7,
-    "aug": 8,
-    "august": 8,
-    "sep": 9,
-    "sept": 9,
-    "september": 9,
-    "oct": 10,
-    "october": 10,
-    "nov": 11,
-    "november": 11,
-    "dec": 12,
-    "december": 12,
-}
 
 DHW_THRESHOLDS = (
     (12, "mortality expected"),
@@ -100,14 +65,7 @@ class CoralBleachingEvent:
     source_name: str = SOURCE_NAME
     source_leg: str | None = None  # witness leg that served; None = primary
     provenance: dict | None = None
-
-
-@dataclass(frozen=True)
-class _StationLink:
-    region_id: str
-    region_full_name: str
-    stress_level: str
-    data_file: str
+    baa_7day_max: int | None = None
 
 
 @dataclass(frozen=True)
@@ -159,7 +117,7 @@ def fetch_coral_dhw(
 
     The CRW station text files are full 1985-present histories. To keep the
     scheduled bot polite, the default path fetches the station index once and
-    then byte-range tails only for stations whose current stress level is not
+    then bounded, version-matched header/tail ranges for stations whose current stress level is not
     ``No Stress``. Tests and manual audits can set ``include_inactive=True``.
     """
     try:
@@ -189,14 +147,10 @@ def _fetch_coral_dhw_primary(
 ) -> list[CoralDHWReading]:
     """Fetch latest DHW readings from the primary CRW virtual-station text path."""
     try:
-        index_text = _fetch_text(STATION_INDEX_URL, source_name="coral_dhw index")
-        assert_response_schema({"body": index_text}, ["body"], "coral_dhw")
-        latest_index_date = _parse_latest_index_date(index_text)
-        assert_freshness(latest_index_date, "coral_dhw", max_age_days)
-
-        stations = _parse_station_index(index_text)
-        if not stations:
-            raise SourceFetchError("coral_dhw schema drift: no station data links found")
+        index_body, index_receipt = _fetch_regional_bytes(STATION_INDEX_URL, kind="index")
+        stations, index = regional_contract.decode_index(
+            index_body, retrieved_at=index_receipt["retrieved_at"], max_age_days=max_age_days,
+        )
 
         target_stations = [
             station for station in stations
@@ -213,6 +167,7 @@ def _fetch_coral_dhw_primary(
                 executor.submit(
                     _fetch_station_latest,
                     station,
+                    index=index,
                     max_age_days=max_age_days,
                 ): station
                 for station in target_stations
@@ -258,7 +213,7 @@ def detect_dhw_thresholds(
                 region_id=reading.region_id,
                 region_full_name=reading.region_full_name,
                 date=reading.date,
-                dhw_value=reading.dhw_value if reading.source_leg == CRW_ERDDAP_LEG else round(reading.dhw_value, 1),
+                dhw_value=reading.dhw_value,
                 dhw_tier=tier,
                 bleaching_level=level,
                 stress_level=reading.stress_level,
@@ -267,6 +222,7 @@ def detect_dhw_thresholds(
                 event_id=f"coral_dhw_{reading.region_id}_tier{tier}",
                 source_leg=reading.source_leg,
                 provenance=deepcopy(reading.provenance),
+                baa_7day_max=reading.baa_7day_max,
             )
         )
     events.sort(key=lambda event: (event.dhw_tier, event.dhw_value), reverse=True)
@@ -358,136 +314,66 @@ def _erddap_point_url(lat: float, lon: float, timestamp: str) -> str:
     return point_contract.point_url(lat, lon, timestamp)
 
 
-def _fetch_text(
-    url: str,
-    *,
-    source_name: str,
-    byte_range: str | None = None,
-) -> str:
-    headers = dict(_REQUEST_HEADERS)
-    if byte_range:
-        headers["Range"] = byte_range
-    response = fetch_with_retry(url, headers=headers, timeout=30, attempts=3)
-    text = response.text
-    assert_response_schema({"body": text}, ["body"], source_name)
-    if not text.strip():
-        raise SourceFetchError(f"{source_name} returned empty response")
-    return text
-
-
-def _parse_latest_index_date(index_text: str) -> date:
-    match = _LATEST_DATE_RE.search(index_text)
-    if not match:
-        raise SourceFetchError("coral_dhw schema drift: missing latest data date")
-    month_raw, day_raw, year_raw = match.groups()
-    month = _MONTHS.get(month_raw.lower())
-    if month is None:
-        raise SourceFetchError(f"coral_dhw schema drift: unknown month {month_raw!r}")
-    return date(int(year_raw), month, int(day_raw))
-
-
-def _strip_html(value: str) -> str:
-    return re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", value))).strip()
-
-
-def _parse_station_index(index_text: str) -> list[_StationLink]:
-    stations: list[_StationLink] = []
-    seen: set[str] = set()
-    for row_match in re.finditer(r"<tr>(.*?)</tr>", index_text, re.IGNORECASE | re.DOTALL):
-        row = row_match.group(1)
-        data_match = re.search(r'href="data/(?P<file>[^"]+\.txt)"', row, re.IGNORECASE)
-        name_match = re.search(
-            r'href="timeseries/[^"]+#(?P<id>[^"]+)">(?P<name>.*?)</a>',
-            row,
-            re.IGNORECASE | re.DOTALL,
+def _fetch_regional_bytes(url: str, *, kind: str, prior: dict | None = None) -> tuple[bytes, dict]:
+    headers = {**_REQUEST_HEADERS, "Accept-Encoding": "identity"}
+    if kind == "tail":
+        headers["Range"] = "bytes=-8192"
+        limit = regional_contract.TAIL_BYTES
+    elif kind == "header" and prior is not None:
+        headers.update({"Range": "bytes=0-2048", "If-Match": prior["etag"]})
+        limit = regional_contract.HEADER_BYTES
+    elif kind == "index":
+        limit = regional_contract.INDEX_LIMIT
+    else:
+        raise SourceFetchError("coral_dhw invalid regional request")
+    try:
+        response = fetch_with_retry(
+            url, headers=headers, timeout=30, attempts=3, stream=True, allow_redirects=False,
         )
-        stress_match = re.search(
-            r'href="gauges/[^"]+">(?P<stress>.*?)</a>',
-            row,
-            re.IGNORECASE | re.DOTALL,
-        )
-        if not data_match or not name_match or not stress_match:
-            continue
-        region_id = html.unescape(name_match.group("id")).strip()
-        if not region_id or region_id in seen:
-            continue
-        seen.add(region_id)
-        stations.append(
-            _StationLink(
-                region_id=region_id,
-                region_full_name=_strip_html(name_match.group("name")),
-                stress_level=_strip_html(stress_match.group("stress")),
-                data_file=data_match.group("file"),
-            )
-        )
-    return stations
-
-
-def _fetch_station_latest(station: _StationLink, *, max_age_days: int) -> CoralDHWReading:
-    url = f"{STATION_DATA_BASE_URL}{station.data_file}"
-    tail_text = _fetch_text(
-        url,
-        source_name=f"coral_dhw station {station.region_id}",
-        byte_range="bytes=-8192",
-    )
-    latest = _parse_latest_station_row(tail_text, station.region_id)
-    assert_freshness(latest["date"], "coral_dhw", max_age_days)
-
-    lat: float | None = None
-    lon: float | None = None
-    if float(latest["dhw"]) >= 4.0:
-        head_text = _fetch_text(
-            url,
-            source_name=f"coral_dhw station metadata {station.region_id}",
-            byte_range="bytes=0-2048",
-        )
-        metadata = _parse_station_metadata(head_text)
-        lat = metadata.get("lat")
-        lon = metadata.get("lon")
-
-    return CoralDHWReading(
-        region_id=station.region_id,
-        region_full_name=station.region_full_name,
-        date=str(latest["date"]),
-        dhw_value=round(float(latest["dhw"]), 1),
-        stress_level=station.stress_level,
-        baa_7day_max=int(latest["baa"]) if latest["baa"] is not None else None,
-        lat=lat,
-        lon=lon,
-    )
-
-
-def _parse_latest_station_row(text: str, region_id: str) -> dict[str, object]:
-    latest: dict[str, object] | None = None
-    for line in text.splitlines():
-        if not _DATA_ROW_RE.match(line):
-            continue
-        parts = line.split()
-        if len(parts) < 10:
-            continue
         try:
-            observed = date(int(parts[0]), int(parts[1]), int(parts[2]))
-            dhw = float(parts[8])
-            baa = int(float(parts[9]))
-        except (TypeError, ValueError) as exc:
-            raise SourceFetchError(
-                f"coral_dhw schema drift for {region_id}: malformed data row"
-            ) from exc
-        latest = {"date": observed.isoformat(), "dhw": dhw, "baa": baa}
-    if latest is None:
-        raise SourceFetchError(f"coral_dhw schema drift for {region_id}: no data rows")
-    return latest
+            if kind == "index":
+                if response.status_code != 200:
+                    raise SourceFetchError("coral_dhw unexpected index status")
+                ranges = {}
+            else:
+                ranges = regional_contract.response_range(response.status_code, response.headers, kind=kind, prior=prior)
+            chunks = []
+            size = 0
+            for chunk in response.iter_content(4096):
+                size += len(chunk)
+                if size > limit:
+                    raise SourceFetchError("coral_dhw regional response byte limit")
+                chunks.append(chunk)
+            if not size or (kind != "index" and size != limit):
+                raise SourceFetchError("coral_dhw regional response length")
+            body = b"".join(chunks)
+            return body, {
+                "source_url": url, "response_sha256": hashlib.sha256(body).hexdigest(),
+                "response_bytes": size, "retrieved_at": regional_contract.now_utc(), **ranges,
+            }
+        finally:
+            response.close()
+    except requests.RequestException as exc:
+        if isinstance(exc, requests.HTTPError) and exc.response is not None:
+            reason = f"HTTP {exc.response.status_code}"
+            if exc.response.status_code == 400:
+                reason = "bad request HTTP 400"
+        else:
+            reason = type(exc).__name__
+        raise SourceFetchError(f"coral_dhw regional request failed: {reason}") from exc
 
 
-def _parse_station_metadata(text: str) -> dict[str, float]:
-    metadata: dict[str, float] = {}
-    lat_match = re.search(r"Polygon Middle Latitude:\s*([-+]?\d+(?:\.\d+)?)", text)
-    lon_match = re.search(r"Polygon Middle Longitude:\s*([-+]?\d+(?:\.\d+)?)", text)
-    if lat_match:
-        metadata["lat"] = float(lat_match.group(1))
-    if lon_match:
-        metadata["lon"] = float(lon_match.group(1))
-    return metadata
+def _fetch_station_latest(station: regional_contract.StationLink, *, index: dict, max_age_days: int) -> CoralDHWReading:
+    url = f"{STATION_DATA_BASE_URL}{station.data_file}"
+    tail_body, tail = _fetch_regional_bytes(url, kind="tail")
+    header_body, header = _fetch_regional_bytes(url, kind="header", prior=tail)
+    p = regional_contract.decode_station(station, index, header_body, header, tail_body, tail, max_age_days=max_age_days)
+    return CoralDHWReading(
+        region_id=station.region_id, region_full_name=station.region_full_name,
+        date=p["valid_date"], dhw_value=p["dhw_value"], stress_level=p["stress_level"],
+        baa_7day_max=p["baa_7day_max"], lat=p["marker_point"][0], lon=p["marker_point"][1],
+        provenance=p,
+    )
 
 
 def _tier_for_dhw(dhw_value: float) -> tuple[int | None, str]:

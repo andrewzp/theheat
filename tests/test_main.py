@@ -1162,28 +1162,10 @@ class TestCoralDHWAlerts:
         from src.two_bot.types import TriageCandidateBundle
         from src.orchestrator.sources.coral_dhw import run_coral_dhw
 
-        reading = CoralDHWReading(
-            region_id="gbr_northern",
-            region_full_name="Northern GBR",
-            date="2026-05-13",
-            dhw_value=8.2,
-            stress_level="Alert Level 1",
-            baa_7day_max=3,
-            lat=-16.1,
-            lon=145.975,
-        )
-        event = CoralBleachingEvent(
-            region_id="gbr_northern",
-            region_full_name="Northern GBR",
-            date="2026-05-13",
-            dhw_value=8.2,
-            dhw_tier=8,
-            bleaching_level="mass bleaching expected",
-            stress_level="Alert Level 1",
-            lat=-16.1,
-            lon=145.975,
-            event_id="coral_dhw_gbr_northern_tier8",
-        )
+        from tests.coral_regional_fixtures import reading as regional_reading
+        from src.data.coral_dhw import detect_dhw_thresholds
+        reading = regional_reading(8.2, region_id="gbr_northern", name="Northern GBR")
+        event = detect_dhw_thresholds([reading])[0]
         # Patch the data module in the namespace where run_coral_dhw actually looks it up.
         coral_data_mock = MagicMock()
         coral_data_mock.fetch_coral_dhw.return_value = [reading]

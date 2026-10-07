@@ -188,12 +188,10 @@ def _attach_impact(bundle: StoryBundle, args: argparse.Namespace, incident: str)
 
 def _build_bundle(args: argparse.Namespace) -> StoryBundle:
     if args.type == "coral_bleaching":
-        # Never attaches human_impact — a DHW threshold crossing carries no
-        # human toll. bleaching_level/stress_level use the REAL intern
-        # vocabulary (src/data/coral_dhw.py): bleaching_level comes from
-        # DHW_THRESHOLDS ("mortality expected" at the 12 °C-week tier, not
-        # "Alert Level 3"), stress_level from _stress_level_for_dhw (caps at
-        # "Bleaching Alert Level 2" for any dhw_value >= 8).
+        # Legacy scalar specimen, deliberately unqualified at the current source
+        # boundary. Keep it visible for inspection, but never invent a receipt to
+        # send it through a paid evaluation. DHW alone cannot supply this label.
+        # A future coral evaluation needs independently qualified source packets.
         event = CoralBleachingEvent(
             region_id=args.dhw_region,
             region_full_name="Galapagos, Ecuador",
