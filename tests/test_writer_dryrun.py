@@ -32,10 +32,14 @@ class TestFireFixture:
         for entry in bundle.human_impact:
             assert _WARRANT_KEYS <= set(entry), entry
 
-    def test_fire_bundle_passes_the_evidence_contract(self):
+    def test_legacy_fire_dryrun_has_no_invented_source_time_or_receipt(self):
         audit = audit_story_bundle(_build_bundle(_args(type="fire")))
         errors = [i.code for i in audit.issues if i.severity == "error"]
-        assert audit.prompt_ready, errors
+        assert not audit.prompt_ready
+        assert "thermal_source_unqualified" in errors
+        bundle = _build_bundle(_args(type="fire"))
+        assert bundle.when == ""
+        assert bundle.raw_signal_dump["acquisition_provenance"] is None
 
     def test_no_impact_control_run(self):
         bundle = _build_bundle(_args(type="fire", no_impact=True))

@@ -11,7 +11,7 @@ time-travel canary runs this suite at +30/+365 days).
 from __future__ import annotations
 
 from copy import deepcopy
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 import pytest
 
@@ -683,18 +683,14 @@ class TestSaveDraftForcing:
 
 class TestEvidenceContract:
     def _prompt_ready_bundle(self) -> StoryBundle:
-        return StoryBundle(
-            signal_kind="fire",
-            where="Alpine complex, Colorado, United States",
-            when=_iso(0),
-            event_id="ec1",
-            headline_metric={"label": "FRP", "value": 400.0, "unit": "MW"},
-            current_facts=[{"label": "country", "value": "United States"}],
-            historical_context={},
-            raw_signal_dump={"event_id": "ec1", "frp": 400.0},
-        )
+        from tests.fire_source_fixtures import fire_event
+        from src.two_bot.intern.fire import build_fire_bundle
+        return build_fire_bundle(fire_event(frp=400, lat=39.0, lon=-105.5,
+            region="Alpine complex, Colorado, United States", country="United States",
+            when=datetime.fromisoformat(_iso(0)).replace(tzinfo=UTC)))
 
-    def test_complete_impact_entries_pass(self, synthetic_bundle_provenance):
+
+    def test_complete_impact_entries_pass(self):
         from src.two_bot.evidence_contract import audit_story_bundle
 
         b = self._prompt_ready_bundle()
@@ -859,7 +855,7 @@ class TestDrainWiring:
 
 
 class TestPipelineMetadata:
-    def test_metadata_carries_impact_and_citation_flag(self, monkeypatch, synthetic_bundle_provenance):
+    def test_metadata_carries_impact_and_citation_flag(self, monkeypatch):
         monkeypatch.setenv("ANTHROPIC_API_KEY", "offline-fixture-no-provider-access")
         monkeypatch.setenv("GEMINI_API_KEY", "offline-fixture-no-provider-access")
         monkeypatch.setattr("src.voice.safety.GEMINI_API_KEY", "offline-fixture-no-provider-access")
@@ -867,16 +863,7 @@ class TestPipelineMetadata:
         from src.two_bot import pipeline
         from src.two_bot.types import FactCheckResult, WriterResult
 
-        bundle = StoryBundle(
-            signal_kind="fire",
-            where="Alpine complex, Colorado, United States",
-            when=_iso(0),
-            event_id="pm1",
-            headline_metric={"label": "FRP", "value": 400.0, "unit": "MW"},
-            current_facts=[{"label": "country", "value": "United States"}],
-            historical_context={},
-            raw_signal_dump={"event_id": "pm1", "frp": 400.0},
-        )
+        bundle = TestEvidenceContract()._prompt_ready_bundle()
         bundle.human_impact = [_impact()]
         # Explicit synthetic incident warrant for this metadata propagation
         # fixture; thermal power alone cannot certify a vegetation fire.

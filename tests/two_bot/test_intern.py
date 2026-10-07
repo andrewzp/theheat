@@ -90,16 +90,16 @@ LIVE_CORAL_DHW_REGION_IDS = {
 
 
 def test_build_fire_bundle_uses_fire_signal_fields():
-    fire = _fire_event(event_id="fire_1", region="Southwestern US", country="US")
+    fire = _fire_event(region="Southwestern US", country="US")
     bundle = build_fire_bundle(fire)
 
     assert bundle.signal_kind == "fire"
     assert bundle.where == "Southwestern US"
-    assert bundle.when == date.today().isoformat()
-    assert bundle.event_id == "fire_1"
+    assert bundle.when == fire.acquired_at
+    assert bundle.event_id == fire.event_id
     assert bundle.headline_metric == {"label": "FRP", "value": 361.0, "unit": "MW"}
     assert bundle.historical_context == {}
-    assert bundle.raw_signal_dump["event_id"] == "fire_1"
+    assert bundle.raw_signal_dump["event_id"] == fire.event_id
 
 
 def test_build_regional_sst_anomaly_bundle_uses_regional_signal_kind():
@@ -151,7 +151,7 @@ def test_build_fire_bundle_rounds_frp_to_one_decimal():
         (1000.999, 1001.0),
     ]
     for raw, expected in cases:
-        fire = _fire_event(frp=raw, event_id=f"fire_{raw}")
+        fire = _fire_event(frp=raw)
         bundle = build_fire_bundle(fire)
 
         assert bundle.headline_metric == {"label": "FRP", "value": expected, "unit": "MW"}, (
@@ -188,7 +188,7 @@ def test_build_fire_bundle_falls_back_to_country_when_region_missing():
 
 
 def test_build_fire_bundle_tier_low():
-    fire = _fire_event(frp=20.5, event_id="fire_low")
+    fire = _fire_event(frp=20.5)
     bundle = build_fire_bundle(fire)
     labels = {f["label"]: f["value"] for f in bundle.current_facts}
     assert labels["frp_tier"] == "low"
@@ -196,7 +196,7 @@ def test_build_fire_bundle_tier_low():
 
 
 def test_build_fire_bundle_tier_moderate():
-    fire = _fire_event(frp=50.0, event_id="fire_moderate")
+    fire = _fire_event(frp=50.0)
     bundle = build_fire_bundle(fire)
     labels = {f["label"]: f["value"] for f in bundle.current_facts}
     assert labels["frp_tier"] == "moderate"
@@ -205,7 +205,7 @@ def test_build_fire_bundle_tier_moderate():
 
 def test_build_fire_bundle_tier_high():
     """309.6 MW is the live Mali Sahel draft FRP. Should land in high-intensity tier."""
-    fire = _fire_event(frp=309.6, event_id="fire_high")
+    fire = _fire_event(frp=309.6)
     bundle = build_fire_bundle(fire)
     labels = {f["label"]: f["value"] for f in bundle.current_facts}
     assert labels["frp_tier"] == "high"
@@ -213,7 +213,7 @@ def test_build_fire_bundle_tier_high():
 
 
 def test_build_fire_bundle_tier_very_high():
-    fire = _fire_event(frp=600.0, event_id="fire_very_high")
+    fire = _fire_event(frp=600.0)
     bundle = build_fire_bundle(fire)
     labels = {f["label"]: f["value"] for f in bundle.current_facts}
     assert labels["frp_tier"] == "very_high"
@@ -222,7 +222,7 @@ def test_build_fire_bundle_tier_very_high():
 
 def test_build_fire_bundle_tier_boundary_30():
     """30.0 MW is the inclusive lower bound of the moderate tier."""
-    fire = _fire_event(frp=30.0, event_id="fire_boundary_30")
+    fire = _fire_event(frp=30.0)
     bundle = build_fire_bundle(fire)
     labels = {f["label"]: f["value"] for f in bundle.current_facts}
     assert labels["frp_tier"] == "moderate"
@@ -231,7 +231,7 @@ def test_build_fire_bundle_tier_boundary_30():
 
 def test_build_fire_bundle_tier_boundary_100():
     """100.0 MW is the inclusive lower bound of the high tier."""
-    fire = _fire_event(frp=100.0, event_id="fire_boundary_100")
+    fire = _fire_event(frp=100.0)
     bundle = build_fire_bundle(fire)
     labels = {f["label"]: f["value"] for f in bundle.current_facts}
     assert labels["frp_tier"] == "high"

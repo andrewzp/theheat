@@ -24,7 +24,7 @@ from src.main import (
     process_due_drafts,
 )
 from src.data.open_meteo import CityTemp, RecordEvent
-from src.data.firms import FireEvent
+from tests.fire_source_fixtures import fire_event
 from src.data.co2 import CO2Reading, CO2Milestone
 from src.data.coral_dhw import CoralBleachingEvent, CoralDHWReading
 from src.data.cyclones import CycloneAdvisory, TierCrossingEvent
@@ -1535,7 +1535,8 @@ class TestRunAlerts:
         mock_om.check_extreme_signals_for_cities.return_value = ([], [])
         mock_om.check_records_for_cities.return_value = []
         mock_firms.fetch_fires.return_value = [
-            FireEvent(34.0, -118.0, 95, 250.0, "Southwestern US", "US", "fire_1"),
+            fire_event(
+                lat=34.0, lon=-118.0, frp=250.0, region="Southwestern US", country="US"),
         ]
         mock_co2.fetch_co2_data.return_value = []
         mock_co2.detect_milestone.return_value = None
@@ -2736,7 +2737,6 @@ class TestPerCycleCapCleanup:
 
 class TestSynthesisRecording:
     def test_fire_in_us_records_component(self, monkeypatch):
-        from unittest.mock import MagicMock
         from copy import deepcopy
         from src.state import DEFAULT_STATE
         from src import main
@@ -2744,12 +2744,9 @@ class TestSynthesisRecording:
 
         bot_state = deepcopy(DEFAULT_STATE)
 
-        fake_fire = MagicMock(
-            event_id="fire_38.58_-121.49_2026-04-20",
-            lat=38.58, lon=-121.49,
-            nearest_city="Sacramento", country="United States",
-            confidence=95, frp=1500.0,
-        )
+        from tests.fire_source_fixtures import fire_event
+        fake_fire = fire_event(lat=38.58, lon=-121.49, region="Sacramento",
+                               country="United States", confidence=95, frp=1500.0)
         monkeypatch.setattr(firms, "fetch_fires", lambda: [fake_fire])
         # Short-circuit open-meteo + others.
         monkeypatch.setattr(main.open_meteo, "load_cities", lambda: [])

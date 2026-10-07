@@ -31,6 +31,7 @@ from src.orchestrator.dedup import (
 from src.orchestrator.suppression import _record_save_rejection
 from src.state_schema import BotState
 from src.data.places import event_identity, legacy_publication_status
+from src.data.fire_identity import legacy_history_reason
 
 
 def _touch_draft(draft: dict) -> None:
@@ -53,6 +54,9 @@ def can_draft_candidate(bot_state: BotState, candidate) -> tuple[bool, str]:
     from src import state as _state
 
     event_id = getattr(candidate, "event_id", "") or ""
+    fire_hold = legacy_history_reason(bot_state, event_id)
+    if fire_hold:
+        return False, fire_hold
     place_id = event_identity(event_id).get("place_id", "")
     history_status = legacy_publication_status(bot_state, event_id)
     if history_status == "duplicate":
@@ -148,6 +152,10 @@ def save_draft(
     event types (fires, disasters, CO2, sea ice, etc.) omit ``city`` and
     pass through unchanged.
     """
+    fire_hold = legacy_history_reason(bot_state, event_id)
+    if fire_hold:
+        print(f"[draft] Fire history hold: {fire_hold}")
+        return False
     place_id = event_identity(event_id).get("place_id", "")
     history_status = legacy_publication_status(bot_state, event_id)
     if history_status in ("duplicate", "unresolved", "unregistered"):

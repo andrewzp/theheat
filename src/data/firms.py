@@ -4,11 +4,17 @@ import csv
 import io
 import os
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import UTC, datetime
+from typing import Any
 
 import requests
 
-from src.data._freshness import assert_freshness, newest_freshness_date
+from src.data.error_class import classify_error_class
+from src.data.fire_identity import source_event_id
+from src.data.fire_source_contract import (
+    FIRMS_FIELDS, FIRMS_PRODUCTS, FIRMS_PUBLIC_URL, HMS_FIELDS, HMS_PRODUCT,
+    FireSourceRow, freshness, make_receipt, parse_record, reject, validate_days,
+)
 from src.data._http import fetch_with_retry
 from src.data._witness import is_witness_eligible_failure, tag_source_leg, with_witness
 from src.data.open_meteo import load_cities
@@ -26,26 +32,21 @@ FIRMS_URL = "https://firms.modaps.eosdis.nasa.gov/api/area/csv"
 # still generous for sparse global city coverage.
 GEOCODE_NEAR_CITY_MAX_KM = 200.0
 
-# NOAA HMS independent fire witness (R-02). Independent HOST
-# (satepsanone.nesdis.noaa.gov, NESDIS) AND independent INSTRUMENT (GOES) — so it
-# covers a full FIRMS host outage that the same-host R-06 product chain cannot.
+# NOAA HMS alternate-host fire witness (R-02). NESDIS can cover a FIRMS host
+# outage; per-row satellite/method labels do not establish instrument independence.
 # Daily accumulating text file; no auth. N. America coverage only.
 HMS_FIRE_URL = "https://satepsanone.nesdis.noaa.gov/pub/FIRE/web/HMS/Fire_Points/Text"
-# HMS publishes no per-detection confidence percentage — the analyst/NGFS QC IS
-# the confidence. We assign the FIRMS "high" floor so HMS events score comparably
-# to primary events; the observed_alt_host grade + data_source fact mark provenance.
-HMS_NOMINAL_CONFIDENCE = 80
 # FIRMS same-host product chain (R-06). A given product can be momentarily
 # empty/lagged while a sibling has the data. Freshest sensors lead; all share the
-# area/csv host + MAP_KEY, so they are semantically-equivalent observations (no
-# evidence_grade). This is product-gap insurance, NOT a host-outage fix (HMS is).
+# area/csv host + MAP_KEY. Each retains its own product/time/confidence semantics
+# with no new evidence_grade. This is product-gap insurance, not a host-outage fix.
 _FIRMS_PRODUCT_CHAIN = [
     "VIIRS_SNPP_NRT",
     "VIIRS_NOAA20_NRT",
     "VIIRS_NOAA21_NRT",
     "MODIS_NRT",
 ]
-# HMS (GOES-East/West) only resolves the Americas. Outside this box the witness
+# This HMS adapter selects the existing North American box. Outside it the witness
 # returns nothing and FIRMS has no fallback (stated honestly in the bundle).
 _HMS_NORTH_AMERICA_BBOX = (7.0, 83.0, -170.0, -50.0)  # lat_min, lat_max, lon_min, lon_max
 
@@ -60,38 +61,9 @@ class FireEvent:
     country: str
     event_id: str
     source_leg: str | None = None  # witness leg that served (R-00); None = primary
-
-
-# VIIRS confidence is categorical (l/n/h), MODIS is 0-100 percentage.
-# We normalize both to a 0-100 scale so the same filter threshold works.
-# VIIRS mapping mirrors NASA's own typical interpretation.
-_VIIRS_CONFIDENCE = {
-    "l": 30,
-    "n": 70,
-    "h": 95,
-}
-
-
-def _parse_confidence(raw: object | None) -> int | None:
-    """Return a 0-100 confidence score, or None if unparseable.
-
-    Handles both numeric percentages (MODIS, "90" or "90%") and VIIRS
-    categorical letters ("l", "n", "h"). Unknown values return None so the
-    caller can skip the row instead of silently scoring it 0 (which was the
-    prior bug — VIIRS rows all fell through ``int()`` and were dropped).
-    """
-    if raw is None:
-        return None
-    value = str(raw).strip().rstrip("%").strip()
-    if not value:
-        return None
-    lowered = value.lower()
-    if lowered in _VIIRS_CONFIDENCE:
-        return _VIIRS_CONFIDENCE[lowered]
-    try:
-        return int(float(value))
-    except (ValueError, TypeError):
-        return None
+    source_product: str | None = None
+    acquired_at: str | None = None
+    acquisition_provenance: dict[str, Any] | None = None
 
 
 def fetch_fires(
@@ -123,10 +95,15 @@ def fetch_fires(
         return _fetch_fires_hms(frp_min)
 
     try:
+        _validate_request(source, days)
         return with_witness(primary, witness, source_key="firms", leg_label="noaa_hms")
-    except (SourceFetchError, requests.RequestException) as exc:
+    except SourceSkipped:
+        raise
+    except Exception as exc:
         if strict:
-            raise SourceFetchError(f"FIRMS fetch failed: {exc}") from exc
+            # Classify after the product/witness decision. Never export URL,
+            # body, key or chained exception text to the source runner/logs.
+            raise SourceFetchError(_public_failure(exc)) from None
         return []
 
 
@@ -137,20 +114,18 @@ def _fetch_fires_product_chain(
     days: int,
 ) -> list[FireEvent]:
     """Try FIRMS products in order (R-06): a given product can be momentarily
-    empty/lagged while a sibling has the data. Same host + MAP_KEY, so these are
-    semantically-equivalent observations — a non-first product records
-    ``source_leg`` (→ status degraded) but NO ``evidence_grade``. Order leads with
-    the freshest sensors.
+    empty/lagged while a sibling has the data. A non-first product records
+    ``source_leg`` (→ status degraded) but NO new ``evidence_grade``. Product/time
+    semantics remain explicit; the historical ordering is unchanged here.
 
     Returns ``[]`` only when every reachable product is genuinely empty (FIRMS up,
     no big fires — do NOT fall through to the independent HMS witness). Raises
-    ``SourceFetchError`` only when EVERY product failed (a real host outage), so
-    ``with_witness`` then tries the independent NOAA HMS leg. This chain is the
+    an outage when EVERY product failed, so ``with_witness`` then tries the
+    alternate-host NOAA HMS leg. Schema/access failures still stop immediately.
+    This chain is the
     same host and therefore NOT a host-outage fix; HMS (R-02) is."""
-    if source in _FIRMS_PRODUCT_CHAIN:
-        chain = _FIRMS_PRODUCT_CHAIN[_FIRMS_PRODUCT_CHAIN.index(source):]
-    else:
-        chain = [source, *[p for p in _FIRMS_PRODUCT_CHAIN if p != source]]
+    _validate_request(source, days)
+    chain = _FIRMS_PRODUCT_CHAIN[_FIRMS_PRODUCT_CHAIN.index(source):]
 
     last_exc: Exception | None = None
     any_reachable = False
@@ -168,8 +143,100 @@ def _fetch_fires_product_chain(
             # product served the gap -> tag the leg (degraded), no grade.
             return fires if index == 0 else tag_source_leg(fires, product)
     if not any_reachable and last_exc is not None:
-        raise SourceFetchError(f"FIRMS product chain exhausted: {last_exc}") from last_exc
+        # Retain the typed outage for the host witness decision. Wrapping a
+        # Timeout whose text omits "timeout" would erase its eligibility.
+        raise last_exc
     return []
+
+
+def _validate_request(source: str, days: int) -> None:
+    if type(source) is not str or source not in FIRMS_PRODUCTS:
+        reject("unsupported FIRMS source product")
+    validate_days(days)
+
+
+def _public_failure(exc: Exception) -> str:
+    """Fixed outward diagnostics; internal witness decisions retain their inputs."""
+    detail = str(exc).lower()
+    cause = exc
+    seen: set[int] = set()
+    while isinstance(cause.__cause__, Exception) and id(cause) not in seen and len(seen) < 16:
+        seen.add(id(cause))
+        cause = cause.__cause__
+    if "schema drift" in detail:
+        category = "schema drift (ParseError)"
+    elif "freshness check failed" in detail:
+        category = "freshness check failed"
+    elif isinstance(cause, requests.Timeout):
+        category = "timeout"
+    elif isinstance(cause, requests.ConnectionError):
+        category = "ConnectionError"
+    else:
+        category = {
+            "auth": "auth credential/access failure", "http403": "HTTP 403",
+            "http429": "HTTP 429", "http5xx": "HTTP 5xx Server Error",
+            "timeout": "timeout", "dns": "NameResolution failure",
+            "connection": "ConnectionError", "parse": "ParseError",
+        }.get(classify_error_class(str(exc)), "unknown failure")
+        if isinstance(cause, requests.HTTPError) and cause.response is not None:
+            status = cause.response.status_code
+            if type(status) is int and 100 <= status <= 599:
+                category = f"HTTP {status}"
+    return f"FIRMS/HMS fetch failed: {category}"
+
+
+def _qualified_rows(text: str, product: str, reference: datetime) -> list[FireSourceRow]:
+    """Validate every row before thresholding; never refresh one row with another."""
+    reader = csv.reader(io.StringIO(text), strict=True)
+    counts = dict(invalid=0, stale=0, future=0)
+    valid = 0
+    fresh: list[FireSourceRow] = []
+    try:
+        header = [value.strip() for value in next(reader, [])]
+        required = HMS_FIELDS if product == HMS_PRODUCT else FIRMS_FIELDS
+        if (not header or len(header) != len(set(header)) or not all(header)
+                or not required.issubset(header)):
+            reject("missing or duplicated required header")
+        for values in reader:
+            if not values:  # blank lines are not source records
+                continue
+            try:
+                if len(values) != len(header):
+                    reject("source row length disagrees with header")
+                row = parse_record(product, dict(zip(header, values, strict=True)))
+            except SourceFetchError:
+                counts["invalid"] += 1
+                continue
+            valid += 1
+            status = freshness(row, reference)
+            if status != "fresh":
+                counts[status] += 1
+                continue
+            fresh.append(row)
+    except csv.Error:
+        reject("malformed CSV packet")
+    if any(counts.values()):
+        # Fixed keys and capped integer counts only; never print row contents.
+        diagnostic = ", ".join(f"{key}={min(value, 999999)}" for key, value in counts.items())
+        print(f"[firms] excluded source rows: {diagnostic}")
+    if not valid and counts["invalid"]:
+        reject("no structurally valid source rows")
+    if valid and not fresh:
+        raise SourceFetchError("fire freshness check failed: no current source rows")
+    return fresh
+
+
+def _event(row: FireSourceRow, source_url: str, *, leg: str | None = None) -> FireEvent:
+    if row.frp is None:
+        reject("missing fire radiative power cannot become an event")
+    city, country = reverse_geocode_simple(row.lat, row.lon)
+    return FireEvent(
+        lat=row.lat, lon=row.lon, confidence=row.ranking_confidence, frp=row.frp,
+        nearest_city=city, country=country,
+        event_id=source_event_id(row.lat, row.lon, row.acquired_at), source_leg=leg,
+        source_product=row.source_product, acquired_at=row.acquired_at,
+        acquisition_provenance=make_receipt(row, source_url),
+    )
 
 
 def _fetch_fires_primary(
@@ -178,54 +245,15 @@ def _fetch_fires_primary(
     source: str,
     days: int,
 ) -> list[FireEvent]:
-    """Single-product NASA FIRMS fetch. Raises ``SourceFetchError`` on any failure
-    so the product chain / ``with_witness`` can fall through."""
-    payload_dates: list[date | datetime | int | float | str | None] = []
-    try:
-        resp = fetch_with_retry(
-            f"{FIRMS_URL}/{FIRMS_API_KEY}/{source}/world/{days}",
-            timeout=30,
-        )
-
-        reader = csv.DictReader(io.StringIO(resp.text))
-        fires = []
-        for row in reader:
-            payload_dates.append(row.get("acq_date") or row.get("acq_datetime"))
-            conf = _parse_confidence(row.get("confidence"))
-            if conf is None:
-                continue
-            try:
-                frp = float(row.get("frp", "0") or "0")
-            except (ValueError, TypeError):
-                continue
-
-            if conf >= confidence_min and frp >= frp_min:
-                try:
-                    lat = float(row["latitude"])
-                    lon = float(row["longitude"])
-                except (ValueError, KeyError, TypeError):
-                    continue
-                city, country = reverse_geocode_simple(lat, lon)
-                event_id = f"fire_{lat:.2f}_{lon:.2f}_{date.today().isoformat()}"
-                fires.append(FireEvent(
-                    lat=lat,
-                    lon=lon,
-                    confidence=conf,
-                    frp=frp,
-                    nearest_city=city,
-                    country=country,
-                    event_id=event_id,
-                ))
-
-    except (requests.RequestException, csv.Error, KeyError) as exc:
-        raise SourceFetchError(f"FIRMS fetch failed: {exc}") from exc
-    except SourceFetchError:
-        raise
-    except Exception as exc:
-        raise SourceFetchError(f"FIRMS fetch failed: {exc}") from exc
-    if newest_date := newest_freshness_date(payload_dates):
-        assert_freshness(newest_date, "firms", max_age_days=2)
-    return fires
+    _validate_request(source, days)
+    resp = fetch_with_retry(
+        f"{FIRMS_URL}/{FIRMS_API_KEY}/{source}/world/{days}", timeout=30,
+    )
+    text = resp.text
+    reference = datetime.now(UTC)
+    rows = _qualified_rows(text, source, reference)
+    return [_event(row, FIRMS_PUBLIC_URL) for row in rows
+            if row.frp is not None and row.ranking_confidence >= confidence_min and row.frp >= frp_min]
 
 
 def _in_north_america(lat: float, lon: float) -> bool:
@@ -234,58 +262,15 @@ def _in_north_america(lat: float, lon: float) -> bool:
 
 
 def _fetch_fires_hms(frp_min: float) -> list[FireEvent]:
-    """NOAA HMS independent fire witness (R-02).
-
-    Fetches the daily HMS fire-points text file (GOES/VIIRS detections from an
-    independent NESDIS host) and maps the SAME ``FireEvent`` shape, tagged
-    ``source_leg="noaa_hms"``. N. America only — points outside the HMS coverage
-    box are dropped (FIRMS has no fallback there). ``-999.0`` FRP is missing, not
-    zero. Confidence is the analyst-QC nominal floor (HMS has no per-row %)."""
-    today = date.today()
-    url = f"{HMS_FIRE_URL}/{today:%Y}/{today:%m}/hms_fire{today:%Y%m%d}.txt"
+    """Read NOAA's dated file, retaining each row's own UTC acquisition minute."""
+    requested_day = datetime.now(UTC).date()
+    url = f"{HMS_FIRE_URL}/{requested_day:%Y}/{requested_day:%m}/hms_fire{requested_day:%Y%m%d}.txt"
     resp = fetch_with_retry(url, timeout=30)
-
-    rows = list(csv.reader(io.StringIO(resp.text)))
-    if not rows:
-        return []
-    header = [h.strip() for h in rows[0]]
-    try:
-        i_lon, i_lat, i_frp = header.index("Lon"), header.index("Lat"), header.index("FRP")
-    except ValueError as exc:
-        raise SourceFetchError(f"HMS fire schema drift: header={header}") from exc
-
-    fires: list[FireEvent] = []
-    last_col = max(i_lon, i_lat, i_frp)
-    for raw in rows[1:]:
-        if len(raw) <= last_col:
-            continue
-        try:
-            lon = float(raw[i_lon].strip())
-            lat = float(raw[i_lat].strip())
-            frp = float(raw[i_frp].strip())
-        except (ValueError, IndexError):
-            continue
-        if frp < 0:  # -999.0 sentinel = FRP not retrieved
-            continue
-        if frp < frp_min:
-            continue
-        if not _in_north_america(lat, lon):
-            continue
-        city, country = reverse_geocode_simple(lat, lon)
-        event_id = f"fire_{lat:.2f}_{lon:.2f}_{today.isoformat()}"
-        fires.append(FireEvent(
-            lat=lat,
-            lon=lon,
-            confidence=HMS_NOMINAL_CONFIDENCE,
-            frp=frp,
-            nearest_city=city,
-            country=country,
-            event_id=event_id,
-        ))
-    # The file is named for today's UTC date; guard against a stale/misdated file
-    # within the same freshness budget the primary uses.
-    assert_freshness(today.isoformat(), "firms", max_age_days=2)
-    return tag_source_leg(fires, "noaa_hms")
+    text = resp.text
+    reference = datetime.now(UTC)
+    rows = _qualified_rows(text, HMS_PRODUCT, reference)
+    return [_event(row, url, leg="noaa_hms") for row in rows
+            if row.frp is not None and row.frp >= frp_min and _in_north_america(row.lat, row.lon)]
 
 
 # Ordered list of bounding boxes used to reverse-geocode a FIRMS fire

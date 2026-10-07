@@ -10,6 +10,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from src.data.firms import FireEvent
+from tests.fire_source_fixtures import fire_event
 from src.state import DEFAULT_STATE
 from src.two_bot.types import FactCheckResult, MemorySlice, StoryBundle, WriterResult
 
@@ -34,31 +35,15 @@ def _bundle(
     frp: float = 361.0,
     confidence: int = 95,
 ) -> StoryBundle:
-    return StoryBundle(
-        signal_kind="fire",
-        where=region,
-        when="2026-04-30",
-        event_id=event_id,
-        headline_metric={"label": "FRP", "value": frp, "unit": "MW"},
-        current_facts=[
-            {"label": "satellite_confidence", "value": confidence, "unit": "%"},
-            {"label": "country", "value": country},
-            {"label": "nearest_region", "value": region},
-            {"label": "lat", "value": 13.5},
-            {"label": "lon", "value": -4.2},
-        ],
-        historical_context={},
-        raw_signal_dump={
-            "source_product": "synthetic-firms-fixture",
-            "lat": 13.5,
-            "lon": -4.2,
-            "confidence": confidence,
-            "frp": frp,
-            "nearest_city": region,
-            "country": country,
-            "event_id": event_id,
-        },
-    )
+    from src.two_bot.intern.fire import build_fire_bundle
+    bundle = build_fire_bundle(fire_event(country=country, region=region, frp=frp, confidence=confidence))
+    if event_id != "fire_test":
+        # Explicit overrides support memory/invalid-identity tests; they are not
+        # qualified generation packets and must fail when offered to a writer.
+        bundle.event_id = event_id
+        bundle.raw_signal_dump["event_id"] = event_id
+    return bundle
+
 
 
 def _memory() -> MemorySlice:
@@ -73,16 +58,11 @@ def _memory() -> MemorySlice:
 
 
 def _fire_event(
-    *,
-    event_id: str = "fire_test",
-    country: str = "ML",
-    region: str = "Mali",
-    frp: float = 361.0,
-    confidence: int = 95,
-    lat: float = 13.5,
-    lon: float = -4.2,
+    *, country: str = "ML", region: str = "Mali", frp: float = 361.0,
+    confidence: int = 95, lat: float = 13.5, lon: float = -4.2,
 ) -> FireEvent:
-    return FireEvent(lat, lon, confidence, frp, region, country, event_id)
+    return fire_event(country=country, region=region, frp=frp, confidence=confidence, lat=lat, lon=lon)
+
 
 
 def _empty_memory_state() -> dict:

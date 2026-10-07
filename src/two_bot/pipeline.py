@@ -164,11 +164,19 @@ def _revision_constraint(previous_tweet: str, revise_instruction: str) -> str:
 
 def _audit_bundle_for_generation(
     bundle: StoryBundle,
+    state: BotState,
     *,
     record_kill: Callable[[str, str], None] | None = None,
     prefix: str = "",
     result_out: dict | None = None,
 ) -> bool:
+    from src.data.fire_identity import legacy_history_reason
+    fire_hold = legacy_history_reason(state, bundle.event_id)
+    if fire_hold:
+        if record_kill is not None:
+            record_kill("fire_history", fire_hold)
+        print(f"[two_bot.pipeline] {prefix}Fire history hold: {fire_hold}")
+        return False
     audit = audit_story_bundle(bundle)
     warning_codes = [issue.code for issue in audit.issues if issue.severity == "warning"]
     if warning_codes:
@@ -338,7 +346,7 @@ def generate_draft(
         if checked_policy is None:
             _record_kill("editorial_policy", "Current editorial policy cannot be established")
             return None
-        if not _audit_bundle_for_generation(bundle, record_kill=_record_kill, result_out=result_out):
+        if not _audit_bundle_for_generation(bundle, state, record_kill=_record_kill, result_out=result_out):
             return None
 
         from src.two_bot.bundle_capture import BundleCaptureError, capture_bundle
@@ -608,7 +616,7 @@ def generate_shadow_draft(bundle: StoryBundle, state: BotState) -> dict | None:
     """
 
     try:
-        if not _audit_bundle_for_generation(bundle, prefix="Shadow "):
+        if not _audit_bundle_for_generation(bundle, state, prefix="Shadow "):
             return None
 
         memory_slice = memory.build_memory_slice(state, bundle)

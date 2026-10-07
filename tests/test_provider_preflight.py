@@ -43,7 +43,7 @@ def test_preflight_does_not_coerce_availability(value):
 
 @pytest.mark.parametrize("missing", ["writer", "google", "loaded_safety", "unsupported"])
 def test_pipeline_blocks_before_any_writer_memory_or_checker_work(
-    monkeypatch, missing, synthetic_bundle_provenance
+    monkeypatch, missing
 ):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "offline-configured")
     monkeypatch.setenv("GEMINI_API_KEY", "offline-configured")

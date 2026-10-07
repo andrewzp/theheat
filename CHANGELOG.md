@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.108.90 — 2026-10-07
+
+- Retain and validate each FIRMS/HMS acquisition minute, source product and selected-row receipt before thresholding. Keep categorical/numeric/unavailable confidence distinct, and redact public fetch diagnostics without changing source ordering or retry bounds.
+- Bind primary and related thermal evidence through writing/checking; withhold unsupported simultaneity/overpass claims. Guard corrected source-date IDs against retained legacy drafts and publication attempts before generation, save and send. Historical records and runtime publishing/model settings are unchanged.
+
 ## 0.9.108.89 — 2026-10-07
 
 - Skip unused PostgreSQL binary installation in the core CI partition. Keep all database and media tests, with separate bounded steps for signed repository setup, package metadata and PostgreSQL 17 installation.

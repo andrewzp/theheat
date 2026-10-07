@@ -127,12 +127,10 @@ from src.two_bot.types import MemorySlice, StoryBundle  # noqa: E402
 
 
 def _bundle() -> StoryBundle:
-    return StoryBundle(
-        signal_kind="fire", where="Testville", when="2026-07-23",
-        event_id="evt-refusal", headline_metric={"label": "FRP", "value": 100},
-        current_facts=[{"label": "FRP", "value": 100, "unit": "MW"}],
-        raw_signal_dump={"source_product": "synthetic-refusal-fixture"},
-    )
+    from src.two_bot.intern.fire import build_fire_bundle
+    from tests.fire_source_fixtures import fire_event
+    return build_fire_bundle(fire_event(frp=100, region="Testville"))
+
 
 
 def _fake_anthropic_factory(monkeypatch, responses: list):

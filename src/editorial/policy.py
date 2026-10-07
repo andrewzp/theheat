@@ -40,6 +40,8 @@ POLICY_FILES = (
     "src/orchestrator/sources/open_meteo.py",
     "src/data/ocean_sst_anomaly.py", "src/data/crw_contract.py",
     "src/data/coral_dhw.py", "src/data/coral_evidence.py", "src/data/coral_source_contract.py", "src/data/coral_regional_contract.py",
+    "src/data/firms.py", "src/data/fire_source_contract.py", "src/data/fire_identity.py", "src/data/fire_evidence.py",
+    "src/orchestrator/draft_save.py", "src/orchestrator/sources/firms.py", "src/orchestrator/triage_queue.py",
     "src/editorial/synthesis.py", "src/editorial/thresholds.py",
     "src/media/crw_graphic_adapter.py", "src/media/evidence_graphic.py",
 )

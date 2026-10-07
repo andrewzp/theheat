@@ -86,10 +86,20 @@ def _identity(value) -> str | None:
 def _summary(candidate) -> tuple[str, RelatedSignal]:
     """Compare and detach exactly the facts that will reach the writer."""
     bundle = candidate.bundle
+    from src.data.fire_evidence import is_thermal, validate_bundle
+    from src.data.source_status import SourceFetchError
+
+    receipt = None
+    if is_thermal(bundle):
+        try:
+            validate_bundle(bundle)
+        except SourceFetchError as exc:
+            raise ValueError("Unqualified thermal related observation") from exc
+        receipt = bundle.raw_signal_dump["acquisition_provenance"]
     signal = RelatedSignal(
         event_id=candidate.event_id, signal_kind=bundle.signal_kind,
         where=bundle.where, when=bundle.when, headline_metric=bundle.headline_metric,
-        country=_bundle_country(bundle),
+        country=_bundle_country(bundle), acquisition_evidence=receipt,
     )
     encoded = json.dumps(signal.to_dict(), sort_keys=True, allow_nan=False,
                          ensure_ascii=False, default=_evidence_default)
