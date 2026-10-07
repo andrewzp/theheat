@@ -75,7 +75,12 @@ def test_non_pr_fallback_never_splits_or_cancels_producers(workflow, event):
 def test_pr_and_display_branch_job_exclusions_remain_explicit(workflow):
     test, run = workflow["jobs"]["test-partition"], workflow["jobs"]["run"]
     assert test["if"] == "github.event_name == 'pull_request' && github.head_ref != 'daily-plan-current'"
-    assert " ".join(run["if"].split()) == "always() && github.event_name != 'pull_request'"
+    assert " ".join(run["if"].split()) == (
+        "always() && github.event_name != 'pull_request'"
+        " && (vars.THEHEAT_PRODUCTION_PAUSED != '1'"
+        " || (github.event_name == 'workflow_dispatch'"
+        " && github.event.inputs.mode == 'manual_tweet'))"
+    )
     assert run["needs"] == "test"
     # PR-specific groups depend only on the PR number, including forks and the
     # display-only branch; no branch-controlled string can select production.
