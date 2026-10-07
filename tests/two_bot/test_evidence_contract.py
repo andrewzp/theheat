@@ -7,7 +7,7 @@ import pytest
 
 from src.data.co2 import CO2Milestone
 from src.data.climate_indices import OscillationExtremeEvent, OscillationTransition
-from src.data.coral_dhw import CoralBleachingEvent
+from tests.coral_regional_fixtures import bundle as coral_regional_bundle
 from src.data.copernicus_ems import CopernicusFloodActivation
 from src.data.cyclones import BasinRecordEvent
 from src.data.fire_footprint import FireComplex
@@ -433,20 +433,7 @@ def test_assert_prompt_ready_raises_only_for_error_bundles():
         ),
         (
             "coral",
-            build_coral_bleaching_bundle(
-                CoralBleachingEvent(
-                    region_id="gbr_northern",
-                    region_full_name="Northern GBR",
-                    date="2026-05-13",
-                    dhw_value=8.2,
-                    dhw_tier=8,
-                    bleaching_level="mass bleaching expected",
-                    stress_level="Alert Level 1",
-                    lat=-16.1,
-                    lon=145.975,
-                    event_id="coral_dhw_gbr_northern_tier8",
-                )
-            ),
+            coral_regional_bundle(),
         ),
         (
             "sea_ice",

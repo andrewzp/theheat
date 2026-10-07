@@ -59,109 +59,26 @@ def test_score_coral_bleaching_passes_warning_threshold():
 
 
 def test_fetch_coral_dhw_uses_index_and_station_byte_ranges(monkeypatch):
-    # Build dates dynamically so the freshness check (max_age_days=5 by default)
-    # passes regardless of when CI runs. Previously hardcoded to 2026-05-13,
-    # which began failing every cron after 2026-05-18 because `assert_freshness`
-    # (added by the Codex source-hardening pass) rejected anything > 5 days old.
-    today = date.today()
-    yesterday = today - timedelta(days=1)
-    index = f"""
-Latest Data Date: {today:%b}. {today.day}, {today.year}
-<tr>
-  <td><a href="timeseries/great_barrier_reef.php#gbr_northern">Northern GBR</a></td>
-  <td style="background-color:#FF0000"><a href="gauges/gbr_northern.php">Alert Level 1</a></td>
-  <td><a href="data/gbr_northern.txt">txt</a></td>
-</tr>
-<tr>
-  <td><a href="timeseries/florida.php#florida_keys">Florida Keys</a></td>
-  <td style="background-color:#C8FAFA"><a href="gauges/florida_keys.php">No Stress</a></td>
-  <td><a href="data/florida_keys.txt">txt</a></td>
-</tr>
-"""
-    tail = f"""
-{yesterday.year} {yesterday.month:02d} {yesterday.day:02d} 27.8300 30.4600 29.6000      3.2680       0.0000    7.9000            2
-{today.year} {today.month:02d} {today.day:02d} 28.0800 30.4800 29.7700      3.2560       0.1700    8.2000            3
-"""
-    head = """
-Name:
-Northern GBR
-
-Polygon Middle Longitude:
-145.9750
-
-Polygon Middle Latitude:
--16.1000
-"""
-    calls = []
-
-    def fake_fetch_text(url, *, source_name, byte_range=None):
-        calls.append((url, byte_range))
-        if url.endswith("data.php"):
-            return index
-        if byte_range == "bytes=-8192":
-            return tail
-        if byte_range == "bytes=0-2048":
-            return head
-        raise AssertionError(f"unexpected fetch {url} {byte_range}")
-
-    monkeypatch.setattr(coral_dhw, "_fetch_text", fake_fetch_text)
-
+    from tests.coral_regional_fixtures import packet, install_transport
+    p = packet(8.2, region_id="gbr_northern", name="Northern GBR")
+    responses, calls = install_transport(monkeypatch, p)
     readings = fetch_coral_dhw(strict=True)
-
     assert len(readings) == 1
     assert readings[0].region_id == "gbr_northern"
     assert readings[0].dhw_value == 8.2
-    assert readings[0].lat == -16.1
-    assert readings[0].lon == 145.975
-    assert not any("florida_keys.txt" in url for url, _range in calls)
+    assert readings[0].lat == -21.75 and readings[0].lon == 151.125
+    assert len(calls) == 3 and all(r.closed for r in responses)
 
 
 def test_coral_primary_healthy_skips_erddap(monkeypatch):
-    today = date.today()
-    yesterday = today - timedelta(days=1)
-    index = f"""
-Latest Data Date: {today:%b}. {today.day}, {today.year}
-<tr>
-  <td><a href="timeseries/great_barrier_reef.php#gbr_northern">Northern GBR</a></td>
-  <td style="background-color:#FF0000"><a href="gauges/gbr_northern.php">Alert Level 1</a></td>
-  <td><a href="data/gbr_northern.txt">txt</a></td>
-</tr>
-"""
-    tail = f"""
-{yesterday.year} {yesterday.month:02d} {yesterday.day:02d} 27.8300 30.4600 29.6000      3.2680       0.0000    7.9000            2
-{today.year} {today.month:02d} {today.day:02d} 28.0800 30.4800 29.7700      3.2560       0.1700    8.2000            3
-"""
-    head = """
-Name:
-Northern GBR
-
-Polygon Middle Longitude:
-145.9750
-
-Polygon Middle Latitude:
--16.1000
-"""
-
-    def fake_fetch_text(url, *, source_name, byte_range=None):
-        if url.endswith("data.php"):
-            return index
-        if byte_range == "bytes=-8192":
-            return tail
-        if byte_range == "bytes=0-2048":
-            return head
-        raise AssertionError(f"unexpected fetch {url} {byte_range}")
-
-    monkeypatch.setattr(coral_dhw, "_fetch_text", fake_fetch_text)
+    from tests.coral_regional_fixtures import packet, install_transport
+    install_transport(monkeypatch, packet())
     monkeypatch.setattr(
-        coral_dhw,
-        "_fetch_coral_dhw_erddap",
+        coral_dhw, "_fetch_coral_dhw_erddap",
         lambda **kwargs: (_ for _ in ()).throw(AssertionError("witness should not be called")),
     )
-
     readings = fetch_coral_dhw(strict=True)
-
-    assert readings
-    assert all(reading.source_leg is None for reading in readings)
+    assert readings and all(reading.source_leg is None for reading in readings)
 
 
 def test_coral_erddap_station_coord_mapping():
@@ -290,7 +207,7 @@ def test_coral_falls_back_to_erddap_when_primary_raises(monkeypatch):
     )
     monkeypatch.setattr(
         coral_dhw,
-        "_fetch_text",
+        "_fetch_regional_bytes",
         lambda *args, **kwargs: (_ for _ in ()).throw(SourceFetchError("coral_dhw down")),
     )
     monkeypatch.setattr(coral_dhw, "_fetch_coral_dhw_erddap", lambda **kwargs: witness_readings)
@@ -384,18 +301,11 @@ def _make_coral_event(
     dhw_tier: int = 8,
     event_id: str = "coral_dhw_gbr_northern_tier8",
 ) -> CoralBleachingEvent:
-    return CoralBleachingEvent(
-        region_id=region_id,
-        region_full_name=region_full_name,
-        date="2026-05-17",
-        dhw_value=dhw_value,
-        dhw_tier=dhw_tier,
-        bleaching_level="mass bleaching expected",
-        stress_level="Alert Level 1",
-        lat=-16.1,
-        lon=145.975,
-        event_id=event_id,
-    )
+    from dataclasses import replace
+    from tests.coral_regional_fixtures import reading
+    r = reading(dhw_value, region_id=region_id, name=region_full_name)
+    event = detect_dhw_thresholds([r])[0]
+    return replace(event, event_id=event_id, dhw_tier=dhw_tier)
 
 
 def _make_reading(
@@ -403,36 +313,14 @@ def _make_reading(
     region_full_name: str = "Northern GBR",
     dhw_value: float = 8.2,
 ) -> CoralDHWReading:
-    return CoralDHWReading(
-        region_id=region_id,
-        region_full_name=region_full_name,
-        date="2026-05-17",
-        dhw_value=dhw_value,
-        stress_level="Alert Level 1",
-        baa_7day_max=3,
-        lat=-16.1,
-        lon=145.975,
-    )
+    from tests.coral_regional_fixtures import reading
+    return reading(dhw_value, region_id=region_id, name=region_full_name)
 
 
 def _make_bundle(event: CoralBleachingEvent) -> StoryBundle:
-    return StoryBundle(
-        signal_kind="coral_bleaching",
-        where=event.region_full_name,
-        when=event.date,
-        event_id=event.event_id,
-        headline_metric={"label": "Degree heating weeks", "value": event.dhw_value, "unit": "C-weeks"},
-        current_facts=[
-            {"label": "Region", "value": event.region_full_name},
-            {"label": "DHW", "value": f"{event.dhw_value:.1f} C-weeks"},
-            {"label": "Source", "value": "NOAA Coral Reef Watch"},
-        ],
-        raw_signal_dump={
-            "source": "NOAA Coral Reef Watch",
-            "region_id": event.region_id,
-            "dhw_value": event.dhw_value,
-        },
-    )
+    from src.two_bot.intern.marine import build_coral_bleaching_bundle
+    return build_coral_bleaching_bundle(event)
+
 
 
 class TestCoralDHWSourceRunnerMigration:

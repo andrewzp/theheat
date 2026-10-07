@@ -7,7 +7,8 @@ import json
 
 import pytest
 
-from src.data.coral_dhw import CoralBleachingEvent
+from src.data.coral_dhw import detect_dhw_thresholds
+from tests.coral_regional_fixtures import reading as regional_reading
 from src.two_bot.intern import build_coral_bleaching_bundle
 from src.two_bot import negative_cache as cache
 from src.two_bot.types import WriterResult, TriageCandidateBundle, MemorySlice
@@ -32,21 +33,13 @@ def restore_compatibility_facade(monkeypatch):
     monkeypatch.setattr(safety, "GEMINI_API_KEY", "offline-fixture-no-provider-access")
 
 
-def bundle(event="event", value=8.2):
-    return build_coral_bleaching_bundle(
-        CoralBleachingEvent(
-            region_id="fixture_reef",
-            region_full_name="Fixture Reef",
-            date=datetime.now(timezone.utc).date().isoformat(),
-            dhw_value=value,
-            dhw_tier=8,
-            bleaching_level="mass bleaching expected",
-            stress_level="Alert Level 1",
-            lat=-16.1,
-            lon=145.975,
-            event_id=event,
-        )
-    )
+EVENT = "coral_dhw_fixture_reef_tier8"
+
+
+def bundle(value=8.2):
+    # Complete invented source packets keep the real eligibility/cache boundary.
+    event = detect_dhw_thresholds([regional_reading(value, region_id="fixture_reef", name="Fixture Reef")])[0]
+    return build_coral_bleaching_bundle(event)
 
 
 def rejection(scope="evidence", code="insufficient_evidence"):
@@ -133,7 +126,7 @@ def test_two_actual_writer_rejections_then_both_queue_modes_skip_without_spendin
     for _ in range(3):
         state["_triage_queue"] = [candidate, candidate]
         _drain_and_write_triage_queue(state, {"id": "r", "sources": [{"source": "coral_dhw"}]})
-    assert calls == ["event", "event"]
+    assert calls == [EVENT, EVENT]
     assert next(iter(state["writer_negative_cache"].values()))["kills"] == 2
     assert sum(row["stage"] == "negative_cache" for row in state["suppressions"]) == 1
     assert not any("dollar" in str(row).lower() for row in state["suppressions"])
@@ -203,8 +196,8 @@ def test_prompt_policy_model_and_actual_memory_changes_reopen(monkeypatch):
     from src.two_bot.prompts import writer_prompt, critic_prompt, fact_check_prompt
 
     state, packet = deepcopy(DEFAULT_STATE), bundle()
-    seed(state, "event", packet)
-    assert cache.should_skip(state, "event", packet)
+    seed(state, EVENT, packet)
+    assert cache.should_skip(state, EVENT, packet)
     for module, attribute in [
         (writer_prompt, "WRITER_SYSTEM_PROMPT"),
         (critic_prompt, "CRITIC_SYSTEM_PROMPT"),
@@ -216,27 +209,27 @@ def test_prompt_policy_model_and_actual_memory_changes_reopen(monkeypatch):
             scoped.setattr(
                 module, attribute, getattr(module, attribute) + "\nfixture policy change"
             )
-            assert cache.should_skip(state, "event", packet) is None
+            assert cache.should_skip(state, EVENT, packet) is None
     monkeypatch.setattr(
         memory,
         "build_memory_slice",
         lambda state, packet: MemorySlice(used_framings=["new context"]),
     )
-    assert cache.should_skip(state, "event", packet) is None
+    assert cache.should_skip(state, EVENT, packet) is None
 
 
 def test_editorial_policy_only_change_or_unknown_policy_reopens_evidence_rejections(monkeypatch):
     from src.editorial import policy
 
     state, packet = deepcopy(DEFAULT_STATE), bundle()
-    seed(state, "event", packet)
-    assert cache.should_skip(state, "event", packet)
+    seed(state, EVENT, packet)
+    assert cache.should_skip(state, EVENT, packet)
     with monkeypatch.context() as scoped:
         scoped.setattr(policy, "source_manifest", lambda: {"source_sha256": "f" * 64})
-        assert cache.should_skip(state, "event", packet) is None
-    assert cache.should_skip(state, "event", packet)
+        assert cache.should_skip(state, EVENT, packet) is None
+    assert cache.should_skip(state, EVENT, packet)
     monkeypatch.setattr(policy, "current_editorial_policy", lambda: None)
-    assert cache.should_skip(state, "event", packet) is None
+    assert cache.should_skip(state, EVENT, packet) is None
     assert cache.decision_epoch() == ""
 
 
@@ -245,14 +238,14 @@ def test_different_evidence_codes_and_zero_cost_contract_failures_cannot_arm_cac
     sha = cache.bundle_fingerprint(packet, state)
     for code in ("insufficient_evidence", "conflicting_evidence"):
         cache.record_kill(
-            state, "event", sha, "writer", "model judgment", scope="evidence", code=code
+            state, EVENT, sha, "writer", "model judgment", scope="evidence", code=code
         )
-    assert cache.should_skip(state, "event", packet) is None
+    assert cache.should_skip(state, EVENT, packet) is None
     assert [row["kills"] for row in state["writer_negative_cache"].values()] == [1, 1]
     state = deepcopy(DEFAULT_STATE)
     cache.record_result(
         state,
-        "event",
+        EVENT,
         packet,
         {
             "cacheable": True,
@@ -329,7 +322,7 @@ def test_python_dashboard_python_sqlite_roundtrip_preserves_real_cache_and_recei
     state["publish_ledger"] = {
         "published": {"phase": "posted", "tweet_id": "receipt-1", "text_sha256": "f" * 64}
     }
-    seed(state, "event", packet)
+    seed(state, EVENT, packet)
     original_cache, original_ledger = (
         deepcopy(state["writer_negative_cache"]),
         deepcopy(state["publish_ledger"]),
@@ -344,7 +337,7 @@ def test_python_dashboard_python_sqlite_roundtrip_preserves_real_cache_and_recei
     assert restored["writer_negative_cache"] == original_cache
     assert restored["publish_ledger"] == original_ledger
     assert restored["drafts"] == state["drafts"]
-    assert cache.should_skip(restored, "event", packet)
+    assert cache.should_skip(restored, EVENT, packet)
 
 
 def test_cache_skipped_sibling_does_not_consume_changed_evidence_slot(monkeypatch):
@@ -366,12 +359,12 @@ def test_cache_skipped_sibling_does_not_consume_changed_evidence_slot(monkeypatc
     for refill in ("0", "1"):
         monkeypatch.setenv("THEHEAT_REFILL_ENABLED", refill)
         state = deepcopy(DEFAULT_STATE)
-        seed(state, "event", old)
+        seed(state, EVENT, old)
         state["_triage_queue"] = [
             TriageCandidateBundle(
                 b,
                 _score(),
-                "event",
+                EVENT,
                 "coral_dhw",
                 {},
                 "",
@@ -404,14 +397,14 @@ def test_actual_imported_writer_prompt_and_mismatched_cache_payload_reopen(monke
     from src.two_bot import writer
 
     state, packet = deepcopy(DEFAULT_STATE), bundle()
-    seed(state, "event", packet)
-    assert cache.should_skip(state, "event", packet)
+    seed(state, EVENT, packet)
+    assert cache.should_skip(state, EVENT, packet)
     with monkeypatch.context() as scoped:
         scoped.setattr(writer, "WRITER_SYSTEM_PROMPT", writer.WRITER_SYSTEM_PROMPT + " changed")
-        assert cache.should_skip(state, "event", packet) is None
+        assert cache.should_skip(state, EVENT, packet) is None
     row = next(iter(state["writer_negative_cache"].values()))
     row["sha"] = "a" * 64
-    assert cache.should_skip(state, "event", packet) is None
+    assert cache.should_skip(state, EVENT, packet) is None
     assert cache.merge_entries(state["writer_negative_cache"], {}) == {}
 
 

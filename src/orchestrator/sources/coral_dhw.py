@@ -53,12 +53,12 @@ def run_coral_dhw(bot_state: BotState, current_run: dict | None) -> None:
             review_context = _review_context(
                 source="NOAA Coral Reef Watch",
                 source_key="coral_dhw",
-                headline=f"{coral_event.region_full_name} DHW {coral_event.dhw_value:.1f}",
+                headline=f"{coral_event.region_full_name} DHW {coral_event.dhw_value}",
                 current_run=current_run,
                 facts=[
                     _fact("Region", coral_event.region_full_name),
                     _fact("Region ID", coral_event.region_id),
-                    _fact("DHW", f"{coral_event.dhw_value:.1f} °C-weeks"),
+                    _fact("DHW", f"{coral_event.dhw_value} °C-weeks"),
                     _fact("Threshold crossed", f"{coral_event.dhw_tier} °C-weeks"),
                     _fact("Bleaching level", coral_event.bleaching_level),
                 ],

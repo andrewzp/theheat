@@ -12,7 +12,7 @@ from datetime import date
 from typing import Any
 
 from src.data.coral_dhw import CoralBleachingEvent
-from src.data.coral_evidence import DHW_POINT_SOURCE, DHW_POINT_SCOPE, DHW_ONLY_LIMIT
+from src.data.coral_evidence import DHW_POINT_SOURCE, DHW_POINT_SCOPE, DHW_ONLY_LIMIT, REGIONAL_SCOPE, REGIONAL_LIMIT
 
 from src.data.ice_mass import IceMassRecord
 
@@ -55,9 +55,24 @@ def build_coral_bleaching_bundle(event: CoralBleachingEvent) -> StoryBundle:
             {"label": "claim_limit", "value": DHW_ONLY_LIMIT},
         ])
 
+    elif event.source_leg is None:
+        current_facts.extend([
+            {"label": "data_source", "value": "NOAA Coral Reef Watch regional virtual station"},
+            {"label": "evidence_grade", "value": "satellite_analysis"},
+            {"label": "sample_scope", "value": REGIONAL_SCOPE},
+            {"label": "baa_7day_max", "value": event.baa_7day_max},
+            {"label": "baa_scale", "value": "heritage_0_to_4"},
+            {"label": "baa_window_days", "value": 7},
+            {"label": "dhw_window_weeks", "value": 12},
+            {"label": "source_date", "value": event.date},
+            {"label": "claim_limit", "value": REGIONAL_LIMIT},
+        ])
+
     raw = asdict(event)
+    if event.baa_7day_max is None:
+        raw.pop("baa_7day_max")
     if event.provenance is None:
-        # Preserve primary and legacy bundle bytes; absence never qualifies a point.
+        # Preserve absent legacy fields; absence never qualifies a source.
         raw.pop("provenance")
     return StoryBundle(
         signal_kind="coral_bleaching",

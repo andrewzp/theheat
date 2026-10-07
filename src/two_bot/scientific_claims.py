@@ -91,7 +91,10 @@ def scientific_claim_failures(tweet: str, bundle) -> list[str]:
     signal = bundle.signal_kind
     text = tweet.lower()
 
-    from src.data.coral_evidence import is_dhw_only_bundle, dhw_only_bundle_failures
+    from src.data.coral_evidence import is_dhw_only_bundle, dhw_only_bundle_failures, regional_bundle_failures, regional_alert_failures
+
+    failures.extend("coral_regional_unqualified: " + reason for reason in regional_bundle_failures(bundle))
+    failures.extend("unwarranted_coral_alert: " + reason for reason in regional_alert_failures(tweet, bundle))
 
     if is_dhw_only_bundle(bundle):
         failures.extend("dhw_only_alert_unwarranted: " + reason for reason in dhw_only_bundle_failures(bundle))
