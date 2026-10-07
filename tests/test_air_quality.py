@@ -2,7 +2,7 @@ from __future__ import annotations
 from src.data import places
 from tests.air_quality_fixtures import observation as qualified_observation
 
-from datetime import date
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -30,7 +30,7 @@ def _payload(
     aod: list[float | None] | None = None,
     us_aqi: list[int | None] | None = None,
 ) -> dict:
-    day = day or date.today().isoformat()
+    day = day or datetime.now(UTC).date().isoformat()
     return {
         "latitude": 31.5,
         "longitude": 74.3,
