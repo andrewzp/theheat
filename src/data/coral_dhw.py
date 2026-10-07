@@ -4,11 +4,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
+from copy import deepcopy
 from concurrent.futures import ThreadPoolExecutor, as_completed
-import csv
 import html
-import io
-import math
 import re
 from collections.abc import Mapping
 
@@ -19,16 +17,17 @@ from src.data._http import fetch_with_retry
 from src.data._witness import tag_source_leg, with_witness
 from src.data.source_status import SourceFetchError, assert_response_schema
 from src.data.coral_evidence import DHW_ONLY_STRESS_LEVEL
+from src.data import coral_source_contract as point_contract
 
 SOURCE_NAME = "NOAA Coral Reef Watch"
 STATION_INDEX_URL = "https://coralreefwatch.noaa.gov/product/vs/data.php"
 STATION_DATA_BASE_URL = "https://coralreefwatch.noaa.gov/product/vs/data/"
 CRW_ERDDAP_LEG = "crw_erddap"
-CRW_ERDDAP_DATASET_URL = "https://coastwatch.noaa.gov/erddap/griddap/noaacrwdhwDaily.csv"
+CRW_ERDDAP_DATASET_URL = point_contract.CSV_BASE
 # CRW's ERDDAP grid can lag the virtual-station index by several days; the
 # 2026-06-14 unblock probe returned a six-day-old latest grid. Keep this
 # witness-only budget tight, but wide enough for the documented grid cadence.
-CRW_ERDDAP_MAX_AGE_DAYS = 7
+CRW_ERDDAP_MAX_AGE_DAYS = point_contract.MAX_AGE_DAYS
 _REQUEST_HEADERS = {"User-Agent": "theheat-bot/1.0"}
 
 _LATEST_DATE_RE = re.compile(
@@ -83,6 +82,7 @@ class CoralDHWReading:
     lon: float | None = None
     source_name: str = SOURCE_NAME
     source_leg: str | None = None  # witness leg that served (R-00); None = primary
+    provenance: dict | None = None
 
 
 @dataclass(frozen=True)
@@ -99,6 +99,7 @@ class CoralBleachingEvent:
     lon: float | None = None
     source_name: str = SOURCE_NAME
     source_leg: str | None = None  # witness leg that served; None = primary
+    provenance: dict | None = None
 
 
 @dataclass(frozen=True)
@@ -257,7 +258,7 @@ def detect_dhw_thresholds(
                 region_id=reading.region_id,
                 region_full_name=reading.region_full_name,
                 date=reading.date,
-                dhw_value=round(reading.dhw_value, 1),
+                dhw_value=reading.dhw_value if reading.source_leg == CRW_ERDDAP_LEG else round(reading.dhw_value, 1),
                 dhw_tier=tier,
                 bleaching_level=level,
                 stress_level=reading.stress_level,
@@ -265,6 +266,7 @@ def detect_dhw_thresholds(
                 lon=reading.lon,
                 event_id=f"coral_dhw_{reading.region_id}_tier{tier}",
                 source_leg=reading.source_leg,
+                provenance=deepcopy(reading.provenance),
             )
         )
     events.sort(key=lambda event: (event.dhw_tier, event.dhw_value), reverse=True)
@@ -277,16 +279,24 @@ def _fetch_coral_dhw_erddap(
     max_age_days: int = 5,
 ) -> list[CoralDHWReading]:
     """Fetch CRW DHW from the NOAA CoastWatch ERDDAP grid backup."""
+    try:
+        metadata_body, metadata_at = _fetch_point_bytes(point_contract.METADATA_URL, point_contract.METADATA_LIMIT)
+        metadata = point_contract.decode_metadata(metadata_body, retrieved_at=metadata_at, max_age_days=max_age_days)
+    except (requests.RequestException, SourceFetchError) as exc:
+        if strict:
+            raise SourceFetchError("CRW ERDDAP metadata unavailable or rejected") from exc
+        return []
     readings: list[CoralDHWReading] = []
     errors: list[str] = []
     for station in CRW_ERDDAP_STATIONS.values():
         try:
-            csv_text = _fetch_erddap_csv(station)
+            csv_body, retrieved_at = _fetch_erddap_csv(station, metadata["last_product_time"])
             readings.append(
                 _reading_from_erddap_csv(
-                    csv_text,
+                    csv_body,
                     station,
                     max_age_days=max_age_days,
+                    metadata=metadata, retrieved_at=retrieved_at,
                 )
             )
         except (requests.RequestException, SourceFetchError, ValueError) as exc:
@@ -300,66 +310,52 @@ def _fetch_coral_dhw_erddap(
     return []
 
 
-def _fetch_erddap_csv(station: _ErddapStation) -> str:
+def _fetch_point_bytes(url: str, limit: int) -> tuple[bytes, str]:
     response = fetch_with_retry(
-        _erddap_point_url(station.lat, station.lon),
-        headers=_REQUEST_HEADERS,
-        timeout=20,
-        attempts=1,
+        url, headers=_REQUEST_HEADERS, timeout=20, attempts=1,
+        stream=True, allow_redirects=False,
     )
-    return response.text
+    try:
+        if response.status_code != 200:
+            raise SourceFetchError("CRW ERDDAP unexpected response status")
+        chunks = []
+        size = 0
+        for chunk in response.iter_content(4096):
+            size += len(chunk)
+            if size > limit:
+                raise SourceFetchError("CRW ERDDAP response byte limit")
+            chunks.append(chunk)
+        return b"".join(chunks), point_contract.now_utc()
+    finally:
+        response.close()
+
+
+def _fetch_erddap_csv(station: _ErddapStation, timestamp: str) -> tuple[bytes, str]:
+    return _fetch_point_bytes(_erddap_point_url(station.lat, station.lon, timestamp), point_contract.CSV_LIMIT)
 
 
 def _reading_from_erddap_csv(
-    csv_text: str,
+    csv_body: bytes,
     station: _ErddapStation,
     *,
     max_age_days: int,
+    metadata: dict,
+    retrieved_at: str,
 ) -> CoralDHWReading:
-    rows = csv.DictReader(io.StringIO(csv_text))
-    for row in rows:
-        if row.get("time") == "UTC":
-            continue
-        observed_at = str(row.get("time") or "")
-        observed_date = observed_at.split("T", 1)[0]
-        try:
-            dhw = float(str(row.get("degree_heating_week") or ""))
-            lat = float(str(row.get("latitude") or station.lat))
-            lon = float(str(row.get("longitude") or station.lon))
-        except ValueError as exc:
-            raise SourceFetchError(
-                f"CRW ERDDAP schema drift for {station.region_id}: malformed row"
-            ) from exc
-        if not math.isfinite(dhw):
-            raise SourceFetchError(f"CRW ERDDAP returned non-finite DHW for {station.region_id}")
-        if dhw <= -300:
-            raise SourceFetchError(f"CRW ERDDAP returned fill value for {station.region_id}")
-        assert_freshness(
-            observed_date,
-            "coral_dhw",
-            max(max_age_days, CRW_ERDDAP_MAX_AGE_DAYS),
-        )
-        return CoralDHWReading(
-            region_id=station.region_id,
-            region_full_name=station.region_full_name,
-            date=observed_date,
-            dhw_value=round(dhw, 1),
-            # This response contains neither HotSpot nor the BAA product.
-            # DHW can remain high after active heat stress has subsided.
-            stress_level=DHW_ONLY_STRESS_LEVEL,
-            baa_7day_max=None,
-            lat=lat,
-            lon=lon,
-            source_leg=CRW_ERDDAP_LEG,
-        )
-    raise SourceFetchError(f"CRW ERDDAP schema drift for {station.region_id}: no data rows")
-
-
-def _erddap_point_url(lat: float, lon: float) -> str:
-    return (
-        f"{CRW_ERDDAP_DATASET_URL}?"
-        f"degree_heating_week%5B(last)%5D%5B({lat})%5D%5B({lon})%5D"
+    provenance = point_contract.decode_point(
+        csv_body, station, metadata=metadata, retrieved_at=retrieved_at, max_age_days=max_age_days,
     )
+    return CoralDHWReading(
+        region_id=station.region_id, region_full_name=station.region_full_name,
+        date=provenance["valid_date"], dhw_value=provenance["dhw_value"],
+        stress_level=DHW_ONLY_STRESS_LEVEL, baa_7day_max=None,
+        lat=provenance["sampled_point"][0], lon=provenance["sampled_point"][1],
+        source_leg=CRW_ERDDAP_LEG, provenance=provenance,
+    )
+
+
+def _erddap_point_url(lat: float, lon: float, timestamp: str) -> str:
+    return point_contract.point_url(lat, lon, timestamp)
 
 
 def _fetch_text(

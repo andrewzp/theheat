@@ -11,6 +11,8 @@ from src.data.coral_dhw import CoralBleachingEvent, CoralDHWReading, detect_dhw_
 from src.data.source_status import SourceFetchError
 from src.editorial.scoring import score_coral_bleaching
 from src.state import DEFAULT_STATE
+from tests.coral_point_fixtures import metadata, timestamp
+from src.data import coral_source_contract as point_contract
 from src.two_bot.types import StoryBundle
 
 
@@ -174,7 +176,11 @@ def test_coral_erddap_point_fetch_is_bounded(monkeypatch):
     calls = []
 
     class Response:
-        text = "time,latitude,longitude,degree_heating_week\n"
+        status_code = 200
+        def iter_content(self, size):
+            yield b"time,latitude,longitude,degree_heating_week\n"
+        def close(self):
+            self.closed = True
 
     def fake_fetch_with_retry(url, **kwargs):
         calls.append((url, kwargs))
@@ -182,38 +188,39 @@ def test_coral_erddap_point_fetch_is_bounded(monkeypatch):
 
     monkeypatch.setattr(coral_dhw, "fetch_with_retry", fake_fetch_with_retry)
 
-    coral_dhw._fetch_erddap_csv(coral_dhw.CRW_ERDDAP_STATIONS["gbr_northern"])
+    coral_dhw._fetch_erddap_csv(coral_dhw.CRW_ERDDAP_STATIONS["gbr_northern"], timestamp())
 
     assert len(calls) == 1
     url, kwargs = calls[0]
-    assert "degree_heating_week%5B(last)%5D%5B(-16.1)%5D%5B(145.975)%5D" in url
+    assert f"degree_heating_week%5B({timestamp()})%5D%5B(-16.1)%5D%5B(145.975)%5D" in url
     assert kwargs["timeout"] == 20
     assert kwargs["attempts"] == 1
 
 
 def test_coral_erddap_parses_fixture():
-    today = date.today()
+    today = date.fromisoformat(timestamp()[:10])
     csv_text = f"""time,latitude,longitude,degree_heating_week
 UTC,degrees_north,degrees_east,degree_Celsius_weeks
 {today.isoformat()}T12:00:00Z,-16.075,145.975,8.34
 """
 
     reading = coral_dhw._reading_from_erddap_csv(
-        csv_text,
+        csv_text.encode(),
         coral_dhw.CRW_ERDDAP_STATIONS["gbr_northern"],
-        max_age_days=5,
+        max_age_days=5, metadata=metadata(csv_text.splitlines()[-1].split(",")[0]), retrieved_at=point_contract.now_utc(),
     )
 
     assert reading == CoralDHWReading(
         region_id="gbr_northern",
         region_full_name="Northern GBR",
         date=today.isoformat(),
-        dhw_value=8.3,
+        dhw_value=8.34,
         stress_level=coral_dhw.DHW_ONLY_STRESS_LEVEL,
         baa_7day_max=None,
         lat=-16.075,
         lon=145.975,
         source_leg="crw_erddap",
+        provenance=reading.provenance,
     )
 
 
@@ -224,10 +231,10 @@ def test_dhw_only_backup_cannot_supply_any_current_alert_class(dhw):
     csv_text = (
         "time,latitude,longitude,degree_heating_week\n"
         "UTC,degrees_north,degrees_east,degree_Celsius_weeks\n"
-        f"{date.today().isoformat()}T12:00:00Z,-16.075,145.975,{dhw}\n"
+        f"{timestamp()[:10]}T12:00:00Z,-16.075,145.975,{dhw}\n"
     )
     reading = coral_dhw._reading_from_erddap_csv(
-        csv_text, coral_dhw.CRW_ERDDAP_STATIONS["gbr_northern"], max_age_days=5,
+        csv_text.encode(), coral_dhw.CRW_ERDDAP_STATIONS["gbr_northern"], max_age_days=5, metadata=metadata(csv_text.splitlines()[-1].split(",")[0]), retrieved_at=point_contract.now_utc(),
     )
     assert reading.dhw_value == dhw
     assert reading.stress_level == coral_dhw.DHW_ONLY_STRESS_LEVEL
@@ -242,16 +249,16 @@ UTC,degrees_north,degrees_east,degree_Celsius_weeks
 """
 
     reading = coral_dhw._reading_from_erddap_csv(
-        csv_text,
+        csv_text.encode(),
         coral_dhw.CRW_ERDDAP_STATIONS["gbr_northern"],
-        max_age_days=5,
+        max_age_days=5, metadata=metadata(csv_text.splitlines()[-1].split(",")[0]), retrieved_at=point_contract.now_utc(),
     )
 
     assert reading.date == lagged.isoformat()
 
 
 def test_coral_erddap_nan_cell_raises_source_fetch_error():
-    today = date.today()
+    today = date.fromisoformat(timestamp()[:10])
     csv_text = f"""time,latitude,longitude,degree_heating_week
 UTC,degrees_north,degrees_east,degree_Celsius_weeks
 {today.isoformat()}T12:00:00Z,-16.075,145.975,NaN
@@ -259,9 +266,9 @@ UTC,degrees_north,degrees_east,degree_Celsius_weeks
 
     with pytest.raises(SourceFetchError, match="non-finite"):
         coral_dhw._reading_from_erddap_csv(
-            csv_text,
+            csv_text.encode(),
             coral_dhw.CRW_ERDDAP_STATIONS["gbr_northern"],
-            max_age_days=5,
+            max_age_days=5, metadata=metadata(csv_text.splitlines()[-1].split(",")[0]), retrieved_at=point_contract.now_utc(),
         )
 
 
