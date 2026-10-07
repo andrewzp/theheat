@@ -11,6 +11,133 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-10-06 — Daily corpus grading (7 drafts; all fresh to the corpus, 5–6 days old)
+
+**Context:** Gist read via git-clone path (success). Queue: 7 pending (47 total in state: 38 posted,
+2 approved, 7 pending) — none previously graded. **First graded cycle since Jul 6** (the corpus,
+trend and plan on `main` stop at 2026-07-06; the grader was not run, or its PRs were not merged,
+for ~3 months). All 7 pending drafts were created Sep 30 17:49Z → Oct 1 20:47Z, i.e. 5.0–6.0 days
+old at grading, all past the 48h staleness line. Mix: 4 air-quality/dust (Riyadh ×2, Mecca, Taiz), 1 fire, 2 cyclone_tier_crossing. **Posting is no longer paused** — recent `posted`
+drafts (Jul 14–23: fire, all_time_high, hot10, monthly_high) went out via `manual` and `auto`
+approval modes; the queue's pending drafts here are the ones `approval_policy` held back or the
+operator left unreviewed.
+
+**A-rate: 0% (0/7). Gap to bar: 50 pp.**
+
+**Grade distribution:** A 0 · B 1 (B-) · C 6 (4 C+, 2 C) · D/F 0.
+
+**Headline finding:** The P_dust gap is **closed on its face** — all 4 dust/air-quality drafts now
+state a WHO multiple unprompted (26×, 4×, 14×, 5.9×), where 11 of 11 prior `dust_event` drafts did
+not. But the fix produced a **new uniform template**, not better copy: *[city]: [model] estimates
+[number] on [date] — [N]× the WHO guideline. [Second number from a sibling signal.] (source
+parenthetical)*. Every draft ends on a data point; none has a mechanism or a consequence close
+(P_close fails 6 of 7). The humor-lens read: violation present (the numbers are enormous),
+benign-voice present (flat, calm), **setup→punchline absent** — the data is setup and there is no
+punchline, not even the understatement-closer that pure data delivery sometimes earns. Nothing
+here is wrong; nothing is *written*. Ceiling B-.
+
+### B-range
+
+**[1] `draft_20260930_174938_40` — Riyadh dust_event (score 75) — B-**
+"Riyadh, Saudi Arabia: CAMS model estimates a dust daily maximum of 4,338 µg/m³ on Sept 30, with
+PM10 averaging 1,176 µg/m³ over 24 hours — about 26× the WHO daily guideline. A concurrent PM2.5
+signal reached 162 µg/m³ the same day."
+- Best of the batch: the WHO anchor (1,176/45 = 26.1× ✓) finally calibrates the number, and
+  "model-estimated" framing is honest. Exact figures, no approximation.
+- Capped by: three numbers in two sentences (4,338 / 1,176 / 162) with only one calibrated;
+  "A concurrent PM2.5 signal reached…" is a restate-padding second sentence that gives the reader
+  another uncalibrated number (162 ≈ 10.8× the PM2.5 guideline, unstated) — the same P_dust failure
+  one sentence later. No close (P_close failing).
+
+### C-range
+
+**[2] `draft_20260930_175201_41` — Mecca dust_event (71) — C+**
+"Model-estimated dust over Mecca, Saudi Arabia reached 622 µg/m³ on Sept 30, with PM10 averaging
+4× the WHO 24-hour guideline — while Riyadh registered a peak of 4,338 µg/m³ the same day. Two major
+Saudi cities, one dust event. (CAMS/Open-Meteo)"
+- Created 2m23s after [1] from the same dust event: near-duplicate generation, and the Riyadh
+  number it imports is [1]'s lead — so if both ship, the feed repeats itself.
+- "Two major Saudi cities, one dust event." is period-and-restate with nothing added — the
+  sentence restates the two clauses that precede it. Wodehouse violation (trying to land a close
+  that isn't there). Leads with the weaker city's number (622) and spends the comparison on the
+  stronger one — the Mecca draft is mostly a Riyadh draft. Bare source parenthetical.
+
+**[3] `draft_20261001_031925_42` — Cerrado fire (78) — C**
+"Brazil's Cerrado: 888 MW of radiative heat logged by NASA FIRMS on Oct. 1 — very-high intensity,
+satellite-confirmed at 100% confidence. Two nearby signals the same day reached 1,584 and 1,018 MW."
+- **P_tier:** "very-high intensity" is the fire-intensity bucket label leaking as copy (same phrase
+  went out in the Jul 14 posted Ontario draft: "very-high-intensity, satellite-confirmed"). "100%
+  confidence" is a pipeline field, not a fact about the world.
+- Second sentence reports that two nearby signals were *larger* than the headline (1,584 and
+  1,018 MW > 888) — undercuts its own lead. Real mechanic stranded: the Cerrado in early October
+  is the end of the dry season, the savanna-biome burn peak — one clause of ecosystem specificity
+  would have carried it (P5 stranded-mechanic / P_close). Plant comparison and banned-opener regex:
+  neither fires (no "is radiating N MW"; "logged" is not on the verb list — noting the variant).
+
+**[4] `draft_20261001_104103_43` — Riyadh air_quality_hazard (74) — C+**
+"Riyadh, Saudi Arabia: model-estimated PM2.5 daily mean of 213 µg/m³ on Oct. 1 — 14× the WHO
+24-hour guideline of 15 µg/m³. A related dust signal for the city peaked at 4,711 µg/m³ the same day.
+(CAMS global model, 45 km resolution)"
+- 213/15 = 14.2× ✓; stating the 15 µg/m³ guideline is the best calibration in the batch. But it is
+  the **2nd Riyadh draft in 17 hours** (Sept 30 dust, Oct 1 AQ; Mecca's draft also quotes Riyadh) off the same dust event, and the
+  4,711 µg/m³ "related dust signal" is exactly the lead of [1] with a new number. The reader of
+  the feed would show Riyadh numbers three times in a day. "45 km resolution" is provenance noise in the
+  tweet body, not information a reader acts on. No close.
+
+**[5] `draft_20261001_104137_44` — Taiz dust_event (71) — C+**
+"Taiz, Yemen: model-estimated PM10 averaged ~266 µg/m³ over 24 hours on Oct 1 — about 5.9× the WHO
+daily guideline. Dust daily maximum reached 829 µg/m³ (CAMS global model, 45 km resolution)."
+- Approximation where exact is available: "~266" next to "about 5.9×" (266/45 = 5.91) — two hedges
+  on two exact figures (P4 Wodehouse, 1st instance this plan on dust). Same template as [1]/[4].
+  Taiz is a repeat station (see Jun 25, Jun 28, Jun 30 Taiz drafts): the mountain-basin
+  mechanism that made the Jun 28 Taiz draft its type's best is absent here. No close.
+
+**[6] `draft_20261001_104203_45` — Hurricane Rachel Cat 2 (68) — C**
+"Hurricane Rachel has strengthened to Category 2 in the East Pacific, packing 85-kt winds and a
+972 mb central pressure as of the Oct. 1 NHC advisory."
+- Wire copy. 85 kt = Cat 2 ✓, but nothing in it tells a reader why Cat 2 matters: no category scale
+  context, no position (bundle has lat/lon), no direction, no stakes. "Packing" is the only
+  voice-shaped word and it is a cliché. First `cyclone_tier_crossing` draft in corpus.
+- **Superseded:** [7] is the Cat 3 crossing 10 hours later. Publishing [6] after [7] exists is
+  a pure-staleness fail; the signal's whole life was ~10 hours.
+
+**[7] `draft_20261001_204711_46` — Hurricane Rachel Cat 3 (74) — C+**
+"Hurricane Rachel has strengthened to Category 3 in the East Pacific, reaching 105 kt (121 mph) with
+a central pressure of 950 mb, per NHC advisory 019. nhc.noaa.gov/text/MIATCPEP3…"
+- Same bulletin form; 105 kt = 121 mph ✓, 950 mb is the real intensification number but unglossed.
+  **Formatting defect:** the tweet body ends in a *truncated* URL ("MIATCPEP3…" — the literal
+  ellipsis is in the text) while the full advisory URL is also carried in the facts; the ellipsis
+  URL is not a working link. (PR #589 "Format cyclone source links before checking drafts" is on
+  main — this draft predates or escapes it; verify.) Cat 3 is the "major hurricane" threshold —
+  the one fact that makes this crossing worth a tweet — and the draft never says it. C+ for
+  correct arithmetic and the cleanest figures in the cyclone pair.
+- `approval_policy`: `manual_only` ("potential human-impact event") — the pipeline already
+  routes cyclones to a human; the draft quality should justify that attention.
+
+### Patterns named
+
+1. **P_dust closed → stat-stack template.** WHO multiple now present 4/4 (was 0/11). Success on
+   the anchor, but the template is *number — WHO× — second number — source parenthetical* with no
+   mechanism or close. Do not re-open P_dust; fold the remainder into P_close for dust.
+2. **P_close, 17th cycle (0 positive, 6 failing, +1 n/a on bulletin form).** First cycle with *zero*
+   positive instances since the proposal opened.
+3. **P_tier, 8th cycle (+1 instance):** "very-high intensity" (Cerrado). Now 11 instances across
+   5 signal types; the fire label shipped to Twitter on Jul 14 already.
+4. **Event-level duplicate generation:** Riyadh ×2 and Mecca off one dust event within 17h. Logged
+   as an operational note (diversity gate is on main — verify it keys on event, not city+type).
+5. **Cyclone bulletins:** new failure mode, `cyclone_tier_crossing` has no voice — added as
+   **P_cyclone** (new proposal).
+6. **No A-grade mechanics to report** — nothing to promote.
+
+### Followups
+
+- Operator: `docs/` on `main` was frozen at Jul 6 until this cycle; ~3 months of cycles are
+  ungraded. If the Jul–Oct posted drafts matter for the A-rate record, they would need a
+  backfill pass (not attempted — drafts in state are `posted`, not `pending`).
+- Staleness: all 7 are >48h; see rejection events in `QUALITY_TREND.md`. Write skipped.
+
+---
+
 ## 2026-07-06 — Daily corpus grading (0 fresh drafts; 15 carry-overs from Jul 5, previously graded)
 
 **Context:** Gist read via git-clone path (success; no rate limit). Queue: 15 pending drafts —
