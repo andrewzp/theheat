@@ -1,4 +1,5 @@
 """Real PostgreSQL spending transactions, paired local policy, no provider calls."""
+from datetime import timedelta
 import multiprocessing
 import time
 from uuid import uuid4
@@ -7,10 +8,10 @@ import pytest
 
 from src.commands import postgres_spending as pg, spend_journal as s
 from src.commands.postgres_authority import PostgresCommandAuthority
-from src.commands.schema import CommandError
+from src.commands.schema import Command, CommandError, utc_text
 from src.commands.sqlite_authority import SQLiteAuthority
 from src.storage import postgres_projection as p
-from tests.test_command_authority import story, command, EDITOR, resolver, NOW as COMMAND_NOW
+from tests.test_command_authority import story, command, request, EDITOR, resolver, NOW as COMMAND_NOW
 from tests.test_postgres_projection import cluster as cluster, database as database
 from tests.test_postgres_projection import admin, counts, wrap_connections
 from tests.test_postgres_command_authority import make_authority as make_authority, core as core
@@ -87,12 +88,12 @@ def test_exact_request_concurrency_and_one_dispatch_after_restart(store, core):
     assert call(reopened, "status")["totals"]["held_micro_usd"] == 60
 
 
-def _queued_worker(params, action, payload, ready, results):
+def _queued_worker(params, action, payload, ready, results, command_clock):
     try:
         store = PostgresCommandAuthority(**options(params))
         ready.set()
         if action == "consume":
-            results.put(store.consume(resolver, now=COMMAND_NOW))
+            results.put(store.consume(resolver, now=command_clock))
         else:
             results.put(call(store, action, payload))
     except BaseException as exc:
@@ -102,12 +103,15 @@ def _queued_worker(params, action, payload, ready, results):
 def test_spend_and_command_consumers_wait_for_the_same_database_lock(store, core):
     import psycopg
     params = core[3]
-    cmd = command(core[1]["drafts"][0])
-    store.accept(cmd, EDITOR, now=COMMAND_NOW)
+    command_clock = COMMAND_NOW - timedelta(hours=2)
+    row = request(core[1]["drafts"][0])
+    row.update(requested_at=utc_text(command_clock), expires_at=utc_text(command_clock + timedelta(hours=1)))
+    cmd = Command.from_request(row, EDITOR, environment="local", now=command_clock)
+    store.accept(cmd, EDITOR, now=command_clock)
     ctx = multiprocessing.get_context("spawn")
     results = ctx.Queue()
     events = [ctx.Event(), ctx.Event()]
-    children = [ctx.Process(target=_queued_worker, args=(params, action, payload, event, results))
+    children = [ctx.Process(target=_queued_worker, args=(params, action, payload, event, results, command_clock))
                 for (action, payload), event in zip((("reserve", intent()), ("consume", None)), events, strict=True)]
     try:
         with psycopg.connect(**{**params, "autocommit": False}) as c:
