@@ -173,8 +173,8 @@ def run_air_quality(bot_state: BotState, current_run: dict | None, cities: list[
                                     _fact("Country", country),
                                     _fact("Dust daily-max", f"{dust_event.dust_daily_max:.0f} μg/m³"),
                                     _fact("Tier", f"{dust_event.tier}/3"),
-                                    _fact("AOD", f"{dust_event.aod_daily_max:.2f}" if dust_event.aod_daily_max else None),
-                                    _fact("Evidence grade", "model_estimated; CAMS 0.4 degree grid"),
+                                    _fact("AOD", f"{dust_event.aod_daily_max:.2f}" if dust_event.aod_daily_max is not None else None),
+                                    _fact("Evidence grade", "model_estimated; CAMS automatic domain; resolution unspecified"),
                                 ],
                             )
                             bundle = build_dust_event_bundle(dust_event)

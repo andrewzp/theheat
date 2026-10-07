@@ -91,6 +91,9 @@ def scientific_claim_failures(tweet: str, bundle) -> list[str]:
     signal = bundle.signal_kind
     text = tweet.lower()
 
+    from src.data.air_quality_evidence import bundle_failures as aq_failures, is_air_quality
+    failures.extend("air_quality_window_unqualified: " + reason for reason in aq_failures(bundle))
+
     from src.data.fire_evidence import fire_bundle_failures, is_thermal, temporal_claim_failures
     failures.extend("thermal_source_unqualified: " + reason for reason in fire_bundle_failures(bundle))
     failures.extend(temporal_claim_failures(tweet, bundle))
@@ -164,7 +167,7 @@ def scientific_claim_failures(tweet: str, bundle) -> list[str]:
 
     # P06 supplies the more precise temperature source/valid-time rule. This
     # also covers explicitly modelled non-temperature fallback products.
-    forecast = evidence.get("evidence_type") == "forecast" or facts.get("evidence_grade") in {"modelled", "model_fallback", "forecast"}
+    forecast = is_air_quality(bundle) or evidence.get("evidence_type") == "forecast" or facts.get("evidence_grade") in {"modelled", "model_fallback", "forecast"}
     if forecast and re.search(r"\b(?:recorded|measured|observed|has broken|broke the record|set a (?:new )?record)\b", text):
         failures.append("forecast_as_observation: a forecast cannot establish an already observed measurement or record")
     if re.search(r"\b(?:wet[- ]bulb|heat index|humidex)\b", text):

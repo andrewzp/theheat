@@ -188,6 +188,10 @@ def audit_story_bundle(bundle: StoryBundle) -> EvidenceAudit:
                 )
             )
 
+    from src.data.air_quality_evidence import bundle_failures as aq_failures
+    for reason in aq_failures(bundle):
+        issues.append(_issue("error", "air_quality_window_unqualified", "raw_signal_dump", reason))
+
     from src.data.fire_evidence import fire_bundle_failures
     for reason in fire_bundle_failures(bundle):
         issues.append(_issue("error", "thermal_source_unqualified", "raw_signal_dump", reason))

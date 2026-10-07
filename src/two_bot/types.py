@@ -22,6 +22,7 @@ class RelatedSignal:
     headline_metric: dict[str, Any]
     country: str = ""
     acquisition_evidence: dict[str, Any] | None = None
+    air_quality_evidence: dict[str, Any] | None = None
 
     def to_dict(self) -> dict:
         data = {
@@ -34,6 +35,8 @@ class RelatedSignal:
         }
         if self.acquisition_evidence is not None:
             data["acquisition_evidence"] = self.acquisition_evidence
+        if self.air_quality_evidence is not None:
+            data["air_quality_evidence"] = self.air_quality_evidence
         return data
 
 
