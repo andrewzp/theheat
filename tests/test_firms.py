@@ -32,7 +32,7 @@ def _source_clock(monkeypatch):
     monkeypatch.setattr("src.data.firms.datetime", _SourceClock)
 
 
-def _firms_csv(rows, product="VIIRS_SNPP_NRT"):
+def _firms_csv(rows, product="VIIRS_NOAA21_NRT"):
     """Complete invented wire rows at the explicit fixture collection clock."""
     output = io.StringIO()
     base = firms_row(product, when=_SourceClock.now())
@@ -52,7 +52,7 @@ class TestFetchFires:
         )
         responses.add(
             responses.GET,
-            "https://firms.modaps.eosdis.nasa.gov/api/area/csv/test_key/VIIRS_SNPP_NRT/world/1",
+            "https://firms.modaps.eosdis.nasa.gov/api/area/csv/test_key/VIIRS_NOAA21_NRT/world/1",
             body=csv_body,
             status=200,
         )
@@ -70,7 +70,7 @@ class TestFetchFires:
         )
         responses.add(
             responses.GET,
-            "https://firms.modaps.eosdis.nasa.gov/api/area/csv/test_key/VIIRS_SNPP_NRT/world/1",
+            "https://firms.modaps.eosdis.nasa.gov/api/area/csv/test_key/VIIRS_NOAA21_NRT/world/1",
             body=csv_body,
             status=200,
         )
@@ -85,7 +85,7 @@ class TestFetchFires:
         )
         responses.add(
             responses.GET,
-            "https://firms.modaps.eosdis.nasa.gov/api/area/csv/test_key/VIIRS_SNPP_NRT/world/1",
+            "https://firms.modaps.eosdis.nasa.gov/api/area/csv/test_key/VIIRS_NOAA21_NRT/world/1",
             body=csv_body,
             status=200,
         )
@@ -105,7 +105,7 @@ class TestFetchFires:
         for _ in range(3):
             responses.add(
                 responses.GET,
-                "https://firms.modaps.eosdis.nasa.gov/api/area/csv/test_key/VIIRS_SNPP_NRT/world/1",
+                "https://firms.modaps.eosdis.nasa.gov/api/area/csv/test_key/VIIRS_NOAA21_NRT/world/1",
                 status=500,
             )
         fires = fetch_fires()
@@ -115,7 +115,7 @@ class TestFetchFires:
     @patch("src.data.firms.FIRMS_API_KEY", "test_key")
     def test_transient_5xx_retries_then_returns_fires(self):
         csv_body = _firms_csv('34.05,-118.25,h,350.0\n')
-        url = "https://firms.modaps.eosdis.nasa.gov/api/area/csv/test_key/VIIRS_SNPP_NRT/world/1"
+        url = "https://firms.modaps.eosdis.nasa.gov/api/area/csv/test_key/VIIRS_NOAA21_NRT/world/1"
         responses.add(responses.GET, url, status=502)
         responses.add(responses.GET, url, body=csv_body, status=200)
 
@@ -127,7 +127,7 @@ class TestFetchFires:
     @responses.activate
     @patch("src.data.firms.FIRMS_API_KEY", "test_key")
     def test_viirs_letter_confidence_parsed(self):
-        """VIIRS_SNPP_NRT uses categorical l/n/h confidence, not percentages.
+        """VIIRS_NOAA21_NRT uses categorical l/n/h confidence, not percentages.
 
         The old parser did int("h") and silently dropped every VIIRS row,
         which is why production fire detection returned 0 all day. Regression
@@ -138,7 +138,7 @@ class TestFetchFires:
         )
         responses.add(
             responses.GET,
-            "https://firms.modaps.eosdis.nasa.gov/api/area/csv/test_key/VIIRS_SNPP_NRT/world/1",
+            "https://firms.modaps.eosdis.nasa.gov/api/area/csv/test_key/VIIRS_NOAA21_NRT/world/1",
             body=csv_body,
             status=200,
         )
@@ -154,7 +154,7 @@ class TestFetchFires:
         )
         responses.add(
             responses.GET,
-            "https://firms.modaps.eosdis.nasa.gov/api/area/csv/test_key/VIIRS_SNPP_NRT/world/1",
+            "https://firms.modaps.eosdis.nasa.gov/api/area/csv/test_key/VIIRS_NOAA21_NRT/world/1",
             body=csv_body,
             status=200,
         )
@@ -170,7 +170,7 @@ class TestFetchFires:
         )
         responses.add(
             responses.GET,
-            "https://firms.modaps.eosdis.nasa.gov/api/area/csv/test_key/VIIRS_SNPP_NRT/world/1",
+            "https://firms.modaps.eosdis.nasa.gov/api/area/csv/test_key/VIIRS_NOAA21_NRT/world/1",
             body=csv_body,
             status=200,
         )
@@ -363,7 +363,7 @@ from src.two_bot.intern import build_fire_bundle  # noqa: E402
 
 HMS_URL_BASE = "https://satepsanone.nesdis.noaa.gov/pub/FIRE/web/HMS/Fire_Points/Text"
 FIRMS_PRIMARY_URL = (
-    "https://firms.modaps.eosdis.nasa.gov/api/area/csv/test_key/VIIRS_SNPP_NRT/world/1"
+    "https://firms.modaps.eosdis.nasa.gov/api/area/csv/test_key/VIIRS_NOAA21_NRT/world/1"
 )
 HMS_HEADER = "        Lon,        Lat, YearDay, Time, Satellite, Method, Ecosystem, FRP\n"
 
@@ -377,7 +377,7 @@ class TestNoaaHmsWitness:
     """R-02: NOAA HMS independent fire witness for firms.
 
     HMS fires ONLY when the primary FIRMS fetch fails (with_witness). It is an
-    independent host + instrument, N. America only, graded observed_alt_host.
+    alternate host with a North American selection box, graded observed_alt_host.
     """
 
     @responses.activate
@@ -455,26 +455,26 @@ FIRMS_BASE = "https://firms.modaps.eosdis.nasa.gov/api/area/csv/test_key"
 
 
 class TestFirmsProductChain:
-    """R-06: same-host product chain VIIRS_SNPP→NOAA20→NOAA21→MODIS.
+    """R-06: same-host product chain NOAA21→NOAA20→MODIS.
 
-    Semantically-equivalent observations — a non-first product records source_leg
+    Distinct source products — a non-first product records source_leg
     (degraded) but NO evidence_grade. Product-gap insurance; NOT a host-outage fix.
     """
 
     @responses.activate
     @patch("src.data.firms.FIRMS_API_KEY", "test_key")
     def test_firms_primary_product_unchanged_when_healthy(self):
-        responses.add(responses.GET, f"{FIRMS_BASE}/VIIRS_SNPP_NRT/world/1",
+        responses.add(responses.GET, f"{FIRMS_BASE}/VIIRS_NOAA21_NRT/world/1",
                       body=_firms_csv('34.05,-118.25,h,400.0\n'), status=200)
         fires = fetch_fires()
         assert len(fires) == 1
-        assert fires[0].source_leg is None  # primary product, no provenance
+        assert fires[0].source_leg is None  # requested product; exact receipt retains provenance
 
     @responses.activate
     @patch("src.data.firms.FIRMS_API_KEY", "test_key")
     def test_firms_product_chain_advances_on_empty(self):
-        # SNPP reachable but empty (no qualifying fires) -> advance to NOAA20.
-        responses.add(responses.GET, f"{FIRMS_BASE}/VIIRS_SNPP_NRT/world/1",
+        # NOAA21 reachable but empty (no qualifying fires) -> advance to NOAA20.
+        responses.add(responses.GET, f"{FIRMS_BASE}/VIIRS_NOAA21_NRT/world/1",
                       body=FIRMS_CSV_HEADER, status=200)
         responses.add(responses.GET, f"{FIRMS_BASE}/VIIRS_NOAA20_NRT/world/1",
                       body=_firms_csv('34.05,-118.25,h,500.0\n', product="VIIRS_NOAA20_NRT"), status=200)
@@ -485,21 +485,21 @@ class TestFirmsProductChain:
     @responses.activate
     @patch("src.data.firms.FIRMS_API_KEY", "test_key")
     def test_firms_product_chain_records_leg_no_grade(self):
-        responses.add(responses.GET, f"{FIRMS_BASE}/VIIRS_SNPP_NRT/world/1",
+        responses.add(responses.GET, f"{FIRMS_BASE}/VIIRS_NOAA21_NRT/world/1",
                       body=FIRMS_CSV_HEADER, status=200)
         responses.add(responses.GET, f"{FIRMS_BASE}/VIIRS_NOAA20_NRT/world/1",
                       body=_firms_csv('34.05,-118.25,h,500.0\n', product="VIIRS_NOAA20_NRT"), status=200)
         fires = fetch_fires()
         bundle = build_fire_bundle(fires[0])
-        # Same-provider equivalent product -> NO evidence_grade (unlike HMS).
+        # Same-provider alternative product -> NO evidence_grade (unlike HMS).
         assert not any(f.get("label") == "evidence_grade" for f in bundle.current_facts)
 
     @responses.activate
     @patch("src.data.firms.FIRMS_API_KEY", "test_key")
     def test_firms_product_chain_advances_on_product_failure(self):
-        # SNPP fails outright (500x3 retries) -> NOAA20 serves the gap.
+        # NOAA21 fails outright (500x3 retries) -> NOAA20 serves the gap.
         for _ in range(3):
-            responses.add(responses.GET, f"{FIRMS_BASE}/VIIRS_SNPP_NRT/world/1", status=500)
+            responses.add(responses.GET, f"{FIRMS_BASE}/VIIRS_NOAA21_NRT/world/1", status=500)
         responses.add(responses.GET, f"{FIRMS_BASE}/VIIRS_NOAA20_NRT/world/1",
                       body=_firms_csv('34.05,-118.25,h,500.0\n', product="VIIRS_NOAA20_NRT"), status=200)
         fires = fetch_fires()
@@ -511,7 +511,7 @@ class TestFirmsProductChain:
     def test_firms_all_products_empty_returns_empty_no_hms(self):
         # Every product reachable but empty (FIRMS up, no fires) -> [] WITHOUT
         # invoking the independent HMS witness (HMS URL left unregistered).
-        for product in ("VIIRS_SNPP_NRT", "VIIRS_NOAA20_NRT", "VIIRS_NOAA21_NRT", "MODIS_NRT"):
+        for product in ("VIIRS_NOAA21_NRT", "VIIRS_NOAA20_NRT", "MODIS_NRT"):
             responses.add(responses.GET, f"{FIRMS_BASE}/{product}/world/1",
                           body=FIRMS_CSV_HEADER, status=200)
         assert fetch_fires() == []
@@ -524,7 +524,7 @@ class TestFirmsProductChain:
         for _ in range(3):
             responses.add(
                 responses.GET,
-                f"{FIRMS_BASE}/VIIRS_SNPP_NRT/world/1",
+                f"{FIRMS_BASE}/VIIRS_NOAA21_NRT/world/1",
                 status=401,
                 body="Unauthorized",
             )

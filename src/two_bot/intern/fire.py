@@ -13,8 +13,8 @@ from src.data.fire_footprint import FireComplex
 
 from src.data.fire_footprint import TIERS_HECTARES
 
-from src.data.firms import FireEvent, _FIRMS_PRODUCT_CHAIN
-from src.data.fire_source_contract import validate_event
+from src.data.firms import FireEvent
+from src.data.fire_source_contract import FIRMS_PRODUCTS, validate_event
 from src.data.fire_evidence import source_facts
 
 from src.two_bot.types import StoryBundle
@@ -64,7 +64,7 @@ def build_fire_bundle(fire: FireEvent) -> StoryBundle:
             # the selected measurement, its source product and minute.
             "source_name": (
                 "NOAA HMS" if fire.source_leg == "noaa_hms"
-                else "NASA FIRMS" if fire.source_leg is None or fire.source_leg in _FIRMS_PRODUCT_CHAIN
+                else "NASA FIRMS" if fire.source_leg is None or fire.source_leg in FIRMS_PRODUCTS
                 else None
             ),
             "source_leg": fire.source_leg,

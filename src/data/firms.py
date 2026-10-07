@@ -37,15 +37,17 @@ GEOCODE_NEAR_CITY_MAX_KM = 200.0
 # Daily accumulating text file; no auth. N. America coverage only.
 HMS_FIRE_URL = "https://satepsanone.nesdis.noaa.gov/pub/FIRE/web/HMS/Fire_Points/Text"
 # FIRMS same-host product chain (R-06). A given product can be momentarily
-# empty/lagged while a sibling has the data. Freshest sensors lead; all share the
+# empty/lagged while a sibling has the data. All active products share the
 # area/csv host + MAP_KEY. Each retains its own product/time/confidence semantics
 # with no new evidence_grade. This is product-gap insurance, not a host-outage fix.
-_FIRMS_PRODUCT_CHAIN = [
-    "VIIRS_SNPP_NRT",
-    "VIIRS_NOAA20_NRT",
-    "VIIRS_NOAA21_NRT",
-    "MODIS_NRT",
-]
+# Active collection is separate from the pure historical receipt product enum.
+# Explicit sequences keep NOAA20 reachable behind NOAA21 without list slicing.
+_FIRMS_PRODUCT_CHAINS = {
+    "VIIRS_NOAA21_NRT": ("VIIRS_NOAA21_NRT", "VIIRS_NOAA20_NRT", "MODIS_NRT"),
+    "VIIRS_NOAA20_NRT": ("VIIRS_NOAA20_NRT", "VIIRS_NOAA21_NRT", "MODIS_NRT"),
+    "MODIS_NRT": ("MODIS_NRT",),
+}
+_RETIRED_SNPP_MESSAGE = "TheHeat no longer collects S-NPP; select VIIRS_NOAA21_NRT"
 # This HMS adapter selects the existing North American box. Outside it the witness
 # returns nothing and FIRMS has no fallback (stated honestly in the bundle).
 _HMS_NORTH_AMERICA_BBOX = (7.0, 83.0, -170.0, -50.0)  # lat_min, lat_max, lon_min, lon_max
@@ -69,7 +71,7 @@ class FireEvent:
 def fetch_fires(
     confidence_min: int = 80,
     frp_min: float = 250.0,
-    source: str = "VIIRS_SNPP_NRT",
+    source: str = "VIIRS_NOAA21_NRT",
     days: int = 1,
     *,
     strict: bool = False,
@@ -80,9 +82,13 @@ def fetch_fires(
     100 to 250 MW on 2026-04-24 after reviewing production draft quality:
     sub-200 MW fires produced weak copy (e.g., 136 MW framed with an
     awkward "a coal power plant runs at 150 MW, this is one of those"
-    comparison). 250 MW roughly matches a "newsworthy" scale floor — a
-    fire that reads as a real incident, not noise near a farmer's burn.
+    comparison). This remains a selection heuristic; thermal power alone
+    does not classify the detection as a vegetation-fire incident.
     """
+    if type(source) is str and source == "VIIRS_SNPP_NRT":
+        if strict:
+            raise SourceSkipped(_RETIRED_SNPP_MESSAGE)
+        return []
     if not FIRMS_API_KEY:
         if strict:
             raise SourceSkipped("NASA_FIRMS_API_KEY is not configured")
@@ -116,7 +122,8 @@ def _fetch_fires_product_chain(
     """Try FIRMS products in order (R-06): a given product can be momentarily
     empty/lagged while a sibling has the data. A non-first product records
     ``source_leg`` (→ status degraded) but NO new ``evidence_grade``. Product/time
-    semantics remain explicit; the historical ordering is unchanged here.
+    semantics remain explicit. The selected product has its own bounded sequence;
+    retired S-NPP collection never participates in active fallback.
 
     Returns ``[]`` only when every reachable product is genuinely empty (FIRMS up,
     no big fires — do NOT fall through to the independent HMS witness). Raises
@@ -125,7 +132,7 @@ def _fetch_fires_product_chain(
     This chain is the
     same host and therefore NOT a host-outage fix; HMS (R-02) is."""
     _validate_request(source, days)
-    chain = _FIRMS_PRODUCT_CHAIN[_FIRMS_PRODUCT_CHAIN.index(source):]
+    chain = _FIRMS_PRODUCT_CHAINS[source]
 
     last_exc: Exception | None = None
     any_reachable = False
@@ -152,6 +159,8 @@ def _fetch_fires_product_chain(
 def _validate_request(source: str, days: int) -> None:
     if type(source) is not str or source not in FIRMS_PRODUCTS:
         reject("unsupported FIRMS source product")
+    if source == "VIIRS_SNPP_NRT":
+        raise SourceSkipped(_RETIRED_SNPP_MESSAGE)
     validate_days(days)
 
 

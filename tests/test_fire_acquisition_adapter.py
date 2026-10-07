@@ -11,7 +11,13 @@ import requests
 from src.data import firms
 from src.data.fire_source_contract import FIRMS_PRODUCTS, HMS_PRODUCT, validate_event
 from src.data.source_status import SourceFetchError
-from tests.fire_source_fixtures import firms_row, hms_row
+from tests.fire_source_fixtures import firms_row as source_row, hms_row
+
+ACTIVE_PRODUCTS = ("VIIRS_NOAA21_NRT", "VIIRS_NOAA20_NRT", "MODIS_NRT")
+
+
+def firms_row(product="VIIRS_NOAA21_NRT", **kwargs):
+    return source_row(product, **kwargs)
 
 REFERENCE = datetime(2032, 3, 1, 0, 1, 42, tzinfo=UTC)
 
@@ -39,7 +45,7 @@ def no_real_collection(monkeypatch):
     monkeypatch.setattr(firms, 'fetch_with_retry', lambda *a, **k: pytest.fail('Unexpected source request'))
 
 
-def collect(monkeypatch, rows, product=FIRMS_PRODUCTS[0]):
+def collect(monkeypatch, rows, product="VIIRS_NOAA21_NRT"):
     text = csv_text(rows)
     calls = []
     def fetch(url, **kwargs):
@@ -52,7 +58,7 @@ def collect(monkeypatch, rows, product=FIRMS_PRODUCTS[0]):
     return result
 
 
-@pytest.mark.parametrize('product', FIRMS_PRODUCTS)
+@pytest.mark.parametrize('product', ACTIVE_PRODUCTS)
 def test_real_adapter_retains_yesterday_source_minute(monkeypatch, product):
     yesterday = REFERENCE - timedelta(minutes=2)
     event, = collect(monkeypatch, [firms_row(product, when=yesterday)], product)
@@ -100,26 +106,26 @@ def test_hms_missing_frp_and_outside_region_are_valid_unselected(monkeypatch):
     'latitude,latitude\n1,2\n', 'Lat,Lon,FRP\n1,2,3\n'])
 def test_bad_header_fails_schema(text):
     with pytest.raises(SourceFetchError, match='schema drift'):
-        firms._qualified_rows(text, FIRMS_PRODUCTS[0], REFERENCE)
+        firms._qualified_rows(text, "VIIRS_NOAA21_NRT", REFERENCE)
 
 
 def test_empty_and_malformed_rows_are_different():
     row = firms_row(when=REFERENCE)
     header = csv_text([], list(row))
-    assert firms._qualified_rows(header, FIRMS_PRODUCTS[0], REFERENCE) == []
+    assert firms._qualified_rows(header, "VIIRS_NOAA21_NRT", REFERENCE) == []
     with pytest.raises(SourceFetchError, match='no structurally valid'):
-        firms._qualified_rows(header+'1,2\n', FIRMS_PRODUCTS[0], REFERENCE)
+        firms._qualified_rows(header+'1,2\n', "VIIRS_NOAA21_NRT", REFERENCE)
 
 
-@pytest.mark.parametrize('source,days', [('invented', 1), (HMS_PRODUCT, 1), (FIRMS_PRODUCTS[0], True),
-    (FIRMS_PRODUCTS[0], 0), (FIRMS_PRODUCTS[0], 6)])
+@pytest.mark.parametrize('source,days', [('invented', 1), (HMS_PRODUCT, 1), ("VIIRS_NOAA21_NRT", True),
+    ("VIIRS_NOAA21_NRT", 0), ("VIIRS_NOAA21_NRT", 6)])
 def test_invalid_request_never_fetches(source, days):
     with pytest.raises(SourceFetchError, match='schema drift'):
         firms.fetch_fires(source=source, days=days, strict=True)
 
 
-@pytest.mark.parametrize('status,count', [(400, 1), (401, 1), (403, 5), (404, 1),
-    (410, 1), (429, 5), (500, 5), (503, 5)])
+@pytest.mark.parametrize('status,count', [(400, 1), (401, 1), (403, 4), (404, 1),
+    (410, 1), (429, 4), (500, 4), (503, 4)])
 def test_public_http_failures_are_redacted_after_preserved_fallbacks(monkeypatch, status, count, capsys):
     calls = []
     def fetch(url, **kwargs):
@@ -148,7 +154,7 @@ def test_transport_and_witness_failures_are_redacted(monkeypatch, error):
     monkeypatch.setattr(firms, 'fetch_with_retry', fetch)
     with pytest.raises(SourceFetchError) as caught:
         firms.fetch_fires(strict=True)
-    assert len(calls) == 5
+    assert len(calls) == 4
     assert 'SYNTHETIC_MAP_KEY' not in ''.join(traceback.format_exception(caught.value))
     assert 'RAW_BODY_MARKER' not in str(caught.value)
 
@@ -253,7 +259,7 @@ def test_exhausted_products_then_malformed_hms_has_bounded_schema_diagnostic(mon
     monkeypatch.setattr(firms, 'fetch_with_retry', fetch)
     with pytest.raises(SourceFetchError) as caught:
         firms.fetch_fires(strict=True)
-    assert len(calls) == 5
+    assert len(calls) == 4
     assert 'schema drift' in str(caught.value)
     formatted = ''.join(traceback.format_exception(caught.value))
     assert 'SYNTHETIC_MAP_KEY' not in formatted and 'RAW_BODY_MARKER' not in formatted
