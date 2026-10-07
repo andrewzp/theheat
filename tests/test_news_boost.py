@@ -11,7 +11,7 @@ Fire-only wiring in v1 (FIRMS + NIFC runners). All fixture dates today-relative.
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 from src.editorial.newsworthiness import (
     MAX_NEWS_BOOST,
@@ -306,16 +306,13 @@ class TestProvenanceSurvivesKills:
 class TestRunnerSeams:
     """The flag-gated seam in the FIRMS runner: batch plan → boost → gate."""
 
-    def _fire(self, event_id: str = "fire_test_1", lat: float = 39.0, lon: float = -105.5):
-        from src.data.firms import FireEvent
+    def _fire(self, lat: float = 39.0, lon: float = -105.5):
+        from tests.fire_source_fixtures import fire_event
+        return fire_event(lat=lat, lon=lon, frp=350.0, confidence=95,
+            region="Colorado Springs", country="United States",
+            when=datetime.fromisoformat(_iso(0)).replace(tzinfo=UTC))
 
-        return FireEvent(
-            lat=lat, lon=lon, confidence=95, frp=350.0,
-            nearest_city="Colorado Springs", country="United States",
-            event_id=event_id,
-        )
-
-    def _run(self, monkeypatch, *, fires, news_events, score_total: int):
+    def _run(self, monkeypatch, *, fires, news_events, score_total: int, held_event_id=None):
         from copy import deepcopy
 
         from src.orchestrator.sources import firms as firms_runner
@@ -323,6 +320,8 @@ class TestRunnerSeams:
 
         state = deepcopy(DEFAULT_STATE)
         state["news_events"] = news_events
+        if held_event_id:
+            state["posted_events"] = [held_event_id.removesuffix("_utc1")]
         monkeypatch.setattr(firms_runner, "_fetch_strict", lambda fn: fires)
         monkeypatch.setattr(
             firms_runner, "score_fire_event", lambda *a, **k: _score(score_total)
@@ -352,10 +351,18 @@ class TestRunnerSeams:
         monkeypatch.setenv("THEHEAT_NEWS_BOOST_ENABLED", "1")
         enqueued = self._run(
             monkeypatch,
-            fires=[self._fire("f1"), self._fire("f2", lat=39.5, lon=-105.0)],
+            fires=[self._fire(), self._fire(lat=39.5, lon=-105.0)],
             news_events=[_fire_event()], score_total=62,
         )
         assert enqueued == []
+
+    def test_history_held_hotspot_still_prevents_ambiguous_news_rescue(self, monkeypatch):
+        monkeypatch.setenv("THEHEAT_NEWSWORTHINESS_ENABLED", "1")
+        monkeypatch.setenv("THEHEAT_NEWS_BOOST_ENABLED", "1")
+        held = self._fire()
+        other = self._fire(lat=39.5, lon=-105.0)
+        assert self._run(monkeypatch, fires=[held, other], news_events=[_fire_event()],
+                         score_total=62, held_event_id=held.event_id) == []
 
     def test_firms_seam_flag_off_is_untouched(self, monkeypatch):
         monkeypatch.delenv("THEHEAT_NEWS_BOOST_ENABLED", raising=False)

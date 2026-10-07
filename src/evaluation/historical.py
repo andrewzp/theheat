@@ -38,6 +38,8 @@ RUNTIME_FILES = (
     "src/two_bot/evidence_contract.py", "src/two_bot/types.py", "src/voice/safety.py",
     "src/data/temperature_evidence.py", "src/data/ghcn.py", "src/data/ghcn_format.py",
     "src/data/temperature_history.py", "src/editorial/revisions.py",
+    "src/data/fire_source_contract.py", "src/data/fire_evidence.py", "src/data/fire_identity.py",
+    "src/two_bot/intern/fire.py",
 )
 
 
@@ -114,6 +116,23 @@ def structural_bundle(spec):
     """Deliberately engineered minimum evidence, never historical provenance."""
     from src.two_bot.types import StoryBundle
     signal = spec["signal_kind"]
+    if signal == "fire":
+        # These rows exist only in the explicit offline probe fixture. Do not
+        # fill a retained historical packet or production fallback with them.
+        from src.data.fire_source_contract import FIRMS_PUBLIC_URL, make_receipt, parse_record
+        from src.data.fire_identity import source_event_id
+        from src.data.firms import FireEvent
+        from src.two_bot.intern.fire import build_fire_bundle
+        row = parse_record(spec["synthetic_source_product"], spec["synthetic_source_record"])
+        if row.frp is None or not spec.get("synthetic_source_limit"):
+            raise ValueError("Thermal probe requires an explicit invented-source limitation")
+        event = FireEvent(row.lat, row.lon, row.ranking_confidence, row.frp,
+            "Synthetic probe location", "", source_event_id(row.lat, row.lon, row.acquired_at),
+            source_product=row.source_product, acquired_at=row.acquired_at,
+            acquisition_provenance=make_receipt(row, FIRMS_PUBLIC_URL))
+        bundle = build_fire_bundle(event)
+        bundle.raw_signal_dump["evidence"] = deepcopy(spec["structural_evidence"])
+        return bundle
     unit = "MW" if signal == "fire" else "mm" if signal.startswith("precipitation") else "C"
     return StoryBundle(
         signal_kind=signal, event_id=f"synthetic_{spec['case_id']}",

@@ -87,7 +87,7 @@ def test_pipeline_happy_path(mock_writer, mock_extract, mock_fact_check):
     assert draft is not None
     assert draft["text"].startswith("Mali")
     assert state["memory"]["used_peer_comparisons"] == []
-    assert draft["two_bot_metadata"]["bundle"]["event_id"] == "fire_test"
+    assert draft["two_bot_metadata"]["bundle"]["event_id"] == _fire_event().event_id
     assert draft["two_bot_metadata"]["reviewed_text_sha256"] == text_hash(draft["text"])
     assert draft["two_bot_metadata"]["reviewed_bundle_sha256"] == fingerprint(draft["two_bot_metadata"]["bundle"])
 
@@ -244,7 +244,7 @@ def test_pipeline_memory_loop_blocks_reuse(mock_writer, mock_extract, mock_fact_
         raw_response="ok",
         extracted_claims=mock_extract.return_value,
     )
-    draft1 = generate_fire_draft(_fire_event(event_id="fire_first"), state)
+    draft1 = generate_fire_draft(_fire_event(lat=13.5), state)
 
     assert draft1 is not None
     assert state["memory"]["used_era_anchors"] == []
@@ -267,7 +267,7 @@ def test_pipeline_memory_loop_blocks_reuse(mock_writer, mock_extract, mock_fact_
         state,
     )
 
-    draft2 = generate_fire_draft(_fire_event(event_id="fire_second"), state)
+    draft2 = generate_fire_draft(_fire_event(lat=13.6), state)
 
     assert draft2 is None
 

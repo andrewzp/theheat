@@ -114,7 +114,7 @@ def test_single_sample_immutable_request_matches_shared_sync_contract(inputs):
 def test_every_material_change_gets_a_distinct_plan_and_custom_id(inputs, monkeypatch, change):
     before = batch.prepare_batch_plan(**inputs)
     if change == "evidence":
-        inputs["bundle"].headline_metric["value"] += 1
+        inputs["bundle"] = _bundle(frp=362.0)
         inputs["bundle_sha256"] = fingerprint(inputs["bundle"].to_dict())
     elif change == "memory":
         inputs["memory"].used_framings.append("fixture-framing")

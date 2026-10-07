@@ -21,9 +21,10 @@ class RelatedSignal:
     when: str
     headline_metric: dict[str, Any]
     country: str = ""
+    acquisition_evidence: dict[str, Any] | None = None
 
     def to_dict(self) -> dict:
-        return {
+        data = {
             "event_id": self.event_id,
             "signal_kind": self.signal_kind,
             "where": self.where,
@@ -31,6 +32,9 @@ class RelatedSignal:
             "headline_metric": self.headline_metric,
             "country": self.country,
         }
+        if self.acquisition_evidence is not None:
+            data["acquisition_evidence"] = self.acquisition_evidence
+        return data
 
 
 @dataclass

@@ -91,6 +91,10 @@ def scientific_claim_failures(tweet: str, bundle) -> list[str]:
     signal = bundle.signal_kind
     text = tweet.lower()
 
+    from src.data.fire_evidence import fire_bundle_failures, is_thermal, temporal_claim_failures
+    failures.extend("thermal_source_unqualified: " + reason for reason in fire_bundle_failures(bundle))
+    failures.extend(temporal_claim_failures(tweet, bundle))
+
     from src.data.coral_evidence import is_dhw_only_bundle, dhw_only_bundle_failures, regional_bundle_failures, regional_alert_failures
 
     failures.extend("coral_regional_unqualified: " + reason for reason in regional_bundle_failures(bundle))
@@ -119,7 +123,7 @@ def scientific_claim_failures(tweet: str, bundle) -> list[str]:
                 and _finite_number(comparison.get("value")) and comparison.get("unit") == bundle.headline_metric.get("unit")):
             failures.append("unwarranted_record: rainfall record language requires a sourced, scoped archive comparison; an alert threshold is not a record")
 
-    if signal == "fire":
+    if is_thermal(bundle):
         # FRP is the satellite product's physical metric, not an incident
         # classification. Other fire assertions (including a satellite-
         # confirmed "fire") require an independently attributed incident.

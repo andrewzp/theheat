@@ -7,12 +7,15 @@ from __future__ import annotations
 
 
 from datetime import date
+from copy import deepcopy
 
 from src.data.fire_footprint import FireComplex
 
 from src.data.fire_footprint import TIERS_HECTARES
 
 from src.data.firms import FireEvent, _FIRMS_PRODUCT_CHAIN
+from src.data.fire_source_contract import validate_event
+from src.data.fire_evidence import source_facts
 
 from src.two_bot.types import StoryBundle
 
@@ -23,7 +26,14 @@ from ._shared import _climate_context_facts, _frp_tier, _round_sig
 def build_fire_bundle(fire: FireEvent) -> StoryBundle:
     """Assemble a pure-facts StoryBundle for a fire signal."""
 
-    # FIRMS returns FRP at two-decimal precision (e.g. 480.34 MW). The fact-
+    # Old constructors remain representable but unqualified, with no invented time
+    # or synthetic ranking score presented as a measured confidence percentage.
+    qualified = any(value is not None for value in (
+        fire.source_product, fire.acquired_at, fire.acquisition_provenance,
+    ))
+    row = validate_event(fire) if qualified else None
+    # Source precision is retained in the receipt; the headline rounds explicitly.
+    # FIRMS returns FRP at varying decimal precision (e.g. 480.34 MW). The fact-
     # check prompt requires exact numerical match with no tolerance, so the
     # writer rounding "480.34" → "480 MW" or "480.3 MW" produces a BUNDLE_FACT
     # kill against the raw value. Round at the bundle builder so the bundle
@@ -36,24 +46,22 @@ def build_fire_bundle(fire: FireEvent) -> StoryBundle:
     bundle = StoryBundle(
         signal_kind="fire",
         where=fire.nearest_city or fire.country,
-        when=date.today().isoformat(),
+        when=row.acquired_at if row else "",
         event_id=fire.event_id,
         headline_metric={"label": "FRP", "value": frp_rounded, "unit": "MW"},
         current_facts=[
-            {"label": "satellite_confidence", "value": fire.confidence, "unit": "%"},
+            *(source_facts(row) if row else []),
             {"label": "country", "value": fire.country},
             {"label": "nearest_region", "value": fire.nearest_city},
-            {"label": "lat", "value": fire.lat},
-            {"label": "lon", "value": fire.lon},
+
             {"label": "frp_tier", "value": tier_label},
             {"label": "frp_tier_floor_mw", "value": tier_floor},
             *_climate_context_facts(fire.lat, fire.lon, category="fire"),
         ],
         historical_context={},
         raw_signal_dump={
-            # Source family is known by this adapter; the primary product,
-            # acquisition interval and raw classification are not retained by
-            # FireEvent and must not be invented here.
+            # Geocoder labels are separate inferences; the receipt binds only
+            # the selected measurement, its source product and minute.
             "source_name": (
                 "NOAA HMS" if fire.source_leg == "noaa_hms"
                 else "NASA FIRMS" if fire.source_leg is None or fire.source_leg in _FIRMS_PRODUCT_CHAIN
@@ -62,7 +70,14 @@ def build_fire_bundle(fire: FireEvent) -> StoryBundle:
             "source_leg": fire.source_leg,
             "lat": fire.lat,
             "lon": fire.lon,
-            "confidence": fire.confidence,
+            "confidence": row.confidence_value if row else None,
+            "confidence_kind": row.confidence_kind if row else "unavailable",
+            "source_product": fire.source_product,
+            "acquired_at": fire.acquired_at,
+            "source_date": row.acquired_at[:10] if row else None,
+            "acquisition_precision": "minute" if row else None,
+            "acquisition_provenance": deepcopy(fire.acquisition_provenance),
+            "frp_source": fire.frp,
             "frp": frp_rounded,
             "nearest_city": fire.nearest_city,
             "country": fire.country,
@@ -71,12 +86,12 @@ def build_fire_bundle(fire: FireEvent) -> StoryBundle:
     )
     # R-02: a fire served by the NOAA HMS witness during a FIRMS outage carries
     # honest provenance. observed_alt_host = a real observation from an independent
-    # host/instrument (treat as observed; note the alternate source). The grade is
+    # host (the retained row names its satellite/method). The grade is
     # a current_facts entry the writer/fact-check prompts already honor (R-00).
     if fire.source_leg == "noaa_hms":
         bundle.current_facts.append({"label": "evidence_grade", "value": "observed_alt_host"})
         bundle.current_facts.append(
-            {"label": "data_source", "value": "NOAA HMS (GOES/VIIRS, analyst-reviewed) — FIRMS backup feed"}
+            {"label": "data_source", "value": "NOAA HMS fire points — FIRMS backup feed"}
         )
     return bundle
 

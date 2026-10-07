@@ -89,7 +89,7 @@ def test_legacy_temperature_record_bundle_requires_source_provenance():
 
 
 def test_fire_bundle_passes_and_warns_on_empty_historical_context():
-    bundle = build_fire_bundle(_fire_event(event_id="fire_evidence"))
+    bundle = build_fire_bundle(_fire_event())
 
     audit = audit_story_bundle(bundle)
 
@@ -138,6 +138,7 @@ def test_cached_reading_cannot_reach_triage():
 def test_numeric_headline_without_unit_signal_warns():
     bundle = replace(
         _bundle(),
+        signal_kind="drought", event_id="unitless_score",
         headline_metric={"label": "score", "value": 99},
         raw_signal_dump={"event_id": "unitless_score", "source": "test"},
     )
@@ -230,7 +231,7 @@ def test_assert_prompt_ready_raises_only_for_error_bundles():
                 event_id="hot10_2026-05-04",
             ),
         ),
-        ("fire", build_fire_bundle(_fire_event(event_id="fire_prompt_ready"))),
+        ("fire", build_fire_bundle(_fire_event())),
         (
             "fire_footprint",
             build_fire_footprint_bundle(
