@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.108.89 — 2026-10-07
+
+- Skip unused PostgreSQL binary installation in the core CI partition. Keep all database and media tests, with separate bounded steps for signed repository setup, package metadata and PostgreSQL 17 installation.
+- Bound dependency network retries, expose repository errors and fail metadata refresh on transient acquisition failures. Required test aggregation and production workflows are unchanged.
+
 ## 0.9.108.88 — 2026-10-07
 
 - Qualify primary coral regional readings with bounded index and file ranges, matching strong validators, strict dates/columns/finite values and source-bound receipts. Malformed packets stop before paid drafting; source precision is preserved through threshold selection and review.

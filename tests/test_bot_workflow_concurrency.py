@@ -5,6 +5,7 @@ the deliberately narrow approved expression shape and exercise its partitioning;
 they do not claim to reproduce GitHub scheduling or cancellation behavior.
 """
 from pathlib import Path
+import json
 import os
 import re
 import select
@@ -120,6 +121,73 @@ def test_partitions_preserve_every_check_without_repeating_dashboard(workflow):
             assert step["if"] == "matrix.partition == 'core'"
     suite = next(s for s in worker["steps"] if s.get("run", "").startswith("python -m pytest"))
     assert "if" not in suite and "continue-on-error" not in worker
+
+
+def _database_setup(workflow):
+    steps = workflow["jobs"]["test-partition"]["steps"]
+    names = (
+        "Configure signed PostgreSQL test repository",
+        "Refresh PostgreSQL test package metadata",
+        "Install PostgreSQL 17 contract-test binaries",
+    )
+    selected = [step for step in steps if step.get("name") in names]
+    assert [step["name"] for step in selected] == list(names)
+    assert [step["timeout-minutes"] for step in selected] == ["3", "4", "5"]
+    assert all(step["if"] == "matrix.partition != 'core'" for step in selected)
+    assert all("continue-on-error" not in step for step in selected)
+    return selected
+
+
+def test_only_database_partitions_install_binaries_with_bounded_steps(workflow):
+    setup = _database_setup(workflow)
+    steps = workflow["jobs"]["test-partition"]["steps"]
+    # Every system dependency command must live behind the same non-core guard.
+    assert [step for step in steps if "sudo " in step.get("run", "")] == setup
+    python_packages = next(step for step in steps if step.get("run", "").startswith("pip install"))
+    assert "requirements-postgres.txt" in python_packages["run"]
+    assert "if" not in python_packages and "continue-on-error" not in python_packages
+    suite = next(step for step in steps if step.get("run", "").startswith("python -m pytest"))
+    assert suite["env"] == {
+        "THEHEAT_TEST_POSTGRES": "1", "THEHEAT_POSTGRES_BINDIR": "/usr/lib/postgresql/17/bin",
+    }
+    assert "if" not in suite and "continue-on-error" not in suite
+
+
+@pytest.mark.parametrize("failure", [None, "directories", "key", "repository", "cluster", "metadata", "packages"])
+def test_dependency_shell_steps_fail_closed_without_system_access(workflow, tmp_path, failure):
+    stub = Path(__file__).parent / "fixtures/ci_dependency_stub.py"
+    binary = tmp_path / "bin/sudo"
+    binary.parent.mkdir()
+    binary.write_text(f"#!{sys.executable}\n" + stub.read_text())
+    binary.chmod(0o700)
+    # No inherited BASH_ENV, credentials, network client or real sudo in PATH.
+    env = {"PATH": str(binary.parent), "THEHEAT_CI_STUB_ROOT": str(tmp_path)}
+    if failure:
+        env["THEHEAT_CI_STUB_FAIL"] = failure
+    completed_steps = []
+    for step in _database_setup(workflow):
+        # GitHub's unspecified Linux shell uses bash -e. The stub never invokes
+        # any real package manager or downloader, even on its success path.
+        result = subprocess.run(
+            ["/bin/bash", "--noprofile", "--norc", "-e", "-c", step["run"]],
+            env=env, cwd=tmp_path, capture_output=True, text=True, timeout=10,
+        )
+        completed_steps.append(result.returncode)
+        if result.returncode:
+            break
+    calls = [json.loads(line) for line in (tmp_path / "calls.jsonl").read_text().splitlines()]
+    phases = ["directories", "key", "repository", "cluster", "metadata", "packages"]
+    if failure:
+        # The injected command failure propagates, and no subsequent command
+        # (even within the same shell step) or default success artifact appears.
+        assert completed_steps[-1] == 47, result.stderr
+        assert all(code == 0 for code in completed_steps[:-1])
+        assert [call["phase"] for call in calls] == phases[:phases.index(failure) + 1]
+        assert not (tmp_path / "packages.json").exists()
+    else:
+        assert completed_steps == [0, 0, 0], result.stderr
+        assert [call["phase"] for call in calls] == phases
+        assert json.loads((tmp_path / "packages.json").read_text()) == ["postgresql-17", "postgresql-client-17"]
 
 
 def test_immediate_python_output_is_scoped_to_the_bot_step(workflow):

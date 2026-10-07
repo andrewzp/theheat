@@ -90,16 +90,29 @@ jobs:
 
       - run: pip install -r requirements.txt -r requirements-postgres.txt
 
-      - name: Install PostgreSQL 17 contract-test binaries
+      - name: Configure signed PostgreSQL test repository
+        if: matrix.partition != 'core'
+        timeout-minutes: 3
         # Disposable CI runner only. Tests start their own private Unix-socket
-        # cluster; no service, TCP listener or existing database is used.
+        # cluster; core does not use these binaries. Bound each setup phase so
+        # an unavailable dependency fails visibly before the whole job expires.
         run: |
           sudo install -d /usr/share/postgresql-common/pgdg /etc/postgresql-common
-          sudo curl --fail --silent --show-error https://www.postgresql.org/media/keys/ACCC4CF8.asc -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
+          sudo curl --fail --silent --show-error --connect-timeout 10 --max-time 45 --retry 2 --retry-max-time 100 https://www.postgresql.org/media/keys/ACCC4CF8.asc -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
           echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt noble-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
           echo "create_main_cluster = false" | sudo tee /etc/postgresql-common/createcluster.conf > /dev/null
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends postgresql-17 postgresql-client-17
+
+      - name: Refresh PostgreSQL test package metadata
+        if: matrix.partition != 'core'
+        timeout-minutes: 4
+        run: |
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 update --error-on=any
+
+      - name: Install PostgreSQL 17 contract-test binaries
+        if: matrix.partition != 'core'
+        timeout-minutes: 5
+        run: |
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 install -y --no-install-recommends postgresql-17 postgresql-client-17
 
       - name: Install dashboard dependencies
         if: matrix.partition == 'core'
