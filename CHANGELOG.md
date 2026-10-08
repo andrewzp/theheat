@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.108.98 — 2026-10-08
+
+- Add a local PM2.5 forecast chart using the exact retained 24-hour sample window, separate model grid location and daily sample mean. Keep forecast, source and local-date qualifications readable on mobile without extra source or model calls.
+- Bind the new chart to the full single-source bundle and existing text/media review chain; changed evidence, text, policy or assets invalidate prior review. Production media delivery remains inactive.
+
 ## 0.9.108.97 — 2026-10-08
 
 - Report qualified PM2.5 and dust forecast availability separately. A missing enabled hazard now degrades source health, while complete quiet data and the existing 90% coverage tolerance remain valid.
