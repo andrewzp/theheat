@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.108.99 — 2026-10-08
+
+- Show retained air-quality forecast dates, timezone, requested place, sampled grid point and hourly values in the draft workbench. Distinguish model inputs from station measurements and missing samples from zero, with keyboard-accessible mobile disclosures.
+- Keep saved evidence separate from review authority: changing the draft or saved revision closes its disclosures, while existing checks, edit conflicts and approval controls remain in force. No extra source or model requests.
+
 ## 0.9.108.98 — 2026-10-08
 
 - Add a local PM2.5 forecast chart using the exact retained 24-hour sample window, separate model grid location and daily sample mean. Keep forecast, source and local-date qualifications readable on mobile without extra source or model calls.
