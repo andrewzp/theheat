@@ -132,7 +132,7 @@ def test_run_air_quality_empty_city_list(bot_state, monkeypatch):
     run_air_quality(bot_state, current_run, [])
 
     source_entry = next(s for s in current_run["sources"] if s["source"] == "air_quality")
-    assert source_entry["status"] == "success"
+    assert source_entry["status"] == "skipped"
     assert source_entry["observed"] == 0
 
 
@@ -223,7 +223,7 @@ def test_run_air_quality_high_coverage_partial_loss_reports_success(bot_state, m
     from src.orchestrator.sources.air_quality import run_air_quality
 
     # 20 cities, 1 fetch failure -> 95% coverage.
-    observations = [_obs(city=f"C{i}", pm25=10.0) for i in range(19)] + [None]
+    observations = [_obs(city=f"C{i}", pm25=10.0, dust=0.0) for i in range(19)] + [None]
     cities = [_city(city=f"C{i}") for i in range(20)]
     monkeypatch.setattr(
         "src.orchestrator.sources.air_quality.air_quality.fetch_batch_air_quality",
@@ -244,7 +244,7 @@ def test_run_air_quality_low_coverage_reports_degraded(bot_state, monkeypatch):
     from src.orchestrator.sources.air_quality import run_air_quality
 
     # 20 cities, 16 fetch failures -> 20% coverage.
-    observations = [_obs(city=f"C{i}", pm25=10.0) for i in range(4)] + [None] * 16
+    observations = [_obs(city=f"C{i}", pm25=10.0, dust=0.0) for i in range(4)] + [None] * 16
     cities = [_city(city=f"C{i}") for i in range(20)]
     monkeypatch.setattr(
         "src.orchestrator.sources.air_quality.air_quality.fetch_batch_air_quality",

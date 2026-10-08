@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.108.97 — 2026-10-08
+
+- Report qualified PM2.5 and dust forecast availability separately. A missing enabled hazard now degrades source health, while complete quiet data and the existing 90% coverage tolerance remain valid.
+- Validate returned city identity, source records and aggregate values before queuing candidates; reject ambiguous batch cardinality and skip source work when no cities or hazards are enabled.
+- Retain bounded availability counts and show safe diagnostics through existing source health, without additional source or model requests.
+
 ## 0.9.108.96 — 2026-10-08
 
 - Pin the dashboard to Next.js 15.5.27 for the SSG/ISR response-cache advisories, with matching compiler packages. Preserve unrelated dependency versions and platform selectors, dashboard access controls, editorial policy and publishing settings.
