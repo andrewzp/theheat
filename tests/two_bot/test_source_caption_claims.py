@@ -22,7 +22,7 @@ TEXT = "A model estimates an index in Luma of 42. Data: WeatherGrid model (12 km
 @pytest.fixture
 def bundle():
     return StoryBundle(
-        signal_kind="air_quality_hazard", where="Luma", when="2026-01-01",
+        signal_kind="synthetic_caption", where="Luma", when="2026-01-01",
         event_id="invented-caption-fixture", headline_metric={"label": "index", "value": 42},
         current_facts=[{"label": "data_source", "value": SOURCE + " via GridRelay"}],
         historical_context={}, raw_signal_dump={},
@@ -226,3 +226,13 @@ def test_changed_retained_bundle_never_inherits_a_check(bundle):
     result = check_requests.interpret_observation(saved, "fact_check",
         {"complete": True, "http_status": 200}, envelope(response()))
     assert result["execution_status"] == "error" and result["verdict"] is None
+
+
+def test_caption_identity_does_not_qualify_a_legacy_air_quality_bundle(bundle, monkeypatch):
+    bundle.signal_kind = "air_quality_hazard"
+    provider = MagicMock()
+    monkeypatch.setattr(fact_check, "_call_gemini", provider)
+    result = fact_check.fact_check(TEXT, [], bundle, {})
+    assert not result.passed
+    assert any("air_quality_window_unqualified" in failure for failure in result.failures)
+    provider.assert_not_called()

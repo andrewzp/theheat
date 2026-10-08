@@ -1,5 +1,6 @@
 from __future__ import annotations
 from src.data import places
+from tests.air_quality_fixtures import observation
 
 from copy import deepcopy
 
@@ -21,18 +22,7 @@ def _obs(
     pm25: float | None = 150.0,
     dust: float | None = None,
 ) -> CityAirQuality:
-    return CityAirQuality(
-        city=city,
-        country=country,
-        lat=31.5,
-        lon=74.3,
-        date=day,
-        pm25_24h_mean=pm25,
-        dust_daily_max=dust,
-        aod_daily_max=0.6,
-        us_aqi_daily_max=210,
-        pm10_24h_mean=None,
-    )
+    return observation(city=city, country=country, day=day, pm25=pm25, dust=dust)
 
 
 @pytest.fixture

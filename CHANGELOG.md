@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.108.92 — 2026-10-07
+
+- Require a complete, correctly dated local forecast day for air-quality means and daily maxima. Partial or wrong-day samples cannot become a 24-hour claim; unavailable optional measurements lose only their own comparisons, and malformed cities do not hide valid neighbors.
+- Retain bounded hourly evidence and validate primary/related aggregates before writing or checking. Use accurate automatic-domain CAMS attribution, preserve forecast qualifications and existing event identities, and withhold legacy scalar-only evidence from renewed qualification. Publishing and model settings are unchanged.
+
 ## 0.9.108.91 — 2026-10-07
 
 - Prefer qualified NOAA-21 fire detections, then NOAA-20 and MODIS, ahead of the announced S-NPP data retirement. Explicit NOAA-20 requests keep NOAA-21/MODIS alternatives; MODIS retains its single-product scope and the existing outage witness.

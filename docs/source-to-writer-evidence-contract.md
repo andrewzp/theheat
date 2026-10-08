@@ -163,3 +163,33 @@ Required warning coverage:
 - missing source-like anchor
 - numeric headline without unit signal
 - malformed fact dictionaries
+
+## Air-quality forecast windows
+
+Air-quality collection requests an explicit local calendar day with `timezone=auto`
+and `domains=auto`. Its date label comes from one UTC reference captured for the
+whole batch; the retained timezone and calculated UTC bounds describe each city's
+actual window. The [Open-Meteo air-quality contract](https://open-meteo.com/en/docs/air-quality-api)
+describes hourly forecast samples and automatic model-domain selection. The
+response does not identify an authoritative model run or universal resolution.
+
+Only 24 ordered, unique hourly labels spanning a real 24-hour local day qualify.
+Wrong-day, partial and daylight-saving 23/25-hour windows are withheld. A variable
+needs 24 finite, nonnegative values in its documented unit to supply a daily
+scalar. Nulls or invalid optional series remove their own scalar; complete dust
+can survive unavailable PM10, without a PM10/WHO comparison. Zero remains data.
+
+The versioned selected record retains requested and supplied grid coordinates,
+timezone, UTC request/retrieval and window bounds, hourly values and per-variable
+availability. Its canonical JSON is limited to 32 KiB. Its digest binds the
+selected normalized record, not unavailable raw HTTP bytes or source authenticity.
+The mean of hourly forecast samples is not a measured exposure; co-reported dust
+and PM10 alone do not establish causality. Nearby station annotations do not turn
+the model window into an observed full day.
+
+Primary and related evidence must reproduce the event's aggregates, ratios,
+identity and writer-facing projection before writer or required-check calls.
+Legacy scalar-only evidence stays retained but cannot pass renewed qualification.
+Place/day/tier IDs remain stable; exact evidence, checks and cache identities bind
+the changed content. Source qualification does not grant posting approval or prove
+live source recovery, lower bills or improved writing.
