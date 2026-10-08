@@ -166,6 +166,15 @@ Required warning coverage:
 
 ## Air-quality forecast windows
 
+Air-quality recovery accepts bounded integer or dated `Retry-After` values on
+rate-limit responses, following [HTTP semantics](https://www.rfc-editor.org/rfc/rfc9110.html#name-retry-after).
+Each response's headers stay paired; the longest required wait controls the next
+recovery pass. Malformed values use the bounded minute-window fallback. A requested
+delay above 63 seconds or an oversized header defers the remaining sweep, preserving
+qualified results and leaving unresolved city slots unavailable. It never shortens
+a longer server delay to retry early. Normal request bounds and two recovery passes
+remain; this is not a total run deadline or a durable cooldown across runs.
+
 Air-quality collection requests an explicit local calendar day with `timezone=auto`
 and `domains=auto`. Its date label comes from one UTC reference captured for the
 whole batch; the retained timezone and calculated UTC bounds describe each city's
