@@ -46,6 +46,9 @@ POLICY_FILES = (
     "src/data/firms.py", "src/data/fire_source_contract.py", "src/data/fire_identity.py", "src/data/fire_evidence.py",
     "src/orchestrator/draft_save.py", "src/orchestrator/sources/firms.py", "src/orchestrator/triage_queue.py",
     "src/editorial/synthesis.py", "src/editorial/thresholds.py",
+    "src/editorial/marine_evidence.py",
+    "src/orchestrator/sources/ocean_sst_anomaly.py", "src/orchestrator/sources/coral_dhw.py",
+    "src/orchestrator/sources/synthesis.py",
     "src/media/crw_graphic_adapter.py", "src/media/evidence_graphic.py",
 )
 MODEL_KEYS = {"writer", "writer_provider", "fact_check", "critic", "safety"}

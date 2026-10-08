@@ -96,6 +96,10 @@ def scientific_claim_failures(tweet: str, bundle) -> list[str]:
     from src.two_bot.air_quality_claims import causal_claim_failures
     failures.extend(causal_claim_failures(tweet, bundle))
 
+    from src.editorial.marine_evidence import bundle_failures as marine_failures, claim_failures as marine_claims
+    failures.extend("marine_source_unqualified: " + reason for reason in marine_failures(bundle))
+    failures.extend(marine_claims(tweet, bundle))
+
     from src.data.fire_evidence import fire_bundle_failures, is_thermal, temporal_claim_failures
     failures.extend("thermal_source_unqualified: " + reason for reason in fire_bundle_failures(bundle))
     failures.extend(temporal_claim_failures(tweet, bundle))

@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 # ruff: noqa: F403,F405
+from collections import Counter
 from functools import partial
+
+from src.editorial.marine_evidence import record_reading
 
 from src.orchestrator.common import *
 from src.two_bot.intern import build_regional_sst_anomaly_bundle
@@ -15,22 +18,7 @@ def run_ocean_sst_anomaly(bot_state: BotState, current_run: dict | None) -> None
     try:
         collection = ocean_sst_anomaly.collect_all_regions(strict=False)
         readings = collection.readings
-        for reading in readings:
-            state.record_synthesis_component(
-                bot_state,
-                kind="sst_anomaly",
-                region=reading.region_slug,
-                event_id=f"sst_anom_component_{reading.region_slug}_{reading.date}",
-                metadata={
-                    "region_slug": reading.region_slug,
-                    "region_display_name": reading.region_display_name,
-                    "anomaly_c": float(reading.anomaly_c),
-                    "tier": int(reading.tier),
-                    "cells_used": int(reading.cells_used),
-                    "date": reading.date,
-                },
-                timestamp=f"{reading.date}T00:00:00Z",
-            )
+        marine_outcomes = Counter(record_reading(bot_state, "sst_anomaly", r) for r in readings)
         reading_year = readings[0].date[:4] if readings else str(date.today().year)
         prefix = f"{reading_year}/"
         last_tiers = {
@@ -118,7 +106,7 @@ def run_ocean_sst_anomaly(bot_state: BotState, current_run: dict | None) -> None
             promoted=source_promoted,
             drafted=0,
             note=collection.note,
-            details=collection.details(),
+            details={**collection.details(), "marine_components": dict(marine_outcomes)},
         )
     except Exception:
         # Source outcomes are fixed codes above. Unexpected runner errors must

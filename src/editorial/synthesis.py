@@ -160,84 +160,44 @@ def detect_fire_drought_heat(bot_state: BotState) -> list[SynthesisSignal]:
     return signals
 
 
-def _component_float(component: dict, key: str) -> float:
-    try:
-        return float(component.get(key) or 0)
-    except (TypeError, ValueError):
-        return 0.0
+def detect_marine_compound(bot_state: BotState, *, diagnostics: dict | None = None) -> list[SynthesisSignal]:
+    """Pair independently dated qualified marine products at mapped locations.
 
+    The configured association supplies neither temporal overlap nor a common
+    measurement footprint. Legacy scalar-only components remain ineligible.
+    """
+    from src.editorial import marine_evidence as marine
+    from src.data.coral_dhw import _tier_for_dhw
 
-def detect_marine_compound(bot_state: BotState) -> list[SynthesisSignal]:
-    """Emit SST x coral synthesis signals when reef heat stress overlaps a
-    mapped regional SST anomaly in the same 14-day window."""
     if bot_state.get("synthesis_enabled") is False:
         return []
-
-    since = (datetime.now(UTC) - timedelta(days=WINDOW_DAYS)).isoformat().replace("+00:00", "Z")
+    evaluation_at = marine.now_utc()
     signals: list[SynthesisSignal] = []
-
     for coral_region_id, sst_region_slug in CORAL_TO_SST_REGION.items():
-        if not sst_region_slug:
-            continue
-        if is_synthesis_on_cooldown(
-            bot_state,
-            RULE_MARINE_COMPOUND,
-            coral_region_id,
+        if not sst_region_slug or is_synthesis_on_cooldown(
+            bot_state, RULE_MARINE_COMPOUND, coral_region_id,
             days=MARINE_COMPOUND_COOLDOWN_DAYS,
         ):
             continue
-
-        corals = [
-            coral
-            for coral in get_synthesis_components(
-                bot_state,
-                kind="coral",
-                region=coral_region_id,
-                since=since,
-            )
-            if _component_float(coral, "dhw_tier") >= MARINE_DHW_MIN_C_WEEKS
-        ]
-        sst_anomalies = [
-            sst
-            for sst in get_synthesis_components(
-                bot_state,
-                kind="sst_anomaly",
-                region=sst_region_slug,
-                since=since,
-            )
-            if _component_float(sst, "anomaly_c") >= MARINE_SST_ANOMALY_MIN_C
-        ]
-        if not corals or not sst_anomalies:
+        coral = marine.select_component(bot_state, "coral", coral_region_id, evaluation_at, diagnostics=diagnostics)
+        sst = marine.select_component(bot_state, "sst_anomaly", sst_region_slug, evaluation_at, diagnostics=diagnostics)
+        if coral is None or sst is None:
             continue
-
-        peak_coral = max(corals, key=lambda coral: _component_float(coral, "dhw_value"))
-        peak_sst = max(sst_anomalies, key=lambda sst: _component_float(sst, "anomaly_c"))
-        coral_name = peak_coral.get("region_full_name") or coral_region_id
-        sst_name = peak_sst.get("region_display_name") or sst_region_slug
-        event_id = f"synthesis_marine_compound_{coral_region_id}_{_iso_week()}"
+        payload = marine.make_payload(coral, sst, evaluation_at)
+        c, s = coral["marine_source"]["reading"], sst["marine_source"]["reading"]
+        tier, _ = _tier_for_dhw(c["dhw_value"])
         components = {
-            "coral_region_id": coral_region_id,
-            "coral_region_full_name": coral_name,
-            "coral_dhw_value": _component_float(peak_coral, "dhw_value"),
-            "coral_dhw_tier": int(_component_float(peak_coral, "dhw_tier")),
-            "coral_bleaching_level": peak_coral.get("bleaching_level") or "",
-            "sst_region_slug": sst_region_slug,
-            "sst_region_display_name": sst_name,
-            "sst_anomaly_c": _component_float(peak_sst, "anomaly_c"),
-            "sst_tier": int(_component_float(peak_sst, "tier")),
-            "sst_cells_used": int(_component_float(peak_sst, "cells_used")),
-            "window_days": WINDOW_DAYS,
+            "coral_region_id": coral_region_id, "coral_region_full_name": c["region_full_name"],
+            "coral_dhw_value": c["dhw_value"], "coral_dhw_tier": tier,
+            "sst_region_slug": sst_region_slug, "sst_region_display_name": s["region_display_name"],
+            "sst_anomaly_c": s["anomaly_c"], "sst_tier": s["tier"], "sst_cells_used": s["cells_used"],
+            "window_days": WINDOW_DAYS, "marine_payload": payload,
+            "coral_valid_date": c["date"], "sst_valid_date": s["date"],
         }
-        signals.append(
-            SynthesisSignal(
-                rule_name=RULE_MARINE_COMPOUND,
-                region=coral_region_id,
-                event_id=event_id,
-                headline=(
-                    f"{coral_name}: DHW at least {MARINE_DHW_MIN_C_WEEKS} °C-weeks plus "
-                    f"{_component_float(peak_sst, 'anomaly_c'):+.1f}C {sst_name} SST anomaly"
-                ),
-                components=components,
-            )
-        )
+        signals.append(SynthesisSignal(
+            rule_name=RULE_MARINE_COMPOUND, region=coral_region_id, event_id=payload["event_id"],
+            headline=(f"{c['region_full_name']}: DHW {c['dhw_value']:.1f} °C-weeks ({c['date']}); "
+                      f"{s['region_display_name']}: SST anomaly {s['anomaly_c']:+.1f}°C ({s['date']})"),
+            components=components,
+        ))
     return signals

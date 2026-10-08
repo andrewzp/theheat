@@ -31,6 +31,7 @@ _GLOBAL_OR_COARSE_KINDS: frozenset[str] = frozenset({
     "oscillation_transition", "oscillation_extreme", "oscillation_alignment",
     "ozone_hole_peak", "ice_mass_record", "global_disaster",
     "country_high", "country_low",
+    "synthesis_marine_compound",  # Scalar projection would discard both source receipts.
 })
 
 

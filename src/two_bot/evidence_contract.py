@@ -192,6 +192,10 @@ def audit_story_bundle(bundle: StoryBundle) -> EvidenceAudit:
     for reason in aq_failures(bundle):
         issues.append(_issue("error", "air_quality_window_unqualified", "raw_signal_dump", reason))
 
+    from src.editorial.marine_evidence import bundle_failures as marine_failures
+    for reason in marine_failures(bundle):
+        issues.append(_issue("error", "marine_source_unqualified", "raw_signal_dump", reason))
+
     from src.data.fire_evidence import fire_bundle_failures
     for reason in fire_bundle_failures(bundle):
         issues.append(_issue("error", "thermal_source_unqualified", "raw_signal_dump", reason))

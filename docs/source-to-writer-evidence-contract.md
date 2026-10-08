@@ -128,7 +128,7 @@ If a detail matters for factual safety, it belongs in `current_facts`,
 | River gauges | `src/orchestrator/sources/river_gauges.py` | Gauge height and flood stage data, with Open-Meteo Flood modeled discharge fallback | Above-stage flood selection or modeled high-discharge selection | `disasters.build_river_flood_bundle` | Gauge/current/flood-stage feet for primary; modeled discharge fields and `model_fallback` for Open-Meteo Flood | Model fallback must omit gauge-height/flood-stage feet and never masquerade as a gauge reading |
 | Storm surge | `src/orchestrator/sources/co_ops.py` | CO-OPS water level observations | Observed versus predicted surge anomaly | `disasters.build_storm_surge_bundle` | Observed, predicted, anomaly, station/area | Anomaly sign and station identity must remain explicit |
 | Cyclones | Cyclone helpers in `src/orchestrator/common.py` | Storm track/intensity data | Rapid intensification, tier crossing, landfall, basin record | `disasters.build_cyclone_rapid_intensification_bundle`, `build_cyclone_tier_crossing_bundle`, `build_cyclone_landfall_bundle`, `build_cyclone_basin_record_bundle` | Storm identity, basin, wind values, category/tier, record context where relevant | Each cyclone story type must keep its comparison basis |
-| Synthesis | `src/orchestrator/sources/synthesis.py` | Cross-source components already detected elsewhere | Components combined by region/topic | `synthesis.build_synthesis_bundle` | Region, synthesis kind, component count, component facts | Synthesis can cite only included components and must not invent connecting claims |
+| Synthesis | `src/orchestrator/sources/synthesis.py` | Existing cross-source inputs; marine pairs require complete qualified CRW source readings | Marine: bounded dated selection within each product family | `synthesis.build_synthesis_bundle` | Marine: both exact source receipts, individual dates/scopes, DHW metric, SST reference climate, explicit evaluation time | A regional association does not prove a shared footprint, simultaneous event, cause, marine heatwave, observed bleaching or mortality; legacy marine scalars remain held |
 
 ## High-Risk Evidence Gaps
 
@@ -210,3 +210,41 @@ all usual checks. This is not complete semantic entailment: unrecognized wording
 pronoun-only links and surrounding clause ambiguity remain review limitations.
 Exact text, complete source receipts and policy-bound approval identities remain
 unchanged by the scan. Passing the local rule is never a factual or posting pass.
+
+## Dated marine comparison evidence
+
+Marine components retain the complete qualified SST or coral reading and source
+receipt under a versioned, content-bound component ID, separate from the weekly
+publication ID. New acquisitions have distinct IDs. Source runners record them
+before individual-event deduplication and caps, including SST readings below the
+standalone tier threshold but at or above the existing marine floor. No extra
+source request is made. Existing 60-day marine posting cooldowns remain.
+
+Selection uses a captured UTC evaluation time and each product's own valid date.
+The 14-day comparison window is an upper bound: stricter source qualification
+still applies, including primary regional coral freshness. Future acquisitions,
+future/stale dates, altered hashes, legacy scalars and mismatched projections are
+withheld. Different qualified values from one source family/region/date conflict
+and that group cannot qualify. Identical reacquisitions remain separately bound;
+latest acquisition breaks ties. Primary source families take precedence over
+backups; within one family the largest retained eligible value is selected. This
+is not an exhaustive maximum or a comparison of regional and point statistics.
+
+A component is limited to8KiB and a region to128 stored rows. A pool at or above
+capacity is withheld, because rejected insertions could leave it incomplete;
+ordinary TTL pruning can make room. Fixed diagnostics report rejected inputs,
+conflicting dates and capacity holds. These bounds do not make Gist transactional
+or an immutable source archive. Python merge and dashboard preservation tests use
+one shared, entirely invented source-shaped fixture.
+
+The marine bundle carries both complete selected records, actual source dates,
+regional/point sampling scopes and the SST reference climatology. Its `when` is
+explicitly the evaluation date, not an asserted common observation date. Evidence
+and direct scientific checks rebuild the full projection. Paired marine bundles
+are excluded from scalar-only related-signal projection. Finite language guards
+hold named shared-event/time/footprint/causal/impact claims, including derived coral
+alert classes without the required source evidence. Conservative lexical guards
+can also withhold negative/background phrasing; they are not complete semantic
+entailment. All normal checks remain mandatory for eligible copy. No production
+recovery, human preference, global recall or cost saving is established by these
+offline fixtures.
