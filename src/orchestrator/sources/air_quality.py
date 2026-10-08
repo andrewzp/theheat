@@ -6,16 +6,11 @@ import os
 
 # ruff: noqa: F403,F405
 from src.orchestrator.common import *
-from src.data import air_quality, openaq, places
+from src.data import air_quality, air_quality_availability, openaq, places
 from src.two_bot.intern import build_dust_event_bundle, build_pm25_hazard_bundle
 
-# A 638-city sweep routinely loses its rate-limited tail chunk to Open-Meteo's
-# per-minute budget even after recovery retries (see src/data/air_quality.py).
-# Losing a small fraction of cities is still a successful run — the source
-# delivered the bulk of the data — so only a meaningful coverage shortfall is
-# "degraded" and only zero observed is "failed". Without this, a permanently
-# partial source reads as 0% success to the health sentinel and false-alarms.
-AQ_MIN_COVERAGE: float = 0.90
+# Keep the established tolerance for small source gaps, now per enabled hazard.
+AQ_MIN_COVERAGE: float = air_quality_availability.AQ_MIN_COVERAGE
 
 
 def _enabled(env_name: str) -> bool:
@@ -63,22 +58,25 @@ def run_air_quality(bot_state: BotState, current_run: dict | None, cities: list[
     print("[alerts] Checking air quality (PM2.5 24h-mean / dust peak)...")
     aq_start = time.perf_counter()
     source_promoted = 0
-    observed = 0
-    failures = 0
     pm25_enabled = _enabled("THEHEAT_AQ_PM25_ENABLED")
     dust_enabled = _enabled("THEHEAT_AQ_DUST_ENABLED")
     openaq_enabled = bool(os.environ.get("OPENAQ_API_KEY", "").strip())
 
     try:
-        observations = air_quality.fetch_batch_air_quality(cities)
+        observations = (air_quality.fetch_batch_air_quality(cities)
+                        if cities and (pm25_enabled or dust_enabled) else None)
+        qualified, availability = air_quality_availability.assess_air_quality(
+            cities, observations, pm25_enabled=pm25_enabled, dust_enabled=dust_enabled,
+        )
+        observed = availability["observed_cities"]
+        failures = (len(cities) - observed
+                    if availability["result_shape"] != "not_requested" else 0)
 
-        for city_row, obs in zip(cities, observations, strict=False):
+        for city_row, obs in zip(cities, qualified, strict=True):
+            if obs is None:
+                continue
             city_name = str(city_row.get("city", ""))
             country = str(city_row.get("country", ""))
-            if obs is None:
-                failures += 1
-                continue
-            observed += 1
 
             if pm25_enabled:
                 pm25_event = air_quality.detect_pm25_hazard(obs)
@@ -198,22 +196,11 @@ def run_air_quality(bot_state: BotState, current_run: dict | None, cities: list[
                                 on_draft_success=_on_success_dust,
                             )
 
-        status = "success"
-        error = None
-        note = None
-        total = len(cities)
-        if total and observed == 0:
-            status = "failed"
-            error = f"all {total} air-quality city fetches failed"
+        status = air_quality_availability.source_status(availability)
+        note = air_quality_availability.availability_note(availability)
+        error = note if status == "failed" else None
+        if error:
             state.log_error(bot_state, "air_quality", error)
-        elif failures:
-            coverage = observed / total if total else 1.0
-            note = (
-                f"{failures} air-quality city fetches failed "
-                f"({coverage:.0%} coverage)"
-            )
-            if coverage < AQ_MIN_COVERAGE:
-                status = "degraded"
 
         _record_source_run(
             current_run,
@@ -228,6 +215,7 @@ def run_air_quality(bot_state: BotState, current_run: dict | None, cities: list[
             note=note,
             details={
                 "failed_cities": failures,
+                "aq_availability": availability,
                 "pm25_enabled": pm25_enabled,
                 "dust_enabled": dust_enabled,
                 "openaq_enabled": openaq_enabled,
