@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.108.96 — 2026-10-08
+
+- Pin the dashboard to Next.js 15.5.27 for the SSG/ISR response-cache advisories, with matching compiler packages. Preserve unrelated dependency versions and platform selectors, dashboard access controls, editorial policy and publishing settings.
+
 ## 0.9.108.95 — 2026-10-08
 
 - Bound air-quality recovery waits and preserve each response's retry headers. Invalid delays cannot trigger infinite sleeps or immediate negative-delay retries; a later short delay cannot erase an earlier longer request.
