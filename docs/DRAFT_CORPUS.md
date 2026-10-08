@@ -11,6 +11,115 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-10-08 — Daily corpus grading (7 fresh drafts; queue fully turned over)
+
+**Context:** Step 0 hard-reset `main` (tip `54175fd`, PR #628). `daily-plan-current` picked up at
+`39b5b66` (Oct 5); rebase onto main conflicts on the same Jul 7 commit and was aborted per the
+fallback. Gist read via git-clone (success). **Queue: 7 pending, all fresh** (created Oct 7T10:48Z →
+Oct 8T11:07Z; oldest ~28h at pull). Oct 5's seven carry-overs (Riyadh/Mecca dust, Cerrado, Taiz,
+Rachel Cat 2/3, Riyadh PM2.5) are gone from the queue — no re-grading, nothing fabricated.
+
+**Grade distribution:** A 0 · B 4 · C 3 · D/F 0 → **A-rate 0% (0/7)**. Bar ✗ (50 pp gap). Third
+consecutive measured 0% cycle (Oct 1, Oct 3, Oct 8).
+
+**Headline finding:** the data-only regime (A10) holds on a second batch, so it is not a post-outage
+transient. 6 of 7 drafts are a number, a WHO multiple and a disclaimer. The one draft with a
+story-shaped spine — Isaias — gets it from the signal type (`cyclone_rapid_intensification`, corpus
+debut), not from voice. Two same-day pairs share one template each (Quetta/Arequipa dust,
+Shah Alam/Kano PM2.5). Three drafts end on a disclaimer or method tag as the last beat.
+
+### B range (4)
+
+**[5] Hurricane Isaias cyclone_rapid_intensification (score 71) — B-.** "intensified 35 kt in 24
+hours in the Gulf of Mexico — from tropical storm to Category 1 — surpassing the NHC rapid
+intensification threshold of 30 kt. Advisory 006 puts it at 65 kt, 982 mb near 22.9°N, 91.9°W. [raw
+nhc.noaa.gov URL]" Best draft of the batch: the rapid-intensification fact the Oct 3 Rachel pair
+stranded is now the lead, and "intensified 35 kt in 24 hours" is exact. Marks against: (a) 65 − 35 =
+30 kt, which is a tropical depression, not a tropical storm (≥34 kt) — "from tropical storm" is
+unverifiable from the copy and likely a slip; engineer to check the bundle's 24h-ago intensity;
+(b) "surpassing the NHC … threshold of 30 kt" cites the detection rule (A4/P_tier-adjacent; the
+margin 35 vs 30 is the bot grading itself); (c) raw URL in the tweet body; (d) coordinates and
+advisory number as the close — no consequence sentence (Gulf, warm water, landfall exposure unsaid).
+P_close fails by omission.
+
+**[2] Quetta, Pakistan dust_event (score 71) — B-.** "model-estimated dust concentration reached 523
+µg/m³ on Oct 7, with a PM10 24-hour mean of 173 µg/m³ — nearly 4× the WHO daily guideline. Source:
+CAMS global model via Open-Meteo." 173/45 = 3.84 ✓ ("nearly 4×" is honest). WHO anchor present
+(P_dust holding). No mechanism, no close; "Source: …" as last beat (A10a).
+
+**[4] Riyadh dust_event (score 75) — B-.** "CAMS air-quality model forecast puts Riyadh's peak dust
+concentration at 2,347 µg/m³ on Oct 8 — with PM10 averaging about 10.7× the WHO 24-hour guideline
+across the day. These are model estimates, not station measurements." Strongest numbers in the
+batch, WHO anchor correct. "about 10.7×" is an approximation hedge on a figure already given to a
+decimal (Wodehouse/P4-class). The disclaimer sentence as terminal beat is the defensive-posture
+failure; the honesty belongs mid-sentence ("modelled"). Riyadh again (3 of 6 drafts on Oct 1; 1 of 7
+now). Forecast is for today — perishable by tomorrow.
+
+**[6] Shah Alam, Malaysia air_quality_hazard (score 74) — B-.** "PM2.5 daily mean of ~152 µg/m³ on
+Oct 8 — about 10× the WHO 24-hour guideline of 15 µg/m³, with hourly estimates running above 180
+µg/m³ overnight. No station data to verify; model forecast only." 152/15 = 10.1 ✓. "~152" and "about
+10×" double-hedge (P4-class); "model forecast" is stated in the first clause and again as the closer
+(restate-padding). The hourly peak is a good second beat; the disclaimer buries it. October in
+Selangor sits in the inter-monsoon haze window — the obvious setup sentence is absent.
+
+### C range (3)
+
+**[1] Papua New Guinea fire (score 80) — C.** "a thermal anomaly detected by NASA FIRMS/MODIS on Oct.
+7 is radiating 1,026 MW — very-high-intensity, satellite-confirmed at 94% confidence. Two nearby
+hotspots the same day registered 1,120 and 817 MW." Three failures stack. (a) **"is radiating 1,026
+MW"** is the banned P3/P6 opener skeleton, here with "a thermal anomaly detected by …" as subject —
+the formula resurfaces on the two-bot writer. (b) **"very-high-intensity" is the scoring-tier label**
+(P_tier, 2nd fire sighting after Oct 1 "very-high intensity"). (c) The lead (1,026) is not the
+largest reading (1,120 peer) — stranded punchline, same shape as Oct 1 Cerrado. "Two nearby hotspots"
+is plumbing vocabulary (A4-adjacent). No ecosystem/season sentence for PNG. Highest score in the
+queue (80), lowest voice quality — scoring and voice remain decoupled.
+
+**[3] Arequipa, Peru dust_event (score 71) — C+.** "model-estimated dust reached 527 µg/m³ on Oct 7,
+pushing the PM10 24-hour mean to about 121 µg/m³ — 2.7× the WHO daily guideline. (CAMS global model,
+45 km resolution)" 121/45 = 2.69 ✓. "about 121" and "2.7×" stacked approximations; source tag
+parenthetical as terminal element (A10a); near-twin of [2] (same skeleton, same day). Dust in a
+Peruvian highland city is genuinely unexpected — the Violation is there and the draft never says
+why it's notable.
+
+**[7] Kano, Nigeria air_quality_hazard (score 74) — C+.** "a CAMS model forecast puts PM2.5 at ~230
+μg/m³ for Oct 8 — about 15× the WHO 24-hour guideline of 15 μg/m³. Dust values in the same forecast
+run above 300 μg/m³ through most of the day." 230/15 = 15.3 ✓. "~230" and "about 15×" double-hedge
+(P4); "Dust values in the same forecast" is vague (no peak figure, no PM10 anchor) and again leans on
+model plumbing language ("the same forecast"). Early-October Kano precedes harmattan; the seasonal
+frame is available and unused.
+
+### Patterns named
+
+1. **A10 data-only regime — 2nd cycle (Oct 1, Oct 8), 13 of 13 drafts across both batches lack a
+   mechanism sentence except Isaias's RI fact.** Not an outage transient. Promote (see plan).
+2. **Disclaimer / method tag as last beat — 3 instances** ([2] "Source: …", [3] "(CAMS …)", [4]/[6]
+   "model estimates / no station data"). A10a fix unchanged; add that honesty hedges belong
+   mid-sentence.
+3. **Approximation stacking (P4-class, Wodehouse): 5 instances** — "~152 … about 10×" [6], "~230 …
+   about 15×" [7], "about 121 … 2.7×" [3], "about 10.7×" [4], "nearly 4×" [2] (this last one is
+   honest). No restate-math or poetry closers.
+4. **Banned-formula opener resurfaces:** "is radiating 1,026 MW" [1] — exact verb "radiating", subject
+   "a thermal anomaly detected by NASA FIRMS/MODIS". P3/P6 shipped against the old generator; no
+   equivalent guard is visible in the two-bot path. 1 instance.
+5. **P_tier re-sighting (fire), 2nd cycle:** "very-high-intensity" [1].
+6. **Template convergence within a cycle:** dust pair [2]/[3]; PM2.5 pair [6]/[7]. Same skeleton,
+   same day, same source tag.
+7. **Lead-with-smaller-reading** [1] (1,026 before 1,120); Oct 1 Cerrado was the same shape.
+8. **Rapid intensification now leads** [5] — the Oct 3 stranded-mechanic note is resolved by the new
+   signal type. Detection-threshold citation ("surpassing the NHC … threshold") is the new leak.
+9. **Untested:** P9, P_compound, A5, A6, A7, A8, A9. No era anchors. No political anchors.
+
+### Followups
+
+- Engineer: check Isaias bundle for the 24h-ago intensity (65 − 35 = 30 kt is TD, not "tropical
+  storm"); strip raw NHC URL from tweet body (3rd occurrence of the URL class: Jul 3, Oct 3, Oct 8).
+- Prompt: ban citing the detection threshold ("surpassing the … threshold of 30 kt") — name the
+  rate, not the rule.
+- Prompt: honesty hedges for model data go mid-sentence ("modelled", "forecast"), never as the last
+  sentence/parenthetical.
+- Staleness: 0 candidates (oldest ~28h). Riyadh/Shah Alam/Kano forecasts are dated Oct 8 — they will
+  be stale candidates by the Oct 10 cycle if unposted.
+
 ## 2026-10-05 — Daily corpus grading (0 fresh drafts; 7 carry-overs from Oct 1–Oct 3, previously graded)
 
 **Context:** Step 0 hard-reset `main` (tip `9c1cc90`, PR #596). `daily-plan-current` picked up at

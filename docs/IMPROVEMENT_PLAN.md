@@ -2,6 +2,20 @@
 
 Living plan for closing the gap between the bot's current voice quality and the **resumption bar** (majority A-grade rate per cycle). Refined daily by the autonomous grading agent (cron `0 15 * * *`), reviewed and implemented by the human operator.
 
+> **Oct 8: 7 fresh drafts (queue fully turned over), 0% A-rate (0/7); 4 B-/B, 3 C.** Third
+> consecutive measured 0% cycle. **A10 (data-only, no mechanism/close, disclaimer as last beat) now
+> 2 cycles → PROMOTED to active**; 13/13 drafts across Oct 1 + Oct 8 lack a mechanism sentence
+> (Isaias's RI fact is the only exception, and it comes from the signal type). New evidence under
+> A10: (a) 3 disclaimer/method-tag closers; (b) 5 approximation-hedge instances ("~152 … about 10×")
+> — P4-class; (c) within-cycle template convergence (dust pair, PM2.5 pair); (d) fire lead is
+> the smaller reading again (PNG 1,026 vs 1,120 MW). **P_tier re-sighting** (2nd fire cycle):
+> "very-high-intensity" in PNG fire. **P3/P6 banned skeleton resurfaces:** "a thermal anomaly …
+> is radiating 1,026 MW" on the two-bot writer. **A4-adjacent:** Isaias copy cites the detection rule
+> ("surpassing the NHC rapid intensification threshold of 30 kt"); "Two nearby hotspots"; "Dust
+> values in the same forecast". **Engineer flags:** Isaias 65 − 35 = 30 kt is a TD, so "from
+> tropical storm" is likely wrong; raw NHC URL in tweet body (3rd occurrence). 0 staleness
+> candidates (oldest ~28h). P_close fails by omission 7/7. Untested: P9, P_compound, A5–A9.
+>
 > **Oct 5: 0 fresh drafts — queue is an exact match to Oct 3's 7 graded drafts; no re-grading.**
 > No proposal evidence updates (P_close, P_tier, P_dust, A4, A10 unchanged). Writer output appears
 > stalled again since Oct 3. All 7 pending now >48h; Rachel Cat 2 + Cat 3 are strict stale
@@ -1072,6 +1086,8 @@ stochastic drift.
 
 ### P_close — Mechanism close defaults to implied consequence rather than declarative statement
 
+> **Oct 8:** 7/7 failed by omission (Isaias: coordinates/advisory number as close, no consequence). Cycle count +1 (failing).
+>
 > **Oct 1:** 6/6 drafts failed by omission (no mechanism, no close; Mecca's tally close borderline). Cycle count +1 (failing).
 
 **Observed:** 2026-06-07 — Barrow, Alaska precipitation_extreme, B+: "sheets across the
@@ -1580,6 +1596,8 @@ relocating to Resolved). Reopen if a future `dust_event` draft reverts to the pr
 AOD-only opener with no WHO anchor.
 
 ### ~~P_tier~~ — Internal scoring-tier / threshold name leaks verbatim into copy (promoted from A3) — **SHIPPED 2026-07-07 (PR #386), CONFIRMED 2026-07-14 (2 independent clean cycles: Ahvaz Jul 10, Basrah Jul 14)**
+
+> **Oct 8 re-sighting (reopens tracking, 2nd fire instance after Oct 1):** PNG fire "very-high-intensity, satellite-confirmed" — the `very_high` tier label in copy. The Jul 7 fix covered `absolute_extreme`/`fire_footprint`/cyclone/SST; plain `fire` appears uncovered. Engineer: extend tier-label ban to `fire` bundles.
 
 **Observed:** 2026-06-23 — Mediterranean SST regional_sst_anomaly draft states "exceeds the 2.5°C
 tier threshold in NOAA CRW's basin-wide anomaly index" with no explanation of what the tier
@@ -2311,7 +2329,18 @@ July's dust/AQ drafts carried a shamal/heat-trap mechanism. Best sentence in the
 major Saudi cities, one dust event.") is restated and then buried under the source tag. Fire draft
 leads with the smallest of three readings (888 vs 1,584 MW).
 
-**Cycles observed:** 1 (Oct 1). **Last seen:** Oct 1.
+**Cycles observed:** 2 (Oct 1, Oct 8). **Last seen:** Oct 8.
+
+> **Oct 8 update — PROMOTED to active (2nd cycle, not a post-outage transient).** 7 fresh drafts,
+> 6 data-only (Quetta, Arequipa, Riyadh, Shah Alam, Kano, PNG fire); Isaias only exception, via signal
+> type. New sub-findings: (d) honesty hedges for model data ("These are model estimates, not station
+> measurements"; "No station data to verify; model forecast only"; "Source: CAMS…") sit as the final
+> sentence in 3 of 5 AQ/dust drafts — move to a mid-sentence word ("modelled", "forecast"); (e)
+> approximation stacking, 5 instances ("~152 … about 10×", "~230 … about 15×", "about 121 … 2.7×") —
+> when the exact figure is in the bundle, state it once, exactly; (f) same-cycle skeleton twins
+> (dust pair, PM2.5 pair) — a per-cycle opener-variety nudge applies; (g) fire again leads with the
+> smaller reading. Seasonal-setup sentence unused in Shah Alam (inter-monsoon haze), Kano
+> (pre-harmattan), PNG (dry season).
 
 **Proposed fix (prompt-language only):** (a) source/method attribution goes in a mid-sentence
 clause or is dropped from the last position — the final beat is a fact or consequence; (b) when the
@@ -2416,6 +2445,8 @@ Active proposals above.
 
 ### A4 — Signal-kind self-naming leaks into `air_quality_hazard` copy, post-P_tier-fix
 
+> **Oct 8: 3rd cycle, 3 more near-instances** — Isaias "surpassing the NHC rapid intensification threshold of 30 kt" (cites detection rule), PNG fire "Two nearby hotspots", Kano "Dust values in the same forecast". Fix scope should add: do not cite the detection threshold or the 'same forecast'; name the quantity.
+>
 > **Oct 1: 2nd cycle — PROMOTED to active.** 3 instances in one batch, cross-signal-reference variant: "A concurrent PM2.5 signal" (Riyadh dust), "A related dust signal" (Riyadh PM2.5), "Two nearby signals" (Cerrado fire). Fix per original note: extend the "DETECTION PLUMBING IS NOT A FACT" rule's examples to ban "signal" as a noun for sibling readings; name the quantity instead ("PM2.5 reached 162 µg/m³").
 
 **Observed:** 2026-07-07 — Riyadh, Saudi Arabia `air_quality_hazard` (created
