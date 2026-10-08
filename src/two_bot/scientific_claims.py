@@ -93,6 +93,8 @@ def scientific_claim_failures(tweet: str, bundle) -> list[str]:
 
     from src.data.air_quality_evidence import bundle_failures as aq_failures, is_air_quality
     failures.extend("air_quality_window_unqualified: " + reason for reason in aq_failures(bundle))
+    from src.two_bot.air_quality_claims import causal_claim_failures
+    failures.extend(causal_claim_failures(tweet, bundle))
 
     from src.data.fire_evidence import fire_bundle_failures, is_thermal, temporal_claim_failures
     failures.extend("thermal_source_unqualified: " + reason for reason in fire_bundle_failures(bundle))

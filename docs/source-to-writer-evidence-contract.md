@@ -193,3 +193,20 @@ Legacy scalar-only evidence stays retained but cannot pass renewed qualification
 Place/day/tier IDs remain stable; exact evidence, checks and cache identities bind
 the changed content. Source qualification does not grant posting approval or prove
 live source recovery, lower bills or improved writing.
+
+For primary or related air-quality evidence, a local language check withholds
+recognizable causal links before paid checks. A forecast that co-reports dust and
+PM10 cannot support wording such as dust "pushing" PM10 higher, or a modeled
+concentration "causing" a visibility or health impact. Quotations and forecast
+qualifiers do not supply the missing causal evidence.
+
+The rule recognizes a finite set of causal predicates and nearby AQ/impact terms
+within a sentence or semicolon-delimited clause. It preserves decimal PM labels,
+normalizes Unicode only for scanning, and distinguishes immediate negation from
+another affirmative predicate. A narrow standalone general-background form can
+reach normal review; common words such as "as" and "due" alone are not causal
+triggers. Bare co-reporting and numerical guideline comparisons still require
+all usual checks. This is not complete semantic entailment: unrecognized wording,
+pronoun-only links and surrounding clause ambiguity remain review limitations.
+Exact text, complete source receipts and policy-bound approval identities remain
+unchanged by the scan. Passing the local rule is never a factual or posting pass.
