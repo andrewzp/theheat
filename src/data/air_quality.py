@@ -11,6 +11,7 @@ readings. Exact model/run and resolution are not identified by this response.
 from __future__ import annotations
 
 import os
+import re
 import time
 from copy import deepcopy
 from dataclasses import dataclass
@@ -168,34 +169,55 @@ def _rate_limit_wait_seconds(date_header: str | None) -> float:
     calendar minute). Falls back to a safe blind wait when the header is missing
     or unparseable.
     """
-    if not date_header:
-        return _RATE_LIMIT_DEFAULT_WAIT_S
-    try:
-        parsed = parsedate_to_datetime(date_header)
-    except (TypeError, ValueError):
+    parsed = _http_date(date_header)
+    if parsed is None:
         return _RATE_LIMIT_DEFAULT_WAIT_S
     seconds_into_minute = parsed.second + parsed.microsecond / 1_000_000
     wait = (60.0 - seconds_into_minute) + _RATE_LIMIT_WAIT_BUFFER_S
     return max(_RATE_LIMIT_WAIT_MIN_S, min(wait, _RATE_LIMIT_WAIT_MAX_S))
 
 
-def _retry_after_wait_seconds(retry_after_header: str | None) -> float | None:
-    if not retry_after_header:
+def _http_date(value: str | None) -> datetime | None:
+    """Only bounded, timezone-aware response dates can establish a wait."""
+    if not isinstance(value, str) or not 0 < len(value) <= 256:
         return None
     try:
-        wait = float(retry_after_header.strip())
-    except ValueError:
+        parsed = parsedate_to_datetime(value)
+        return parsed.astimezone(UTC) if parsed.utcoffset() is not None else None
+    except (TypeError, ValueError, OverflowError):
         return None
-    return max(0.0, wait)
+
+
+def _retry_after_wait_seconds(
+    retry_after_header: str | None, date_header: str | None = None,
+) -> float | None:
+    """RFC9110 seconds/date, or None for a malformed/missing header.
+
+    Oversized values return a bounded sentinel above the wait limit. The caller
+    defers the sweep; it must not shorten a long server delay and retry early.
+    """
+    if not isinstance(retry_after_header, str) or not retry_after_header:
+        return None
+    if len(retry_after_header) > 256:
+        return _RATE_LIMIT_WAIT_MAX_S + 1
+    text = retry_after_header.strip()
+    if re.fullmatch(r"[0-9]+", text):
+        return float(min(int(text), int(_RATE_LIMIT_WAIT_MAX_S) + 1))
+    retry_at = _http_date(text)
+    if retry_at is None:
+        return None
+    reference = _http_date(date_header) or datetime.now(UTC)
+    return max(0.0, (retry_at - reference).total_seconds())
 
 
 def _rate_limit_wait_seconds_for_headers(
     date_header: str | None,
     retry_after_header: str | None,
-) -> float:
-    retry_after_wait = _retry_after_wait_seconds(retry_after_header)
+) -> float | None:
+    """Finite wait up to the existing limit; None means defer this sweep."""
+    retry_after_wait = _retry_after_wait_seconds(retry_after_header, date_header)
     if retry_after_wait is not None:
-        return retry_after_wait
+        return retry_after_wait if retry_after_wait <= _RATE_LIMIT_WAIT_MAX_S else None
     return _rate_limit_wait_seconds(date_header)
 
 
@@ -288,7 +310,8 @@ def fetch_batch_air_quality(
     fails or an individual location response cannot be parsed. Chunks that fail
     the first pass — typically Open-Meteo rate-limiting the tail of the sweep —
     are retried up to ``recovery_passes`` times, waiting out the per-minute
-    window between passes.
+    window between passes. A server delay beyond the bounded recovery window
+    defers the remaining sweep, preserving already-qualified city results.
     """
     if chunk_size < 1:
         raise ValueError("chunk_size must be >= 1")
@@ -299,13 +322,12 @@ def fetch_batch_air_quality(
 
     pending = list(range(0, len(cities), chunk_size))
     stale_error: SourceFetchError | None = None
-    rate_limit_date: str | None = None
-    retry_after: str | None = None
+    recovery_wait = 0.0
     for attempt in range(recovery_passes + 1):
         if attempt > 0:
-            time.sleep(_rate_limit_wait_seconds_for_headers(rate_limit_date, retry_after))
-        rate_limit_date = None
-        retry_after = None
+            time.sleep(recovery_wait)
+        recovery_wait = 0.0
+        recovery_deferred = False
         still_failed: list[int] = []
         for chunk_index, chunk_start in enumerate(pending):
             chunk = cities[chunk_start : chunk_start + chunk_size]
@@ -323,14 +345,20 @@ def fetch_batch_air_quality(
                     results[chunk_start + offset] = value
             else:
                 still_failed.append(chunk_start)
-                if date_header is not None:
-                    rate_limit_date = date_header
-                if retry_after_header is not None:
-                    retry_after = retry_after_header
+                wait = _rate_limit_wait_seconds_for_headers(date_header, retry_after_header)
+                if wait is None:
+                    # Preserve qualified results and leave all unresolved city
+                    # positions unavailable. No retry before the server's delay.
+                    print("[air_quality] recovery deferred: server wait exceeds sweep limit")
+                    recovery_deferred = True
+                    break
+                # Keep each response's headers paired, and never let a later
+                # shorter delay overwrite an earlier server requirement.
+                recovery_wait = max(recovery_wait, wait)
             if chunk_index < len(pending) - 1:
                 _chunk_pacing_sleep()
         pending = still_failed
-        if not pending:
+        if recovery_deferred or not pending:
             break
 
     if stale_error is not None and not any(item is not None for item in results):

@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.108.95 — 2026-10-08
+
+- Bound air-quality recovery waits and preserve each response's retry headers. Invalid delays cannot trigger infinite sleeps or immediate negative-delay retries; a later short delay cannot erase an earlier longer request.
+- Defer the remaining source sweep when the server asks for more than 63 seconds, preserving qualified city results and visible missing coverage. Keep source evidence, request limits, model checks and publishing controls unchanged.
+
 ## 0.9.108.94 — 2026-10-07
 
 - Preserve complete CRW source evidence and individual valid dates through marine comparisons, including quiet SST readings and capped coral events. Withhold legacy, altered, conflicting, future, stale and capacity-limited inputs before writing.
