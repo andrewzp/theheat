@@ -117,7 +117,43 @@ def render_preview(template, evidence, *, expected_evidence_sha256, output_dir, 
 
     text(56, 1418, "THEHEAT", 48)
     text(1144, 1418, "SYNTHETIC DATA" if evidence["synthetic"] else "REVIEW PREVIEW", 40, "warm", "end")
-    if template == "crw_regional_anomaly":
+    if template == "pm25_forecast_day":
+        from src.media.air_quality_graphic_adapter import concentration, forecast_axis
+        from reportlab.graphics.shapes import Circle, Line
+        text(56, 1320, chart_title(template, evidence), 62)
+        block(1240, evidence["location"], size=48, color="text", bottom=1150)
+        text(56, 1080, "Local day " + evidence["valid_date"], 40, "muted")
+        text(56, 1025, evidence["timezone"], 40, "muted")
+        text(56, 965, "PM2.5 · μg/m³", 40, "muted")
+        top, ticks = forecast_axis(evidence["values"])
+        plot_left, bottom, width, height = 180, 630, 920, 270
+        for tick in ticks:
+            y = bottom + tick / top * height
+            drawing.add(Line(plot_left, y, plot_left + width, y, strokeColor=colors["grid"], strokeWidth=2))
+            text(plot_left - 20, y - 12, f"{tick:g}", 40, "muted", "end")
+        for hour in (0, 6, 12, 18, 23):
+            x = plot_left + hour / 23 * width
+            drawing.add(Line(x, bottom - 8, x, bottom, strokeColor=colors["muted"], strokeWidth=2))
+            text(x, bottom - 62, f"{hour:02d}", 40, "muted", "middle")
+        points = [(plot_left + hour / 23 * width, bottom + value / top * height)
+                  for hour, value in enumerate(evidence["values"])]
+        for first, second in zip(points, points[1:]):
+            drawing.add(Line(*first, *second, strokeColor=colors["text"], strokeWidth=4))
+        for x, y in points:
+            drawing.add(Circle(x, y, 5, fillColor=colors["text"], strokeColor=None))
+        text(1100, 507, "Local hour", 40, "muted", "end")
+        text(56, 507, "Mean of 24 samples", 40, "muted")
+        text(56, 405, concentration(evidence["sample_mean"]) + " μg/m³", 96)
+        lat, lon = evidence["grid_location"]
+        notes = [f"Grid: {abs(lat):.4f}°{'N' if lat >= 0 else 'S'}, {abs(lon):.4f}°{'E' if lon >= 0 else 'W'}",
+                 "Model forecast; 24 hourly samples.", "Not station measurements.",
+                 "Source: CAMS via Open-Meteo"]
+        if evidence["synthetic"]:
+            notes.append("Illustrative values; not actual weather.")
+        y = 315
+        for note in notes:
+            y = block(y, note)
+    elif template == "crw_regional_anomaly":
         from src.media.crw_graphic_adapter import anomaly_axis_limit, signed_anomaly
         from reportlab.graphics.shapes import Line
         text(56, 1320, chart_title(template, evidence), 62)
