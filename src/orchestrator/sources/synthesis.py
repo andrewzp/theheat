@@ -13,9 +13,10 @@ def run_synthesis(bot_state: BotState, current_run: dict | None) -> None:
     synthesis_observed = 0
     synthesis_promoted = 0
     try:
+        marine_diagnostics: dict = {}
         signals = [
             *synthesis.detect_fire_drought_heat(bot_state),
-            *synthesis.detect_marine_compound(bot_state),
+            *synthesis.detect_marine_compound(bot_state, diagnostics=marine_diagnostics),
         ]
         synthesis_observed = len(signals)
         for sig in signals:
@@ -45,37 +46,15 @@ def run_synthesis(bot_state: BotState, current_run: dict | None) -> None:
                     facts=[
                         _fact("Coral region", comps["coral_region_full_name"]),
                         _fact("DHW", f"{comps['coral_dhw_value']:.1f} C-weeks"),
-                        _fact("DHW tier", str(comps["coral_dhw_tier"])),
+                        _fact("Coral source date", comps["coral_valid_date"]),
                         _fact("SST region", comps["sst_region_display_name"]),
                         _fact("SST anomaly", f"{comps['sst_anomaly_c']:+.1f}C"),
+                        _fact("SST source date", comps["sst_valid_date"]),
+                        _fact("Scope", "Independently dated products; association does not prove a shared footprint or impact"),
                         _fact("Window", f"{comps['window_days']} days"),
                     ],
                 )
-                synth_payload = {
-                    "event_id": sig.event_id,
-                    "region": comps["coral_region_full_name"],
-                    "kind": "marine_compound",
-                    "headline": sig.headline,
-                    "rule_name": sig.rule_name,
-                    "components": [
-                        {
-                            "kind": "coral",
-                            "region_id": comps["coral_region_id"],
-                            "region": comps["coral_region_full_name"],
-                            "dhw_value": comps["coral_dhw_value"],
-                            "dhw_tier": comps["coral_dhw_tier"],
-                        },
-                        {
-                            "kind": "sst_anomaly",
-                            "region_slug": comps["sst_region_slug"],
-                            "region": comps["sst_region_display_name"],
-                            "anomaly_c": comps["sst_anomaly_c"],
-                            "tier": comps["sst_tier"],
-                        },
-                    ],
-                    "window_days": comps["window_days"],
-                    "total_score": score.total if hasattr(score, "total") else None,
-                }
+                synth_payload = comps["marine_payload"]
                 legacy_type = "synthesis_marine_compound"
             else:
                 score = score_synthesis_fire_drought_heat(
@@ -151,6 +130,7 @@ def run_synthesis(bot_state: BotState, current_run: dict | None) -> None:
         _record_source_run(
             current_run, bot_state, "synthesis_fire_drought_heat", synthesis_start,
             status="success",
+            details={"marine_selection": marine_diagnostics},
             observed=synthesis_observed,
             promoted=synthesis_promoted,
             drafted=0,

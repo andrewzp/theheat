@@ -107,13 +107,13 @@ _SHARED_EVENT_ASSERTION = re.compile(
 
 
 def _cross_signal_violation(tweet: str, bundle: StoryBundle) -> str | None:
-    """Reject a causal / shared-system / "global pattern" framing in a draft that
-    was handed ``related_signals``. Only fires when related_signals are present, so
-    single-event drafts are never affected (flag OFF == today). Bare enumeration of
-    the related facts is allowed. Returns the matched phrase, or None when clean /
-    no related signals. Curly apostrophes normalized (cf. _forbidden_claim_violation).
+    """Reject named shared-event upgrades of separately sourced measurements.
+
+    Applies to related signals and paired marine products. Bare enumeration still
+    needs ordinary required checks. Other single-event drafts are unaffected.
     """
-    if not getattr(bundle, "related_signals", None):
+    from src.editorial.marine_evidence import is_marine
+    if not getattr(bundle, "related_signals", None) and not is_marine(bundle):
         return None
     low = tweet.lower().replace("’", "'").replace("‘", "'")
     for phrase in _CROSS_SIGNAL_BANNED_PHRASES:

@@ -1,6 +1,6 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import { mkdtempSync, rmSync } from "node:fs"
+import { mkdtempSync, rmSync, readFileSync } from "node:fs"
 import os from "node:os"
 import path from "node:path"
 
@@ -77,6 +77,7 @@ test("updateDraftStore merges an edited draft into the latest gist state", async
       shipped_tweets: [],
     },
     data_source_failures: { ghcn: 2 },
+    synthesis_components: JSON.parse(readFileSync(new URL("../../tests/fixtures/marine-components.json", import.meta.url), "utf8")),
   }
 
   const fetchCalls = []
@@ -122,6 +123,7 @@ test("updateDraftStore merges an edited draft into the latest gist state", async
     assert.deepEqual(written.pending_confirmations, latestState.pending_confirmations)
     assert.deepEqual(written.memory, latestState.memory)
     assert.deepEqual(written.data_source_failures, { ghcn: 2 })
+    assert.deepEqual(written.synthesis_components, latestState.synthesis_components)
 
     assert.equal(result.state.drafts.length, 2)
     assert.equal(result.draft.status, "approved")
@@ -250,6 +252,7 @@ test("sqlite state store preserves Python-owned metadata keys", async () => {
       },
       data_source_failures: { ghcn: 2 },
       synthesis_components: {
+        ...JSON.parse(readFileSync(new URL("../../tests/fixtures/marine-components.json", import.meta.url), "utf8")),
         fires: { CA: [{ event_id: "fire_1", at: "2026-05-09T00:00:00Z" }] },
         heats: {},
         drought_snapshot: null,

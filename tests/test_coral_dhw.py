@@ -12,6 +12,7 @@ from src.data.source_status import SourceFetchError
 from src.editorial.scoring import score_coral_bleaching
 from src.state import DEFAULT_STATE
 from tests.coral_point_fixtures import metadata, timestamp
+from tests.marine_fixtures import marine_clock, coral_reading
 from src.data import coral_source_contract as point_contract
 from src.two_bot.types import StoryBundle
 
@@ -381,32 +382,21 @@ class TestCoralDHWSourceRunnerMigration:
         assert candidate.cooldown_exempt is False
         assert candidate.created_at  # iso8601 string — must be non-empty
 
+    @pytest.mark.usefixtures("marine_clock")
     def test_run_coral_dhw_records_marine_synthesis_component(self, monkeypatch):
         from src.orchestrator.sources.coral_dhw import run_coral_dhw
+        from src.editorial.marine_evidence import component
 
         bot_state = deepcopy(DEFAULT_STATE)
-        event = _make_coral_event(region_id="fiji", region_full_name="Fiji", event_id="coral_dhw_fiji_tier8")
-        reading = _make_reading(region_id="fiji", region_full_name="Fiji")
-
+        reading = coral_reading(dhw=8.2)
         monkeypatch.setattr(
             "src.orchestrator.sources.coral_dhw.coral_dhw.fetch_coral_dhw",
             lambda **kw: [reading],
         )
-        monkeypatch.setattr(
-            "src.orchestrator.sources.coral_dhw.coral_dhw.detect_dhw_thresholds",
-            lambda readings, last_tiers: [event],
-        )
-        monkeypatch.setattr(
-            "src.orchestrator.sources.coral_dhw.build_coral_bleaching_bundle",
-            _make_bundle,
-        )
-
         run_coral_dhw(bot_state, {"sources": []})
-
-        component = bot_state["synthesis_components"]["corals"]["fiji"][0]
-        assert component["event_id"] == "coral_dhw_fiji_tier8"
-        assert component["dhw_tier"] == 8
-        assert component["dhw_value"] == 8.2
+        stored = bot_state["synthesis_components"]["corals"]["great_nicobar"][0]
+        assert stored == component("coral", reading)
+        assert stored["marine_source"]["reading"]["dhw_value"] == 8.2
         assert bot_state["coral_dhw_last_tier"] == {}
 
     def test_multiple_passing_events_each_enqueue(self, monkeypatch):

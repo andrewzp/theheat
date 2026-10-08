@@ -236,9 +236,13 @@ def _state_with_marine_components(*, coral_offset_days: int = 1, sst_offset_days
     return s
 
 
+from tests.marine_fixtures import marine_clock, qualified_state
+
+
+@pytest.mark.usefixtures("marine_clock")
 class TestMarineCompound:
-    def test_marine_compound_fires_on_overlap(self):
-        signals = detect_marine_compound(_state_with_marine_components())
+    def test_marine_compound_pairs_qualified_dated_sources(self, monkeypatch):
+        signals = detect_marine_compound(qualified_state(monkeypatch))
 
         assert len(signals) == 1
         sig = signals[0]
@@ -250,11 +254,13 @@ class TestMarineCompound:
         assert sig.components["sst_anomaly_c"] == 2.2
         assert sig.components["sst_region_slug"] == "bay_of_bengal"
 
-    def test_marine_compound_respects_window_and_cooldown(self):
+    def test_marine_compound_respects_window_and_cooldown(self, monkeypatch):
         stale = _state_with_marine_components(sst_offset_days=20)
         assert detect_marine_compound(stale) == []
 
-        on_cooldown = _state_with_marine_components()
+        from src.editorial.marine_evidence import datetime as clock
+        monkeypatch.setattr(__import__(__name__, fromlist=["datetime"]), "datetime", clock)
+        on_cooldown = qualified_state(monkeypatch)
         record_synthesis_fired(
             on_cooldown,
             RULE_MARINE_COMPOUND,
@@ -263,7 +269,7 @@ class TestMarineCompound:
         )
         assert detect_marine_compound(on_cooldown) == []
 
-        cooled = _state_with_marine_components()
+        cooled = qualified_state(monkeypatch)
         record_synthesis_fired(
             cooled,
             RULE_MARINE_COMPOUND,

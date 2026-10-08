@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.108.94 — 2026-10-07
+
+- Preserve complete CRW source evidence and individual valid dates through marine comparisons, including quiet SST readings and capped coral events. Withhold legacy, altered, conflicting, future, stale and capacity-limited inputs before writing.
+- Keep regional and point scopes distinct, retain actual SST reference context and reject named unsupported shared-event, causal and impact claims. Bind exact evidence into required checks and editorial policy; models, samples and publishing settings are unchanged.
+
 ## 0.9.108.93 — 2026-10-07
 
 - Withhold recognizable unsupported causal links in air-quality copy before paid checks, including primary and related forecasts. Co-reported dust, particulate and AQI values do not establish event-specific causes or visibility/health impacts.

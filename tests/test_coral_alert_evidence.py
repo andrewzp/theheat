@@ -143,13 +143,11 @@ def test_compound_threshold_is_not_an_alert_class_or_a_source_warrant():
     from src.two_bot.intern.synthesis import build_synthesis_bundle
     from tests.test_synthesis import _state_with_marine_components
 
-    signal = detect_marine_compound(_state_with_marine_components())[0]
-    assert "DHW at least 8 °C-weeks" in signal.headline
-    assert "Alert" not in signal.headline
-    assert signal.components["coral_dhw_tier"] == 8
+    # Scalar thresholds no longer produce a candidate at all.
+    assert detect_marine_compound(_state_with_marine_components()) == []
     bundle = build_synthesis_bundle({
-        "kind": "marine_compound", "region": signal.region, "event_id": signal.event_id,
-        "headline": signal.headline, "components": [signal.components], "total_score": 80,
+        "kind": "marine_compound", "region": "great_nicobar", "event_id": "invented-legacy",
+        "components": [{"dhw_value": 9.1, "dhw_tier": 8}], "total_score": 80,
     })
     audit = audit_story_bundle(bundle)
-    assert not audit.prompt_ready and "missing_provenance" in {i.code for i in audit.issues}
+    assert not audit.prompt_ready and {"missing_provenance", "marine_source_unqualified"} <= {i.code for i in audit.issues}
