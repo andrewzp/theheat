@@ -23,7 +23,7 @@ from src.data.world_thresholds import CityThresholds
 from src.orchestrator import world_cache
 from src.orchestrator.sources import open_meteo as runner
 
-TODAY = date.today()
+TODAY = date(2026, 6, 16)
 ISO = TODAY.isoformat()
 STALE_ISO = (TODAY - timedelta(days=60)).isoformat()
 MM = f"{TODAY.month:02d}"
@@ -58,7 +58,7 @@ def _arch(*, max_c=None, min_c=None, tw=None):
         a["temperature_2m_min"] = [min_c]
     if tw is not None:
         a["wet_bulb_temperature_2m_max"] = [tw]
-    return complete_archive(a)
+    return complete_archive(a, valid_date=ISO)
 
 
 def _raise(exc):
@@ -81,6 +81,14 @@ def _run(monkeypatch, world_cities, seed_cache, *, forecasts, archive,
 
     Returns (om_bundles, om_country, store, metrics).
     """
+    class FixtureDate(date):
+        @classmethod
+        def today(cls):
+            return TODAY
+
+    # Keep fixtures and the actual cache runner on one clock, including when
+    # a full CI run crosses midnight between test collection and execution.
+    monkeypatch.setattr(runner, "date", FixtureDate)
     store = dict(seed_cache)
     for c in world_cities:
         key = world_cache.world_key(c["city"], c["country"], c["lat"], c["lon"])
