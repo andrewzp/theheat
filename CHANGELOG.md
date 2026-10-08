@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.108.93 — 2026-10-07
+
+- Withhold recognizable unsupported causal links in air-quality copy before paid checks, including primary and related forecasts. Co-reported dust, particulate and AQI values do not establish event-specific causes or visibility/health impacts.
+- Preserve factual comparisons, scoped negation, exact retained evidence and all mandatory checks. Bind the bounded language rule into editorial policy so previous approvals cannot carry forward automatically; runtime models, sample counts and publishing settings are unchanged.
+
 ## 0.9.108.92 — 2026-10-07
 
 - Require a complete, correctly dated local forecast day for air-quality means and daily maxima. Partial or wrong-day samples cannot become a 24-hour claim; unavailable optional measurements lose only their own comparisons, and malformed cities do not hide valid neighbors.
