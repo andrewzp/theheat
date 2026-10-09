@@ -51,6 +51,7 @@ POLICY_FILES = (
     "src/orchestrator/sources/synthesis.py",
     "src/media/crw_graphic_adapter.py", "src/media/evidence_graphic.py",
     "src/media/air_quality_graphic_adapter.py",
+    "src/media/fire_graphic_adapter.py",
 )
 MODEL_KEYS = {"writer", "writer_provider", "fact_check", "critic", "safety"}
 FLAG_KEYS = {"critic_enabled", "critic_revise_enabled", "writer_samples", "safety_llm_enabled"}

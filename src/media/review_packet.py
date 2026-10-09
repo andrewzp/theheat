@@ -169,7 +169,7 @@ def _build(
     _require(valid_policy(policy), "Current editorial policy is unavailable")
     _require(
         set(spec) == {"template", "expected_evidence_sha256", "evidence"}
-        and spec["template"] in {"temperature_comparator", "crw_regional_anomaly", "pm25_forecast_day"},
+        and spec["template"] in {"temperature_comparator", "crw_regional_anomaly", "pm25_forecast_day", "modis_thermal_detections"},
         "Only a qualified single-bundle graphic is supported",
     )
     _require(_sha(spec["expected_evidence_sha256"]), "Graphic evidence fingerprint is invalid")
@@ -183,6 +183,9 @@ def _build(
     if spec["template"] == "pm25_forecast_day":
         from src.media.air_quality_graphic_adapter import ADAPTER_VERSION as pm25_version
         adapter_versions = {pm25_version}
+    if spec["template"] == "modis_thermal_detections":
+        from src.media.fire_graphic_adapter import ADAPTER_VERSION as fire_version
+        adapter_versions = {fire_version}
     input_binding = evidence["input_binding"]
     _require(
         input_binding["adapter_version"] in adapter_versions and len(input_binding["bundles"]) == 1,

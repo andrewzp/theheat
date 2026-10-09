@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.108.100 — 2026-10-09
+
+- Add an offline MODIS thermal-detection chart for one to four source-bound pixel measurements. Preserve the complete story, exact source values, platform and acquisition minute without inferring fire perimeters, separate incidents or simultaneity.
+- Bind graphics to existing private text/media review and revision invalidation. Deterministic previews need no model or source calls; production media delivery remains inactive.
+
 ## 0.9.108.99 — 2026-10-08
 
 - Show retained air-quality forecast dates, timezone, requested place, sampled grid point and hourly values in the draft workbench. Distinguish model inputs from station measurements and missing samples from zero, with keyboard-accessible mobile disclosures.
