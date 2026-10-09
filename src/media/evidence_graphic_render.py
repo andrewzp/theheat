@@ -117,7 +117,39 @@ def render_preview(template, evidence, *, expected_evidence_sha256, output_dir, 
 
     text(56, 1418, "THEHEAT", 48)
     text(1144, 1418, "SYNTHETIC DATA" if evidence["synthetic"] else "REVIEW PREVIEW", 40, "warm", "end")
-    if template == "pm25_forecast_day":
+    if template == "modis_thermal_detections":
+        from src.media.fire_graphic_adapter import coordinate_label, frp_axis, frp_label
+        from reportlab.graphics.shapes import Line
+        text(56, 1320, chart_title(template, evidence), 62)
+        text(56, 1245, f"NASA FIRMS · {evidence['satellite']} / MODIS", 40, "muted")
+        text(56, 1185, evidence["acquired_at"][:16].replace("T", " ") + " UTC (minute)", 40, "muted")
+        text(56, 1125, "Pixel FRP · MW (rounded to 1 decimal)", 40, "muted")
+        top = frp_axis([point["frp_source"] for point in evidence["points"]])
+        for index, point in enumerate(evidence["points"]):
+            y = 1045 - index * 125
+            place = point["label"] + " · " + coordinate_label(point)
+            value = frp_label(point["frp_source"])
+            if sum(pdfmetrics.stringWidth(label, "TheHeatMono", 40) for label in (place, value)) > 1060:
+                raise ValueError("MODIS point labels exceed readable row width")
+            text(56, y, place, 40)
+            text(1144, y, value, 40, "text", "end")
+            drawing.add(Line(56, y - 58, 1144, y - 58, strokeColor=colors["grid"], strokeWidth=2))
+            drawing.add(Rect(56, y - 58, point["frp_source"] / top * 1088, 36,
+                             fillColor=colors["text"], strokeColor=None))
+        for fraction, anchor in ((0, "start"), (0.5, "middle"), (1, "end")):
+            x = 56 + fraction * 1088
+            text(x, 535, f"{top * fraction:g}", 40, "muted", anchor)
+        y = 450
+        for note in [
+            "Pixel centers; coordinates rounded to 4 decimals.",
+            "Not fire perimeters or separate-fire counts.",
+            "UTC minute does not establish simultaneity.",
+            "FRP is radiative power, not temperature.",
+            "Not burned area or total physical-fire intensity.",
+            *(["Illustrative values; not actual weather."] if evidence["synthetic"] else []),
+        ]:
+            y = block(y, note)
+    elif template == "pm25_forecast_day":
         from src.media.air_quality_graphic_adapter import concentration, forecast_axis
         from reportlab.graphics.shapes import Circle, Line
         text(56, 1320, chart_title(template, evidence), 62)
