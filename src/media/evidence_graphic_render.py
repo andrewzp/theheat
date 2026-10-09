@@ -1,7 +1,7 @@
-"""Optional local preview backend using ReportLab charts and pdftoppm.
+"""Optional evidence graphics, shared by in-memory SVG and local PDF/PNG previews.
 
-Import only from the explicit preview CLI. Normal bot/media modules do not
-import ReportLab or require this renderer. No upload or publishing adapter.
+ReportLab is imported only after validation in an explicit render entry point.
+Normal bot/media modules do not require it. No upload or publishing adapter.
 """
 from __future__ import annotations
 
@@ -9,6 +9,9 @@ from datetime import date, datetime, timezone
 import base64
 import hashlib
 import json
+from importlib.resources import files
+from io import BytesIO, StringIO
+from threading import RLock
 from pathlib import Path
 import subprocess
 
@@ -23,7 +26,9 @@ TEXT = "#F4F4F5"
 MUTED = "#B5B5BD"
 WARM = "#F87171"
 GRID = "#35353B"
-FONT_PATH = Path(__file__).with_name("fonts") / "DejaVuSansMono.ttf"
+FONT_RESOURCE = "fonts/DejaVuSansMono.ttf"
+MAX_SVG_BYTES = 1_000_000
+_RENDER_LOCK = RLock()
 
 
 def _digest(path):
@@ -31,26 +36,57 @@ def _digest(path):
 
 
 def render_preview(template, evidence, *, expected_evidence_sha256, output_dir, pdftoppm):
-    evidence = validate_graphic(template, evidence, expected_evidence_sha256=expected_evidence_sha256)
-    # Optional dependencies stay inside this local-only entry point.
-    from reportlab import Version, rl_config
-    from reportlab.graphics import renderPDF, renderSVG
-    from reportlab.graphics.charts.lineplots import LinePlot
-    from reportlab.graphics.shapes import Drawing, Rect, String
-    from reportlab.graphics.widgets.markers import makeMarker
-    from reportlab.lib.colors import HexColor
-    from reportlab.pdfbase import pdfmetrics
-    from reportlab.pdfbase.ttfonts import TTFont
+    """Retain the existing immutable five-asset local package."""
+    with _RENDER_LOCK:
+        return _render_preview(template, evidence, expected_evidence_sha256=expected_evidence_sha256,
+                               output_dir=output_dir, pdftoppm=pdftoppm)
 
-    rl_config.invariant = True
-    pdfmetrics.registerFont(TTFont("TheHeatMono", str(FONT_PATH)))
-    rasterizer = Path(pdftoppm).resolve(strict=True)
-    renderer = {"library": "ReportLab", "version": Version, "rasterizer_sha256": _digest(rasterizer),
-                "implementation_sha256": _digest(Path(__file__)),
-                "contract_sha256": _digest(Path(__file__).with_name("evidence_graphic.py")),
-                "font_sha256": _digest(FONT_PATH), "width": WIDTH, "height": HEIGHT}
+
+def _resource(name):
+    return files("src.media").joinpath(name).read_bytes()
+
+
+def _resource_digest(name):
+    return hashlib.sha256(_resource(name)).hexdigest()
+
+
+def _renderer_identity(template, evidence):
+    from reportlab import Version
+
+    renderer = {"library": "ReportLab", "version": Version,
+                "implementation_sha256": _resource_digest("evidence_graphic_render.py"),
+                "contract_sha256": _resource_digest("evidence_graphic.py"),
+                "font_sha256": _resource_digest(FONT_RESOURCE), "width": WIDTH, "height": HEIGHT}
     if "input_binding" in evidence:
-        renderer["adapter_sha256"] = _digest(Path(__file__).with_name(adapter_filename(template)))
+        renderer["adapter_sha256"] = _resource_digest(adapter_filename(template))
+    return renderer
+
+
+def render_svg(template, evidence, *, expected_evidence_sha256):
+    """Return validated private preview bytes without files, PDF, network or approval.
+
+    The caller owns access control and exact saved-draft selection. This rendering
+    identity alone does not establish source authenticity or text/graphic agreement.
+    """
+    evidence = validate_graphic(template, evidence, expected_evidence_sha256=expected_evidence_sha256)
+    with _RENDER_LOCK:
+        renderer = {**_renderer_identity(template, evidence), "format": "svg", "schema_version": 1}
+        binding = {"template": template, "template_version": template_version(template),
+                   "source_evidence_sha256": expected_evidence_sha256, "renderer": renderer}
+        svg = _svg_bytes(_drawing(template, evidence), template, evidence)
+    return {"schema_version": 1, "cache_key": fingerprint(binding), "binding": binding,
+            "svg": svg, "svg_sha256": hashlib.sha256(svg).hexdigest(),
+            "title": chart_title(template, evidence), "alt_text": build_alt_text(template, evidence),
+            "width": WIDTH, "height": HEIGHT, "synthetic": evidence["synthetic"],
+            "scope": evidence["scope"], "publication_approved": False}
+
+
+def _render_preview(template, evidence, *, expected_evidence_sha256, output_dir, pdftoppm):
+    evidence = validate_graphic(template, evidence, expected_evidence_sha256=expected_evidence_sha256)
+    from reportlab.graphics import renderPDF
+
+    rasterizer = Path(pdftoppm).resolve(strict=True)
+    renderer = {**_renderer_identity(template, evidence), "rasterizer_sha256": _digest(rasterizer)}
     identity = {"template": template, "template_version": template_version(template),
                 "source_evidence_sha256": expected_evidence_sha256, "renderer": renderer}
     key = fingerprint(identity)
@@ -81,6 +117,68 @@ def render_preview(template, evidence, *, expected_evidence_sha256, output_dir, 
         return manifest_path
     folder.mkdir(parents=True, mode=0o700)
     folder.chmod(0o700)
+    drawing = _drawing(template, evidence)
+    (folder / "input.json").write_text(json.dumps({"template": template, "expected_evidence_sha256": expected_evidence_sha256, "evidence": evidence}, ensure_ascii=False, sort_keys=True, indent=2) + "\n")
+    (folder / "alt.txt").write_text(build_alt_text(template, evidence) + "\n")
+    renderPDF.drawToFile(drawing, str(folder / "preview.pdf"))
+    (folder / "preview.svg").write_bytes(_svg_bytes(drawing, template, evidence, legacy_doctype=True))
+    subprocess.run([str(rasterizer), "-r", "72", "-singlefile", "-png", str(folder / "preview.pdf"), str(folder / "preview")], check=True, capture_output=True, timeout=30)
+    files = {name: _digest(folder / name) for name in ("input.json", "alt.txt", "preview.pdf", "preview.svg", "preview.png")}
+    manifest = {"schema_version": 1, "cache_key": key, "binding": identity, "files": files,
+                "synthetic": evidence["synthetic"], "alt_text": build_alt_text(template, evidence),
+                "publication_approved": False, "scope": evidence["scope"]}
+    manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, sort_keys=True, indent=2) + "\n")
+    for path in folder.iterdir():
+        path.chmod(0o600)
+    return manifest_path
+
+
+class _BoundedSvg(StringIO):
+    """Refuse oversized serialized UTF-8 output before returning any bytes."""
+    def __init__(self):
+        super().__init__()
+        self.byte_count = 0
+
+    def write(self, value):
+        self.byte_count += len(value.encode("utf-8"))
+        if self.byte_count > MAX_SVG_BYTES:
+            raise ValueError("Graphic exceeds SVG byte limit")
+        return super().write(value)
+
+
+def _svg_bytes(drawing, template, evidence, *, legacy_doctype=False):
+    from reportlab.graphics import renderSVG
+
+    svg = renderSVG.SVGCanvas((WIDTH, HEIGHT))
+    # Browser previews must not reference ReportLab's external SVG 1.0 DTD.
+    # Preserve the existing local-package bytes and their immutable history.
+    if not legacy_doctype and svg.doc.doctype is not None:
+        svg.doc.removeChild(svg.doc.doctype)
+    style = svg.doc.createElement("style")
+    style.setAttribute("type", "text/css")
+    encoded_font = base64.b64encode(_resource(FONT_RESOURCE)).decode("ascii")
+    style.appendChild(svg.doc.createTextNode("@font-face{font-family:'TheHeatMono';src:url('data:font/ttf;base64," + encoded_font + "') format('truetype');font-weight:normal;font-style:normal;}"))
+    svg.doc.documentElement.appendChild(style)
+    for tag, value in (("title", chart_title(template, evidence)), ("desc", build_alt_text(template, evidence))):
+        node = svg.doc.getElementsByTagName(tag)[0]
+        node.replaceChild(svg.doc.createTextNode(value), node.firstChild)
+    renderSVG.draw(drawing, svg, 0, 0)
+    output = _BoundedSvg()
+    svg.save(output)
+    return output.getvalue().encode("utf-8")
+
+
+def _drawing(template, evidence):
+    from reportlab import rl_config
+    from reportlab.graphics.charts.lineplots import LinePlot
+    from reportlab.graphics.shapes import Drawing, Rect, String
+    from reportlab.graphics.widgets.markers import makeMarker
+    from reportlab.lib.colors import HexColor
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+
+    rl_config.invariant = True
+    pdfmetrics.registerFont(TTFont("TheHeatMono", BytesIO(_resource(FONT_RESOURCE))))
     drawing = Drawing(WIDTH, HEIGHT)
     colors = {key: HexColor(value) for key, value in {"bg": BACKGROUND, "text": TEXT, "muted": MUTED, "warm": WARM, "grid": GRID}.items()}
     drawing.add(Rect(0, 0, WIDTH, HEIGHT, fillColor=colors["bg"], strokeColor=None))
@@ -331,26 +429,4 @@ def render_preview(template, evidence, *, expected_evidence_sha256, output_dir, 
         bottom = 610
         for note in notes:
             bottom = block(bottom, note)
-    (folder / "input.json").write_text(json.dumps({"template": template, "expected_evidence_sha256": expected_evidence_sha256, "evidence": evidence}, ensure_ascii=False, sort_keys=True, indent=2) + "\n")
-    (folder / "alt.txt").write_text(build_alt_text(template, evidence) + "\n")
-    renderPDF.drawToFile(drawing, str(folder / "preview.pdf"))
-    svg = renderSVG.SVGCanvas((WIDTH, HEIGHT))
-    style = svg.doc.createElement("style")
-    style.setAttribute("type", "text/css")
-    encoded_font = base64.b64encode(FONT_PATH.read_bytes()).decode("ascii")
-    style.appendChild(svg.doc.createTextNode("@font-face{font-family:'TheHeatMono';src:url('data:font/ttf;base64," + encoded_font + "') format('truetype');font-weight:normal;font-style:normal;}"))
-    svg.doc.documentElement.appendChild(style)
-    for tag, value in (("title", chart_title(template, evidence)), ("desc", build_alt_text(template, evidence))):
-        node = svg.doc.getElementsByTagName(tag)[0]
-        node.replaceChild(svg.doc.createTextNode(value), node.firstChild)
-    renderSVG.draw(drawing, svg, 0, 0)
-    svg.save(str(folder / "preview.svg"))
-    subprocess.run([str(rasterizer), "-r", "72", "-singlefile", "-png", str(folder / "preview.pdf"), str(folder / "preview")], check=True, capture_output=True, timeout=30)
-    files = {name: _digest(folder / name) for name in ("input.json", "alt.txt", "preview.pdf", "preview.svg", "preview.png")}
-    manifest = {"schema_version": 1, "cache_key": key, "binding": identity, "files": files,
-                "synthetic": evidence["synthetic"], "alt_text": build_alt_text(template, evidence),
-                "publication_approved": False, "scope": evidence["scope"]}
-    manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, sort_keys=True, indent=2) + "\n")
-    for path in folder.iterdir():
-        path.chmod(0o600)
-    return manifest_path
+    return drawing

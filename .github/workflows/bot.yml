@@ -88,7 +88,7 @@ jobs:
           cache: 'npm'
           cache-dependency-path: dashboard/package-lock.json
 
-      - run: pip install -r requirements.txt -r requirements-postgres.txt
+      - run: pip install -r requirements.txt -r requirements-postgres.txt -r requirements-graphics.txt
 
       - name: Configure signed PostgreSQL test repository
         if: matrix.partition != 'core'
