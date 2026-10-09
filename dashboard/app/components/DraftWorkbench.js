@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { ForecastEvidence } from "./ForecastEvidence.js"
 import { formatDuration, timeAgo } from "../../lib/format.js"
 import { draftReviewControls, draftTextLength, revisionKey } from "../../lib/draft-review-ui.js"
 import {
@@ -164,10 +165,12 @@ export function DraftWorkbench({
                   </div>
                 )}
 
+                <ForecastEvidence key={reviewKey} draft={selectedDraft} />
+
                 {controls.canReview && editingId !== selectedDraft.id && (
                   <div className="workbench-panel">
                     <h3>Review this version</h3>
-                    <p>Previous checks do not cover this text. Check it against the source evidence below. Recording your review permits manual approval; it does not run or replace model checks.</p>
+                    <p>Previous checks do not cover this text. Check it against the saved source evidence. Recording your review permits manual approval; it does not run or replace model checks.</p>
                     <label>
                       <input
                         type="checkbox"
