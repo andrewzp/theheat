@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.108.101 — 2026-10-09
+
+- Share the qualified chart drawing between local packages and bounded in-memory SVG previews. Embed the font and retain full source qualifications without PDF tools, output files or model calls in the SVG path.
+- Preserve existing local assets and exact renderer identities; test real rendering and zip packaging offline. This library prepares private editor previews but does not activate hosted graphics or media publishing.
+
 ## 0.9.108.100 — 2026-10-09
 
 - Add an offline MODIS thermal-detection chart for one to four source-bound pixel measurements. Preserve the complete story, exact source values, platform and acquisition minute without inferring fire perimeters, separate incidents or simultaneity.

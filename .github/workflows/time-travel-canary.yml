@@ -47,7 +47,7 @@ jobs:
           cache: pip
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: pip install -r requirements.txt -r requirements-graphics.txt
 
       - name: Run the suite at +${{ matrix.days }} days
         env:
