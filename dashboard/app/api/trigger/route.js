@@ -9,6 +9,12 @@ export async function POST(request) {
   if (authError) {
     return authError
   }
+  if (process.env.THEHEAT_PRODUCTION_PAUSED === "1") {
+    return Response.json({
+      error: "Data collection and draft generation are paused. Existing drafts remain available for review.",
+      code: "production_paused",
+    }, { status: 503, headers: { "Cache-Control": "no-store" } })
+  }
   if (!GITHUB_TOKEN) {
     return Response.json({ error: "No GitHub token configured" }, { status: 500 })
   }
