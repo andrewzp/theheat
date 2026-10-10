@@ -11,6 +11,82 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-10-10 — Daily corpus grading (8 fresh drafts; 7 carry-overs from Oct 7–8, previously graded)
+
+**Context:** Step 0 hard-reset `main` (tip `e66c8c6`, PR #636). `daily-plan-current` picked up at
+`6652834` (Oct 8). Gist read via git-clone (success). **Queue: 15 pending** — the 7 Oct 8-graded
+drafts (Quetta B-, Arequipa C+, Riyadh B-, Isaias RI 35 kt B-, Shah Alam B-, Kano C+, PNG fire C)
+unchanged, plus **8 fresh** (Oct 8T18:39Z → Oct 10T03:33Z). Carry-overs not re-graded. Publication
+is paused in the state file (`publication_control.enabled=false`).
+
+**Grade distribution (8 fresh):** A 0 · B 1 · B- 1 · C+ 3 · C 3 → **A-rate 0% (0/8)**. Bar ✗ (50 pp
+gap). Fourth consecutive measured 0% cycle (Oct 1, 3, 8, 10).
+
+**Headline finding:** six of eight fresh drafts are NHC cyclone copy, and all six end on a raw
+`nhc.noaa.gov` URL in the tweet body (Oct 8 [5] made it 4 of the last 7; now 7 of 15 in queue).
+The cyclone types stack 3 drafts per storm: **Isaias** (carry-over [5] RI 35 kt + [10] Cat 3 + [11]
+RI 30 kt) and **Simon** ([12] Cat 2, [13] RI, [15] Cat 3) report one ramp as six facts and none
+tells it. The cyclone drafts also leak the detection rule ("NHC rapid-intensification threshold")
+twice more. The two non-cyclone drafts are data-only (A10).
+
+### B range (2)
+- **[9] Eastern Mongolian steppe fire — B.** "three thermal anomalies within about 10 km of each
+  other — 600.5, 568.6 and 543.6 MW of fire radiative power — all at 01:13 UTC." Cleanest copy in
+  the queue: exact figures, enumeration does the work (accidental comic triple), leads with the
+  largest reading (A10(b) satisfied). Stops at the timestamp — no season/steppe-ground sentence.
+- **[11] Isaias RI Cat 1→3 — B-.** "jumped from Category 1 to Category 3 in 24 hours in the Gulf —
+  winds rising 30 kt to 105 kt, exactly the NHC rapid-intensification threshold." "exactly" earns
+  its place (a number landing on the line to the knot). Capped by the threshold citation
+  (P_tier/A4-adjacent) and the trailing URL. Arithmetic: Cat 1 ≈ 65–75 kt → 105 is +30–40 kt; the
+  "30 kt to 105 kt" wording reads as if the start were 30 kt (ambiguous: gain vs start).
+
+### C+ range (3)
+- **[8] Klang, Malaysia PM2.5 — C+.** "~152 µg/m³ ... about 10× the WHO daily guideline — with a
+  modeled hourly peak near 188 µg/m³. These are model estimates, not station readings." Value-
+  identical twin of carry-over [6] Shah Alam (same 152 µg/m³, 10×, same hedge close); disclaimer as
+  last beat (A10(d)); "~152 ... about 10×" approximation stack (A10(e)).
+- **[13] Simon RI — C+.** "intensified 30 kt in 24 hours — from tropical storm to Category 2 at 85
+  kt — meeting the NHC threshold for rapid intensification. (NHC advisory 009a) <URL>" Threshold
+  citation, parenthetical advisory tag, URL; duplicates [12]'s advisory.
+- **[14] Brazil's Cerrado fire — C+.** "519 MW ... a thermal signal intense enough to register in the
+  top tier of VIIRS detections. A second hotspot 200 km north logged 529 MW three minutes later."
+  "top tier of VIIRS detections" is detection-plumbing/tier vocabulary (P_tier-adjacent); the lead is
+  the *smaller* of the two readings (519 vs 529) — A10(b) violated, same as Oct 1 Cerrado and Oct 8 PNG.
+
+### C range (3)
+- **[10] Isaias → Cat 3 — C.** "strengthened to Category 3 (105 kt, 959 mb) ... up from Category 2
+  within the same advisory cycle. <URL>" Status line; the 959 mb is there and never framed.
+- **[12] Simon → Cat 2 — C.** "packing 85 kt winds, per NHC advisory 009a. <URL>" Wire copy;
+  "per NHC advisory" cites methodology (A4/A5-adjacent).
+- **[15] Simon → Cat 3 — C.** "intensified to Category 3 ... 105 kt with a central pressure of 952
+  mb (NHC advisory 011). <URL>" Third Simon status line in 24h; Cat 1→3 in the same period is the
+  story, spread across [12]→[13]→[15].
+
+### Patterns named
+1. **Raw NHC URL in tweet body — 6 of 8 fresh** ([10]–[13],[15] + carry-over [5]; 7 of 15 queued).
+   4th occurrence of the URL class (Jul 3, Oct 3, Oct 8, Oct 10) — now the most frequent mechanical
+   defect in the queue. Proposed as **P_url**.
+2. **Same-storm stacking:** Isaias ×3, Simon ×3 across tier-crossing + RI types. Operational (event
+   dedupe / pending-type cap), logged not proposed.
+3. **Detection-rule leakage (P_tier reopened):** "NHC rapid-intensification threshold" [11],[13];
+   "top tier of VIIRS detections" [14]; carry-overs [1] "very-high-intensity", [5] "threshold of 30
+   kt". 5 instances over 2 cycles outside the Jul 7 fix scope (cyclone RI, plain fire).
+4. **A10 continues (3rd cycle):** [8],[14] have no mechanism sentence; [8] ends on a disclaimer; [14]
+   leads with the smaller reading.
+5. **Value-identical twin:** [8] Klang ↔ [6] Shah Alam (4th duplicate-generation class in corpus).
+6. **P_dust holds** (carry-over dust drafts all anchored); no fresh dust draft this cycle.
+7. **A-reference mechanic:** none (0 A). Closest: [11] "exactly the ... threshold" (understatement-
+   adjacent) and [9] enumeration. Untested: P9, P_compound, A5–A9. No era or political anchors.
+
+### Followups
+- Engineer: strip URLs from cyclone tweet bodies (or confirm they belong in a card/reply field).
+- Prompt: cyclone copy should name the *rate* ("30 kt in 24 hours"), never the detection rule.
+- Staleness: [4] Riyadh, [6] Shah Alam, [7] Kano (forecasts dated Oct 8, now >48h) and [5] Isaias
+  advisory 006 (superseded) are strict candidates; [8] Klang (forecast Oct 8, ~43h) crosses 48h
+  tomorrow. Bulk-reject skipped (gist API HTTP 403).
+
+---
+
 ## 2026-10-08 — Daily corpus grading (7 fresh drafts; queue fully turned over)
 
 **Context:** Step 0 hard-reset `main` (tip `54175fd`, PR #628). `daily-plan-current` picked up at
