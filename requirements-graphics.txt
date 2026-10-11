@@ -1,2 +1,4 @@
 # Optional deterministic renderer; no model or native PDF rasterizer required for SVG.
 reportlab==4.4.9
+# Native previews must not depend on the deployment host's timezone database.
+tzdata==2026.5

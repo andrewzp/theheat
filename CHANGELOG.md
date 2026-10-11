@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.108.103 — 2026-10-11
+
+- Load each story builder when requested, preserving the public API without importing unrelated source adapters for a single forecast.
+- Package exact place/country registries and pinned timezone data for native previews. Bind registry bytes to policy and runtime identities; preserve place resolution, forecast time rules and the MODIS-only endpoint.
+
 ## 0.9.108.102 — 2026-10-11
 
 - Add an on-demand saved MODIS graphic preview beside draft text, with source qualifications, minute precision and a full accessible description. Editing, draft actions and changed versions remove old previews; cancelled responses cannot restore them.
