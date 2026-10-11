@@ -182,6 +182,9 @@ def connection(config: HostedStagingConfig, driver):
             "sslmode": "verify-full", "channel_binding": "require", "sslcertmode": "disable",
             "sslrootcert": value["ca_path"], "gssencmode": "disable",
         }.items()) and conn.pgconn.ssl_in_use, "staging_tls_identity_mismatch")
-        row = conn.execute("SELECT current_database(),current_user,ssl FROM pg_stat_ssl WHERE pid=pg_backend_pid()").fetchone()
-        _require(row == (value["database"], value["role"], True), "staging_database_identity_mismatch")
+        # Client TLS terminates at a provider proxy; pg_stat_ssl can describe a
+        # different internal hop. Verify this client's TLS above and SQL identity
+        # here without mistaking backend-hop statistics for client encryption.
+        row = conn.execute("SELECT current_database(),current_user").fetchone()
+        _require(row == (value["database"], value["role"]), "staging_database_identity_mismatch")
         yield conn

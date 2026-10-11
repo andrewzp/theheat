@@ -860,3 +860,55 @@ def test_specific_real_tls_failure_reaches_owned_server(
     finally:
         cert.write_bytes(original_certificate)
         restart("on")
+
+
+@pytest.mark.parametrize("mode", ["strict_client", "client_tls_false", "wrong_database", "wrong_user", "missing_identity"])
+def test_client_tls_and_database_identity_are_separate_guards(files, mode):
+    """Explicit offline driver model; real certificate negatives remain above."""
+    from contextlib import contextmanager
+    from types import SimpleNamespace
+
+    configured = load(files)
+    value = configured.parameters()
+    statements = []
+    identity = (value["database"], value["role"])
+    if mode == "wrong_database":
+        identity = ("wrong_database", value["role"])
+    elif mode == "wrong_user":
+        identity = (value["database"], "wrong_role")
+    elif mode == "missing_identity":
+        identity = None
+
+    class Connection:
+        info = SimpleNamespace(server_version=170000)
+        pgconn = None
+
+        def execute(self, query):
+            statements.append(query)
+            assert query == "SELECT current_database(),current_user"
+            return SimpleNamespace(fetchone=lambda: identity)
+
+    class Driver:
+        @staticmethod
+        @contextmanager
+        def connect(**kwargs):
+            assert kwargs["sslmode"] == "verify-full"
+            assert kwargs["channel_binding"] == "require"
+            assert kwargs["sslrootcert"] == value["ca_path"]
+            connection = Connection()
+            connection.pgconn = SimpleNamespace(
+                ssl_in_use=mode != "client_tls_false",
+                info=[SimpleNamespace(keyword=k.encode(), val=str(v).encode()) for k, v in kwargs.items()],
+            )
+            yield connection
+
+    if mode == "strict_client":
+        with h.connection(configured, Driver):
+            pass
+        assert statements == ["SELECT current_database(),current_user"]
+    else:
+        code = "staging_tls_identity_mismatch" if mode == "client_tls_false" else "staging_database_identity_mismatch"
+        with pytest.raises(p.ProjectionError, match=code):
+            with h.connection(configured, Driver):
+                pytest.fail("invalid client TLS or database identity accepted")
+        assert statements == ([] if mode == "client_tls_false" else ["SELECT current_database(),current_user"])

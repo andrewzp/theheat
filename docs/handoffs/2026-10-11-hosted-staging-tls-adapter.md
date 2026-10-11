@@ -23,7 +23,12 @@ Each connection rechecks those files and the CA. The connection requires port
 5432, TLS hostname verification, channel binding and PostgreSQL 17. Client
 certificates, ambient password files, services, generic connection strings,
 poolers, GSS encryption and automatic acquisition retries are unavailable.
-Database/user identity and TLS are checked before repository SQL. Errors expose
+Client TLS is verified through libpq on the authenticated connection; database/user
+identity is checked separately through SQL before repository operations. A
+provider proxy can terminate client TLS while its internal backend connection
+reports different `pg_stat_ssl` statistics. Backend-hop statistics do not replace
+or weaken the required client certificate, hostname or channel-binding checks.
+Errors expose
 bounded codes rather than raw connection or SQL details.
 
 The existing transaction profile remains Read Committed, with a protected search
