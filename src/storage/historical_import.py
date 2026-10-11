@@ -99,6 +99,16 @@ def prepare(import_id: str, records: list[tuple[str, str, dict]]) -> ArchivePlan
 def _validated(plan: ArchivePlan) -> ArchivePlan:
     _require(type(plan) is ArchivePlan and type(plan.records) is tuple,
              "invalid_history_plan")
+    _require(1 <= len(plan.records) <= MAX_RECORDS, "history_record_bound")
+    _require(type(plan.completion) is bytes and len(plan.completion) <= p.MAX_BYTES,
+             "invalid_history_plan")
+    total = len(plan.completion)
+    for row in plan.records:
+        _require(type(row) is tuple and len(row) == 3 and type(row[0]) is str
+                 and type(row[1]) is str and type(row[2]) is bytes
+                 and len(row[2]) <= p.MAX_BYTES, "invalid_history_plan")
+        total += len(row[2])
+        _require(total <= MAX_IMPORT_BYTES, "history_import_byte_bound")
     actual = prepare(plan.import_id, [(ns, ident, p._decode(raw))
                                      for ns, ident, raw in plan.records])
     _require(actual == plan, "history_plan_mismatch")

@@ -81,3 +81,25 @@ def test_hosted_and_preview_refused_without_connection(tmp_path):
     repository._hosted_config = object()
     with pytest.raises(p.ProjectionError, match="local_history_repository_required"):
         h.record_import(repository, plan())
+
+
+@pytest.mark.parametrize("case,code", [("count", "history_record_bound"),
+    ("aggregate", "history_import_byte_bound"), ("shape", "invalid_history_plan"),
+    ("raw_size", "invalid_history_plan"), ("completion", "invalid_history_plan")])
+def test_supplied_plan_bounds_checked_before_decode(monkeypatch, case, code):
+    value = plan()
+    def forbidden(_):
+        pytest.fail("unbounded supplied plan reached decoding")
+    monkeypatch.setattr(p, "_decode", forbidden)
+    if case == "count":
+        monkeypatch.setattr(h, "MAX_RECORDS", 1)
+    elif case == "aggregate":
+        monkeypatch.setattr(h, "MAX_IMPORT_BYTES", 1)
+    elif case == "shape":
+        value = replace(value, records=(["history.sources.v1", "x", b"{}"],))
+    elif case == "completion":
+        value = replace(value, completion="untrusted-string")
+    else:
+        value = replace(value, records=(("history.sources.v1", "x", b"x" * (p.MAX_BYTES + 1)),))
+    with pytest.raises(p.ProjectionError, match=f"^{code}$"):
+        h._validated(value)
