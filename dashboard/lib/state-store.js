@@ -3,6 +3,7 @@ import { mergeUsageObservations } from "./usage-observations.js"
 import { mergePublicationControl } from "./publication-control.js"
 import { mergeUsageLedgers } from "./usage-ledger.js"
 import { DatabaseSync } from "node:sqlite"
+import { parseGistDocument, stringifyGistDocument, assertGistEvidenceUnchanged, gistDraftNumericIdentity } from "./lossless-gist.js"
 import { STATE_DEFAULTS, METADATA_JSON_KEYS, DRAFT_RETENTION } from "./state-contract.js"
 import { decisionRevision, draftIdentity, fingerprint } from "./draft-revisions.js"
 
@@ -527,9 +528,12 @@ function mergeState(current, incoming) {
   })
 }
 
-async function readGistState() {
+async function readGistState({ preserveNumbers = false } = {}) {
   const gistId = configuredGistId()
-  if (!gistId) return structuredClone(DEFAULT_STATE)
+  if (!gistId) {
+    const state = structuredClone(DEFAULT_STATE)
+    return preserveNumbers ? { state, document: parseGistDocument(JSON.stringify(state)) } : state
+  }
   const res = await fetch(`https://api.github.com/gists/${gistId}`, {
     headers: gistHeaders(),
     cache: "no-store",
@@ -555,16 +559,21 @@ async function readGistState() {
   if (!content) {
     throw new Error("state.json not found in Gist")
   }
+  if (preserveNumbers) {
+    const document = parseGistDocument(content)
+    return { state: normalizeState(structuredClone(document.value)), document }
+  }
   return normalizeState(JSON.parse(content))
 }
 
-async function writeGistState(state) {
+async function writeGistState(state, document) {
+  const content = stringifyGistDocument(state, document)
   const gistId = configuredGistId()
   const res = await fetch(`https://api.github.com/gists/${gistId}`, {
     method: "PATCH",
     headers: { ...gistHeaders(), "Content-Type": "application/json" },
     body: JSON.stringify({
-      files: { "state.json": { content: JSON.stringify(state, null, 2) } },
+      files: { "state.json": { content } },
     }),
   })
   if (!res.ok) {
@@ -891,8 +900,10 @@ export async function writeStateStore(state) {
       db.close()
     }
   }
-  const merged = mergeState(await readGistState(), state)
-  await writeGistState(merged)
+  const latest = await readGistState({ preserveNumbers: true })
+  if (Object.hasOwn(state, "drafts")) assertGistEvidenceUnchanged(latest.document, state.drafts)
+  const merged = mergeState(latest.state, state)
+  await writeGistState(merged, latest.document)
 }
 
 function revisionConflict() {
@@ -951,7 +962,8 @@ export async function updateDraftStore(draftId, updater, { expectedRevision } = 
     }
   }
 
-  const state = await readGistState()
+  const initial = await readGistState({ preserveNumbers: true })
+  const state = initial.state
   const drafts = state.drafts || []
   const draftIndex = drafts.findIndex((draft) => draft.id === draftId)
   if (draftIndex === -1) {
@@ -966,15 +978,18 @@ export async function updateDraftStore(draftId, updater, { expectedRevision } = 
     return { state, draft: null }
   }
 
+  assertGistEvidenceUnchanged(initial.document, [nextDraft])
   nextDraft.updated_at = new Date().toISOString()
-  const latestState = await readGistState()
+  const latest = await readGistState({ preserveNumbers: true })
+  const latestState = latest.state
   const latestDraft = latestState.drafts?.find((candidate) => candidate.id === draftId)
   // Reject changes visible at the second read, including approval revocation or
   // a newly submitted platform attempt with an unchanged content revision.
   // Gist has no transaction here: the remaining GET-to-PATCH race is unchanged.
-  if (!latestDraft || draftMutationSnapshot(latestDraft, latestState) !== observedSnapshot) throw revisionConflict()
+  if (!latestDraft || draftMutationSnapshot(latestDraft, latestState) !== observedSnapshot
+    || gistDraftNumericIdentity(initial.document, draftId) !== gistDraftNumericIdentity(latest.document, draftId)) throw revisionConflict()
   const mergedState = mergeDraftIntoState(latestState, nextDraft)
-  await writeGistState(mergedState)
+  await writeGistState(mergedState, latest.document)
   const mergedDraft = (mergedState.drafts || []).find((candidate) => candidate.id === draftId) || nextDraft
   return { state: mergedState, draft: mergedDraft }
 }
