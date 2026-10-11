@@ -235,6 +235,7 @@ def run_workflow_health(
     *,
     beacon: Mapping[str, Any] | None = None,
     now: datetime | None = None,
+    production_paused: bool = False,
 ) -> dict[str, Any]:
     """Classify every workflow + the self-heal heartbeat; bucket and summarize."""
     now = now or datetime.now(timezone.utc)
@@ -242,7 +243,13 @@ def run_workflow_health(
     for name, info in runs_by_workflow.items():
         file = str(info.get("file") or "")
         runs = info.get("runs") or []
-        verdicts.append(classify_workflow_run(name, file, runs, now=now))
+        verdict = classify_workflow_run(name, file, runs, now=now)
+        if (production_paused is True and name == "theheat-bot" and file == "bot.yml"
+                and verdict["category"] != "failing"):
+            # A successful workflow may contain only skipped jobs. Keep its run
+            # details, but never resolve a collection incident from pause intent.
+            verdict = {**verdict, "category": "paused", "reason": "production_pause_configured"}
+        verdicts.append(verdict)
 
     liveness = selfheal_liveness_verdict(beacon, now=now)
     if liveness is not None:
@@ -251,15 +258,18 @@ def run_workflow_health(
     failing = [v for v in verdicts if v["category"] == "failing"]
     healthy = [v for v in verdicts if v["category"] == "healthy"]
     unknown = [v for v in verdicts if v["category"] == "unknown"]
+    paused = [v for v in verdicts if v["category"] == "paused"]
     return {
         "has_failures": len(failing) > 0,
         "failing": failing,
         "healthy": healthy,
         "unknown": unknown,
+        "paused": paused,
         "summary": {
             "failing": len(failing),
             "healthy": len(healthy),
             "unknown": len(unknown),
+            "paused": len(paused),
             "total": len(verdicts),
         },
     }
@@ -581,8 +591,11 @@ def _print_report(report: Mapping[str, Any]) -> None:
     s = report["summary"]
     print(
         f"[workflow-health] {s['total']} checks: "
-        f"{s['failing']} failing, {s['healthy']} healthy, {s['unknown']} unknown"
+        f"{s['failing']} failing, {s['healthy']} healthy, {s['unknown']} unknown, "
+        f"{s.get('paused', 0)} paused"
     )
+    if report.get("paused"):
+        print("  PAUSED   Collection pause configured; workflow success does not establish recovery.")
     for v in report["failing"]:
         print(f"  FAILING  {v['workflow']} [{v.get('conclusion')}]: {v.get('run_url')}")
 
@@ -598,7 +611,10 @@ def main(argv: list[str] | None = None) -> int:
 
     runs_by_workflow = fetch_runs_by_workflow()
     beacon = fetch_selfheal_beacon()
-    report = run_workflow_health(runs_by_workflow, beacon=beacon)
+    report = run_workflow_health(
+        runs_by_workflow, beacon=beacon,
+        production_paused=os.environ.get("THEHEAT_PRODUCTION_PAUSED") == "1",
+    )
     _print_report(report)
 
     if not apply:
