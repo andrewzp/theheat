@@ -29,6 +29,9 @@ export function DraftWorkbench({
   draftAct,
   draftAction,
   draftFeedback,
+  pendingCommand,
+  checkLocalCommand,
+  retryLocalCommand,
   botRuns,
 }) {
   const [reviewConfirmedIdentity, setReviewConfirmedIdentity] = useState("")
@@ -49,10 +52,10 @@ export function DraftWorkbench({
         <div>
           <h2>Draft Workbench</h2>
           <p className="card-kicker">
-            Review the queue with source facts, score context, alternate copy, and approval policy in one place.
+            {selectedDraft?.local_preview ? "Invented local preview. Approvals are parked; nothing is published." : "Review the queue with source facts, score context, alternate copy, and approval policy in one place."}
           </p>
         </div>
-        <span className="backend-pill">{drafts.length} awaiting publication</span>
+        <span className="backend-pill">{drafts.length} {selectedDraft?.local_preview ? "local drafts" : "awaiting publication"}</span>
       </div>
 
       {drafts.length > 0 ? (
@@ -63,6 +66,7 @@ export function DraftWorkbench({
                 key={draft.id}
                 type="button"
                 className={`queue-item ${selectedDraft?.id === draft.id ? "selected" : ""}`}
+                disabled={!!pendingCommand}
                 onClick={() => {
                   setSelectedDraftId(draft.id)
                   setEditingId(null)
@@ -78,7 +82,7 @@ export function DraftWorkbench({
                 <div className="queue-text">{clipText(draft.text, 118)}</div>
                 <div className="queue-meta">
                   <span>{timeAgo(draft.created_at)}</span>
-                  <span>{draft.publish_blocked ? "publication needs reconciliation" : draft.review_status === "media_review_required" ? "graphic review needed" : draft.review_status === "policy_unverified" ? "editorial policy unverified" : draft.review_status !== "passed" ? "review needed" : draft.status === "approved" ? "awaiting publication" : draft.review_kind === "human" ? "human reviewed" : policySummary(draft)}</span>
+                  <span>{draft.publish_blocked ? "publication needs reconciliation" : draft.review_status === "media_review_required" ? "graphic review needed" : draft.review_status === "policy_unverified" ? "editorial policy unverified" : draft.review_status !== "passed" ? "review needed" : draft.status === "approved" ? (draft.local_preview ? "local intent parked" : "awaiting publication") : draft.review_kind === "human" ? "human reviewed" : policySummary(draft)}</span>
                 </div>
               </button>
             ))}
@@ -98,7 +102,7 @@ export function DraftWorkbench({
 
                 <div className="draft-status-row">
                   <span className="workbench-pill">
-                    {selectedDraft.publish_blocked ? "publication needs reconciliation" : selectedDraft.review_status === "media_review_required" ? "graphic review needed" : selectedDraft.review_status === "policy_unverified" ? "editorial policy unverified" : controls.conflict ? "conflicting versions" : controls.needsReview ? "review needed" : selectedDraft.status === "approved" ? "awaiting publication" : selectedDraft.review_kind === "human" ? "human reviewed" : "model checks current"}
+                    {selectedDraft.publish_blocked ? "publication needs reconciliation" : selectedDraft.review_status === "media_review_required" ? "graphic review needed" : selectedDraft.review_status === "policy_unverified" ? "editorial policy unverified" : controls.conflict ? "conflicting versions" : controls.needsReview ? "review needed" : selectedDraft.status === "approved" ? (selectedDraft.local_preview ? "local intent parked" : "awaiting publication") : selectedDraft.review_kind === "human" ? "human reviewed" : "model checks current"}
                   </span>
                   <span className="workbench-pill">
                     signal {selectedDraft.score?.total ?? "—"}
@@ -128,6 +132,7 @@ export function DraftWorkbench({
                 {editingId === selectedDraft.id ? (
                   <>
                     <textarea
+                      disabled={!!pendingCommand}
                       className="draft-edit-area"
                       value={editText}
                       onChange={(e) => setEditText(e.target.value)}
@@ -293,7 +298,7 @@ export function DraftWorkbench({
                         : controls.needsReview
                         ? "This version needs review before approval."
                         : selectedDraft.review_kind === "human"
-                        ? "Human review permits manual posting. Automatic scheduling requires current model checks."
+                        ? (selectedDraft.local_preview ? "Human review permits local approval. Nothing will be published." : "Human review permits manual posting. Automatic scheduling requires current model checks.")
                         : selectedDraft.approval_policy?.mode === "armed_auto"
                         ? "Policy armed this draft automatically."
                         : selectedDraft.approval_policy?.mode === "suggested_auto"
@@ -403,7 +408,7 @@ export function DraftWorkbench({
                       >
                         Save
                       </button>
-                      <button type="button" className="btn sm" onClick={() => setEditingId(null)}>
+                      <button type="button" className="btn sm" disabled={!!pendingCommand} onClick={() => setEditingId(null)}>
                         Cancel
                       </button>
                     </>
@@ -415,7 +420,7 @@ export function DraftWorkbench({
                         disabled={!!draftAction || !controls.canApprove}
                         onClick={() => draftAct(selectedDraft.id, "approve")}
                       >
-                        {draftAction === selectedDraft.id ? "..." : "Approve + Post"}
+                        {draftAction === selectedDraft.id ? "..." : selectedDraft.local_preview ? "Approve locally" : "Approve + Post"}
                       </button>
                       <button
                         type="button"
@@ -440,11 +445,11 @@ export function DraftWorkbench({
                           disabled={!!draftAction || !controls.canEdit}
                           onClick={() => draftAct(selectedDraft.id, "cancel_auto_approve")}
                         >
-                          {selectedDraft.status === "approved" ? "Cancel queued approval" : `Cancel ${countdownText(selectedDraft.auto_approve_at)}`}
+                          {selectedDraft.status === "approved" ? (selectedDraft.local_preview ? "Cancel parked approval" : "Cancel queued approval") : `Cancel ${countdownText(selectedDraft.auto_approve_at)}`}
                         </button>
                       ) : !controls.canSchedule ? (
                         <button type="button" className="btn sm" disabled>
-                          {selectedDraft.review_kind === "human" ? "Manual posting only" : "Auto unavailable"}
+                          {selectedDraft.local_preview ? "Publication unavailable" : selectedDraft.review_kind === "human" ? "Manual posting only" : "Auto unavailable"}
                         </button>
                       ) : (
                         <button
@@ -463,6 +468,12 @@ export function DraftWorkbench({
                     </>
                   )}
                 </div>
+                {pendingCommand && pendingCommand.draftId === selectedDraft.id && (
+                  <div className="draft-actions" aria-label="Pending local command">
+                    <button className="btn sm" type="button" onClick={checkLocalCommand}>Check result</button>
+                    <button className="btn sm" type="button" onClick={retryLocalCommand}>Retry same action</button>
+                  </div>
+                )}
                 {draftFeedback && (!draftFeedback.draftId || draftFeedback.draftId === selectedDraft.id) && (
                   <div className={`draft-feedback ${draftFeedback.type}`} role="alert">
                     {draftFeedback.text}

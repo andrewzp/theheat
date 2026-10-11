@@ -1,3 +1,4 @@
+import { acceptLocalCommand, localCommandRequest, localDraftProjection, previewConfigured, previewError } from "../../../lib/draft-command-client.js"
 import { dashboardEditorialPolicy } from "../../../lib/editorial-policy.js"
 import { dashboardAutomaticPolicy } from "../../../lib/publication-control.js"
 import { readStateStore, updateDraftStore } from "../../../lib/state-store.js"
@@ -62,7 +63,8 @@ function assertReviewed(draft, policy, modelOnly = false) {
   }
 }
 
-function projection(draft, state) {
+function projection(draft, state, local = null) {
+  if (local) return localDraftProjection(draft, state, local)
   try {
     return { ...projectDraft(draft, dashboardEditorialPolicy(state).policy), editorial_policy: dashboardEditorialPolicy(state), automatic_publication: dashboardAutomaticPolicy(state), publish_blocked: hasUnresolvedPublish(draft, state) }
   } catch (error) {
@@ -74,7 +76,13 @@ export async function GET(request) {
   const authError = requireDashboardAuth(request)
   if (authError) return authError
   try {
-    const state = await readStateStore()
+    if (previewConfigured() && new URL(request.url).searchParams.has("commandId")) {
+      const id = new URL(request.url).searchParams.get("commandId")
+      const { payload } = await localCommandRequest(request, `/commands/${id}`)
+      return Response.json(payload, { headers: { "Cache-Control": "private, no-store" } })
+    }
+    const local = previewConfigured() ? (await localCommandRequest(request, "/state")).payload : null
+    const state = local ? local.state : await readStateStore()
     const drafts = (state.drafts || [])
       .filter((d) => ["pending", "approved"].includes(d.status))
       .sort((a, b) => {
@@ -82,9 +90,10 @@ export async function GET(request) {
         const priorityB = (b.score?.total || 0) + (b.candidate_score?.total || 0) * 0.35
         return priorityB - priorityA || new Date(b.created_at || 0) - new Date(a.created_at || 0)
       })
-      .map((d) => ({ ...projection(d, state), tweet_id: d.tweet_id ?? null }))
-    return Response.json({ drafts })
+      .map((d) => ({ ...projection(d, state, local), tweet_id: d.tweet_id ?? null }))
+    return Response.json({ drafts, ...(local ? { local_preview: true, state_version: local.state_version } : {}) }, { headers: { "Cache-Control": "private, no-store" } })
   } catch (error) {
+    if (previewConfigured()) return previewError(error)
     return Response.json({ drafts: [], error: error.message }, { status: 500 })
   }
 }
@@ -92,6 +101,7 @@ export async function GET(request) {
 export async function POST(request) {
   const authError = requireDashboardAuth(request)
   if (authError) return authError
+  if (previewConfigured()) return acceptLocalCommand(request)
   const { body, error } = await readJsonObject(request)
   if (error) return error
   const { action, draftId, editedText, delayMinutes, candidateRank, expectedRevision } = body

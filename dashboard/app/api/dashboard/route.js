@@ -1,3 +1,4 @@
+import { localCommandRequest, localDraftProjection, previewConfigured, previewError } from "../../../lib/draft-command-client.js"
 import { dashboardEditorialPolicy } from "../../../lib/editorial-policy.js"
 import { dashboardAutomaticPolicy } from "../../../lib/publication-control.js"
 import { getStateBackend, readStateStore } from "../../../lib/state-store.js"
@@ -27,7 +28,7 @@ function tsValue(s) {
   return Number.isFinite(parsed) ? parsed : 0
 }
 
-function pendingDrafts(state) {
+function pendingDrafts(state, local = null) {
   return (state?.drafts || [])
     .filter((d) => ["pending", "approved"].includes(d.status))
     .sort((a, b) => {
@@ -39,6 +40,7 @@ function pendingDrafts(state) {
     })
     .map((d) => {
       try {
+        if (local) return localDraftProjection(d, state, local)
         return { ...projectDraft(d, dashboardEditorialPolicy(state).policy), editorial_policy: dashboardEditorialPolicy(state), automatic_publication: dashboardAutomaticPolicy(state), publish_blocked: hasUnresolvedPublish(d, state), tweet_id: d.tweet_id ?? null }
       } catch (error) {
         return { ...d, text: typeof d.text === "string" ? d.text : "[Invalid draft text]", revision_identity: null, review_status: "conflict", review_kind: null, publish_blocked: true, review_error: error.message, tweet_id: d.tweet_id ?? null }
@@ -155,25 +157,28 @@ export async function GET(request) {
   }
 
   try {
-    const state = await readStateStore()
+    const local = previewConfigured() ? (await localCommandRequest(request, "/state")).payload : null
+    const state = local ? local.state : await readStateStore()
+    results.local_preview = !!local
     results.costEvidence = buildCostEvidence(state, {scenario: url.searchParams.get("cost_scenario")})
     results.state = projectStateForDashboard(state)
-    results.stateBackend = getStateBackend()
-    results.drafts = { drafts: pendingDrafts(state), posted: postedDraftsWithMetrics(state) }
+    results.stateBackend = local ? "local command preview" : getStateBackend()
+    results.drafts = { drafts: pendingDrafts(state, local), posted: postedDraftsWithMetrics(state) }
     results.suppressions = suppressionsPayload(state, { sourceFilter, sinceFilter, limit })
     results.sourceHealth = buildSourceHealthPayload(state)
     results.config = buildRuntimeConfig(state)
     results.productHealth = buildProductHealth(state)
   } catch (error) {
+    if (previewConfigured()) return previewError(error)
     results.stateError = `Failed to fetch state store: ${error.message}`
   }
 
   try {
-    results.runs = await workflowRuns()
+    results.runs = previewConfigured() ? [] : await workflowRuns()
   } catch (error) {
     results.runs = []
     results.runsError = `Failed to fetch workflow runs: ${error.message}`
   }
 
-  return Response.json(results)
+  return Response.json(results, { headers: { "Cache-Control": "private, no-store" } })
 }

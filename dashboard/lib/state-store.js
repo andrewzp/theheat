@@ -1,3 +1,4 @@
+import { localCommandRequest, previewConfigured } from "./draft-command-client.js"
 import { mergeUsageObservations } from "./usage-observations.js"
 import { mergePublicationControl } from "./publication-control.js"
 import { mergeUsageLedgers } from "./usage-ledger.js"
@@ -863,7 +864,8 @@ export function getStateBackend() {
   return configuredBackend()
 }
 
-export async function readStateStore() {
+export async function readStateStore(request) {
+  if (previewConfigured()) return (await localCommandRequest(request, "/state")).payload.state
   if (configuredBackend() === "sqlite") {
     const db = connectDb()
     try {
@@ -877,6 +879,7 @@ export async function readStateStore() {
 }
 
 export async function writeStateStore(state) {
+  if (previewConfigured()) throw new Error("Local preview requires a domain command")
   if (configuredBackend() === "sqlite") {
     const db = connectDb()
     try {
@@ -911,6 +914,7 @@ function draftMutationSnapshot(draft, state) {
 }
 
 export async function updateDraftStore(draftId, updater, { expectedRevision } = {}) {
+  if (previewConfigured()) throw new Error("Local preview requires a domain command")
   if (configuredBackend() === "sqlite") {
     const db = connectDb()
     try {
