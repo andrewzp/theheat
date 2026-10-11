@@ -9,13 +9,15 @@ export function draftTextLength(text) { return typeof text === "string" ? Array.
 
 export function draftReviewControls(draft) {
   const pending = draft?.status === "pending"
-  const mutable = ["pending", "approved"].includes(draft?.status) && !draft?.publish_blocked
+  const mayEdit = !draft?.local_preview || ["editor", "publisher"].includes(draft.operator_role)
+  const mayApprove = !draft?.local_preview || draft.operator_role === "publisher"
+  const mutable = mayEdit && ["pending", "approved"].includes(draft?.status) && !draft?.publish_blocked
   const conflict = draft?.review_status === "conflict"
   const reviewed = draft?.review_status === "passed"
   return {
     canEdit: mutable,
     canReview: mutable && pending && !conflict && !reviewed && !["policy_unverified", "media_review_required"].includes(draft?.review_status),
-    canApprove: mutable && pending && reviewed,
+    canApprove: mayApprove && mutable && pending && reviewed,
     canSchedule: draft?.automatic_publication?.enabled === true && mutable && pending && reviewed && draft.review_kind === "model" && draft.approval_policy?.can_auto_approve !== false,
     needsReview: !reviewed,
     conflict,

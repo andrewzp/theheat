@@ -1,3 +1,5 @@
+import { localPreviewGuard } from "./local-preview-boundary.js"
+
 function getDashboardUsername() {
   return process.env.DASHBOARD_USERNAME || ""
 }
@@ -70,7 +72,7 @@ function verifyProtectedDeployment(request) {
   }
 }
 
-export function verifyDashboardAuth(request) {
+function verifyConfiguredAuth(request) {
   // Disabling Basic auth in production relies on the verified outer Vercel gate
   // at the generated deployment URL. Missing platform configuration fails closed.
   if (process.env.DASHBOARD_AUTH_DISABLED === "1") {
@@ -111,6 +113,13 @@ export function verifyDashboardAuth(request) {
   }
 
   return { ok: false, response: unauthorizedResponse() }
+}
+
+export function verifyDashboardAuth(request) {
+  const result = verifyConfiguredAuth(request)
+  if (!result.ok) return result
+  const previewError = localPreviewGuard(request)
+  return previewError ? { ok: false, response: previewError } : result
 }
 
 export function requireDashboardAuth(request) {

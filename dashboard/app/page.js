@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useRef } from "react"
 import { AutomationStatusStrip } from "./components/AutomationStrip.js"
 import { CredentialsCard } from "./components/CredentialsCard.js"
 import { DraftWorkbench } from "./components/DraftWorkbench.js"
@@ -15,6 +15,7 @@ import { COST_SCENARIO } from "../lib/usage-cost-contract.js"
 import { SuppressedView } from "./components/SuppressedView.js"
 import { hot10IsStale, hot10StaleDays, timeAgo, todayTweetCount } from "../lib/format.js"
 import { draftReviewControls, draftTextLength, revisionKey } from "../lib/draft-review-ui.js"
+import { createDraftCommand } from "../lib/draft-command-request.js"
 import "./dashboard.css"
 
 export default function Dashboard() {
@@ -31,6 +32,8 @@ export default function Dashboard() {
   const [draftAction, setDraftAction] = useState(null)
   const [selectedDraftId, setSelectedDraftId] = useState(null)
   const [draftFeedback, setDraftFeedback] = useState(null)
+  const [pendingCommand, setPendingCommand] = useState(null)
+  const previewSeen = useRef(false)
 
   // Compose
   const [composePrompt, setComposePrompt] = useState("")
@@ -77,12 +80,15 @@ export default function Dashboard() {
         ? `/api/dashboard?limit=50&source=${encodeURIComponent(suppressionsSourceFilter)}`
         : "/api/dashboard?limit=50"
       const dashboardRes = await fetch(`${dashboardUrl}&cost_scenario=${encodeURIComponent(COST_SCENARIO.scenario)}`)
-      if (!dashboardRes.ok) {
-        throw new Error(`dashboard refresh failed: ${dashboardRes.status}`)
-      }
       const payload = await dashboardRes.json()
+      if (payload.local_preview === true) previewSeen.current = true
+      if (!dashboardRes.ok) {
+        throw new Error(payload.error || `dashboard refresh failed: ${dashboardRes.status}`)
+      }
+      previewSeen.current = payload.local_preview === true
       setData({
         state: payload.state,
+        local_preview: payload.local_preview === true,
         stateBackend: payload.stateBackend,
         stateError: payload.stateError,
         runs: payload.runs || [],
@@ -111,6 +117,12 @@ export default function Dashboard() {
     } finally {
       setLoading(false)
       setRefreshing(false)
+    }
+
+    if (previewSeen.current) {
+      setAutomation(null)
+      setAutomationError("Local preview: collection and publication are unavailable.")
+      return
     }
 
     // Automation status — independent of dashboard fetch. A failure here is
@@ -149,6 +161,7 @@ export default function Dashboard() {
   }, [fetchData])
 
   async function trigger(mode) {
+    if (data?.local_preview) { setTriggerResult("Collection is unavailable in local preview."); return }
     setTriggering(mode)
     setTriggerResult(null)
     try {
@@ -167,12 +180,65 @@ export default function Dashboard() {
     }
   }
 
+  async function submitLocalCommand(saved) {
+    setPendingCommand(saved)
+    setDraftAction(saved.draftId)
+    try {
+      const response = await fetch("/api/drafts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(saved.command) })
+      const result = await response.json()
+      if (!response.ok) {
+        // A definite input/auth rejection can be corrected. An unavailable
+        // response leaves acceptance uncertain and retains the original body.
+        if (response.status < 500 && !pendingCommand) { setPendingCommand(null); setDraftAction(null) }
+        throw new Error(result.error || "Local authority unavailable")
+      }
+      setDraftFeedback({ type: "pending", draftId: saved.draftId, text: "Accepted and waiting for the local consumer. Your edit is preserved." })
+    } catch (error) {
+      setDraftFeedback({ type: "error", draftId: saved.draftId, text: `${error.message}. Check the result or retry the same action. Your edit is preserved.` })
+    }
+  }
+
+  async function checkLocalCommand() {
+    if (!pendingCommand) return
+    try {
+      const response = await fetch(`/api/drafts?commandId=${encodeURIComponent(pendingCommand.command.command_id)}`, { cache: "no-store" })
+      const payload = await response.json()
+      if (!response.ok) throw new Error(payload.error || "Local authority unavailable")
+      if (payload.status === "pending") {
+        setDraftFeedback({ type: "pending", draftId: pendingCommand.draftId, text: "Still waiting for the local consumer. Your edit is preserved." })
+        return
+      }
+      const result = payload.result
+      if (!result || !["applied", "unchanged", "rejected"].includes(result.status)) throw new Error("Unrecognized command result")
+      const rejected = result.status === "rejected"
+      setDraftFeedback({ type: rejected ? "error" : "success", draftId: pendingCommand.draftId,
+        text: rejected ? `${result.message} Your edit is preserved.`
+          : result.publish_intent_id ? "Approved locally. The intent is parked; nothing will be published."
+          : pendingCommand.action === "review" ? "Human review recorded for this exact version."
+          : pendingCommand.action === "edit" ? "Saved. Review this version against its sources before approval." : "Local command completed." })
+      if (!rejected) { setEditingId(null); setEditText(""); setEditingRevision(null) }
+      setPendingCommand(null)
+      setDraftAction(null)
+      await fetchData()
+    } catch (error) {
+      setDraftFeedback({ type: "error", draftId: pendingCommand.draftId, text: `${error.message}. The same action is retained for retry; your edit is preserved.` })
+    }
+  }
+
   async function draftAct(draftId, action, payload = {}) {
     // Backward-compat: if a string is passed (legacy 'edit' callers), treat as editedText
     if (typeof payload === "string") payload = { editedText: payload }
     const expectedRevision = payload.expectedRevision || (action === "edit"
       ? editingRevision
       : drafts.find((draft) => draft.id === draftId)?.revision_identity)
+    if (data?.local_preview) {
+      if (pendingCommand) return
+      try {
+        const draft = drafts.find((item) => item.id === draftId)
+        const command = createDraftCommand(draft, action, { ...payload, expectedRevision })
+        return await submitLocalCommand({ command, draftId, action })
+      } catch (error) { setDraftFeedback({ type: "error", draftId, text: error.message }); return }
+    }
     setDraftAction(draftId)
     setDraftFeedback(null)
     try {
@@ -227,6 +293,7 @@ export default function Dashboard() {
   }
 
   async function generateTweet() {
+    if (data?.local_preview) { setComposeStatus("Generation is unavailable in local preview."); return }
     setGenerating(true)
     setComposeStatus(null)
     try {
@@ -290,6 +357,18 @@ export default function Dashboard() {
       <AutomationStatusStrip status={automation} error={automationError} />
 
       <div className="dash">
+        {data?.local_preview && (
+          <div className="card full" role="status">
+            <strong>Invented local preview</strong>
+            <p>Approvals are parked. Collection, generation and publication are unavailable.</p>
+            {pendingCommand && activeTab !== "workbench" && (
+              <div className="draft-actions">
+                <button className="btn sm" type="button" onClick={checkLocalCommand}>Check result</button>
+                <button className="btn sm" type="button" onClick={() => submitLocalCommand(pendingCommand)}>Retry same action</button>
+              </div>
+            )}
+          </div>
+        )}
         <header>
           <h1
             role="button"
@@ -442,13 +521,16 @@ export default function Dashboard() {
             draftAct={draftAct}
             draftAction={draftAction}
             draftFeedback={draftFeedback}
+            pendingCommand={pendingCommand}
+            checkLocalCommand={checkLocalCommand}
+            retryLocalCommand={() => pendingCommand && submitLocalCommand(pendingCommand)}
             botRuns={runHistory}
           />
         ) : (
           <>
             {/* DRAFTS — primary view */}
             <div className="card full" style={{ marginBottom: 16 }}>
-              <h2>Drafts awaiting publication ({drafts.length})</h2>
+              <h2>{data?.local_preview ? "Local drafts" : "Drafts awaiting publication"} ({drafts.length})</h2>
               {drafts.length > 0 ? (
                 drafts.map((d) => {
                   const controls = draftReviewControls(d)
@@ -458,7 +540,7 @@ export default function Dashboard() {
                         <span className="draft-type">{d.type}</span>
                         <span className="draft-time">{timeAgo(d.created_at)}</span>
                         <span className="workbench-pill">
-                          {d.publish_blocked ? "publication needs reconciliation" : d.status === "approved" ? "awaiting publication" : controls.needsReview ? "review needed" : d.review_kind === "human" ? "human reviewed" : "model checks current"}
+                          {d.publish_blocked ? "publication needs reconciliation" : d.status === "approved" ? (d.local_preview ? "local intent parked" : "awaiting publication") : controls.needsReview ? "review needed" : d.review_kind === "human" ? "human reviewed" : "model checks current"}
                         </span>
                       </div>
                       <div className="draft-text">{d.text}</div>
@@ -470,7 +552,7 @@ export default function Dashboard() {
                           disabled={!!draftAction || !controls.canApprove || editingId === d.id}
                           onClick={() => draftAct(d.id, "approve")}
                         >
-                          {draftAction === d.id ? "..." : "Approve + Post"}
+                          {draftAction === d.id ? "..." : d.local_preview ? "Approve locally" : "Approve + Post"}
                         </button>
                         <button
                           type="button"
