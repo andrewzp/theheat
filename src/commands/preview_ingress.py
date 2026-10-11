@@ -28,7 +28,8 @@ from src.storage.postgres_projection import ProjectionError
 
 AUTH_CONTEXT = "verified-local-preview-basic-v1"
 ALLOWED_ACTIONS = frozenset({"edit_revision", "record_review", "approve_revision",
-                             "reject_revision", "cancel_approval", "select_candidate"})
+                             "reject_revision", "cancel_approval", "select_candidate",
+                             "request_candidate_checks", "admit_checked_candidate"})
 
 
 def safe_environment() -> None:
@@ -116,7 +117,7 @@ class Operators:
 
 class PreviewServer(HTTPServer):
     """Single bounded connection at a time; each request has a read deadline."""
-    def __init__(self, authority: PostgresCommandAuthority, operators: Operators, *, port: int, origin: str):
+    def __init__(self, authority: PostgresCommandAuthority, operators: Operators, *, port: int, origin: str, candidate_inputs: tuple[str, ...] = ()):
         safe_environment()
         parsed = urlsplit(origin)
         if (parsed.scheme != "http" or parsed.hostname != "127.0.0.1" or not parsed.port
@@ -124,6 +125,9 @@ class PreviewServer(HTTPServer):
             raise ValueError("explicit_loopback_origin_required")
         if authority.environment != "local":
             raise ValueError("local_authority_required")
+        if len(candidate_inputs) > 16 or len(set(candidate_inputs)) != len(candidate_inputs) or any(not re.fullmatch(r"[a-f0-9]{64}", v) for v in candidate_inputs):
+            raise ValueError("invalid_candidate_allowlist")
+        self.candidate_inputs = candidate_inputs
         self.authority, self.operators, self.origin = authority, operators, origin
         super().__init__(("127.0.0.1", port), PreviewHandler)
 
@@ -211,6 +215,7 @@ class PreviewHandler(BaseHTTPRequestHandler):
                 version, state = self.server.authority.read()
                 self.reply(200, {"state_version": version, "state": state,
                                  "editorial_policy": current_editorial_policy(), "role": actor.role,
+                                 "candidates": self.server.authority.candidate_projection(self.server.candidate_inputs, now=datetime.now(UTC)),
                                  "local_preview": True, "publication_enabled": False})
                 return
             if self.command == "GET" and re.fullmatch(r"/commands/[a-f0-9-]{36}", self.path):
@@ -267,6 +272,8 @@ class PreviewHandler(BaseHTTPRequestHandler):
             if command.action not in ALLOWED_ACTIONS:
                 self.reply(400, {"error": "Action unavailable in local preview", "code": "preview_action_unavailable"})
                 return
+            if command.action in {"request_candidate_checks", "admit_checked_candidate"} and command.payload["admission_input_id"] not in self.server.candidate_inputs:
+                raise CommandError("candidate_not_allowlisted", "Candidate is not in this local fixture")
             receipt = self.server.authority.accept(command, actor, now=now)
             self.reply(202, {"status": "pending", "receipt": receipt, "local_preview": True})
         except CommandError as exc:
@@ -301,10 +308,11 @@ def main() -> int:
     arguments(parser)
     parser.add_argument("--port", type=int, required=True)
     parser.add_argument("--origin", required=True)
+    parser.add_argument("--candidate-input-id", action="append", default=[])
     args = parser.parse_args()
     try:
         authority, operators = adapter(args)
-        with PreviewServer(authority, operators, port=args.port, origin=args.origin) as server:
+        with PreviewServer(authority, operators, port=args.port, origin=args.origin, candidate_inputs=tuple(args.candidate_input_id)) as server:
             server.serve_forever()
     except (ValueError, OSError, CommandError, ProjectionError):
         print('{"error":"local_preview_unavailable"}')

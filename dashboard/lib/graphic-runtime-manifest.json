@@ -1,6 +1,6 @@
 {
   "identity": {
-    "archive_sha256": "db1f822ea29c304d2cf057f43d10fc123254e1c25416e65d62e441072a564919",
+    "archive_sha256": "8fe35e7c364a3425e0ac79c36e1edd4768551b36caaa10a7aaed4c006cfef827",
     "deployment_files": {
       "api/graphic_preview.py": "abbde75deff02ba22b67df70f7783d33d8150bd119a5514f8007feb43191e0c9",
       "pyproject.toml": "6d161405a3084285699805cd15f4c0584aab66806b7f3414a5de8e6eef61290b",
@@ -44,7 +44,7 @@
       "src/editorial/candidates.py": "80d50c488f44fd879c137751701a306cfae78eb376c3da33b9b7f3150cf9270d",
       "src/editorial/marine_evidence.py": "7183f93f1068d75856063cf061a1dea8751bd4dd98cc1f1f34488bcf39296f5c",
       "src/editorial/publication.py": "7fa23a8f51530dc7f128beacc23689f0df7a8c95b6888beb39afca4212f1a5fe",
-      "src/editorial/revisions.py": "98ac320899d602e4d4fff7e1b83a39f140009e7511d07ec4d34af4511c934f0b",
+      "src/editorial/revisions.py": "c4d6ebed696a1174b0f961eb8e69971b2b5adbaccabab5628d72ed61f662318d",
       "src/editorial/scoring/__init__.py": "f969fa55020ff1a436f9bce87701b43f574a98f340f1d5345fd74a5410db0de4",
       "src/editorial/scoring/_shared.py": "ecfbe383674644f82223150fc3beb9761b0ec3942f31b93d245514721fee16f0",
       "src/editorial/scoring/air_quality.py": "973727e2037d76129d68283a0889e23fafc8034b993315fd35af3c6c894dd30b",
@@ -67,7 +67,7 @@
       "src/media/fonts/DejaVu-LICENSE.txt": "7a083b136e64d064794c3419751e5c7dd10d2f64c108fe5ba161eae5e5958a93",
       "src/media/fonts/DejaVuSansMono.ttf": "b4a6c3e4faab8773f4ff761d56451646409f29abedd68f05d38c2df667d3c582",
       "src/media/temperature_graphic_adapter.py": "3dee0f12a5e9fbdcd5b800e8ab8e96e17e81291729c50323c232f07452760255",
-      "src/state_schema.py": "df6bccb07c3621a6d09f131c17553085a0bdba42af6e6461f365792b8bf966c0",
+      "src/state_schema.py": "dd250ab6ea263afadbbfff1d43d447a9bac1cec87897f994013c53b1e1e2cd76",
       "src/two_bot/__init__.py": "57333e1314a97e2fc83e03db569e03b0199c67ff52fad71770853226b9a68f00",
       "src/two_bot/evidence_contract.py": "506c86325dd4b589d5cd4f202461b65447f323218ccbaa8eacc0c92230e8f6a8",
       "src/two_bot/intern/__init__.py": "2e34d6b9975fb831edbad10ed06d66aad2e8569a29cfd4cf17784177b91205e0",
@@ -77,12 +77,12 @@
       "src/two_bot/types.py": "36ed2e6475a655f4112012486795702159ed546c3040e8ef1874b7a0b02a9035"
     },
     "format": "saved-source-svg-preview-v2",
-    "policy_source_sha256": "f387041bffb5a7e3fa78eb7e8ff1a36ec5e607fa94c7b529abe1419a4ee11a1e",
+    "policy_source_sha256": "9c2b05c239e1bcff2d656ba811d560567feae4950ec5d7628a69d8e3bc17871f",
     "resource_sources": {
       "src/data/registry/country_codes.json": "data/country_codes.json",
       "src/data/registry/place_registry.json": "data/place_registry.json"
     },
     "schema_version": 1
   },
-  "runtime_sha256": "928eb7fdbac38910d4b8e5ec54c325b2eb0474cef0858ebc5c6670dcc36d7fa2"
+  "runtime_sha256": "1296e5aa0a5aa6b646da982b867411c7ae05fb78636015a4c30cb1f09c1dfa44"
 }

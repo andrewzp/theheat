@@ -14,7 +14,10 @@ import math
 import os
 from pathlib import Path
 import re
-from typing import Any
+from typing import Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.storage.hosted_staging import HostedStagingConfig
 
 MAX_BYTES = 16 * 1024 * 1024
 MAX_FIELDS = 512
@@ -191,6 +194,8 @@ def _catalog(connection, schema: str = SCHEMA) -> str:
 class PostgresProjectionRepository:
     """Explicit Unix-socket local rehearsal. Hosted auth/cutover are separate."""
 
+    _hosted_config: HostedStagingConfig
+
     def __init__(self, *, socket_directory: str | Path, database: str, user: str,
                  port: int = 5432, environment: str = "local"):
         _require(type(environment) is str and environment in {"local", "preview"}, "production_adapter_unavailable")
@@ -202,8 +207,42 @@ class PostgresProjectionRepository:
         self.database, self.user = _identifier(database), _identifier(user)
         self.port, self.environment = port, environment
 
+    @classmethod
+    def for_hosted_staging(cls, config):
+        """Explicit preview-only factory; normal construction stays Unix-only."""
+        from src.storage.hosted_staging import HostedStagingConfig
+        _require(cls is PostgresProjectionRepository and type(config) is HostedStagingConfig,
+                 "explicit_staging_config_required")
+        value = config.parameters()
+        result = cls.__new__(cls)
+        result.database, result.user = value["database"], value["role"]
+        result.port, result.environment = 5432, "preview"
+        result._hosted_config = config
+        return result
+
+    @contextmanager
+    def _transaction(self, connection):
+        with connection.transaction():
+            connection.execute("SET TRANSACTION ISOLATION LEVEL READ COMMITTED")
+            connection.execute("SET LOCAL search_path=pg_catalog")
+            connection.execute("SET LOCAL synchronous_commit=on")
+            _require(170000 <= connection.info.server_version < 180000,
+                     "unsupported_postgres_version")
+            yield connection
+
     @contextmanager
     def _connection(self, *, writing=False):
+        hosted = getattr(self, "_hosted_config", None)
+        if hosted is not None:
+            from src.storage.hosted_staging import connection as hosted_connection
+            driver = _driver()
+            try:
+                with hosted_connection(hosted, driver) as connection:
+                    with self._transaction(connection):
+                        yield connection
+            except driver.Error:
+                raise ProjectionError("write_outcome_unknown" if writing else "storage_unavailable") from None
+            return
         # libpq may otherwise pick up a service/host/password from the process.
         _require(not any(k.startswith("PG") for k in os.environ), "ambient_postgres_configuration_refused")
         _require(not (Path(self.socket_directory) / "password-file-disabled").exists(), "password_file_refused")
@@ -213,12 +252,7 @@ class PostgresProjectionRepository:
                                 user=self.user, password="", passfile=str(Path(self.socket_directory) / "password-file-disabled"), connect_timeout=5,
                                 application_name="theheat_projection_local", autocommit=True,
                                 options="-c statement_timeout=30000 -c lock_timeout=10000 -c timezone=UTC") as connection:
-                with connection.transaction():
-                    connection.execute("SET TRANSACTION ISOLATION LEVEL READ COMMITTED")
-                    connection.execute("SET LOCAL search_path=pg_catalog")
-                    connection.execute("SET LOCAL synchronous_commit=on")
-                    _require(170000 <= connection.info.server_version < 180000,
-                             "unsupported_postgres_version")
+                with self._transaction(connection):
                     yield connection
         except driver.Error:
             # A disconnect around COMMIT is ambiguous. Retry the same identity;

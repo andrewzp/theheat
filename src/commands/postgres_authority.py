@@ -13,7 +13,7 @@ from uuid import UUID
 from src.commands import postgres_batch, postgres_batch_results, postgres_batch_worker, postgres_spending
 from src.commands import postgres_check_observations, postgres_checks, postgres_media, postgres_media_commands
 from src.commands.reducer import AutomaticPolicy, reduce_command
-from src.commands.schema import MEDIA_ACTIONS, Command, CommandError, Principal, authorize, canonical_json, utc_datetime, utc_text
+from src.commands.schema import CANDIDATE_ACTIONS, MEDIA_ACTIONS, Command, CommandError, Principal, authorize, canonical_json, utc_datetime, utc_text
 from src.editorial.policy import current_editorial_policy
 from src.storage import postgres_projection as p
 
@@ -71,6 +71,15 @@ class PostgresCommandAuthority:
             port=port, environment=environment,
         )
         self.environment = environment
+
+    @classmethod
+    def for_hosted_staging(cls, config):
+        """Same transactions and role/catalog checks through an explicit TLS input."""
+        p._require(cls is PostgresCommandAuthority, "explicit_staging_config_required")
+        result = cls.__new__(cls)
+        result.projections = p.PostgresProjectionRepository.for_hosted_staging(config)
+        result.environment = "preview"
+        return result
 
     def _validate(self, c, *, runtime: bool = True) -> None:
         self.projections._validate(c, runtime=runtime)
@@ -453,10 +462,19 @@ class PostgresCommandAuthority:
                     editorial_policy = current_editorial_policy()
                     changed = None
                     media_transition = None
+                    candidate_transition = None
                     try:
                         if actor is None:
                             raise CommandError("forbidden", "Operator authorization was revoked before execution")
-                        if command.action in MEDIA_ACTIONS:
+                        if command.action in CANDIDATE_ACTIONS:
+                            from src.commands import postgres_candidate_admission as admission
+                            # Deterministic refusals keep their command result but
+                            # roll back every domain write (including a new lease).
+                            with c.transaction(), admission.expected_domain_failures():
+                                candidate_transition = admission.prepare(self, c, state, version, command, actor,
+                                    now=clock, policy=policy, editorial_policy=editorial_policy)
+                            reduction = candidate_transition.reduction
+                        elif command.action in MEDIA_ACTIONS:
                             media_transition = postgres_media_commands.prepare(c, state, command, actor,
                                 now=clock, editorial_policy=editorial_policy, environment=self.environment)
                             reduction = media_transition.reduction
@@ -464,6 +482,8 @@ class PostgresCommandAuthority:
                             reduction = reduce_command(state, command, actor, now=clock, policy=policy, editorial_policy=editorial_policy)
                         result = {"status": "applied" if reduction.changed_ids else "unchanged", "changed_ids": list(reduction.changed_ids),
                                   "identities": list(reduction.identities), "publish_intent_id": reduction.publish_intent_id}
+                        if candidate_transition is not None:
+                            result["candidate"] = candidate_transition.references
                         if media_transition is not None:
                             result["media"] = media_transition.references
                         if reduction.changed_ids:
@@ -471,8 +491,8 @@ class PostgresCommandAuthority:
                     except CommandError as exc:
                         result = {"status": "rejected", "code": exc.code, "message": str(exc)}
                     except (ValueError, TypeError, UnicodeError, OverflowError):
-                        if command.action in MEDIA_ACTIONS:
-                            # Media preparation converts deterministic input errors
+                        if command.action in MEDIA_ACTIONS | CANDIDATE_ACTIONS:
+                            # Domain preparation converts deterministic input errors
                             # itself; storage/implementation uncertainty rolls back.
                             raise
                         result = {"status": "rejected", "code": "invalid_revision", "message": "Stored revision cannot be validated"}
@@ -494,6 +514,80 @@ class PostgresCommandAuthority:
                     if command.action == "attach_media_revision" and result["status"] == "applied":
                         self._result(c, command.command_id)
         return result
+
+    def capture_candidate_input(self, payload: dict, *, now: datetime) -> dict:
+        """Trusted local fixture-producer input; no HTTP route grants this ability."""
+        from src.commands import postgres_candidate_admission as admission
+        with self.projections._connection(writing=True) as c:
+            self._validate(c)
+            version, state = self._state(c, lock=True)
+            receipt = admission.capture(c, payload, version=version, state=state,
+                policy=current_editorial_policy(), now=_clock(now), environment=self.environment)
+        return receipt
+
+    def candidate_projection(self, allowed: tuple[str, ...], *, now: datetime) -> list[dict]:
+        from src.commands import postgres_candidate_admission as admission
+        with self.projections._connection() as c:
+            self._validate(c)
+            version, state = self._state(c, lock=True)
+            result = admission.project(self, c, allowed, version=version, state=state,
+                policy=current_editorial_policy(), now=_clock(now))
+        return result
+
+    def execute_candidate_check_once(self, command_id: str, resolve_principal, *, clock,
+                                     reservation: dict | None = None, enabled: bool = False) -> dict:
+        """Separate explicitly enabled runner using the existing four-stage executor.
+
+        Reauthorize and compare the locked state for every grant/observation/read.
+        The browser cannot select the owner, packet, role, provider or reservation.
+        """
+        from src.commands import postgres_candidate_admission as admission
+        from src.two_bot.check_executor import execute_check_once
+        if type(enabled) is not bool:
+            raise ValueError("check_execution_flag_requires_boolean")
+        if not enabled:
+            return execute_check_once(self, "", current_context={}, checker_state={}, owner="", clock=clock)
+        authority = self
+        command_id = _id(command_id)
+
+        def transaction(operation, payload=None, *, now=None, raw=None, request=None, receipt=None):
+            at = utc_datetime(now if now is not None else clock())
+            with authority.projections._connection(writing=operation not in {"context", "read", "request", "response"}) as c:
+                authority._validate(c)
+                version, state = authority._state(c, lock=True)
+                command, value, identity = admission.runner_context(authority, c, command_id, resolve_principal,
+                    version=version, state=state, policy=current_editorial_policy(), now=at)
+                if operation == "context":
+                    return command, value, identity, state
+                if operation == "batch":
+                    admission.refuse(payload["job_id"] == value["job_id"] and payload["owner"] == admission.owner_for(command), "check_request_mismatch")
+                    return postgres_batch_worker.apply(c, "acquire", payload, now=utc_text(at), environment=authority.environment)
+                admission.refuse(payload["check_set_id"] == identity, "check_request_mismatch")
+                if operation in {"begin", "complete", "status"}:
+                    admission.refuse(payload["owner"] == admission.owner_for(command), "check_owner_mismatch")
+                    return postgres_checks.apply(c, operation, payload, now=utc_text(at), environment=authority.environment, request=request, receipt=receipt)
+                if operation in {"read", "observe"}:
+                    return postgres_check_observations.apply(c, operation, payload, now=utc_text(at), environment=authority.environment, raw=raw)
+                reader = postgres_check_observations.read_response if operation == "response" else postgres_check_observations.read_request
+                return reader(c, payload["check_set_id"], payload["stage"], payload["grant_id"], environment=authority.environment)
+
+        command, value, identity, state = transaction("context")
+        class ScopedAuthority:
+            def batch_work(self, action, payload, *, now, raw=None):
+                admission.refuse(action == "acquire" and raw is None, "check_operation_refused")
+                return transaction("batch", payload, now=now)
+            def candidate_checks(self, action, payload, *, now, request=None, receipt=None):
+                admission.refuse(action in {"begin", "complete", "status"}, "check_operation_refused")
+                return transaction(action, payload, now=now, request=request, receipt=receipt)
+            def check_execution(self, action, payload, *, now, raw=None):
+                admission.refuse(action in {"read", "observe"}, "check_operation_refused")
+                return transaction(action, payload, now=now, raw=raw)
+            def read_check_request(self, check_set_id, stage, grant_id):
+                return transaction("request", dict(check_set_id=check_set_id, stage=stage, grant_id=grant_id))
+            def read_check_response(self, check_set_id, stage, grant_id):
+                return transaction("response", dict(check_set_id=check_set_id, stage=stage, grant_id=grant_id))
+        return execute_check_once(ScopedAuthority(), identity, current_context=admission.context_for(value, current_editorial_policy()),
+            checker_state=state, owner=admission.owner_for(command), clock=clock, reservation=reservation, enabled=enabled)
 
     def read(self) -> tuple[int, dict]:
         with self.projections._connection() as c:

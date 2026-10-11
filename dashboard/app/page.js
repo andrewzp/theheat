@@ -15,7 +15,7 @@ import { COST_SCENARIO } from "../lib/usage-cost-contract.js"
 import { SuppressedView } from "./components/SuppressedView.js"
 import { hot10IsStale, hot10StaleDays, timeAgo, todayTweetCount } from "../lib/format.js"
 import { draftReviewControls, draftTextLength, revisionKey } from "../lib/draft-review-ui.js"
-import { createDraftCommand } from "../lib/draft-command-request.js"
+import { createDraftCommand, createCandidateCommand } from "../lib/draft-command-request.js"
 import "./dashboard.css"
 
 export default function Dashboard() {
@@ -88,6 +88,8 @@ export default function Dashboard() {
       previewSeen.current = payload.local_preview === true
       setData({
         state: payload.state,
+        candidates: payload.candidates || [],
+        operator_role: payload.operator_role,
         local_preview: payload.local_preview === true,
         stateBackend: payload.stateBackend,
         stateError: payload.stateError,
@@ -216,6 +218,7 @@ export default function Dashboard() {
           : result.publish_intent_id ? "Approved locally. The intent is parked; nothing will be published."
           : pendingCommand.action === "review" ? "Human review recorded for this exact version."
           : pendingCommand.action === "edit" ? "Saved. Review this version against its sources before approval." : "Local command completed." })
+      if (!rejected && result.candidate?.draft_id) setSelectedDraftId(result.candidate.draft_id)
       if (!rejected) { setEditingId(null); setEditText(""); setEditingRevision(null) }
       setPendingCommand(null)
       setDraftAction(null)
@@ -509,6 +512,10 @@ export default function Dashboard() {
         ) : activeTab === "workbench" ? (
           <DraftWorkbench
             drafts={drafts}
+            localCandidates={data?.candidates || []}
+            localRole={data?.operator_role}
+            candidateAct={(candidate, action) => submitLocalCommand({ command: createCandidateCommand(candidate, action), draftId: candidate.admission_input_id, action })}
+            refreshCandidates={fetchData}
             selectedDraftId={selectedDraftId}
             setSelectedDraftId={setSelectedDraftId}
             editingId={editingId}

@@ -17,6 +17,10 @@ import {
 
 export function DraftWorkbench({
   drafts,
+  localCandidates = [],
+  localRole,
+  candidateAct,
+  refreshCandidates,
   selectedDraftId,
   setSelectedDraftId,
   editingId,
@@ -57,6 +61,34 @@ export function DraftWorkbench({
         </div>
         <span className="backend-pill">{drafts.length} {selectedDraft?.local_preview ? "local drafts" : "awaiting publication"}</span>
       </div>
+
+      {localCandidates.length > 0 && (
+        <section aria-label="Local unchecked candidates" className="card" style={{ marginBottom: 16 }}>
+          <h3>Retained candidates</h3>
+          <p>Invented local evidence. Required checks run separately. Cost is unknown; nothing is published.</p>
+          {localCandidates.map((candidate) => (
+            <article key={candidate.admission_input_id} style={{ padding: "12px 0", overflowWrap: "anywhere" }}>
+              <strong>{candidate.source?.type}: {candidate.source?.event_id}</strong>
+              <p>{candidate.source?.where} · {candidate.source?.when}</p>
+              {candidate.source?.headline_metric && <p>{candidate.source.headline_metric.label.replaceAll("_", " ")}: {candidate.source.headline_metric.value} {candidate.source.headline_metric.unit}</p>}
+              {candidate.text && <blockquote>{candidate.text}</blockquote>}
+              <details><summary>Retained source facts</summary><ul>{(candidate.source?.facts || []).map((fact, i) => <li key={i}>{fact.label.replaceAll("_", " ")}: {fact.value} {fact.unit}</li>)}</ul></details>
+              {candidate.last_observed_at && <p className="text-muted">Last check response: {candidate.last_observed_at}</p>}
+              <p role="status">{({ not_checked: "Not checked", checks_pending: "Checks pending", checks_completed: "Required checks completed", checks_blocked: "Checks blocked", stale: "Candidate changed; stage a new attempt", admitted: "Saved to local drafts" })[candidate.status] || "Unavailable"}{candidate.reason ? ` — ${candidate.reason}` : ""}</p>
+              <ul>{Object.entries(candidate.stages || {}).map(([stage, disposition]) => <li key={stage}>{stage.replaceAll("_", " ")}: {disposition}</li>)}</ul>
+              {candidate.saved_draft_id ? <button type="button" className="btn btn-ghost" disabled={!!pendingCommand || !!editingId} onClick={() => setSelectedDraftId(candidate.saved_draft_id)}>Open saved draft</button>
+                : candidate.status === "not_checked" ? <button type="button" className="btn btn-blue" style={{ minHeight: 44 }} disabled={localRole === "viewer" || !!pendingCommand || !!editingId} onClick={() => candidateAct(candidate, "request_candidate_checks")}>Check candidate</button>
+                : candidate.required_checks_completed ? <button type="button" className="btn btn-blue" style={{ minHeight: 44 }} disabled={localRole === "viewer" || !!pendingCommand || !!editingId} onClick={() => candidateAct(candidate, "admit_checked_candidate")}>Add to local drafts</button> : null}
+            </article>
+          ))}
+          <button type="button" className="btn btn-ghost" style={{ minHeight: 44 }} onClick={refreshCandidates}>Refresh check progress</button>
+          {localCandidates.some((candidate) => candidate.admission_input_id === draftFeedback?.draftId) && <p role="status">{draftFeedback.text}</p>}
+          {pendingCommand?.command?.targets?.length === 0 && <div>
+            <button type="button" className="btn btn-ghost" style={{ minHeight: 44 }} onClick={checkLocalCommand}>Check command result</button>
+            <button type="button" className="btn btn-ghost" style={{ minHeight: 44 }} onClick={retryLocalCommand}>Retry same command</button>
+          </div>}
+        </section>
+      )}
 
       {drafts.length > 0 ? (
         <div className="draft-desk">

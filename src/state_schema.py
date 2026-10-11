@@ -202,6 +202,23 @@ class DraftIdentity(TypedDict):
     evidence_sha256: str
 
 
+class RequiredCheckStageBinding(TypedDict):
+    grant_id: str
+    request_sha256: str
+    observation_sha256: str
+    receipt_sha256: str
+
+
+class RequiredChecksBinding(TypedDict):
+    schema_version: int
+    check_set_id: str
+    candidate_id: str
+    derivation_id: str
+    checker_state_sha256: str
+    completion_sha256: str
+    stages: dict[str, RequiredCheckStageBinding]
+
+
 class DraftRevisionFields(TypedDict, total=False):
     """Additive fields carried in each heterogeneous draft's JSON payload.
 

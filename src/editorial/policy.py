@@ -12,6 +12,7 @@ from src.editorial.revisions import fingerprint
 
 ROOT = Path(__file__).resolve().parents[2]
 POLICY_FILES = (
+    "src/storage/hosted_staging.py", "src/storage/postgres_projection.py",
     "src/storage/scientific_supply.py", "src/commands/preview_ingress.py",
     "src/data/places.py", "data/place_registry.json", "data/country_codes.json",
     "src/commands/postgres_batch_results.py", "src/commands/postgres_checks.py",
@@ -46,6 +47,8 @@ POLICY_FILES = (
     "src/data/coral_dhw.py", "src/data/coral_evidence.py", "src/data/coral_source_contract.py", "src/data/coral_regional_contract.py",
     "src/data/air_quality.py", "src/data/air_quality_availability.py", "src/data/air_quality_contract.py", "src/data/air_quality_evidence.py",
     "src/data/firms.py", "src/data/fire_source_contract.py", "src/data/fire_identity.py", "src/data/fire_evidence.py",
+    "src/editorial/draft_admission.py", "src/orchestrator/dedup.py",
+    "src/commands/postgres_candidate_admission.py",
     "src/orchestrator/draft_save.py", "src/orchestrator/sources/firms.py", "src/orchestrator/triage_queue.py",
     "src/editorial/synthesis.py", "src/editorial/thresholds.py",
     "src/editorial/marine_evidence.py",

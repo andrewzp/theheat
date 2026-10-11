@@ -79,6 +79,21 @@ function policyMatches(binding, policy) {
   try { return validEditorialPolicy(policy) && validEditorialPolicy(binding?.editorial_policy) && fingerprint(binding.editorial_policy) === fingerprint(policy) && binding.policy_sha256 === fingerprint(policy) } catch { return false }
 }
 
+export function requiredChecksFingerprint(value) {
+  const fields = ["schema_version", "check_set_id", "candidate_id", "derivation_id", "checker_state_sha256", "completion_sha256", "stages"]
+  const exact = (v, keys) => v && typeof v === "object" && !Array.isArray(v) && Object.keys(v).length === keys.length && keys.every((k) => Object.hasOwn(v, k))
+  const sha = (v) => typeof v === "string" && /^[a-f0-9]{64}$/.test(v)
+  if (!exact(value, fields) || value.schema_version !== 1 || !fields.filter((k) => !["schema_version", "stages"].includes(k)).every((k) => sha(value[k]))) return null
+  if (!exact(value.stages, ["deterministic", "safety", "fact_check", "critic"])) return null
+  if (!Object.values(value.stages).every((row) => exact(row, ["grant_id", "request_sha256", "observation_sha256", "receipt_sha256"]) && Object.values(row).every(sha))) return null
+  return fingerprint(value)
+}
+function proofMatches(value, binding) {
+  if (!Object.hasOwn(value, "required_checks_binding")) return !Object.hasOwn(binding, "required_checks_sha256")
+  const digest = requiredChecksFingerprint(value.required_checks_binding)
+  return digest !== null && digest === binding.required_checks_sha256
+}
+
 export function reviewIsCurrent(draft, policy = null) {
   if (Object.hasOwn(draft, "media_attachment")) return false
   const binding = draft.review_binding
@@ -86,7 +101,7 @@ export function reviewIsCurrent(draft, policy = null) {
   if (!policyMatches(binding, policy)) return false
   if (binding.kind === "human") return true
   if (binding.kind !== "model" || !checksPass(twoBot(draft))) return false
-  try { return binding.checks_sha256 === fingerprint(checks(twoBot(draft))) } catch { return false }
+  try { return proofMatches(twoBot(draft), binding) && binding.checks_sha256 === fingerprint(checks(twoBot(draft))) } catch { return false }
 }
 
 export function approvalIsCurrent(draft, mode = null, policy = null) {
@@ -122,7 +137,7 @@ export function recordModelReview(draft, policy = null) {
   const value = twoBot(draft)
   let proven = false
   try {
-    proven = !Object.hasOwn(draft, "media_attachment") && validEditorialPolicy(policy) && value.reviewed_policy_sha256 === fingerprint(policy) && checksPass(value) && value.reviewed_text_sha256 === textHash(draft.text ?? "")
+    proven = !Object.hasOwn(value, "required_checks_binding") && !Object.hasOwn(draft, "media_attachment") && validEditorialPolicy(policy) && value.reviewed_policy_sha256 === fingerprint(policy) && checksPass(value) && value.reviewed_text_sha256 === textHash(draft.text ?? "")
       && Object.hasOwn(value, "bundle") && value.reviewed_bundle_sha256 === fingerprint(value.bundle)
   } catch { /* Invalid evidence cannot establish a review. */ }
   if (proven && !draft.revision_conflicts?.length) {

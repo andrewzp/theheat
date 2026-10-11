@@ -200,3 +200,90 @@ test("real Next draft handlers over HTTP accept, conflict, review and park in Po
     delete process.env.DASHBOARD_AUTH_DISABLED
   }
 })
+
+test("actual Next handlers request checks, admit a retained candidate, and invalidate an edit", {
+  skip: !process.env.THEHEAT_CANDIDATE_TEST_CONFIG && "Run through the actual candidate PostgreSQL profile",
+}, async () => {
+  const configFile = process.env.THEHEAT_CANDIDATE_TEST_CONFIG
+  const config = JSON.parse(readFileSync(configFile, "utf8"))
+  process.env.NODE_ENV = "test"
+  process.env.DASHBOARD_AUTH_DISABLED = "1"
+  process.env.THEHEAT_LOCAL_COMMAND_URL = config.endpoint
+  const { createCandidateCommand } = await import("../lib/draft-command-request.js")
+  const drafts = await import("../app/api/drafts/route.js")
+  const dashboard = await import("../app/api/dashboard/route.js")
+  const actualFetch = globalThis.fetch
+  globalThis.fetch = (url, options) => {
+    assert.ok([config.origin, config.endpoint].includes(new URL(url).origin), "Only the two owned loopback services may be contacted")
+    return actualFetch(url, options)
+  }
+  const server = createServer(async (incoming, outgoing) => {
+    try {
+      const request = new Request(`${config.origin}${incoming.url}`, { method: incoming.method, headers: incoming.headers,
+        ...(incoming.method === "POST" ? { body: Readable.toWeb(incoming), duplex: "half" } : {}) })
+      const route = incoming.url.startsWith("/api/dashboard") ? dashboard : drafts
+      const response = await route[incoming.method](request)
+      outgoing.writeHead(response.status, Object.fromEntries(response.headers))
+      outgoing.end(Buffer.from(await response.arrayBuffer()))
+    } catch (error) { outgoing.writeHead(500); outgoing.end(JSON.stringify({ error: error.message })) }
+  })
+  await new Promise((resolve, reject) => { server.once("error", reject); server.listen(Number(new URL(config.origin).port), "127.0.0.1", resolve) })
+  async function request(path = "/api/drafts", command = null, role = "editor") {
+    const response = await actualFetch(`${config.origin}${path}`, { method: command ? "POST" : "GET",
+      headers: { Authorization: `Basic ${Buffer.from(`${role}:invented-${role}`).toString("base64")}`, Origin: config.origin, "Content-Type": "application/json" },
+      ...(command ? { body: JSON.stringify(command) } : {}) })
+    return { status: response.status, body: await response.json() }
+  }
+  function worker(mode, command, stage) {
+    const result = spawnSync(config.python, [config.child, configFile, mode, command, ...(stage ? [stage] : [])], {
+      cwd: config.root, env: { PATH: process.env.PATH, PYTHONPATH: config.root, no_proxy: "*" }, encoding: "utf8", timeout: 30000 })
+    assert.equal(result.status, 0, result.stdout + result.stderr)
+    return JSON.parse(result.stdout)
+  }
+  try {
+    let view = await request("/api/dashboard")
+    assert.equal(view.status, 200)
+    let candidate = view.body.candidates[0]
+    assert.equal(candidate.status, "not_checked")
+    assert.equal(candidate.cost_usd, null)
+    assert.equal(candidate.publication_approved, false)
+    const check = createCandidateCommand(candidate, "request_candidate_checks")
+    assert.deepEqual(check.targets, [])
+    assert.equal((await request("/api/drafts", check, "viewer")).status, 403)
+    assert.equal((await request("/api/drafts", check)).status, 202)
+    assert.equal((await request(`/api/drafts?commandId=${check.command_id}`)).body.status, "pending")
+    assert.equal(worker("consume", check.command_id).candidate.outcome, "checks_requested")
+    for (const stage of ["deterministic", "safety", "fact_check", "critic"]) {
+      const result = worker("stage", check.command_id, stage)
+      assert.equal(result.outcome, "completed", JSON.stringify(result))
+      candidate = (await request()).body.candidates[0]
+      assert.equal(candidate.stages[stage], "passed")
+    }
+    assert.equal(candidate.required_checks_completed, true)
+    const save = createCandidateCommand(candidate, "admit_checked_candidate")
+    assert.equal((await request("/api/drafts", save)).status, 202)
+    const saved = worker("consume", save.command_id)
+    assert.equal(saved.candidate.outcome, "candidate_admitted")
+    let draft = (await request()).body.drafts.find((d) => d.id === saved.candidate.draft_id)
+    assert.equal(draft.review_status, "passed")
+    assert.equal(draft.review_kind, "model")
+    assert.equal(draft.status, "pending")
+    assert.equal(draft.approval_binding, undefined)
+    assert.equal(worker("consume", save.command_id).state_version, saved.state_version)
+    const approval = createDraftCommand(draft, "approve")
+    assert.equal((await request("/api/drafts", approval, "publisher")).status, 202)
+    assert.ok(worker("consume", approval.command_id).publish_intent_id)
+    draft = (await request()).body.drafts.find((d) => d.id === draft.id)
+    const edit = createDraftCommand(draft, "edit", { editedText: "Edited after required checks; a new review is required." })
+    assert.equal((await request("/api/drafts", edit)).status, 202)
+    assert.equal(worker("consume", edit.command_id).status, "applied")
+    draft = (await request()).body.drafts.find((d) => d.id === draft.id)
+    assert.equal(draft.review_status, "needs_revalidation")
+    assert.equal(draft.approval_binding, undefined)
+    assert.equal(draft.publish_intent_id, undefined)
+  } finally {
+    globalThis.fetch = actualFetch
+    await new Promise((resolve) => server.close(resolve))
+    delete process.env.THEHEAT_LOCAL_COMMAND_URL
+  }
+})

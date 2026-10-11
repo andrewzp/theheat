@@ -14,7 +14,8 @@ from src.editorial.publication import valid_epoch
 MAX_COMMAND_BYTES = 128 * 1024
 MAX_TARGETS = 500
 MEDIA_ACTIONS = frozenset({"attach_media_revision", "remove_media_revision"})
-ACTIONS = MEDIA_ACTIONS | frozenset({"edit_revision", "select_candidate", "record_review", "approve_revision",
+CANDIDATE_ACTIONS = frozenset({"request_candidate_checks", "admit_checked_candidate"})
+ACTIONS = CANDIDATE_ACTIONS | MEDIA_ACTIONS | frozenset({"edit_revision", "select_candidate", "record_review", "approve_revision",
                      "schedule_revision", "cancel_approval", "reject_revision", "bulk_reject"})
 _HEX = re.compile(r"[a-f0-9]{64}")
 
@@ -117,11 +118,22 @@ def _validate_payload(action: str, payload: Any, *, allow_legacy_review: bool = 
         "cancel_approval": {"reason"}, "reject_revision": {"reason"}, "bulk_reject": {"reason"},
         "attach_media_revision": {"proposal_sha256", "expected_packet_sha256", "expected_policy_sha256", "review"},
         "remove_media_revision": {"expected_proposal_sha256", "expected_policy_sha256", "confirmed", "reason"},
+        "request_candidate_checks": {"admission_input_id", "admission_input_sha256", "job_id", "custom_id", "candidate_id", "expected_state_version", "expected_policy_sha256"},
+        "admit_checked_candidate": {"admission_input_id", "admission_input_sha256", "job_id", "custom_id", "candidate_id", "expected_state_version", "expected_policy_sha256", "check_set_id", "expected_completion_sha256"},
     }[action]
     if action == "record_review" and allow_legacy_review and set(payload) == {"confirmed", "reason"}:
         required = {"confirmed", "reason"}  # Retained old intent must receive a terminal refusal, not wedge the journal.
     if set(payload) != required:
         raise CommandError("invalid_payload", "Payload fields do not match the action")
+    if action in CANDIDATE_ACTIONS:
+        for key in ("admission_input_id", "admission_input_sha256", "candidate_id", "check_set_id", "expected_completion_sha256"):
+            if key in payload and (not isinstance(payload[key], str) or not _HEX.fullmatch(payload[key])):
+                raise CommandError("invalid_candidate_identity", "Supply exact retained candidate identities")
+        for key in ("job_id", "custom_id"):
+            if not isinstance(payload[key], str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}", payload[key]):
+                raise CommandError("invalid_candidate_identity", "Supply bounded retained candidate identifiers")
+        if type(payload["expected_state_version"]) is not int or not 0 <= payload["expected_state_version"] <= 9007199254740991:
+            raise CommandError("invalid_state_version", "Supply the exact safe authority version")
     if "text" in payload:
         _string(payload["text"], "Draft text", 280)
     if "reason" in payload:
@@ -197,7 +209,7 @@ class Command:
         if requested > clock + timedelta(minutes=5) or expires <= requested or expires > requested + timedelta(days=1):
             raise CommandError("invalid_time", "Command time window is invalid")
         rows = body["targets"]
-        if not isinstance(rows, list) or not 1 <= len(rows) <= MAX_TARGETS or (action != "bulk_reject" and len(rows) != 1):
+        if not isinstance(rows, list) or (rows != [] if action in CANDIDATE_ACTIONS else not 1 <= len(rows) <= MAX_TARGETS or (action != "bulk_reject" and len(rows) != 1)):
             raise CommandError("invalid_targets", "Supply one target, or an explicit bounded set for bulk rejection")
         targets = tuple(DraftTarget.parse(row) for row in rows)
         if len({row.draft_id for row in targets}) != len(targets):
