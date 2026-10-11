@@ -1,0 +1,77 @@
+# Saved MODIS graphic preview
+
+The private draft workbench offers an explicit **Preview graphic** action for fire
+drafts. It builds one SVG from the complete saved MODIS source bundle. It does not
+fetch new weather, call a model, write state, attach media or approve publication.
+Other hazards and incomplete or unsupported source evidence produce no graphic.
+
+The preview sits beside the saved text. Editing, a pending draft action, switching
+stories or changing the saved revision removes it. Rebuilding revokes the previous
+browser Blob; cancelled and late responses cannot install a replacement. Source
+time, scope and a full visible text description accompany the image. A chart can
+describe historical saved evidence without establishing present freshness, source
+authenticity, a physical fire's extent or agreement with the tweet's claims.
+
+## Read-only boundary
+
+`dashboard/api/graphic_preview.py` is a native Python function, with authorization
+independent of Next middleware. It accepts only the saved draft ID, full expected
+content/text/evidence/decision revision, policy source hash and preview runtime hash.
+Clients cannot supply source packets, retrieval URLs or a synthetic override.
+
+Complete dashboard Basic credentials are required unless the existing outer
+Vercel protection mode is configured. In that mode, the actual request Host must
+equal the validated generated deployment hostname; aliases and inconsistent
+absolute targets do not gain access through forwarded headers. Missing configuration
+fails closed. Supplied Origin must match. Authentication precedes JSON parsing,
+state reads and rendering; this endpoint has no local development bypass.
+
+Only the configured production Gist backend is supported. There is no database
+bootstrap or write path. The reader uses fixed GitHub API locations and strictly
+validated, versioned raw URLs, without redirects, retries or credential forwarding.
+It reads the saved draft again after rendering and rejects content, status,
+decision or conflict changes. This checks two snapshots; it is not a transaction
+and grants no authority against a later state change.
+
+Requests are limited to 4 KiB, GitHub API responses to 12 MiB, raw state to 8 MiB,
+and the complete source bundle to 1 MB. JSON rejects duplicate keys, non-finite
+numbers, invalid Unicode and excessive nesting. SVG bytes have a separate 1 MB
+limit; encoded JSON responses are at most 1 MiB. One in-process request runs at a
+time. The application checks a 25-second budget between bounded operations and
+before returning success. Connect/read timeouts bound network inactivity; Vercel's
+30-second function maximum covers blocking operations as well. This is not a
+global concurrency or spending cap. Gist reads and hosting costs remain unmeasured.
+
+Responses use fixed error messages, private/no-store caching and nosniff. The
+handler suppresses request logs, including Vercel's prepended native logger.
+Source receipts, draft text, credentials and upstream exception bodies are not
+logged or included in errors. Platform-level access/fetch metadata remains subject
+to the hosting platform's own logging behavior.
+
+## Reproducible package and checks
+
+The generated archive contains an explicit allowlist of public Python source,
+the existing font and its license. It retains the scientific guards used by the
+shared adapter. The manifest binds every file, archive bytes, policy source,
+entrypoint, Python dependency manifest and lock. The entrypoint verifies the
+package before importing it without extraction or downloads. A bad or missing
+package returns a private unavailable response.
+
+After changing a packaged source or dependency, run:
+
+```sh
+python scripts/gen_dashboard_graphic_runtime.py
+python scripts/gen_dashboard_graphic_runtime.py --check
+python -m pytest tests/test_dashboard_graphic_auth.py tests/test_dashboard_graphic_reader.py tests/test_dashboard_graphic_preview.py tests/test_dashboard_graphic_http.py tests/test_dashboard_graphic_runtime.py tests/test_evidence_graphic_render.py tests/test_fire_graphic_adapter.py -q -m 'not voice_replay'
+cd dashboard
+npm test
+npm run build
+```
+
+Install the existing optional `requirements-graphics.txt` for Python renderer
+tests. Native Vercel builds use the dashboard's pinned Python 3.12 dependency lock.
+Required offline CI verifies archive and manifest freshness rather than silently
+regenerating them. Follow normal reviewed-head release checks and manual dashboard
+deployment. Verify native extensionless and `.py` routes on the generated hostname
+and every alias. Anonymous protection checks alone do not establish signed-in UI
+behavior or a working production source bundle.

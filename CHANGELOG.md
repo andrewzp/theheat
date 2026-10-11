@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.108.106 — 2026-10-11
+
+- Add an on-demand saved MODIS graphic preview beside draft text, with source qualifications, minute precision and a full accessible description. Editing, draft actions and changed versions remove old previews; cancelled responses cannot restore them.
+- Protect the native Python endpoint independently, verify its exact source/dependency package and bound read-only Gist retrieval and rendering. No weather/model calls, state writes, media attachment or publication approval are added by previewing.
+
 ## 0.9.108.105 — 2026-10-11
 
 - Distinguish configured collection pauses from stale-pipeline failures in the source observer. Keep real source failures visible and preserve existing pause-related incidents.

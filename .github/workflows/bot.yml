@@ -135,6 +135,10 @@ jobs:
         if: matrix.partition == 'core'
         run: python scripts/gen_editorial_policy.py --check
 
+      - name: Verify packaged dashboard graphic runtime
+        if: matrix.partition == 'core'
+        run: python scripts/gen_dashboard_graphic_runtime.py --check
+
       # `voice_replay` tests live in tests/voice_regression/ and call the
       # real Anthropic writer. They run in voice-regression.yml (daily
       # canary + weekly full + writer-path PR gate), not in this suite.

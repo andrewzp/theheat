@@ -1,0 +1,9 @@
+[project]
+name = "theheat-dashboard-graphic-preview"
+version = "1.0.0"
+requires-python = "==3.12.*"
+dependencies = [
+  "reportlab==4.4.9",
+  "pillow==12.2.0",
+  "requests==2.34.2",
+]

@@ -1,0 +1,95 @@
+"""Select the exact saved draft twice; a preview never changes state or grants review."""
+
+from copy import deepcopy
+import json
+import re
+
+from src.dashboard_preview.errors import PreviewError
+from src.editorial.revisions import decision_revision, draft_identity, fingerprint, has_unresolved_publish
+from src.media.fire_graphic_adapter import fire_graphic_spec
+from src.media.evidence_graphic_render import render_svg
+from src.media.temperature_graphic_adapter import _StoredBundle
+
+MAX_RESPONSE = 1024 * 1024
+SHA = re.compile(r"[a-f0-9]{64}")
+REQUEST_KEYS = {"draft_id", "expected_revision", "expected_policy_source_sha256", "expected_preview_runtime_sha256"}
+REVISION_KEYS = {"content_revision", "text_sha256", "evidence_sha256", "decision_revision"}
+
+
+def check_request(request, policy_sha, runtime_sha):
+    if not isinstance(request, dict) or set(request) != REQUEST_KEYS:
+        raise PreviewError("bad_request")
+    draft_id, revision = request["draft_id"], request["expected_revision"]
+    if (not isinstance(draft_id, str) or not 0 < len(draft_id) <= 200
+            or any(ord(c) < 32 for c in draft_id)
+            or not isinstance(revision, dict) or set(revision) != REVISION_KEYS):
+        raise PreviewError("bad_request")
+    for key in ("content_revision", "decision_revision"):
+        maximum = 9007199254740991 if key == "content_revision" else 9007199254740990
+        if type(revision[key]) is not int or not 0 <= revision[key] <= maximum:
+            raise PreviewError("bad_request")
+    for value in (revision["text_sha256"], revision["evidence_sha256"],
+                  request["expected_policy_source_sha256"], request["expected_preview_runtime_sha256"]):
+        if not isinstance(value, str) or not SHA.fullmatch(value):
+            raise PreviewError("bad_request")
+    if (request["expected_policy_source_sha256"] != policy_sha
+            or request["expected_preview_runtime_sha256"] != runtime_sha):
+        raise PreviewError("stale_preview")
+
+
+def _selected(state, request):
+    drafts = state.get("drafts")
+    if not isinstance(drafts, list):
+        raise PreviewError("draft_unavailable")
+    matches = [d for d in drafts if isinstance(d, dict) and d.get("id") == request["draft_id"]]
+    if len(matches) != 1:
+        raise PreviewError("draft_unavailable")
+    draft = matches[0]
+    if draft.get("status") not in {"pending", "approved"}:
+        raise PreviewError("draft_unavailable")
+    if draft.get("revision_conflicts") or has_unresolved_publish(draft, state):
+        raise PreviewError("conflicted_draft")
+    identity = {**draft_identity(draft), "decision_revision": decision_revision(draft)}
+    if identity != request["expected_revision"]:
+        raise PreviewError("stale_preview")
+    return draft
+
+
+def build_preview(request, *, policy_sha, runtime_sha, read_state, budget, synthetic=False):
+    check_request(request, policy_sha, runtime_sha)
+    try:
+        budget.remaining()
+        draft = _selected(read_state(), request)
+        original_status = draft["status"]
+        bundle = deepcopy(draft["review_context"]["two_bot"]["bundle"])
+        # Bound the full retained story before canonical hashing and validation.
+        if len(json.dumps(bundle, ensure_ascii=False, allow_nan=False).encode("utf-8")) > 1_000_000:
+            raise PreviewError("graphic_unavailable")
+        receipts = [bundle["raw_signal_dump"]["acquisition_provenance"],
+                    *[r["acquisition_evidence"] for r in bundle.get("related_signals", [])]]
+        spec = fire_graphic_spec(_StoredBundle(bundle), expected_bundle_sha256=fingerprint(bundle),
+                                expected_receipt_sha256=[fingerprint(r) for r in receipts], synthetic=synthetic)
+        budget.remaining()
+        rendered = render_svg(**spec)
+        budget.remaining()
+        current = _selected(read_state(), request)
+        if current["status"] != original_status:
+            raise PreviewError("stale_preview")
+        budget.remaining()
+        result = {"schema_version": 1, "draft_id": request["draft_id"],
+                  "revision_identity": deepcopy(request["expected_revision"]),
+                  "policy_source_sha256": policy_sha, "preview_runtime_sha256": runtime_sha,
+                  "binding": rendered["binding"], "cache_key": rendered["cache_key"],
+                  "svg_sha256": rendered["svg_sha256"], "svg_utf8": rendered["svg"].decode("utf-8"),
+                  "title": rendered["title"], "alt_text": rendered["alt_text"], "scope": rendered["scope"],
+                  "source": "NASA FIRMS · MODIS", "source_time": spec["evidence"]["acquired_at"],
+                  "width": rendered["width"], "height": rendered["height"],
+                  "publication_approved": False, "attachment": False}
+        body = json.dumps(result, ensure_ascii=False, separators=(",", ":"), allow_nan=False).encode("utf-8")
+        if len(body) > MAX_RESPONSE:
+            raise PreviewError("graphic_unavailable")
+        return body
+    except PreviewError:
+        raise
+    except (ValueError, KeyError, TypeError, AttributeError, UnicodeError, RecursionError, OverflowError) as exc:
+        raise PreviewError("graphic_unavailable") from exc
