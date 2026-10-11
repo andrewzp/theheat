@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.108.108 — 2026-10-11
+
+- Show the repository collection-pause setting separately from the dashboard generation setting. Keep retained workflow history visible, preserve real failure alerts and report unavailable pause reads as unknown.
+- Bound the pause-variable read, preserve the shared status cache and prevent browser caching of authenticated status responses. Keep pause wording readable on narrow screens.
+- Refresh the original 45-package upgrade ledger with explicit implementation, testing, release, runtime and acceptance boundaries.
+
 ## 0.9.108.107 — 2026-10-11
 
 - Load each story builder when requested, preserving the public API without importing unrelated source adapters for a single forecast.
