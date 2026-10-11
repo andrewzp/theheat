@@ -15,3 +15,16 @@ def saved_preview():
                "expected_revision": {**draft_identity(draft), "decision_revision": decision_revision(draft)},
                "expected_policy_source_sha256": POLICY, "expected_preview_runtime_sha256": RUNTIME}
     return {"drafts": [draft], "publication_ledger": [], "unrelated": {"preserve": True}}, request
+
+
+def saved_pm25_preview():
+    from tests.air_quality_graphic_helpers import graphic_bundle as pm25_bundle
+
+    state, request = saved_preview()
+    draft = state["drafts"][0]
+    draft.update(id="invented-pm25", type="air_quality_hazard",
+                 text="Invented PM2.5 forecast for a graphic test.")
+    draft["review_context"]["two_bot"]["bundle"] = pm25_bundle().to_dict()
+    request["draft_id"] = draft["id"]
+    request["expected_revision"] = {**draft_identity(draft), "decision_revision": decision_revision(draft)}
+    return state, request

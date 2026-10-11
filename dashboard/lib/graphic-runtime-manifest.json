@@ -1,6 +1,6 @@
 {
   "identity": {
-    "archive_sha256": "ea5e5bda1e290f26fe8d44a55117b2e76f080d7626eb5db4b505d7e27ff5bfb1",
+    "archive_sha256": "45af5ca783beeb16097acde53f24db156db724c22e668fd1e30f94b361ee108d",
     "deployment_files": {
       "api/graphic_preview.py": "abbde75deff02ba22b67df70f7783d33d8150bd119a5514f8007feb43191e0c9",
       "pyproject.toml": "6d161405a3084285699805cd15f4c0584aab66806b7f3414a5de8e6eef61290b",
@@ -12,7 +12,7 @@
       "src/dashboard_preview/auth.py": "dd10dcf251c94d36e9234ad01186b3e841378c92c827d6ef18ff164e13de0b99",
       "src/dashboard_preview/errors.py": "c2a4c012149b98948da00e157bb3a23a8a807fc0bc95d8088537dd788e687dcd",
       "src/dashboard_preview/http.py": "69e14e4a1d9d8e9c1cf41b09a9a4b8367aa330e751f5f2ee27ed978675cbe1d4",
-      "src/dashboard_preview/preview.py": "bc87dde7a33028089bae5d41f3b0c0f12c7c31b8eb0877bc06bc3eb0c17eb242",
+      "src/dashboard_preview/preview.py": "b878d18b322404777799f596642f5cdea4a07cb78c438c9fb527e6c6a7e4a5fd",
       "src/dashboard_preview/reader.py": "cd4e1cb8937adac0c9acfeb90be51b239144b45043c1f0a90e3961938b9c4373",
       "src/data/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "src/data/_freshness.py": "21e6f9bed82e769ad82a8b798e31e0faeb2851c4849fdaf99d90852fd8fa2c79",
@@ -76,7 +76,7 @@
       "src/two_bot/strict_contract.py": "d4536268c08775cea808d3f2738226da9d33d7244a8c30988d5286d6dae83ca8",
       "src/two_bot/types.py": "36ed2e6475a655f4112012486795702159ed546c3040e8ef1874b7a0b02a9035"
     },
-    "format": "saved-modis-svg-preview-v1",
+    "format": "saved-source-svg-preview-v2",
     "policy_source_sha256": "f387041bffb5a7e3fa78eb7e8ff1a36ec5e607fa94c7b529abe1419a4ee11a1e",
     "resource_sources": {
       "src/data/registry/country_codes.json": "data/country_codes.json",
@@ -84,5 +84,5 @@
     },
     "schema_version": 1
   },
-  "runtime_sha256": "6a3218bb982bf77fe7b9ec9713039ac397c6c640866f2c1d7ede353fae5d1a07"
+  "runtime_sha256": "f9ee8eb9c1a0e94254d3bebb841d8d5ce2f2c9f33663ae03a6451b0dc56f4a8d"
 }

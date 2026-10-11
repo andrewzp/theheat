@@ -1,7 +1,8 @@
-# Saved MODIS graphic preview
+# Saved-source graphic preview
 
 The private draft workbench offers an explicit **Preview graphic** action for fire
-drafts. It builds one SVG from the complete saved MODIS source bundle. It does not
+and PM2.5 forecast drafts. It builds one SVG from the complete saved MODIS or
+unextended single-source PM2.5 bundle. It does not
 fetch new weather, call a model, write state, attach media or approve publication.
 Other hazards and incomplete or unsupported source evidence produce no graphic.
 
@@ -48,6 +49,22 @@ Source receipts, draft text, credentials and upstream exception bodies are not
 logged or included in errors. Platform-level access/fetch metadata remains subject
 to the hosting platform's own logging behavior.
 
+## Acquisition and forecast timing
+
+Success schema2 uses a strict source-context variant. MODIS retains its reported
+UTC acquisition minute. PM2.5 retains the local forecast calendar day and timezone,
+UTC interval, and separate request/retrieval times. The browser displays the local
+date string directly, without changing it to the viewer's timezone. Old runtime
+identities and schema1 responses are refused.
+
+PM2.5 graphics contain all24 instantaneous hourly samples and their independently
+recomputed sample mean. They identify CAMS via Open-Meteo and the sampled grid point;
+they are model forecasts, not station measurements, measured exposure or health
+thresholds. Related, extended, station-corroborated, dust, incomplete and legacy
+packets are refused without removing evidence or repairing values. The full text
+description preserves hourly values, grid/time bounds and retained-record limits.
+No image establishes independent acquisition authenticity or source currentness.
+
 ## Reproducible package and checks
 
 The generated archive contains an explicit allowlist of public Python source,
@@ -66,7 +83,7 @@ the complete air-quality reconstruction without importing unrelated hazard adapt
 The native preview uses pinned `tzdata` with system timezone paths disabled and
 clears pre-existing timezone caches; a missing or incompatible package fails closed.
 The bot's timezone configuration and source rules are unchanged. These dependencies
-prepare forecast rendering; the endpoint still supports only saved MODIS graphics.
+support the same complete forecast reconstruction used by the source adapter.
 
 After changing a packaged source or dependency, run:
 
@@ -74,7 +91,7 @@ After changing a packaged source or dependency, run:
 python scripts/gen_editorial_policy.py
 python scripts/gen_dashboard_graphic_runtime.py
 python scripts/gen_dashboard_graphic_runtime.py --check
-python -m pytest tests/test_dashboard_graphic_auth.py tests/test_dashboard_graphic_reader.py tests/test_dashboard_graphic_preview.py tests/test_dashboard_graphic_http.py tests/test_dashboard_graphic_runtime.py tests/test_evidence_graphic_render.py tests/test_fire_graphic_adapter.py -q -m 'not voice_replay'
+python -m pytest tests/test_dashboard_pm25_preview.py tests/test_dashboard_graphic_auth.py tests/test_dashboard_graphic_reader.py tests/test_dashboard_graphic_preview.py tests/test_dashboard_graphic_http.py tests/test_dashboard_graphic_runtime.py tests/test_evidence_graphic_render.py tests/test_fire_graphic_adapter.py -q -m 'not voice_replay'
 python -m pytest tests/test_intern_import_boundaries.py tests/test_graphic_runtime_resources.py tests/test_places.py tests/test_air_quality_graphic_adapter.py -q -m 'not voice_replay'
 cd dashboard
 npm test

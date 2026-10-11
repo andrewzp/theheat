@@ -6,6 +6,7 @@ import re
 
 from src.dashboard_preview.errors import PreviewError
 from src.editorial.revisions import decision_revision, draft_identity, fingerprint, has_unresolved_publish
+from src.media.air_quality_graphic_adapter import pm25_graphic_spec
 from src.media.fire_graphic_adapter import fire_graphic_spec
 from src.media.evidence_graphic_render import render_svg
 from src.media.temperature_graphic_adapter import _StoredBundle
@@ -65,10 +66,25 @@ def build_preview(request, *, policy_sha, runtime_sha, read_state, budget, synth
         # Bound the full retained story before canonical hashing and validation.
         if len(json.dumps(bundle, ensure_ascii=False, allow_nan=False).encode("utf-8")) > 1_000_000:
             raise PreviewError("graphic_unavailable")
-        receipts = [bundle["raw_signal_dump"]["acquisition_provenance"],
-                    *[r["acquisition_evidence"] for r in bundle.get("related_signals", [])]]
-        spec = fire_graphic_spec(_StoredBundle(bundle), expected_bundle_sha256=fingerprint(bundle),
-                                expected_receipt_sha256=[fingerprint(r) for r in receipts], synthetic=synthetic)
+        if bundle["signal_kind"] == "fire":
+            receipts = [bundle["raw_signal_dump"]["acquisition_provenance"],
+                        *[r["acquisition_evidence"] for r in bundle.get("related_signals", [])]]
+            spec = fire_graphic_spec(_StoredBundle(bundle), expected_bundle_sha256=fingerprint(bundle),
+                                    expected_receipt_sha256=[fingerprint(r) for r in receipts], synthetic=synthetic)
+            source = "NASA FIRMS · MODIS"
+            context = {"kind": "modis_acquisition", "acquired_at": spec["evidence"]["acquired_at"]}
+        elif bundle["signal_kind"] == "air_quality_hazard":
+            spec = pm25_graphic_spec(_StoredBundle(bundle), expected_bundle_sha256=fingerprint(bundle),
+                                    expected_window_sha256=fingerprint(bundle["raw_signal_dump"]["forecast_window"]),
+                                    synthetic=synthetic)
+            evidence = spec["evidence"]
+            window = evidence["input_binding"]["bundles"][0]["bundle"]["raw_signal_dump"]["forecast_window"]
+            source = "CAMS via Open-Meteo"
+            context = {"kind": "pm25_forecast_day",
+                       **{key: evidence[key] for key in ("valid_date", "timezone", "valid_start", "valid_end")},
+                       **{key: window[key] for key in ("requested_at", "retrieved_at")}}
+        else:
+            raise PreviewError("graphic_unavailable")
         budget.remaining()
         rendered = render_svg(**spec)
         budget.remaining()
@@ -76,13 +92,13 @@ def build_preview(request, *, policy_sha, runtime_sha, read_state, budget, synth
         if current["status"] != original_status:
             raise PreviewError("stale_preview")
         budget.remaining()
-        result = {"schema_version": 1, "draft_id": request["draft_id"],
+        result = {"schema_version": 2, "draft_id": request["draft_id"],
                   "revision_identity": deepcopy(request["expected_revision"]),
                   "policy_source_sha256": policy_sha, "preview_runtime_sha256": runtime_sha,
                   "binding": rendered["binding"], "cache_key": rendered["cache_key"],
                   "svg_sha256": rendered["svg_sha256"], "svg_utf8": rendered["svg"].decode("utf-8"),
                   "title": rendered["title"], "alt_text": rendered["alt_text"], "scope": rendered["scope"],
-                  "source": "NASA FIRMS · MODIS", "source_time": spec["evidence"]["acquired_at"],
+                  "source": source, "source_context": context,
                   "width": rendered["width"], "height": rendered["height"],
                   "publication_approved": False, "attachment": False}
         body = json.dumps(result, ensure_ascii=False, separators=(",", ":"), allow_nan=False).encode("utf-8")

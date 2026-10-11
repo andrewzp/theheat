@@ -14,18 +14,22 @@ const draft = () => ({ id: "invented", type: "fire", status: "pending", revision
 } })
 const request = () => graphicRequest(draft(), manifest)
 // Browser contract fixture only: source eligibility is tested by the actual Python adapter.
-function responseValue() {
+function responseValue(forecast = false) {
   const req = request(), files = manifest.identity.files
-  const binding = { template: "modis_thermal_detections", template_version: "p31-modis-thermal-1",
+  const binding = { template: forecast ? "pm25_forecast_day" : "modis_thermal_detections",
+    template_version: forecast ? "p31-pm25-forecast-1" : "p31-modis-thermal-1",
     source_evidence_sha256: "c".repeat(64), renderer: { library: "ReportLab", version: "4.4.9", format: "svg", schema_version: 1,
       width: 1200, height: 1500, implementation_sha256: files["src/media/evidence_graphic_render.py"],
-      contract_sha256: files["src/media/evidence_graphic.py"], adapter_sha256: files["src/media/fire_graphic_adapter.py"],
+      contract_sha256: files["src/media/evidence_graphic.py"], adapter_sha256: files[forecast ? "src/media/air_quality_graphic_adapter.py" : "src/media/fire_graphic_adapter.py"],
       font_sha256: files["src/media/fonts/DejaVuSansMono.ttf"] } }
   const svg = '<svg xmlns="http://www.w3.org/2000/svg"><title>Invented browser contract fixture</title></svg>'
-  return { schema_version: 1, draft_id: req.draft_id, revision_identity: req.expected_revision,
+  return { schema_version: 2, draft_id: req.draft_id, revision_identity: req.expected_revision,
     policy_source_sha256: req.expected_policy_source_sha256, preview_runtime_sha256: req.expected_preview_runtime_sha256,
-    publication_approved: false, attachment: false, width: 1200, height: 1500, source: "NASA FIRMS · MODIS",
-    source_time: "2032-02-29T23:59:00Z", title: "Invented", alt_text: "Invented, no physical incident claim", scope: "Saved detections",
+    publication_approved: false, attachment: false, width: 1200, height: 1500, source: forecast ? "CAMS via Open-Meteo" : "NASA FIRMS · MODIS",
+    source_context: forecast ? { kind: "pm25_forecast_day", valid_date: "2026-06-08", timezone: "Asia/Kathmandu",
+      valid_start: "2026-06-07T18:15:00Z", valid_end: "2026-06-08T18:15:00Z",
+      requested_at: "2026-06-08T12:00:00.000001+00:00", retrieved_at: "2026-06-08T12:00:01Z" }
+      : { kind: "modis_acquisition", acquired_at: "2032-02-29T23:59:00Z" }, title: "Invented", alt_text: "Invented, no physical incident claim", scope: "Saved detections",
     svg_utf8: svg, svg_sha256: hash(svg), binding, cache_key: fingerprint(binding) }
 }
 const ok = value => new Response(JSON.stringify(value), { headers: { "Content-Type": "application/json" } })
@@ -126,4 +130,49 @@ test("deadline clears loading and discards a fetch that ignores abort", async ()
   assert.equal(states.at(-1).status, "error")
   pending.resolve(ok(responseValue())); await first; controller.dispose()
   assert.equal(states.filter(state => state.status === "ready").length, 0)
+})
+
+
+test("forecast preview affordance preserves missing-window and edit controls", () => {
+  const render = props => renderToStaticMarkup(React.createElement(GraphicPreview, props))
+  const forecast = { ...draft(), type: "air_quality_hazard",
+    review_context: { two_bot: { bundle: { raw_signal_dump: { forecast_window: { retained: true } } } } } }
+  assert.match(render({ draft: forecast }), /saved PM2.5 model forecast/)
+  assert.match(render({ draft: forecast }), /Preview graphic/)
+  assert.doesNotMatch(render({ draft: forecast, editing: true }), /<button|<img/)
+  assert.doesNotMatch(render({ draft: forecast, updating: true }), /<button|<img/)
+  const missing = render({ draft: { ...forecast, review_context: {} } })
+  assert.match(missing, /hourly forecast was not saved/)
+  assert.doesNotMatch(missing, /<button|<img/)
+  assert.equal(render({ draft: { ...forecast, type: "dust_event" } }), "")
+})
+
+test("fixed template dispatch accepts both contexts and rejects schema or source confusion", async () => {
+  for (const forecast of [false, true]) {
+    const good = responseValue(forecast)
+    assert.equal(await validateGraphicResponse(good, request(), manifest), good)
+    for (const change of [value => { value.schema_version = 1 }, value => { value.source_time = "old field" },
+      value => { value.source_context.extra = "unrecognized" }, value => { value.source_context = null },
+      value => { value.source = forecast ? "NASA FIRMS · MODIS" : "CAMS via Open-Meteo" },
+      value => { value.source_context = responseValue(!forecast).source_context },
+      value => { value.binding.template = "constructor" }, value => { value.binding.template_version = "unknown" },
+      value => { value.binding.renderer.adapter_sha256 = "d".repeat(64) },
+      value => { value.preview_runtime_sha256 = "d".repeat(64) }]) {
+      const bad = structuredClone(good); change(bad)
+      await assert.rejects(validateGraphicResponse(bad, request(), manifest))
+    }
+  }
+})
+
+test("forecast date stays a literal local day, including noninteger timezone offsets", async () => {
+  const good = responseValue(true)
+  const html = renderToStaticMarkup(React.createElement(GraphicPreviewFigure, { value: good, url: "blob:invented" }))
+  assert.match(html, /CAMS via Open-Meteo · 2026-06-08 · Asia\/Kathmandu · model forecast/)
+  assert.doesNotMatch(html, /minute precision|2026-06-07/)
+  for (const changes of [{ valid_date: "2026-02-30" }, { timezone: "x".repeat(129) },
+    { requested_at: "2026-06-08T24:00:00Z" }, { valid_start: "2026-06-08T00:00:00+05:45" },
+    { retrieved_at: "2026-06-08T12:00:01.1234567Z" }, { acquired_at: "2032-02-29T23:59:00Z" }]) {
+    const bad = structuredClone(good); Object.assign(bad.source_context, changes)
+    await assert.rejects(validateGraphicResponse(bad, request(), manifest))
+  }
 })

@@ -111,7 +111,7 @@ def generate(root=ROOT):
     policy = (root / "dashboard/lib/editorial-policy-manifest.js").read_text()
     source_policy = json.loads(policy.split("export const EDITORIAL_POLICY_MANIFEST = ", 1)[1])
     identity = {
-        "schema_version": 1, "format": "saved-modis-svg-preview-v1",
+        "schema_version": 1, "format": "saved-source-svg-preview-v2",
         "archive_sha256": sha256(packaged).hexdigest(), "files": files,
         "resource_sources": dict(RESOURCES),
         "policy_source_sha256": source_policy["source_sha256"],

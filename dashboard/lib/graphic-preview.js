@@ -45,28 +45,58 @@ export function graphicRequest(draft, manifest) {
 
 export const graphicRequestKey = request => request ? canonical(request) : "unavailable"
 
+const templates = {
+  modis_thermal_detections: { version: "p31-modis-thermal-1", source: "NASA FIRMS · MODIS",
+    adapter: "src/media/fire_graphic_adapter.py", context: "modis_acquisition" },
+  pm25_forecast_day: { version: "p31-pm25-forecast-1", source: "CAMS via Open-Meteo",
+    adapter: "src/media/air_quality_graphic_adapter.py", context: "pm25_forecast_day" },
+}
+const exactKeys = (value, keys) => value && typeof value === "object" && !Array.isArray(value)
+  && Object.keys(value).length === keys.length && keys.every(key => Object.hasOwn(value, key))
+function calendarDate(value) {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value) || value.startsWith("0000")) return false
+  const parsed = new Date(`${value}T00:00:00Z`)
+  return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value
+}
+function utcTimestamp(value) {
+  return typeof value === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|\+00:00)$/.test(value)
+    && calendarDate(value.slice(0, 10)) && Number(value.slice(11, 13)) < 24
+    && Number(value.slice(14, 16)) < 60 && Number(value.slice(17, 19)) < 60
+}
+// Presentation shapes only: source eligibility and timezone arithmetic stay in Python.
+function sourceContext(value, template) {
+  const context = value.source_context
+  if (context?.kind !== template.context) return false
+  if (template.context === "modis_acquisition") return exactKeys(context, ["kind", "acquired_at"])
+    && utcTimestamp(context.acquired_at) && context.acquired_at.slice(17, 19) === "00"
+  return exactKeys(context, ["kind", "valid_date", "timezone", "valid_start", "valid_end", "requested_at", "retrieved_at"])
+    && calendarDate(context.valid_date) && typeof context.timezone === "string" && context.timezone.length <= 128
+    && /^[A-Za-z][A-Za-z0-9_+-]*(?:\/[A-Za-z0-9_+-]+)*$/.test(context.timezone)
+    && [context.valid_start, context.valid_end, context.requested_at, context.retrieved_at].every(utcTimestamp)
+}
+
 export async function validateGraphicResponse(value, request, manifest) {
   const r = value?.binding?.renderer, files = manifest.identity.files
-  if (!value || value.schema_version !== 1 || value.draft_id !== request.draft_id
+  const template = Object.hasOwn(templates, value?.binding?.template) ? templates[value.binding.template] : null
+  if (!value || value.schema_version !== 2 || value.draft_id !== request.draft_id
       || canonical(value.revision_identity) !== canonical(request.expected_revision)
       || value.policy_source_sha256 !== request.expected_policy_source_sha256
       || value.preview_runtime_sha256 !== request.expected_preview_runtime_sha256
       || value.publication_approved !== false || value.attachment !== false
       || value.width !== 1200 || value.height !== 1500
-      || value.source !== "NASA FIRMS · MODIS"
-      || typeof value.source_time !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:00Z$/.test(value.source_time)
+      || !template || value.source !== template.source || !sourceContext(value, template)
+      || Object.hasOwn(value, "source_time")
       || ![value.title, value.alt_text, value.scope].every(text => typeof text === "string" && text.length > 0 && text.length <= 20000)
       || typeof value.svg_utf8 !== "string" || encoder.encode(value.svg_utf8).length > 1_000_000
       || !value.svg_utf8.includes("<svg") || /<!DOCTYPE|<script|<foreignObject|\son[a-z]+\s*=/i.test(value.svg_utf8)
       || !isSHA(value.svg_sha256) || !isSHA(value.cache_key)
-      || value.binding?.template !== "modis_thermal_detections"
-      || value.binding?.template_version !== "p31-modis-thermal-1"
+      || value.binding?.template_version !== template.version
       || !isSHA(value.binding?.source_evidence_sha256)
       || r?.library !== "ReportLab" || r?.version !== "4.4.9" || r?.format !== "svg" || r?.schema_version !== 1
       || r?.width !== value.width || r?.height !== value.height
       || r?.implementation_sha256 !== files["src/media/evidence_graphic_render.py"]
       || r?.contract_sha256 !== files["src/media/evidence_graphic.py"]
-      || r?.adapter_sha256 !== files["src/media/fire_graphic_adapter.py"]
+      || r?.adapter_sha256 !== files[template.adapter]
       || r?.font_sha256 !== files["src/media/fonts/DejaVuSansMono.ttf"]
       || await digest(value.svg_utf8) !== value.svg_sha256
       || await digest(JSON.stringify(bindingPayload(value.binding))) !== value.cache_key) throw new Error("invalid preview")
