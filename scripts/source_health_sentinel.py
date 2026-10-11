@@ -160,12 +160,13 @@ def _alerts_liveness_verdict(
     run_history: list[dict[str, Any]] | None,
     *,
     now: datetime,
+    production_paused: bool = False,
 ) -> dict[str, Any] | None:
-    if run_history is None:
+    if run_history is None and production_paused is not True:
         return None
 
     newest_alerts: datetime | None = None
-    for run in run_history:
+    for run in run_history or []:
         if not isinstance(run, Mapping):
             continue
         if run.get("mode") not in ("alerts", "both"):
@@ -175,6 +176,18 @@ def _alerts_liveness_verdict(
             continue
         if newest_alerts is None or parsed > newest_alerts:
             newest_alerts = parsed
+
+    if production_paused is True:
+        return {
+            "source": LIVENESS_SOURCE,
+            "category": "paused",
+            "reason": "production_pause_configured",
+            "issue_resolution_unknown": True,
+            "last_alert_at": newest_alerts.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+            if newest_alerts is not None else None,
+            "days_since_alert": round((now - newest_alerts).total_seconds() / 86400.0, 1)
+            if newest_alerts is not None else None,
+        }
 
     max_age = timedelta(hours=LIVENESS_MAX_AGE_H)
     if newest_alerts is not None and now - newest_alerts <= max_age:
@@ -323,6 +336,7 @@ def run_sentinel(
     now: datetime | None = None,
     recent_window: int = RECENT_WINDOW,
     run_history: list[dict[str, Any]] | None = None,
+    production_paused: bool = False,
 ) -> dict[str, Any]:
     """Classify all sources and bucket them. ``has_failures`` gates the issues."""
     now = now or datetime.now(timezone.utc)
@@ -331,21 +345,26 @@ def run_sentinel(
         for name, health in sorted((source_health or {}).items())
         if isinstance(health, dict)
     ]
-    liveness = _alerts_liveness_verdict(run_history, now=now)
+    liveness = _alerts_liveness_verdict(
+        run_history, now=now, production_paused=production_paused,
+    )
     if liveness is not None:
         verdicts.append(liveness)
     failing = [v for v in verdicts if v["category"] == "failing"]
     degraded = [v for v in verdicts if v["category"] == "degraded"]
     healthy = [v for v in verdicts if v["category"] in ("healthy", "idle")]
+    paused = [v for v in verdicts if v["category"] == "paused"]
     return {
         "has_failures": len(failing) > 0,
         "failing": failing,
         "degraded": degraded,
         "healthy": healthy,
+        "paused": paused,
         "summary": {
             "failing": len(failing),
             "degraded": len(degraded),
             "healthy": len(healthy),
+            "paused": len(paused),
             "total": len(verdicts),
         },
     }
@@ -356,6 +375,7 @@ def plan_health_issue_actions(report: dict, open_issues: Mapping[str, Any]) -> l
     failing = {row["source"]: row for row in report["failing"]}
     unresolved = {row["source"] for row in [*report["healthy"], *report["degraded"]]
                   if row.get("issue_resolution_unknown")}
+    unresolved.update(row["source"] for row in report.get("paused", []))
     return plan_issue_actions(failing, open_issues, resolution_unknown=unresolved)
 
 
@@ -501,8 +521,11 @@ def _print_report(report: dict[str, Any]) -> None:
     s = report["summary"]
     print(
         f"[sentinel] {s['total']} sources: "
-        f"{s['failing']} failing, {s['degraded']} degraded, {s['healthy']} healthy/idle"
+        f"{s['failing']} failing, {s['degraded']} degraded, {s['healthy']} healthy/idle, "
+        f"{s.get('paused', 0)} paused"
     )
+    if report.get("paused"):
+        print("  PAUSED   Collection pause configured; freshness and recovery are not established.")
     for v in report["failing"]:
         print(f"  FAILING  {v['source']} [{v['cause']}]: {v['last_error'][:80]}")
     for v in report["degraded"]:
@@ -1497,6 +1520,7 @@ def main(argv: list[str] | None = None) -> int:
     report = run_sentinel(
         source_health,
         run_history=state.get("run_history") or [],
+        production_paused=os.environ.get("THEHEAT_PRODUCTION_PAUSED") == "1",
     )
     watched = yield_watch_sources(source_health)
     _print_report(report)

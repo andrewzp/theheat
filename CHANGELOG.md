@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.108.105 — 2026-10-11
+
+- Distinguish configured collection pauses from stale-pipeline failures in the source observer. Keep real source failures visible and preserve existing pause-related incidents.
+- Prevent successful or unknown bot workflows from proving recovery while collection is paused. Other workflows and self-heal liveness retain their normal checks.
+
 ## 0.9.108.104 — 2026-10-11
 
 - Make the production pause stop scheduled collection and drafting while keeping required PR tests available. Preserve the existing reviewed manual-publication route and its separate safeguards.
