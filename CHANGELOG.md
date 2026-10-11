@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.108.104 — 2026-10-11
+
+- Make the production pause stop scheduled collection and drafting while keeping required PR tests available. Preserve the existing reviewed manual-publication route and its separate safeguards.
+- Refuse dashboard generation and collection requests before external calls when paused, with authentication checked first. Existing drafts and publication controls are unchanged.
+
 ## 0.9.108.101 — 2026-10-09
 
 - Share the qualified chart drawing between local packages and bounded in-memory SVG previews. Embed the font and retain full source qualifications without PDF tools, output files or model calls in the SVG path.
