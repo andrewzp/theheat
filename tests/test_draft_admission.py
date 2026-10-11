@@ -11,6 +11,20 @@ from src.orchestrator import draft_save
 AT = datetime(2026, 10, 11, 12, tzinfo=UTC)
 
 
+@pytest.fixture
+def inactive_suppression_context():
+    """Scope this test's logging mode without consuming a prior cycle's context."""
+    from src.orchestrator import suppression
+    previous_legacy = suppression._CURRENT_SUPPRESSION_CTX
+    token = suppression._SUPPRESSION_CTX_VAR.set(None)
+    suppression._CURRENT_SUPPRESSION_CTX = None
+    try:
+        yield suppression
+    finally:
+        suppression._SUPPRESSION_CTX_VAR.reset(token)
+        suppression._CURRENT_SUPPRESSION_CTX = previous_legacy
+
+
 def plan(state, **changes):
     args = dict(text="Synthetic City recorded 40°C.", tweet_type="absolute_extreme", event_id="synthetic-new",
         draft_id="synthetic-new-draft", at=AT, editorial_policy=current_editorial_policy(),
@@ -33,7 +47,7 @@ def test_later_cooldown_refusal_cannot_remove_weaker_pending_draft():
     assert not any(s["kill_stage"] == "same_day_superseded" for s in result.suppressions)
 
 
-def test_wrapper_preserves_weaker_draft_after_cooldown_refusal(monkeypatch):
+def test_wrapper_preserves_weaker_draft_after_cooldown_refusal(monkeypatch, inactive_suppression_context):
     state = {"drafts": old_rows()}
     before = deepcopy(state)
     class Score:
@@ -43,6 +57,33 @@ def test_wrapper_preserves_weaker_draft_after_cooldown_refusal(monkeypatch):
     monkeypatch.setattr(draft_save, "_utc_now", lambda: AT)
     assert not draft_save.save_draft("Synthetic strong signal.", state, "absolute_extreme", "synthetic-new", score=Score(), city="Synthetic City", tweet_date="2026-10-11")
     assert state == before
+
+
+def test_wrapper_active_context_preserves_state_and_records_only_cooldown(monkeypatch, inactive_suppression_context):
+    suppression = inactive_suppression_context
+    state = {"drafts": old_rows(), "posted_events": ["retained-event"],
+        "publish_ledger": {"retained": {"phase": "unknown", "intent_id": "retained-intent"}},
+        "publication_control": {"enabled": False, "epoch": "invented-held", "retired_epochs": ["invented-retired"]},
+        "daily_tweet_count": {"2026-10-10": 1},
+        "suppressions": [{"id": "retained-suppression", "stage": "score_gate", "event_id": "retained-event"}]}
+    before = deepcopy(state)
+    class Score:
+        total = 80
+        def as_dict(self):
+            return {"total": self.total}
+    monkeypatch.setattr(draft_save, "_utc_now", lambda: AT)
+    monkeypatch.setattr(suppression, "_utc_now_iso", lambda: "2026-10-11T12:00:00Z")
+    monkeypatch.setattr(suppression.secrets, "token_hex", lambda size: "01234567")
+    with suppression._suppression_context(state, source="invented-source", run_id="invented-run"):
+        assert not draft_save.save_draft("Synthetic strong signal.", state, "absolute_extreme", "synthetic-new", score=Score(), city="Synthetic City", tweet_date="2026-10-11")
+    expected_row = {"id": "supp_2026-10-11T12:00:00Z_01234567", "ts": "2026-10-11T12:00:00Z",
+        "run_id": "invented-run", "source": "invented-source", "stage": "city_cooldown",
+        "event_id": "synthetic-new", "category": None, "score_total": 80, "threshold": 0,
+        "reasons": ["Synthetic City in 3-day cooldown"], "summary": "Synthetic City"}
+    # Every original draft/publication/history field survives. The single new row
+    # is the cooldown refusal, never a premature same_day_superseded decision.
+    assert state == {**before, "suppressions": [*before["suppressions"], expected_row]}
+    assert suppression._current_suppression_ctx() is None
 
 
 def test_same_inputs_repeat_without_ambient_clock_or_policy(monkeypatch):
