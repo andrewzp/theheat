@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.108.109 — 2026-10-11
+
+- Connect the opt-in local draft workbench to authenticated loopback commands and PostgreSQL, with durable pending results, a separate consumer, and explicit stale-edit recovery.
+- Verify current local operator roles and isolate preview requests from production configuration and external services. Local review and approval park an intent without publishing; retries preserve their command identity within the open page.
+
 ## 0.9.108.108 — 2026-10-11
 
 - Show the repository collection-pause setting separately from the dashboard generation setting. Keep retained workflow history visible, preserve real failure alerts and report unavailable pause reads as unknown.
