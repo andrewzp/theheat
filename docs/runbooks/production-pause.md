@@ -9,8 +9,13 @@ enabled: its required PR tests are independent of this variable.
 
 Disable the separate `refresh-thresholds.yml` workflow to stop weekly source
 acquisition. Keep `THEHEAT_SELFHEAL_REPAIR_ENABLED=0` so intentional pauses cannot
-be repaired automatically. The source/workflow observers may report stale data
-or a disabled workflow during a deliberate pause.
+be repaired automatically. The source/workflow observers receive the same pause
+variable: source liveness reports configured pause, and successful or unknown bot
+workflow results cannot resolve an existing incident while paused. Real source
+and workflow failures remain visible; pause alone never closes their issues.
+The dashboard still shows retained source/workflow history, including the disabled
+threshold workflow. Configured pause does not prove running workers have stopped,
+source freshness, recovery or zero spending.
 
 Set `THEHEAT_PRODUCTION_PAUSED=1` in the dashboard's Production environment and
 deploy the dashboard. This makes authenticated generation and collection-trigger
