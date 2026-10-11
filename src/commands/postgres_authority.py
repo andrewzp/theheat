@@ -331,6 +331,19 @@ class PostgresCommandAuthority:
             generation.record(c, generation.INPUT, identity, value)
         return dict(brief_id=identity, brief_sha256=identity)
 
+    def retain_generation_reservation(self, value: dict) -> dict:
+        """Retain an explicit invented local allowance; not exposed to HTTP."""
+        from src.commands import postgres_sourced_generation as generation
+        value = p._decode(p._canonical(value))
+        generation.reservation_document(value)
+        identity = p._sha(p._canonical(value))
+        with self.projections._connection(writing=True) as c:
+            self._validate(c)
+            self._pointer(c, lock=True)
+            generation.refuse(self.environment == "local", "local_generation_required")
+            generation.record(c, generation.RESERVATION, identity, value)
+        return dict(estimate_sha256=identity, reserve_micro_usd=value["reserve_micro_usd"])
+
     def generation_projection(self, *, now: datetime) -> dict:
         from src.commands import postgres_sourced_generation as generation
         with self.projections._connection() as c:

@@ -28,6 +28,13 @@ from tests.two_bot.test_batch_contract import inputs as inputs
 NOW = utc_datetime(worker.NOW)
 
 
+def allowance_document(brief_id, *, now=NOW, **changes):
+    policy = current_editorial_policy()
+    return dict(dict(schema_version=1, basis="invented_local_allowance", provider="anthropic", role="writer",
+        model=policy["models"]["writer"], policy_sha256=fingerprint(policy), brief_ids=[brief_id], reserve_micro_usd=20,
+        valid_from=utc_text(now), valid_until=utc_text(now+timedelta(hours=8))), **changes)
+
+
 @pytest.fixture
 def sourced(store, inputs, monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "invented-offline-key")
@@ -39,7 +46,8 @@ def sourced(store, inputs, monkeypatch):
     value = dict(schema_version=1, source_key="firms", source_revision="invented-one", captured_at=utc_text(NOW),
         useful_until=utc_text(NOW+timedelta(hours=8)), urgent=False, bundle=inputs["bundle"].to_dict(), save=save)
     refs = store.retain_generation_input(value)
-    config = dict(current_inputs=[refs["brief_id"]], reservation=dict(estimate_sha256="e"*64, reserve_micro_usd=20))
+    reserve = store.retain_generation_reservation(allowance_document(refs["brief_id"]))
+    config = dict(current_inputs=[refs["brief_id"]], reservation=reserve)
     store.configure_sourced_generation(lambda: config)
     return dict(store=store, refs=refs, value=value, config=config, bundle=inputs["bundle"])
 
@@ -165,6 +173,21 @@ def test_unknown_submission_never_reposts_or_releases_hold(sourced):
     assert status["intent"]["state"] == "uncertain" and status["intent"]["settled_micro_usd"] is None
 
 
+def test_estimate_drift_during_lost_acknowledgment_preserves_unknown_hold(sourced, core):
+    request(sourced)
+    def change(_):
+        sourced["config"]["reservation"]["estimate_sha256"] = "e"*64
+    sent, factory = transport(sourced, fail_post=True, after=change)
+    assert run(sourced, "submit", factory)["outcome"] == "submission_uncertain"
+    with pytest.raises(CommandError) as exc:
+        run(sourced, "submit", factory)
+    assert exc.value.code == "generation_reservation_missing"
+    assert len(sent) == 1
+    assert admin(core[3], "SELECT count(*) FROM theheat_batch_work.uncertainties") == [(1,)]
+    status = sourced["store"].spending("status", {"intent_id": sourced["result"]["generation"]["intent_id"]}, now=utc_text(NOW))
+    assert status["intent"]["state"] == "uncertain" and status["intent"]["settled_micro_usd"] is None
+
+
 @pytest.mark.parametrize("change", [{"prompt": "Free text"}, {"samples": 3}, {"role": "publisher"}])
 def test_reference_only_input(sourced, change):
     with pytest.raises(CommandError):
@@ -182,11 +205,70 @@ def test_superseded_and_urgent_are_not_generation_authority(sourced):
 
 
 def test_exhausted_allowance_is_durable_refusal_without_orphan(sourced, core):
-    sourced["config"]["reservation"]["reserve_micro_usd"] = 91
+    sourced["config"]["reservation"] = sourced["store"].retain_generation_reservation(
+        allowance_document(sourced["refs"]["brief_id"], reserve_micro_usd=91))
     result = request(sourced)
     assert result["status"] == "rejected" and result["code"] == "spending_allowance_exhausted"
     assert admin(core[3], "SELECT count(*) FROM theheat_batches.registrations") == [(0,)]
     assert admin(core[3], "SELECT count(*) FROM theheat_spending.intents") == [(0,)]
+
+
+@pytest.mark.parametrize("changes", [
+    {"schema_version": True}, {"reserve_micro_usd": True}, {"reserve_micro_usd": 0},
+    {"reserve_micro_usd": 10**12+1}, {"extra": "not allowed"}, {"basis": "price_estimate"},
+    {"provider": "google"}, {"role": "critic"}, {"model": ""}, {"policy_sha256": "A"*64},
+    {"brief_ids": []}, {"brief_ids": ["a"*64]*2}, {"brief_ids": [f"{i:064x}" for i in range(17)]},
+    {"brief_ids": ["A"*64]}, {"valid_from": "2026-09-29T12:00:00+00:00"},
+    {"valid_until": utc_text(NOW)}, {"valid_until": utc_text(NOW-timedelta(seconds=1))},
+])
+def test_reservation_schema_refuses_ambiguous_or_unbounded_values(changes):
+    with pytest.raises(CommandError):
+        generation.reservation_document(allowance_document("a"*64, **changes))
+
+
+@pytest.mark.parametrize("phase", ["prepare", "submit", "collect", "capture"])
+@pytest.mark.parametrize("mismatch", ["missing", "amount", "model", "policy", "brief", "future", "expired", "digest"])
+def test_retained_allowance_is_required_before_registration_and_active_work(sourced, core, phase, mismatch):
+    if phase != "prepare":
+        assert request(sourced)["status"] == "applied"
+    value = allowance_document(sourced["refs"]["brief_id"])
+    if mismatch == "amount":
+        value["reserve_micro_usd"] += 1
+    if mismatch == "model":
+        value["model"] = "claude-other-invented"
+    if mismatch == "policy":
+        value["policy_sha256"] = "b"*64
+    if mismatch == "brief":
+        value["brief_ids"] = ["c"*64]
+    if mismatch == "future":
+        value["valid_from"] = utc_text(NOW+timedelta(seconds=1))
+    if mismatch == "expired":
+        value["valid_from"] = utc_text(NOW-timedelta(hours=1))
+        value["valid_until"] = utc_text(NOW)
+    reserve = sourced["store"].retain_generation_reservation(value)
+    if mismatch == "amount":
+        reserve["reserve_micro_usd"] = 20
+    if mismatch in {"missing", "digest"}:
+        reserve["estimate_sha256"] = "e"*64
+    if mismatch == "digest":
+        # Even a stored document with an internally valid repository receipt
+        # cannot be referenced under a different caller-selected digest.
+        sourced["store"].projections.record(generation.RESERVATION, "e"*64, value)
+    sourced["config"]["reservation"] = reserve
+    expected = ("generation_reservation_missing" if mismatch == "missing" else
+        "generation_reservation_expired" if mismatch in {"future", "expired"} else "generation_reservation_mismatch")
+    if phase == "prepare":
+        result = request(sourced)
+        assert result["status"] == "rejected" and result["code"] == expected
+    else:
+        with pytest.raises(CommandError) as exc:
+            run(sourced, phase, lambda: pytest.fail("refused allowance constructed a provider"))
+        assert exc.value.code == expected
+    expected_jobs = 0 if phase == "prepare" else 1
+    assert admin(core[3], "SELECT count(*) FROM theheat_batches.registrations") == [(expected_jobs,)]
+    assert admin(core[3], "SELECT count(*) FROM theheat_spending.intents") == [(expected_jobs,)]
+    assert admin(core[3], "SELECT count(*) FROM theheat_batch_work.submissions") == [(0,)]
+    assert admin(core[3], "SELECT count(*) FROM theheat_batch_results.receipts") == [(0,)]
 
 
 def test_registration_fault_rolls_back_and_restart_consumes_once(sourced, core, monkeypatch):
@@ -268,8 +350,11 @@ def test_racing_manual_and_automatic_starts_share_one_hold_and_attempt(sourced, 
 
 
 @pytest.mark.parametrize("phase", ["submit", "collect"])
-@pytest.mark.parametrize("drift", ["source", "role", "policy", "lease"])
+@pytest.mark.parametrize("drift", ["source", "role", "policy", "lease", "estimate", "estimate_expiry"])
 def test_inflight_drift_keeps_raw_evidence_without_promotion(sourced, monkeypatch, core, phase, drift):
+    if drift == "estimate_expiry":
+        sourced["config"]["reservation"] = sourced["store"].retain_generation_reservation(
+            allowance_document(sourced["refs"]["brief_id"], valid_until=utc_text(NOW+timedelta(seconds=1))))
     request(sourced)
     clock = [NOW]
     revoked = [False]
@@ -286,6 +371,10 @@ def test_inflight_drift_keeps_raw_evidence_without_promotion(sourced, monkeypatc
             monkeypatch.setenv("THEHEAT_WRITER_SAMPLES", "3")
         if drift == "lease":
             clock[0] += timedelta(seconds=61)
+        if drift == "estimate":
+            sourced["config"]["reservation"]["estimate_sha256"] = "e"*64
+        if drift == "estimate_expiry":
+            clock[0] += timedelta(seconds=1)
     if phase == "collect":
         _, clean = transport(sourced)
         assert run(sourced, "submit", clean)["outcome"] == "submitted"
@@ -305,11 +394,17 @@ def test_inflight_drift_keeps_raw_evidence_without_promotion(sourced, monkeypatc
     assert status["totals"]["held_micro_usd"] == 20 and not status["accounting_complete"]
 
 
-def test_changed_source_between_metadata_and_results_retains_only_metadata(sourced, core):
+@pytest.mark.parametrize("drift", ["source", "estimate"])
+def test_changed_authority_between_metadata_and_results_retains_only_metadata(sourced, core, drift):
     request(sourced)
     _, factory = transport(sourced)
     assert run(sourced, "submit", factory)["outcome"] == "submitted"
-    sent, factory = transport(sourced, after=lambda _: sourced["config"]["current_inputs"].clear())
+    def change(_):
+        if drift == "source":
+            sourced["config"]["current_inputs"].clear()
+        else:
+            sourced["config"]["reservation"]["estimate_sha256"] = "e"*64
+    sent, factory = transport(sourced, after=change)
     assert run(sourced, "collect", factory)["outcome"] == "retained"
     assert len(sent) == 1 and sent[0][1].endswith("msgbatch_fixture")
     assert admin(core[3], "SELECT count(*) FROM theheat_batch_results.receipts") == [(1,)]
@@ -327,6 +422,8 @@ def test_only_two_independent_evidence_kills_arm_cache_and_receipt_replay_is_onc
         value["captured_at"] = utc_text(at)
         sourced["refs"] = sourced["store"].retain_generation_input(value)
         sourced["config"]["current_inputs"] = [sourced["refs"]["brief_id"]]
+        sourced["config"]["reservation"] = sourced["store"].retain_generation_reservation(
+            allowance_document(sourced["refs"]["brief_id"], now=at))
         assert request(sourced, now=at)["status"] == "applied"
         raw = sourced["store"].read_batch_plan(sourced["result"]["generation"]["job_id"])
         if number == 0:
@@ -377,6 +474,8 @@ def test_fresh_owned_cluster_restore_resumes_exact_source_job(sourced, core, clu
             restored = PostgresCommandAuthority(socket_directory=socket, port=55477, database="restored_generation", user="projection_runtime")
             restored.configure_sourced_generation(lambda: sourced["config"])
             assert restored.read() == before
+            digest = sourced["config"]["reservation"]["estimate_sha256"]
+            assert restored.projections.read(generation.RESERVATION, digest) == sourced["store"].projections.read(generation.RESERVATION, digest)
             assert restored.consume(candidate.resolve, command_id=sourced["request"].command_id, now=NOW) == initial
             recovery = dict(sourced, store=restored)
             if phase == "registered":

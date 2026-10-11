@@ -19,11 +19,14 @@ from src.two_bot import negative_cache
 from src.two_bot.sourced_generation import prepare as prepare_plan, identity as plan_identity, refuse, source_bundle
 
 INPUT = "sourced-generation-input-v1"
+RESERVATION = "sourced-generation-reservation-v1"
 JOB = "sourced-generation-job-v1"
 CAPTURE = "sourced-generation-capture-v1"
 RESOLUTION = "sourced-generation-resolution-v1"
 MAX_INPUT = 131072
 FIELDS = {"schema_version", "source_key", "source_revision", "captured_at", "useful_until", "urgent", "bundle", "save"}
+RESERVATION_FIELDS = {"schema_version", "basis", "provider", "role", "model", "policy_sha256",
+    "brief_ids", "reserve_micro_usd", "valid_from", "valid_until"}
 
 
 def configuration(authority):
@@ -88,6 +91,38 @@ def document(value):
     return value
 
 
+def reservation_document(value):
+    """An invented local allowance, never a price quote or production grant."""
+    refuse(isinstance(value, dict) and set(value) == RESERVATION_FIELDS
+        and type(value["schema_version"]) is int and value["schema_version"] == 1,
+        "generation_reservation_invalid")
+    refuse(value["basis"] == "invented_local_allowance" and value["provider"] == "anthropic"
+        and value["role"] == "writer", "generation_reservation_invalid")
+    refuse(isinstance(value["model"], str) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,159}", value["model"])
+        and isinstance(value["policy_sha256"], str) and re.fullmatch(r"[a-f0-9]{64}", value["policy_sha256"]),
+        "generation_reservation_invalid")
+    ids = value["brief_ids"]
+    refuse(isinstance(ids, list) and 1 <= len(ids) <= 16
+        and all(isinstance(i, str) and re.fullmatch(r"[a-f0-9]{64}", i) for i in ids)
+        and len(set(ids)) == len(ids), "generation_reservation_invalid")
+    refuse(type(value["reserve_micro_usd"]) is int and 1 <= value["reserve_micro_usd"] <= 10**12,
+        "generation_reservation_invalid")
+    refuse(utc_datetime(value["valid_from"]) < utc_datetime(value["valid_until"]), "generation_reservation_invalid")
+    return value
+
+
+def current_reservation(c, reserve, identity, policy, now):
+    digest = reserve["estimate_sha256"]
+    refuse(exists(c, RESERVATION, digest), "generation_reservation_missing")
+    value = reservation_document(read(c, RESERVATION, digest))
+    refuse(p._sha(p._canonical(value)) == digest, "generation_reservation_mismatch")
+    refuse(value["reserve_micro_usd"] == reserve["reserve_micro_usd"]
+        and identity in value["brief_ids"] and value["provider"] == policy["models"]["writer_provider"]
+        and value["model"] == policy["models"]["writer"] and value["policy_sha256"] == fingerprint(policy),
+        "generation_reservation_mismatch")
+    refuse(utc_datetime(value["valid_from"]) <= now < utc_datetime(value["valid_until"]), "generation_reservation_expired")
+
+
 def current(authority, c, identity, policy, now):
     config = configuration(authority)
     refuse(identity in config["current_inputs"], "generation_source_superseded")
@@ -104,6 +139,7 @@ def current(authority, c, identity, policy, now):
     refuse(valid_policy(policy) and policy["flags"]["writer_samples"] == 1
         and policy["flags"]["critic_enabled"] and policy["flags"]["safety_llm_enabled"], "generation_policy_unavailable")
     refuse(os.environ.get("THEHEAT_PRODUCTION_PAUSED") != "1", "production_paused")
+    current_reservation(c, config["reservation"], identity, policy, now)
     return value, config
 
 

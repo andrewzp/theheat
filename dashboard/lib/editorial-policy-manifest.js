@@ -9,14 +9,14 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/commands/check_execution_journal.py": "519b28ec65739e0ce3d378a0c1f9c50b64e84a4f88c413c0f2668f4110a211ec",
     "src/commands/check_journal.py": "f15f914c762604525a5f4e1b0be47d0536be54ed82dfbf932940a3085a0c8a95",
     "src/commands/media_journal.py": "fb983bf43c20dd654f47969f46d982014fe01052b8b4c7658d603e077d9713c0",
-    "src/commands/postgres_authority.py": "1ca1422a483388a45f0bddaf19c0f312c1b29cf11e9934f7eaa3db826208386b",
+    "src/commands/postgres_authority.py": "722e08d9e985d7c825a40d1b72275fc7805ec9b718d74cfe2429b026e8ad9dd7",
     "src/commands/postgres_batch_results.py": "3fc0201e0b2f8f1c9a2670d2d6e94f4bcf9d6e0738c8df8cda55e7469dd7a1a5",
     "src/commands/postgres_candidate_admission.py": "b0751a121feb1fed99edafac18539ba1d5b78f078e869d85dabee66bc273e104",
     "src/commands/postgres_check_observations.py": "a17f45afa03bcd5bded93d18fae1b1f87e371aef3550798359a9449540c0bd85",
     "src/commands/postgres_checks.py": "45a0526596d8075de8a777cbed9c07602f813cc9780d6311f4a25409fd9dc9dd",
     "src/commands/postgres_media.py": "3d9ecaf947f87fa486e38e6617486fc458677aa19721cfca68a2523d52655a16",
     "src/commands/postgres_media_commands.py": "28a0826e5a47ea4781c897a4e3c0b78cc773b264ffd8b46191c1ea1e290f3d1c",
-    "src/commands/postgres_sourced_generation.py": "04eda1fba2cc046fefac04299ef79b37799e888baed853d5ca3bde1b091adc5e",
+    "src/commands/postgres_sourced_generation.py": "4c71f60c2e6966e60bb801f6dd7bad08094c7513f78980b895693449de0552f6",
     "src/commands/preview_ingress.py": "47e78981bd11d561dac9a22933f401f5d2c57abfbc59044d8cb4f5e50ed491f2",
     "src/commands/reducer.py": "9438ff563ef7b362f6b7cfe76bf0fb8e0325ec2c269a0135e0252a8cd3296672",
     "src/commands/schema.py": "5dc1643d1ed755b642d13f7d5cccbb1095ddd599101a786f9bf30b387a3252c9",
@@ -118,5 +118,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "4a828a22e451889f630e994add6ba38c463d44369d24d2e22c2ff85e7f0387e5"
   },
   "schema_version": 1,
-  "source_sha256": "d8001247673f0b18eea196e9c0be2ad2bd3a12604e73301b47be7132e0f1287c"
+  "source_sha256": "cea750713b6e53cb219766a964966b318a346e1982ee334c0873abb999783d76"
 }

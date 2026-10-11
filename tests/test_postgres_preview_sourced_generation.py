@@ -22,6 +22,7 @@ from tests.test_postgres_batch_results import worker_store as worker_store
 from tests.test_postgres_check_observations import base_store as base_store, store as store
 from tests.two_bot.test_batch_contract import inputs as inputs
 from tests.test_postgres_preview_command_ingress import clean_environment, operator_file
+from tests.test_postgres_sourced_generation import allowance_document
 
 ROOT = Path(__file__).resolve().parents[1]
 ORIGIN = "http://127.0.0.1:3038"
@@ -97,7 +98,8 @@ def sourced_preview(store, core, inputs, monkeypatch, tmp_path):
         bundle=inputs["bundle"].to_dict(), save=dict(legacy_type="fire", event_id=inputs["bundle"].event_id,
             score=None, city="", tweet_date="", cooldown_exempt=False, review_context=None, evaluator_metadata=None)))
     generation = tmp_path/"generation.json"
-    generation.write_text(json.dumps(dict(current_inputs=[refs["brief_id"]], reservation=dict(estimate_sha256="e"*64, reserve_micro_usd=20))))
+    reserve = store.retain_generation_reservation(allowance_document(refs["brief_id"], now=now))
+    generation.write_text(json.dumps(dict(current_inputs=[refs["brief_id"]], reservation=reserve)))
     generation.chmod(0o600)
     store.configure_sourced_generation(private_configuration(generation))
     operators = operator_file(tmp_path/"operators.json")
