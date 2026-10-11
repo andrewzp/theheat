@@ -11,6 +11,7 @@ import re
 import select
 import subprocess
 import sys
+from types import SimpleNamespace
 
 import pytest
 import yaml
@@ -126,6 +127,43 @@ def test_partitions_preserve_every_check_without_repeating_dashboard(workflow):
             assert step["if"] == "matrix.partition == 'core'"
     suite = next(s for s in worker["steps"] if s.get("run", "").startswith("python -m pytest"))
     assert "if" not in suite and "continue-on-error" not in worker
+
+
+def test_postgres_ingress_has_node_and_dashboard_dependencies(workflow):
+    steps = workflow["jobs"]["test-partition"]["steps"]
+    node, = [step for step in steps if step.get("uses") == "actions/setup-node@v6"]
+    dependencies, = [step for step in steps if step.get("name") == "Install dashboard dependencies"]
+    assert node["if"] == dependencies["if"] == "matrix.partition != 'media'"
+    assert node["with"]["node-version"] == "24"
+    assert node["with"]["cache-dependency-path"] == "dashboard/package-lock.json"
+    assert dependencies["working-directory"] == "dashboard"
+    assert dependencies["run"] == "npm ci"
+
+
+@pytest.mark.parametrize("partition", ["all", "core", "postgres", "media"])
+def test_actual_collection_hook_keeps_preview_ingress_in_postgres(partition):
+    from tests.conftest import pytest_collection_modifyitems
+
+    # Exercise the real hook with the database-backed ingress module, including
+    # its separate Next/HTTP/PG test; no assertion in that module is skipped.
+    paths = {
+        "core": Path(__file__),
+        "postgres": Path(__file__).with_name("test_postgres_preview_command_ingress.py"),
+        "media": Path(__file__).with_name("test_postgres_media_commands.py"),
+    }
+    assert all(path.is_file() for path in paths.values())
+    items = [SimpleNamespace(path=path) for path in paths.values()]
+    original = list(items)
+    deselected = []
+    config = SimpleNamespace(
+        getoption=lambda name: partition,
+        hook=SimpleNamespace(pytest_deselected=lambda items: deselected.extend(items)),
+    )
+    pytest_collection_modifyitems(config, items)
+    expected = list(paths.values()) if partition == "all" else [paths[partition]]
+    assert [item.path for item in items] == expected
+    assert {id(item) for item in items}.isdisjoint(id(item) for item in deselected)
+    assert {id(item) for item in items + deselected} == {id(item) for item in original}
 
 
 def _database_setup(workflow):
