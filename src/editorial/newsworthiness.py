@@ -296,6 +296,10 @@ def _event_matches_candidate(ev: dict, candidate: Any) -> bool:
     bundle = getattr(candidate, "bundle", None)
     if bundle is None:
         return False
+    if "physical_episode" in (getattr(bundle, "raw_signal_dump", None) or {}):
+        # This matcher has no retained episode/claim-time link contract yet.
+        # Country/name/time proximity cannot become impact or identity evidence.
+        return False
 
     families = _NEWS_KIND_TO_LEGACY_TYPES.get(str(ev.get("kind") or ""))
     if not families or getattr(candidate, "legacy_type", "") not in families:

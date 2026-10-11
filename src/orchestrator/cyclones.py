@@ -192,8 +192,18 @@ def _process_cyclone_source(
     source_label: str,
     fetch_fn,
     detect_module,
-) -> None:
+    episode_lane=None,
+):
     """Fetch, detect, and draft NHC/JTWC cyclone events."""
+
+    if episode_lane is not None:
+        from src.orchestrator.cyclone_episodes import CycloneEpisodeLane
+        from src.data import nhc
+        from src.storage.cyclone_supply import require
+        require(type(episode_lane) is CycloneEpisodeLane and source_key == "nhc"
+                and fetch_fn is nhc.fetch_active_cyclones and detect_module is nhc,
+                "explicit_nhc_episode_lane_required")
+        return episode_lane.capture_prepare(bot_state, fetch_fn)
 
     from src.orchestrator.common import _enqueue_story_candidate
 

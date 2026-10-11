@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from datetime import datetime
+import hashlib
+import json
 import re
 from typing import Any
 from urllib.parse import unquote, urljoin, urlsplit
@@ -32,7 +34,7 @@ NHC_CURRENT_STORMS_URL = "https://www.nhc.noaa.gov/CurrentStorms.json"
 NHC_BASE_URL = "https://www.nhc.noaa.gov/"
 
 
-def fetch_active_cyclones(*, strict: bool = False) -> list[CycloneAdvisory]:
+def fetch_active_cyclones(*, strict: bool = False, retention_observer=None) -> list[CycloneAdvisory]:
     """Fetch active NHC Atlantic and East Pacific storm advisories."""
 
     fetched_advisories: list[CycloneAdvisory] = []
@@ -52,7 +54,8 @@ def fetch_active_cyclones(*, strict: bool = False) -> list[CycloneAdvisory]:
         for raw in payload.get("activeStorms") or []:
             if not isinstance(raw, dict):
                 continue
-            advisory = _parse_active_storm(raw)
+            advisory = (_parse_active_storm(raw) if retention_observer is None else
+                        _parse_active_storm(raw, retention_observer=retention_observer))
             if advisory is not None:
                 advisories.append(advisory)
         fetched_advisories = advisories
@@ -67,7 +70,7 @@ def fetch_active_cyclones(*, strict: bool = False) -> list[CycloneAdvisory]:
     return fetched_advisories
 
 
-def _parse_active_storm(raw: dict[str, Any]) -> CycloneAdvisory | None:
+def _parse_active_storm(raw: dict[str, Any], *, retention_observer=None) -> CycloneAdvisory | None:
     storm_id = str(_first_present(
         raw,
         "id",
@@ -141,13 +144,16 @@ def _parse_active_storm(raw: dict[str, Any]) -> CycloneAdvisory | None:
     # the storm still parses; the land-threat signal simply cannot fire.
     forecast_points: tuple[ForecastPoint, ...] = ()
     tcm_obj = raw.get("forecastAdvisory")
+    tcm_url = ""
+    acquisition: dict = {}
     if isinstance(tcm_obj, dict):
         tcm_url = _normalize_url(tcm_obj.get("url"))
-        tcm_text = _fetch_advisory_text(tcm_url)
+        tcm_text = (_fetch_advisory_text(tcm_url) if retention_observer is None else
+                    _fetch_advisory_text(tcm_url, acquisition=acquisition))
         if tcm_text:
             forecast_points = parse_nhc_forecast_advisory(tcm_text)
 
-    return CycloneAdvisory(
+    advisory = CycloneAdvisory(
         source="nhc",
         storm_id=storm_id or name,
         storm_name=name or storm_id,
@@ -163,6 +169,24 @@ def _parse_active_storm(raw: dict[str, Any]) -> CycloneAdvisory | None:
         advisory_text=advisory_text,
         forecast_points=forecast_points,
     )
+
+    if retention_observer is not None:
+        # Canonical parsed JSON row, not raw wire bytes. Do not infer product
+        # issuance/number/completeness from the current storm or truncated text.
+        from dataclasses import asdict
+        def digest(value):
+            return hashlib.sha256(json.dumps(value, sort_keys=True, ensure_ascii=False,
+                allow_nan=False, separators=(",", ":")).encode()).hexdigest()
+        forecast = tcm_obj if isinstance(tcm_obj, dict) else {}
+        retention_observer(advisory, {
+            "source_row_sha256": digest(raw),
+            "forecast_product_url": tcm_url or None,
+            "forecast_issued_at_original": _issue_time(forecast.get("issuance")) or None,
+            "forecast_advisory_number": _advisory_number(forecast.get("advNum")) or None,
+            "forecast_text_complete": acquisition.get("complete"),
+            "forecast_points_sha256": digest([asdict(point) for point in forecast_points]),
+        })
+    return advisory
 
 
 def _first_present(raw: dict[str, Any], *keys: str, default: Any = None) -> Any:
@@ -227,7 +251,7 @@ def _normalize_url(value: Any) -> str:
     return url
 
 
-def _fetch_advisory_text(url: str) -> str:
+def _fetch_advisory_text(url: str, *, acquisition: dict | None = None) -> str:
     if not url:
         return ""
     try:
@@ -237,7 +261,12 @@ def _fetch_advisory_text(url: str) -> str:
             timeout=15,
             attempts=2,
         )
-        return response.text[:8000]
+        text = response.text
+        if acquisition is not None:
+            # Successful fetch of a nonempty product, prior to the legacy cap.
+            # This says only that application truncation did not omit bytes.
+            acquisition["complete"] = bool(text) and len(text) <= 8000
+        return text[:8000]
     except requests.RequestException:
         return ""
 
