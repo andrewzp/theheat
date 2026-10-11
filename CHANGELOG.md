@@ -6,9 +6,10 @@ All notable changes to this project will be documented in this file.
 
 - Preview qualified saved PM2.5 model forecasts in the protected editor using the existing complete-source adapter, with all hourly samples, grid scope and full description.
 - Keep forecast calendar dates and timezones distinct from MODIS acquisition times. Bind both response variants to the exact runtime, renderer and draft revision; preserve read-only behavior and cancellation controls.
-
 - Preserve exact retained numeric evidence and revision history through dashboard saves; refuse ambiguous evidence and detect numeric drift during native rendering.
 - Add opt-in local PostgreSQL capture and replay of the complete qualified station supply before publication caps, with restart and restore checks.
+- Let the local workbench check retained writer candidates and admit current results as unapproved drafts. Reconstruct all four recorded checks at admission, and preserve an older draft when a later save gate refuses the replacement.
+- Add an explicitly configured staging PostgreSQL connection with pinned certificate, hostname and database identity checks. Keep client TLS verification distinct from backend connection metadata.
 
 ## 0.9.108.109 — 2026-10-11
 
