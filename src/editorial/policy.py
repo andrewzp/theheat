@@ -12,6 +12,7 @@ from src.editorial.revisions import fingerprint
 
 ROOT = Path(__file__).resolve().parents[2]
 POLICY_FILES = (
+    "src/storage/scientific_supply.py", "src/commands/preview_ingress.py",
     "src/data/places.py", "data/place_registry.json", "data/country_codes.json",
     "src/commands/postgres_batch_results.py", "src/commands/postgres_checks.py",
     "src/commands/check_execution_journal.py", "src/two_bot/check_executor.py",

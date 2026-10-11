@@ -24,7 +24,7 @@ from tests.test_ghcn_time_integrity import DAY, NOW, baseline_rows, dly
 
 
 @pytest.fixture
-def supply(tmp_path):
+def supply_inputs(tmp_path):
     stations, observations, payloads = [], {}, {}
     history = baseline_rows()
     path = tmp_path / "stations.sqlite"
@@ -45,11 +45,14 @@ def supply(tmp_path):
             # Station6 has a current QC rejection; station7 has omitted years;
             # station8's diff reading is non-finite. None can supply a record.
             payloads[sid] = dly(rows + [(DAY, "TMAX", 399, "S" if index == 6 else "", "T")], sid)
+    return dict(stations=stations, db_path=path, _fetch_obs_fn=lambda _: observations,
+                _fetch_archive_fn=payloads.__getitem__, _now_fn=lambda: NOW)
+
+
+@pytest.fixture
+def supply(supply_inputs):
     metrics = {}
-    bundles, countries = ghcn.check_extreme_signals_for_stations(
-        stations=stations, db_path=path, _fetch_obs_fn=lambda _: observations,
-        _fetch_archive_fn=payloads.__getitem__, _now_fn=lambda: NOW, metrics_out=metrics,
-    )
+    bundles, countries = ghcn.check_extreme_signals_for_stations(**supply_inputs, metrics_out=metrics)
     return bundles, countries, metrics
 
 
