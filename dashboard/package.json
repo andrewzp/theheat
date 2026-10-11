@@ -10,7 +10,7 @@
     "test": "node --test"
   },
   "dependencies": {
-    "next": "^15.5.25",
+    "next": "15.5.27",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },

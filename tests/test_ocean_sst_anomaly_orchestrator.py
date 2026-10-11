@@ -5,6 +5,8 @@ from copy import deepcopy
 from src.data.ocean_sst_anomaly import REGION_REGISTRY, RegionalSSTReading
 from src.state import DEFAULT_STATE
 from tests.crw_fixtures import quiet_collection
+from tests.marine_fixtures import marine_clock, sst_reading
+import pytest
 
 
 def _reading(
@@ -52,30 +54,22 @@ def test_run_ocean_sst_anomaly_enqueues_regional_candidate(monkeypatch, syntheti
     assert queue[0].source == "ocean_sst_anomaly"
 
 
+@pytest.mark.usefixtures("marine_clock")
 def test_run_ocean_sst_anomaly_records_synthesis_component(monkeypatch):
     from src.orchestrator.sources.ocean_sst_anomaly import run_ocean_sst_anomaly
+    from src.editorial.marine_evidence import component
 
     bot_state = _state()
+    reading = sst_reading(monkeypatch, slug="coral_triangle", value=2.1)
     monkeypatch.setattr(
         "src.orchestrator.sources.ocean_sst_anomaly.ocean_sst_anomaly.collect_all_regions",
-        lambda strict=False: quiet_collection([
-            _reading(
-                slug="coral_triangle",
-                display="Coral Triangle",
-                anomaly=2.1,
-                tier=0,
-                day="2026-08-20",
-            )
-        ]),
+        lambda strict=False: quiet_collection([reading]),
     )
-
     run_ocean_sst_anomaly(bot_state, {"sources": []})
-
     assert bot_state.get("_triage_queue", []) == []
-    component = bot_state["synthesis_components"]["sst_anomalies"]["coral_triangle"][0]
-    assert component["event_id"] == "sst_anom_component_coral_triangle_2026-08-20"
-    assert component["anomaly_c"] == 2.1
-    assert component["tier"] == 0
+    stored = bot_state["synthesis_components"]["sst_anomalies"]["coral_triangle"][0]
+    assert stored == component("sst_anomaly", reading)
+    assert stored["marine_source"]["reading"]["tier"] == 0
 
 
 def test_run_ocean_sst_anomaly_duplicate_updates_tier_without_queue(monkeypatch):
@@ -236,7 +230,7 @@ def test_runner_records_report_counts_partial_failure_and_safe_details(monkeypat
     run_ocean_sst_anomaly(bot_state, current_run)
     entry = current_run["sources"][0]
     assert entry["status"] == "partial_failure" and entry["observed"] == 12
-    assert entry["details"] == report.details() and entry["note"] == report.note
+    assert entry["details"] == {**report.details(), "marine_components": {}} and entry["note"] == report.note
     health = bot_state["source_health"]["ocean_sst_anomaly"]
     assert health["degraded"] == 1 and health["total_observed"] == 12
     assert health["last_error"] == report.note

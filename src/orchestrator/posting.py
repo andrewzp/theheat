@@ -1,6 +1,7 @@
 """Posting and publish queue modes."""
 
 from __future__ import annotations
+from src.data.fire_identity import legacy_history_reason
 from src.data.places import has_unregistered_identity, legacy_publication_status, requires_identity_review
 
 from copy import deepcopy
@@ -209,6 +210,10 @@ def post_approved(draft_or_text: dict | str, bot_state: BotState) -> str:
             _touch_draft(draft)
             return "failed"
 
+    fire_hold = legacy_history_reason(bot_state, draft.get("event_id", ""))
+    if fire_hold:
+        draft["post_error"] = f"Fire history requires reconciliation: {fire_hold}"
+        return "failed"
     if has_unregistered_identity(draft):
         draft["post_error"] = "Unregistered sampling identity requires registry attribution before publishing"
         return "failed"
@@ -394,6 +399,15 @@ def run_manual_tweet(bot_state: BotState, current_run: dict | None = None) -> Bo
         )
         return bot_state
 
+    fire_hold = legacy_history_reason(bot_state, draft.get("event_id", "") if draft else "")
+    if fire_hold:
+        reason = f"Fire history requires reconciliation: {fire_hold}"
+        if draft:
+            draft["post_error"] = reason
+        _record_source_run(current_run, bot_state, "manual_publish", manual_start,
+                           status="failed", observed=1, error=reason)
+        return bot_state
+
     passed, safety_reason = run_safety_pipeline(tweet_text)
     if not passed:
         reason = safety_reason or "Safety pipeline rejected tweet"
@@ -556,6 +570,11 @@ def process_due_drafts(bot_state: BotState, current_run: dict | None = None) -> 
                 continue
             # post_approved marks the attempt immediately before its durable write.
 
+        fire_hold = legacy_history_reason(bot_state, draft.get("event_id", ""))
+        if fire_hold:
+            _demote_autoship_to_manual(draft, f"Fire history requires reconciliation: {fire_hold}")
+            failures.append(f"{draft.get('id')}: {fire_hold}")
+            continue
         history_status = legacy_publication_status(bot_state, draft.get("event_id", ""))
         if has_unregistered_identity(draft) or requires_identity_review(draft) or history_status != "clear":
             identity_reason = (

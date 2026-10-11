@@ -19,6 +19,10 @@ def build_synthesis_bundle(synthesis: dict) -> StoryBundle:
     (region, kind, components, total_score, event_id, headline).
     """
 
+    if "marine_schema_version" in synthesis:
+        from src.editorial.marine_evidence import build_bundle
+        return build_bundle(synthesis)
+
     components = synthesis.get("components") or []
     return StoryBundle(
         signal_kind=f"synthesis_{synthesis.get('kind', 'compound')}",

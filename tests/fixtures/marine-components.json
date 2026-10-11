@@ -1,0 +1,160 @@
+{
+  "corals": {
+    "great_nicobar": [
+      {
+        "at": "2026-06-15T00:00:00Z",
+        "event_id": "marine_component_coral_v1_37460fe049b1d007275d437736b448f490c47b71882a6fdd650cff5eb68ec33d",
+        "marine_source": {
+          "kind": "coral",
+          "reading": {
+            "baa_7day_max": 3,
+            "date": "2026-06-15",
+            "dhw_value": 8.25,
+            "lat": -21.75,
+            "lon": 151.125,
+            "provenance": {
+              "baa_7day_max": 3,
+              "baa_scale": "heritage_0_to_4",
+              "baa_window_days": 7,
+              "dhw_value": 8.25,
+              "evidence_type": "satellite_analysis",
+              "header": {
+                "columns": [
+                  "YYYY",
+                  "MM",
+                  "DD",
+                  "SST_MIN",
+                  "SST_MAX",
+                  "SST@90th_HS",
+                  "SSTA@90th_HS",
+                  "90th_HS>0",
+                  "DHW_from_90th_HS>1",
+                  "BAA_7day_max"
+                ],
+                "etag": "\"invented-representation-1\"",
+                "first_baa_date": "2001-03-31",
+                "first_dhw_date": "2001-03-25",
+                "range_end": 2048,
+                "range_start": 0,
+                "response_bytes": 2049,
+                "response_sha256": "9e9098ecc417aefd34d768e68fb76c32311de04ef3009d63125057641a7a5ab2",
+                "retrieved_at": "2026-06-16T12:00:00Z",
+                "source_url": "https://coralreefwatch.noaa.gov/product/vs/data/great_nicobar.txt",
+                "total_bytes": 11971
+              },
+              "index": {
+                "index_date": "2026-06-15",
+                "response_bytes": 287,
+                "response_sha256": "89e37802552ba2c52f676296eb8fc983e18bde4d8f32ca01bf93a152e7d37334",
+                "retrieved_at": "2026-06-16T12:00:00Z",
+                "source_url": "https://coralreefwatch.noaa.gov/product/vs/data.php"
+              },
+              "marker_point": [
+                -21.75,
+                151.125
+              ],
+              "marker_role": "regional_map_marker",
+              "method": "Regional 90th-percentile HotSpot accumulation over the preceding 12 weeks",
+              "region_full_name": "Great Nicobar",
+              "region_id": "great_nicobar",
+              "schema_version": 1,
+              "source_leg": "crw_virtual_station",
+              "source_name": "NOAA Coral Reef Watch",
+              "source_product": "noaa-crw-regional-v3.1",
+              "source_url": "https://coralreefwatch.noaa.gov/product/vs/data/great_nicobar.txt",
+              "stress_level": "Bleaching Alert Level 1",
+              "tail": {
+                "complete_row_count": 141,
+                "etag": "\"invented-representation-1\"",
+                "first_retained_date": "2026-01-26",
+                "last_retained_date": "2026-06-15",
+                "range_end": 11970,
+                "range_start": 3779,
+                "response_bytes": 8192,
+                "response_sha256": "f2f5993001fd31387a2412aae4f2cb3bdeb80ee9fd28c76c5ab08431bd1d4090",
+                "retrieved_at": "2026-06-16T12:00:00Z",
+                "source_url": "https://coralreefwatch.noaa.gov/product/vs/data/great_nicobar.txt",
+                "total_bytes": 11971
+              },
+              "unit": "degree_Celsius_weeks",
+              "valid_date": "2026-06-15"
+            },
+            "region_full_name": "Great Nicobar",
+            "region_id": "great_nicobar",
+            "source_leg": null,
+            "source_name": "NOAA Coral Reef Watch",
+            "stress_level": "Bleaching Alert Level 1"
+          },
+          "schema_version": 1
+        }
+      }
+    ]
+  },
+  "drought_snapshot": null,
+  "fires": {},
+  "heats": {},
+  "sst_anomalies": {
+    "bay_of_bengal": [
+      {
+        "at": "2026-06-14T00:00:00Z",
+        "event_id": "marine_component_sst_anomaly_v1_f13c68e20ab00a74677d3fbb11f9e38aaf0a20e49a016291e16353ad2cf2eaca",
+        "marine_source": {
+          "kind": "sst_anomaly",
+          "reading": {
+            "anomaly_c": 2.2,
+            "cells_used": 288,
+            "date": "2026-06-14",
+            "provenance": {
+              "evidence_type": "satellite_analysis",
+              "excluded_cells": 0,
+              "grid_stride": 20,
+              "mean_anomaly_c": 2.2,
+              "method": "cos-latitude-weighted mean of valid strided sample cells",
+              "native_grid_degrees": 0.05,
+              "primary_metadata": {
+                "first_product_time": "1985-01-01T12:00:00Z",
+                "last_product_time": "2026-06-14T12:00:00Z",
+                "metadata_sha256": "23323ee7038d87b790b3070e51a93a73c1bff5fefca9649571e6ef8521cc1b02",
+                "metadata_url": "https://coastwatch.noaa.gov/erddap/info/noaacrwsstanomalyDaily/index.json",
+                "response_bytes": 751,
+                "retrieved_at": "2026-06-16T12:00:00Z"
+              },
+              "product_timestamp": "2026-06-14T12:00:00Z",
+              "region_display_name": "Bay of Bengal",
+              "region_slug": "bay_of_bengal",
+              "requested_bounds": [
+                5,
+                22,
+                80,
+                95
+              ],
+              "response_bytes": 11248,
+              "response_sha256": "53fd64e8680a7a8287e889b0a2cf80813f95410748f753420182b546f53fe391",
+              "retrieved_at": "2026-06-16T12:00:00Z",
+              "sampled_bounds": [
+                5.025,
+                22.025,
+                80.025,
+                95.025
+              ],
+              "schema_version": 1,
+              "source_leg": "coastwatch_erddap",
+              "source_name": "NOAA Coral Reef Watch daily 5km SST anomaly v3.1",
+              "source_product": "noaa-crw-ssta-v3.1",
+              "source_url": "https://coastwatch.noaa.gov/erddap/griddap/noaacrwsstanomalyDaily.csv?sea_surface_temperature_anomaly[(last)][(22):20:(5)][(80):20:(95)]",
+              "total_cells": 288,
+              "unit": "degree_C",
+              "valid_cells": 288,
+              "valid_date": "2026-06-14"
+            },
+            "region_display_name": "Bay of Bengal",
+            "region_slug": "bay_of_bengal",
+            "source_leg": null,
+            "tier": 0
+          },
+          "schema_version": 1
+        }
+      }
+    ]
+  }
+}

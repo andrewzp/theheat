@@ -128,7 +128,7 @@ If a detail matters for factual safety, it belongs in `current_facts`,
 | River gauges | `src/orchestrator/sources/river_gauges.py` | Gauge height and flood stage data, with Open-Meteo Flood modeled discharge fallback | Above-stage flood selection or modeled high-discharge selection | `disasters.build_river_flood_bundle` | Gauge/current/flood-stage feet for primary; modeled discharge fields and `model_fallback` for Open-Meteo Flood | Model fallback must omit gauge-height/flood-stage feet and never masquerade as a gauge reading |
 | Storm surge | `src/orchestrator/sources/co_ops.py` | CO-OPS water level observations | Observed versus predicted surge anomaly | `disasters.build_storm_surge_bundle` | Observed, predicted, anomaly, station/area | Anomaly sign and station identity must remain explicit |
 | Cyclones | Cyclone helpers in `src/orchestrator/common.py` | Storm track/intensity data | Rapid intensification, tier crossing, landfall, basin record | `disasters.build_cyclone_rapid_intensification_bundle`, `build_cyclone_tier_crossing_bundle`, `build_cyclone_landfall_bundle`, `build_cyclone_basin_record_bundle` | Storm identity, basin, wind values, category/tier, record context where relevant | Each cyclone story type must keep its comparison basis |
-| Synthesis | `src/orchestrator/sources/synthesis.py` | Cross-source components already detected elsewhere | Components combined by region/topic | `synthesis.build_synthesis_bundle` | Region, synthesis kind, component count, component facts | Synthesis can cite only included components and must not invent connecting claims |
+| Synthesis | `src/orchestrator/sources/synthesis.py` | Existing cross-source inputs; marine pairs require complete qualified CRW source readings | Marine: bounded dated selection within each product family | `synthesis.build_synthesis_bundle` | Marine: both exact source receipts, individual dates/scopes, DHW metric, SST reference climate, explicit evaluation time | A regional association does not prove a shared footprint, simultaneous event, cause, marine heatwave, observed bleaching or mortality; legacy marine scalars remain held |
 
 ## High-Risk Evidence Gaps
 
@@ -163,3 +163,97 @@ Required warning coverage:
 - missing source-like anchor
 - numeric headline without unit signal
 - malformed fact dictionaries
+
+## Air-quality forecast windows
+
+Air-quality recovery accepts bounded integer or dated `Retry-After` values on
+rate-limit responses, following [HTTP semantics](https://www.rfc-editor.org/rfc/rfc9110.html#name-retry-after).
+Each response's headers stay paired; the longest required wait controls the next
+recovery pass. Malformed values use the bounded minute-window fallback. A requested
+delay above 63 seconds or an oversized header defers the remaining sweep, preserving
+qualified results and leaving unresolved city slots unavailable. It never shortens
+a longer server delay to retry early. Normal request bounds and two recovery passes
+remain; this is not a total run deadline or a durable cooldown across runs.
+
+Air-quality collection requests an explicit local calendar day with `timezone=auto`
+and `domains=auto`. Its date label comes from one UTC reference captured for the
+whole batch; the retained timezone and calculated UTC bounds describe each city's
+actual window. The [Open-Meteo air-quality contract](https://open-meteo.com/en/docs/air-quality-api)
+describes hourly forecast samples and automatic model-domain selection. The
+response does not identify an authoritative model run or universal resolution.
+
+Only 24 ordered, unique hourly labels spanning a real 24-hour local day qualify.
+Wrong-day, partial and daylight-saving 23/25-hour windows are withheld. A variable
+needs 24 finite, nonnegative values in its documented unit to supply a daily
+scalar. Nulls or invalid optional series remove their own scalar; complete dust
+can survive unavailable PM10, without a PM10/WHO comparison. Zero remains data.
+
+The versioned selected record retains requested and supplied grid coordinates,
+timezone, UTC request/retrieval and window bounds, hourly values and per-variable
+availability. Its canonical JSON is limited to 32 KiB. Its digest binds the
+selected normalized record, not unavailable raw HTTP bytes or source authenticity.
+The mean of hourly forecast samples is not a measured exposure; co-reported dust
+and PM10 alone do not establish causality. Nearby station annotations do not turn
+the model window into an observed full day.
+
+Primary and related evidence must reproduce the event's aggregates, ratios,
+identity and writer-facing projection before writer or required-check calls.
+Legacy scalar-only evidence stays retained but cannot pass renewed qualification.
+Place/day/tier IDs remain stable; exact evidence, checks and cache identities bind
+the changed content. Source qualification does not grant posting approval or prove
+live source recovery, lower bills or improved writing.
+
+For primary or related air-quality evidence, a local language check withholds
+recognizable causal links before paid checks. A forecast that co-reports dust and
+PM10 cannot support wording such as dust "pushing" PM10 higher, or a modeled
+concentration "causing" a visibility or health impact. Quotations and forecast
+qualifiers do not supply the missing causal evidence.
+
+The rule recognizes a finite set of causal predicates and nearby AQ/impact terms
+within a sentence or semicolon-delimited clause. It preserves decimal PM labels,
+normalizes Unicode only for scanning, and distinguishes immediate negation from
+another affirmative predicate. A narrow standalone general-background form can
+reach normal review; common words such as "as" and "due" alone are not causal
+triggers. Bare co-reporting and numerical guideline comparisons still require
+all usual checks. This is not complete semantic entailment: unrecognized wording,
+pronoun-only links and surrounding clause ambiguity remain review limitations.
+Exact text, complete source receipts and policy-bound approval identities remain
+unchanged by the scan. Passing the local rule is never a factual or posting pass.
+
+## Dated marine comparison evidence
+
+Marine components retain the complete qualified SST or coral reading and source
+receipt under a versioned, content-bound component ID, separate from the weekly
+publication ID. New acquisitions have distinct IDs. Source runners record them
+before individual-event deduplication and caps, including SST readings below the
+standalone tier threshold but at or above the existing marine floor. No extra
+source request is made. Existing 60-day marine posting cooldowns remain.
+
+Selection uses a captured UTC evaluation time and each product's own valid date.
+The 14-day comparison window is an upper bound: stricter source qualification
+still applies, including primary regional coral freshness. Future acquisitions,
+future/stale dates, altered hashes, legacy scalars and mismatched projections are
+withheld. Different qualified values from one source family/region/date conflict
+and that group cannot qualify. Identical reacquisitions remain separately bound;
+latest acquisition breaks ties. Primary source families take precedence over
+backups; within one family the largest retained eligible value is selected. This
+is not an exhaustive maximum or a comparison of regional and point statistics.
+
+A component is limited to8KiB and a region to128 stored rows. A pool at or above
+capacity is withheld, because rejected insertions could leave it incomplete;
+ordinary TTL pruning can make room. Fixed diagnostics report rejected inputs,
+conflicting dates and capacity holds. These bounds do not make Gist transactional
+or an immutable source archive. Python merge and dashboard preservation tests use
+one shared, entirely invented source-shaped fixture.
+
+The marine bundle carries both complete selected records, actual source dates,
+regional/point sampling scopes and the SST reference climatology. Its `when` is
+explicitly the evaluation date, not an asserted common observation date. Evidence
+and direct scientific checks rebuild the full projection. Paired marine bundles
+are excluded from scalar-only related-signal projection. Finite language guards
+hold named shared-event/time/footprint/causal/impact claims, including derived coral
+alert classes without the required source evidence. Conservative lexical guards
+can also withhold negative/background phrasing; they are not complete semantic
+entailment. All normal checks remain mandatory for eligible copy. No production
+recovery, human preference, global recall or cost saving is established by these
+offline fixtures.

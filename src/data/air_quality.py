@@ -4,33 +4,36 @@ Host: air-quality-api.open-meteo.com (CAMS-backed; distinct from the
 temperature/archive Open-Meteo hosts in src/data/open_meteo.py).
 No API key required for non-commercial use.
 
-Evidence grade: CAMS global model is gridded at 0.4 degrees, updated every
-12 h. City-level values are model estimates, not station readings.
+Evidence grade: the automatic CAMS domain supplies model forecasts, not station
+readings. Exact model/run and resolution are not identified by this response.
 """
 
 from __future__ import annotations
 
 import os
+import re
 import time
+from copy import deepcopy
 from dataclasses import dataclass
-from datetime import date
+from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
-from statistics import mean
 from typing import Any
 
 import requests
 
+from src.data import air_quality_contract as window_contract
 from src.data._freshness import assert_freshness, newest_freshness_date
+from src.data.source_status import SourceFetchError
 from src.data._http import fetch_with_retry
 from src.data.places import event_location_key
 
-AQ_URL = "https://air-quality-api.open-meteo.com/v1/air-quality"
+AQ_URL = window_contract.SOURCE_URL
 
 # WHO 2021 PM2.5 24-hour mean guideline (micrograms per cubic meter).
 WHO_24H_GUIDELINE: float = 15.0
 
 # WHO 2021 Air Quality Guideline, PM10 24-hour mean. The dust anchor is
-# CO-MEASURED PM10 (Open-Meteo `pm10`), never the `dust` variable itself —
+# Co-reported forecast PM10 (Open-Meteo `pm10`), never the `dust` variable itself —
 # `dust` is mineral dust only and has no 24h-average standard.
 WHO_PM10_24H_GUIDELINE: float = 45.0
 
@@ -75,6 +78,7 @@ class CityAirQuality:
     aod_daily_max: float | None
     us_aqi_daily_max: int | None
     pm10_24h_mean: float | None
+    forecast_window: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -93,6 +97,7 @@ class PM25HazardEvent:
     station_name: str | None = None
     station_pm25_ug_m3: float | None = None
     station_distance_km: float | None = None
+    forecast_window: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -108,25 +113,11 @@ class DustEvent:
     event_id: str
     pm10_24h_mean: float | None = None
     who_pm10_multiple: float | None = None
+    forecast_window: dict[str, Any] | None = None
 
 
 def _city_slug(name: str) -> str:
     return name.lower().replace(" ", "_").replace(",", "")
-
-
-def _daily_mean(values: list[Any]) -> float | None:
-    valid = [float(value) for value in values if isinstance(value, int | float)]
-    return mean(valid) if valid else None
-
-
-def _daily_max(values: list[Any]) -> float | None:
-    valid = [float(value) for value in values if isinstance(value, int | float)]
-    return max(valid) if valid else None
-
-
-def _daily_max_int(values: list[Any]) -> int | None:
-    value = _daily_max(values)
-    return int(round(value)) if value is not None else None
 
 
 def _tier(value: float, tiers: tuple[int, ...]) -> int | None:
@@ -135,47 +126,38 @@ def _tier(value: float, tiers: tuple[int, ...]) -> int | None:
 
 
 def _parse_single_location(
-    data: dict[str, Any],
-    city: str,
-    country: str,
-    lat: float,
-    lon: float,
-    today_str: str,
+    data: dict[str, Any], city: str, country: str, lat: float, lon: float,
+    today_str: str, *, requested_at: str | None = None, retrieved_at: str | None = None,
 ) -> CityAirQuality | None:
-    hourly = data.get("hourly", {})
-    if not isinstance(hourly, dict):
+    now = datetime.now(UTC).isoformat()
+    try:
+        reference = window_contract._utc(requested_at or now).date()
+    except (TypeError, ValueError):
         return None
-    times = hourly.get("time", [])
-    if not isinstance(times, list) or not times:
+    hourly = data.get("hourly") if isinstance(data, dict) else None
+    times = hourly.get("time") if isinstance(hourly, dict) else None
+    if isinstance(times, list) and len(times) <= 72:
+        # Preserve the existing explicit stale diagnostic. The batch caller
+        # contains it to this location; other cities remain available.
+        if newest := newest_freshness_date([t for t in times if isinstance(t, str)]):
+            assert_freshness(newest, "air_quality", max_age_days=2, today=reference)
+    try:
+        packet = window_contract.build_window(
+            data, city=city, country=country, lat=lat, lon=lon, day=today_str,
+            requested_at=requested_at or now, retrieved_at=retrieved_at or now,
+        )
+        values = window_contract.validate_window(packet)
+    except SourceFetchError:
+        print("[air_quality] location withheld: unqualified forecast window")
         return None
-    if newest_time := newest_freshness_date(times):
-        assert_freshness(newest_time, "air_quality", max_age_days=2)
-
-    today_indices = [
-        index
-        for index, timestamp in enumerate(times)
-        if isinstance(timestamp, str) and timestamp.startswith(today_str)
-    ]
-    if not today_indices:
-        today_indices = list(range(len(times)))
-
-    def _slice(key: str) -> list[Any]:
-        values = hourly.get(key, [])
-        if not isinstance(values, list):
-            return []
-        return [values[index] for index in today_indices if index < len(values)]
-
+    if values["pm2_5"] is None and values["dust"] is None:
+        return None
     return CityAirQuality(
-        city=city,
-        country=country,
-        lat=lat,
-        lon=lon,
-        date=today_str,
-        pm25_24h_mean=_daily_mean(_slice("pm2_5")),
-        dust_daily_max=_daily_max(_slice("dust")),
-        aod_daily_max=_daily_max(_slice("aerosol_optical_depth")),
-        us_aqi_daily_max=_daily_max_int(_slice("us_aqi")),
-        pm10_24h_mean=_daily_mean(_slice("pm10")),
+        city=city, country=country, lat=lat, lon=lon, date=today_str,
+        pm25_24h_mean=values["pm2_5"], dust_daily_max=values["dust"],
+        aod_daily_max=values["aerosol_optical_depth"],
+        us_aqi_daily_max=int(values["us_aqi"]) if values["us_aqi"] is not None else None,
+        pm10_24h_mean=values["pm10"], forecast_window=packet,
     )
 
 
@@ -187,34 +169,55 @@ def _rate_limit_wait_seconds(date_header: str | None) -> float:
     calendar minute). Falls back to a safe blind wait when the header is missing
     or unparseable.
     """
-    if not date_header:
-        return _RATE_LIMIT_DEFAULT_WAIT_S
-    try:
-        parsed = parsedate_to_datetime(date_header)
-    except (TypeError, ValueError):
+    parsed = _http_date(date_header)
+    if parsed is None:
         return _RATE_LIMIT_DEFAULT_WAIT_S
     seconds_into_minute = parsed.second + parsed.microsecond / 1_000_000
     wait = (60.0 - seconds_into_minute) + _RATE_LIMIT_WAIT_BUFFER_S
     return max(_RATE_LIMIT_WAIT_MIN_S, min(wait, _RATE_LIMIT_WAIT_MAX_S))
 
 
-def _retry_after_wait_seconds(retry_after_header: str | None) -> float | None:
-    if not retry_after_header:
+def _http_date(value: str | None) -> datetime | None:
+    """Only bounded, timezone-aware response dates can establish a wait."""
+    if not isinstance(value, str) or not 0 < len(value) <= 256:
         return None
     try:
-        wait = float(retry_after_header.strip())
-    except ValueError:
+        parsed = parsedate_to_datetime(value)
+        return parsed.astimezone(UTC) if parsed.utcoffset() is not None else None
+    except (TypeError, ValueError, OverflowError):
         return None
-    return max(0.0, wait)
+
+
+def _retry_after_wait_seconds(
+    retry_after_header: str | None, date_header: str | None = None,
+) -> float | None:
+    """RFC9110 seconds/date, or None for a malformed/missing header.
+
+    Oversized values return a bounded sentinel above the wait limit. The caller
+    defers the sweep; it must not shorten a long server delay and retry early.
+    """
+    if not isinstance(retry_after_header, str) or not retry_after_header:
+        return None
+    if len(retry_after_header) > 256:
+        return _RATE_LIMIT_WAIT_MAX_S + 1
+    text = retry_after_header.strip()
+    if re.fullmatch(r"[0-9]+", text):
+        return float(min(int(text), int(_RATE_LIMIT_WAIT_MAX_S) + 1))
+    retry_at = _http_date(text)
+    if retry_at is None:
+        return None
+    reference = _http_date(date_header) or datetime.now(UTC)
+    return max(0.0, (retry_at - reference).total_seconds())
 
 
 def _rate_limit_wait_seconds_for_headers(
     date_header: str | None,
     retry_after_header: str | None,
-) -> float:
-    retry_after_wait = _retry_after_wait_seconds(retry_after_header)
+) -> float | None:
+    """Finite wait up to the existing limit; None means defer this sweep."""
+    retry_after_wait = _retry_after_wait_seconds(retry_after_header, date_header)
     if retry_after_wait is not None:
-        return retry_after_wait
+        return retry_after_wait if retry_after_wait <= _RATE_LIMIT_WAIT_MAX_S else None
     return _rate_limit_wait_seconds(date_header)
 
 
@@ -230,6 +233,7 @@ def _chunk_pacing_sleep() -> None:
 def _fetch_chunk(
     chunk: list[dict],
     today_str: str,
+    requested_at: str | None = None,
 ) -> tuple[list[CityAirQuality | None], bool, str | None, str | None]:
     """Fetch and parse one batched chunk.
 
@@ -251,11 +255,13 @@ def _fetch_chunk(
                 "longitude": lons,
                 "hourly": "pm2_5,pm10,dust,aerosol_optical_depth,us_aqi",
                 "timezone": "auto",
-                "forecast_days": 1,
-                "past_days": 1,
+                "domains": "auto",
+                "start_date": today_str,
+                "end_date": today_str,
             },
         )
         payload = response.json()
+        retrieved_at = datetime.now(UTC).isoformat()
     except requests.HTTPError as exc:
         resp = exc.response
         if resp is not None and resp.status_code == 429:
@@ -267,9 +273,10 @@ def _fetch_chunk(
     location_list = payload if isinstance(payload, list) else [payload]
     if len(location_list) != len(chunk):
         return out, False, None, None  # Cannot assign an incomplete positional batch safely.
+    stale_count = 0
     for offset, loc_data in enumerate(location_list):
-        if offset >= len(chunk) or not isinstance(loc_data, dict):
-            break
+        if not isinstance(loc_data, dict):
+            continue
         row = chunk[offset]
         try:
             out[offset] = _parse_single_location(
@@ -279,9 +286,15 @@ def _fetch_chunk(
                 lat=float(row["lat"]),
                 lon=float(row["lon"]),
                 today_str=today_str,
+                requested_at=requested_at,
+                retrieved_at=retrieved_at,
             )
+        except SourceFetchError:
+            stale_count += 1
         except (KeyError, TypeError, ValueError):
             out[offset] = None
+    if stale_count and not any(item is not None for item in out):
+        raise SourceFetchError("air_quality stale data: no usable current location in chunk")
     return out, True, None, None
 
 
@@ -297,41 +310,59 @@ def fetch_batch_air_quality(
     fails or an individual location response cannot be parsed. Chunks that fail
     the first pass — typically Open-Meteo rate-limiting the tail of the sweep —
     are retried up to ``recovery_passes`` times, waiting out the per-minute
-    window between passes.
+    window between passes. A server delay beyond the bounded recovery window
+    defers the remaining sweep, preserving already-qualified city results.
     """
     if chunk_size < 1:
         raise ValueError("chunk_size must be >= 1")
 
-    today_str = date.today().isoformat()
+    requested_at = datetime.now(UTC).isoformat()
+    today_str = requested_at[:10]
     results: list[CityAirQuality | None] = [None] * len(cities)
 
     pending = list(range(0, len(cities), chunk_size))
-    rate_limit_date: str | None = None
-    retry_after: str | None = None
+    stale_error: SourceFetchError | None = None
+    recovery_wait = 0.0
     for attempt in range(recovery_passes + 1):
         if attempt > 0:
-            time.sleep(_rate_limit_wait_seconds_for_headers(rate_limit_date, retry_after))
-        rate_limit_date = None
-        retry_after = None
+            time.sleep(recovery_wait)
+        recovery_wait = 0.0
+        recovery_deferred = False
         still_failed: list[int] = []
         for chunk_index, chunk_start in enumerate(pending):
             chunk = cities[chunk_start : chunk_start + chunk_size]
-            chunk_results, ok, date_header, retry_after_header = _fetch_chunk(chunk, today_str)
+            try:
+                chunk_results, ok, date_header, retry_after_header = _fetch_chunk(chunk, today_str, requested_at)
+            except SourceFetchError as exc:
+                # Stale source evidence is unavailable, not a transient HTTP
+                # outage worth retrying; continue other chunks before reporting.
+                stale_error = exc
+                if chunk_index < len(pending) - 1:
+                    _chunk_pacing_sleep()
+                continue
             if ok:
                 for offset, value in enumerate(chunk_results):
                     results[chunk_start + offset] = value
             else:
                 still_failed.append(chunk_start)
-                if date_header is not None:
-                    rate_limit_date = date_header
-                if retry_after_header is not None:
-                    retry_after = retry_after_header
+                wait = _rate_limit_wait_seconds_for_headers(date_header, retry_after_header)
+                if wait is None:
+                    # Preserve qualified results and leave all unresolved city
+                    # positions unavailable. No retry before the server's delay.
+                    print("[air_quality] recovery deferred: server wait exceeds sweep limit")
+                    recovery_deferred = True
+                    break
+                # Keep each response's headers paired, and never let a later
+                # shorter delay overwrite an earlier server requirement.
+                recovery_wait = max(recovery_wait, wait)
             if chunk_index < len(pending) - 1:
                 _chunk_pacing_sleep()
         pending = still_failed
-        if not pending:
+        if recovery_deferred or not pending:
             break
 
+    if stale_error is not None and not any(item is not None for item in results):
+        raise stale_error
     return results
 
 
@@ -353,6 +384,7 @@ def detect_pm25_hazard(obs: CityAirQuality) -> PM25HazardEvent | None:
         tier=tier,
         who_multiple=round(obs.pm25_24h_mean / WHO_24H_GUIDELINE, 1),
         us_aqi_daily_max=obs.us_aqi_daily_max,
+        forecast_window=deepcopy(obs.forecast_window),
         event_id=f"pm25_{slug}_{obs.date}_tier{tier}",
     )
 
@@ -365,7 +397,7 @@ def detect_dust_event(obs: CityAirQuality) -> DustEvent | None:
     if tier is None:
         return None
     slug = event_location_key(obs.city, obs.country, obs.lat, obs.lon)
-    # Co-measured PM10 anchor, pre-rounded here so the writer never divides
+    # Co-reported forecast PM10 anchor, pre-rounded here so the writer never divides
     # (the value_rounded_c pattern). None-safe: a cycle with no pm10 series
     # still mints the event, just without the WHO anchor.
     who_pm10_multiple = (
@@ -385,4 +417,5 @@ def detect_dust_event(obs: CityAirQuality) -> DustEvent | None:
         event_id=f"dust_{slug}_{obs.date}_tier{tier}",
         pm10_24h_mean=obs.pm10_24h_mean,
         who_pm10_multiple=who_pm10_multiple,
+        forecast_window=deepcopy(obs.forecast_window),
     )

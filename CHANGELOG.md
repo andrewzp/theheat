@@ -2,6 +2,66 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.108.101 — 2026-10-09
+
+- Share the qualified chart drawing between local packages and bounded in-memory SVG previews. Embed the font and retain full source qualifications without PDF tools, output files or model calls in the SVG path.
+- Preserve existing local assets and exact renderer identities; test real rendering and zip packaging offline. This library prepares private editor previews but does not activate hosted graphics or media publishing.
+
+## 0.9.108.100 — 2026-10-09
+
+- Add an offline MODIS thermal-detection chart for one to four source-bound pixel measurements. Preserve the complete story, exact source values, platform and acquisition minute without inferring fire perimeters, separate incidents or simultaneity.
+- Bind graphics to existing private text/media review and revision invalidation. Deterministic previews need no model or source calls; production media delivery remains inactive.
+
+## 0.9.108.99 — 2026-10-08
+
+- Show retained air-quality forecast dates, timezone, requested place, sampled grid point and hourly values in the draft workbench. Distinguish model inputs from station measurements and missing samples from zero, with keyboard-accessible mobile disclosures.
+- Keep saved evidence separate from review authority: changing the draft or saved revision closes its disclosures, while existing checks, edit conflicts and approval controls remain in force. No extra source or model requests.
+
+## 0.9.108.98 — 2026-10-08
+
+- Add a local PM2.5 forecast chart using the exact retained 24-hour sample window, separate model grid location and daily sample mean. Keep forecast, source and local-date qualifications readable on mobile without extra source or model calls.
+- Bind the new chart to the full single-source bundle and existing text/media review chain; changed evidence, text, policy or assets invalidate prior review. Production media delivery remains inactive.
+
+## 0.9.108.97 — 2026-10-08
+
+- Report qualified PM2.5 and dust forecast availability separately. A missing enabled hazard now degrades source health, while complete quiet data and the existing 90% coverage tolerance remain valid.
+- Validate returned city identity, source records and aggregate values before queuing candidates; reject ambiguous batch cardinality and skip source work when no cities or hazards are enabled.
+- Retain bounded availability counts and show safe diagnostics through existing source health, without additional source or model requests.
+
+## 0.9.108.96 — 2026-10-08
+
+- Pin the dashboard to Next.js 15.5.27 for the SSG/ISR response-cache advisories, with matching compiler packages. Preserve unrelated dependency versions and platform selectors, dashboard access controls, editorial policy and publishing settings.
+
+## 0.9.108.95 — 2026-10-08
+
+- Bound air-quality recovery waits and preserve each response's retry headers. Invalid delays cannot trigger infinite sleeps or immediate negative-delay retries; a later short delay cannot erase an earlier longer request.
+- Defer the remaining source sweep when the server asks for more than 63 seconds, preserving qualified city results and visible missing coverage. Keep source evidence, request limits, model checks and publishing controls unchanged.
+
+## 0.9.108.94 — 2026-10-07
+
+- Preserve complete CRW source evidence and individual valid dates through marine comparisons, including quiet SST readings and capped coral events. Withhold legacy, altered, conflicting, future, stale and capacity-limited inputs before writing.
+- Keep regional and point scopes distinct, retain actual SST reference context and reject named unsupported shared-event, causal and impact claims. Bind exact evidence into required checks and editorial policy; models, samples and publishing settings are unchanged.
+
+## 0.9.108.93 — 2026-10-07
+
+- Withhold recognizable unsupported causal links in air-quality copy before paid checks, including primary and related forecasts. Co-reported dust, particulate and AQI values do not establish event-specific causes or visibility/health impacts.
+- Preserve factual comparisons, scoped negation, exact retained evidence and all mandatory checks. Bind the bounded language rule into editorial policy so previous approvals cannot carry forward automatically; runtime models, sample counts and publishing settings are unchanged.
+
+## 0.9.108.92 — 2026-10-07
+
+- Require a complete, correctly dated local forecast day for air-quality means and daily maxima. Partial or wrong-day samples cannot become a 24-hour claim; unavailable optional measurements lose only their own comparisons, and malformed cities do not hide valid neighbors.
+- Retain bounded hourly evidence and validate primary/related aggregates before writing or checking. Use accurate automatic-domain CAMS attribution, preserve forecast qualifications and existing event identities, and withhold legacy scalar-only evidence from renewed qualification. Publishing and model settings are unchanged.
+
+## 0.9.108.91 — 2026-10-07
+
+- Prefer qualified NOAA-21 fire detections, then NOAA-20 and MODIS, ahead of the announced S-NPP data retirement. Explicit NOAA-20 requests keep NOAA-21/MODIS alternatives; MODIS retains its single-product scope and the existing outage witness.
+- Stop explicit active S-NPP collection before any request, without narrowing historical source/receipt validation or changing retained evidence. Preserve source-specific chronology, confidence, outage/schema distinctions, bounded retries and publishing/model controls.
+
+## 0.9.108.90 — 2026-10-07
+
+- Retain and validate each FIRMS/HMS acquisition minute, source product and selected-row receipt before thresholding. Keep categorical/numeric/unavailable confidence distinct, and redact public fetch diagnostics without changing source ordering or retry bounds.
+- Bind primary and related thermal evidence through writing/checking; withhold unsupported simultaneity/overpass claims. Guard corrected source-date IDs against retained legacy drafts and publication attempts before generation, save and send. Historical records and runtime publishing/model settings are unchanged.
+
 ## 0.9.108.89 — 2026-10-07
 
 - Skip unused PostgreSQL binary installation in the core CI partition. Keep all database and media tests, with separate bounded steps for signed repository setup, package metadata and PostgreSQL 17 installation.

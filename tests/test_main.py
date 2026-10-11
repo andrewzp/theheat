@@ -8,6 +8,7 @@ from unittest.mock import ANY, patch, MagicMock
 from datetime import date, datetime, timedelta, timezone
 
 import pytest
+from tests.marine_fixtures import marine_clock
 
 pytestmark = pytest.mark.usefixtures("automatic_publication_release")
 
@@ -24,7 +25,7 @@ from src.main import (
     process_due_drafts,
 )
 from src.data.open_meteo import CityTemp, RecordEvent
-from src.data.firms import FireEvent
+from tests.fire_source_fixtures import fire_event
 from src.data.co2 import CO2Reading, CO2Milestone
 from src.data.coral_dhw import CoralBleachingEvent, CoralDHWReading
 from src.data.cyclones import CycloneAdvisory, TierCrossingEvent
@@ -1535,7 +1536,8 @@ class TestRunAlerts:
         mock_om.check_extreme_signals_for_cities.return_value = ([], [])
         mock_om.check_records_for_cities.return_value = []
         mock_firms.fetch_fires.return_value = [
-            FireEvent(34.0, -118.0, 95, 250.0, "Southwestern US", "US", "fire_1"),
+            fire_event(
+                lat=34.0, lon=-118.0, frp=250.0, region="Southwestern US", country="US"),
         ]
         mock_co2.fetch_co2_data.return_value = []
         mock_co2.detect_milestone.return_value = None
@@ -2736,7 +2738,6 @@ class TestPerCycleCapCleanup:
 
 class TestSynthesisRecording:
     def test_fire_in_us_records_component(self, monkeypatch):
-        from unittest.mock import MagicMock
         from copy import deepcopy
         from src.state import DEFAULT_STATE
         from src import main
@@ -2744,12 +2745,9 @@ class TestSynthesisRecording:
 
         bot_state = deepcopy(DEFAULT_STATE)
 
-        fake_fire = MagicMock(
-            event_id="fire_38.58_-121.49_2026-04-20",
-            lat=38.58, lon=-121.49,
-            nearest_city="Sacramento", country="United States",
-            confidence=95, frp=1500.0,
-        )
+        from tests.fire_source_fixtures import fire_event
+        fake_fire = fire_event(lat=38.58, lon=-121.49, region="Sacramento",
+                               country="United States", confidence=95, frp=1500.0)
         monkeypatch.setattr(firms, "fetch_fires", lambda: [fake_fire])
         # Short-circuit open-meteo + others.
         monkeypatch.setattr(main.open_meteo, "load_cities", lambda: [])
@@ -2815,48 +2813,11 @@ class TestSynthesisStage:
         cooldown = bot_state["synthesis_cooldown"].get("fire_drought_heat") or {}
         assert "California" not in cooldown
 
-    def test_synthesis_stage_creates_marine_compound_draft(self, monkeypatch):
-        from copy import deepcopy
-        from datetime import datetime, timedelta, UTC
-        from src.state import DEFAULT_STATE, record_synthesis_component
+    def test_synthesis_stage_creates_marine_compound_draft(self, monkeypatch, request):
         from src.orchestrator.sources.synthesis import run_synthesis
-
-        bot_state = deepcopy(DEFAULT_STATE)
-        now = datetime.now(UTC)
-
-        def iso(days_ago):
-            return (now - timedelta(days=days_ago)).isoformat().replace("+00:00", "Z")
-
-        record_synthesis_component(
-            bot_state,
-            kind="coral",
-            region="great_nicobar",
-            event_id="coral_dhw_great_nicobar_tier8",
-            metadata={
-                "region_id": "great_nicobar",
-                "region_full_name": "Great Nicobar",
-                "dhw_value": 9.1,
-                "dhw_tier": 8,
-                "bleaching_level": "mass bleaching expected",
-                "date": "2026-06-11",
-            },
-            timestamp=iso(1),
-        )
-        record_synthesis_component(
-            bot_state,
-            kind="sst_anomaly",
-            region="bay_of_bengal",
-            event_id="sst_anom_component_bay_of_bengal_2026-06-11",
-            metadata={
-                "region_slug": "bay_of_bengal",
-                "region_display_name": "Bay of Bengal",
-                "anomaly_c": 2.3,
-                "tier": 0,
-                "cells_used": 80,
-                "date": "2026-06-11",
-            },
-            timestamp=iso(1),
-        )
+        from tests.marine_fixtures import qualified_state
+        request.getfixturevalue("marine_clock")
+        bot_state = qualified_state(monkeypatch)
 
         captured = {}
 
@@ -2880,8 +2841,8 @@ class TestSynthesisStage:
         assert captured["legacy_type"] == "synthesis_marine_compound"
         assert captured["source"] == "synthesis_fire_drought_heat"
         assert captured["bundle_signal_kind"] == "synthesis_marine_compound"
-        assert captured["components"][0]["kind"] == "coral"
-        assert captured["components"][1]["kind"] == "sst_anomaly"
+        assert captured["components"]["coral"]["marine_source"]["kind"] == "coral"
+        assert captured["components"]["sst_anomaly"]["marine_source"]["kind"] == "sst_anomaly"
         cooldown = bot_state["synthesis_cooldown"].get("marine_compound") or {}
         assert "great_nicobar" in cooldown
 

@@ -10,7 +10,7 @@ state in a GitHub Gist-backed approval queue reviewed from the Next.js dashboard
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements.txt -r requirements-graphics.txt
 python -m pytest
 python -m mypy src/
 cd dashboard

@@ -1,0 +1,2 @@
+# Optional deterministic renderer; no model or native PDF rasterizer required for SVG.
+reportlab==4.4.9

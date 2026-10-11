@@ -16,13 +16,19 @@ from urllib.parse import urlparse
 from src.editorial.revisions import fingerprint
 
 TEMPLATE_VERSION = "p31-preview-3-mobile"
-TEMPLATES = frozenset({"temperature_comparator", "temperature_trajectory", "crw_regional_anomaly"})
+TEMPLATES = frozenset({"temperature_comparator", "temperature_trajectory", "crw_regional_anomaly", "pm25_forecast_day", "modis_thermal_detections"})
 VARIABLE_LABELS = {"daily_maximum_temperature": "Daily maximum temperature",
                    "daily_minimum_temperature": "Daily minimum temperature"}
 WIDTH, HEIGHT = 1200, 1500
 
 
 def template_version(template):
+    if template == "modis_thermal_detections":
+        from src.media.fire_graphic_adapter import TEMPLATE_VERSION as version
+        return version
+    if template == "pm25_forecast_day":
+        from src.media.air_quality_graphic_adapter import TEMPLATE_VERSION as version
+        return version
     if template == "crw_regional_anomaly":
         from src.media.crw_graphic_adapter import TEMPLATE_VERSION as version
         return version
@@ -32,6 +38,10 @@ def template_version(template):
 
 
 def adapter_filename(template):
+    if template == "modis_thermal_detections":
+        return "fire_graphic_adapter.py"
+    if template == "pm25_forecast_day":
+        return "air_quality_graphic_adapter.py"
     return "crw_graphic_adapter.py" if template == "crw_regional_anomaly" else "temperature_graphic_adapter.py"
 
 
@@ -119,6 +129,14 @@ def validate_graphic(template, evidence, *, expected_evidence_sha256):
         raise ValueError("Graphic evidence differs from the expected review binding")
     if type(evidence.get("synthetic")) is not bool:
         raise ValueError("Synthetic status must be explicit")
+    if template == "modis_thermal_detections":
+        from src.media.fire_graphic_adapter import validate_fire_adapter_binding
+        validate_fire_adapter_binding(evidence)
+        return deepcopy(evidence)
+    if template == "pm25_forecast_day":
+        from src.media.air_quality_graphic_adapter import validate_pm25_adapter_binding
+        validate_pm25_adapter_binding(evidence)
+        return deepcopy(evidence)
     if template == "crw_regional_anomaly":
         from src.media.crw_graphic_adapter import validate_crw_adapter_binding
         validate_crw_adapter_binding(evidence)
@@ -200,6 +218,10 @@ def validate_graphic(template, evidence, *, expected_evidence_sha256):
 
 
 def chart_title(template, evidence):
+    if template == "modis_thermal_detections":
+        return "Satellite heat detections"
+    if template == "pm25_forecast_day":
+        return "PM2.5 forecast"
     if template == "crw_regional_anomaly":
         return "Sea temperature anomaly"
     if template == "temperature_trajectory":
@@ -209,6 +231,12 @@ def chart_title(template, evidence):
 
 
 def build_alt_text(template, evidence):
+    if template == "modis_thermal_detections":
+        from src.media.fire_graphic_adapter import fire_alt_text
+        return fire_alt_text(evidence)
+    if template == "pm25_forecast_day":
+        from src.media.air_quality_graphic_adapter import pm25_alt_text
+        return pm25_alt_text(evidence)
     if template == "crw_regional_anomaly":
         from src.media.crw_graphic_adapter import anomaly_alt_text
         return anomaly_alt_text(evidence)

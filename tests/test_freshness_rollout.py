@@ -29,21 +29,20 @@ def _mock_response(payload: object) -> MagicMock:
 @patch("src.data.firms.FIRMS_API_KEY", "test_key")
 def test_firms_stale_data_raises_freshness():
     body = (
-        "latitude,longitude,confidence,frp,acq_date\n"
-        "34.05,-118.25,90,350.0,2020-01-01\n"
+        "latitude,longitude,confidence,frp,acq_date,acq_time,satellite,instrument,version\n"
+        "34.05,-118.25,h,350.0,2020-01-01,0000,N21,VIIRS,synthetic-v1\n"
     )
     responses.add(
         responses.GET,
-        f"{firms.FIRMS_URL}/test_key/VIIRS_SNPP_NRT/world/1",
+        f"{firms.FIRMS_URL}/test_key/VIIRS_NOAA21_NRT/world/1",
         body=body,
         status=200,
     )
 
-    # R-06: asserts the PRIMARY product's freshness gate. The public fetch_fires
-    # now chains products (R-06) and falls back to the NOAA HMS witness (R-02), so
-    # this specific stale-product error is intentionally superseded there.
-    with pytest.raises(SourceFetchError, match="firms stale data"):
-        firms._fetch_fires_primary(80, 250.0, "VIIRS_SNPP_NRT", 1)
+    # A wholly stale source packet fails before thresholds; another product
+    # must not hide this chronology defect.
+    with pytest.raises(SourceFetchError, match="freshness check failed"):
+        firms._fetch_fires_primary(80, 250.0, "VIIRS_NOAA21_NRT", 1)
 
 
 @responses.activate

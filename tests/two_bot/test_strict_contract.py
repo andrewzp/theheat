@@ -14,8 +14,15 @@ from src.two_bot import writer
 from src.two_bot.evidence_contract import audit_story_bundle
 from src.two_bot.json_utils import loads_model_json
 from src.two_bot.strict_contract import bundle_schema_issues
-from src.two_bot.types import ExtractedClaim, MemorySlice
+from src.two_bot.types import ExtractedClaim, MemorySlice, StoryBundle
 from tests.two_bot.conftest import _bundle, _state_with_memory
+
+
+def _generic_bundle(kind="drought"):
+    """Nonthermal evidence for generic source and cross-domain tests."""
+    return StoryBundle(signal_kind=kind, where="Synthetic place", when="2032-03-01",
+        event_id="synthetic-other", headline_metric={"label": "measurement", "value": 1, "unit": "fixture"},
+        current_facts=[{"label": "country", "value": "ML"}], raw_signal_dump={"source_product": "synthetic-measurement"})
 
 
 def response(tweet="Paris: 40 C.", claims=None):
@@ -54,7 +61,7 @@ def test_nonfinite_evidence_cannot_be_approved_anywhere(value, monkeypatch):
 
 @pytest.mark.parametrize("raw", [{"event_id": "FIRMS-123", "resource_description": "NOAA"}, {"source_name": " "}, {"source_url": "javascript:alert(1)"}, {"source_url": "https://user:password@example.test"}])
 def test_generated_ids_substrings_and_invalid_urls_are_not_provenance(raw):
-    bundle = replace(_bundle(), raw_signal_dump=raw)
+    bundle = replace(_generic_bundle(), raw_signal_dump=raw)
     assert "missing_provenance" in {issue[0] for issue in bundle_schema_issues(bundle)}
 
 
@@ -64,7 +71,7 @@ def test_generated_ids_substrings_and_invalid_urls_are_not_provenance(raw):
     {"evidence": {"related_news": [{"source_name": "a newspaper"}]}},
 ])
 def test_unrelated_nested_source_cannot_stand_in_for_primary_measurement(raw):
-    assert "missing_provenance" in {issue[0] for issue in bundle_schema_issues(replace(_bundle(), raw_signal_dump=raw))}
+    assert "missing_provenance" in {issue[0] for issue in bundle_schema_issues(replace(_generic_bundle(), raw_signal_dump=raw))}
 
 
 @pytest.mark.parametrize("field", ["evidence", "provenance", "source"])
@@ -179,7 +186,7 @@ def test_rejected_candidate_retains_exact_evidence_and_actionable_repair_reason(
     from src.orchestrator.triage_queue import _enqueue_story_candidate
     from tests.test_triage import _score
 
-    bundle = _bundle()
+    bundle = _generic_bundle()
     bundle.raw_signal_dump.pop("source_product")
     original = deepcopy(bundle.to_dict())
     state = _state_with_memory()
@@ -261,7 +268,7 @@ def test_all_eight_historical_cases_keep_their_evidence_limits():
 
 @pytest.mark.parametrize("tweet", ["Forecast uncertainty remains. Bavi made landfall in China.", "No rain fell, but Bavi made landfall in China."])
 def test_unrelated_forecast_or_negative_clause_cannot_authorize_landfall(tweet, monkeypatch):
-    bundle = replace(_bundle(), signal_kind="cyclone_landfall")
+    bundle = _generic_bundle("cyclone_landfall")
     call = MagicMock()
     monkeypatch.setattr(checker, "_call_gemini", call)
     result = checker.fact_check(tweet, [], bundle, {})
@@ -272,7 +279,7 @@ def test_unrelated_forecast_or_negative_clause_cannot_authorize_landfall(tweet, 
 @pytest.mark.parametrize("tweet", ["Bavi is expected to make landfall in China.", "Bavi has not made landfall in China.", "Bavi may make landfall in China."])
 def test_forecast_or_negated_landfall_is_not_completed_landfall(tweet):
     from src.two_bot.scientific_claims import scientific_claim_failures
-    assert scientific_claim_failures(tweet, replace(_bundle(), signal_kind="cyclone_landfall")) == []
+    assert scientific_claim_failures(tweet, _generic_bundle("cyclone_landfall")) == []
 
 
 def test_typed_incident_warrant_is_bound_to_current_candidate_and_date():
@@ -329,11 +336,11 @@ def test_t46_classification_only_without_causal_ending_still_requires_incident_w
 def test_thermal_measurement_and_ordinary_rain_observation_do_not_claim_records_or_fire_identity():
     from src.two_bot.scientific_claims import scientific_claim_failures
     assert scientific_claim_failures("A thermal anomaly: fire radiative power 300 MW, reported satellite confidence 100%.", _bundle()) == []
-    assert scientific_claim_failures("Paris recorded 180 mm of rain.", replace(_bundle(), signal_kind="precipitation_extreme")) == []
+    assert scientific_claim_failures("Paris recorded 180 mm of rain.", _generic_bundle("precipitation_extreme")) == []
 
 
 def test_actual_model_fallback_grade_cannot_be_written_as_recorded_rain(monkeypatch):
-    bundle = replace(_bundle(), signal_kind="precipitation_extreme")
+    bundle = _generic_bundle("precipitation_extreme")
     bundle.current_facts.append({"label": "evidence_grade", "value": "model_fallback"})
     call = MagicMock()
     monkeypatch.setattr(checker, "_call_gemini", call)
@@ -347,7 +354,9 @@ def test_unknown_fire_adapter_leg_does_not_invent_a_nasa_source():
     from tests.two_bot.conftest import _fire_event
     fire = _fire_event()
     fire.source_leg = "unregistered-witness"
-    assert "missing_provenance" in {issue[0] for issue in bundle_schema_issues(build_fire_bundle(fire))}
+    from src.data.source_status import SourceFetchError
+    with pytest.raises(SourceFetchError, match="source leg and receipt disagree"):
+        build_fire_bundle(fire)
 
 
 @pytest.mark.parametrize("parser", [writer._parse_writer_json, checker._parse_fact_check_json])

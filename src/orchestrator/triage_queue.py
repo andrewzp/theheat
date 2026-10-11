@@ -81,6 +81,11 @@ def _enqueue_story_candidate(
     from src.two_bot.evidence_contract import audit_story_bundle, evidence_rejection_details
     from src.two_bot.types import TriageCandidateBundle
 
+    from src.data.fire_identity import legacy_history_reason
+    fire_hold = legacy_history_reason(bot_state, event_id)
+    if fire_hold:
+        print(f"[triage] Fire history hold: {fire_hold}")
+        return False
     audit = audit_story_bundle(bundle)
     error_codes = [issue.code for issue in audit.issues if issue.severity == "error"]
     if error_codes:

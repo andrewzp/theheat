@@ -16,6 +16,7 @@ from datetime import date, datetime
 
 from src.two_bot.strict_contract import _evidence_default
 from src.two_bot.types import RelatedSignal
+from src.data.source_status import SourceFetchError
 
 MAX_RELATED_SIGNALS = 2
 RELATED_WINDOW_DAYS = 7
@@ -30,6 +31,7 @@ _GLOBAL_OR_COARSE_KINDS: frozenset[str] = frozenset({
     "oscillation_transition", "oscillation_extreme", "oscillation_alignment",
     "ozone_hole_peak", "ice_mass_record", "global_disaster",
     "country_high", "country_low",
+    "synthesis_marine_compound",  # Scalar projection would discard both source receipts.
 })
 
 
@@ -86,10 +88,24 @@ def _identity(value) -> str | None:
 def _summary(candidate) -> tuple[str, RelatedSignal]:
     """Compare and detach exactly the facts that will reach the writer."""
     bundle = candidate.bundle
+    from src.data.fire_evidence import is_thermal, validate_bundle
+    from src.data.air_quality_evidence import is_air_quality, validate_bundle as validate_aq
+
+    aq_receipt = None
+    if is_air_quality(bundle):
+        validate_aq(bundle)
+        aq_receipt = bundle.raw_signal_dump
+    receipt = None
+    if is_thermal(bundle):
+        try:
+            validate_bundle(bundle)
+        except SourceFetchError as exc:
+            raise ValueError("Unqualified thermal related observation") from exc
+        receipt = bundle.raw_signal_dump["acquisition_provenance"]
     signal = RelatedSignal(
         event_id=candidate.event_id, signal_kind=bundle.signal_kind,
         where=bundle.where, when=bundle.when, headline_metric=bundle.headline_metric,
-        country=_bundle_country(bundle),
+        country=_bundle_country(bundle), acquisition_evidence=receipt, air_quality_evidence=aq_receipt,
     )
     encoded = json.dumps(signal.to_dict(), sort_keys=True, allow_nan=False,
                          ensure_ascii=False, default=_evidence_default)
@@ -135,7 +151,7 @@ def attach_related_signals(
             continue
         try:
             encoded, signal = _summary(candidate)
-        except (ValueError, TypeError, UnicodeError, OverflowError, AttributeError, RecursionError):
+        except (ValueError, TypeError, UnicodeError, OverflowError, AttributeError, RecursionError, SourceFetchError):
             invalid.add(candidate_id)
             invalid_rows += 1
             continue

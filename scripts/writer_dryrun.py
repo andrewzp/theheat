@@ -366,6 +366,9 @@ def _build_bundle(args: argparse.Namespace) -> StoryBundle:
         bundle = build_fire_footprint_bundle(fc)
         incident = args.incident or args.name
     else:
+        # Illustrative legacy input only: no qualified source minute/receipt.
+        # The evidence gate intentionally blocks writing; never fabricate source
+        # provenance here to turn a dry-run example into a production fallback.
         fire = FireEvent(
             lat=args.lat,
             lon=args.lon,

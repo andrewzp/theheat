@@ -32,10 +32,14 @@ class TestFireFixture:
         for entry in bundle.human_impact:
             assert _WARRANT_KEYS <= set(entry), entry
 
-    def test_fire_bundle_passes_the_evidence_contract(self):
+    def test_legacy_fire_dryrun_has_no_invented_source_time_or_receipt(self):
         audit = audit_story_bundle(_build_bundle(_args(type="fire")))
         errors = [i.code for i in audit.issues if i.severity == "error"]
-        assert audit.prompt_ready, errors
+        assert not audit.prompt_ready
+        assert "thermal_source_unqualified" in errors
+        bundle = _build_bundle(_args(type="fire"))
+        assert bundle.when == ""
+        assert bundle.raw_signal_dump["acquisition_provenance"] is None
 
     def test_no_impact_control_run(self):
         bundle = _build_bundle(_args(type="fire", no_impact=True))
@@ -93,14 +97,27 @@ class TestImpactFixtureAttribution:
 
 
 class TestDustFixture:
-    def test_dust_bundle_carries_the_anchor_and_passes_evidence(self):
+    def test_legacy_dust_fixture_retains_scalars_without_inventing_hourly_evidence(self):
         bundle = _build_bundle(_args(type="dust"))
         assert bundle.signal_kind == "dust_event"
         facts = {f["label"]: f.get("value") for f in bundle.current_facts}
         assert facts["who_pm10_multiple"] == 20.0
         assert facts["pm10_24h_mean_ug_m3"] == 900.0
         audit = audit_story_bundle(bundle)
-        assert audit.prompt_ready, [i.code for i in audit.issues if i.severity == "error"]
+        assert not audit.prompt_ready
+        assert "air_quality_window_unqualified" in {i.code for i in audit.issues}
+        assert bundle.raw_signal_dump["forecast_window"] is None
+
+    def test_complete_invented_dust_window_qualifies_the_anchor(self):
+        from src.data.air_quality import detect_dust_event
+        from src.two_bot.intern.air_quality import build_dust_event_bundle
+        from tests.air_quality_fixtures import observation
+
+        bundle = build_dust_event_bundle(detect_dust_event(observation(dust=2400., pm10_24h_mean=900.)))
+        facts = {f["label"]: f.get("value") for f in bundle.current_facts}
+        assert facts["who_pm10_multiple"] == 20.0
+        assert facts["pm10_24h_mean_ug_m3"] == 900.0
+        assert audit_story_bundle(bundle).prompt_ready
 
     def test_dust_fixture_never_attaches_impact(self):
         bundle = _build_bundle(_args(type="dust"))

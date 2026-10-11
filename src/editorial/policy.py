@@ -24,6 +24,7 @@ POLICY_FILES = (
     "src/two_bot/pipeline.py", "src/two_bot/provider_preflight.py", "src/two_bot/memory.py", "src/two_bot/types.py",
     "src/two_bot/strict_contract.py", "src/two_bot/evidence_contract.py",
     "src/two_bot/scientific_claims.py", "src/two_bot/json_utils.py",
+    "src/two_bot/air_quality_claims.py",
     "src/two_bot/bundle_capture.py",
     "src/two_bot/source_links.py", "src/orchestrator/two_bot_dispatch.py",
     "src/two_bot/multisignal.py",
@@ -38,10 +39,19 @@ POLICY_FILES = (
     "src/commands/schema.py", "src/commands/reducer.py", "src/media/joint_review.py",
     "src/commands/postgres_authority.py", "src/commands/sqlite_authority.py",
     "src/orchestrator/sources/open_meteo.py",
+    "src/orchestrator/sources/air_quality.py",
     "src/data/ocean_sst_anomaly.py", "src/data/crw_contract.py",
     "src/data/coral_dhw.py", "src/data/coral_evidence.py", "src/data/coral_source_contract.py", "src/data/coral_regional_contract.py",
+    "src/data/air_quality.py", "src/data/air_quality_availability.py", "src/data/air_quality_contract.py", "src/data/air_quality_evidence.py",
+    "src/data/firms.py", "src/data/fire_source_contract.py", "src/data/fire_identity.py", "src/data/fire_evidence.py",
+    "src/orchestrator/draft_save.py", "src/orchestrator/sources/firms.py", "src/orchestrator/triage_queue.py",
     "src/editorial/synthesis.py", "src/editorial/thresholds.py",
+    "src/editorial/marine_evidence.py",
+    "src/orchestrator/sources/ocean_sst_anomaly.py", "src/orchestrator/sources/coral_dhw.py",
+    "src/orchestrator/sources/synthesis.py",
     "src/media/crw_graphic_adapter.py", "src/media/evidence_graphic.py",
+    "src/media/air_quality_graphic_adapter.py",
+    "src/media/fire_graphic_adapter.py",
 )
 MODEL_KEYS = {"writer", "writer_provider", "fact_check", "critic", "safety"}
 FLAG_KEYS = {"critic_enabled", "critic_revise_enabled", "writer_samples", "safety_llm_enabled"}

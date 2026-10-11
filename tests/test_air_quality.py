@@ -1,7 +1,8 @@
 from __future__ import annotations
 from src.data import places
+from tests.air_quality_fixtures import observation as qualified_observation
 
-from datetime import date
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -29,10 +30,14 @@ def _payload(
     aod: list[float | None] | None = None,
     us_aqi: list[int | None] | None = None,
 ) -> dict:
-    day = day or date.today().isoformat()
+    day = day or datetime.now(UTC).date().isoformat()
     return {
         "latitude": 31.5,
         "longitude": 74.3,
+        "timezone": "GMT",
+        "utc_offset_seconds": 0,
+        "hourly_units": {"pm2_5": "μg/m³", "pm10": "μg/m³", "dust": "μg/m³",
+                         "aerosol_optical_depth": "", "us_aqi": "USAQI"},
         "hourly": {
             "time": [f"{day}T{hour:02d}:00" for hour in range(24)],
             "pm2_5": pm25 if pm25 is not None else [150.0] * 24,
@@ -72,23 +77,15 @@ def _obs(
     us_aqi: int | None = 210,
     pm10_24h_mean: float | None = None,
 ) -> CityAirQuality:
-    return CityAirQuality(
-        city=city,
-        country=country,
-        lat=31.5,
-        lon=74.3,
-        date=day,
-        pm25_24h_mean=pm25,
-        dust_daily_max=dust,
-        aod_daily_max=aod,
-        us_aqi_daily_max=us_aqi,
-        pm10_24h_mean=pm10_24h_mean,
+    return qualified_observation(
+        city=city, country=country, day=day, pm25=pm25, dust=dust,
+        aod=aod, us_aqi=us_aqi, pm10_24h_mean=pm10_24h_mean,
     )
 
 
 def test_fetch_24h_mean_pm25():
-    """pm25_24h_mean is the arithmetic mean of non-None hourly PM2.5 values."""
-    values = [100.0, None, 200.0] + [None] * 21
+    """The 24-hour mean requires all 24 dated samples."""
+    values = [100.0, 200.0] * 12
 
     with patch("src.data.air_quality.fetch_with_retry", return_value=_response([_payload(pm25=values)])):
         observations = fetch_batch_air_quality([_city()])
@@ -98,8 +95,8 @@ def test_fetch_24h_mean_pm25():
 
 
 def test_fetch_dust_daily_max():
-    """dust_daily_max is the max of non-None hourly dust values, not the mean."""
-    values = [100.0, 500.0, 900.0] + [None] * 21
+    """The daily maximum uses all 24 dated forecast samples."""
+    values = [100.0, 500.0, 900.0] + [100.0] * 21
 
     with patch("src.data.air_quality.fetch_with_retry", return_value=_response([_payload(dust=values)])):
         observations = fetch_batch_air_quality([_city()])

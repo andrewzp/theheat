@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 # ruff: noqa: F403,F405
+from collections import Counter
+
 from src.data._witness import degraded_via
+from src.editorial.marine_evidence import record_reading
 from src.orchestrator.common import *
 from src.two_bot.intern import build_coral_bleaching_bundle
 
@@ -14,6 +17,7 @@ def run_coral_dhw(bot_state: BotState, current_run: dict | None) -> None:
     coral_start = time.perf_counter()
     try:
         readings = _fetch_strict(coral_dhw.fetch_coral_dhw)
+        marine_outcomes = Counter(record_reading(bot_state, "coral", r) for r in readings)
         events = coral_dhw.detect_dhw_thresholds(
             readings,
             cast(dict, bot_state.get("coral_dhw_last_tier", {})),
@@ -32,23 +36,6 @@ def run_coral_dhw(bot_state: BotState, current_run: dict | None) -> None:
             )
             if not _should_draft(score, coral_event.event_id):
                 continue
-            if coral_event.dhw_tier >= 8:
-                state.record_synthesis_component(
-                    bot_state,
-                    kind="coral",
-                    region=coral_event.region_id,
-                    event_id=coral_event.event_id,
-                    metadata={
-                        "region_id": coral_event.region_id,
-                        "region_full_name": coral_event.region_full_name,
-                        "dhw_value": float(coral_event.dhw_value),
-                        "dhw_tier": int(coral_event.dhw_tier),
-                        "bleaching_level": coral_event.bleaching_level,
-                        "stress_level": coral_event.stress_level,
-                        "date": coral_event.date,
-                    },
-                    timestamp=f"{coral_event.date}T00:00:00Z",
-                )
             source_promoted += 1
             review_context = _review_context(
                 source="NOAA Coral Reef Watch",
@@ -119,6 +106,7 @@ def run_coral_dhw(bot_state: BotState, current_run: dict | None) -> None:
             current_run, bot_state, "coral_dhw", coral_start,
             status="degraded" if degraded_note else "success",
             note=degraded_note,
+            details={"marine_components": dict(marine_outcomes)},
             observed=len(readings),
             promoted=source_promoted,
             drafted=0,  # drafted credited by _drain_and_write_triage_queue

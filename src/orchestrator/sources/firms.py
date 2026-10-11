@@ -4,6 +4,8 @@ from __future__ import annotations
 
 # ruff: noqa: F403,F405
 from src.data._witness import degraded_via
+from src.data.fire_identity import legacy_history_reason
+from src.data.fire_source_contract import source_name, validate_event
 from src.orchestrator.common import *
 
 
@@ -13,6 +15,16 @@ def run_firms(bot_state: BotState, current_run: dict | None) -> None:
     firms_start = time.perf_counter()
     try:
         fires = _fetch_strict(firms.fetch_fires)
+        eligible = []
+        holds: dict[str, int] = {}
+        for fire in fires:
+            reason = legacy_history_reason(bot_state, fire.event_id)
+            if reason:
+                holds[reason] = min(999999, holds.get(reason, 0) + 1)
+            else:
+                eligible.append(fire)
+        if holds:
+            print("[firms] History holds: " + ", ".join(f"{reason}={count}" for reason, count in sorted(holds.items())))
         source_promoted = 0
         # Bet A A2 (default OFF): a sourced newsworthiness match can rescue a
         # NEAR-miss before the gate — the Congo-vs-Colorado fix. The plan is
@@ -25,20 +37,22 @@ def run_firms(bot_state: BotState, current_run: dict | None) -> None:
         boost_plan: dict[str, dict] = {}
         if _news.news_boost_enabled():
             try:
-                today_iso = date.today().isoformat()
                 boost_plan = _news.plan_fire_boosts(
                     bot_state.get("news_events"),
                     [
                         {
                             "id": f.event_id, "country": f.country,
-                            "when": today_iso, "lat": f.lat, "lon": f.lon,
+                            "when": validate_event(f).acquired_at[:10], "lat": f.lat, "lon": f.lon,
                         }
+                        # Matching remains batch-wide: a history-held hotspot
+                        # still makes a nameless report's identity ambiguous.
                         for f in fires
                     ],
                 )
             except Exception as boost_exc:  # noqa: BLE001
                 print(f"[news_boost] firms boost planning error (continuing): {boost_exc!r}")
-        for fire in fires:
+        for fire in eligible:
+            row = validate_event(fire)
             if state.is_duplicate(bot_state, fire.event_id):
                 continue
             score = score_fire_event(fire.confidence, fire.frp, region=fire.nearest_city)
@@ -68,14 +82,19 @@ def run_firms(bot_state: BotState, current_run: dict | None) -> None:
                     },
                 )
             review_context = _review_context(
-                source="NASA FIRMS",
+                source=source_name(row.source_product),
                 source_key="firms",
-                headline=f"Wildfire signal near {fire.nearest_city}",
+                headline=f"Thermal detection near {fire.nearest_city}",
                 current_run=current_run,
                 facts=[
                     _fact("Nearest region", fire.nearest_city),
                     _fact("Country", fire.country),
-                    _fact("Satellite confidence", f"{fire.confidence}%"),
+                    _fact("Satellite confidence", (
+                        f"{row.confidence_value}%" if row.confidence_kind == "numeric"
+                        else row.confidence_value if row.confidence_kind == "categorical" else "Unavailable"
+                    )),
+                    _fact("Source product", row.source_product),
+                    _fact("Acquired at (UTC; minute precision)", row.acquired_at),
                     _fact("Fire radiative power", f"{fire.frp:.0f} MW"),
                 ],
             )

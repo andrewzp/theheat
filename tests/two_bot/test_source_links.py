@@ -198,8 +198,10 @@ def test_shadow_formats_before_its_existing_checks(models):
 def test_dispatch_refuses_cyclone_kind_mismatch_without_postcheck_edit(models):
     from src.orchestrator.two_bot_dispatch import _try_two_bot_draft
     from src.editorial.scoring import score_cyclone_tier_crossing
+    from src.two_bot.intern.fire import build_fire_bundle
+    from tests.fire_source_fixtures import fire_event
     state, outcome = _state_with_memory(), {}
-    assert not _try_two_bot_draft(bundle(kind="fire"), state,
+    assert not _try_two_bot_draft(build_fire_bundle(fire_event()), state,
         score_cyclone_tier_crossing(2, 4, "Atlantic"), legacy_type="cyclone_tier_crossing",
         event_id="synthetic-wrong-kind", review_context={}, result_out=outcome)
     assert not state["drafts"] and outcome["kill_stage"] == "final_format"

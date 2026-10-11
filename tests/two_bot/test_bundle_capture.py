@@ -26,8 +26,11 @@ def complete_bundle():
     bundle = _bundle()
     bundle.country = "ML"
     bundle.historical_context = {"scope": "synthetic sample", "samples": [100, 200]}
-    bundle.related_signals = [RelatedSignal("synthetic-other", "fire", "Synthetic place", bundle.when,
-                                           {"label": "FRP", "value": 120, "unit": "MW"}, "NE")]
+    from tests.fire_source_fixtures import fire_event
+    from src.two_bot.intern.fire import build_fire_bundle
+    related = build_fire_bundle(fire_event(lat=14.0, frp=120, country="NE", region="Synthetic place"))
+    bundle.related_signals = [RelatedSignal(related.event_id, "fire", related.where, related.when,
+        related.headline_metric, "NE", deepcopy(related.raw_signal_dump["acquisition_provenance"]))]
     bundle.human_impact = [{"claim": "evacuated", "value": 12, "source_name": "Synthetic bulletin",
                            "url": "https://example.org/synthetic-bulletin", "as_of": bundle.when}]
     return bundle
@@ -179,7 +182,14 @@ def test_mutation_during_checks_cannot_bind_changed_source_to_old_verdict(stage,
     calls[stage].side_effect = mutate
     outcome = {}
     assert pipeline.generate_draft(bundle, _state_with_memory(), result_out=outcome) is None
-    assert outcome["kill_stage"] == "bundle_retention" and outcome["kill_reason"] == "bundle_changed_during_checks"
+    if stage == 0:
+        # The source contract now catches a detached related FRP immediately
+        # after writing, before purchasing any downstream check.
+        assert outcome["kill_stage"] == "fact_check"
+        assert "thermal_source_unqualified" in outcome["kill_reason"]
+        assert [call.call_count for call in calls] == [1, 0, 0, 0]
+    else:
+        assert outcome["kill_stage"] == "bundle_retention" and outcome["kill_reason"] == "bundle_changed_during_checks"
 
 
 def test_legacy_compact_bundle_is_not_backfilled_by_state_round_trip(monkeypatch):

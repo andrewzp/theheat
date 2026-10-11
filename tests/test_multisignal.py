@@ -8,6 +8,7 @@ from __future__ import annotations
 from copy import deepcopy
 from dataclasses import replace
 from decimal import Decimal
+from datetime import UTC, datetime
 
 import pytest
 
@@ -27,9 +28,14 @@ def _bundle(*, signal_kind="drought", event_id="e", where="Place", when="2026-06
 
 def _cand(*, event_id, total=80, signal_kind="drought", country="", when="2026-06-16",
           facts=None, source="s"):
+    bundle = _bundle(signal_kind=signal_kind, event_id=event_id, when=when, country=country, facts=facts)
+    if signal_kind == "fire":
+        from tests.fire_source_fixtures import fire_event
+        from src.two_bot.intern.fire import build_fire_bundle
+        bundle = build_fire_bundle(fire_event(when=datetime.fromisoformat(when).replace(tzinfo=UTC), country=country))
+        event_id = bundle.event_id
     return TriageCandidateBundle(
-        bundle=_bundle(signal_kind=signal_kind, event_id=event_id, when=when,
-                       country=country, facts=facts),
+        bundle=bundle,
         score=EditorialScore(category=signal_kind, severity=80, novelty=80, timeliness=80,
                              confidence=80, shareability=80, sensitivity=0, total=total,
                              threshold=60, reasons=[]),
@@ -87,7 +93,7 @@ class TestWindowing:
             _cand(event_id="b", country="ML", when="2026-06-14", signal_kind="fire"),
         ]
         attach_related_signals(q)
-        assert [r.event_id for r in q[0].bundle.related_signals] == ["b"]
+        assert [r.event_id for r in q[0].bundle.related_signals] == [q[1].event_id]
         assert [r.event_id for r in q[1].bundle.related_signals] == ["a"]
 
     def test_different_country_excluded(self):
@@ -293,6 +299,7 @@ def test_drain_attaches_when_flag_on(monkeypatch):
         _cand(event_id="a", country="ML", source="s1"),
         _cand(event_id="b", country="ML", signal_kind="fire", source="s2"),
     ]
+    related_id = bot_state["_triage_queue"][1].event_id
     captured = {}
 
     def fake_try(bundle, st, score, **kwargs):
@@ -303,7 +310,7 @@ def test_drain_attaches_when_flag_on(monkeypatch):
     monkeypatch.setenv("THEHEAT_TRIAGE_ENABLED", "0")
     monkeypatch.setattr(common, "_try_two_bot_draft", fake_try)
     common._drain_and_write_triage_queue(bot_state, {"id": "r", "sources": []})
-    assert [r.event_id for r in captured["a"]] == ["b"]
+    assert [r.event_id for r in captured["a"]] == [related_id]
 
 
 def test_drain_does_not_attach_when_flag_off(monkeypatch):

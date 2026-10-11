@@ -91,6 +91,19 @@ def scientific_claim_failures(tweet: str, bundle) -> list[str]:
     signal = bundle.signal_kind
     text = tweet.lower()
 
+    from src.data.air_quality_evidence import bundle_failures as aq_failures, is_air_quality
+    failures.extend("air_quality_window_unqualified: " + reason for reason in aq_failures(bundle))
+    from src.two_bot.air_quality_claims import causal_claim_failures
+    failures.extend(causal_claim_failures(tweet, bundle))
+
+    from src.editorial.marine_evidence import bundle_failures as marine_failures, claim_failures as marine_claims
+    failures.extend("marine_source_unqualified: " + reason for reason in marine_failures(bundle))
+    failures.extend(marine_claims(tweet, bundle))
+
+    from src.data.fire_evidence import fire_bundle_failures, is_thermal, temporal_claim_failures
+    failures.extend("thermal_source_unqualified: " + reason for reason in fire_bundle_failures(bundle))
+    failures.extend(temporal_claim_failures(tweet, bundle))
+
     from src.data.coral_evidence import is_dhw_only_bundle, dhw_only_bundle_failures, regional_bundle_failures, regional_alert_failures
 
     failures.extend("coral_regional_unqualified: " + reason for reason in regional_bundle_failures(bundle))
@@ -119,7 +132,7 @@ def scientific_claim_failures(tweet: str, bundle) -> list[str]:
                 and _finite_number(comparison.get("value")) and comparison.get("unit") == bundle.headline_metric.get("unit")):
             failures.append("unwarranted_record: rainfall record language requires a sourced, scoped archive comparison; an alert threshold is not a record")
 
-    if signal == "fire":
+    if is_thermal(bundle):
         # FRP is the satellite product's physical metric, not an incident
         # classification. Other fire assertions (including a satellite-
         # confirmed "fire") require an independently attributed incident.
@@ -160,7 +173,7 @@ def scientific_claim_failures(tweet: str, bundle) -> list[str]:
 
     # P06 supplies the more precise temperature source/valid-time rule. This
     # also covers explicitly modelled non-temperature fallback products.
-    forecast = evidence.get("evidence_type") == "forecast" or facts.get("evidence_grade") in {"modelled", "model_fallback", "forecast"}
+    forecast = is_air_quality(bundle) or evidence.get("evidence_type") == "forecast" or facts.get("evidence_grade") in {"modelled", "model_fallback", "forecast"}
     if forecast and re.search(r"\b(?:recorded|measured|observed|has broken|broke the record|set a (?:new )?record)\b", text):
         failures.append("forecast_as_observation: a forecast cannot establish an already observed measurement or record")
     if re.search(r"\b(?:wet[- ]bulb|heat index|humidex)\b", text):

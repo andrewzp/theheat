@@ -177,7 +177,20 @@
           "expected_outcome": "verification_required"
         }
       ],
-      "required_scientific_outcome": "reject_unsupported_claim"
+      "required_scientific_outcome": "reject_unsupported_claim",
+      "synthetic_source_product": "MODIS_NRT",
+      "synthetic_source_record": {
+        "latitude": "0.0",
+        "longitude": "20.0",
+        "frp": "300.0",
+        "confidence": "100",
+        "acq_date": "2026-07-01",
+        "acq_time": "1200",
+        "satellite": "Terra",
+        "instrument": "MODIS",
+        "version": "synthetic-probe-v1"
+      },
+      "synthetic_source_limit": "Entirely invented measurement/time/product row to reach the existing targeted gate; not a recovered historical observation or provenance."
     },
     {
       "case_id": "material_precipitation_product_disagreement",
@@ -233,7 +246,20 @@
           "required_capability": "versioned_country_boundary_check_not_yet_enforced"
         }
       ],
-      "required_scientific_outcome": "source_review_required"
+      "required_scientific_outcome": "source_review_required",
+      "synthetic_source_product": "MODIS_NRT",
+      "synthetic_source_record": {
+        "latitude": "10.68",
+        "longitude": "-13.49",
+        "frp": "300.0",
+        "confidence": "100",
+        "acq_date": "2026-07-01",
+        "acq_time": "1200",
+        "satellite": "Terra",
+        "instrument": "MODIS",
+        "version": "synthetic-probe-v1"
+      },
+      "synthetic_source_limit": "Entirely invented measurement/time/product row to reach the existing targeted gate; not a recovered historical observation or provenance."
     }
   ]
 }

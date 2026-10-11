@@ -6,6 +6,8 @@ from dataclasses import asdict
 from typing import Any
 
 from src.data.air_quality import DustEvent, PM25HazardEvent
+from src.data.air_quality_contract import SOURCE_NAME
+from src.data.air_quality_evidence import window_facts
 from src.two_bot.types import StoryBundle
 
 
@@ -17,11 +19,11 @@ def build_pm25_hazard_bundle(event: PM25HazardEvent) -> StoryBundle:
         {"label": "who_multiple", "value": event.who_multiple},
         {"label": "tier", "value": event.tier},
         {"label": "us_aqi_daily_max", "value": event.us_aqi_daily_max},
-        {"label": "data_source", "value": "CAMS global model via Open-Meteo"},
-        {"label": "model_resolution_km", "value": 45},
+        {"label": "data_source", "value": SOURCE_NAME},
         {"label": "lat", "value": event.lat},
         {"label": "lon", "value": event.lon},
         {"label": "evidence_grade", "value": event.evidence_grade},
+        *window_facts(event.forecast_window),
     ]
     if event.evidence_grade == "model_corroborated_by_station":
         current_facts.extend([
@@ -54,14 +56,14 @@ def build_dust_event_bundle(event: DustEvent) -> StoryBundle:
             "label": "aerosol_optical_depth",
             "value": round(event.aod_daily_max, 2) if event.aod_daily_max is not None else None,
         },
-        {"label": "data_source", "value": "CAMS global model via Open-Meteo"},
-        {"label": "model_resolution_km", "value": 45},
+        {"label": "data_source", "value": SOURCE_NAME},
         {"label": "lat", "value": event.lat},
         {"label": "lon", "value": event.lon},
         {"label": "evidence_grade", "value": "model_estimated"},
+        *window_facts(event.forecast_window),
     ]
     if event.pm10_24h_mean is not None and event.who_pm10_multiple is not None:
-        # Co-measured PM10 anchor (mean-vs-mean against the WHO 2021 PM10
+        # Co-reported forecast PM10 anchor (mean-vs-mean against the WHO 2021 PM10
         # 24h AQG). The `dust` value itself has no 24h-average standard —
         # the anchor claim is about PM10 during the event, never about dust.
         current_facts.extend([
