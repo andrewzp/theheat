@@ -81,6 +81,12 @@ export async function POST(request) {
   if (authError) {
     return authError
   }
+  if (process.env.THEHEAT_PRODUCTION_PAUSED === "1") {
+    return Response.json({
+      error: "Data collection and draft generation are paused. Existing drafts remain available for review.",
+      code: "production_paused",
+    }, { status: 503, headers: { "Cache-Control": "no-store" } })
+  }
   if (!ANTHROPIC_API_KEY) {
     return Response.json({ error: "No Anthropic API key configured" }, { status: 500 })
   }

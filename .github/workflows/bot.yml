@@ -184,9 +184,15 @@ jobs:
     # schedules). Drafting must survive a flaky unit test; the Smoke gate step
     # below guards broken imports; publication has separate revision and policy
     # gates. P00b defaults automatic publication paused while ingestion continues.
+    # Operational stop: repo variable THEHEAT_PRODUCTION_PAUSED=1 skips scheduled
+    # and manually triggered collection before checkout or state writes. Preserve
+    # the existing reviewed manual-publication route and required PR checks.
     if: |
       always()
       && github.event_name != 'pull_request'
+      && (vars.THEHEAT_PRODUCTION_PAUSED != '1'
+          || (github.event_name == 'workflow_dispatch'
+              && github.event.inputs.mode == 'manual_tweet'))
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
