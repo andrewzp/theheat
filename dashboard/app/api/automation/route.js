@@ -45,8 +45,11 @@ export async function GET(request) {
 
   try {
     const status = await getCachedAutomationStatus()
-    return Response.json(status)
+    return Response.json(status, { headers: { "Cache-Control": "private, no-store" } })
   } catch (e) {
-    return Response.json({ error: e?.message || "automation status failed" }, { status: 500 })
+    return Response.json({ error: e?.message || "automation status failed" }, {
+      status: 500,
+      headers: { "Cache-Control": "private, no-store" },
+    })
   }
 }

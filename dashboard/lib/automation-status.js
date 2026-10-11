@@ -34,11 +34,34 @@ export const SELFHEAL_MAX_AGE_MS = 26 * 60 * 60 * 1000
 // the healer died. Matches scripts/workflow_health.py SELFHEAL_PENDING_MAX_AGE_H.
 export const SELFHEAL_PENDING_MAX_AGE_MS = 3 * 60 * 60 * 1000
 
-export function dotColorForWorkflow(wf) {
+export function isCollectorWorkflow(wf) {
+  return wf?.name === "theheat-bot" && wf?.file === "bot.yml"
+}
+
+export function collectionPauseSummary(status) {
+  const pause = status?.collection_pause?.status
+  const configured = pause === "configured"
+  const known = configured || pause === "not_configured"
+  const dashboardPaused = status?.dashboard_generation_pause === true
+  return {
+    collection: configured
+      ? "Collection pause configured; saved source data may be old."
+      : known
+        ? "Collection pause not configured; current collection is not confirmed."
+        : "Collection pause unknown; saved workflow results do not confirm current collection.",
+    dashboard: dashboardPaused
+      ? "Dashboard generation pause configured."
+      : "Dashboard generation pause not configured.",
+    mismatch: known && configured !== dashboardPaused,
+  }
+}
+
+export function dotColorForWorkflow(wf, collectionPause) {
   if (!wf) return "gray"
   if (wf.error) return "red"
   if (wf.state === "disabled_manually") return "gray"
   if (FAILING_CONCLUSIONS.has(wf.last_run_conclusion)) return "red"
+  if (isCollectorWorkflow(wf) && collectionPause?.status === "configured") return "gray"
   if (wf.last_run_conclusion === "success") return "green"
   // No decisive conclusion (cancelled / in-progress / never-run) → gray, NOT
   // green. Painting it green would let a real failure hide behind a newer
@@ -50,7 +73,7 @@ export function dotColorForWorkflow(wf) {
 // (a failing conclusion or a fetch error).
 export function failingWorkflows(status) {
   const workflows = status?.workflows || []
-  return workflows.filter((wf) => dotColorForWorkflow(wf) === "red")
+  return workflows.filter((wf) => dotColorForWorkflow(wf, status?.collection_pause) === "red")
 }
 
 // Self-heal routine heartbeat dot. A MISSING beacon is gray (routine may not be

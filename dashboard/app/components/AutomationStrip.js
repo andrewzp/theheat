@@ -4,6 +4,8 @@ import {
   dotColorForWorkflow,
   dotColorForSelfHeal,
   failingWorkflows,
+  isCollectorWorkflow,
+  collectionPauseSummary,
 } from "../../lib/automation-status.js"
 
 function AutomationDot({ name, color, tooltip }) {
@@ -52,6 +54,8 @@ export function AutomationStatusStrip({ status, error }) {
   const selfHeal = status.self_heal || {}
   const pm = status.posting_mode_summary
   const failing = failingWorkflows(status)
+  const pause = collectionPauseSummary(status)
+  const collector = workflows.find(isCollectorWorkflow)
 
   return (
     <>
@@ -71,7 +75,7 @@ export function AutomationStatusStrip({ status, error }) {
           <AutomationDot
             key={wf.file}
             name={wf.name}
-            color={dotColorForWorkflow(wf)}
+            color={dotColorForWorkflow(wf, status.collection_pause)}
             tooltip={`${wf.name} — state: ${wf.state}, last run: ${
               wf.last_run_at ? new Date(wf.last_run_at).toUTCString() : "never"
             }, conclusion: ${wf.last_run_conclusion || "none"}${
@@ -109,6 +113,17 @@ export function AutomationStatusStrip({ status, error }) {
           posting status unavailable
         </span>
       )}
+      </div>
+      <div className="automation-pause-status">
+        <p>{pause.collection}</p>
+        <p>{pause.dashboard}{pause.mismatch ? " Collection and dashboard settings differ." : ""}</p>
+        {collector && (
+          <p className="automation-retained-run">
+            Last recorded collector workflow: {collector.last_run_conclusion || "no decisive result"}
+            {collector.last_run_at ? ` · ${new Date(collector.last_run_at).toUTCString()}` : " · no run time"}.
+            {collector.error ? ` Check error: ${collector.error}` : ""}
+          </p>
+        )}
       </div>
     </>
   )
