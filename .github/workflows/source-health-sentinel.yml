@@ -46,6 +46,7 @@ jobs:
       - name: Reconcile source-failure issues
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          THEHEAT_PRODUCTION_PAUSED: ${{ vars.THEHEAT_PRODUCTION_PAUSED }}
         run: python scripts/source_health_sentinel.py /tmp/state.json
 
       # Observe the five scheduled workflows themselves: turn any that are red on
@@ -62,4 +63,5 @@ jobs:
           # context. workflow_health.py reads this env first; without it the
           # stale-heartbeat meta-guard would silently never fire.
           SELFHEAL_BEACON: ${{ vars.SELFHEAL_BEACON }}
+          THEHEAT_PRODUCTION_PAUSED: ${{ vars.THEHEAT_PRODUCTION_PAUSED }}
         run: python scripts/workflow_health.py

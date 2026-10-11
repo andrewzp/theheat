@@ -2,15 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
-## 0.9.108.103 — 2026-10-11
+## 0.9.108.107 — 2026-10-11
 
 - Load each story builder when requested, preserving the public API without importing unrelated source adapters for a single forecast.
 - Package exact place/country registries and pinned timezone data for native previews. Bind registry bytes to policy and runtime identities; preserve place resolution, forecast time rules and the MODIS-only endpoint.
 
-## 0.9.108.102 — 2026-10-11
+## 0.9.108.106 — 2026-10-11
 
 - Add an on-demand saved MODIS graphic preview beside draft text, with source qualifications, minute precision and a full accessible description. Editing, draft actions and changed versions remove old previews; cancelled responses cannot restore them.
 - Protect the native Python endpoint independently, verify its exact source/dependency package and bound read-only Gist retrieval and rendering. No weather/model calls, state writes, media attachment or publication approval are added by previewing.
+
+## 0.9.108.105 — 2026-10-11
+
+- Distinguish configured collection pauses from stale-pipeline failures in the source observer. Keep real source failures visible and preserve existing pause-related incidents.
+- Prevent successful or unknown bot workflows from proving recovery while collection is paused. Other workflows and self-heal liveness retain their normal checks.
+
+## 0.9.108.104 — 2026-10-11
+
+- Make the production pause stop scheduled collection and drafting while keeping required PR tests available. Preserve the existing reviewed manual-publication route and its separate safeguards.
+- Refuse dashboard generation and collection requests before external calls when paused, with authentication checked first. Existing drafts and publication controls are unchanged.
 
 ## 0.9.108.101 — 2026-10-09
 
