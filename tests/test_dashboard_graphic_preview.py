@@ -124,3 +124,39 @@ def test_boolean_revision_is_not_an_integer():
     request["expected_revision"]["decision_revision"] = False
     with pytest.raises(PreviewError):
         preview(state, request, read_state=lambda: pytest.fail("unexpected read"))
+
+
+@pytest.mark.parametrize("fixture", [saved_preview, saved_pm25_preview], ids=["modis", "pm25"])
+def test_source_numeric_type_drift_after_render_refuses_unchanged_editorial_revision(fixture):
+    from src.editorial.revisions import draft_identity
+
+    state, request = fixture()
+    changed = deepcopy(state)
+    raw = changed["drafts"][0]["review_context"]["two_bot"]["bundle"]["raw_signal_dump"]
+    if "forecast_window" in raw:
+        values = raw["forecast_window"]["series"]["dust"]["values"]
+        assert type(values[0]) is float and values[0].is_integer()
+        values[0] = int(values[0])
+    else:
+        assert type(raw["confidence"]) is float and raw["confidence"].is_integer()
+        raw["confidence"] = int(raw["confidence"])
+    assert draft_identity(state["drafts"][0]) == draft_identity(changed["drafts"][0])
+    reads = iter([state, changed])
+    with pytest.raises(PreviewError) as error:
+        preview(state, request, read_state=lambda: next(reads))
+    assert error.value.code == "stale_preview"
+
+
+@pytest.mark.parametrize("fixture", [saved_preview, saved_pm25_preview], ids=["modis", "pm25"])
+def test_source_object_key_order_is_not_source_drift(fixture):
+    state, request = fixture()
+
+    def reordered(value):
+        if isinstance(value, dict):
+            return {key: reordered(value[key]) for key in reversed(value)}
+        if isinstance(value, list):
+            return [reordered(item) for item in value]
+        return value
+
+    reads = iter([state, reordered(deepcopy(state))])
+    assert json.loads(preview(state, request, read_state=lambda: next(reads)))["schema_version"] == 2

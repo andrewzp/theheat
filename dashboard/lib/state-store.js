@@ -924,6 +924,33 @@ function draftMutationSnapshot(draft, state) {
   return fingerprint({ draft, publish_ledger: state.publish_ledger?.[eventId] ?? null })
 }
 
+// Keep the first complete raw tree and defensive state clone out of the second
+// read's lifetime. The updater never receives the authoritative raw baseline.
+async function prepareGistDraftUpdate(draftId, updater, expectedRevision) {
+  const initial = await readGistState({ preserveNumbers: true })
+  const state = initial.state
+  const drafts = state.drafts || []
+  const draftIndex = drafts.findIndex((draft) => draft.id === draftId)
+  if (draftIndex === -1) {
+    return { state, draft: null }
+  }
+
+  const draft = structuredClone(drafts[draftIndex])
+  checkExpectedRevision(draft, expectedRevision)
+  const observedSnapshot = draftMutationSnapshot(draft, state)
+  const nextDraft = await updater(draft, state)
+  if (!nextDraft) {
+    return { state, draft: null }
+  }
+
+  assertGistEvidenceUnchanged(initial.document, [nextDraft])
+  return {
+    nextDraft,
+    observedSnapshot,
+    observedNumericIdentity: gistDraftNumericIdentity(initial.document, draftId),
+  }
+}
+
 export async function updateDraftStore(draftId, updater, { expectedRevision } = {}) {
   if (previewConfigured()) throw new Error("Local preview requires a domain command")
   if (configuredBackend() === "sqlite") {
@@ -962,23 +989,9 @@ export async function updateDraftStore(draftId, updater, { expectedRevision } = 
     }
   }
 
-  const initial = await readGistState({ preserveNumbers: true })
-  const state = initial.state
-  const drafts = state.drafts || []
-  const draftIndex = drafts.findIndex((draft) => draft.id === draftId)
-  if (draftIndex === -1) {
-    return { state, draft: null }
-  }
-
-  const draft = structuredClone(drafts[draftIndex])
-  checkExpectedRevision(draft, expectedRevision)
-  const observedSnapshot = draftMutationSnapshot(draft, state)
-  const nextDraft = await updater(draft, state)
-  if (!nextDraft) {
-    return { state, draft: null }
-  }
-
-  assertGistEvidenceUnchanged(initial.document, [nextDraft])
+  const prepared = await prepareGistDraftUpdate(draftId, updater, expectedRevision)
+  if (!prepared.nextDraft) return prepared
+  const { nextDraft, observedSnapshot, observedNumericIdentity } = prepared
   nextDraft.updated_at = new Date().toISOString()
   const latest = await readGistState({ preserveNumbers: true })
   const latestState = latest.state
@@ -987,7 +1000,7 @@ export async function updateDraftStore(draftId, updater, { expectedRevision } = 
   // a newly submitted platform attempt with an unchanged content revision.
   // Gist has no transaction here: the remaining GET-to-PATCH race is unchanged.
   if (!latestDraft || draftMutationSnapshot(latestDraft, latestState) !== observedSnapshot
-    || gistDraftNumericIdentity(initial.document, draftId) !== gistDraftNumericIdentity(latest.document, draftId)) throw revisionConflict()
+    || observedNumericIdentity !== gistDraftNumericIdentity(latest.document, draftId)) throw revisionConflict()
   const mergedState = mergeDraftIntoState(latestState, nextDraft)
   await writeGistState(mergedState, latest.document)
   const mergedDraft = (mergedState.drafts || []).find((candidate) => candidate.id === draftId) || nextDraft

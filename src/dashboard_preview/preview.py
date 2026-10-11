@@ -56,6 +56,15 @@ def _selected(state, request):
     return draft
 
 
+def _retained_bundle_json(bundle, *, code="graphic_unavailable"):
+    # Editorial fingerprints deliberately normalize numeric types. The source
+    # warrants do not: 500.0 -> 500 can invalidate a selected-record digest.
+    encoded = json.dumps(bundle, sort_keys=True, ensure_ascii=False, allow_nan=False)
+    if len(encoded.encode("utf-8")) > 1_000_000:
+        raise PreviewError(code)
+    return encoded
+
+
 def build_preview(request, *, policy_sha, runtime_sha, read_state, budget, synthetic=False):
     check_request(request, policy_sha, runtime_sha)
     try:
@@ -64,8 +73,7 @@ def build_preview(request, *, policy_sha, runtime_sha, read_state, budget, synth
         original_status = draft["status"]
         bundle = deepcopy(draft["review_context"]["two_bot"]["bundle"])
         # Bound the full retained story before canonical hashing and validation.
-        if len(json.dumps(bundle, ensure_ascii=False, allow_nan=False).encode("utf-8")) > 1_000_000:
-            raise PreviewError("graphic_unavailable")
+        retained_bundle = _retained_bundle_json(bundle)
         if bundle["signal_kind"] == "fire":
             receipts = [bundle["raw_signal_dump"]["acquisition_provenance"],
                         *[r["acquisition_evidence"] for r in bundle.get("related_signals", [])]]
@@ -89,7 +97,9 @@ def build_preview(request, *, policy_sha, runtime_sha, read_state, budget, synth
         rendered = render_svg(**spec)
         budget.remaining()
         current = _selected(read_state(), request)
-        if current["status"] != original_status:
+        if (current["status"] != original_status
+                or _retained_bundle_json(current["review_context"]["two_bot"]["bundle"],
+                                         code="stale_preview") != retained_bundle):
             raise PreviewError("stale_preview")
         budget.remaining()
         result = {"schema_version": 2, "draft_id": request["draft_id"],

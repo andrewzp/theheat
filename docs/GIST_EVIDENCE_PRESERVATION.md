@@ -10,6 +10,10 @@ are emitted from the latest raw document. Draft correspondence uses unique saved
 IDs; copied history uses the same draft's retained revision and text. Ambiguous
 numeric representations are refused. The observed second-read check also binds
 numeric spelling, which editorial revision fingerprints deliberately normalize.
+The first full raw tree and defensive state clone leave scope before the second
+read; the mutable updater never receives the raw baseline. Native preview also
+rechecks the exact retained bundle, with type-sensitive JSON and sorted object
+keys, after rendering and before returning an image.
 
 Source-bearing fields cannot be changed, added or removed by these dashboard
 mutation paths. A text edit retains the exact evidence while revoking checks and
