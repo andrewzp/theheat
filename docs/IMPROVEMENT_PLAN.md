@@ -2,6 +2,11 @@
 
 Living plan for closing the gap between the bot's current voice quality and the **resumption bar** (majority A-grade rate per cycle). Refined daily by the autonomous grading agent (cron `0 15 * * *`), reviewed and implemented by the human operator.
 
+> **Oct 11: 0 fresh drafts — queue is an exact match to Oct 10's 15 graded drafts; no re-grade.**
+> No proposal evidence changes (P_close/P_tier/P_url/A10 as of Oct 10). 7 Oct 8-graded drafts
+> are now >48h with elapsed baked dates, and Isaias [5] / Simon [12],[13] are superseded by later
+> advisories; gist write skipped (`gh` token invalid) — operator should reject via dashboard.
+>
 > **Oct 10: 8 fresh drafts (+7 Oct 8-graded carry-overs, 15 pending), 0% A-rate (0/8); 1 B, 1 B-,
 > 3 C+, 3 C.** 4th consecutive measured 0%. **New P_url:** raw NHC URL in tweet body on 6 of 8
 > fresh (7 of 15 queued; 4th occurrence class since Jul 3) — cheap mechanical fix. **P_tier

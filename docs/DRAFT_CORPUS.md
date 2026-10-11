@@ -11,6 +11,19 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-10-11 — Daily corpus grading (0 fresh drafts; 15 carry-overs from Oct 8/Oct 10, previously graded)
+
+**Context:** Step 0 reset `main` (tip `e66c8c6`); `daily-plan-current` picked up at `b2306be` (Oct 10).
+Gist read via git-clone (success). Queue: 15 pending — an exact match to the Oct 10 graded set
+(newest draft: Simon Cat 3 [15], created Oct 10T03:33Z). Zero drafts entered since. No re-grading;
+all grades stand. (A first-pass grade run from stale `main` docs was discarded after discovering
+this branch already held the Oct 8/Oct 10 grades.) Grades remain editorial per the Sept 29 boundary.
+
+**Staleness as of ~15:10 UTC:** the 7 Oct 8-graded drafts (Quetta, Arequipa, Riyadh, Isaias RI
+[5], Shah Alam, Kano, PNG fire; 59–100h) all cross 48h with baked dates (Oct 7/8) elapsed, plus
+Isaias [5] superseded by Cat 3 and Simon [12]/[13] superseded by [15]. Gist write skipped
+(`gh` token invalid; no gist-write tool). Operator should reject via dashboard.
+
 ## 2026-10-10 — Daily corpus grading (8 fresh drafts; 7 carry-overs from Oct 7–8, previously graded)
 
 **Context:** Step 0 hard-reset `main` (tip `e66c8c6`, PR #636). `daily-plan-current` picked up at
