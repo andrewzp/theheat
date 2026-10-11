@@ -1,4 +1,5 @@
 "use client"
+import SourcedGeneration from "./components/SourcedGeneration.js"
 
 import { useEffect, useState, useCallback, useRef } from "react"
 import { AutomationStatusStrip } from "./components/AutomationStrip.js"
@@ -36,10 +37,6 @@ export default function Dashboard() {
   const previewSeen = useRef(false)
 
   // Compose
-  const [composePrompt, setComposePrompt] = useState("")
-  const [composeTweet, setComposeTweet] = useState("")
-  const [generating, setGenerating] = useState(false)
-  const [composeStatus, setComposeStatus] = useState(null)
 
   // Suppressed signals
   const [suppressions, setSuppressions] = useState([])
@@ -292,29 +289,6 @@ export default function Dashboard() {
     if (draft.id === editingId && revisionKey(draft.revision_identity) !== revisionKey(editingRevision)) {
       setEditingRevision(draft.revision_identity)
       setDraftFeedback({ type: "success", draftId: draft.id, text: "Your edit is kept. Saving will replace the latest text shown above." })
-    }
-  }
-
-  async function generateTweet() {
-    if (data?.local_preview) { setComposeStatus("Generation is unavailable in local preview."); return }
-    setGenerating(true)
-    setComposeStatus(null)
-    try {
-      const res = await fetch("/api/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: composePrompt }),
-      })
-      const result = await res.json()
-      if (result.tweet) {
-        setComposeTweet(result.tweet)
-      } else {
-        setComposeStatus(`Error: ${result.error}`)
-      }
-    } catch (e) {
-      setComposeStatus(`Error: ${e.message}`)
-    } finally {
-      setGenerating(false)
     }
   }
 
@@ -619,48 +593,7 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Compose */}
-            <div className="card full" style={{ marginBottom: 16 }}>
-              <h2>Writing preview</h2>
-              <p className="runtime-note">Previews are unsourced writing experiments. Publishing requires a sourced draft with current review in the workbench.</p>
-              <div className="compose">
-                <textarea
-                  className="compose-input"
-                  placeholder="Describe the data (e.g. 'Phoenix hit 122F today, old record 121F from 2024')..."
-                  value={composePrompt}
-                  onChange={(e) => setComposePrompt(e.target.value)}
-                  rows={2}
-                />
-                <button className="btn" disabled={generating || !composePrompt.trim()} onClick={generateTweet}>
-                  {generating ? "generating..." : "Generate Preview"}
-                </button>
-                {composeTweet && (
-                  <div className="preview-box">
-                    <div className="preview-label">
-                      PREVIEW
-                      <span className={`char-count ${composeTweet.length > 280 ? "over" : ""}`}>
-                        {composeTweet.length}/280
-                      </span>
-                    </div>
-                    <textarea
-                      className="preview-tweet"
-                      value={composeTweet}
-                      onChange={(e) => setComposeTweet(e.target.value)}
-                      rows={3}
-                    />
-                    <div className="preview-actions">
-                      <button className="btn" disabled={generating} onClick={generateTweet}>
-                        Regenerate
-                      </button>
-                      <button className="btn" onClick={() => { setComposeTweet(""); setComposeStatus(null) }}>
-                        Discard
-                      </button>
-                    </div>
-                  </div>
-                )}
-                {composeStatus && <div className="compose-status">{composeStatus}</div>}
-              </div>
-            </div>
+            <SourcedGeneration onRefresh={fetchData} readOnly={data?.operator_role === "viewer"} />
 
             {/* Stats */}
             <div className="grid">

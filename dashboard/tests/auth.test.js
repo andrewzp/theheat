@@ -94,7 +94,7 @@ test("trigger route rejects unauthenticated POST requests", async () => {
   assert.equal(response.status, 401)
 })
 
-test("generate route preserves Anthropic rate-limit failures", async () => {
+test("generate route refuses the removed direct provider bypass", async () => {
   process.env.NODE_ENV = "production"
   process.env.DASHBOARD_USERNAME = "reviewer"
   process.env.DASHBOARD_PASSWORD = "secret-pass"
@@ -120,9 +120,9 @@ test("generate route preserves Anthropic rate-limit failures", async () => {
       body: JSON.stringify({ prompt: "Write about Mauna Loa crossing 436 ppm." }),
     }))
 
-    assert.equal(response.status, 429)
+    assert.equal(response.status, 503)
     const payload = await response.json()
-    assert.match(payload.error, /rate limit/i)
+    assert.equal(payload.code, "sourced_generation_unavailable")
   } finally {
     globalThis.fetch = originalFetch
   }
@@ -153,7 +153,10 @@ test("authenticated POST routes reject malformed JSON bodies", async () => {
       body: "{",
     }))
 
-    if (modulePath === "app/api/post/route.js") {
+    if (modulePath === "app/api/generate/route.js") {
+      assert.equal(response.status, 503)
+      assert.equal((await response.json()).code, "sourced_generation_unavailable")
+    } else if (modulePath === "app/api/post/route.js") {
       assert.equal(response.status, 409)
       assert.equal((await response.json()).code, "sourced_draft_required")
     } else {
@@ -202,7 +205,10 @@ test("POST routes reject non-string text fields", async () => {
         body: JSON.stringify(body),
       }))
 
-      if (modulePath === "app/api/post/route.js") {
+      if (modulePath === "app/api/generate/route.js") {
+        assert.equal(response.status, 503)
+        assert.equal((await response.json()).code, "sourced_generation_unavailable")
+      } else if (modulePath === "app/api/post/route.js") {
         assert.equal(response.status, 409)
         assert.equal((await response.json()).code, "sourced_draft_required")
       } else {

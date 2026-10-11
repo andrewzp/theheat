@@ -38,7 +38,7 @@ async function boundedBody(body, maxBytes, signal) {
 
 export async function localCommandRequest(request, path, { method = "GET", raw } = {}) {
   const config = configuration(request)
-  if (!/^\/(?:state|commands(?:\/[a-f0-9-]{36})?)$/.test(path)) fail("invalid_command_route", 400)
+  if (!/^\/(?:state|generation|commands(?:\/[a-f0-9-]{36})?)$/.test(path)) fail("invalid_command_route", 400)
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), 8000)
   try {
@@ -61,7 +61,7 @@ export async function localCommandRequest(request, path, { method = "GET", raw }
 
 export const previewError = localPreviewError
 
-export async function acceptLocalCommand(request) {
+export async function acceptLocalCommand(request, expectedAction = null) {
   try {
     const config = configuration(request)
     if (request.headers.get("origin") !== config.origin) fail("local_preview_origin_refused", 403)
@@ -71,6 +71,12 @@ export async function acceptLocalCommand(request) {
     let raw
     try { raw = await boundedBody(request.body, LIMIT, controller.signal) }
     finally { clearTimeout(timer) }
+    if (expectedAction) {
+      let parsed
+      try { parsed = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(raw)) }
+      catch { fail("invalid_command_body", 400) }
+      if (parsed?.action !== expectedAction) fail("sourced_generation_command_required", 400)
+    }
     // Preserve raw bytes: Python rejects duplicate JSON keys before parsing any
     // identity/action. Next must never silently normalize a hostile request.
     const { status, payload } = await localCommandRequest(request, "/commands", { method: "POST", raw })

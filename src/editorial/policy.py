@@ -49,6 +49,8 @@ POLICY_FILES = (
     "src/data/firms.py", "src/data/fire_source_contract.py", "src/data/fire_identity.py", "src/data/fire_evidence.py",
     "src/editorial/draft_admission.py", "src/orchestrator/dedup.py",
     "src/commands/postgres_candidate_admission.py",
+    "src/commands/postgres_sourced_generation.py", "src/two_bot/sourced_generation.py",
+    "src/two_bot/batch_authority.py", "src/two_bot/batch_transport.py", "src/two_bot/batch_collector.py",
     "src/orchestrator/draft_save.py", "src/orchestrator/sources/firms.py", "src/orchestrator/triage_queue.py",
     "src/editorial/synthesis.py", "src/editorial/thresholds.py",
     "src/editorial/marine_evidence.py",

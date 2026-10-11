@@ -217,7 +217,7 @@ def bundle_memory_snapshot(bundle: StoryBundle) -> dict:
     }
 
 
-def build_memory_slice(state: BotState, bundle: StoryBundle) -> MemorySlice:
+def build_memory_slice(state: BotState, bundle: StoryBundle, *, now: datetime | None = None) -> MemorySlice:
     """Assemble the relevant memory for the writer."""
 
     from src.data.places import country_key
@@ -227,7 +227,10 @@ def build_memory_slice(state: BotState, bundle: StoryBundle) -> MemorySlice:
         key for key in (_event_base(bundle.event_id), _event_series_key(bundle))
         if key
     }
-    cutoff = datetime.now(UTC).timestamp() - (30 * 24 * 60 * 60)
+    instant = now if now is not None else datetime.now(UTC)
+    if instant.tzinfo is None:
+        raise ValueError("memory_clock_requires_timezone")
+    cutoff = instant.timestamp() - (30 * 24 * 60 * 60)
 
     same_country_rows = []
     for row in memory.get("shipped_tweets", []):
@@ -274,7 +277,7 @@ def build_memory_slice(state: BotState, bundle: StoryBundle) -> MemorySlice:
     # geography / scale) so the feed doesn't read like two fires in a row.
     # shipped_rows is already most-recent-first; preserve that order while
     # deduping so the writer sees the freshest category first.
-    category_cutoff = datetime.now(UTC).timestamp() - _CATEGORY_COOLDOWN_SECONDS
+    category_cutoff = instant.timestamp() - _CATEGORY_COOLDOWN_SECONDS
     recent_categories: list[str] = []
     seen_categories: set[str] = set()
     for row in shipped_rows:

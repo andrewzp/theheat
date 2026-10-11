@@ -478,6 +478,13 @@ class SQLiteAuthority:
             self._check_environment(connection)
             return batch_journal.read(connection, job_id)
 
+    def read_batch_plan(self, job_id: str) -> bytes:
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN")
+            self._check_environment(connection)
+            registration = batch_journal.read(connection, job_id)
+            return domain_journal.read_artifact(connection, registration["plan_sha256"])
+
     def read(self) -> tuple[int, dict]:
         with closing(self._connect()) as connection:
             self._check_environment(connection)

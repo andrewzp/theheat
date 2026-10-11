@@ -15,7 +15,8 @@ MAX_COMMAND_BYTES = 128 * 1024
 MAX_TARGETS = 500
 MEDIA_ACTIONS = frozenset({"attach_media_revision", "remove_media_revision"})
 CANDIDATE_ACTIONS = frozenset({"request_candidate_checks", "admit_checked_candidate"})
-ACTIONS = CANDIDATE_ACTIONS | MEDIA_ACTIONS | frozenset({"edit_revision", "select_candidate", "record_review", "approve_revision",
+GENERATION_ACTIONS = frozenset({"request_sourced_generation"})
+ACTIONS = GENERATION_ACTIONS | CANDIDATE_ACTIONS | MEDIA_ACTIONS | frozenset({"edit_revision", "select_candidate", "record_review", "approve_revision",
                      "schedule_revision", "cancel_approval", "reject_revision", "bulk_reject"})
 _HEX = re.compile(r"[a-f0-9]{64}")
 
@@ -112,6 +113,7 @@ def _validate_payload(action: str, payload: Any, *, allow_legacy_review: bool = 
     if not isinstance(payload, dict):
         raise CommandError("invalid_payload", "Payload must be an object")
     required = {
+        "request_sourced_generation": {"brief_id", "brief_sha256", "expected_state_version", "expected_policy_sha256"},
         "edit_revision": {"text"}, "select_candidate": {"candidate_rank", "candidate_sha256"},
         "record_review": {"confirmed", "reason", "expected_policy_sha256"}, "approve_revision": {"reason"},
         "schedule_revision": {"delay_minutes", "publication_epoch", "reason"},
@@ -125,6 +127,12 @@ def _validate_payload(action: str, payload: Any, *, allow_legacy_review: bool = 
         required = {"confirmed", "reason"}  # Retained old intent must receive a terminal refusal, not wedge the journal.
     if set(payload) != required:
         raise CommandError("invalid_payload", "Payload fields do not match the action")
+    if action in GENERATION_ACTIONS:
+        for key in ("brief_id", "brief_sha256"):
+            if not isinstance(payload[key], str) or not _HEX.fullmatch(payload[key]):
+                raise CommandError("invalid_generation_identity", "Supply exact retained brief identities")
+        if type(payload["expected_state_version"]) is not int or not 0 <= payload["expected_state_version"] <= 9007199254740991:
+            raise CommandError("invalid_state_version", "Supply the exact authority version")
     if action in CANDIDATE_ACTIONS:
         for key in ("admission_input_id", "admission_input_sha256", "candidate_id", "check_set_id", "expected_completion_sha256"):
             if key in payload and (not isinstance(payload[key], str) or not _HEX.fullmatch(payload[key])):
@@ -209,7 +217,7 @@ class Command:
         if requested > clock + timedelta(minutes=5) or expires <= requested or expires > requested + timedelta(days=1):
             raise CommandError("invalid_time", "Command time window is invalid")
         rows = body["targets"]
-        if not isinstance(rows, list) or (rows != [] if action in CANDIDATE_ACTIONS else not 1 <= len(rows) <= MAX_TARGETS or (action != "bulk_reject" and len(rows) != 1)):
+        if not isinstance(rows, list) or (rows != [] if action in CANDIDATE_ACTIONS | GENERATION_ACTIONS else not 1 <= len(rows) <= MAX_TARGETS or (action != "bulk_reject" and len(rows) != 1)):
             raise CommandError("invalid_targets", "Supply one target, or an explicit bounded set for bulk rejection")
         targets = tuple(DraftTarget.parse(row) for row in rows)
         if len({row.draft_id for row in targets}) != len(targets):

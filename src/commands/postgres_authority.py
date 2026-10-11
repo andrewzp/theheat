@@ -13,7 +13,7 @@ from uuid import UUID
 from src.commands import postgres_batch, postgres_batch_results, postgres_batch_worker, postgres_spending
 from src.commands import postgres_check_observations, postgres_checks, postgres_media, postgres_media_commands
 from src.commands.reducer import AutomaticPolicy, reduce_command
-from src.commands.schema import CANDIDATE_ACTIONS, MEDIA_ACTIONS, Command, CommandError, Principal, authorize, canonical_json, utc_datetime, utc_text
+from src.commands.schema import GENERATION_ACTIONS, CANDIDATE_ACTIONS, MEDIA_ACTIONS, Command, CommandError, Principal, authorize, canonical_json, utc_datetime, utc_text
 from src.editorial.policy import current_editorial_policy
 from src.storage import postgres_projection as p
 
@@ -306,6 +306,138 @@ class PostgresCommandAuthority:
             result = postgres_batch.read(c, job_id, environment=self.environment)
         return result
 
+    def read_batch_plan(self, job_id: str) -> bytes:
+        with self.projections._connection() as c:
+            self._validate(c)
+            self._pointer(c, lock=True)
+            saved = postgres_batch.read(c, job_id, environment=self.environment)
+            return postgres_batch._plan_bytes(c, saved["plan_sha256"])
+
+    def configure_sourced_generation(self, load_configuration) -> None:
+        """Explicit local adapter input; no ambient backend selection."""
+        from src.commands import postgres_sourced_generation as generation
+        self.generation_configuration = load_configuration
+        generation.configuration(self)
+
+    def retain_generation_input(self, value: dict) -> dict:
+        from src.commands import postgres_sourced_generation as generation
+        value = p._decode(p._canonical(value))
+        generation.document(value)
+        identity = p._sha(p._canonical(value))
+        with self.projections._connection(writing=True) as c:
+            self._validate(c)
+            self._pointer(c, lock=True)
+            generation.refuse(self.environment == "local", "local_generation_required")
+            generation.record(c, generation.INPUT, identity, value)
+        return dict(brief_id=identity, brief_sha256=identity)
+
+    def generation_projection(self, *, now: datetime) -> dict:
+        from src.commands import postgres_sourced_generation as generation
+        with self.projections._connection() as c:
+            self._validate(c)
+            version, state = self._state(c, lock=True)
+            return generation.project(self, c, state, version, current_editorial_policy(), _clock(now))
+
+    def generated_candidate_inputs(self) -> tuple[str, ...]:
+        from src.commands import postgres_sourced_generation as generation
+        if not callable(getattr(self, "generation_configuration", None)):
+            return ()
+        with self.projections._connection() as c:
+            self._validate(c)
+            self._pointer(c, lock=True)
+            return generation.candidates(self, c)
+
+    def execute_sourced_generation_once(self, command_id: str, resolve_principal, *, clock,
+            operation: str, enabled: bool = False, refresh: bool = False, transport_factory=None) -> dict:
+        """One explicit existing transport operation; no scheduler or retry loop."""
+        from src.commands import postgres_sourced_generation as generation
+        from src.two_bot.batch_transport import submit_batch_once
+        from src.two_bot.batch_collector import collect_batch_once
+        generation.refuse(type(enabled) is bool, "generation_enabled_requires_boolean")
+        generation.refuse(type(refresh) is bool, "generation_refresh_requires_boolean")
+        if not enabled:
+            return dict(outcome="disabled", publication_approved=False)
+        generation.refuse(operation in {"submit", "collect", "capture"}, "generation_operation_refused")
+        authority = self
+        command_id = _id(command_id)
+        owner = "generation-"+command_id
+
+        def transaction(action, payload=None, *, now=None, raw=None, metadata=None, results=None):
+            at = utc_datetime(now if now is not None else clock())
+            with authority.projections._connection(writing=action not in {"context", "status", "plan", "index"}) as c:
+                authority._validate(c)
+                version, state = authority._state(c, lock=True)
+                policy = current_editorial_policy()
+                if action in {"observe_ack", "uncertain", "record"}:
+                    # A granted attempt's bytes/cost uncertainty survive later
+                    # role, source, policy or lease drift. Lower journals bind
+                    # receipts to the exact grant; this cannot buy or promote work.
+                    _, refs, job = generation.runner_identity(authority, c, command_id)
+                else:
+                    refs, job, value = generation.runner_context(authority, c, command_id, resolve_principal, state, policy, at)
+                if action == "context":
+                    return refs, job
+                if action == "capture":
+                    return generation.capture(authority, c, refs, job, value, state, version, policy, at, owner)
+                generation.refuse(payload["job_id"] == refs["job_id"], "generation_job_mismatch")
+                if "owner" in payload:
+                    generation.refuse(payload["owner"] == owner, "generation_owner_mismatch")
+                if "current_context" in payload:
+                    generation.refuse(payload["current_context"] == job["context"], "generation_context_changed")
+                if action in {"status", "plan"}:
+                    registration = postgres_batch.read(c, refs["job_id"], environment=authority.environment)
+                    return postgres_batch._plan_bytes(c, registration["plan_sha256"]) if action == "plan" else registration
+                if action == "index":
+                    return postgres_batch_results.index(c, payload, now=utc_text(at), environment=authority.environment)
+                if action == "record":
+                    return postgres_batch_results.record(c, payload, metadata, results, now=utc_text(at), environment=authority.environment)
+                if action == "review":
+                    return postgres_batch_results.review(c, payload, now=utc_text(at), environment=authority.environment)
+                return postgres_batch_worker.apply(c, "status" if action == "worker_status" else action,
+                    payload, now=utc_text(at), raw=raw, environment=authority.environment)
+
+        refs, job = transaction("context")
+        class ScopedAuthority:
+            def batch_status(self, job_id):
+                return transaction("status", dict(job_id=job_id))
+            def read_batch_plan(self, job_id):
+                return transaction("plan", dict(job_id=job_id))
+            def batch_work(self, action, payload, *, now, raw=None):
+                generation.refuse(action in {"acquire", "begin", "uncertain", "status", "observe_ack", "adopt"}, "generation_operation_refused")
+                # Worker status differs from registration status.
+                return transaction("worker_status" if action == "status" else action, payload, now=now, raw=raw)
+            def record_batch_results(self, payload, *, metadata, results, now):
+                return transaction("record", payload, metadata=metadata, results=results, now=now)
+            def batch_results_status(self, job_id, *, now):
+                return transaction("index", dict(job_id=job_id), now=now)
+            def review_batch_results(self, payload, *, now):
+                return transaction("review", payload, now=now)
+        if operation == "capture":
+            captured = transaction("capture")
+            if captured.get("terminal"):
+                return dict(outcome="terminal", reason=captured["reason"], cost_usd=None, publication_approved=False)
+            return dict(outcome="candidate_ready", candidate=captured, publication_approved=False)
+        runner = submit_batch_once if operation == "submit" else collect_batch_once
+        from src.two_bot.batch_transport import AnthropicBatchTransport
+        import os
+        def guarded_transport():
+            inner = (transport_factory or (lambda: AnthropicBatchTransport(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))))()
+            class GuardedTransport:
+                def submit(self, requests):
+                    transaction("context")
+                    return inner.submit(requests)
+                def retrieve(self, provider_id):
+                    transaction("context")
+                    return inner.retrieve(provider_id)
+                def results(self, provider_id):
+                    transaction("context")
+                    return inner.results(provider_id)
+                def close(self):
+                    inner.close()
+            return GuardedTransport()
+        return runner(ScopedAuthority(), refs["job_id"], current_context=job["context"], owner=owner,
+            clock=clock, enabled=True, transport_factory=guarded_transport, **({"refresh": refresh} if operation == "collect" else {}))
+
     def initialize(self, initial_state: dict, *, runtime_role: str) -> None:
         encoded, fields = p._snapshot(initial_state)
         # Separate schema provisioning may commit first; no authority exists yet.
@@ -463,10 +595,18 @@ class PostgresCommandAuthority:
                     changed = None
                     media_transition = None
                     candidate_transition = None
+                    generation = None
                     try:
                         if actor is None:
                             raise CommandError("forbidden", "Operator authorization was revoked before execution")
-                        if command.action in CANDIDATE_ACTIONS:
+                        if command.action in GENERATION_ACTIONS:
+                            from src.commands import postgres_sourced_generation as generation_domain
+                            from src.commands.reducer import Reduction
+                            with c.transaction():
+                                generation = generation_domain.prepare(self, c, state, version, command, actor,
+                                    now=clock, policy=policy, editorial_policy=editorial_policy)
+                            reduction = Reduction(state, (), ())
+                        elif command.action in CANDIDATE_ACTIONS:
                             from src.commands import postgres_candidate_admission as admission
                             # Deterministic refusals keep their command result but
                             # roll back every domain write (including a new lease).
@@ -482,6 +622,8 @@ class PostgresCommandAuthority:
                             reduction = reduce_command(state, command, actor, now=clock, policy=policy, editorial_policy=editorial_policy)
                         result = {"status": "applied" if reduction.changed_ids else "unchanged", "changed_ids": list(reduction.changed_ids),
                                   "identities": list(reduction.identities), "publish_intent_id": reduction.publish_intent_id}
+                        if generation is not None:
+                            result.update(status="applied", generation=generation)
                         if candidate_transition is not None:
                             result["candidate"] = candidate_transition.references
                         if media_transition is not None:
@@ -491,7 +633,7 @@ class PostgresCommandAuthority:
                     except CommandError as exc:
                         result = {"status": "rejected", "code": exc.code, "message": str(exc)}
                     except (ValueError, TypeError, UnicodeError, OverflowError):
-                        if command.action in MEDIA_ACTIONS | CANDIDATE_ACTIONS:
+                        if command.action in MEDIA_ACTIONS | CANDIDATE_ACTIONS | GENERATION_ACTIONS:
                             # Domain preparation converts deterministic input errors
                             # itself; storage/implementation uncertainty rolls back.
                             raise

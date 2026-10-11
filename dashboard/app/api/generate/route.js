@@ -1,140 +1,23 @@
 import { requireDashboardAuth } from "../../../lib/auth.js"
-import { readJsonObject } from "../../../lib/request-json.js"
+import { acceptLocalCommand, localCommandRequest, previewConfigured, previewError } from "../../../lib/draft-command-client.js"
 
-// Manual-compose endpoint used by the dashboard "Generate Preview"
-// button. Routed to Anthropic Sonnet on 2026-05-04 alongside the rest
-// of the writer-tier port. Gemini Flash never writes audience-facing
-// prose anymore — it only does structured-output work (fact-check,
-// claim extract) on the backend pipeline.
-const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY
-const WRITER_MODEL = process.env.THEHEAT_WRITER_MODEL || "claude-sonnet-4-6"
-
-function parseProviderError(text) {
+export const runtime = "nodejs"
+const headers = { "Cache-Control": "private, no-store" }
+function unavailable() {
+  if (process.env.THEHEAT_PRODUCTION_PAUSED === "1") return Response.json({ error: "Data collection and draft generation are paused. Existing drafts remain available for review.", code: "production_paused" }, { status: 503, headers })
+  if (!previewConfigured()) return Response.json({ error: "Sourced generation is not configured. Existing drafts remain available for review.", code: "sourced_generation_unavailable" }, { status: 503, headers })
+  return null
+}
+export async function GET(request) {
+  const error = requireDashboardAuth(request) || unavailable()
+  if (error) return error
   try {
-    const parsed = JSON.parse(text)
-    return parsed?.error?.message || parsed?.message || text
-  } catch {
-    return text
-  }
+    const { payload } = await localCommandRequest(request, "/generation")
+    return Response.json(payload, { headers })
+  } catch (error) { return previewError(error) }
 }
-
-function anthropicErrorResponse(status, text) {
-  const providerMessage = parseProviderError(text || "")
-  if (status === 401 || status === 403) {
-    return Response.json(
-      { error: `Anthropic auth failed: ${providerMessage}`, provider_status: status },
-      { status }
-    )
-  }
-  if (status === 429) {
-    return Response.json(
-      { error: `Anthropic rate limit: ${providerMessage}`, provider_status: status },
-      { status: 429 }
-    )
-  }
-  if (status >= 400 && status < 500) {
-    return Response.json(
-      { error: `Anthropic request rejected: ${providerMessage}`, provider_status: status },
-      { status }
-    )
-  }
-  return Response.json(
-    { error: `Anthropic unavailable: ${providerMessage}`, provider_status: status },
-    { status: 502 }
-  )
-}
-
-const SYSTEM_PROMPT = `You are @theheat, a climate data account with a voice. You report \
-extreme weather with genuine surprise at the absurdity of the numbers. Your personality \
-comes from how you frame the data — punchy sentences, deadpan context, comparisons that \
-help people understand the scale and what it means. The data is already remarkable. \
-Frame it so people feel that.
-
-Rules:
-- Under 280 characters. No exceptions.
-- No emojis. No hashtags. No exclamation points.
-- CAPS for emphasis. Periods after CAPS for deadpan.
-- Every tweet must include enough context that someone seeing it for the first time \
-understands what happened and why it matters.
-- Always include the country for non-iconic cities (e.g. "Conakry, Guinea", not just \
-"Conakry"). Tokyo, Paris, NYC, London, Cairo, Sydney, Miami can stand alone.
-- CO2 tweets must mention Mauna Loa and reference pre-industrial levels (280 ppm).
-- Record tweets must mention when the old record was set.
-- Never preach, never political, never moralize.
-- No sports metaphors (career high, unguardable, MVP, rookie, debut, jersey).
-- No gaming/internet slang (cooked, rekt, speed-running, GG).
-- No forced catchphrases (congratulations to no one, nobody asked).
-- Personality comes from FRAMING: "That used to take a decade." "Except it's a forest." \
-"It's April." "Ninety. Seven. Years."
-
-Examples:
-- "Buenos Aires just put up 42.1C. That broke a 97-year record. Ninety. Seven. Years."
-- "Atmospheric CO2 at Mauna Loa: 433.24 ppm. First time above 433 in recorded history. Pre-industrial was 280."
-- "Satellite picked up a 1,200 MW fire in Siberia. For reference, a large power plant is about 1,000 MW. Except it's a forest."
-- "Houston is on the Hot 10. In April. That doesn't usually happen until July."
-- "Ocean surface temps just broke the record for the 400th consecutive day. Four. Hundred. Days."
-
-Return ONLY the tweet text. No quotation marks, no commentary, no markdown.`
-
 export async function POST(request) {
-  const authError = requireDashboardAuth(request)
-  if (authError) {
-    return authError
-  }
-  if (process.env.THEHEAT_PRODUCTION_PAUSED === "1") {
-    return Response.json({
-      error: "Data collection and draft generation are paused. Existing drafts remain available for review.",
-      code: "production_paused",
-    }, { status: 503, headers: { "Cache-Control": "no-store" } })
-  }
-  if (!ANTHROPIC_API_KEY) {
-    return Response.json({ error: "No Anthropic API key configured" }, { status: 500 })
-  }
-
-  const { body, error } = await readJsonObject(request)
-  if (error) {
-    return error
-  }
-  const { prompt } = body
-  if (typeof prompt !== "string" || prompt.length < 5) {
-    return Response.json({ error: "Prompt too short" }, { status: 400 })
-  }
-
-  try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: WRITER_MODEL,
-        max_tokens: 400,
-        system: SYSTEM_PROMPT,
-        messages: [
-          {
-            role: "user",
-            content: `Write a tweet about this:\n${prompt}`,
-          },
-        ],
-      }),
-    })
-
-    if (!res.ok) {
-      const errText = await res.text()
-      return anthropicErrorResponse(res.status, errText)
-    }
-
-    const data = await res.json()
-    const text = data?.content?.[0]?.text?.trim()?.replace(/^["']|["']$/g, "") || ""
-
-    if (!text) {
-      return Response.json({ error: "Anthropic returned empty response" }, { status: 500 })
-    }
-
-    return Response.json({ tweet: text, chars: text.length, writer_model: WRITER_MODEL })
-  } catch (e) {
-    return Response.json({ error: e.message }, { status: 500 })
-  }
+  const error = requireDashboardAuth(request) || unavailable()
+  if (error) return error
+  return acceptLocalCommand(request, "request_sourced_generation")
 }

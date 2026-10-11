@@ -384,6 +384,13 @@ def project(authority, c, allowed, *, version, state, policy, now):
         draft_id = "draft_" + str(uuid5(NAMESPACE_URL, authority.environment + ":" + value["candidate_id"]))
         if any(d.get("id") == draft_id for d in state.get("drafts", [])):
             row.update(status="admitted", saved_draft_id=draft_id, required_checks_completed=False)
+        if row["status"] == "not_checked":
+            # Result retention precedes expiry of the producer's existing lease.
+            # This is availability only; intake still acquires its own fenced lease.
+            batch_state = worker.apply(c, "status", {"job_id": value["job_id"]}, now=utc_text(now), environment=authority.environment)
+            lease = batch_state.get("lease")
+            if lease and utc_datetime(lease["expires_at"]) > now:
+                row["checks_available_at"] = lease["expires_at"]
         output.append(row)
     return output
 

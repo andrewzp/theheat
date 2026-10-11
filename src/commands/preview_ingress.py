@@ -29,7 +29,7 @@ from src.storage.postgres_projection import ProjectionError
 AUTH_CONTEXT = "verified-local-preview-basic-v1"
 ALLOWED_ACTIONS = frozenset({"edit_revision", "record_review", "approve_revision",
                              "reject_revision", "cancel_approval", "select_candidate",
-                             "request_candidate_checks", "admit_checked_candidate"})
+                             "request_candidate_checks", "admit_checked_candidate", "request_sourced_generation"})
 
 
 def safe_environment() -> None:
@@ -215,8 +215,11 @@ class PreviewHandler(BaseHTTPRequestHandler):
                 version, state = self.server.authority.read()
                 self.reply(200, {"state_version": version, "state": state,
                                  "editorial_policy": current_editorial_policy(), "role": actor.role,
-                                 "candidates": self.server.authority.candidate_projection(self.server.candidate_inputs, now=datetime.now(UTC)),
+                                 "candidates": self.server.authority.candidate_projection(self.server.candidate_inputs + self.server.authority.generated_candidate_inputs(), now=datetime.now(UTC)),
                                  "local_preview": True, "publication_enabled": False})
+                return
+            if self.command == "GET" and self.path == "/generation":
+                self.reply(200, self.server.authority.generation_projection(now=datetime.now(UTC)))
                 return
             if self.command == "GET" and re.fullmatch(r"/commands/[a-f0-9-]{36}", self.path):
                 command_id = self.path.removeprefix("/commands/")
@@ -272,7 +275,7 @@ class PreviewHandler(BaseHTTPRequestHandler):
             if command.action not in ALLOWED_ACTIONS:
                 self.reply(400, {"error": "Action unavailable in local preview", "code": "preview_action_unavailable"})
                 return
-            if command.action in {"request_candidate_checks", "admit_checked_candidate"} and command.payload["admission_input_id"] not in self.server.candidate_inputs:
+            if command.action in {"request_candidate_checks", "admit_checked_candidate"} and command.payload["admission_input_id"] not in self.server.candidate_inputs + self.server.authority.generated_candidate_inputs():
                 raise CommandError("candidate_not_allowlisted", "Candidate is not in this local fixture")
             receipt = self.server.authority.accept(command, actor, now=now)
             self.reply(202, {"status": "pending", "receipt": receipt, "local_preview": True})
@@ -293,6 +296,7 @@ def arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--user", required=True)
     parser.add_argument("--database-port", type=int, default=55473)
     parser.add_argument("--operators", required=True)
+    parser.add_argument("--generation-inputs")
 
 
 def adapter(args) -> tuple[PostgresCommandAuthority, Operators]:
@@ -300,6 +304,9 @@ def adapter(args) -> tuple[PostgresCommandAuthority, Operators]:
     operators = Operators(args.operators)
     authority = PostgresCommandAuthority(socket_directory=args.socket_directory, database=args.database,
                                          user=args.user, port=args.database_port, environment="local")
+    if getattr(args, "generation_inputs", None):
+        from src.commands.postgres_sourced_generation import private_configuration
+        authority.configure_sourced_generation(private_configuration(args.generation_inputs))
     return authority, operators
 
 

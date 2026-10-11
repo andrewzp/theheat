@@ -10,7 +10,7 @@ import re
 import time
 from typing import Protocol, cast
 
-from src.commands.sqlite_authority import SQLiteAuthority
+from src.two_bot.batch_authority import BatchAuthority
 from src.two_bot.provider_http import anthropic_httpx
 
 ACK_LIMIT = 65536
@@ -222,7 +222,7 @@ def _attempt(authority, job, context, owner, clock, transport, requests):
 
 
 def submit_batch_once(
-    authority: SQLiteAuthority,
+    authority: BatchAuthority,
     job_id: str,
     *,
     current_context: dict,
@@ -254,7 +254,7 @@ def submit_batch_once(
         return _report("blocked", reason="invalid_batch_identity")
     try:
         registration = authority.batch_status(job_id)
-        raw = authority.read_artifact(registration["plan_sha256"])
+        raw = authority.read_batch_plan(job_id)
         plan = validated_batch_plan(raw, expected_plan_sha256=registration["plan_sha256"])
         policy = current_editorial_policy()
         if policy is None or fingerprint(policy) != plan["policy_sha256"]:

@@ -31,8 +31,8 @@ test("local mode blocks every legacy route before external I/O, including failed
     for (const [name, route] of routes.slice(1)) {
       const method = route.POST ? "POST" : "GET"
       const response = await route[method](request(name, method))
-      assert.equal(response.status, 503, name)
-      assert.equal((await response.json()).code, "local_preview_route_unavailable")
+      assert.equal(response.status, name === "generate" ? 400 : 503, name)
+      assert.equal((await response.json()).code, name === "generate" ? "sourced_generation_command_required" : "local_preview_route_unavailable")
     }
     assert.deepEqual(calls, ["http://127.0.0.1:3999/state"])
     calls.length = 0

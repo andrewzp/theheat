@@ -73,7 +73,7 @@ def min_kills() -> int:
     return max(2, min(value, 10))
 
 
-def bundle_fingerprint(bundle: Any, bot_state=None) -> str:
+def bundle_fingerprint(bundle: Any, bot_state=None, *, now=None) -> str:
     """Exact bundle plus actual writer memory; volatile evidence is not dropped.
 
     Changed context reopens a rejection even when weather values are identical.
@@ -84,7 +84,7 @@ def bundle_fingerprint(bundle: Any, bot_state=None) -> str:
 
         memory_state = dict(bot_state or {})
         memory_state["memory"] = deepcopy(memory_state.get("memory"))
-        context = build_memory_slice(cast(BotState, memory_state), bundle).to_dict()
+        context = build_memory_slice(cast(BotState, memory_state), bundle, **({"now": now} if now is not None else {})).to_dict()
         payload = json.dumps(
             {"bundle": bundle.to_dict(), "memory": context},
             sort_keys=True,
@@ -297,7 +297,7 @@ def should_skip(bot_state: Any, event_id: str, bundle: Any, *, now=None) -> str 
         rows = _cache_view(bot_state)
         if not rows:
             return None
-        sha, epoch = bundle_fingerprint(bundle, bot_state), decision_epoch()
+        sha, epoch = bundle_fingerprint(bundle, bot_state, now=now), decision_epoch()
         if not sha or not epoch:
             return None
         current = now or datetime.now(timezone.utc)

@@ -1,0 +1,19 @@
+# Shared sourced generation in local preview
+
+The local source chooser requests one draft from an immutable, audited source brief. It uses the same writer request and one-sample batch engine as the explicit automatic starter, then the existing four required checks and checked-candidate admission. Admission creates a pending, unapproved draft. Editing still invalidates obsolete checks and approval.
+
+This is an experimental local PostgreSQL workflow. It does not select a production backend, activate batch transport, collect sources or enable publishing. Gist remains the production store. Urgent synchronous generation, production producer trust and billing reconciliation remain separate work.
+
+The old free-text `/api/generate` provider call is removed. Outside an explicitly configured local preview, generation is unavailable. Production pause takes precedence. An authenticated local `GET /api/generate` lists at most 16 server-retained briefs; `POST` accepts only the durable `request_sourced_generation` command with `brief_id`, `brief_sha256`, `expected_state_version` and `expected_policy_sha256`. No browser-supplied prose, model, source payload or spending amount is accepted.
+
+The preview adapter accepts an optional owner-only `--generation-inputs` JSON file with `current_inputs` and a trusted `reservation` (`estimate_sha256`, `reserve_micro_usd`). Inputs are retained beforehand through `PostgresCommandAuthority.retain_generation_input`. The file is reread for current authority; removing, superseding or expiring a brief blocks new work. This local allowlist is not proof of scientific truth or a production source-verification service.
+
+`SourcedGenerationClient` gives an explicitly injected automatic caller the same command path. Both triage drains count queued work as a selected slot, not a saved draft or provider attempt. Source callbacks with deferred side effects are excluded. An unavailable explicit adapter cannot fall back to the legacy provider.
+
+Separate explicit worker invocations call `execute_sourced_generation_once` with `submit`, `collect` or `capture`; execution is off unless explicitly enabled. Collection reuses a retained complete receipt by default. `refresh=True` is an explicit bounded read of existing provider work, never another submission. Source, role, memory, policy and reservation are revalidated before requests and interpretation. Returned bytes from an already granted attempt remain retained after later authority drift; that does not permit interpreting or promoting stale results. A lost acknowledgment keeps the hold and unknown outcome.
+
+The writer's existing lease may briefly delay the checker. `checks_available_at` is only a current availability hint. The UI waits and rereads it; the backend independently acquires checker ownership and rejects an early or stale request. Refreshing the dashboard makes no provider request.
+
+Each source row may include `writer_usage`: exact `job_id`, `custom_id`, `receipt_id` and `intent_id`; current `reservation_state`; existing `usage_status` semantics; nullable numeric `counts` using the existing Anthropic token field names; `cost_usd: null`; and `cost_status: "unreconciled"`. Before a job exists it is null. One chosen receipt is projected once, without summing duplicate reads. Tokens are observations, not a bill. This lane neither prices nor settles charges or releases dispatched holds.
+
+Offline acceptance uses invented source inputs through the existing fire intern, the actual Anthropic SDK with explicit HTTP fixtures, separate checker processes, actual local PostgreSQL and actual dashboard route/component code. The tests cover manual/automatic deduplication, spending refusal, role/source/policy drift during HTTP, expired leases, crash recovery and restore to a fresh owned cluster. Browser interaction, hosted qualification and production operation are distinct acceptance gates.
