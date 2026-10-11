@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.108.102 — 2026-10-11
+
+- Add an on-demand saved MODIS graphic preview beside draft text, with source qualifications, minute precision and a full accessible description. Editing, draft actions and changed versions remove old previews; cancelled responses cannot restore them.
+- Protect the native Python endpoint independently, verify its exact source/dependency package and bound read-only Gist retrieval and rendering. No weather/model calls, state writes, media attachment or publication approval are added by previewing.
+
 ## 0.9.108.101 — 2026-10-09
 
 - Share the qualified chart drawing between local packages and bounded in-memory SVG previews. Embed the font and retain full source qualifications without PDF tools, output files or model calls in the SVG path.

@@ -1,5 +1,12 @@
 {
   "framework": "nextjs",
   "installCommand": "npm install",
-  "buildCommand": "npm run build"
+  "buildCommand": "npm run build",
+  "functions": {
+    "api/graphic_preview.py": {
+      "maxDuration": 30,
+      "includeFiles": "{graphic-runtime.zip,lib/graphic-runtime-manifest.json,pyproject.toml,uv.lock}",
+      "excludeFiles": "{node_modules/**,.next/**,tests/**,app/**,public/**,lib/*.js,.claude/**,.git/**,.vercel/**,.env*,middleware.js,next.config.mjs,package*.json}"
+    }
+  }
 }

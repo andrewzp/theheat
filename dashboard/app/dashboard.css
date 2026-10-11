@@ -616,7 +616,7 @@ h1 span { color: #666; font-weight: 400; font-size: 14px; margin-left: 8px; }
 }
 .draft-queue {
   display: grid; gap: 8px; max-height: 720px; overflow-y: auto;
-  padding-right: 4px;
+  padding-right: 4px; align-self: start; align-content: start;
 }
 .queue-item {
   background: #0f0f0f; border: 1px solid #222; border-radius: 6px;
@@ -709,12 +709,22 @@ h1 span { color: #666; font-weight: 400; font-size: 14px; margin-left: 8px; }
   font-variant-numeric: tabular-nums;
 }
 
-.forecast-evidence {
+.forecast-evidence, .graphic-preview {
   min-width: 0; padding: 16px; border: 1px solid #383838; border-radius: 6px;
   background: #111; color: #ccc; font-size: 13px; line-height: 1.6;
   display: grid; gap: 12px; overflow-wrap: anywhere;
 }
-.forecast-evidence h3 { font-size: 15px; font-weight: 600; color: #eee; }
+.forecast-evidence h3, .graphic-preview h3 { font-size: 15px; font-weight: 600; color: #eee; }
+.graphic-preview > .btn { justify-self: start; min-height: 44px; font-size: 13px; }
+.graphic-preview-note { color: #f6c792; }
+.graphic-preview-figure { min-width: 0; margin: 0; max-width: 680px; }
+.graphic-preview-figure img { display: block; width: 100%; height: auto; }
+.graphic-preview-figure figcaption { display: grid; gap: 10px; margin-top: 12px; }
+.graphic-preview summary { cursor: pointer; padding: 12px 0; color: #eee; }
+.graphic-preview summary:focus-visible, .graphic-preview button:focus-visible {
+  outline: 2px solid #ffb380; outline-offset: 3px; border-radius: 2px;
+}
+.graphic-preview details { border-top: 1px solid #383838; }
 .forecast-kind { color: #f6c792; font-size: 12px; }
 .forecast-fields { display: grid; gap: 10px; margin: 0; }
 .forecast-fields > div { min-width: 0; }
