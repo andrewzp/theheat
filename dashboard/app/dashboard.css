@@ -856,23 +856,37 @@ h1 span { color: #666; font-weight: 400; font-size: 14px; margin-left: 8px; }
   border-radius: 999px;
   background: #1a1a1a;
   cursor: help;
+  max-width: 100%;
+  min-width: 0;
 }
 .automation-dot::before {
   content: "";
   display: inline-block;
   width: 8px;
   height: 8px;
+  flex-shrink: 0;
   border-radius: 50%;
 }
 .automation-dot-green::before { background: #22c55e; }
 .automation-dot-yellow::before { background: #eab308; }
 .automation-dot-gray::before { background: #6b7280; }
 .automation-dot-red::before { background: #ef4444; }
-.automation-dot-label { font-size: 12px; }
+.automation-dot-label { font-size: 12px; overflow-wrap: anywhere; }
 .automation-spacer { flex: 1; }
 .automation-posting-mode { font-size: 12px; color: #a3a3a3; }
 .automation-posting-mode-error { color: #fca5a5; }
-.automation-error, .automation-loading { font-size: 12px; color: #a3a3a3; }
+.automation-error, .automation-loading { font-size: 12px; color: #a3a3a3; overflow-wrap: anywhere; min-width: 0; }
+.automation-pause-status {
+  padding: 10px 16px;
+  border-bottom: 1px solid #2a2a2a;
+  background: #0f0f0f;
+  color: #d4d4d4;
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.automation-pause-status p { margin: 0; }
+.automation-retained-run { color: #a3a3a3; }
 
 /* Loud red banner when any scheduled workflow is red — impossible to miss. */
 .automation-banner {
@@ -887,7 +901,7 @@ h1 span { color: #666; font-weight: 400; font-size: 14px; margin-left: 8px; }
   border-bottom: 2px solid #7a0103;
 }
 .automation-banner-icon { font-size: 18px; line-height: 1; }
-.automation-banner-text { font-weight: 500; }
+.automation-banner-text { font-weight: 500; min-width: 0; overflow-wrap: anywhere; }
 .automation-banner-text strong { font-weight: 700; }
 
 /* Cost evidence keeps estimates and coverage distinct, including on narrow screens. */

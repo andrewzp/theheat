@@ -372,9 +372,115 @@ test("GET /api/automation reuses the short-lived status cache", async () => {
   assert.equal(second.status, 200)
   // 5 workflows × 2 calls (state + runs) = 10, but cache dedupes the second
   // request entirely. The gist is hit once by readStateStore, and the variables
-  // endpoint is hit twice on the first pass (ROUTINE_BEACON + SELFHEAL_BEACON).
+  // endpoint is hit three times on the first pass (both beacons + collection pause).
   // The second GET is a cache hit on all.
   assert.equal(actionCalls, 10)
   assert.equal(gistCalls, 1)
-  assert.equal(beaconCalls, 2)
+  assert.equal(beaconCalls, 3)
+})
+
+function pauseRequest() {
+  return new Request("http://localhost/api/automation", {
+    headers: { authorization: basicAuth("pause-reviewer", "invented-password") },
+  })
+}
+
+function configurePauseBoundary() {
+  Object.assign(process.env, {
+    NODE_ENV: "production", DASHBOARD_USERNAME: "pause-reviewer", DASHBOARD_PASSWORD: "invented-password",
+    GITHUB_TOKEN: "invented-token", GIST_ID: "invented-gist", THEHEAT_STATE_BACKEND: "gist", STATE_BACKEND: "gist",
+  })
+  delete process.env.DASHBOARD_AUTH_DISABLED
+  delete process.env.THEHEAT_AUTOMATION_CACHE_TTL_MS
+}
+
+function pauseBoundaryFetch(pauseResponse, calls, savedState = { drafts: [], source_health: { invented: { status: "failed" } } }) {
+  return async (url, options) => {
+    const u = String(url)
+    calls.push({ url: u, options })
+    if (u.endsWith("/actions/variables/THEHEAT_PRODUCTION_PAUSED")) return pauseResponse()
+    if (u.includes("/actions/variables/")) return beaconVariableResponse(undefined)
+    if (u.includes("/runs?")) return workflowRunsResponse([{ conclusion: "success", created_at: "2026-10-10T01:00:00Z" }])
+    if (u.includes("/actions/workflows/")) return workflowResponse("active")
+    return gistStateResponse(savedState)
+  }
+}
+
+test("automation boundary authenticates before all reads including unconfigured auth", async () => {
+  configurePauseBoundary()
+  const calls = []
+  global.fetch = pauseBoundaryFetch(() => Response.json({ value: "1" }), calls)
+  const { GET } = await importFresh("app/api/automation/route.js")
+  assert.equal((await GET(new Request("http://localhost/api/automation"))).status, 401)
+  delete process.env.DASHBOARD_USERNAME
+  delete process.env.DASHBOARD_PASSWORD
+  assert.equal((await GET(pauseRequest())).status, 503)
+  assert.deepEqual(calls, [])
+})
+
+test("automation boundary keeps separate flags, retained workflow details and source state without mutation", async () => {
+  configurePauseBoundary()
+  process.env.THEHEAT_PRODUCTION_PAUSED = "0"
+  const calls = []
+  const saved = { drafts: [], source_health: { invented: { status: "failed" } }, runtime_inventory: { marker: "retained" } }
+  const original = structuredClone(saved)
+  global.fetch = pauseBoundaryFetch(() => Response.json({ value: "1" }), calls, saved)
+  const { GET } = await importFresh("app/api/automation/route.js")
+  const response = await GET(pauseRequest())
+  assert.equal(response.headers.get("cache-control"), "private, no-store")
+  const body = await response.json()
+  assert.equal(body.collection_pause.status, "configured")
+  assert.equal(body.dashboard_generation_pause, false)
+  assert.equal(body.workflows[0].last_run_at, "2026-10-10T01:00:00Z")
+  assert.equal(body.workflows[0].last_run_conclusion, "success")
+  assert.deepEqual(saved, original)
+  assert.ok(calls.every(call => !call.options?.method || call.options.method === "GET"))
+  assert.equal("runtime_inventory" in body, false)
+})
+
+test("shared cache coalesces the pause read and keeps the default fifteen-second age", async () => {
+  configurePauseBoundary()
+  const originalNow = Date.now
+  let now = originalNow()
+  Date.now = () => now
+  let release
+  const pauseResponse = new Promise(resolve => { release = resolve })
+  const calls = []
+  global.fetch = pauseBoundaryFetch(() => pauseResponse, calls)
+  try {
+    const { GET } = await importFresh("app/api/automation/route.js")
+    const firstPromise = GET(pauseRequest())
+    const secondPromise = GET(pauseRequest())
+    release(Response.json({ value: "1" }))
+    const [first, second] = await Promise.all([firstPromise, secondPromise])
+    const firstBody = await first.json()
+    assert.deepEqual(await second.json(), firstBody)
+    const pauseCalls = () => calls.filter(call => call.url.endsWith("/THEHEAT_PRODUCTION_PAUSED")).length
+    assert.equal(pauseCalls(), 1)
+    now += 14999
+    assert.deepEqual(await (await GET(pauseRequest())).json(), firstBody)
+    assert.equal(pauseCalls(), 1)
+    now += 1
+    global.fetch = pauseBoundaryFetch(() => new Response("upstream private denial", { status: 403 }), calls)
+    const failedRefresh = await GET(pauseRequest())
+    assert.equal(failedRefresh.headers.get("cache-control"), "private, no-store")
+    assert.deepEqual((await failedRefresh.json()).collection_pause, { status: "unknown", checked_at: null, reason: "unavailable" })
+    assert.equal(pauseCalls(), 2)
+  } finally {
+    Date.now = originalNow
+  }
+})
+
+test("authenticated serialization failure retains no-store response policy", async () => {
+  configurePauseBoundary()
+  const calls = []
+  const ordinary = pauseBoundaryFetch(() => Response.json({ value: "0" }), calls)
+  global.fetch = async (url, options) => {
+    if (String(url).endsWith("/workflows/bot.yml")) return { ok: true, json: async () => ({ state: 1n }) }
+    return ordinary(url, options)
+  }
+  const { GET } = await importFresh("app/api/automation/route.js")
+  const response = await GET(pauseRequest())
+  assert.equal(response.status, 500)
+  assert.equal(response.headers.get("cache-control"), "private, no-store")
 })

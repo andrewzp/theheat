@@ -4,6 +4,7 @@ import { selectLatestDecisiveRun } from "./automation-status.js"
 const DEFAULT_PRODUCTION_BRANCH = "main"
 const ROUTINE_BEACON_VARIABLE = "ROUTINE_BEACON"
 const SELFHEAL_BEACON_VARIABLE = "SELFHEAL_BEACON"
+const COLLECTION_PAUSE_VARIABLE = "THEHEAT_PRODUCTION_PAUSED"
 
 // Kept in lockstep with scripts/workflow_health.py MONITORED_WORKFLOWS — both
 // monitor the same five scheduled workflows.
@@ -112,6 +113,34 @@ export async function readSelfHealBeacon() {
   return readBeaconVariable(SELFHEAL_BEACON_VARIABLE, "readSelfHealBeacon")
 }
 
+export async function readCollectionPause() {
+  const unknown = (reason) => ({ status: "unknown", checked_at: null, reason })
+  if (!process.env.GITHUB_TOKEN) return unknown("missing_credentials")
+  const signal = AbortSignal.timeout(4000)
+  try {
+    const url = `https://api.github.com/repos/${repo()}/actions/variables/${COLLECTION_PAUSE_VARIABLE}`
+    const response = await fetch(url, { headers: ghHeaders(), cache: "no-store", signal })
+    // A 404 can mean insufficient access. It never proves the flag is absent.
+    if (!response.ok) return unknown("unavailable")
+    let data
+    try {
+      data = await response.json()
+    } catch (error) {
+      return unknown(signal.aborted || error?.name === "TimeoutError" ? "timeout" : "invalid_response")
+    }
+    if (!data || Array.isArray(data) || typeof data.value !== "string") {
+      return unknown("invalid_response")
+    }
+    return {
+      status: data.value === "1" ? "configured" : "not_configured",
+      checked_at: new Date().toISOString(),
+      reason: null,
+    }
+  } catch (error) {
+    return unknown(signal.aborted || error?.name === "TimeoutError" ? "timeout" : "read_failed")
+  }
+}
+
 function summarizePostingModes(drafts) {
   const summary = { manual_only_count: 0, armed_auto_count: 0, suggested_count: 0 }
   for (const d of drafts || []) {
@@ -165,15 +194,18 @@ async function readPostingModeSummary() {
 }
 
 export async function getAutomationStatus() {
-  const [workflows, beacon, selfHealBeacon, postingMode] = await Promise.all([
+  const [workflows, beacon, selfHealBeacon, postingMode, collectionPause] = await Promise.all([
     Promise.all(WORKFLOWS.map(fetchWorkflowFull)),
     readRoutineBeacon().catch(() => null),
     readSelfHealBeacon().catch(() => null),
     readPostingModeSummary(),
+    readCollectionPause(),
   ])
 
   return {
     workflows,
+    collection_pause: collectionPause,
+    dashboard_generation_pause: process.env.THEHEAT_PRODUCTION_PAUSED === "1",
     routine: {
       name: ROUTINE.name,
       cron: ROUTINE.cron,

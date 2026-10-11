@@ -17,6 +17,14 @@ The dashboard still shows retained source/workflow history, including the disabl
 threshold workflow. Configured pause does not prove running workers have stopped,
 source freshness, recovery or zero spending.
 
+The Automation area reads the single repository pause variable during its shared
+15-second status refresh. A configured collector pause is shown separately from
+this dashboard deployment's generation pause, including differing settings. The
+last recorded workflow conclusion and time remain visible; genuine workflow or
+access failures retain their alert. An inaccessible, malformed or timed-out flag
+read is explicitly unknown, never evidence that collection resumed. This display
+does not change source history, runtime inventory or any pause setting.
+
 Set `THEHEAT_PRODUCTION_PAUSED=1` in the dashboard's Production environment and
 deploy the dashboard. This makes authenticated generation and collection-trigger
 requests return HTTP 503 before provider calls or workflow dispatch. Existing
