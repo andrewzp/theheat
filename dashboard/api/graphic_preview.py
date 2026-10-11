@@ -23,6 +23,15 @@ def load_handler():
     # No extraction, downloads, environment-selected module or fallback source tree.
     if any(name == "src" or name.startswith("src.") for name in sys.modules):
         raise ValueError("Unexpected graphic runtime already loaded")
+    # This dedicated preview process uses the locked timezone package. Do not
+    # silently depend on host OS zone files or an inherited ZoneInfo cache.
+    import tzdata
+    from zoneinfo import ZoneInfo, reset_tzpath
+    if tzdata.__version__ != "2026.5":
+        raise ValueError("Unexpected graphic timezone data")
+    reset_tzpath(())
+    ZoneInfo.clear_cache()
+    ZoneInfo("Asia/Kathmandu")  # Missing/corrupt package data must fail closed.
     sys.path.insert(0, str(archive))
     from src.dashboard_preview.http import handler_type
     return handler_type(policy_sha=identity["policy_source_sha256"], runtime_sha=actual)

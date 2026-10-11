@@ -6,4 +6,5 @@ dependencies = [
   "reportlab==4.4.9",
   "pillow==12.2.0",
   "requests==2.34.2",
+  "tzdata==2026.5",
 ]

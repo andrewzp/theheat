@@ -51,18 +51,31 @@ to the hosting platform's own logging behavior.
 ## Reproducible package and checks
 
 The generated archive contains an explicit allowlist of public Python source,
-the existing font and its license. It retains the scientific guards used by the
+the existing font and its license, and the byte-identical public place/country
+registries. Resource destinations and original source paths are explicitly bound;
+the archive uses embedded registry reads without extracting files. Ordinary source
+checkouts retain their existing data-directory readers. Registry bytes and reader
+code also participate in editorial policy identity. It retains the scientific guards used by the
 shared adapter. The manifest binds every file, archive bytes, policy source,
 entrypoint, Python dependency manifest and lock. The entrypoint verifies the
 package before importing it without extraction or downloads. A bad or missing
 package returns a private unavailable response.
 
+Story-builder exports load only their owning module. This lets the package retain
+the complete air-quality reconstruction without importing unrelated hazard adapters.
+The native preview uses pinned `tzdata` with system timezone paths disabled and
+clears pre-existing timezone caches; a missing or incompatible package fails closed.
+The bot's timezone configuration and source rules are unchanged. These dependencies
+prepare forecast rendering; the endpoint still supports only saved MODIS graphics.
+
 After changing a packaged source or dependency, run:
 
 ```sh
+python scripts/gen_editorial_policy.py
 python scripts/gen_dashboard_graphic_runtime.py
 python scripts/gen_dashboard_graphic_runtime.py --check
 python -m pytest tests/test_dashboard_graphic_auth.py tests/test_dashboard_graphic_reader.py tests/test_dashboard_graphic_preview.py tests/test_dashboard_graphic_http.py tests/test_dashboard_graphic_runtime.py tests/test_evidence_graphic_render.py tests/test_fire_graphic_adapter.py -q -m 'not voice_replay'
+python -m pytest tests/test_intern_import_boundaries.py tests/test_graphic_runtime_resources.py tests/test_places.py tests/test_air_quality_graphic_adapter.py -q -m 'not voice_replay'
 cd dashboard
 npm test
 npm run build
