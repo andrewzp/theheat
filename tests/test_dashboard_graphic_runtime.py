@@ -9,7 +9,7 @@ import zipfile
 
 import pytest
 
-from scripts.gen_dashboard_graphic_runtime import ROOT, SOURCES, DEPLOYMENT_FILES, generate
+from scripts.gen_dashboard_graphic_runtime import ROOT, SOURCES, RESOURCES, DEPLOYMENT_FILES, generate
 
 
 def test_archive_is_exact_reproducible_public_allowlist():
@@ -20,7 +20,7 @@ def test_archive_is_exact_reproducible_public_allowlist():
     manifest = json.loads(raw_manifest)
     assert manifest["identity"]["archive_sha256"] == sha256(archive).hexdigest()
     with zipfile.ZipFile(BytesIO(archive)) as z:
-        assert z.namelist() == list(SOURCES)
+        assert z.namelist() == [*SOURCES, *(name for name, _ in RESOURCES)]
         for info in z.infolist():
             assert info.date_time == (1980, 1, 1, 0, 0, 0)
             assert info.filename.startswith("src/") and ".." not in info.filename

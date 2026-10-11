@@ -9,6 +9,7 @@ from __future__ import annotations
 import csv
 from functools import lru_cache
 import hashlib
+from importlib.resources import files
 import json
 import math
 from pathlib import Path
@@ -22,13 +23,22 @@ CACHE_PRODUCT = "openmeteo-era5-daily-v2"
 _TOKEN = re.compile(r"loc1-(pl[0-9]+|ux[a-f0-9]{16})-(pt[a-f0-9]{16})")
 
 
+def _registry_text(name: str) -> str:
+    # The preview archive embeds the exact public registry; ordinary checkouts
+    # retain their existing data directory. A corrupt embedded copy never falls back.
+    resource = files(__package__).joinpath("registry", name)
+    if resource.is_file():
+        return resource.read_text(encoding="utf-8")
+    return (DATA / name).read_text(encoding="utf-8")
+
+
 def normalize(value: str) -> str:
     return unicodedata.normalize("NFKC", str(value)).strip().casefold()
 
 
 @lru_cache(maxsize=1)
 def country_codes() -> dict[str, str]:
-    return json.loads((DATA / "country_codes.json").read_text())["codes"]
+    return json.loads(_registry_text("country_codes.json"))["codes"]
 
 
 def country_key(value: str) -> str:
@@ -58,7 +68,7 @@ def sampling_point_id(lat: Any, lon: Any) -> str:
 
 @lru_cache(maxsize=1)
 def registry() -> tuple[dict, ...]:
-    rows = json.loads((DATA / "place_registry.json").read_text())["places"]
+    rows = json.loads(_registry_text("place_registry.json"))["places"]
     ids, aliases = set(), {}
     for row in rows:
         if row["place_id"] in ids:

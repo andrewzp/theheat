@@ -4,7 +4,7 @@ import argparse
 from hashlib import sha256
 from io import BytesIO
 import json
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -18,7 +18,9 @@ SOURCES = (
     'src/dashboard_preview/preview.py',
     'src/dashboard_preview/reader.py',
     'src/data/__init__.py',
+    'src/data/_freshness.py',
     'src/data/_http.py',
+    'src/data/air_quality.py',
     'src/data/air_quality_contract.py',
     'src/data/air_quality_evidence.py',
     'src/data/coral_evidence.py',
@@ -59,6 +61,7 @@ SOURCES = (
     'src/editorial/scoring/wetbulb.py',
     'src/editorial/thresholds.py',
     'src/media/__init__.py',
+    'src/media/air_quality_graphic_adapter.py',
     'src/media/evidence_graphic.py',
     'src/media/evidence_graphic_render.py',
     'src/media/fire_graphic_adapter.py',
@@ -68,9 +71,15 @@ SOURCES = (
     'src/state_schema.py',
     'src/two_bot/__init__.py',
     'src/two_bot/evidence_contract.py',
+    'src/two_bot/intern/__init__.py',
+    'src/two_bot/intern/air_quality.py',
     'src/two_bot/json_utils.py',
     'src/two_bot/strict_contract.py',
     'src/two_bot/types.py',
+)
+RESOURCES = (
+    ("src/data/registry/place_registry.json", "data/place_registry.json"),
+    ("src/data/registry/country_codes.json", "data/country_codes.json"),
 )
 DEPLOYMENT_FILES = ("api/graphic_preview.py", "pyproject.toml", "uv.lock")
 
@@ -78,9 +87,21 @@ DEPLOYMENT_FILES = ("api/graphic_preview.py", "pyproject.toml", "uv.lock")
 def generate(root=ROOT):
     output = BytesIO()
     files = {}
+    entries = [(name, name) for name in SOURCES] + list(RESOURCES)
+    seen = set()
+    for destination, source in entries:
+        for name in (destination, source):
+            path = PurePosixPath(name)
+            if (not path.parts or path.is_absolute() or ".." in path.parts or "\\" in name
+                    or any(ord(char) < 32 or ord(char) == 127 for char in name)
+                    or str(path) != name):
+                raise ValueError("Unsafe graphic runtime path")
+        if destination in seen:
+            raise ValueError("Duplicate graphic runtime destination")
+        seen.add(destination)
     with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_STORED) as archive:
-        for name in SOURCES:
-            data = (root / name).read_bytes()
+        for name, source in entries:
+            data = (root / source).read_bytes()
             files[name] = sha256(data).hexdigest()
             entry = zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
             entry.create_system = 3
@@ -92,6 +113,7 @@ def generate(root=ROOT):
     identity = {
         "schema_version": 1, "format": "saved-modis-svg-preview-v1",
         "archive_sha256": sha256(packaged).hexdigest(), "files": files,
+        "resource_sources": dict(RESOURCES),
         "policy_source_sha256": source_policy["source_sha256"],
         "deployment_files": {name: sha256((root / "dashboard" / name).read_bytes()).hexdigest()
                              for name in DEPLOYMENT_FILES},
