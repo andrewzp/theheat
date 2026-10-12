@@ -7,9 +7,10 @@ All notable changes to this project will be documented in this file.
 - Join retained sources, one-sample batch or synchronous writing, four required checks and pending-draft admission in the experimental local editor. Preserve original requests, responses and uncertain costs; revalidate original actors and deadlines before saving.
 - Retain complete GHCN scientific evidence while using a compact, exactly bound model view. Keep original source selection semantics, refuse changed baselines and prevent retries from renewing enrollment.
 - Add a full-color MODIS locator and qualified PM2.5 forecast graphics with source/time/units and accessible descriptions. Retain exact numeric evidence and original assets through joint review, current checks, parked approval, edits and restore.
-- Retain one qualified NWS KTLX published radar product with its original colors, labels and legend, a lossless PNG preview, exact source/time binding and required joint review. Refuse expired check grants after database waits; retain historical assets without restoring approval.
+- Retain one qualified NWS KTLX published radar product with its original colors, labels and legend, a lossless PNG preview, exact source/time binding and required joint review. Refuse expired checks and late approvals after database waits or slow processing; retain historical assets without restoring approval.
 - Recover interrupted editor commands and preserve the selected draft. Keep historical graphics readable without restoring obsolete approval; refuse ambiguous evidence and unsupported geometry.
 - Connect local cyclone episodes, attributed report review and coverage references while preserving unresolved claims and missing reference qualification. Exercise delivery and database recovery with invented transports and Free staging data only.
+- Show local writing/check requests, exact reserved allowances and retained token usage in the existing cost card. Keep unknown final charges, incomplete coverage and legacy estimates separate; passive reads survive editing and restore.
 - Keep Gist as production authority and collection, drafting and automatic publishing paused. These local workflows do not activate paid requests, production migration or public delivery; other published charts and broader radar coverage remain separate work.
 
 ## 0.9.108.109 — 2026-10-11

@@ -10,11 +10,12 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/commands/check_execution_journal.py": "519b28ec65739e0ce3d378a0c1f9c50b64e84a4f88c413c0f2668f4110a211ec",
     "src/commands/check_journal.py": "f15f914c762604525a5f4e1b0be47d0536be54ed82dfbf932940a3085a0c8a95",
     "src/commands/media_journal.py": "286d22f43bf37fb0f4fdf640345c06fcf11def6bd6223dc199b5bcee338312f9",
-    "src/commands/postgres_authority.py": "9a2d6856a2eedff569f7eb78504a988c9d8a77fc5875ac5f8f537f2e3d3c2769",
+    "src/commands/postgres_authority.py": "c08b24f3aa291d525df4351157273aab53419d40932eb116e15930c5ab58961a",
     "src/commands/postgres_batch_results.py": "3fc0201e0b2f8f1c9a2670d2d6e94f4bcf9d6e0738c8df8cda55e7469dd7a1a5",
     "src/commands/postgres_candidate_admission.py": "9460c5138e9d27f42afb3fcdf836cd634ebd6739b6b93f9eaec5d9db0895a99e",
     "src/commands/postgres_check_observations.py": "1bc106b92c74b66fa337e1fda3ac41269fa39fac977610a750e03fd27f34e2b2",
     "src/commands/postgres_checks.py": "fbadee0014f56d3d93b19668cbd8e7d9b8e024d011a79a34526719f3f305d557",
+    "src/commands/postgres_cost_projection.py": "bcd6bfd5f2ebbaa72034d26662a275e8212ec469b7c520b8fed585f752d09a52",
     "src/commands/postgres_coverage.py": "edc97725c30d16d980872962a6d7157068727b3de823bd56c4db33fa77a45e31",
     "src/commands/postgres_delivery.py": "f2c7c0cec5340dfcd8fb21f5cbe11caf5d144da77573c9308154271372ea750b",
     "src/commands/postgres_editor_media.py": "6b3285ce32f9008f19b2209648fa634a44a05784ed2435dd0eb5ddbf3e60f879",
@@ -29,8 +30,8 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/commands/postgres_sync_checks.py": "68dc0f7b5262eead1040b52176f4abbe5dd5fb9e9120af9309c667da4458d6f8",
     "src/commands/postgres_synchronous_generation.py": "d74df2ee7a8bb4b3957fde36ff8e198e600e475d4aa594c3c401ec1f731f1ebf",
     "src/commands/preview_delivery_worker.py": "647b901ae031a9f19ff924b8caf87f035172695e22c0319755fa40a45a7f64cd",
-    "src/commands/preview_ingress.py": "33733896b1e8a29109e543627209c6ba114b08497bb242fd6bf480177ef2bb9d",
-    "src/commands/preview_media_worker.py": "b90bb4d2efc68a59d04da95d77ea3605547701f496f5d7f4a1574d380ebb21c9",
+    "src/commands/preview_ingress.py": "52273193ab314d39066629eff997b947f1c24a52e575386231925a2f820d696f",
+    "src/commands/preview_media_worker.py": "a67b9f0a1d061c1dd7fe98b061cd581222ee62bf4b8ec4e5ae1befdd0bc25cdc",
     "src/commands/reducer.py": "6c241112045dd4a9aa66dc81eaa36d7497d7a7c5c3f0d267e73b8c7097baaa8c",
     "src/commands/schema.py": "1bb592febf85e3dc3528a9ffe8ae11fe4c63fd51b7ad5a97a9bd0e17e6fa3bab",
     "src/commands/sqlite_authority.py": "49f9d9a29355eae5e51b55f2f6fa871ad2066106e54059fe32a20a812ad0ef88",
@@ -66,7 +67,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/editorial/draft_admission.py": "1f60fce127c7caa8c1965ce5c7c7e89c7b291a56028604f0d315952c587555ec",
     "src/editorial/marine_evidence.py": "7183f93f1068d75856063cf061a1dea8751bd4dd98cc1f1f34488bcf39296f5c",
     "src/editorial/newsworthiness.py": "2df18f17c51f772b761609bf10dc1c5b7289d2b1f1e2ce6f3f9dd743dbe73236",
-    "src/editorial/policy.py": "a7429cbde1416623e82e36a3213d55671dcb6bbdceabd43f37a01384d2d53c86",
+    "src/editorial/policy.py": "4b71df5ac439835be6d03cb479763bb4b1e1a0da19f25b4d934e72a0229a5a10",
     "src/editorial/report_development.py": "e2ed39a9ff957683c8befff0f3b99533fdc9d90d84af88220ed13f2bf1489995",
     "src/editorial/revisions.py": "c4d6ebed696a1174b0f961eb8e69971b2b5adbaccabab5628d72ed61f662318d",
     "src/editorial/synthesis.py": "c3230d7f91f287550e158548998ed5df778148592c2989cf7155cd2a3182498b",
@@ -157,6 +158,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/two_bot/prompts/writer_prompt.py": "3991cdcc62edd336b6565a173d95ee46c801bf02d8fbd93ae378b660b2530561",
     "src/two_bot/provider_preflight.py": "9a6aa6b4834c04266acdde286a3ccae991a070ab9411a0d56e7b9ab519422021",
     "src/two_bot/rejected_candidate.py": "f15a69f7ac1db8c6d97f487846e6af755575fa2d59aab7a8d89cbd33b2b6e993",
+    "src/two_bot/retained_usage.py": "5741b00e68f41eae62185ada1cd95d2badc1f8fbf1dd0b7f1322bb578a63f238",
     "src/two_bot/scientific_claims.py": "b378a2c571c902e4ac5e36d497af0efecfe748582516bd796e8783a341e6aafb",
     "src/two_bot/source_links.py": "d0cc31547cd714aa7760f7a2ff3659076c4198ce868bf9fa96aa313f98e5e0a0",
     "src/two_bot/sourced_generation.py": "1603b6508156e14dadb0138cfa123c5c8302b09261545cfa0434c585c3bb20f2",
@@ -168,5 +170,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "4a828a22e451889f630e994add6ba38c463d44369d24d2e22c2ff85e7f0387e5"
   },
   "schema_version": 1,
-  "source_sha256": "2360006ef078d39f0c151aa5372a115cd2df04b57a415e96bc6584aea5e4463a"
+  "source_sha256": "03aa2e9998ef0da8bdcb84fb8b60b09c6060bb2e17279d5748273c66c1d31961"
 }
