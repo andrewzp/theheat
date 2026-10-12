@@ -15,7 +15,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/commands/postgres_candidate_admission.py": "9460c5138e9d27f42afb3fcdf836cd634ebd6739b6b93f9eaec5d9db0895a99e",
     "src/commands/postgres_check_observations.py": "1bc106b92c74b66fa337e1fda3ac41269fa39fac977610a750e03fd27f34e2b2",
     "src/commands/postgres_checks.py": "fbadee0014f56d3d93b19668cbd8e7d9b8e024d011a79a34526719f3f305d557",
-    "src/commands/postgres_cost_projection.py": "bcd6bfd5f2ebbaa72034d26662a275e8212ec469b7c520b8fed585f752d09a52",
+    "src/commands/postgres_cost_projection.py": "aed5d7739ede77d35098cac24a2d4068b72074e8b637549b84a057a9d167cea8",
     "src/commands/postgres_coverage.py": "edc97725c30d16d980872962a6d7157068727b3de823bd56c4db33fa77a45e31",
     "src/commands/postgres_delivery.py": "f2c7c0cec5340dfcd8fb21f5cbe11caf5d144da77573c9308154271372ea750b",
     "src/commands/postgres_editor_media.py": "6b3285ce32f9008f19b2209648fa634a44a05784ed2435dd0eb5ddbf3e60f879",
@@ -170,5 +170,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "4a828a22e451889f630e994add6ba38c463d44369d24d2e22c2ff85e7f0387e5"
   },
   "schema_version": 1,
-  "source_sha256": "03aa2e9998ef0da8bdcb84fb8b60b09c6060bb2e17279d5748273c66c1d31961"
+  "source_sha256": "766e09ff223190e3a6a9f5cf56a91f72a80917c56556b9ed967ddaf91cd5c38f"
 }
