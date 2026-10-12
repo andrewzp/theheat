@@ -164,7 +164,15 @@ def test_report_command_uncertainty_keeps_exact_recoverable_intent(report_previe
                 case["authority"].consume(resolver, command_id=command["command_id"])
             assert error.value.code == "authorization_unavailable"
         else:
-            wrap_connections(patch, lost_ack=True)
+            from contextlib import contextmanager
+            connection = p.PostgresProjectionRepository._connection
+            @contextmanager
+            def lost_write_ack(repository, *, writing=False):
+                with connection(repository, writing=writing) as c:
+                    yield c
+                if writing:
+                    raise p.ProjectionError("write_outcome_unknown")
+            patch.setattr(p.PostgresProjectionRepository, "_connection", lost_write_ack)
             with pytest.raises(p.ProjectionError, match="write_outcome_unknown"):
                 case["authority"].consume(operators.resolve, command_id=command["command_id"])
     retained = case["authority"].result(command["command_id"])
