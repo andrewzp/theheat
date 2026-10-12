@@ -738,7 +738,7 @@ def media_history_readback(case,core,cluster,tmp_path,monkeypatch):
         server=PreviewServer(reopened,operators,port=0,origin=ORIGIN)
         thread=threading.Thread(target=server.serve_forever,daemon=True)
         thread.start()
-        record=dict(case,params=core[3],server=server,operators=operators,environment=clean_environment())
+        record=dict(case,params=core[3],server=server,port=server.server_port,operators=operators,environment=clean_environment())
         try:
             with local.context() as guarded:
                 passive_traps(guarded)
