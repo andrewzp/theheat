@@ -24,7 +24,7 @@ export function ReportDetail({ report }) {
       h("p", null, `Still needed: ${(claim.holds || []).map(value => value.replaceAll("_", " ")).join("; ") || "Claim qualification"}`))))
 }
 
-export default function ReportsForReview({ readOnly = false }) {
+export default function ReportsForReview({ readOnly = false, selectedLineage = "", onSelectionConsumed }) {
   const [reports, setReports] = useState([])
   const [selected, setSelected] = useState("")
   const [pending, setPending] = useState(null)
@@ -38,6 +38,12 @@ export default function ReportsForReview({ readOnly = false }) {
     setMessage(data.reports?.length ? "Review a report’s evidence, even when there is no sensor alert." : "No retained reports are configured.")
   }, [])
   useEffect(() => { load().catch(error => setMessage(error.message)) }, [load])
+  useEffect(() => {
+    if (selectedLineage && !busy && !pending && reports.some(row => row.lineage_id === selectedLineage)) {
+      setSelected(selectedLineage)
+      onSelectionConsumed?.()
+    }
+  }, [selectedLineage, reports, busy, pending, onSelectionConsumed])
   const report = reports.find(row => row.lineage_id === selected)
   async function open() {
     if (busy || readOnly || !pending && (!report || report.development_status === "unavailable")) return

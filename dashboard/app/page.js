@@ -1,4 +1,5 @@
 "use client"
+import CoverageEvidence from "./components/CoverageEvidence.js"
 import ReportsForReview from "./components/ReportsForReview.js"
 import SourcedGeneration from "./components/SourcedGeneration.js"
 
@@ -23,6 +24,8 @@ import "./dashboard.css"
 
 export default function Dashboard() {
   const [data, setData] = useState(null)
+  const [coverageReport, setCoverageReport] = useState("")
+  const clearCoverageReport = useCallback(() => setCoverageReport(""), [])
   const [loading, setLoading] = useState(true)
   const [triggering, setTriggering] = useState(null)
   const [triggerResult, setTriggerResult] = useState(null)
@@ -553,7 +556,10 @@ export default function Dashboard() {
         ) : activeTab === "sources" ? (
           <>
             <SourcesView sources={sources} stats={sourcesStats} />
-            {data?.local_preview && <ReportsForReview readOnly={data?.operator_role === "viewer"} />}
+            {data?.local_preview && <>
+              <CoverageEvidence readOnly={data?.operator_role === "viewer"} onOpenReport={setCoverageReport} />
+              <ReportsForReview readOnly={data?.operator_role === "viewer"} selectedLineage={coverageReport} onSelectionConsumed={clearCoverageReport} />
+            </>}
           </>
         ) : activeTab === "health" ? (
           <SourceHealthContent embedded sources={sources} stats={sourcesStats} error={stateError || ""} />

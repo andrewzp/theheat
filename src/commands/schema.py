@@ -17,8 +17,9 @@ MEDIA_ACTIONS = frozenset({"attach_media_revision", "remove_media_revision", "re
 EDITOR_MEDIA_ACTIONS = frozenset({"prepare_media_revision", "request_revision_checks", "approve_media_revision"})
 CANDIDATE_ACTIONS = frozenset({"request_candidate_checks", "admit_checked_candidate"})
 REPORT_ACTIONS = frozenset({"open_report_evidence"})
+COVERAGE_ACTIONS = frozenset({"evaluate_reference_coverage"})
 GENERATION_ACTIONS = frozenset({"request_sourced_generation"})
-ACTIONS = REPORT_ACTIONS | EDITOR_MEDIA_ACTIONS | GENERATION_ACTIONS | CANDIDATE_ACTIONS | MEDIA_ACTIONS | frozenset({"edit_revision", "select_candidate", "record_review", "approve_revision",
+ACTIONS = COVERAGE_ACTIONS | REPORT_ACTIONS | EDITOR_MEDIA_ACTIONS | GENERATION_ACTIONS | CANDIDATE_ACTIONS | MEDIA_ACTIONS | frozenset({"edit_revision", "select_candidate", "record_review", "approve_revision",
                      "schedule_revision", "cancel_approval", "reject_revision", "bulk_reject"})
 _HEX = re.compile(r"[a-f0-9]{64}")
 
@@ -115,6 +116,7 @@ def _validate_payload(action: str, payload: Any, *, allow_legacy_review: bool = 
     if not isinstance(payload, dict):
         raise CommandError("invalid_payload", "Payload must be an object")
     required = {
+        "evaluate_reference_coverage": {"set_id", "expected_set_sha256", "expected_state_version", "expected_policy_sha256"},
         "open_report_evidence": {"lineage_id", "report_sha256", "expected_policy_sha256", "episode_reference"},
         "prepare_media_revision": {"expected_policy_sha256", "expected_renderer_profile_sha256"},
         "request_revision_checks": {"expected_policy_sha256", "expected_renderer_profile_sha256", "expected_packet_sha256", "expected_review_sha256"},
@@ -134,6 +136,13 @@ def _validate_payload(action: str, payload: Any, *, allow_legacy_review: bool = 
         required = {"confirmed", "reason"}  # Retained old intent must receive a terminal refusal, not wedge the journal.
     if set(payload) != required:
         raise CommandError("invalid_payload", "Payload fields do not match the action")
+    if action in COVERAGE_ACTIONS:
+        if not isinstance(payload["set_id"], str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}", payload["set_id"]):
+            raise CommandError("invalid_coverage_identity", "Supply the retained reference-set identity")
+        if not isinstance(payload["expected_set_sha256"], str) or not _HEX.fullmatch(payload["expected_set_sha256"]):
+            raise CommandError("invalid_coverage_identity", "Supply the exact reference-set fingerprint")
+        if type(payload["expected_state_version"]) is not int or not 0 <= payload["expected_state_version"] <= 9007199254740991:
+            raise CommandError("invalid_state_version", "Supply the exact authority version")
     if action in REPORT_ACTIONS:
         if not isinstance(payload["lineage_id"], str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}", payload["lineage_id"]):
             raise CommandError("invalid_report_identity", "Supply the retained report identity")
@@ -237,7 +246,7 @@ class Command:
         if requested > clock + timedelta(minutes=5) or expires <= requested or expires > requested + timedelta(days=1):
             raise CommandError("invalid_time", "Command time window is invalid")
         rows = body["targets"]
-        if not isinstance(rows, list) or (rows != [] if action in CANDIDATE_ACTIONS | GENERATION_ACTIONS | REPORT_ACTIONS else not 1 <= len(rows) <= MAX_TARGETS or (action != "bulk_reject" and len(rows) != 1)):
+        if not isinstance(rows, list) or (rows != [] if action in CANDIDATE_ACTIONS | GENERATION_ACTIONS | REPORT_ACTIONS | COVERAGE_ACTIONS else not 1 <= len(rows) <= MAX_TARGETS or (action != "bulk_reject" and len(rows) != 1)):
             raise CommandError("invalid_targets", "Supply one target, or an explicit bounded set for bulk rejection")
         targets = tuple(DraftTarget.parse(row) for row in rows)
         if len({row.draft_id for row in targets}) != len(targets):
