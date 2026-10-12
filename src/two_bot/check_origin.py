@@ -19,7 +19,7 @@ FIELDS = {"schema_version", "origin_kind", "enrollment_id", "draft_target", "fin
 KEY_FIELDS = {"origin_kind", "draft_target", "state_version", "state_sha256", "source_origin",
               "current_context", "source_useful_until", "provenance_useful_until", "useful_until",
               "renderer_profile_sha256", "media", "check_date"}
-EXECUTABLE = frozenset({"verified_current_formatter", "verified_saved_draft_revision"})
+EXECUTABLE = frozenset({"verified_current_formatter", "verified_saved_draft_revision", "verified_synchronous_writer"})
 
 
 def require(value, code):
@@ -97,6 +97,9 @@ def validate_revision(packet):
 
 
 def packet_verification(packet):
+    if type(packet) is dict and type(packet.get("schema_version")) is int and packet["schema_version"] == 4:
+        from src.two_bot.synchronous_origin import validate
+        return validate(packet)
     if type(packet) is dict and type(packet.get("schema_version")) is int and packet["schema_version"] == 3:
         return validate_revision(packet)
     return candidate.packet_verification(packet)
@@ -105,8 +108,12 @@ def packet_verification(packet):
 def checked_text(packet):
     result = packet_verification(packet)
     require(result in EXECUTABLE, result)
+    if result == "verified_synchronous_writer":
+        return packet["derivation"]["final_text"]
     return packet["final_text"] if result == "verified_saved_draft_revision" else candidate.checked_text(packet)
 
 
 def spending_job(packet):
+    if packet.get("schema_version") == 4:
+        return packet["generation_id"]
     return "draftcheck_" + packet["enrollment_id"] if packet.get("schema_version") == 3 else packet["job_id"]

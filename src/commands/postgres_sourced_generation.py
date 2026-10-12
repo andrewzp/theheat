@@ -34,16 +34,21 @@ def configuration(authority):
     refuse(authority.environment == "local" and callable(load), "sourced_generation_unavailable")
     assert callable(load)
     value = p._decode(p._canonical(load()))
-    refuse(isinstance(value, dict) and set(value) == {"current_inputs", "reservation"}, "generation_configuration_invalid")
+    refuse(isinstance(value, dict) and (set(value) == {"current_inputs", "reservation"} or set(value) == {"schema_version", "current_inputs", "reservations"} and type(value["schema_version"]) is int and value["schema_version"] == 2), "generation_configuration_invalid")
     ids = value["current_inputs"]
     refuse(isinstance(ids, list) and len(ids) <= 16
         and all(isinstance(i, str) and re.fullmatch(r"[a-f0-9]{64}", i) for i in ids)
         and len(set(ids)) == len(ids), "generation_configuration_invalid")
-    reserve = value["reservation"]
-    refuse(isinstance(reserve, dict) and set(reserve) == {"estimate_sha256", "reserve_micro_usd"}, "generation_reservation_invalid")
-    from src.commands.spend_journal import _amount, _sha
-    _amount(reserve["reserve_micro_usd"], positive=True)
-    _sha(reserve["estimate_sha256"])
+    if "reservations" in value:
+        refuse(type(value["reservations"]) is dict and set(value["reservations"]) == {"batch", "synchronous"}, "generation_configuration_invalid")
+    reserves = [value["reservation"]] if "reservation" in value else list(value["reservations"].values())
+    for reserve in reserves:
+        if reserve is None and "reservations" in value:
+            continue
+        refuse(isinstance(reserve, dict) and set(reserve) == {"estimate_sha256", "reserve_micro_usd"}, "generation_reservation_invalid")
+        from src.commands.spend_journal import _amount, _sha
+        _amount(reserve["reserve_micro_usd"], positive=True)
+        _sha(reserve["estimate_sha256"])
     return value
 
 
@@ -93,9 +98,13 @@ def document(value):
 
 def reservation_document(value):
     """An invented local allowance, never a price quote or production grant."""
-    refuse(isinstance(value, dict) and set(value) == RESERVATION_FIELDS
-        and type(value["schema_version"]) is int and value["schema_version"] == 1,
-        "generation_reservation_invalid")
+    sync = isinstance(value, dict) and type(value.get("schema_version")) is int and value["schema_version"] == 2
+    extra = {"execution_mode", "samples", "max_attempts", "read_budget_seconds"} if sync else set()
+    refuse(isinstance(value, dict) and set(value) == RESERVATION_FIELDS | extra
+        and type(value["schema_version"]) is int and value["schema_version"] == (2 if sync else 1), "generation_reservation_invalid")
+    if sync:
+        refuse(value["execution_mode"] == "synchronous" and all(type(value[k]) is int and value[k] == n
+            for k,n in (("samples",1),("max_attempts",1),("read_budget_seconds",180))), "generation_reservation_invalid")
     refuse(value["basis"] == "invented_local_allowance" and value["provider"] == "anthropic"
         and value["role"] == "writer", "generation_reservation_invalid")
     refuse(isinstance(value["model"], str) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,159}", value["model"])
@@ -111,11 +120,12 @@ def reservation_document(value):
     return value
 
 
-def current_reservation(c, reserve, identity, policy, now):
+def current_reservation(c, reserve, identity, policy, now, *, synchronous=False):
+    refuse(type(reserve) is dict, "generation_reservation_missing")
     digest = reserve["estimate_sha256"]
     refuse(exists(c, RESERVATION, digest), "generation_reservation_missing")
     value = reservation_document(read(c, RESERVATION, digest))
-    refuse(p._sha(p._canonical(value)) == digest, "generation_reservation_mismatch")
+    refuse(p._sha(p._canonical(value)) == digest and value["schema_version"] == (2 if synchronous else 1), "generation_reservation_mismatch")
     refuse(value["reserve_micro_usd"] == reserve["reserve_micro_usd"]
         and identity in value["brief_ids"] and value["provider"] == policy["models"]["writer_provider"]
         and value["model"] == policy["models"]["writer"] and value["policy_sha256"] == fingerprint(policy),
@@ -135,11 +145,14 @@ def current(authority, c, identity, policy, now):
         keys.append((item["source_key"], item["save"]["event_id"]))
     refuse(len(set(keys)) == len(keys), "generation_configuration_invalid")
     refuse(utc_datetime(value["captured_at"]) <= now < utc_datetime(value["useful_until"]), "generation_source_expired")
-    refuse(not value["urgent"], "urgent_input_not_batchable")
+    refuse(not value["urgent"] or config.get("schema_version") == 2, "urgent_input_not_batchable")
     refuse(valid_policy(policy) and policy["flags"]["writer_samples"] == 1
         and policy["flags"]["critic_enabled"] and policy["flags"]["safety_llm_enabled"], "generation_policy_unavailable")
     refuse(os.environ.get("THEHEAT_PRODUCTION_PAUSED") != "1", "production_paused")
-    current_reservation(c, config["reservation"], identity, policy, now)
+    reserve = config["reservations"]["synchronous" if value["urgent"] else "batch"] if "reservations" in config else config["reservation"]
+    current_reservation(c, reserve, identity, policy, now, synchronous=value["urgent"])
+    if not value["urgent"] and "reservations" in config:
+        config = dict(current_inputs=config["current_inputs"], reservation=reserve)
     return value, config
 
 
@@ -154,6 +167,9 @@ def prepare(authority, c, state, version, command, actor, *, now, policy, editor
     value, config = current(authority, c, refs["brief_id"], editorial_policy, now)
     bundle = source_bundle(value["bundle"])
     refuse(negative_cache.should_skip(state, value["save"]["event_id"], bundle, now=now) is None, "generation_negative_cache")
+    if value["urgent"]:
+        from src.commands import postgres_synchronous_generation as sync
+        return sync.prepare(c, value, config, state, editorial_policy, now, authority.environment)
     _, _, context, key = plan_identity(value, state, editorial_policy, now=now, epoch=admission.PAUSED_EPOCH)
     job = "gs_"+key
     reused = exists(c, JOB, job)
@@ -306,10 +322,17 @@ def project(authority, c, state, version, policy, now):
             event_id=value["save"]["event_id"], signal_kind=value["bundle"]["signal_kind"],
             where=str(value["bundle"]["where"])[:512], when=str(value["bundle"]["when"])[:512],
             captured_at=value["captured_at"], useful_until=value["useful_until"], expected_state_version=version,
-            expected_policy_sha256=fingerprint(policy), status="ready", job_id=None, writer_usage=None)
+            expected_policy_sha256=fingerprint(policy), status="ready", job_id=None, writer_usage=None,
+            execution_mode="synchronous" if value["urgent"] else "batch")
         try:
             current(authority, c, identity, policy, now)
             _, _, _, key = plan_identity(value, state, policy, now=now, epoch=admission.PAUSED_EPOCH)
+            if value["urgent"]:
+                from src.commands import postgres_synchronous_generation as sync
+                row.update(sync.project(c, "gss_"+key))
+                row["execution_mode"] = "synchronous"
+                rows.append(row)
+                continue
             job_id = "gs_"+key
             if exists(c, JOB, job_id):
                 row["job_id"] = job_id
@@ -320,7 +343,8 @@ def project(authority, c, state, version, policy, now):
                     row["status"] = "candidate_ready"
                 elif exists(c, RESOLUTION, job_id):
                     row["status"] = "terminal"
-        except (CommandError, ValueError):
+        except (CommandError, ValueError) as exc:
+            row["reason"] = exc.code if isinstance(exc, CommandError) else "source_validation_unavailable"
             row["status"] = "expired" if now >= utc_datetime(value["useful_until"]) else "blocked"
         rows.append(row)
     return dict(schema_version=1, enabled=True, disabled_reason=None, briefs=rows)
@@ -329,14 +353,23 @@ def project(authority, c, state, version, policy, now):
 def candidates(authority, c):
     identities = []
     for identity in configuration(authority)["current_inputs"]:
-        rows = c.execute("""SELECT f.snapshot_id FROM theheat_projection.fields f
-            JOIN theheat_projection.artifacts a ON a.sha=f.artifact_sha
-            WHERE f.namespace=%s AND f.name_json=%s AND a.payload=%s
-            ORDER BY f.snapshot_id LIMIT 17""", (JOB, b'"brief_id"', json.dumps(identity).encode())).fetchall()
-        refuse(len(rows) <= 16, "generation_candidate_capacity")
-        for (job_id,) in rows:
-            refuse(read(c, JOB, job_id)["brief_id"] == identity, "generation_input_mismatch")
-            if exists(c, CAPTURE, job_id):
-                identities.append(read(c, CAPTURE, job_id)["admission_input_id"])
-                refuse(len(identities) <= 16, "generation_candidate_capacity")
+        from src.commands import postgres_synchronous_generation as sync
+        for namespace in (JOB, sync.JOB):
+            identities.extend(candidates_for(c, identity, namespace))
+            refuse(len(identities) <= 16, "generation_candidate_capacity")
     return tuple(identities)
+
+
+def candidates_for(c, identity, namespace):
+    identities = []
+    rows = c.execute("""SELECT f.snapshot_id FROM theheat_projection.fields f
+        JOIN theheat_projection.artifacts a ON a.sha=f.artifact_sha
+        WHERE f.namespace=%s AND f.name_json=%s AND a.payload=%s
+        ORDER BY f.snapshot_id LIMIT 17""", (namespace, b'"brief_id"', json.dumps(identity).encode())).fetchall()
+    refuse(len(rows) <= 16, "generation_candidate_capacity")
+    for (job_id,) in rows:
+        refuse(read(c, namespace, job_id)["brief_id"] == identity, "generation_input_mismatch")
+        if exists(c, CAPTURE, job_id):
+            identities.append(read(c, CAPTURE, job_id)["admission_input_id"])
+            refuse(len(identities) <= 16, "generation_candidate_capacity")
+    return identities

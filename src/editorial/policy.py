@@ -60,6 +60,8 @@ POLICY_FILES = (
     "src/editorial/draft_admission.py", "src/orchestrator/dedup.py",
     "src/commands/postgres_candidate_admission.py",
     "src/commands/postgres_sourced_generation.py", "src/two_bot/sourced_generation.py",
+    "src/commands/postgres_synchronous_generation.py", "src/commands/postgres_sync_checks.py",
+    "src/two_bot/synchronous_writer.py", "src/two_bot/synchronous_origin.py", "src/storage/migrations/013_synchronous_checks.sql",
     "src/commands/postgres_revision_checks.py", "src/commands/postgres_editor_media.py",
     "src/commands/preview_media_worker.py", "src/storage/migrations/011_saved_revision_checks.sql",
     "src/commands/submission_recovery.py",

@@ -22,7 +22,8 @@ from src.editorial.policy import valid_policy
 from src.editorial.scoring import EditorialScore
 from src.editorial.revisions import _record_verified_checks_review, fingerprint, text_hash
 from src.storage import postgres_projection as p
-from src.two_bot.candidate_derivation import checked_text, derive_candidate
+from src.two_bot.candidate_derivation import derive_candidate
+from src.two_bot.check_origin import checked_text
 
 NAMESPACE = "candidate-admission-input-v1"
 PAUSED_EPOCH = "local-preview-paused-v1"
@@ -44,7 +45,7 @@ def refuse(condition, code):
 # schema, catalog, role, malformed artifact and hash failures remain uncertain.
 STALE_CODES = {"stale_batch_owner", "batch_lease_expired", "check_result_unavailable",
     "check_candidate_no_longer_current", "changed_checker_calendar_day", "changed_checker_state",
-    "changed_check_context", "formatter_unavailable", "legacy_check_packet"}
+    "changed_check_context", "formatter_unavailable", "legacy_check_packet", "stale_sync_check_owner", "sync_check_expired", "revision_check_lease_busy"}
 DOMAIN_CODES = STALE_CODES | {"batch_lease_busy", "required_checks_disabled", "conflicting_check_candidate"}
 
 
@@ -91,6 +92,9 @@ def _save(value, bundle):
 
 
 def _document(value):
+    if value.get("origin_kind") == "synchronous_writer_v1":
+        from src.commands.postgres_synchronous_generation import input_document
+        return input_document(value)
     refuse(isinstance(value, dict) and set(value) == INPUT_FIELDS and type(value["schema_version"]) is int and value["schema_version"] == 1, "invalid_admission_inputs")
     refuse(type(value["state_version"]) is int and 0 <= value["state_version"] <= p.MAX_INTEGER, "invalid_admission_inputs")
     for key in ("candidate_id", "receipt_id", "plan_sha256", "state_sha256"):
@@ -102,8 +106,19 @@ def _document(value):
     return raw
 
 
+def identity_for(value):
+    if value.get("origin_kind") == "synchronous_writer_v1":
+        from src.commands.postgres_synchronous_generation import input_id as sync_id
+        return sync_id(value)
+    return input_id(value["job_id"], value["custom_id"], value["candidate_id"])
+
+
+def reference_fields(value):
+    return ("origin_kind", "generation_id", "candidate_id") if value.get("origin_kind") == "synchronous_writer_v1" else ("job_id", "custom_id", "candidate_id")
+
+
 def read_input(c, references):
-    identity = input_id(references["job_id"], references["custom_id"], references["candidate_id"])
+    identity = identity_for(references)
     refuse(identity == references["admission_input_id"], "candidate_input_mismatch")
     found = c.execute("SELECT byte_count FROM theheat_projection.versions WHERE namespace=%s AND snapshot_id=%s", (NAMESPACE, identity)).fetchone()
     refuse(found is not None, "candidate_input_not_found")
@@ -115,7 +130,7 @@ def read_input(c, references):
         raise p.ProjectionError("corrupt_admission_inputs") from None
     p._require(p._sha(raw) == receipt.canonical_sha256, "corrupt_admission_inputs")
     refuse(receipt.canonical_sha256 == references["admission_input_sha256"], "candidate_input_mismatch")
-    refuse(all(value[k] == references[k] for k in ("job_id", "custom_id", "candidate_id")), "candidate_input_mismatch")
+    refuse(all(value[k] == references[k] for k in reference_fields(value)), "candidate_input_mismatch")
     return value
 
 
@@ -135,6 +150,9 @@ def _current(value, version, state, policy, now):
 
 
 def _review(c, value, owner, fence, at, environment):
+    if value.get("origin_kind") == "synchronous_writer_v1":
+        from src.commands.postgres_synchronous_generation import verify_candidate
+        return verify_candidate(c, value)
     report = results.evaluate(c, {"job_id": value["job_id"], "owner": owner, "fence": fence,
         "receipt_id": value["receipt_id"], "current_context": value["current_context"]}, now=at, environment=environment)
     row = next((r for r in report["report"]["rows"] if r["custom_id"] == value["custom_id"]), None)
@@ -164,7 +182,7 @@ def capture(c, payload, *, version, state, policy, now, environment):
     _, field_bytes = p._snapshot(value)
     receipt = p.PostgresProjectionRepository._record(c, NAMESPACE, identity, raw, field_bytes)
     return {"admission_input_id": identity, "admission_input_sha256": receipt.canonical_sha256,
-            **{k: value[k] for k in ("job_id", "custom_id", "candidate_id")},
+            **{k: value[k] for k in reference_fields(value)},
             "expected_state_version": version, "expected_policy_sha256": context["policy_sha256"]}
 
 
@@ -177,7 +195,7 @@ def request_for(authority, c, value):
       JOIN theheat_commands.results r USING(command_id)
       WHERE convert_from(i.command_bytes,'UTF8')::jsonb->>'action'='request_candidate_checks'
         AND convert_from(i.command_bytes,'UTF8')::jsonb->'payload'->>'admission_input_id'=%s
-      ORDER BY i.sequence LIMIT 17""", (input_id(value["job_id"], value["custom_id"], value["candidate_id"]),)).fetchall()
+      ORDER BY i.sequence LIMIT 17""", (identity_for(value),)).fetchall()
     p._require(len(rows) <= 16, "candidate_request_capacity")
     for (identity,) in rows:
         command, _ = authority._intent(c, identity)
@@ -190,7 +208,9 @@ def request_for(authority, c, value):
 def verified_completion(c, identity, value, *, owner, fence, state, policy, now, environment):
     observations.validate(c, environment)
     packet, enrolled = pg._packet(c, identity, environment)
-    refuse(packet["schema_version"] == 2 and all(packet[k] == value[k] for k in ("job_id", "custom_id", "candidate_id", "plan_sha256")), "check_candidate_mismatch")
+    sync = value.get("origin_kind") == "synchronous_writer_v1"
+    fields = ("origin_kind", "generation_id", "grant_id", "observation_sha256", "resolution_sha256", "request_sha256", "candidate_id") if sync else ("job_id", "custom_id", "candidate_id", "plan_sha256")
+    refuse(packet["schema_version"] == (4 if sync else 2) and all(packet[k] == value[k] for k in fields), "check_candidate_mismatch")
     refuse(p._canonical(packet["bundle"]) == p._canonical(value["bundle"]) and p._canonical(packet["memory"]) == p._canonical(value["memory"]), "check_input_bytes_changed")
     derivation = derive_candidate(packet["candidate"], value["candidate_id"], value["bundle"], policy)
     refuse(p._canonical(derivation) == p._canonical(packet["derivation"]), "check_derivation_changed")
@@ -211,8 +231,8 @@ class Transition:
     references: dict
 
 
-def prepare(authority, c, state, version, command, actor, *, now, policy, editorial_policy):
-    refuse(actor.subject == command.actor_subject, "forbidden")
+def prepare(authority, c, state, version, command, actor, *, now, policy, editorial_policy, resolve_principal=None):
+    refuse(actor.subject == command.actor_subject and actor.authentication_context == command.authentication_context, "forbidden")
     authorize(actor, command.action)
     refuse(now < utc_datetime(command.expires_at), "command_expired")
     refuse(not policy.enabled, "candidate_publication_must_be_paused")
@@ -238,8 +258,15 @@ def prepare(authority, c, state, version, command, actor, *, now, policy, editor
     refuse(refs["expected_state_version"] == version, "candidate_state_conflict")
     _current(value, version, state, editorial_policy, now)
     owner = owner_for(prior[0] if prior else command)
-    leased = worker.apply(c, "acquire", dict(job_id=value["job_id"], owner=owner, ttl_seconds=300), now=utc_text(now), environment=authority.environment)
-    fence = leased["lease"]["fence"]
+    sync = value.get("origin_kind") == "synchronous_writer_v1"
+    if sync:
+        from src.commands import postgres_synchronous_generation as synchronous, postgres_revision_checks as revisions
+        synchronous.current_candidate(authority, c, value, state, editorial_policy, now, resolve_principal)
+        fence = revisions.acquire(c, prior[1]["check_set_id"], owner, 300, now=utc_text(now), environment=authority.environment,
+            origin_kind="synchronous_writer_v1")["lease"]["fence"] if prior else None
+    else:
+        leased = worker.apply(c, "acquire", dict(job_id=value["job_id"], owner=owner, ttl_seconds=300), now=utc_text(now), environment=authority.environment)
+        fence = leased["lease"]["fence"]
     row = _review(c, value, owner, fence, utc_text(now), authority.environment)
     derivation = derive_candidate(row["candidate"], value["candidate_id"], value["bundle"], editorial_policy)
     # Same deterministic preflight before request and after checks.
@@ -263,7 +290,12 @@ def prepare(authority, c, state, version, command, actor, *, now, policy, editor
     refuse(plan.draft is not None, plan.reason or "candidate_admission_refused")
     common = dict(publication_approved=False, accounting_complete=False, cost_usd=None)
     if command.action == "request_candidate_checks":
-        result = pg.apply(c, "intake", dict(job_id=value["job_id"], owner=owner, fence=fence, receipt_id=value["receipt_id"],
+        if sync:
+            from src.commands.postgres_sync_checks import enroll
+            result = enroll(c, value, refs, row, state, version, editorial_policy, now=now, environment=authority.environment)
+            revisions.acquire(c, result["check_set_id"], owner, 300, now=utc_text(now), environment=authority.environment, origin_kind="synchronous_writer_v1")
+        else:
+            result = pg.apply(c, "intake", dict(job_id=value["job_id"], owner=owner, fence=fence, receipt_id=value["receipt_id"],
             current_context=value["current_context"], custom_id=value["custom_id"], bundle=value["bundle"], memory=value["memory"], checker_state=state),
             now=utc_text(now), environment=authority.environment)
         return Transition(Reduction(state, (), ()), dict(common, outcome="checks_requested", check_set_id=result["check_set_id"]))
@@ -290,6 +322,10 @@ def _source_summary(value):
 
 
 def _retained_text(c, value, *, policy, now, environment):
+    if value.get("origin_kind") == "synchronous_writer_v1":
+        from src.commands.postgres_synchronous_generation import verify_candidate
+        row = verify_candidate(c, value)
+        return derive_candidate(row["candidate"], value["candidate_id"], value["bundle"], policy)["final_text"]
     # Display only: use the existing decoder and immutable input receipt, without
     # taking a lease or certifying readiness. Intake repeats its authoritative
     # chosen-result/context/lease checks under the command lock.
@@ -308,7 +344,7 @@ def _retained_text(c, value, *, policy, now, environment):
     return derive_candidate(row["candidate"], identity, value["bundle"], policy)["final_text"]
 
 
-def project(authority, c, allowed, *, version, state, policy, now):
+def project(authority, c, allowed, *, version, state, policy, now, resolve_principal=None):
     """Read-only and explicitly allowlisted; no lease acquisition or check run."""
     refuse(isinstance(allowed, (list, tuple)) and len(allowed) <= 16 and len(set(allowed)) == len(allowed), "candidate_list_bound")
     output = []
@@ -316,7 +352,7 @@ def project(authority, c, allowed, *, version, state, policy, now):
         refuse(isinstance(identity, str) and re.fullmatch(r"[a-f0-9]{64}", identity), "invalid_candidate_allowlist")
         receipt, value = p.PostgresProjectionRepository._read(c, NAMESPACE, identity)
         refs = {"admission_input_id": identity, "admission_input_sha256": receipt.canonical_sha256,
-            **{k: value[k] for k in ("job_id", "custom_id", "candidate_id")},
+            **{k: value[k] for k in reference_fields(value)},
             "expected_state_version": version, "expected_policy_sha256": fingerprint(policy)}
         read_input(c, refs)
         row = dict(refs, status="not_checked", stages=dict.fromkeys(checks.STAGES, "pending"),
@@ -348,8 +384,15 @@ def project(authority, c, allowed, *, version, state, policy, now):
                     row["last_completed_at"] = max((t["completed_at"] for t in row["stage_times"].values() if t["completed_at"]), default=None)
                     row["status"] = "checks_pending" if all(v in ("pending", "passed") for v in stages.values()) else "checks_blocked"
                 _current(value, version, state, policy, now)
+                if value.get("origin_kind") == "synchronous_writer_v1":
+                    from src.commands.postgres_synchronous_generation import current_candidate
+                    current_candidate(authority, c, value, state, policy, now, resolve_principal)
                 if prior:
-                    lease = worker.apply(c, "status", {"job_id": value["job_id"]}, now=utc_text(now), environment=authority.environment)["lease"]
+                    if value.get("origin_kind") == "synchronous_writer_v1":
+                        saved_lease = c.execute("SELECT fence FROM theheat_checks.draft_leases WHERE check_set_id=%s ORDER BY fence DESC LIMIT 1", (identity,)).fetchone()
+                        lease = dict(fence=saved_lease[0]) if saved_lease else dict(fence=0)
+                    else:
+                        lease = worker.apply(c, "status", {"job_id": value["job_id"]}, now=utc_text(now), environment=authority.environment)["lease"]
                     pg._current(c, packet, {"owner": owner_for(command), "fence": lease["fence"],
                         "current_context": context_for(value, policy), "checker_state_sha256": fingerprint(state)}, utc_text(now), authority.environment)
                     if all(v == "passed" for v in stages.values()):
@@ -365,7 +408,7 @@ def project(authority, c, allowed, *, version, state, policy, now):
         draft_id = "draft_" + str(uuid5(NAMESPACE_URL, authority.environment + ":" + value["candidate_id"]))
         if any(d.get("id") == draft_id for d in state.get("drafts", [])):
             row.update(status="admitted", saved_draft_id=draft_id, required_checks_completed=False)
-        if row["status"] == "not_checked":
+        if row["status"] == "not_checked" and value.get("origin_kind") != "synchronous_writer_v1":
             # Result retention precedes expiry of the producer's existing lease.
             # This is availability only; intake still acquires its own fenced lease.
             batch_state = worker.apply(c, "status", {"job_id": value["job_id"]}, now=utc_text(now), environment=authority.environment)
@@ -387,9 +430,12 @@ def runner_context(authority, c, command_id, resolve, *, version, state, policy,
         actor = resolve(command.actor_subject)
     except Exception:
         raise CommandError("authorization_unavailable", "Current operator authorization is unavailable") from None
-    refuse(actor is not None and actor.subject == command.actor_subject, "forbidden")
+    refuse(actor is not None and actor.subject == command.actor_subject and actor.authentication_context == command.authentication_context, "forbidden")
     authorize(actor, command.action)
     refuse(now < utc_datetime(command.expires_at), "command_expired")
     value = read_input(c, command.payload)
     _current(value, version, state, policy, now)
+    if value.get("origin_kind") == "synchronous_writer_v1":
+        from src.commands.postgres_synchronous_generation import current_candidate
+        current_candidate(authority, c, value, state, policy, now, resolve)
     return command, value, result["candidate"]["check_set_id"]

@@ -43,8 +43,8 @@ def observation_metadata(c, environment, roles):
 
 
 def validate_catalog(c, original, environment, roles):
-    rows = c.execute("SELECT upgrade_version,receipt_bytes,byte_count,sha FROM theheat_checks.schema_upgrades LIMIT 2").fetchall()
-    checks._require(len(rows) == 1, "revision_check_upgrade_receipt_required")
+    rows = c.execute("SELECT upgrade_version,receipt_bytes,byte_count,sha FROM theheat_checks.schema_upgrades ORDER BY upgrade_version LIMIT 3").fetchall()
+    checks._require(len(rows) in (1, 2), "revision_check_upgrade_receipt_required")
     version, raw, size, digest = rows[0]
     checks._require(type(version) is int and version == 2 and type(raw) is bytes
                     and type(size) is int and 0 < size == len(raw) <= 16384 and p._sha(raw) == digest,
@@ -56,12 +56,16 @@ def validate_catalog(c, original, environment, roles):
                     and type(value["to_catalog_version"]) is int and value["to_catalog_version"] == 2,
                     "unsupported_revision_check_upgrade")
     observed = observation_metadata(c, environment, roles)
+    catalog = p._catalog(c, "theheat_checks")
+    if len(rows) == 2:
+        from src.commands.postgres_sync_checks import validate_chain
+        catalog = validate_chain(c, rows, original, observed, environment, roles)
     checks._require(value["upgrade_migration_sha256"] == p._sha(MIGRATION.read_bytes())
                     and p._canonical(value["checks_metadata"]) == p._canonical(original)
                     and p._canonical(value["observations_metadata"]) == p._canonical(observed)
                     and value["prior_checks_catalog_sha256"] == original["catalog_sha"]
                     and value["observations_catalog_sha256"] == observed["catalog_sha"]
-                    and value["current_checks_catalog_sha256"] == p._catalog(c, "theheat_checks")
+                    and value["current_checks_catalog_sha256"] == catalog
                     and value["environment"] == environment
                     and (value["owner_role"], value["runtime_role"]) == roles
                     and spend._time(value["installed_at"]) == value["installed_at"], "changed_revision_check_upgrade")
@@ -115,12 +119,12 @@ def historical_lease(c, identity, fence):
                      (identity, fence)).fetchone()
 
 
-def acquire(c, identity, owner, ttl_seconds, *, now, environment):
+def acquire(c, identity, owner, ttl_seconds, *, now, environment, origin_kind=origin.ORIGIN):
     from src.commands import postgres_checks as pg
     pg.validate(c, environment)
     checks._require(upgraded(c), "revision_check_migration_required")
     value, _ = pg._packet(c, identity, environment)
-    checks._require(value.get("origin_kind") == origin.ORIGIN, "revision_check_origin_required")
+    checks._require(origin_kind in (origin.ORIGIN, "synchronous_writer_v1") and value.get("origin_kind") == origin_kind, "revision_check_origin_required")
     from src.commands.spend_journal import _id
     _id(owner)
     checks._require(len(owner) <= 128 and type(ttl_seconds) is int and 1 <= ttl_seconds <= 300, "invalid_revision_check_lease")
@@ -134,14 +138,17 @@ def acquire(c, identity, owner, ttl_seconds, *, now, environment):
     deadline = min(utc_datetime(at) + timedelta(seconds=ttl_seconds), utc_datetime(value["useful_until"]))
     checks._require((deadline - utc_datetime(at)).total_seconds() >= 1, "revision_check_expired")
     expires = spend._time(deadline.isoformat().replace("+00:00", "Z"))
-    c.execute("INSERT INTO theheat_checks.draft_leases(check_set_id,fence,owner,expires_at,recorded_at) VALUES(%s,%s,%s,%s,%s)",
-              (identity, fence, owner, expires, at))
+    c.execute("INSERT INTO theheat_checks.draft_leases(check_set_id,fence,owner,expires_at,recorded_at,origin_kind) VALUES(%s,%s,%s,%s,%s,%s)",
+              (identity, fence, owner, expires, at, origin_kind))
     return dict(lease=dict(fence=fence, owner=owner, recorded_at=at, expires_at=expires))
 
 
 def retain_source(c, draft, command, refs, value, *, environment):
     """Bind a successful P25/I2 admission; never manufacture legacy provenance."""
     from src.commands import postgres_sourced_generation as generation, postgres_batch as batch
+    if value.get("origin_kind") == "synchronous_writer_v1":
+        from src.commands.postgres_synchronous_generation import retain_source as sync_retain
+        return sync_retain(c, draft, command, refs, value)
     if not generation.exists(c, generation.JOB, value["job_id"]):
         return
     job = generation.read(c, generation.JOB, value["job_id"])
@@ -165,6 +172,9 @@ def source(c, draft):
     from src.commands.postgres_authority import _command, _decode
     identity = fingerprint({"draft_id": draft["id"]})
     receipt, value = p.PostgresProjectionRepository._read(c, origin.SOURCE_NAMESPACE, identity)
+    if value.get("origin_kind") == "synchronous_writer_v1":
+        from src.commands.postgres_synchronous_generation import source as sync_source
+        return sync_source(c, draft, identity, receipt, value)
     expected = {"schema_version", "draft_id", "event_id", "admission_command_id", "admission_input_id",
                 "admission_input_sha256", "job_id", "brief_id", "plan_sha256", "bundle_sha256", "memory_sha256",
                 "source_useful_until", "provenance_useful_until"}

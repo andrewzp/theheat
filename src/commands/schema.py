@@ -134,6 +134,8 @@ def _validate_payload(action: str, payload: Any, *, allow_legacy_review: bool = 
         "request_candidate_checks": {"admission_input_id", "admission_input_sha256", "job_id", "custom_id", "candidate_id", "expected_state_version", "expected_policy_sha256"},
         "admit_checked_candidate": {"admission_input_id", "admission_input_sha256", "job_id", "custom_id", "candidate_id", "expected_state_version", "expected_policy_sha256", "check_set_id", "expected_completion_sha256"},
     }[action]
+    if action in CANDIDATE_ACTIONS and payload.get("origin_kind") == "synchronous_writer_v1":
+        required = (required - {"job_id", "custom_id"}) | {"origin_kind", "generation_id"}
     if action == "record_review" and allow_legacy_review and set(payload) == {"confirmed", "reason"}:
         required = {"confirmed", "reason"}  # Retained old intent must receive a terminal refusal, not wedge the journal.
     if set(payload) != required:
@@ -183,7 +185,9 @@ def _validate_payload(action: str, payload: Any, *, allow_legacy_review: bool = 
         for key in ("admission_input_id", "admission_input_sha256", "candidate_id", "check_set_id", "expected_completion_sha256"):
             if key in payload and (not isinstance(payload[key], str) or not _HEX.fullmatch(payload[key])):
                 raise CommandError("invalid_candidate_identity", "Supply exact retained candidate identities")
-        for key in ("job_id", "custom_id"):
+        if payload.get("origin_kind") == "synchronous_writer_v1" and (not isinstance(payload["generation_id"], str) or not re.fullmatch(r"gss_[0-9a-f]{64}", payload["generation_id"])):
+            raise CommandError("invalid_candidate_identity", "Supply the exact synchronous generation identity")
+        for key in (() if "origin_kind" in payload else ("job_id", "custom_id")):
             if not isinstance(payload[key], str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}", payload[key]):
                 raise CommandError("invalid_candidate_identity", "Supply bounded retained candidate identifiers")
         if type(payload["expected_state_version"]) is not int or not 0 <= payload["expected_state_version"] <= 9007199254740991:

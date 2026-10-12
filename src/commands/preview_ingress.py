@@ -231,7 +231,7 @@ class PreviewHandler(BaseHTTPRequestHandler):
                 version, state = self.server.authority.read()
                 self.reply(200, {"state_version": version, "state": state,
                                  "editorial_policy": current_editorial_policy(), "role": actor.role, "operator_subject": actor.subject,
-                                 "candidates": self.server.authority.candidate_projection(self.server.candidate_inputs + self.server.authority.generated_candidate_inputs(), now=datetime.now(UTC)),
+                                 "candidates": self.server.authority.candidate_projection(self.server.candidate_inputs + self.server.authority.generated_candidate_inputs(), now=datetime.now(UTC), resolve_principal=self.server.operators.resolve),
                                  "local_preview": True, "publication_enabled": False})
                 return
             if self.command == "GET" and re.fullmatch(r"/source-runs/[a-f0-9-]{36}", self.path):
@@ -256,6 +256,16 @@ class PreviewHandler(BaseHTTPRequestHandler):
                     authority._validate(connection)
                     intent = authority._intent(connection, command_id)
                     result = authority._result(connection, command_id)
+                    writer_status = None
+                    if (intent is not None and intent[0].action == "request_sourced_generation"
+                        and intent[0].actor_subject == actor.subject and intent[0].authentication_context == actor.authentication_context
+                        and actor.role != "viewer" and result is not None and result.get("status") == "applied"
+                        and result.get("generation", {}).get("execution_mode") == "synchronous"):
+                        from src.commands import postgres_synchronous_generation as sync_generation
+                        # Passive, bounded status survives source removal. It
+                        # neither reauthorizes work nor returns raw artifacts.
+                        writer_status = dict(sync_generation.project(connection, result["generation"]["generation_id"]),
+                            historical=True, publication_approved=False)
                 if intent is None:
                     self.reply(404, {"error": "Command has not been durably accepted", "code": "command_not_found"})
                     return
@@ -269,7 +279,7 @@ class PreviewHandler(BaseHTTPRequestHandler):
                     stored = intent[0].as_dict()
                     recovered = {key:stored[key] for key in ("command_id", "action", "requested_at", "expires_at", "targets", "payload")}
                 self.reply(200, {"status": "completed" if result else "pending", "result": result, "recoverable_command":recovered,
-                                 "submission_reference":submission_reference,
+                                 "submission_reference":submission_reference, "writer_status":writer_status,
                                  "receipt": intent[1],
                                  "local_preview": True, "publication_enabled": False})
                 return

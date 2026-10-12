@@ -18,7 +18,7 @@ export function WriterUsage({ usage }) {
     h("p", { className: "runtime-note" }, "Reported tokens are not a final bill. The request’s budget remains tracked separately."))
 }
 
-export default function SourcedGeneration({ onRefresh, readOnly = false }) {
+export default function SourcedGeneration({ onRefresh, readOnly = false, onRequest, pendingAction = false }) {
   const [briefs, setBriefs] = useState([])
   const [selected, setSelected] = useState("")
   const [pending, setPending] = useState(null)
@@ -35,7 +35,8 @@ export default function SourcedGeneration({ onRefresh, readOnly = false }) {
   const brief = briefs.find((item) => item.brief_id === selected)
 
   async function start() {
-    if (busy || readOnly || !brief && !pending) return
+    if (busy || readOnly || pendingAction || !brief && !pending) return
+    if (onRequest) return onRequest(generationCommand(brief))
     const body = pending || generationCommand(brief)
     setPending(body)
     setBusy(true)
@@ -78,14 +79,16 @@ export default function SourcedGeneration({ onRefresh, readOnly = false }) {
     h("h2", { id: "sourced-generation-title" }, "Write from retained evidence"),
     h("p", { className: "runtime-note" }, "One draft per source brief. Required checks run before it enters the workbench. Publishing remains off; retained usage is not a final bill."),
     h("label", { htmlFor: "generation-brief" }, "Source brief"),
-    h("select", { id: "generation-brief", value: selected, onChange: e => setSelected(e.target.value), disabled: busy || !!pending,
+    h("select", { id: "generation-brief", value: selected, onChange: e => setSelected(e.target.value), disabled: busy || !!pending || pendingAction,
       style: { minHeight: 44, maxWidth: "100%", width: "100%" } },
       h("option", { value: "" }, "Choose retained evidence"),
       ...briefs.map(item => h("option", { key: item.brief_id, value: item.brief_id }, `${item.where} · ${item.signal_kind} · ${item.status}`))),
     brief && h("p", null, `${brief.source_key} · ${brief.when} · ${brief.status.replaceAll("_", " ")}`),
+    brief && h("p", null, `${brief.execution_mode === "synchronous" ? "Urgent · one synchronous draft" : "Routine · one batch draft"}. Evidence expires ${brief.useful_until}.`),
+    brief?.reason && h("p", { className: "runtime-note" }, `Held: ${brief.reason.replaceAll("_", " ")}. No automatic retry.`),
     brief && h(WriterUsage, { usage: brief.writer_usage }),
     h("div", { className: "preview-actions" },
-      h("button", { type: "button", className: "btn", style: { minHeight: 44 }, disabled: busy || readOnly || !pending && (!brief || brief.status !== "ready"), onClick: start }, pending ? "Retry same request" : "Request draft"),
+      h("button", { type: "button", className: "btn", style: { minHeight: 44 }, disabled: busy || readOnly || pendingAction || !pending && (!brief || brief.status !== "ready"), onClick: start }, pending ? "Retry same request" : "Request draft"),
       h("button", { type: "button", className: "btn", style: { minHeight: 44 }, disabled: busy, onClick: refresh }, "Check progress")),
     h("p", { role: "status", "aria-live": "polite" }, message))
 }

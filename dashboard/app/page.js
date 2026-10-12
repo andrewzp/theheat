@@ -18,7 +18,7 @@ import { COST_SCENARIO } from "../lib/usage-cost-contract.js"
 import { SuppressedView } from "./components/SuppressedView.js"
 import { hot10IsStale, hot10StaleDays, timeAgo, todayTweetCount } from "../lib/format.js"
 import { draftReviewControls, draftTextLength, revisionKey } from "../lib/draft-review-ui.js"
-import { createDraftCommand, createCandidateCommand } from "../lib/draft-command-request.js"
+import { createDraftCommand, createCandidateCommand, localCommandEndpoint } from "../lib/draft-command-request.js"
 import { recoveryKey, saveCommandReference, readCommandReference, clearCommandReference, withCommandReference, abandonmentBody } from "../lib/local-command-recovery.js"
 import "./dashboard.css"
 
@@ -235,7 +235,7 @@ export default function Dashboard() {
       pendingCommandRef.current = saved
       setPendingCommand(saved)
       sent = true
-      const response = await fetch("/api/drafts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(saved.command) })
+      const response = await fetch(localCommandEndpoint(saved.command), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(saved.command) })
       const result = await response.json()
       if (scope !== recoveryScope.current || pendingCommandRef.current?.command.command_id !== saved.command.command_id) return
       if (!response.ok) {
@@ -291,6 +291,7 @@ export default function Dashboard() {
         text: abandoned ? "The previous submission was never accepted and is now closed. Nothing was changed."
           : rejected ? `${result.message} Your edit is preserved.`
           : result.publish_intent_id ? "Approved locally. The intent is parked; nothing will be published."
+          : saved.action === "request_sourced_generation" ? `Writer status: ${(payload.writer_status?.status || "queued").replaceAll("_", " ")}. Required checks still gate admission; final charge remains unknown.`
           : saved.action === "review" ? "Human review recorded for this exact version."
           : saved.action === "edit" ? "Saved. Review this version against its sources before approval." : "Local command completed." })
       if (!rejected && result.candidate?.draft_id) setSelectedDraftId(result.candidate.draft_id)
@@ -360,6 +361,7 @@ export default function Dashboard() {
   }
 
   function startEditing(draft) {
+    setSelectedDraftId(draft.id)
     setEditingId(draft.id)
     setEditText(draft.text)
     setEditingRevision(draft.revision_identity)
@@ -684,7 +686,8 @@ export default function Dashboard() {
               </div>
             </div>
 
-            <SourcedGeneration onRefresh={fetchData} readOnly={data?.operator_role === "viewer"} />
+            <SourcedGeneration key={data?.operator_subject || "unavailable"} onRefresh={fetchData} readOnly={data?.operator_role === "viewer"}
+              pendingAction={!!pendingCommand} onRequest={data?.local_preview ? command => submitLocalCommand({ command, draftId:command.payload.brief_id, action:"request_sourced_generation" }) : undefined} />
 
             {/* Stats */}
             <div className="grid">

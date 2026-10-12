@@ -101,12 +101,18 @@ def _review(c, payload, at, environment):
 def _packet(c, identity, environment):
     s._sha(identity)
     from src.commands import postgres_revision_checks as revisions
+    from src.commands import postgres_sync_checks as sync
     extra = ",origin_kind,draft_namespace,draft_enrollment_id" if revisions.upgraded(c) else ""
+    if sync.upgraded(c):
+        extra += ",sync_namespace,sync_enrollment_id"
     row = c.execute(f"SELECT job_id,custom_id,packet_sha256,recorded_at{extra} FROM {SCHEMA}.sets WHERE check_set_id=%s", (identity,)).fetchone()
     checks._require(row is not None, "check_set_not_found")
     job, custom, digest, at = row[:4]
     packet = _document(c, "packet_artifacts", digest)
-    if len(row) == 7 and row[4] == check_origin.ORIGIN:
+    if len(row) == 9 and row[4] == "synchronous_writer_v1":
+        return sync.packet(c, identity, row, _raw(c, "packet_artifacts", digest))
+    checks._require(len(row) != 9 or row[7] is row[8] is None, "changed_check_origin")
+    if len(row) >= 7 and row[4] == check_origin.ORIGIN:
         return revisions.packet(c, identity, row, _raw(c, "packet_artifacts", digest))
     checks._require(len(row) == 4 or (row[4] == "batch_candidate" and row[5] is row[6] is None), "changed_check_origin")
     checks._shape(packet, checks._PACKET_FIELDS | ({"derivation", "derivation_id"} if packet.get("schema_version") == 2 else set()))
@@ -135,6 +141,9 @@ def _packet(c, identity, environment):
 
 
 def _current(c, packet, payload, at, environment):
+    if packet.get("schema_version") == 4:
+        from src.commands.postgres_sync_checks import current
+        return current(c, packet, payload, at, environment)
     if packet.get("schema_version") == 3:
         from src.commands.postgres_revision_checks import current
         return current(c, packet, payload, at, environment)
@@ -174,7 +183,7 @@ def _attempt(c, identity, stage, packet, enrolled_at):
                     and enrolled_at <= at < spend._time(packet["useful_until"])
                     and at[:10] == packet["check_date"] and type(binding["fence"]) is int, "changed_check_attempt")
     _raw(c, "request_artifacts", request_sha)
-    if packet.get("schema_version") == 3:
+    if packet.get("schema_version") in (3, 4):
         from src.commands.postgres_revision_checks import historical_lease
         lease = historical_lease(c, identity, binding["fence"])
     else:

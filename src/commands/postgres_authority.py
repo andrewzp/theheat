@@ -253,8 +253,8 @@ class PostgresCommandAuthority:
             self._pointer(c, lock=True)
             postgres_checks.validate(c, self.environment)
             packet, _ = postgres_checks._packet(c, check_set_id, self.environment)
-            if packet.get("schema_version") == 3:
-                result = revisions.acquire(c, check_set_id, owner, ttl_seconds, now=now, environment=self.environment)
+            if packet.get("schema_version") in (3, 4):
+                result = revisions.acquire(c, check_set_id, owner, ttl_seconds, now=now, environment=self.environment, origin_kind=packet["origin_kind"])
             else:
                 result = postgres_batch_worker.apply(c, "acquire", dict(job_id=packet["job_id"], owner=owner,
                     ttl_seconds=ttl_seconds), now=now, environment=self.environment)
@@ -388,6 +388,13 @@ class PostgresCommandAuthority:
         from src.commands import postgres_report_development as reports
         return reports.projection(self, now=_clock(now))
 
+    def initialize_synchronous_checks(self, *, now: datetime) -> None:
+        from src.commands import postgres_sync_checks as sync
+        with self.projections._connection(writing=True) as c:
+            self._validate(c, runtime=False)
+            self._pointer(c, lock=True)
+            sync.install(c, self.environment, now=utc_text(_clock(now)))
+
     def configure_sourced_generation(self, load_configuration) -> None:
         """Explicit local adapter input; no ambient backend selection."""
         from src.commands import postgres_sourced_generation as generation
@@ -445,6 +452,12 @@ class PostgresCommandAuthority:
         generation.refuse(type(refresh) is bool, "generation_refresh_requires_boolean")
         if not enabled:
             return dict(outcome="disabled", publication_approved=False)
+        with self.projections._connection() as c:
+            self._validate(c)
+            accepted = self._result(c, _id(command_id))
+        if accepted and accepted.get("generation", {}).get("execution_mode") == "synchronous":
+            from src.commands.postgres_synchronous_generation import execute
+            return execute(self, command_id, resolve_principal, operation=operation, clock=clock, transport_factory=transport_factory)
         generation.refuse(operation in {"submit", "collect", "capture"}, "generation_operation_refused")
         authority = self
         command_id = _id(command_id)
@@ -792,7 +805,7 @@ class PostgresCommandAuthority:
                             # roll back every domain write (including a new lease).
                             with c.transaction(), admission.expected_domain_failures():
                                 candidate_transition = admission.prepare(self, c, state, version, command, actor,
-                                    now=clock, policy=policy, editorial_policy=editorial_policy)
+                                    now=clock, policy=policy, editorial_policy=editorial_policy, resolve_principal=resolve_principal)
                             reduction = candidate_transition.reduction
                         elif command.action in MEDIA_ACTIONS:
                             if hasattr(self, "editor_media_configuration") and command.action != "remove_media_revision":
@@ -949,13 +962,13 @@ class PostgresCommandAuthority:
                 policy=current_editorial_policy(), now=_clock(now), environment=self.environment)
         return receipt
 
-    def candidate_projection(self, allowed: tuple[str, ...], *, now: datetime) -> list[dict]:
+    def candidate_projection(self, allowed: tuple[str, ...], *, now: datetime, resolve_principal=None) -> list[dict]:
         from src.commands import postgres_candidate_admission as admission
         with self.projections._connection() as c:
             self._validate(c)
             version, state = self._state(c, lock=True)
             result = admission.project(self, c, allowed, version=version, state=state,
-                policy=current_editorial_policy(), now=_clock(now))
+                policy=current_editorial_policy(), now=_clock(now), resolve_principal=resolve_principal)
         return result
 
     def execute_candidate_check_once(self, command_id: str, resolve_principal, *, clock,
@@ -979,10 +992,25 @@ class PostgresCommandAuthority:
             with authority.projections._connection(writing=operation not in {"context", "read", "request", "response"}) as c:
                 authority._validate(c)
                 version, state = authority._state(c, lock=True)
+                at = max(at, utc_datetime(clock()))
+                if operation == "observe":
+                    original = authority._intent(c, command_id)
+                    if original is not None and original[0].payload.get("origin_kind") == "synchronous_writer_v1":
+                        result = authority._result(c, command_id)
+                        admission.refuse(original[0].action == "request_candidate_checks" and result is not None
+                            and result["status"] == "unchanged" and result["candidate"]["check_set_id"] == payload["check_set_id"], "check_request_mismatch")
+                        granted = postgres_check_observations._scoped_attempt(c, payload["check_set_id"], payload["stage"], payload["grant_id"], authority.environment)
+                        admission.refuse(granted["binding"]["owner"] == admission.owner_for(original[0]), "check_owner_mismatch")
+                        return postgres_check_observations.apply(c, "observe", payload, now=utc_text(at), raw=raw, environment=authority.environment)
                 command, value, identity = admission.runner_context(authority, c, command_id, resolve_principal,
                     version=version, state=state, policy=current_editorial_policy(), now=at)
                 if operation == "context":
                     return command, value, identity, state
+                if operation == "lease":
+                    from src.commands.postgres_revision_checks import acquire
+                    admission.refuse(payload["owner"] == admission.owner_for(command), "check_owner_mismatch")
+                    return acquire(c, identity, payload["owner"], payload["ttl_seconds"], now=utc_text(at), environment=authority.environment,
+                        origin_kind="synchronous_writer_v1")
                 if operation == "batch":
                     admission.refuse(payload["job_id"] == value["job_id"] and payload["owner"] == admission.owner_for(command), "check_request_mismatch")
                     return postgres_batch_worker.apply(c, "acquire", payload, now=utc_text(at), environment=authority.environment)
@@ -999,6 +1027,8 @@ class PostgresCommandAuthority:
         class ScopedAuthority:
             def acquire_check_lease(self, check_set_id, owner, ttl_seconds, *, now):
                 admission.refuse(check_set_id == identity, "check_request_mismatch")
+                if value.get("origin_kind") == "synchronous_writer_v1":
+                    return transaction("lease", dict(owner=owner, ttl_seconds=ttl_seconds), now=now)
                 return transaction("batch", dict(job_id=value["job_id"], owner=owner, ttl_seconds=ttl_seconds), now=now)
             def batch_work(self, action, payload, *, now, raw=None):
                 admission.refuse(action == "acquire" and raw is None, "check_operation_refused")

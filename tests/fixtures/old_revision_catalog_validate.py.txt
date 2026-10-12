@@ -1,0 +1,23 @@
+def validate_catalog(c, original, environment, roles):
+    rows = c.execute("SELECT upgrade_version,receipt_bytes,byte_count,sha FROM theheat_checks.schema_upgrades LIMIT 2").fetchall()
+    checks._require(len(rows) == 1, "revision_check_upgrade_receipt_required")
+    version, raw, size, digest = rows[0]
+    checks._require(type(version) is int and version == 2 and type(raw) is bytes
+                    and type(size) is int and 0 < size == len(raw) <= 16384 and p._sha(raw) == digest,
+                    "changed_revision_check_upgrade")
+    value = p._decode(raw)
+    checks._shape(value, RECEIPT_FIELDS)
+    checks._require(p._canonical(value) == raw and type(value["schema_version"]) is int and value["schema_version"] == 1
+                    and type(value["from_catalog_version"]) is int and value["from_catalog_version"] == 1
+                    and type(value["to_catalog_version"]) is int and value["to_catalog_version"] == 2,
+                    "unsupported_revision_check_upgrade")
+    observed = observation_metadata(c, environment, roles)
+    checks._require(value["upgrade_migration_sha256"] == p._sha(MIGRATION.read_bytes())
+                    and p._canonical(value["checks_metadata"]) == p._canonical(original)
+                    and p._canonical(value["observations_metadata"]) == p._canonical(observed)
+                    and value["prior_checks_catalog_sha256"] == original["catalog_sha"]
+                    and value["observations_catalog_sha256"] == observed["catalog_sha"]
+                    and value["current_checks_catalog_sha256"] == p._catalog(c, "theheat_checks")
+                    and value["environment"] == environment
+                    and (value["owner_role"], value["runtime_role"]) == roles
+                    and spend._time(value["installed_at"]) == value["installed_at"], "changed_revision_check_upgrade")
