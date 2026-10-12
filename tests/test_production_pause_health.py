@@ -13,7 +13,11 @@ from scripts import workflow_health as workflow
 NOW = datetime(2026, 11, 3, 12, tzinfo=timezone.utc)
 STALE = [{"mode": "alerts", "started_at": "2026-11-02T12:00:00Z"}]
 FRESH = [{"mode": "both", "started_at": "2026-11-03T11:00:00Z"}]
-GUARDED = [("theheat-bot", "bot.yml"), ("voice-regression", "voice-regression.yml")]
+GUARDED = [
+    ("theheat-bot", "bot.yml"),
+    ("voice-regression", "voice-regression.yml"),
+    ("refresh-thresholds", "refresh-thresholds.yml"),
+]
 
 
 def info(file="bot.yml", conclusion="success"):
@@ -93,20 +97,22 @@ def test_pause_never_masks_bot_failures_other_workflows_or_healer_errors(conclus
     report = workflow.run_workflow_health({
         "theheat-bot": info(conclusion=conclusion),
         "voice-regression": info("voice-regression.yml", "failure"),
+        "refresh-thresholds": info("refresh-thresholds.yml", "failure"),
         "time-travel-canary": info("time-travel-canary.yml", "success"),
     }, now=NOW, production_paused=True,
         beacon={"outcome": "error", "run_at": "2026-11-03T11:00:00Z"})
     assert report["paused"] == []
     assert {r["workflow"] for r in report["failing"]} == {
-        "theheat-bot", "voice-regression", workflow.SELFHEAL_SOURCE,
+        "theheat-bot", "voice-regression", "refresh-thresholds", workflow.SELFHEAL_SOURCE,
     }
     assert [r["workflow"] for r in report["healthy"]] == ["time-travel-canary"]
 
 
 @pytest.mark.parametrize("name,file", [
-    ("theheat-bot", "other.yml"), ("other", "bot.yml"),
-    ("voice-regression", "other.yml"), ("other", "voice-regression.yml"),
-    ("theheat-bot", "voice-regression.yml"), ("voice-regression", "bot.yml"),
+    (name, file)
+    for name in [*(name for name, _ in GUARDED), "other"]
+    for file in [*(file for _, file in GUARDED), "other.yml"]
+    if (name, file) not in GUARDED
 ])
 def test_pause_requires_both_exact_workflow_identifiers(name, file):
     report = workflow.run_workflow_health({name: info(file)}, now=NOW, production_paused=True)

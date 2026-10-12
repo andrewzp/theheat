@@ -18,6 +18,7 @@ concurrency:
 
 jobs:
   refresh:
+    if: vars.THEHEAT_PRODUCTION_PAUSED != '1'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
