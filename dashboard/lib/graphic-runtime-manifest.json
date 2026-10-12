@@ -1,6 +1,6 @@
 {
   "identity": {
-    "archive_sha256": "1e6faec2df5c0ca6447444d00559233ac3cc0753be282a3015f354170f213b60",
+    "archive_sha256": "063315e93014f0c9d0d68580605b6a23ee4d9f1875b4a0965d7d4a98d8cce064",
     "deployment_files": {
       "api/graphic_preview.py": "abbde75deff02ba22b67df70f7783d33d8150bd119a5514f8007feb43191e0c9",
       "pyproject.toml": "6d161405a3084285699805cd15f4c0584aab66806b7f3414a5de8e6eef61290b",
@@ -64,7 +64,7 @@
       "src/media/evidence_graphic.py": "7c266f6c7855bb47b3daa4a7e4a2640caba9c97262c8caa90ca596906e21c7f8",
       "src/media/evidence_graphic_render.py": "d43efbd9598699321dd773db86b9330aabf5a4b94d3fcff60787885a44c046ad",
       "src/media/fire_graphic_adapter.py": "343acd087bcbf3f566837bcf2a1799187002a734641c947b599d6f9f025e9833",
-      "src/media/fire_map_graphic_adapter.py": "75bff8feb7c2e6e98df6915e9fa0fb0c680158f9672d3c92a5989dd79ad30643",
+      "src/media/fire_map_graphic_adapter.py": "100022948068e446617100f11a13368f4356838672750d09cc44ff2c2c9d34e2",
       "src/media/fonts/DejaVu-LICENSE.txt": "7a083b136e64d064794c3419751e5c7dd10d2f64c108fe5ba161eae5e5958a93",
       "src/media/fonts/DejaVuSansMono.ttf": "b4a6c3e4faab8773f4ff761d56451646409f29abedd68f05d38c2df667d3c582",
       "src/media/maps/NOTICE.md": "f6ebf3caca500621c4b2c9f9fe9aad802099b82a4a1c21c479daf97d29aabac0",
@@ -88,5 +88,5 @@
     },
     "schema_version": 1
   },
-  "runtime_sha256": "35eefbaf1f9d4070aa05b5c3314a48676fa660bf849cb673ec0d8c9120e6d2a2"
+  "runtime_sha256": "c438ca9dda167c2f7edf7e788a8b4d3becc2570e47f610694b49c96a94c1f439"
 }

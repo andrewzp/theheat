@@ -241,8 +241,39 @@ def test_original_world_segments_stay_inside_exact_viewport():
     rings, _ = adapter.basemap()
     for bounds in ([-180, -90, 180, 90], [170, -5, 190, 5], [12.5, -23, 42.5, 13]):
         segments = list(adapter.clipped_segments(rings, bounds))
-        assert segments
+        # This pinned coarse product has no coastline in the equatorial dateline
+        # window; an empty outline must not fabricate land or establish water.
+        assert bool(segments) is (bounds != [170, -5, 190, 5])
         for row in segments:
             for i in (0, 2):
                 assert bounds[0] <= row[i] <= bounds[2]
                 assert bounds[1] <= row[i + 1] <= bounds[3]
+
+
+def test_root_counterexample_cannot_draw_a_leader_through_another_label():
+    coordinates = [
+        (37.39683884252334, -109.71580495635722),
+        (37.801182992134464, -107.63586992814105),
+        (37.93709394080457, -107.5998425381229),
+        (36.7524897553822, -109.04853878538918),
+    ]
+    spec = adapt(graphic_bundle(values=[125.75] * 4, coordinates=coordinates))
+    g = spec["evidence"]["map"]
+    # caece05 accepted C's diagonal through B's box at this exact retained input.
+    old_c_end = [983.8012067407437, 1024.8333333333323]
+    old_b_box = [971.8894408270712, 1031.896983382698, 999.8894408270712, 1075.896983382698]
+    assert adapter._segment_hits_box(g["markers"][2], old_c_end, old_b_box)
+    assert (g["labels"][2]["leader_end"], g["labels"][1]["box"]) != (old_c_end, old_b_box)
+    # Independently sample every resulting segment, including its endpoints.
+    # The original collision covers a substantial span and fails this regression.
+    for i, label in enumerate(g["labels"]):
+        a, b = g["markers"][i], label["leader_end"]
+        for j, other in enumerate(g["labels"]):
+            if i == j:
+                continue
+            left, bottom, right, top = other["box"]
+            for step in range(1001):
+                t = step / 1000
+                x, y = a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])
+                assert not (left <= x <= right and bottom <= y <= top)
+    assert render_svg(**spec)["publication_approved"] is False

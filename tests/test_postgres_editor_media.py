@@ -832,7 +832,7 @@ def test_map_resource_drift_after_prepare_holds_without_attaching(admitted, monk
     resource = adapter.resource
     monkeypatch.setattr(adapter, "resource", lambda name, bound: resource(name, bound) + (b" " if name == adapter.MANIFEST else b""))
     held = view(case)
-    assert held["status"] == "unavailable" and held["reason"] == "graphic_map_basemap_unavailable"
+    assert held["status"] == "unavailable" and held["code"] == "graphic_map_basemap_unavailable"
     _, result = action(case, "attach_media_revision", dict(
         proposal_sha256=prepared["preparation"]["proposal_sha256"],
         expected_policy_sha256=prepared["expected_policy_sha256"],

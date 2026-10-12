@@ -123,6 +123,15 @@ def _cross(a, b, c, d):
     )
 
 
+def _segment_hits_box(a, b, box):
+    """Closed intersection including entry, exit, touching and wholly enclosed lines."""
+    left, bottom, right, top = box
+    if any(left <= p[0] <= right and bottom <= p[1] <= top for p in (a, b)):
+        return True
+    corners = [(left, bottom), (left, top), (right, top), (right, bottom)]
+    return any(_cross(a, b, p, q) for p, q in zip(corners, corners[1:] + corners[:1]))
+
+
 def label_positions(markers, rectangle):
     left, bottom, width, height = rectangle
     options = [(0, 48), (48, 48), (48, 0), (48, -48), (0, -48), (-48, -48), (-48, 0), (-48, 48)]
@@ -163,6 +172,10 @@ def label_positions(markers, rectangle):
                 if not (a[2] + 4 < b[0] or b[2] + 4 < a[0] or a[3] + 4 < b[1] or b[3] + 4 < a[1]):
                     valid = False
                 if _cross(markers[i], trial[i]["leader_end"], markers[j], trial[j]["leader_end"]):
+                    valid = False
+                if _segment_hits_box(markers[i], trial[i]["leader_end"], b) or _segment_hits_box(
+                    markers[j], trial[j]["leader_end"], a
+                ):
                     valid = False
         if valid:
             return list(trial)
