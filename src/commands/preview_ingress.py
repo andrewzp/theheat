@@ -232,6 +232,7 @@ class PreviewHandler(BaseHTTPRequestHandler):
                 self.reply(200, {"state_version": version, "state": state,
                                  "editorial_policy": current_editorial_policy(), "role": actor.role, "operator_subject": actor.subject,
                                  "candidates": self.server.authority.candidate_projection(self.server.candidate_inputs + self.server.authority.generated_candidate_inputs(), now=datetime.now(UTC), resolve_principal=self.server.operators.resolve),
+                                 "local_cost": self.server.authority.local_cost_projection(now=datetime.now(UTC)),
                                  "local_preview": True, "publication_enabled": False})
                 return
             if self.command == "GET" and self.path == "/ghcn-source-context":

@@ -314,6 +314,11 @@ class PostgresCommandAuthority:
         # A lost commit acknowledgment never returns a provisional dispatch grant.
         return result
 
+    def local_cost_projection(self, *, now):
+        """Bounded read-only local journal view; no billing or editorial authority."""
+        from src.commands.postgres_cost_projection import project
+        return project(self, now=now)
+
     def initialize_spending(self) -> None:
         """Explicit owner-only install; never selects limits or changes state."""
         with self.projections._connection(writing=True) as c:
