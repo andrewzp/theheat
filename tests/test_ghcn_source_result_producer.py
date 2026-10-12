@@ -23,10 +23,11 @@ def dual_source(source):
     day=source['day']
     start=day.replace(year=day.year-23)
     cells=[]
+    historical_extreme=day.replace(year=day.year-1,day=1)
     for index in range((day-start).days):
         at=start+timedelta(days=index)
-        cells.extend([(at,'TMAX',-9999 if index==10 else 280,'S' if index==20 else '', 'T'),
-                      (at,'TMIN',-9999 if index==30 else 100,'S' if index==40 else '', 'T')])
+        cells.extend([(at,'TMAX',-9999 if index==10 else 350 if at==historical_extreme else 280,'S' if index==20 else '', 'T'),
+                      (at,'TMIN',-9999 if index==30 else -50 if at==historical_extreme else 100,'S' if index==40 else '', 'T')])
     cells.extend([(day,'TMAX',455,'','T'),(day,'TMIN',-255,'','T')])
     for index,response in enumerate(source['responses']):
         if response.kind=='diff' and response.key==day.isoformat():
@@ -74,6 +75,19 @@ def test_all_nine_real_scientific_selections_fit_without_losing_full_calendar(co
     assert all(len(v['calendar_samples'])==366 for v in evidence['baseline']['variables'].values())
     assert all(v['source_coverage_complete'] and not v['complete'] for v in evidence['baseline']['variables'].values())
     assert all(v['source_missing_count']==v['source_qc_rejected_count']==1 for v in evidence['baseline']['variables'].values())
+    if field.startswith('anomaly_'):
+        variable='temperature_2m_max' if field=='anomaly_hot' else 'temperature_2m_min'
+        other='temperature_2m_min' if field=='anomaly_hot' else 'temperature_2m_max'
+        original=evidence['baseline']['variables'][variable]
+        month=source['day'].strftime('%m')
+        warrant=captured.payload()['raw_signal_dump']['evidence']['baseline']['variables'][variable]['selected_comparison']
+        assert abs(event.historical_mean_c-original['record_values_c']['monthly'][month])>5
+        assert warrant==dict(period='monthly',key=month,years_with_samples=original['monthly_years'][month],
+            sample_count=original['monthly_samples'][month],purpose='monthly_mean_scope',mean_c=event.historical_mean_c)
+        other_warrant=captured.payload()['raw_signal_dump']['evidence']['baseline']['variables'][other]['selected_comparison']
+        other_original=evidence['baseline']['variables'][other]
+        assert other_warrant==dict(period='monthly',key=month,years_with_samples=other_original['monthly_years'][month],
+            sample_count=other_original['monthly_samples'][month],purpose='monthly_coverage_only')
     assert not str(full.headline_metric['label']).startswith('forecast_')
     with pytest.raises(BundleCaptureError,match='too_large'):
         capture_bundle(full)

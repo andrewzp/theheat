@@ -8,6 +8,7 @@ from __future__ import annotations
 from copy import deepcopy
 from dataclasses import dataclass
 import json
+import math
 import time
 
 from src.commands import postgres_ghcn_source_results as domain
@@ -35,7 +36,7 @@ def json_tree(value):
     return json.loads(json.dumps(value,sort_keys=True,default=json_default,allow_nan=False))
 
 
-def _selected_scope(scope, field, day):
+def _selected_scope(scope, field, day, *, anomaly_mean=None, anomaly_variable=False):
     require(type(scope) is dict and VARIABLE_SCALARS <= set(scope)
             and set(scope) <= VARIABLE_SCALARS | TABLE_FIELDS | {"candidate_accepted"}, "ghcn_claim_variable_schema")
     require(TABLE_FIELDS <= set(scope), "ghcn_claim_variable_schema")
@@ -65,9 +66,18 @@ def _selected_scope(scope, field, day):
         samples=scope[period+"_samples"].get(key)
         old_value=scope["record_values_c"][period].get(key)
         old_date=scope["record_dates"][period].get(key)
-    selected["selected_comparison"]=dict(period=period,key=key,years_with_samples=years,
-        sample_count=samples,prior_value_c=old_value,prior_date=old_date,
-        purpose="monthly_mean_scope" if field.startswith("anomaly_") else "record_comparator")
+    if field.startswith("anomaly_"):
+        # An anomaly compares against the qualified variable's monthly mean,
+        # never its monthly extreme. The other variable retains coverage only.
+        comparison=dict(period=period,key=key,years_with_samples=years,sample_count=samples,
+            purpose="monthly_mean_scope" if anomaly_variable else "monthly_coverage_only")
+        if anomaly_variable:
+            require(type(anomaly_mean) in (int,float) and math.isfinite(anomaly_mean), "ghcn_claim_anomaly_mean")
+            comparison["mean_c"]=anomaly_mean
+        selected["selected_comparison"]=comparison
+    else:
+        selected["selected_comparison"]=dict(period=period,key=key,years_with_samples=years,
+            sample_count=samples,prior_value_c=old_value,prior_date=old_date,purpose="record_comparator")
     return selected
 
 
@@ -85,8 +95,10 @@ def project(full: StoryBundle, reference: dict, selection: dict) -> StoryBundle:
     require(data["historical_context"].get("baseline")==baseline, "ghcn_claim_projection_changed")
     compact=deepcopy(full)  # Never call the mutating constructor on stored facts.
     narrowed={key:deepcopy(value) for key,value in baseline.items() if key!="variables"}
-    narrowed["variables"]={key:_selected_scope(value,selection["signal_field"],selection["signal_date"])
-                           for key,value in baseline["variables"].items()}
+    anomaly_variable={"anomaly_hot":"temperature_2m_max","anomaly_cold":"temperature_2m_min"}.get(selection["signal_field"])
+    narrowed["variables"]={key:_selected_scope(value,selection["signal_field"],selection["signal_date"],
+        anomaly_mean=data["raw_signal_dump"].get("historical_mean_c"),anomaly_variable=key==anomaly_variable)
+        for key,value in baseline["variables"].items()}
     narrowed["representation"]="selected_claim_warrants_v1; complete tables retained by source reference"
     compact.raw_signal_dump["evidence"]["baseline"]=deepcopy(narrowed)
     compact.historical_context["baseline"]=deepcopy(narrowed)
