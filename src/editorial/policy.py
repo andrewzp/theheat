@@ -12,6 +12,15 @@ from src.editorial.revisions import fingerprint
 
 ROOT = Path(__file__).resolve().parents[2]
 POLICY_FILES = (
+    "src/storage/ghcn_runtime_inputs.py",
+    "src/commands/postgres_ghcn_source_results.py",
+    "src/orchestrator/ghcn_source_result_client.py",
+    "src/two_bot/ghcn_claim_view.py",
+    "src/data/ghcn_db.py",
+    "src/data/temperature_history.py",
+    "scripts/threshold_artifacts.py",
+    "src/orchestrator/common.py",
+    "src/state.py",
     "src/storage/hosted_staging.py", "src/storage/postgres_projection.py",
     "src/storage/scientific_supply.py", "src/commands/preview_ingress.py",
     "src/commands/postgres_source_results.py", "src/orchestrator/source_result_client.py",
