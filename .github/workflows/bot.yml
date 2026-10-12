@@ -115,6 +115,13 @@ jobs:
         run: |
           sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 install -y --no-install-recommends postgresql-17 postgresql-client-17 poppler-utils
 
+      - name: Verify native graphics dependency capture
+        if: matrix.partition == 'media'
+        timeout-minutes: 2
+        # Diagnose installed Linux loader failures before the longer PG profile.
+        # The full required media partition below still runs every test.
+        run: python -m pytest tests/test_postgres_media_native_profile.py::test_actual_capture_and_verification_never_inspects_loaders_under_lock -q -m "not voice_replay" --ci-partition=media -o faulthandler_timeout=90
+
       - name: Install dashboard dependencies
         if: matrix.partition != 'media'
         working-directory: dashboard

@@ -2,6 +2,8 @@
 
 from copy import deepcopy
 from pathlib import Path
+import json
+from types import SimpleNamespace
 import os
 import signal
 import subprocess
@@ -77,6 +79,67 @@ def test_declared_dependency_drift_refuses_without_touching_installed_files(
         monkeypatch.setattr(profile, "MAX_TOTAL", 1)
     with pytest.raises((ValueError, FileNotFoundError)):
         profile.verify(manifest, rasterizer=native_dependencies["rasterizer"])
+
+
+@pytest.mark.parametrize("failure", [False, True])
+def test_capture_diagnostics_preserve_subprocess_and_original_failure(monkeypatch, capsys, failure):
+    from tests.native_profile_helpers import capture_with_diagnostics
+    original = profile.subprocess
+    argv = ["/usr/bin/ldd", "/invented/renderer-extension.so"]
+    options = dict(env={"PATH": "/usr/bin:/bin", "LC_ALL": "C"},
+                   capture_output=True, timeout=5, check=True)
+    observed = []
+    response = subprocess.CompletedProcess(argv, 0, b"libfixture.so => not found\n", b"")
+
+    def run(*args, **kwargs):
+        observed.append((args, kwargs))
+        return response
+
+    error = ValueError("native_profile_unresolved_linux_dependency")
+
+    def capture(executable):
+        assert executable == "/invented/pdftoppm"
+        assert profile.subprocess.run(argv, **options) is response
+        if failure:
+            raise error
+        return {"invented": "manifest"}
+
+    monkeypatch.setattr(original, "run", run)
+    monkeypatch.setattr(profile, "capture", capture)
+    if failure:
+        with pytest.raises(ValueError) as raised:
+            capture_with_diagnostics("/invented/pdftoppm")
+        assert raised.value is error
+        line = capsys.readouterr().out.strip()
+        assert line.startswith("NATIVE_CAPTURE_LAST_INSPECTION=")
+        assert json.loads(line.split("=", 1)[1]) == dict(argv=argv, returncode=0,
+            stdout="libfixture.so => not found\n", stderr="", stdout_bytes=27, stderr_bytes=0)
+    else:
+        assert capture_with_diagnostics("/invented/pdftoppm") == {"invented": "manifest"}
+        assert capsys.readouterr().out == ""
+    assert observed == [((argv,), options)]
+    assert profile.subprocess is original
+
+
+def test_capture_diagnostics_bound_last_output_and_restore_on_failure(monkeypatch, capsys):
+    from tests.native_profile_helpers import capture_with_diagnostics
+    original = profile.subprocess
+    response = SimpleNamespace(returncode=0, stdout=b"x" * (256 * 1024 + 1), stderr=b"y" * (256 * 1024 + 1))
+    monkeypatch.setattr(original, "run", lambda *args, **kwargs: response)
+
+    def capture(executable):
+        profile.subprocess.run(["/usr/bin/ldd", "/invented/earlier.so"])
+        profile.subprocess.run(["/usr/bin/ldd", "/invented/last.so"])
+        raise ValueError("native_profile_inspection_output_bound")
+
+    monkeypatch.setattr(profile, "capture", capture)
+    with pytest.raises(ValueError, match="native_profile_inspection_output_bound"):
+        capture_with_diagnostics("/invented/pdftoppm")
+    row = json.loads(capsys.readouterr().out.strip().split("=", 1)[1])
+    assert row["argv"] == ["/usr/bin/ldd", "/invented/last.so"]
+    assert row["stdout"] == "x" * (256 * 1024) and row["stderr"] == "y" * (256 * 1024)
+    assert row["stdout_bytes"] == row["stderr_bytes"] == 256 * 1024 + 1
+    assert profile.subprocess is original
 
 
 def test_macho_declared_resolution_refuses_missing_ambiguous_and_unsupported(tmp_path):
