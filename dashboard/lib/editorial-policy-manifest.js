@@ -65,7 +65,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/media/evidence_graphic.py": "c7d4467dc9cfe942914ade969761437bc14a937daa086dacf3a9bb738f926172",
     "src/media/fire_graphic_adapter.py": "343acd087bcbf3f566837bcf2a1799187002a734641c947b599d6f9f025e9833",
     "src/media/joint_review.py": "54aff9dd95e9e85f7efbe5faa03742d3654ab2259bf2a39a36692b248a9be44b",
-    "src/media/native_profile.py": "a41ef4102bcd51479caf6210028721415c9abfa16b712cb0537692d9e40525b2",
+    "src/media/native_profile.py": "87c7480c10ffe945592f572ac869d2c36f40a95ae45da23c6f839775ee7cb009",
     "src/media/review_packet.py": "b36e1420a998e28cee80c5d475bae61b347441277408ffc3358956fa0445fee7",
     "src/orchestrator/cyclone_episodes.py": "e0913dae539cb3fd256dd6c70fc4e01c7b53b141ec47fcc98febd53cf0ce3f4e",
     "src/orchestrator/cyclones.py": "28b39a7c5e582b477fa96a289f6bb01d0eeb8151b57b4ab7dce8fb2a072aa4a4",
@@ -134,5 +134,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "4a828a22e451889f630e994add6ba38c463d44369d24d2e22c2ff85e7f0387e5"
   },
   "schema_version": 1,
-  "source_sha256": "32883b91681774086d195f79af753af4921906dd81e34e93539b3411855ecbab"
+  "source_sha256": "6f81431c33ab9b9dd890d8c7420f6efd9eb0bc9e3b628700c6d37c41cc9d9658"
 }

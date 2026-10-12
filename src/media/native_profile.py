@@ -162,6 +162,7 @@ def capture(rasterizer):
     platform = platform_identity()
     distributions = installed_distributions()
     files, resolutions, edges, native_seen = {}, {}, [], set()
+    native_paths = set()
     symlinks, missing = {}, set()
     def retain(filename):
         logical = path(str(filename))
@@ -191,7 +192,8 @@ def capture(rasterizer):
         if key in native_seen:
             continue
         native_seen.add(key)
-        require(len({item[0] for item in native_seen}) <= MAX_NATIVE, "native_count")
+        native_paths.add(str(filename))
+        require(len(native_paths) <= MAX_NATIVE, "native_count")
         args = [str(tool), "-arch", platform["architecture"], "-l", str(filename)] if platform["system"] == "Darwin" else [str(tool), str(filename)]
         remaining = 60 - (time.monotonic() - started)
         require(remaining > 0, "capture_timeout")
@@ -225,7 +227,10 @@ def capture(rasterizer):
                 if edge not in edges:
                     edges.append(edge)
                 if found:
-                    queue.append((Path(edge["resolved"]), entry, ()))
+                    # ldd already resolves the full tree in this root's loader
+                    # context. Reopening a child alone loses ancestor RPATHs.
+                    native_paths.add(edge["resolved"])
+                    require(len(native_paths) <= MAX_NATIVE, "native_count")
         require(len(edges) <= MAX_EDGES, "edge_count")
     manifest = dict(schema_version=1, platform=platform, distributions=distributions, files=files,
         resolutions=resolutions, native_edges=edges, inspection_tool=str(tool), rasterizer=str(rasterizer),
