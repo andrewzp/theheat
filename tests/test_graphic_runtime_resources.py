@@ -188,3 +188,38 @@ print(json.dumps({"sha": sha256(r["svg"]).hexdigest(), "start": spec["evidence"]
     assert result["sha"] == expected["svg_sha256"]
     assert (result["start"], result["end"]) == ("2026-06-07T18:15:00Z", "2026-06-08T18:15:00Z")
     assert all(path.startswith(str(tmp_path / "graphic-runtime.zip") + "/") for path in result["sources"])
+
+
+def test_map_renders_from_exact_archive_without_checkout_resources(tmp_path):
+    from tests.fire_graphic_helpers import graphic_bundle
+    source = tmp_path / "bundle.json"
+    source.write_text(json.dumps(graphic_bundle().to_dict()))
+    result = fresh('''
+sys.path.insert(0, sys.argv[1])
+from pathlib import Path
+from src.dashboard_preview.preview import qualified_spec
+from src.media.evidence_graphic_render import render_svg
+spec,_,_=qualified_spec(json.loads(Path(sys.argv[2]).read_text()),synthetic=True)
+image=render_svg(**spec)
+print(json.dumps(dict(template=spec["template"],length=len(image["svg"]),sha=image["svg_sha256"])))
+''', archive(tmp_path), source)
+    assert result["template"] == "modis_thermal_detection_map" and 0 < result["length"] <= 1_000_000
+
+
+def test_packaged_map_resources_cannot_borrow_valid_checkout_on_tamper(tmp_path):
+    content, _ = package.generate()
+    path = tmp_path / "damaged-map.zip"
+    with zipfile.ZipFile(BytesIO(content)) as original, zipfile.ZipFile(path, "w") as target:
+        for name in original.namelist():
+            data = original.read(name)
+            if name.endswith("maps/manifest.json"):
+                data += b" "
+            target.writestr(name, data)
+    result = fresh('''
+sys.path.insert(0, sys.argv[1])
+from src.media.fire_map_graphic_adapter import basemap,MapQualificationError
+try:basemap()
+except MapQualificationError as e:print(json.dumps({"code":e.code}))
+else:raise AssertionError("tampered map resource accepted")
+''', path)
+    assert result["code"] == "graphic_map_basemap_unavailable"

@@ -7,7 +7,7 @@ import re
 from src.dashboard_preview.errors import PreviewError
 from src.editorial.revisions import decision_revision, draft_identity, fingerprint, has_unresolved_publish
 from src.media.air_quality_graphic_adapter import pm25_graphic_spec
-from src.media.fire_graphic_adapter import fire_graphic_spec
+from src.media.fire_map_graphic_adapter import fire_map_graphic_spec
 from src.media.evidence_graphic_render import render_svg
 from src.media.temperature_graphic_adapter import _StoredBundle
 
@@ -71,7 +71,7 @@ def qualified_spec(bundle, *, synthetic=False):
     if bundle["signal_kind"] == "fire":
         receipts = [bundle["raw_signal_dump"]["acquisition_provenance"],
                     *[r["acquisition_evidence"] for r in bundle.get("related_signals", [])]]
-        spec = fire_graphic_spec(_StoredBundle(bundle), expected_bundle_sha256=fingerprint(bundle),
+        spec = fire_map_graphic_spec(_StoredBundle(bundle), expected_bundle_sha256=fingerprint(bundle),
                                 expected_receipt_sha256=[fingerprint(r) for r in receipts], synthetic=synthetic)
         return spec, "NASA FIRMS · MODIS", {"kind": "modis_acquisition", "acquired_at": spec["evidence"]["acquired_at"]}
     if bundle["signal_kind"] == "air_quality_hazard":

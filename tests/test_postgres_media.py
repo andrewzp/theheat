@@ -354,3 +354,103 @@ def test_dump_restore_retains_bytes_proposal_and_core_state(case, cluster):
         assert tables(restored) == original
     finally:
         admin(params, psycopg.sql.SQL("DROP DATABASE {} WITH (FORCE)").format(psycopg.sql.Identifier(name)))
+
+
+def retained_png(case, **overrides):
+    # Low-level integrity inputs stand in for the independently retained command
+    # references. The editor integration separately proves their resolution.
+    args = dict(expected_proposal_sha256=case["proposal"]["proposal_sha256"],
+        expected_packet_sha256=case["proposal"]["packet"]["packet_sha256"],
+        expected_predecessor=case["request"]["expected_revision"], expected_subject=ACTOR.subject,
+        expected_at=AT, environment="local")
+    authority = case["store"]
+    with authority.projections._connection() as c:
+        authority._validate(c)
+        authority._state(c, lock=True)
+        return pg.read_retained_png(c, **(args | overrides))
+
+
+def test_passive_png_is_bytes_only_and_does_not_rebuild_current_science(case, monkeypatch):
+    stage(case)
+    before = tables(case), unaffected(case)
+    def unavailable(*args, **kwargs):
+        raise ValueError("Today's renderer is unavailable")
+    monkeypatch.setattr(pg, "build_media_attachment_proposal", unavailable)
+    assert retained_png(case) == case["assets"]["preview.png"]
+    assert type(retained_png(case)) is bytes
+    with pytest.raises(ValueError, match="renderer is unavailable"):
+        saved(case)
+    assert (tables(case), unaffected(case)) == before
+
+
+@pytest.mark.parametrize("key,value", [
+    ("expected_proposal_sha256", "f"*64), ("expected_packet_sha256", "f"*64),
+    ("expected_subject", "different-operator"), ("expected_at", "2026-10-01T17:00:00Z"),
+    ("expected_predecessor", {"draft_id":"another-draft"}), ("environment", "preview"),
+])
+def test_passive_png_requires_exact_external_preparation_anchors(case, key, value):
+    stage(case)
+    before = tables(case), unaffected(case)
+    with pytest.raises((ValueError, RuntimeError)):
+        retained_png(case, **{key:value})
+    assert (tables(case), unaffected(case)) == before
+
+
+def replace_capture(case, capture):
+    raw = p._canonical(capture)
+    digest = p._sha(raw)
+    admin(case["params"], "INSERT INTO theheat_media.artifacts VALUES(%s,%s,%s) ON CONFLICT DO NOTHING", (digest, raw, len(raw)))
+    admin(case["params"], "ALTER TABLE theheat_media.packages DISABLE TRIGGER packages_immutable")
+    admin(case["params"], "UPDATE theheat_media.packages SET capture_sha256=%s", (digest,))
+    admin(case["params"], "ALTER TABLE theheat_media.packages ENABLE TRIGGER packages_immutable")
+
+
+@pytest.mark.parametrize("mutation", ["proposal", "packet", "manifest", "spec", "predecessor", "png", "input", "alt"])
+def test_passive_png_rejects_rehashed_capture_asset_and_relationship_substitutions(case, mutation):
+    stage(case)
+    capture = deepcopy(saved(case)["capture"])
+    manifest = capture["inputs"]["renderer_manifest"]
+    if mutation == "proposal":
+        capture["proposal"]["changed"] = not capture["proposal"]["changed"]
+        capture["proposal"]["proposal_sha256"] = fingerprint({k:v for k,v in capture["proposal"].items() if k != "proposal_sha256"})
+    elif mutation == "packet":
+        packet = capture["proposal"]["packet"]
+        packet["media"]["alt_text"] = "Substituted caption"
+        packet["packet_sha256"] = fingerprint({k:v for k,v in packet.items() if k != "packet_sha256"})
+    elif mutation == "manifest":
+        manifest["binding"]["template_version"] = "substituted-version"
+        manifest["cache_key"] = fingerprint(manifest["binding"])
+    elif mutation == "spec":
+        spec = capture["inputs"]["graphic_spec"]
+        spec["evidence"]["event_id"] = "substituted-event"
+        spec["expected_evidence_sha256"] = fingerprint(spec["evidence"])
+    elif mutation == "predecessor":
+        capture["predecessor_state"]["drafts"][0]["id"] = "another-draft"
+    else:
+        name = {"png":"preview.png", "input":"input.json", "alt":"alt.txt"}[mutation]
+        raw = case["assets"][name] + b"substituted"
+        digest = p._sha(raw)
+        admin(case["params"], "INSERT INTO theheat_media.artifacts VALUES(%s,%s,%s)", (digest, raw, len(raw)))
+        manifest["files"][name] = capture["asset_sha256"][name] = digest
+    replace_capture(case, capture)
+    before = tables(case), unaffected(case)
+    with pytest.raises((ValueError, RuntimeError)):
+        retained_png(case)
+    assert (tables(case), unaffected(case)) == before
+
+
+@pytest.mark.parametrize("name", tuple(pg.media._LIMITS))
+@pytest.mark.parametrize("failure", ["missing", "oversized"])
+def test_passive_png_requires_all_five_bounded_assets(case, name, failure, monkeypatch):
+    stage(case)
+    capture = saved(case)["capture"]
+    if failure == "missing":
+        admin(case["params"], "ALTER TABLE theheat_media.artifacts DISABLE TRIGGER artifacts_immutable")
+        admin(case["params"], "DELETE FROM theheat_media.artifacts WHERE sha=%s", (capture["asset_sha256"][name],))
+        admin(case["params"], "ALTER TABLE theheat_media.artifacts ENABLE TRIGGER artifacts_immutable")
+    else:
+        monkeypatch.setitem(pg.media._LIMITS, name, len(case["assets"][name]) - 1)
+    before = tables(case), unaffected(case)
+    with pytest.raises(RuntimeError, match="artifact_size"):
+        retained_png(case)
+    assert (tables(case), unaffected(case)) == before

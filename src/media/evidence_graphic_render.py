@@ -215,7 +215,9 @@ def _drawing(template, evidence):
 
     text(56, 1418, "THEHEAT", 48)
     text(1144, 1418, "SYNTHETIC DATA" if evidence["synthetic"] else "REVIEW PREVIEW", 40, "warm", "end")
-    if template == "modis_thermal_detections":
+    if template == "modis_thermal_detection_map":
+        _map_drawing(drawing, evidence, text, colors)
+    elif template == "modis_thermal_detections":
         from src.media.fire_graphic_adapter import coordinate_label, frp_axis, frp_label
         from reportlab.graphics.shapes import Line
         text(56, 1320, chart_title(template, evidence), 62)
@@ -430,3 +432,193 @@ def _drawing(template, evidence):
         for note in notes:
             bottom = block(bottom, note)
     return drawing
+
+
+def _map_drawing(drawing, evidence, text, colors):
+    """The map uses the same drawing/font/native package as every other template."""
+    from reportlab.graphics.shapes import Circle, Line, Path as PlotPath, Rect, String
+    from reportlab.lib.colors import HexColor
+    from src.media import fire_map_graphic_adapter as adapter
+
+    colors["ink"] = HexColor("#17212B")
+    plot_bg, grid = HexColor("#F0F3F5"), HexColor("#C5CDD4")
+    map_ = evidence["map"]
+    west, south, east, north = map_["bounds"]
+    left, bottom, width, height = map_["rectangle"]
+    text(56, 1334, "Satellite heat detections", 52)
+    text(56, 1270, f"NASA FIRMS · {evidence['satellite']} / MODIS", 40, "muted")
+    text(56, 1215, evidence["acquired_at"][:16].replace("T", " ") + " UTC (minute)", 40, "muted")
+    caption = (
+        "Coordinate close-up; coastline omitted"
+        if map_["context_mode"] == "coordinate_closeup"
+        else "Coarse locator; not distance or area"
+    )
+    text(56, 1155, caption, 40, "muted")
+    drawing.add(
+        Rect(left, bottom, width, height, fillColor=plot_bg, strokeColor=grid, strokeWidth=2)
+    )
+    rings, _ = adapter.basemap()
+
+    def outline(bounds, rectangle):
+        x, y, w, h = rectangle
+        a, b, c, d = bounds
+        path = PlotPath(strokeColor=HexColor("#84939D"), strokeWidth=1.3, fillColor=None)
+        for x1, y1, x2, y2 in adapter.clipped_segments(rings, bounds):
+            path.moveTo(x + (x1 - a) / (c - a) * w, y + (y1 - b) / (d - b) * h)
+            path.lineTo(x + (x2 - a) / (c - a) * w, y + (y2 - b) / (d - b) * h)
+        drawing.add(path)
+
+    if map_["context_mode"] == "coarse_land_locator":
+        outline(map_["bounds"], map_["rectangle"])
+    for fraction in (0, 0.5, 1):
+        x, y = left + width * fraction, bottom + height * fraction
+        drawing.add(Line(x, bottom, x, bottom + height, strokeColor=grid, strokeWidth=1))
+        drawing.add(Line(left, y, left + width, y, strokeColor=grid, strokeWidth=1))
+
+    layout = map_text_layout(evidence)
+    for row in layout["longitudes"]:
+        text(row["x"], row["y"], row["text"], 40, "muted")
+    for row in layout["latitudes"]:
+        box = row["box"]
+        drawing.add(Rect(box[0], box[1], box[2] - box[0], box[3] - box[1],
+                         fillColor=plot_bg, strokeColor=None))
+        text(row["x"], row["y"], row["text"], 40, "ink")
+
+    for point, (x, y), label in zip(evidence["points"], map_["markers"], map_["labels"]):
+        drawing.add(Line(x, y, *label["leader_end"], strokeColor=colors["ink"], strokeWidth=2))
+        drawing.add(Circle(x, y, 17, fillColor=HexColor("#FFFFFF"), strokeColor=None))
+        drawing.add(
+            Circle(
+                x,
+                y,
+                14,
+                fillColor=HexColor(adapter.color(point["frp_source"], map_["axis_max"])),
+                strokeColor=colors["ink"],
+                strokeWidth=2,
+            )
+        )
+        box = label["box"]
+        drawing.add(Rect(box[0], box[1], 28, 44, fillColor=plot_bg, strokeColor=None))
+        drawing.add(
+            String(
+                label["x"],
+                label["y"] - 13,
+                point["label"],
+                fontName="TheHeatMono",
+                fontSize=40,
+                fillColor=colors["ink"],
+                textAnchor="middle",
+            )
+        )
+
+    # Legend/table are fixed separate regions, with no scaling of marker area.
+    for i in range(64):
+        drawing.add(
+            Rect(
+                56 + i * 17,
+                526,
+                17,
+                20,
+                fillColor=HexColor(
+                    adapter.color((i + 0.5) / 64 * map_["axis_max"], map_["axis_max"])
+                ),
+                strokeColor=None,
+            )
+        )
+    for fraction, anchor in ((0, "start"), (0.5, "middle"), (1, "end")):
+        text(56 + 1088 * fraction, 477, f"{map_['axis_max'] * fraction:g} MW", 40, "muted", anchor)
+    for index, row in enumerate(layout["rows"]):
+        text(56, 414 - index * 52, row["label"], 40)
+        text(1144, 414 - index * 52, row["value"], 40, "text", "end")
+
+    # The small global locator never enlarges a tiny viewport into an apparent footprint.
+    inset = (56, 84, 280, 140)
+    drawing.add(Rect(*inset, fillColor=plot_bg, strokeColor=grid, strokeWidth=1))
+    outline([-180, -90, 180, 90], inset)
+    iw = (east - west) / 360 * 280
+    ih = (north - south) / 180 * 140
+    tiny = iw < 2 or ih < 2
+    if tiny:
+        x = 56 + (adapter.wrapped((west + east) / 2) + 180) / 360 * 280
+        y = 84 + ((south + north) / 2 + 90) / 180 * 140
+        drawing.add(Line(x - 5, y, x + 5, y, strokeColor=colors["ink"], strokeWidth=2))
+        drawing.add(Line(x, y - 5, x, y + 5, strokeColor=colors["ink"], strokeWidth=2))
+    else:
+        for shift in (-360, 0, 360):
+            w = west + shift
+            e = east + shift
+            a, b = max(-180, w), min(180, e)
+            if a < b:
+                drawing.add(
+                    Rect(
+                        56 + (a + 180) / 360 * 280,
+                        84 + (south + 90) / 180 * 140,
+                        (b - a) / 360 * 280,
+                        ih,
+                        fillColor=None,
+                        strokeColor=colors["ink"],
+                        strokeWidth=2,
+                    )
+                )
+    text(372, 190, "World locator · Natural Earth", 40, "muted")
+    text(372, 140, "Location only; not extent" if tiny else "Coarse viewport outline", 40, "muted")
+    text(372, 90, "Pixel centers; no perimeters", 40, "muted")
+    text(56, 38, "FRP is power, not area or fire severity.", 40, "muted")
+
+
+def map_text_layout(evidence):
+    """Bounded layout only: embedded-font metrics, no drawing, native work or output.
+
+    Readiness and the actual drawing consume this same calculation. Font parsing
+    uses only retained bytes and an unregistered local TTFont instance.
+    """
+    from reportlab.pdfbase.ttfonts import TTFont
+    from src.media import fire_map_graphic_adapter as adapter
+    from src.media.fire_graphic_adapter import coordinate_label
+
+    font = TTFont("TheHeatMapLayout", BytesIO(_resource(FONT_RESOURCE)))
+    def measure(value):
+        return font.stringWidth(value, 40)
+    map_ = evidence["map"]
+    west, south, east, north = map_["bounds"]
+    left, bottom, width, height = map_["rectangle"]
+    longitudes, latitudes, rows = [], [], []
+    lon_boxes: list[tuple[float, float, float]] = []
+    for fraction in (0, 0.5, 1):
+        value = adapter.wrapped(west + (east - west) * fraction)
+        label = "180°" if abs(value) == 180 else f"{abs(value):.4f}°{'W' if value < 0 else 'E'}"
+        label_width = measure(label)
+        x = max(56, min(1144 - label_width, left + width * fraction - label_width / 2))
+        y = bottom + height + 10 if fraction == 0.5 else bottom - 52
+        adapter.require(all(y != old_y or x >= end + 8 or x + label_width + 8 <= start
+                            for start, end, old_y in lon_boxes), "graphic_map_labels_exceed_space")
+        lon_boxes.append((x, x + label_width, y))
+        longitudes.append(dict(x=x, y=y, text=label))
+
+    obstacles = [(x - 20, y - 20, x + 20, y + 20) for x, y in map_["markers"]] + [
+        row["box"] for row in map_["labels"]]
+    for fraction in (0, 0.5, 1):
+        value = south + (north - south) * fraction
+        label = f"{abs(value):.4f}°{'S' if value < 0 else 'N'}"
+        label_width = measure(label)
+        y = bottom + height * fraction + (6 if fraction == 0 else -42 if fraction == 1 else 6)
+        possible = [left - label_width - 12] if left - label_width - 12 >= 56 else []
+        possible += [left + 8 + i * 16 for i in range(max(0, int((width - label_width - 16) / 16) + 1))]
+        box = None
+        for x in possible:
+            box = (x - 3, y - 5, x + label_width + 3, y + 41)
+            if all(box[2] + 16 < a or c + 16 < box[0] or box[3] + 16 < b or d + 16 < box[1]
+                   for a, b, c, d in obstacles):
+                break
+        else:
+            raise adapter.MapQualificationError("graphic_map_labels_exceed_space")
+        assert box is not None
+        obstacles.append(box)
+        latitudes.append(dict(x=x, y=y, text=label, box=box))
+    for point in evidence["points"]:
+        label = point["label"] + " · " + coordinate_label(point)
+        value = str(point["frp_source"]) + " MW"
+        adapter.require(measure(label) + measure(value) + 24 <= 1088,
+                        "graphic_map_labels_exceed_space")
+        rows.append(dict(label=label, value=value))
+    return dict(longitudes=longitudes, latitudes=latitudes, rows=rows)

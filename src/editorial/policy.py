@@ -76,6 +76,8 @@ POLICY_FILES = (
     "src/media/crw_graphic_adapter.py", "src/media/evidence_graphic.py",
     "src/media/air_quality_graphic_adapter.py",
     "src/media/fire_graphic_adapter.py",
+    "src/media/fire_map_graphic_adapter.py",
+    "src/media/maps/ne_110m_land_v4_1_0.json", "src/media/maps/manifest.json", "src/media/maps/NOTICE.md",
 )
 MODEL_KEYS = {"writer", "writer_provider", "fact_check", "critic", "safety"}
 FLAG_KEYS = {"critic_enabled", "critic_revise_enabled", "writer_samples", "safety_llm_enabled"}

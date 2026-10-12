@@ -80,7 +80,14 @@ def inputs(authority, c, draft, policy, now):
     refuse(now < min(utc_datetime(origin["source_useful_until"]), utc_datetime(origin["provenance_useful_until"])),
            "media_source_expired")
     from src.dashboard_preview.preview import qualified_spec
-    spec, label, context = qualified_spec(captured["bundle"], synthetic=True)
+    from src.media.fire_map_graphic_adapter import MapQualificationError
+    try:
+        spec, label, context = qualified_spec(captured["bundle"], synthetic=True)
+        if spec["template"] == "modis_thermal_detection_map":
+            from src.media.evidence_graphic_render import map_text_layout
+            map_text_layout(spec["evidence"])
+    except MapQualificationError as exc:
+        raise CommandError(exc.code, "This source cannot be shown within the qualified map display limits") from None
     digest, renderer = profile(authority, spec)
     return dict(source_origin=ref, source=origin, spec=spec, profile_sha256=digest, renderer=renderer,
                 policy_sha256=fingerprint(policy), source_label=label, source_context=context)
@@ -315,6 +322,27 @@ def projection(authority, c, draft_id, *, state, version, policy, now, resolve_p
     matches = [d for d in state["drafts"] if isinstance(d, dict) and d.get("id") == draft_id]
     refuse(len(matches) == 1, "draft_not_found")
     draft = matches[0]
+    if png_proposal is not None:
+        # Passive historical evidence has an exact retained key. It must not
+        # depend on the current mutation eligibility or a recent-list window.
+        media._sha(png_proposal)
+        refuse(generation.exists(c, PREPARATION, png_proposal), "media_preparation_not_retained")
+        reference = generation.read(c, PREPARATION, png_proposal)
+        intent = authority._intent(c, reference["command_id"])
+        refuse(intent is not None, "media_preparation_not_retained")
+        command, _ = intent
+        result = authority._result(c, reference["command_id"])
+        refuse(command.action == "prepare_media_revision" and len(command.targets) == 1
+               and command.targets[0].draft_id == reference["draft_id"] == draft_id
+               and command.command_id == reference["command_id"] and result is not None
+               and reference["proposal_sha256"] == png_proposal and reference["status"] == "staged"
+               and reference["publication_approved"] is False and result["status"] == "unchanged"
+               and p._canonical(result["media_preparation"]) == p._canonical(reference),
+               "media_preparation_not_retained")
+        return media.read_retained_png(c, expected_proposal_sha256=reference["proposal_sha256"],
+            expected_packet_sha256=reference["packet_sha256"], expected_predecessor=command.targets[0].as_dict(),
+            expected_subject=command.actor_subject, expected_at=utc_text(utc_datetime(command.requested_at)),
+            environment=authority.environment)
     view = dict(draft_id=draft_id, target=_identity(draft), status="unavailable", text=draft["text"],
         publication_approved=False, local_preview=True, parked=False, review_current=False, checks_status="not_requested",
         expected_check_completion_sha256=None, preparation=None, packet=None)
@@ -337,11 +365,6 @@ def projection(authority, c, draft_id, *, state, version, policy, now, resolve_p
             refs.append(result["media_preparation"])
         if len(refs) == 64:
             break
-    if png_proposal is not None:
-        refuse(any(r["proposal_sha256"] == png_proposal for r in refs), "media_draft_mismatch")
-        package = media.read(c, png_proposal, authority.environment)
-        refuse(package["capture"]["predecessor_state"]["drafts"][0]["id"] == draft_id, "media_draft_mismatch")
-        return package["assets"]["preview.png"]
     try:
         value = inputs(authority, c, draft, policy, now)
         view.update(status="ready", expected_policy_sha256=value["policy_sha256"],

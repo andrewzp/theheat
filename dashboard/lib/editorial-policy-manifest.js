@@ -16,7 +16,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/commands/postgres_checks.py": "6e9a357ae190919e9b7bf523b7cb3a0c59f38d41e189de70c3ded359c49048c0",
     "src/commands/postgres_coverage.py": "edc97725c30d16d980872962a6d7157068727b3de823bd56c4db33fa77a45e31",
     "src/commands/postgres_delivery.py": "f2c7c0cec5340dfcd8fb21f5cbe11caf5d144da77573c9308154271372ea750b",
-    "src/commands/postgres_editor_media.py": "c8283ec2a5cfeb155312516a5892ded3f6db0345d4e079a6e4b4772d207a6342",
+    "src/commands/postgres_editor_media.py": "0a6222e7ccd4569f9a6b04409682347e42c0b253617c9b4a47814da2eba6f366",
     "src/commands/postgres_media.py": "3d9ecaf947f87fa486e38e6617486fc458677aa19721cfca68a2523d52655a16",
     "src/commands/postgres_media_commands.py": "9ee66157e64ca30e78cd68d1d4c35c53dd5960c5476c4155b0b0afb1e56142c6",
     "src/commands/postgres_report_development.py": "4a93f353cd6560753d83afdf1ae4b9507b57318f3275351f2d9a5d8480230b68",
@@ -60,7 +60,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/editorial/draft_admission.py": "1f60fce127c7caa8c1965ce5c7c7e89c7b291a56028604f0d315952c587555ec",
     "src/editorial/marine_evidence.py": "7183f93f1068d75856063cf061a1dea8751bd4dd98cc1f1f34488bcf39296f5c",
     "src/editorial/newsworthiness.py": "2df18f17c51f772b761609bf10dc1c5b7289d2b1f1e2ce6f3f9dd743dbe73236",
-    "src/editorial/policy.py": "cbfd60f113845fb2d8110afeb1b31c58f29d2657ccb129cf0272c7a237e11aaa",
+    "src/editorial/policy.py": "917a238cc7e6f6cf677f3529730ae2c5afe65b032f2ad1f416420bc0f5f53a76",
     "src/editorial/report_development.py": "e2ed39a9ff957683c8befff0f3b99533fdc9d90d84af88220ed13f2bf1489995",
     "src/editorial/revisions.py": "c4d6ebed696a1174b0f961eb8e69971b2b5adbaccabab5628d72ed61f662318d",
     "src/editorial/synthesis.py": "c3230d7f91f287550e158548998ed5df778148592c2989cf7155cd2a3182498b",
@@ -69,11 +69,15 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/media/air_quality_graphic_adapter.py": "fb5a1e59526e64141f7aa745ac0f297b0edc159d2398f8e67d60c1ed18dd2aa7",
     "src/media/attachment.py": "119515f4136f9bfa35c9eb3dc2b6f4c9f5ba938cf70e9002d9ae7f9d7bdb8d12",
     "src/media/crw_graphic_adapter.py": "5503a2527f3bf32351685a5c2a54fc41a543dc387ae7005c101461237588f6e1",
-    "src/media/evidence_graphic.py": "c7d4467dc9cfe942914ade969761437bc14a937daa086dacf3a9bb738f926172",
+    "src/media/evidence_graphic.py": "7c266f6c7855bb47b3daa4a7e4a2640caba9c97262c8caa90ca596906e21c7f8",
     "src/media/fire_graphic_adapter.py": "343acd087bcbf3f566837bcf2a1799187002a734641c947b599d6f9f025e9833",
+    "src/media/fire_map_graphic_adapter.py": "75bff8feb7c2e6e98df6915e9fa0fb0c680158f9672d3c92a5989dd79ad30643",
     "src/media/joint_review.py": "54aff9dd95e9e85f7efbe5faa03742d3654ab2259bf2a39a36692b248a9be44b",
+    "src/media/maps/NOTICE.md": "f6ebf3caca500621c4b2c9f9fe9aad802099b82a4a1c21c479daf97d29aabac0",
+    "src/media/maps/manifest.json": "1af072edc46ae3252bf6cf0edb43993986de262a2840b2cd4907eb4866f970e9",
+    "src/media/maps/ne_110m_land_v4_1_0.json": "a37b057aca4fc9714a0c24b5d6bc9778bb5845894646e4052383ea63fa3cd50d",
     "src/media/native_profile.py": "87c7480c10ffe945592f572ac869d2c36f40a95ae45da23c6f839775ee7cb009",
-    "src/media/review_packet.py": "b36e1420a998e28cee80c5d475bae61b347441277408ffc3358956fa0445fee7",
+    "src/media/review_packet.py": "ec5ede8f689bbcfbbd6d410b9683537e3fb10d9588cba13aa726e5a5005e9331",
     "src/orchestrator/cyclone_episodes.py": "e0913dae539cb3fd256dd6c70fc4e01c7b53b141ec47fcc98febd53cf0ce3f4e",
     "src/orchestrator/cyclones.py": "389c6441db0839763b6a9cd42146f75e3ab14d1179125d60a9c368eb1e03697d",
     "src/orchestrator/dedup.py": "e3ad15f1eb544e0d130a29f41e8090fb8839805e57877cf0b45c74438ac8b791",
@@ -151,5 +155,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "4a828a22e451889f630e994add6ba38c463d44369d24d2e22c2ff85e7f0387e5"
   },
   "schema_version": 1,
-  "source_sha256": "64439db5e0ed31d18246d9f0622d455a9fd0f232daf206eb9ed84486b782f408"
+  "source_sha256": "989ed6085d4908024c79702209a72251c27e837ec2c7d6a7dd4fa20daeb31c6d"
 }
