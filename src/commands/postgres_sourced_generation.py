@@ -407,6 +407,10 @@ def candidates_for(c, identity, namespace):
 
 def prepare_ghcn_command(authority, command_id, *, executed=False):
     """Resolve before the mutation connection. Completed command reads stay passive."""
+    # Unconfigured authorities retain their original single-transaction path.
+    # Actual GHCN work still requires an exact resolved scientific context.
+    if not hasattr(authority, "ghcn_baseline"):
+        return None
     from src.commands import postgres_synchronous_generation as sync
     with authority.projections._connection() as c:
         authority._validate(c)

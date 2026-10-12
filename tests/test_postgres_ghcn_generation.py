@@ -9,7 +9,7 @@ from uuid import uuid4
 
 import pytest
 
-from src.commands.schema import utc_text
+from src.commands.schema import CommandError, utc_text
 from src.commands.postgres_sourced_generation import private_configuration
 from src.editorial.policy import current_editorial_policy
 from src.editorial.revisions import fingerprint
@@ -96,7 +96,34 @@ def submit(case,body,role="editor",fault=""):
     return worker(case,"consume",body["command_id"],fault)
 
 
-def test_actual_source_http_one_writer_four_checks_pending_draft(ghcn_case,record_property,cluster,tmp_path):
+def refused_without_source_capability(case, body, monkeypatch):
+    before=case["authority"].read()
+    status,_,_=http(case["port"],"/commands",method="POST",value=body)
+    assert status==202
+    with monkeypatch.context() as local:
+        local.delattr(case["authority"],"ghcn_baseline")
+        result=case["authority"].consume(case["operators"].resolve,command_id=body["command_id"])
+    assert result["status"]=="rejected" and result["code"]=="generation_evidence_not_ready",result
+    assert case["authority"].read()==before
+
+
+def refuse_dispatch_without_source_capability(case, monkeypatch, operation):
+    authority=case["authority"]
+    at=utc_text(datetime.now(UTC))
+    before=authority.spending("status",{},now=at)
+    for missing in (True,False):
+        with monkeypatch.context() as local:
+            if missing:
+                local.delattr(authority,"ghcn_baseline")
+            else:
+                local.setattr(authority,"ghcn_baseline",None)
+            with pytest.raises(CommandError) as error:
+                operation()
+            assert error.value.code in {"generation_evidence_not_ready","ghcn_source_result_unavailable"}
+        assert authority.spending("status",{},now=at)==before
+
+
+def test_actual_source_http_one_writer_four_checks_pending_draft(ghcn_case,record_property,cluster,tmp_path,monkeypatch):
     case=ghcn_case
     before=case["authority"].read()
     assert worker(case,"enroll")==case["refs"]
@@ -108,16 +135,27 @@ def test_actual_source_http_one_writer_four_checks_pending_draft(ghcn_case,recor
     assert status==200 and listing["briefs"][0]["status"]=="pending_validation",listing
     brief=listing["briefs"][0]
     body=command(case,"request_sourced_generation",{k:brief[k] for k in ("brief_id","brief_sha256","expected_state_version","expected_policy_sha256")})
+    refused_without_source_capability(case,command(case,"request_sourced_generation",body["payload"]),monkeypatch)
     result=submit(case,body)
     assert result["status"]=="applied",result
+    def forbidden_transport():
+        raise AssertionError("Missing source capability must not construct a transport")
+    refuse_dispatch_without_source_capability(case,monkeypatch,lambda:case["authority"].execute_sourced_generation_once(
+        body["command_id"],case["operators"].resolve,clock=lambda:utc_text(datetime.now(UTC)),
+        operation="write",enabled=True,transport_factory=forbidden_transport))
     assert worker(case,"write",body["command_id"])["outcome"]=="response_retained"
     assert worker(case,"write",body["command_id"])["outcome"]=="reconciliation_required"
     captured=worker(case,"capture",body["command_id"])
     assert captured["outcome"]=="candidate_ready",captured
+    refused_without_source_capability(case,command(case,"request_candidate_checks",captured["candidate"]),monkeypatch)
     check=command(case,"request_candidate_checks",captured["candidate"])
     check["expires_at"]=utc_text(datetime.now(UTC)+timedelta(minutes=10))
     requested=submit(case,check,role="publisher")
     assert requested["status"]=="unchanged",requested
+    checks_before=case["authority"].check_execution("read",dict(check_set_id=requested["candidate"]["check_set_id"]),now=utc_text(datetime.now(UTC)))
+    refuse_dispatch_without_source_capability(case,monkeypatch,lambda:case["authority"].execute_candidate_check_once(
+        check["command_id"],case["operators"].resolve,clock=lambda:utc_text(datetime.now(UTC)),enabled=True))
+    assert case["authority"].check_execution("read",dict(check_set_id=requested["candidate"]["check_set_id"]),now=utc_text(datetime.now(UTC)))==checks_before
     for stage in ("deterministic","safety","fact_check","critic"):
         pending=worker(case,"projection",fault="passive_traps")[0]
         assert pending["expected_completion_sha256"] is None and not pending["required_checks_completed"]
@@ -144,6 +182,7 @@ def test_actual_source_http_one_writer_four_checks_pending_draft(ghcn_case,recor
     projected=worker(case,"projection",fault="passive_traps")[0]
     assert projected["required_checks_completed"] is False and projected["status"]=="checks_recorded",projected
     refs=dict(captured["candidate"],**{k:projected[k] for k in ("check_set_id","expected_completion_sha256")})
+    refused_without_source_capability(case,command(case,"admit_checked_candidate",refs),monkeypatch)
     # Independent original writer and checker actors, and exact operator input
     # allowlist, are checked again by the worker, not blessed by the listing.
     operators=Path(case["config"]["operators"])
