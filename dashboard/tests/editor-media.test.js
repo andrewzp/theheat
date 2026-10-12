@@ -92,6 +92,19 @@ test("component exposes five explicit confirmations and complete alt; edit/updat
   }
 })
 
+test("local delivery readback distinguishes partial and unknown outcomes without sending controls", () => {
+  const current = { ...view(), parked:true, delivery:{ scope:"local_http_fixture_v1", publication_approved:false,
+    intents:[{intent_id:"invented-intent", current:false, stages:{ x:{upload:{status:"confirmed"},alt:{status:"confirmed"},create:{status:"unknown"}},bluesky:{upload:{status:"not_sent"},create:{status:"pending"}} }}] } }
+  const html = renderToStaticMarkup(React.createElement(EditorMediaPanel, {view:current, role:"viewer", imageUrl:"blob:invented", confirmations:{}, reason:""}))
+  assert.match(html, /X image upload: confirmed by the local test/)
+  assert.match(html, /X post creation: outcome unknown; automatic retry blocked/)
+  assert.match(html, /Bluesky image upload: not sent/)
+  assert.match(html, /Bluesky post creation: waiting/)
+  assert.match(html, /no longer current; no new delivery steps/)
+  assert.match(html, /They do not authorize publishing/)
+  assert.doesNotMatch(html, />Send|>Publish|>Retry delivery|>Reconcile/)
+})
+
 test("media proxy authenticates and confines PNG access to a draft-scoped reference", async () => {
   const saved = { ...process.env }, original = globalThis.fetch, calls = []
   process.env.NODE_ENV = "test"

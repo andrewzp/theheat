@@ -340,6 +340,7 @@ def arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--media-rasterizer")
     parser.add_argument("--media-scratch")
     parser.add_argument("--media-dependency-manifest")
+    parser.add_argument("--delivery-fixture")
 
 
 def adapter(args) -> tuple[PostgresCommandAuthority, Operators]:
@@ -361,6 +362,8 @@ def adapter(args) -> tuple[PostgresCommandAuthority, Operators]:
             raise ValueError("explicit_media_profile_required")
         authority.configure_editor_media(rasterizer=args.media_rasterizer, scratch=args.media_scratch,
             dependency_manifest=args.media_dependency_manifest)
+    if getattr(args, "delivery_fixture", None):
+        authority.configure_delivery(args.delivery_fixture)
     return authority, operators
 
 

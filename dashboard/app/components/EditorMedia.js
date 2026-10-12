@@ -37,6 +37,14 @@ export function EditorMediaPanel({ view, role, busy, imageUrl, imageError, confi
       h("button", { type:"button", className:"btn sm", disabled:busy, style:{ minHeight:44 }, onClick:refresh }, "Refresh graphic status")),
     view.checks && h("ul", null, Object.entries(view.checks).map(([stage,status]) => h("li", { key:stage }, `${stage.replaceAll("_", " ")}: ${status}`))),
     view.checks_status && !["not_requested", "pending", "passed"].includes(view.checks_status) && h("p", { role:"status" }, view.checks_status.replaceAll("_", " ")),
+    view.delivery?.scope === "local_http_fixture_v1" && view.delivery.publication_approved === false && view.delivery.intents.length > 0 &&
+      h("section", { "aria-label":"Local delivery test results" }, h("h4", null, "Local delivery test"),
+        h("p", null, "These receipts describe the invented local test only. They do not authorize publishing."),
+        view.delivery.intents.map((intent, index) => h("div", { key:intent.intent_id },
+          h("p", null, `Review ${index + 1}: ${intent.current ? "current" : "no longer current; no new delivery steps"}.`),
+          h("ul", null, Object.entries(intent.stages).flatMap(([platform, stages]) => Object.entries(stages).map(([stage, receipt]) =>
+            h("li", { key:`${platform}-${stage}` }, `${platform === "x" ? "X" : "Bluesky"} ${stage === "alt" ? "image description" : stage === "upload" ? "image upload" : "post creation"}: ${
+              ({ pending:"waiting", confirmed:"confirmed by the local test", not_sent:"not sent", unknown:"outcome unknown; automatic retry blocked" })[receipt.status] || "unavailable"}`))))))),
     h("p", { className:"graphic-preview-note" }, "Human review and model checks are separate. Model cost remains unknown until reconciled. Publishing stays unavailable."))
 }
 

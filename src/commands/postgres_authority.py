@@ -86,7 +86,13 @@ class PostgresCommandAuthority:
         row = c.execute(f"SELECT version,migration_sha,catalog_sha,environment,owner_role,runtime_role FROM {SCHEMA}.metadata WHERE singleton=1").fetchone()
         p._require(row is not None and row[0] == 1 and row[1] == p._sha(MIGRATION.read_bytes()),
                    "unsupported_command_schema")
-        p._require(row[2] == p._catalog(c, SCHEMA), "changed_command_schema")
+        from src.commands import postgres_delivery as delivery
+        if delivery.upgraded(c):
+            delivery.validate_core_catalog(c, row, self.environment)
+        else:
+            p._require(c.execute("SELECT to_regnamespace('theheat_delivery')").fetchone()[0] is None,
+                       "delivery_intermediate_catalog")
+            p._require(row[2] == p._catalog(c, SCHEMA), "changed_command_schema")
         p._require(row[3] == self.environment, "command_environment_mismatch")
         roles = c.execute(f"SELECT owner_role,runtime_role FROM {p.SCHEMA}.metadata WHERE singleton=1").fetchone()
         p._require(tuple(row[4:]) == roles, "command_role_mismatch")
@@ -112,6 +118,25 @@ class PostgresCommandAuthority:
             self._validate(c, runtime=False)
             self._pointer(c, lock=True)
             postgres_media.install(c, self.environment)
+
+    def initialize_delivery(self, *, now: datetime) -> None:
+        """Explicit owner-only local catalog upgrade; never a sender activation."""
+        from src.commands import postgres_delivery as delivery
+        with self.projections._connection(writing=True) as c:
+            self._validate(c, runtime=False)
+            self._pointer(c, lock=True)
+            delivery.install(c, self.environment, now=_clock(now))
+
+    def configure_delivery(self, path) -> None:
+        from src.commands.postgres_delivery import configure
+        configure(self, path)
+
+    def delivery_projection(self, draft_id, resolve_principal, *, now):
+        from src.commands import postgres_delivery as delivery
+        with self.projections._connection() as c:
+            self._validate(c)
+            self._pointer(c, lock=True)
+            return delivery.projection(self, c, draft_id, resolve_principal, _clock(now))
 
     def initialize_media_commands(self) -> None:
         """Explicit owner migration after media staging; no production cutover."""
@@ -706,6 +731,7 @@ class PostgresCommandAuthority:
                     candidate_transition = None
                     generation = None
                     editor_media = None
+                    delivery_plan = None
                     report_transition = None
                     coverage_outcome = None
                     try:
@@ -730,6 +756,10 @@ class PostgresCommandAuthority:
                             with c.transaction():
                                 reduction, result_key, references = editor_domain.boundary(self, c, state, version,
                                     command, actor, editorial_policy, clock, resolve_principal, _prepared_media)
+                                if command.action == "approve_media_revision" and hasattr(self, "delivery_configuration"):
+                                    from src.commands import postgres_delivery as delivery
+                                    proposed = next(d for d in reduction.state["drafts"] if d["id"] == command.targets[0].draft_id)
+                                    delivery_plan = delivery.prepare(self, c, proposed, command)
                             editor_media = (result_key, references)
                         elif command.action in GENERATION_ACTIONS:
                             from src.commands import postgres_sourced_generation as generation_domain
@@ -771,6 +801,8 @@ class PostgresCommandAuthority:
                             result["media"] = media_transition.references
                         if editor_media is not None:
                             result[editor_media[0]] = editor_media[1]
+                        if delivery_plan is not None:
+                            result["delivery"] = delivery.references(delivery_plan)
                         if reduction.changed_ids:
                             changed = reduction.state
                     except CommandError as exc:
@@ -796,6 +828,8 @@ class PostgresCommandAuthority:
                     c.execute(f"INSERT INTO {SCHEMA}.results VALUES(%s,%s,%s,%s,%s,%s)",
                               (command.command_id, encoded_result, p._sha(encoded_result), version, NAMESPACE, str(version)))
                     self._event(c, command.command_id, "completed", utc_text(clock), result)
+                    if delivery_plan is not None and result["status"] == "applied":
+                        delivery.enroll(self, c, delivery_plan, resolve_principal, clock)
                     if command.action in {"attach_media_revision", "review_media_revision"} and result["status"] == "applied":
                         self._result(c, command.command_id)
         return result
@@ -809,8 +843,13 @@ class PostgresCommandAuthority:
         with self.projections._connection() as c:
             self._validate(c)
             version, state = self._state(c, lock=True)
-            return domain.projection(self, c, draft_id, state=state, version=version,
+            value = domain.projection(self, c, draft_id, state=state, version=version,
                 policy=current_editorial_policy(), now=_clock(now), resolve_principal=resolve_principal, png_proposal=png_proposal)
+            if png_proposal is None:
+                from src.commands import postgres_delivery as delivery
+                if delivery.upgraded(c):
+                    value["delivery"] = delivery.projection(self, c, draft_id, resolve_principal, _clock(now))
+            return value
 
     def execute_revision_check_once(self, command_id, resolve_principal, *, clock, reservation=None, enabled=False):
         from src.commands import postgres_editor_media as domain, postgres_revision_checks as revisions

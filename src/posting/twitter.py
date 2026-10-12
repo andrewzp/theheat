@@ -36,6 +36,21 @@ def _get_upload_api() -> tweepy.API | None:
     return tweepy.API(auth)
 
 
+def upload_png(api, png: bytes, **options):
+    """One SDK phase; authorization and durable effects belong to its caller."""
+    return api.media_upload(filename="hot10.png", file=BytesIO(png), **options)
+
+
+def set_alt_text(api, media_id: str, alt_text: str, **options):
+    return api.create_media_metadata(media_id, alt_text, **options)
+
+
+def create_post(client, text: str, media_ids=None, **options):
+    if media_ids is not None:
+        options["media_ids"] = media_ids
+    return client.create_tweet(text=text, **options)
+
+
 def post_tweet(
     text: str,
     media_png: bytes | None = None,
@@ -58,19 +73,13 @@ def post_tweet(
             if upload_api is None:
                 print("[twitter] No upload API credentials configured, skipping post")
                 return None
-            media = upload_api.media_upload(
-                filename="hot10.png",
-                file=BytesIO(media_png),
-            )
+            media = upload_png(upload_api, media_png)
             media_id = str(media.media_id)
             if alt_text:
-                upload_api.create_media_metadata(media_id, alt_text)
+                set_alt_text(upload_api, media_id, alt_text)
             media_ids = [media_id]
 
-        if media_ids is None:
-            response = client.create_tweet(text=text)
-        else:
-            response = client.create_tweet(text=text, media_ids=media_ids)
+        response = create_post(client, text, media_ids)
         tweet_id = response.data["id"]
         print(f"[twitter] Posted tweet {tweet_id}: {text[:60]}...")
         return {"id": tweet_id, "text": text}
