@@ -238,3 +238,87 @@ def test_artifact_bound_is_checked_before_base64_and_decode(repository, monkeypa
         session.retain_artifact(b"12345", declared_sha256=hashlib.sha256(b"12345").hexdigest(), metadata=meta())
     with session.repository._connection() as c:
         assert c.execute(f"SELECT count(*) FROM {p.SCHEMA}.versions WHERE namespace=%s", (ARTIFACT,)).fetchone()[0] == 0
+
+
+@pytest.mark.parametrize("mode", ["viewer", "changed_actor", "expired", "policy", "config_drift"])
+def test_open_failure_cannot_leave_a_development_item(repository, monkeypatch, mode):
+    repo = repository[1]
+    _, _, head, _ = retained(repo)
+    authority, config = authority_fixture(repo, head)
+    command = command_fixture(head)
+    actor = Principal("fixture-editor", "viewer" if mode == "viewer" else "editor", "fixture-session")
+    if mode == "changed_actor":
+        actor = Principal("different-editor", "editor", "fixture-session")
+    elif mode == "expired":
+        command.expires_at = "2026-10-11T11:00:00Z"
+    elif mode == "policy":
+        command.payload["expected_policy_sha256"] = "e"*64
+    elif mode == "config_drift":
+        record = p.PostgresProjectionRepository._record
+        def change_after_write(c, namespace, *args):
+            receipt = record(c, namespace, *args)
+            if namespace == domain.DEVELOPMENT:
+                config["current_reports"] = []
+            return receipt
+        monkeypatch.setattr(p.PostgresProjectionRepository, "_record", staticmethod(change_after_write))
+    before = {"drafts": [], "publish_ledger": {}}
+    state = deepcopy(before)
+    with pytest.raises(ValueError):
+        with repo._connection(writing=True) as c:
+            repo._validate(c)
+            domain.prepare(authority, c, state, command, actor, now=NOW, editorial_policy=current_editorial_policy())
+    assert state == before
+    with repo._connection() as c:
+        assert c.execute(f"SELECT count(*) FROM {p.SCHEMA}.versions WHERE namespace=%s", (domain.DEVELOPMENT,)).fetchone()[0] == 0
+
+
+def test_revision_cas_race_has_one_winner_and_preserves_both_inputs(repository):
+    from concurrent.futures import ThreadPoolExecutor
+    repo = repository[1]
+    session, original, head, _ = retained(repo)
+    alternatives = []
+    for reason in ("scope_unresolved", "time_unresolved"):
+        value = deepcopy(original)
+        value["previous_report_sha256"] = head
+        value["claims"][0]["holds"].append(reason)
+        alternatives.append(value)
+    def retain_one(value):
+        try:
+            return session.retain_revision(value, expected_head=head, operation_id=str(uuid4()))
+        except ReportError as exc:
+            return str(exc)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(retain_one, alternatives))
+    assert sum(type(result) is dict for result in results) == 1
+    assert "report_head_changed" in results
+    assert session.read_current(original["lineage_id"])[1] in alternatives
+    # The original immutable source artifact still resolves for both candidates.
+    assert session.document(alternatives[0]) and session.document(alternatives[1])
+
+
+def test_report_correction_makes_old_open_item_unavailable_until_reconfigured(repository):
+    repo = repository[1]
+    session, original, head, _ = retained(repo)
+    authority, config = authority_fixture(repo, head)
+    command = command_fixture(head)
+    actor = Principal("fixture-editor", "editor", "fixture-session")
+    with repo._connection(writing=True) as c:
+        repo._validate(c)
+        old = domain.prepare(authority, c, {}, command, actor, now=NOW, editorial_policy=current_editorial_policy()).outcome
+    changed = deepcopy(original)
+    changed["previous_report_sha256"] = head
+    changed["claims"][0]["quantity"]["scope"] = "currently_affected"
+    changed["claims"][0]["holds"].append("cumulative_active_scope_unreconciled")
+    newer = session.retain_revision(changed, expected_head=head, operation_id=str(uuid4()))
+    assert domain.projection(authority, now=NOW)["reports"][0]["development_status"] == "unavailable"
+    config["current_reports"][0]["report_sha256"] = newer["report_sha256"]
+    assert domain.projection(authority, now=NOW)["reports"][0]["development_status"] == "evidence_changed_refresh_required"
+    with repo._connection(writing=True) as c:
+        repo._validate(c)
+        revised = domain.prepare(authority, c, {}, command_fixture(newer["report_sha256"]), actor, now=NOW,
+                                 editorial_policy=current_editorial_policy()).outcome
+    assert old["item_id"] == revised["item_id"] and old["item_sha256"] != revised["item_sha256"]
+    assert session.read_current(original["lineage_id"])[1]["claims"][0]["quantity"]["scope"] == "currently_affected"
+    with repo._connection() as c:
+        _, item = domain._latest(c, original["lineage_id"])
+    assert item["previous_sha256"] == old["item_sha256"] and item["sequence"] == 2
