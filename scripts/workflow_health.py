@@ -41,6 +41,12 @@ MONITORED_WORKFLOWS: list[dict[str, str]] = [
     {"name": "time-travel-canary", "file": "time-travel-canary.yml"},
 ]
 
+# Only these exact workflow identities have the production-pause job guard.
+PAUSE_GUARDED_WORKFLOWS = frozenset({
+    ("theheat-bot", "bot.yml"),
+    ("voice-regression", "voice-regression.yml"),
+})
+
 # Conclusions that mean the run produced a broken result. A single red run trips
 # detection — waiting for "two in a row" is the delay that let voice-regression
 # rot for five days. ``cancelled`` (manual abort) and ``neutral``/``skipped`` are
@@ -244,10 +250,10 @@ def run_workflow_health(
         file = str(info.get("file") or "")
         runs = info.get("runs") or []
         verdict = classify_workflow_run(name, file, runs, now=now)
-        if (production_paused is True and name == "theheat-bot" and file == "bot.yml"
+        if (production_paused is True and (name, file) in PAUSE_GUARDED_WORKFLOWS
                 and verdict["category"] != "failing"):
             # A successful workflow may contain only skipped jobs. Keep its run
-            # details, but never resolve a collection incident from pause intent.
+            # details, but never resolve an incident from pause intent alone.
             verdict = {**verdict, "category": "paused", "reason": "production_pause_configured"}
         verdicts.append(verdict)
 
