@@ -2,14 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
-## 0.9.108.110 — 2026-10-11
+## 0.9.108.110 — 2026-10-12
 
-- Preview qualified saved PM2.5 model forecasts in the protected editor using the existing complete-source adapter, with all hourly samples, grid scope and full description.
-- Keep forecast calendar dates and timezones distinct from MODIS acquisition times. Bind both response variants to the exact runtime, renderer and draft revision; preserve read-only behavior and cancellation controls.
-- Preserve exact retained numeric evidence and revision history through dashboard saves; refuse ambiguous evidence and detect numeric drift during native rendering.
-- Add opt-in local PostgreSQL capture and replay of the complete qualified station supply before publication caps, with restart and restore checks.
-- Let the local workbench check retained writer candidates and admit current results as unapproved drafts. Reconstruct all four recorded checks at admission, and preserve an older draft when a later save gate refuses the replacement.
-- Add an explicitly configured staging PostgreSQL connection with pinned certificate, hostname and database identity checks. Keep client TLS verification distinct from backend connection metadata.
+- Join retained sources, one-sample batch or synchronous writing, four required checks and pending-draft admission in the experimental local editor. Preserve original requests, responses and uncertain costs; revalidate original actors and deadlines before saving.
+- Retain complete GHCN scientific evidence while using a compact, exactly bound model view. Keep original source selection semantics, refuse changed baselines and prevent retries from renewing enrollment.
+- Add a full-color MODIS locator and qualified PM2.5 forecast graphics with source/time/units and accessible descriptions. Retain exact numeric evidence and original assets through joint review, current checks, parked approval, edits and restore.
+- Recover interrupted editor commands and preserve the selected draft. Keep historical graphics readable without restoring obsolete approval; refuse ambiguous evidence and unsupported geometry.
+- Connect local cyclone episodes, attributed report review and coverage references while preserving unresolved claims and missing reference qualification. Exercise delivery and database recovery with invented transports and Free staging data only.
+- Keep Gist as production authority and collection, drafting and automatic publishing paused. These local workflows do not activate paid requests, production migration or public delivery; published charts and radar remain separate work.
 
 ## 0.9.108.109 — 2026-10-11
 
