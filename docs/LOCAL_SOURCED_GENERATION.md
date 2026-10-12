@@ -1,8 +1,8 @@
 # Shared sourced generation in local preview
 
-The local source chooser requests one draft from an immutable, audited source brief. It uses the same writer request and one-sample batch engine as the explicit automatic starter, then the existing four required checks and checked-candidate admission. Admission creates a pending, unapproved draft. Editing still invalidates obsolete checks and approval.
+The local source chooser requests one draft from an immutable, audited source brief. Ordinary inputs use the same writer request and one-sample batch engine as the explicit automatic starter. Eligible urgent inputs use the bounded synchronous writer path. Both require the existing four checks and checked-candidate admission. Admission creates a pending, unapproved draft. Editing still invalidates obsolete checks and approval.
 
-This is an experimental local PostgreSQL workflow. It does not select a production backend, activate batch transport, collect sources or enable publishing. Gist remains the production store. Urgent synchronous generation, production producer trust and billing reconciliation remain separate work.
+This is an experimental local PostgreSQL workflow. It does not select a production backend, activate batch transport, collect sources or enable publishing. Gist remains the production store. Production producer trust, all-writer migration and billing reconciliation remain separate work.
 
 The old free-text `/api/generate` provider call is removed. Outside an explicitly configured local preview, generation is unavailable. Production pause takes precedence. An authenticated local `GET /api/generate` lists at most 16 server-retained briefs; `POST` accepts only the durable `request_sourced_generation` command with `brief_id`, `brief_sha256`, `expected_state_version` and `expected_policy_sha256`. No browser-supplied prose, model, source payload or spending amount is accepted.
 
@@ -13,6 +13,10 @@ The reservation digest must identify a complete immutable document retained thro
 `SourcedGenerationClient` gives an explicitly injected automatic caller the same command path. Both triage drains count queued work as a selected slot, not a saved draft or provider attempt. Source callbacks with deferred side effects are excluded. An unavailable explicit adapter cannot fall back to the legacy provider.
 
 Separate explicit worker invocations call `execute_sourced_generation_once` with `submit`, `collect` or `capture`; execution is off unless explicitly enabled. Collection reuses a retained complete receipt by default. `refresh=True` is an explicit bounded read of existing provider work, never another submission. Source, role, memory, policy and reservation are revalidated before requests and interpretation. Returned bytes from an already granted attempt remain retained after later authority drift; that does not permit interpreting or promoting stale results. A lost acknowledgment keeps the hold and unknown outcome.
+
+For an urgent retained input, the existing command enrolls the synchronous job. The explicit synchronous worker grants one SDK request only after checking the current source, operator/session, allowance and rejection cache. It retains the original request and response for the same check/admission pipeline; an uncertain dispatch is not automatically repeated. Passive response retention after later authority drift does not authorize another request or a saved draft.
+
+The retained GHCN source path currently commits source/history changes and prepares an exactly bound compact claim view from the full replayable evidence. That reference does not yet enroll a writer job or pass through candidate checks; request preparation is not a saved draft. Its separate hydration work must preserve full scientific checks while using the compact view for model requests.
 
 The writer's existing lease may briefly delay the checker. `checks_available_at` is only a current availability hint. The UI waits and rereads it; the backend independently acquires checker ownership and rejects an early or stale request. Refreshing the dashboard makes no provider request.
 

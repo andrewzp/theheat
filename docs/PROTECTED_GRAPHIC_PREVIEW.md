@@ -49,6 +49,14 @@ Source receipts, draft text, credentials and upstream exception bodies are not
 logged or included in errors. Platform-level access/fetch metadata remains subject
 to the hosting platform's own logging behavior.
 
+## Colored locator and retained images
+
+Current qualified MODIS previews use a colored locator. Equal-size markers identify the selected satellite pixel centers; their blue-to-yellow scale represents pixel-integrated radiative power in MW. They do not show fire perimeters, severity or separate fire counts. The original platform, reported UTC minute, quantitative legend and source qualifiers remain attached. Closely spaced, out-of-bounds or unreadable layouts are unavailable rather than silently altered.
+
+The coarse Natural Earth land resource is pinned and packaged locally. Coordinate close-ups omit coastlines that cannot resolve that scale and retain a separate world locator. Rendering acquires no new weather and makes no model call. Published charts and radar ingestion are not implemented by this adapter.
+
+The separate experimental PostgreSQL editor workflow can retain a native image package, record joint text/image review and run the existing four checks before parking a revision-bound approval. Its historical PNG read verifies the exact successful preparation and immutable package, without depending on the current basemap, recent-command listing or current editability. Those original bytes remain evidence only: current attachment, checks and approval still require current source, policy, renderer and draft identity. The Gist SVG endpoint described above remains read-only.
+
 ## Acquisition and forecast timing
 
 Success schema2 uses a strict source-context variant. MODIS retains its reported
