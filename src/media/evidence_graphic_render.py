@@ -526,7 +526,7 @@ def map_text_layout(evidence):
     west, south, east, north = map_["bounds"]
     left, bottom, width, height = map_["rectangle"]
     inset = (824, 1230, 320, 160)
-    texts = []
+    texts: list[dict] = []
 
     def clear(a, b, gap=4):
         return a[2] + gap <= b[0] or b[2] + gap <= a[0] or a[3] + gap <= b[1] or b[3] + gap <= a[1]
