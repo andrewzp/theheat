@@ -40,7 +40,7 @@ def pytest_addoption(parser):
         help="Disjoint offline CI file partitions; ordinary local runs select all.",
     )
     parser.addoption(
-        "--ci-postgres-shard", choices=("all", "0", "1", "2", "3"), default="all",
+        "--ci-postgres-shard", choices=("all", "0", "1", "2", "3", "4", "5", "6", "7"), default="all",
         help="Stable file shard within --ci-partition=postgres; all preserves the complete partition.",
     )
 
@@ -49,7 +49,7 @@ def _ci_postgres_shard(path):
     # Anchor to this repository, not the working directory or randomized hash().
     # Every parameter and test in a module shares its module-scoped fixtures.
     relative = path.resolve().relative_to(Path(__file__).resolve().parents[1]).as_posix()
-    return str(int(sha256(relative.encode("utf-8")).hexdigest(), 16) % 4)
+    return str(int(sha256(relative.encode("utf-8")).hexdigest(), 16) % 8)
 
 
 @pytest.hookimpl(trylast=True)
