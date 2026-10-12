@@ -249,4 +249,3 @@ if strongest_signal is None and bundle.calendar_date_low:
                 _fact("Country", ev_cdl.country),
             ]
             signal_counts["calendar"] += 1
-

@@ -17,7 +17,8 @@ PARENT_CASCADE_SHA = "f3332cb65cf5a63aea912441c5b059462c197e87de8228818cb44ef65a
 
 
 def old_selector():
-    raw=(Path(__file__).parent/"fixtures/ghcn-parent-selector.txt").read_bytes()
+    # Restore the original final blank line without a whitespace-error fixture.
+    raw=(Path(__file__).parent/"fixtures/ghcn-parent-selector.txt").read_bytes()+b"\n"
     assert hashlib.sha256(raw).hexdigest()==PARENT_CASCADE_SHA
     code="def original(bot_state,bundle,records_cluster_suppressed_ids,city_elevations):\n"
     code+="    signal_counts=dict.fromkeys(('all_time','monthly','absolute_extreme','anomaly','calendar'),0)\n    simultaneous_record_stations=[]\n"

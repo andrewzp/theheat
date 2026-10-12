@@ -309,6 +309,14 @@ def prepare(authority, c, state, version, command, actor, *, now, policy, editor
         _current(value, version, state, editorial_policy, now)
         synchronous.current_candidate(authority, c, value, state, editorial_policy, now, resolve_principal, resolved=resolved)
         if proof is not None:
+            if packet["schema_version"] == 5:
+                # The original checker remains an authorization dependency even
+                # when a different editor submits this final admission.
+                assert prior is not None
+                check_command, check_value, check_set = runner_context(authority, c, prior[0].command_id,
+                    resolve_principal, version=version, state=state, policy=editorial_policy, now=now, resolved=resolved)
+                refuse(check_command == prior[0] and p._canonical(check_value) == p._canonical(value)
+                    and check_set == refs["check_set_id"] == prior[1]["check_set_id"], "check_request_changed")
             pg._current(c, packet, {"owner": owner, "fence": fence, "current_context": context_for(value, editorial_policy),
                 "checker_state_sha256": fingerprint(state)}, utc_text(now), authority.environment, resolved=resolved)
     common = dict(publication_approved=False, accounting_complete=False, cost_usd=None)

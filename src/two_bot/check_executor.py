@@ -13,6 +13,8 @@ import hashlib
 import os
 from typing import Protocol
 
+import httpx
+
 from src.commands import check_journal as checks
 from src.commands.schema import canonical_json, utc_datetime
 from src.editorial.policy import current_editorial_policy
@@ -188,7 +190,7 @@ def execute_check_once(
                 # Validate only for a new model call; disabled/deterministic and
                 # original-attempt recovery never inspect credentials/transports.
                 if (type(transport_options) is not dict or set(transport_options) != {"api_key", "http_transport"}
-                        or transport_options["http_transport"] is None):
+                        or not isinstance(transport_options["http_transport"], httpx.BaseTransport)):
                     return _report("blocked", reason="invalid_check_transport_options", stage=stage)
                 key = transport_options["api_key"]
             else:

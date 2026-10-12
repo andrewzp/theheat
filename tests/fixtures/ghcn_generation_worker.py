@@ -82,7 +82,7 @@ if fault=="forged_interpreter":
             outcome=dict(outcome,verdict="pass",result={"passed":True})
         return outcome
     check_requests.interpret_observation=forged
-if fault=="final_clock":
+if fault in {"final_clock", "final_check_clock"}:
     from src.commands import postgres_candidate_admission as admission,postgres_authority as authority_module
     from src.commands.schema import utc_datetime
     from datetime import timedelta
@@ -90,10 +90,41 @@ if fault=="final_clock":
     def delayed(*args,**kwargs):
         result=verify(*args,**kwargs)
         with authority.projections._connection() as c:
-            expires=authority._intent(c,identity)[0].expires_at
+            current_command=authority._intent(c,identity)[0]
+            if fault == "final_check_clock":
+                value=admission.read_input(c,current_command.payload)
+                original=admission.request_for(authority,c,value)
+                assert original is not None
+                expires=original[0].expires_at
+                assert utc_datetime(expires)<utc_datetime(current_command.expires_at)
+            else:
+                expires=current_command.expires_at
         authority_module._clock=lambda ignored=None:utc_datetime(expires)+timedelta(seconds=1)
         return result
     admission.verified_completion=delayed
+if fault in {"final_checker_revoked", "final_checker_session"}:
+    from src.commands import postgres_candidate_admission as admission
+    from src.commands.schema import Principal
+    verify=admission.verified_completion
+    changed_session=[False]
+    original_resolve=operators.resolve
+    def resolving(subject):
+        actor=original_resolve(subject)
+        if changed_session[0] and actor is not None and subject=="local-publisher":
+            return Principal(actor.subject,actor.role,"invented-changed-checker-session")
+        return actor
+    operators.resolve=resolving
+    def checker_changed(*args,**kwargs):
+        result=verify(*args,**kwargs)
+        if fault=="final_checker_revoked":
+            path=Path(cfg["operators"])
+            rows=json.loads(path.read_text())
+            rows["operators"]=[row for row in rows["operators"] if row["username"]!="publisher"]
+            path.write_text(json.dumps(rows))
+        else:
+            changed_session[0]=True
+        return result
+    admission.verified_completion=checker_changed
 if fault=="final_footprint":
     from src.commands import postgres_candidate_admission as admission
     verify=admission.verified_completion

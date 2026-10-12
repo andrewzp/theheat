@@ -31,7 +31,7 @@ class CheckObservation:
 class _CaptureClient(httpx.Client):
     def __init__(self, model: str, *, transport=None):
         super().__init__(
-            transport=transport or httpx.HTTPTransport(retries=0, trust_env=False),
+            transport=transport if transport is not None else httpx.HTTPTransport(retries=0, trust_env=False),
             follow_redirects=False,
             trust_env=False,
             timeout=SOCKET_TIMEOUT_SECONDS,

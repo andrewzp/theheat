@@ -841,7 +841,7 @@ def test_explicit_local_options_use_actual_sdk_once_without_ambient_key(case, mo
     ({"api_key":"invented"},"invalid_check_transport_options"),
     ({"api_key":"invented","http_transport":None},"invalid_check_transport_options"),
     ({"api_key":"invented","http_transport":object(),"model":"other"},"invalid_check_transport_options"),
-    ({"api_key":"","http_transport":object()},"missing_check_credential")])
+    ({"api_key":"","http_transport":httpx.MockTransport(lambda r: pytest.fail("No request"))},"missing_check_credential")])
 def test_malformed_explicit_capability_cannot_grant_or_construct(case,monkeypatch,options,reason):
     assert run(case)["outcome"]=="completed"
     def forbidden(**kwargs):
@@ -861,3 +861,46 @@ def test_disabled_and_deterministic_never_inspect_explicit_capability(case,monke
     assert result["outcome"]=="disabled"
     monkeypatch.setattr(executor,"GoogleCheckTransport",lambda **kw:pytest.fail("Deterministic transport"))
     assert run(case,transport_options=capability)["checks"]["stages"]["deterministic"]=="passed"
+
+
+@pytest.mark.parametrize("transport", [False, 0, "", object(), httpx.AsyncBaseTransport()],
+                         ids=["false", "zero", "empty-string", "object", "async-only"])
+def test_invalid_explicit_transport_never_selects_default_or_grants(case, monkeypatch, transport):
+    assert run(case)["outcome"] == "completed"
+    monkeypatch.setattr(httpx, "HTTPTransport", lambda **kw: pytest.fail("Default network transport constructed"))
+    result = run(case, "safety", transport_options={"api_key": "invented", "http_transport": transport})
+    assert result["outcome"] == "blocked" and result["reason"] == "invalid_check_transport_options"
+    assert "safety" not in saved(case)["attempts"]
+
+
+def test_falsey_synchronous_transport_stays_supplied_through_actual_sdk(case, monkeypatch):
+    assert run(case)["outcome"] == "completed"
+    sent = []
+    class FalseyTransport(httpx.MockTransport):
+        def __bool__(self):
+            return False
+    def handle(request):
+        sent.append(request)
+        return httpx.Response(200, stream=httpx.ByteStream(envelope("NO")), request=request)
+    supplied = FalseyTransport(handle)
+    monkeypatch.setattr(httpx, "HTTPTransport", lambda **kw: pytest.fail("Default network transport constructed"))
+    result = run(case, "safety", transport_options={"api_key": "invented", "http_transport": supplied})
+    assert result["checks"]["stages"]["safety"] == "passed"
+    assert len(sent) == 1 and sent[0].method == "POST"
+    assert saved(case)["attempts"]["safety"]["observation"]["complete"] is True
+
+
+def test_original_response_recovery_never_inspects_explicit_capability(case, monkeypatch):
+    assert run(case)["outcome"] == "completed"
+    sent, _ = provider(monkeypatch, [envelope("NO")])
+    interpret = check_requests.interpret_observation
+    monkeypatch.setattr(check_requests, "interpret_observation", lambda *a: (_ for _ in ()).throw(RuntimeError("pause interpretation")))
+    assert run(case, "safety")["outcome"] == "reconciliation_required"
+    assert len(sent) == 1
+    monkeypatch.setattr(check_requests, "interpret_observation", interpret)
+    class Forbidden:
+        def __iter__(self):
+            raise AssertionError("Recovery inspected options")
+    monkeypatch.setattr(executor, "GoogleCheckTransport", lambda **kw: pytest.fail("Recovery constructed transport"))
+    result = run(case, "safety", transport_options=Forbidden())
+    assert result["checks"]["stages"]["safety"] == "passed" and len(sent) == 1

@@ -115,6 +115,7 @@ def test_actual_source_http_one_writer_four_checks_pending_draft(ghcn_case,recor
     captured=worker(case,"capture",body["command_id"])
     assert captured["outcome"]=="candidate_ready",captured
     check=command(case,"request_candidate_checks",captured["candidate"])
+    check["expires_at"]=utc_text(datetime.now(UTC)+timedelta(minutes=10))
     requested=submit(case,check,role="publisher")
     assert requested["status"]=="unchanged",requested
     for stage in ("deterministic","safety","fact_check","critic"):
@@ -157,6 +158,19 @@ def test_actual_source_http_one_writer_four_checks_pending_draft(ghcn_case,recor
         rejected=worker(case,"consume",attempt["command_id"])
         assert rejected["status"]=="rejected" and rejected["code"]=="forbidden",rejected
         assert case["authority"].read()==before
+        operators.write_bytes(original_operators)
+    # Original checker is a different principal from the still-valid admitting
+    # editor. Change only checker authority after final receipt interpretation.
+    raw_before=case["authority"].check_execution("read",dict(check_set_id=requested["candidate"]["check_set_id"]),now=utc_text(datetime.now(UTC)))
+    for fault in ("final_checker_revoked", "final_checker_session", "final_check_clock"):
+        attempt=command(case,"admit_checked_candidate",refs)
+        status,_,_=http(case["port"],"/commands",method="POST",value=attempt,role="editor")
+        assert status==202
+        rejected=worker(case,"consume",attempt["command_id"],fault)
+        assert rejected["status"]=="rejected" and rejected["code"]==("command_expired" if fault=="final_check_clock" else "forbidden"),rejected
+        assert case["authority"].read()==before
+        retained=case["authority"].check_execution("read",dict(check_set_id=requested["candidate"]["check_set_id"]),now=utc_text(datetime.now(UTC)))
+        assert retained==raw_before
         operators.write_bytes(original_operators)
     generation=Path(case["config"]["generation"])
     original_generation=generation.read_bytes()
