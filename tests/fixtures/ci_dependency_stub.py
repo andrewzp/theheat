@@ -72,9 +72,9 @@ elif args[0] == "apt-get":
         record("metadata")
         (root / "metadata-ready").touch()
     else:
-        assert rest == ["install", "-y", "--no-install-recommends", "postgresql-17", "postgresql-client-17"]
+        assert rest == ["install", "-y", "--no-install-recommends", "postgresql-17", "postgresql-client-17", "poppler-utils"]
         assert (root / "metadata-ready").exists()
         record("packages")
-        (root / "packages.json").write_text(json.dumps(rest[-2:]))
+        (root / "packages.json").write_text(json.dumps(rest[-3:]))
 else:
     raise AssertionError("Unrecognized dependency command; refusing execution")

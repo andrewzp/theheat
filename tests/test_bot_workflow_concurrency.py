@@ -230,7 +230,7 @@ def test_dependency_shell_steps_fail_closed_without_system_access(workflow, tmp_
     else:
         assert completed_steps == [0, 0, 0], result.stderr
         assert [call["phase"] for call in calls] == phases
-        assert json.loads((tmp_path / "packages.json").read_text()) == ["postgresql-17", "postgresql-client-17"]
+        assert json.loads((tmp_path / "packages.json").read_text()) == ["postgresql-17", "postgresql-client-17", "poppler-utils"]
 
 
 def test_immediate_python_output_is_scoped_to_the_bot_step(workflow):
