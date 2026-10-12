@@ -77,6 +77,22 @@ def test_published_radar_source_to_park_restore(
     radar_case, core, cluster, monkeypatch, tmp_path, record_property
 ):
     case = radar_case
+    from tests import test_postgres_cost_projection as cost_tests
+    from src.commands.schema import utc_datetime
+    cost_reads=[]
+    cost_params={id(case["store"]):core[3]}
+    original_cost=PostgresCommandAuthority.local_cost_projection
+    def guarded_cost(authority,*,now):
+        params=cost_params[id(authority)]
+        before=editor.all_application_rows(params)
+        with monkeypatch.context() as local:
+            cost_tests.published_cost_traps(local)
+            value=original_cost(authority,now=now)
+        assert editor.all_application_rows(params)==before
+        assert value["status"]=="available",value
+        cost_reads.append(value)
+        return value
+    monkeypatch.setattr(PostgresCommandAuthority,"local_cost_projection",guarded_cost)
     for key in tuple(os.environ):
         if key.startswith("PG") or any(
             word in key for word in ("TOKEN", "SECRET", "PASSWORD", "API_KEY")
@@ -140,6 +156,7 @@ def test_published_radar_source_to_park_restore(
             published=case["published_config"],
             delivery=str(delivery_path),
             original_base64=base64.b64encode(case["original"]).decode(),
+            cost_trace=str(tmp_path / "cost-trace.json"),
         )
         path = tmp_path / "http.json"
         path.write_text(json.dumps(config))
@@ -165,6 +182,28 @@ def test_published_radar_source_to_park_restore(
             ]
             assert len(trace) == len(accepted) == 5
             assert len(case["provider_requests"]) == 1
+            snapshots=json.loads(Path(config["cost_trace"]).read_text())
+            assert [v["label"] for v in snapshots]==["before_published_review","published_checks_recorded","parked","explicit_approval_cancelled","edited"]
+            incurred=snapshots[-1]["value"]
+            assert incurred["total_intents"]==7 and incurred["summary"]["commitments_micro_usd"]["held"]=="50"
+            assert len(cost_reads)>=len(snapshots)
+            with case["store"].projections._connection() as c:
+                grants=c.execute("SELECT intent_id,grant_id,request_sha256 FROM theheat_checks.attempts WHERE stage!='deterministic'").fetchall()
+                assert len(grants)==6
+                for identity,grant,request_sha in grants:
+                    row=next(v for v in incurred["requests"] if v["intent_id"]==identity)
+                    assert (row["origin"]["grant_id"],row["origin"]["request_sha256"])==(grant,request_sha)
+                    retained=c.execute("SELECT r.raw_sha256,r.recorded_at FROM theheat_check_executions.observations r WHERE grant_id=%s",(grant,)).fetchone()
+                    assert retained is not None
+                    assert row["origin"]["raw_sha256"]==retained[0]
+                    assert utc_datetime(row["usage"]["observed_at"])==utc_datetime(retained[1])
+            # The old graphic is expired and the text was edited; cost remains
+            # historical. Reopen with no source/renderer configuration.
+            expired=case["store"].local_cost_projection(now=editor.AT+timedelta(minutes=14))
+            assert expired["requests"]==incurred["requests"]
+            restarted=PostgresCommandAuthority(**options(core[3]))
+            cost_params[id(restarted)]=core[3]
+            assert restarted.local_cost_projection(now=editor.AT+timedelta(days=100))["requests"]==incurred["requests"]
             # Browser fixture operations were simulated operator actions, not
             # genuine human attention or independent source validation.
             draft = next(
@@ -211,6 +250,7 @@ def test_published_radar_source_to_park_restore(
             try:
                 tool("pg_restore", *args, "--single-transaction", "-d", name, str(dump))
                 authority = PostgresCommandAuthority(**options(restored_params))
+                cost_params[id(authority)]=restored_params
                 authority.configure_sourced_generation(lambda: case["config"])
                 authority.configure_editor_media(**case["store"].editor_media_configuration)
                 configure(authority, lambda: case["published_config"])
@@ -234,6 +274,25 @@ def test_published_radar_source_to_park_restore(
                     == "unavailable"
                 )
                 assert original(restored, proposal) == case["original"]
+                restored_cost=authority.local_cost_projection(now=editor.AT+timedelta(minutes=14))
+                assert restored_cost["requests"]==incurred["requests"]
+                assert restored_cost["summary"]==incurred["summary"]
+                restored_server=PreviewServer(authority,Operators(operators),port=0,origin=origin)
+                restored_thread=threading.Thread(target=restored_server.serve_forever,daemon=True)
+                restored_thread.start()
+                try:
+                    cost_tests.cost_component_http(dict(environment=clean_environment(),origin=origin),restored_server.server_port,restored_cost,tmp_path/"restored-cost-http.json")
+                finally:
+                    restored_server.shutdown()
+                    restored_server.server_close()
+                    restored_thread.join(5)
+                assert len(case["provider_requests"])==1 and len(trace)==len(accepted)==5
+                cost_trace=dict(snapshots=snapshots,restored=restored_cost,read_count=len(cost_reads),
+                    writer_sdk_posts=1,initial_model_sdk_posts=3,revision_model_sdk_posts=3,
+                    local_platform_mutations=5,cost_mutations=0,actual_cancel_approval=True,
+                    producer_packet_sha256=[v["origin"]["check_set_id"] for v in incurred["requests"] if v["role"]!="writer"])
+                if os.environ.get("THEHEAT_RADAR_COST_TRACE"):
+                    Path(os.environ["THEHEAT_RADAR_COST_TRACE"]).write_text(json.dumps(cost_trace,sort_keys=True,indent=2)+"\n")
                 record_property(
                     "published_journey",
                     json.dumps(

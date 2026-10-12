@@ -2,7 +2,7 @@
 from datetime import timedelta
 
 from src.commands import postgres_cost_projection as cost, postgres_spending as spend
-from src.commands.schema import utc_datetime
+from src.commands.schema import utc_datetime, utc_text
 from tests.test_postgres_projection import cluster as cluster, database as database
 from tests.test_postgres_command_authority import make_authority as make_authority, core as core
 from tests.test_spend_journal import NOW, LIMITS, intent, call
@@ -94,7 +94,7 @@ def passive_traps(monkeypatch):
         (postgres_sync_checks,("packet","current")),(sync,("job","attempt","observation","resolution","verify_candidate","project","interpret")),
         (generation,("document","current","writer_usage")),(postgres_batch_results,("index","_receipts","evaluate")),
         (writer,("_parse_writer_json",)),(batch_contract,("interpret_writer_message",)),
-        (check_origin,("packet_verification",)),(synchronous_origin,("validate",))):
+        (check_origin,("packet_verification","validate_revision")),(synchronous_origin,("validate",))):
         for name in names:
             monkeypatch.setattr(module,name,forbidden)
 
@@ -241,7 +241,7 @@ def restored_readback(case,expected,cluster,tmp_path):
 
 def cost_component_http(case,port,value,config):
     import shutil
-    config.write_text(json.dumps(dict(endpoint=f"http://127.0.0.1:{port}",origin="http://127.0.0.1:3035",expected=value)))
+    config.write_text(json.dumps(dict(endpoint=f"http://127.0.0.1:{port}",origin=case.get("origin","http://127.0.0.1:3035"),expected=value)))
     node=os.environ.get("THEHEAT_TEST_NODE") or shutil.which("node")
     assert node,"Node is required for the actual cost HTTP/component journey"
     run=subprocess.run([node,"--test","tests/local-cost-evidence.test.js"],cwd=Path(__file__).resolve().parents[1]/"dashboard",
@@ -795,3 +795,133 @@ def test_detached_usage_display_refuses_malformed_time(original):
     with pytest.raises(ValueError):
         cost._detached_usage(dict(raw=b'{}',observed_at=original,complete=True),
             dict(provider='anthropic',role='writer',requested_model='invented'))
+
+
+from tests.test_postgres_published_media import radar_case as radar_case
+
+
+def published_cost_traps(local):
+    from src.commands import postgres_published_media, postgres_editor_media, preview_media_worker
+    from src.media import published_radar
+    passive_traps(local)
+    def forbidden(*args,**kwargs):
+        pytest.fail('Passive cost read invoked published source, eligibility or raster work')
+    for module,names in ((postgres_published_media,('current','read')),
+        (postgres_editor_media,('inputs','parked')),(preview_media_worker,('run_native',)),
+        (published_radar,('document','source','make_spec','validate_spec','convert'))):
+        for name in names:
+            local.setattr(module,name,forbidden)
+    original=cost.Read.artifact
+    def no_media(self,schema,table,*args,**kwargs):
+        assert not schema.startswith('theheat_media')
+        return original(self,schema,table,*args,**kwargs)
+    local.setattr(cost.Read,'artifact',no_media)
+
+
+def test_published_check_cost_metadata_window_and_unknown_holds(radar_case,core,monkeypatch):
+    from copy import deepcopy
+    from src.commands import postgres_revision_checks, postgres_sync_checks
+    from src.editorial.revisions import fingerprint
+    from src.storage import postgres_projection as p
+    from tests import test_postgres_published_media as published, test_postgres_editor_media as editor
+    case=radar_case
+    published.attach(case)
+    editor.complete_revision(case,monkeypatch)
+    authority=case['store']
+    with authority.projections._connection() as c:
+        rows=c.execute('SELECT payload FROM theheat_checks.packet_artifacts').fetchall()
+    packet=next(json.loads(row[0]) for row in rows if json.loads(row[0]).get('schema_version')==6)
+    def draft(value):
+        return next(d for d in value['checker_state']['drafts'] if d['id']==case['draft_id'])
+    def published_metadata(value):
+        return draft(value)['media_attachment']['published']
+    mutations={
+        'family':lambda v:published_metadata(v).update(family='unknown_family'),
+        'attachment_version':lambda v:draft(v)['media_attachment'].update(schema_version=1),
+        'published_on_packet3':lambda v:v.update(schema_version=3),
+        'frame_precision':lambda v:published_metadata(v).update(frame_minute_utc='2026-09-29T11:59:01Z'),
+        'frame_arithmetic':lambda v:published_metadata(v).update(frame_minute_utc='2026-09-29T11:58:00Z'),
+        'valid_end':lambda v:published_metadata(v).update(valid_end='2026-09-29T12:10:00Z'),
+        'published_deadline':lambda v:published_metadata(v).update(useful_until='2026-09-29T12:13:00Z'),
+        'packet_deadline':lambda v:v.update(useful_until='2026-09-29T12:13:00Z'),
+        'invalid_time':lambda v:published_metadata(v).update(valid_end=None),
+        'missing_published':lambda v:draft(v)['media_attachment'].pop('published'),
+        'media_hash':lambda v:v['media'].update(review_sha256='f'*64),
+        'review_command':lambda v:v['media'].update(review_command_id='00000000-0000-0000-0000-000000000000'),
+        'target':lambda v:v['draft_target'].update(decision_revision=v['draft_target']['decision_revision']+1),
+    }
+    with monkeypatch.context() as local:
+        published_cost_traps(local)
+        cost._revision_media_envelope(packet)
+        for name,mutate in mutations.items():
+            altered=deepcopy(packet)
+            mutate(altered)
+            with pytest.raises(ValueError):
+                cost._revision_media_envelope(altered)
+        # Construct a detached stored-envelope reader, with every hash recomputed,
+        # to prove that new versions stay unsupported instead of aliasing packet6.
+        unsupported=deepcopy(packet)
+        unsupported['schema_version']=7
+        digest=p._sha(p._canonical(unsupported))
+        class Envelope:
+            def execute(self,*args):return self
+            def fetchone(self):return (None,None,digest,unsupported['captured_at'],'saved_draft_revision_v1','draft-check-enrollment-v1',unsupported['enrollment_id'],None,None)
+            def document(self,*args):return unsupported
+        local.setattr(postgres_revision_checks,'upgraded',lambda _:True)
+        local.setattr(postgres_sync_checks,'upgraded',lambda _:True)
+        assert cost._packet(Envelope(),fingerprint(unsupported)) is None
+    # Real original grants/leases remain validated, independently of the pure
+    # metadata counterexamples above. No changed producer or fake authority.
+    before=editor.all_application_rows(core[3])
+    original=cost.Read.document
+    for fault in ('owner','fence','request','enrollment'):
+        def document(self,table,digest):
+            value=deepcopy(original(self,table,digest))
+            if table=='binding_artifacts' and value['check_set_id']==fingerprint(packet):
+                if fault=='owner':
+                    value['owner']='wrong-owner'
+                if fault=='fence':
+                    value['fence']+=1
+                if fault=='request':
+                    value['request_sha256']='f'*64
+            if table=='packet_artifacts' and value.get('schema_version')==6 and fault=='enrollment':
+                value['enrollment_id']='f'*64
+            return value
+        with monkeypatch.context() as local:
+            published_cost_traps(local)
+            local.setattr(cost.Read,'document',document)
+            assert authority.local_cost_projection(now=editor.AT)==cost.unavailable(),fault
+    original_packet=cost._packet
+    def future(c,identity):
+        loaded=original_packet(c,identity)
+        return None if loaded and loaded[0]['schema_version']==6 else loaded
+    with monkeypatch.context() as local:
+        published_cost_traps(local)
+        local.setattr(cost,'_packet',future)
+        held=authority.local_cost_projection(now=editor.AT)
+    assert held['status']=='available' and held['summary']['commitments_micro_usd']['held']=='50'
+    assert sum(r['usage']['reason']=='unsupported_origin' for r in held['requests'])==3
+    assert editor.all_application_rows(core[3])==before
+    at=editor.AT+timedelta(seconds=1)
+    for i in range(19):
+        call(authority,'reserve',intent(f'radar-news-{i:02}',amount=1,job=f'radar-news-job-{i}',role='news'),at=utc_text(at))
+    with authority.projections._connection() as c:
+        check_intent=c.execute('SELECT intent_id FROM theheat_checks.attempts WHERE check_set_id=%s ORDER BY intent_id LIMIT 1',(fingerprint(packet),)).fetchone()[0]
+    selected={f'radar-news-{i:02}' for i in range(19)}|{check_intent}
+    record=spend._record
+    seen=[]
+    def selected_only(c,identity):
+        assert identity in selected,'Unselected parent/sibling replay: '+identity
+        seen.append(identity)
+        return record(c,identity)
+    with monkeypatch.context() as local:
+        published_cost_traps(local)
+        local.setattr(spend,'_record',selected_only)
+        value=authority.local_cost_projection(now=at)
+    assert value['status']=='available',value
+    assert set(seen)==selected and len(seen)==20
+    assert value['total_intents']==26 and value['omitted_intents']==6
+    assert value['summary']['commitments_micro_usd']['held']=='69'
+    check=next(r for r in value['requests'] if r['intent_id']==check_intent)
+    assert check['origin']['brief_id']==case['refs']['brief_id'] and check['usage']['status']=='present'
+    assert len(case['provider_requests'])==1

@@ -14,8 +14,8 @@ from src.commands import postgres_checks as checks, check_journal as cj
 from src.commands import postgres_check_observations as observations
 from src.commands import postgres_sourced_generation as generation
 from src.commands import postgres_synchronous_generation as sync
-from src.commands.schema import utc_datetime, utc_text
-from src.editorial.revisions import fingerprint
+from src.commands.schema import DraftTarget, utc_datetime, utc_text
+from src.editorial.revisions import decision_revision, draft_identity, fingerprint, text_hash
 from src.storage import postgres_projection as p
 from src.two_bot import check_origin, synchronous_origin
 from src.two_bot import retained_usage as usage
@@ -260,7 +260,7 @@ def _packet(reader, identity):
     packet = reader.document("packet_artifacts", row[2])
     require(fingerprint(packet) == identity and type(packet.get("schema_version")) is int)
     version = packet["schema_version"]
-    if version not in {2,3,4,5}:
+    if version not in {2,3,4,5,6}:
         return None
     if version == 2:
         shape(packet, cj._PACKET_FIELDS | {"derivation", "derivation_id"})
@@ -269,13 +269,13 @@ def _packet(reader, identity):
         require(packet["plan_sha256"] == registration["plan_sha256"] and packet["useful_until"] == plan["useful_until"]
                 and packet["policy"] == plan["policy"] and any(r["custom_id"]==packet["custom_id"] for r in plan["requests"]))
     else:
-        module = check_origin if version==3 else synchronous_origin
+        module = check_origin if version in {3,6} else synchronous_origin
         shape(packet, module.FIELDS)
         require(len(row)>=7 and packet["origin_kind"]==module.ORIGIN and row[0] is row[1] is None and row[4]==module.ORIGIN
                 and packet["enrollment_id"]==module.enrollment_id(packet) and row[3]==packet["captured_at"])
-        namespace, enrollment = row[5:7] if version==3 else row[7:9]
+        namespace, enrollment = row[5:7] if version in {3,6} else row[7:9]
         require(namespace==module.NAMESPACE and enrollment==packet["enrollment_id"]
-                and (len(row)==7 or all(v is None for v in (row[7:9] if version==3 else row[5:7]))))
+                and (len(row)==7 or all(v is None for v in (row[7:9] if version in {3,6} else row[5:7]))))
         receipt, retained = reader.projection(namespace,enrollment)
         require(receipt.canonical_sha256==row[2] and retained==packet)
     require(packet["required_stages"]==list(cj.STAGES) and packet["check_date"]==row[3][:10])
@@ -285,9 +285,50 @@ def _packet(reader, identity):
         require(fingerprint(packet[key])==expected)
     if version in {2,4,5}:
         require(fingerprint(packet["derivation"])==packet["derivation_id"] and packet["derivation"]["text_sha256"]==packet["text_sha256"])
-    if version in {3,4,5}:
+    if version in {3,4,5,6}:
         require(p._sha(p._canonical(packet["checker_state"]))==packet["state_sha256"])
+    if version in {3,6}:
+        _revision_media_envelope(packet)
     return packet,row[3]
+
+
+def _revision_media_envelope(packet):
+    """Historical saved-media links only; never current review or raster truth."""
+    target=DraftTarget.parse(packet["draft_target"])
+    drafts=packet["checker_state"].get("drafts")
+    require(type(drafts) is list)
+    matches=[d for d in drafts if type(d) is dict and d.get("id")==target.draft_id]
+    require(len(matches)==1)
+    draft=matches[0]
+    require(dict(draft_id=draft["id"],**draft_identity(draft),decision_revision=decision_revision(draft))==target.as_dict()
+            and packet["final_text"]==draft.get("text") and type(packet["final_text"]) is str
+            and text_hash(packet["final_text"])==packet["text_sha256"]==target.text_sha256)
+    attachment=draft.get("media_attachment",{})
+    require(type(attachment) is dict)
+    if packet["schema_version"]==3:
+        require(attachment.get("schema_version")!=2)
+        return
+    require(type(attachment.get("schema_version")) is int and attachment["schema_version"]==2)
+    media,review=packet["media"],draft.get("media_review_binding",{})
+    shape(media,{"proposal_sha256","packet_sha256","review_sha256","review_command_id"})
+    shape(review,{"schema_version","proposal_sha256","packet_sha256","review_sha256","command_id"})
+    require(type(review["schema_version"]) is int and review["schema_version"]==1
+            and type(media["review_command_id"]) is str and media["review_command_id"]==review["command_id"])
+    from src.commands.postgres_authority import _id
+    _id(media["review_command_id"])
+    for key in ("proposal_sha256","packet_sha256","review_sha256"):
+        s._sha(media[key])
+        require(media[key]==review[key])
+    published=attachment.get("published",{})
+    require(type(published) is dict and published.get("family")=="nws_local_standard_radar_v1")
+    frame=utc_datetime(published.get("frame_minute_utc"))
+    require(frame.second==frame.microsecond==0)
+    frame_deadline=min(frame+timedelta(minutes=15),utc_datetime(published.get("valid_end")))
+    captured=utc_datetime(packet["captured_at"])
+    require(utc_datetime(published.get("useful_until"))==frame_deadline
+            and captured<utc_datetime(packet["useful_until"])==min(frame_deadline,
+                utc_datetime(packet["source_useful_until"]),utc_datetime(packet["provenance_useful_until"]),
+                captured.replace(hour=0,minute=0,second=0,microsecond=0)+timedelta(days=1)))
 
 
 def _sync_capture(reader, capture):
@@ -413,7 +454,7 @@ def _check(reader, record, attempt_row):
         parent,resolution=_sync_capture(reader,capture)
         require(packet["candidate"]==resolution["writer_result"])
         refs.update(brief_id=parent["job"]["brief_id"],generation_id=packet["generation_id"],source_run_id=_source_run(reader,parent["brief"]))
-    elif packet["schema_version"]==3:
+    elif packet["schema_version"] in {3,6}:
         refs["brief_id"],refs["source_run_id"]=_revision_source(reader,packet)
     else:
         saved=reader.projection(generation.JOB,packet["job_id"],optional=True)

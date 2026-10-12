@@ -1,6 +1,6 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import { readFileSync } from "node:fs"
+import { readFileSync, writeFileSync } from "node:fs"
 import { createServer } from "node:http"
 import { runFixtureWorker } from "../test-support/fixture-worker.js"
 import { Readable } from "node:stream"
@@ -17,7 +17,7 @@ test("actual published radar HTTP/component → conversion → joint attestation
     return actualFetch(url,options)
   }
   const routes = { "/api/editor-media":await import("../app/api/editor-media/route.js"), "/api/drafts":await import("../app/api/drafts/route.js"),
-    "/api/local-command-recovery":await import("../app/api/local-command-recovery/route.js") }
+    "/api/local-command-recovery":await import("../app/api/local-command-recovery/route.js"), "/api/dashboard":await import("../app/api/dashboard/route.js") }
   const server = createServer(async (incoming,outgoing) => {
     try {
       const request = new Request(config.origin+incoming.url, { method:incoming.method, headers:incoming.headers,
@@ -50,7 +50,28 @@ test("actual published radar HTTP/component → conversion → joint attestation
     assert.deepEqual((await worker("consume",command.command_id)),result)
     return result
   }
+  const costSnapshots=[]
+  async function costs(label,count,expected=null) {
+    const response=await request("/api/dashboard",null,"viewer")
+    assert.equal(response.status,200,JSON.stringify(response.body))
+    const value=response.body.localCostEvidence
+    assert.equal(value.status,"available",JSON.stringify(value))
+    assert.equal(value.requests.length,count)
+    assert.equal(new Set(value.requests.map(r=>r.intent_id)).size,count)
+    assert.equal(new Set(value.requests.map(r=>r.origin.grant_id)).size,count)
+    assert.equal(value.summary.commitments_micro_usd.held,count===4?"35":"50")
+    assert.ok(value.requests.every(r=>r.charge_status==="unreconciled"&&r.recorded_settlement_micro_usd===null&&r.usage.status==="present"))
+    assert.equal(value.requests.find(r=>r.role==="writer").usage.counts.input_tokens,11)
+    for(const row of value.requests.filter(r=>r.role!=="writer")) assert.equal(row.usage.counts.prompt_token_count,19)
+    if(expected) assert.deepEqual(value.requests,expected.requests)
+    const React=await import("react"),{renderToStaticMarkup}=await import("react-dom/server"),{CostPanel}=await import("../app/components/CostPanel.js")
+    const markup=renderToStaticMarkup(React.createElement(CostPanel,{localEvidence:value}))
+    for(const text of ["Local requests and reserved allowance","Final charge unknown","Writing","Safety","Fact check","Critic"]) assert.ok(markup.includes(text),text)
+    costSnapshots.push({label,value})
+    return value
+  }
   try {
+    await costs("before_published_review",4)
     let current=(await request(mediaPath)).body
     assert.equal(current.status,"ready",JSON.stringify(current))
     const prepare=mediaCommand(current,"prepare_media_revision",null,new Date(config.at))
@@ -90,20 +111,29 @@ test("actual published radar HTTP/component → conversion → joint attestation
     }
     current=(await request(mediaPath)).body
     assert.equal(current.checks_status,"passed")
+    const incurred=await costs("published_checks_recorded",7)
     const approve=mediaCommand(current,"approve_media_revision",null,new Date(config.at))
     assert.equal((await request("/api/drafts",approve)).status,403)
     const result=await submit(approve,"publisher")
     assert.ok(result.publish_intent_id)
     assert.equal((await request(mediaPath)).body.parked,true)
+    await costs("parked",7,incurred)
     const delivery=await worker("deliver",result.delivery.intent_id)
     assert.equal(delivery.receipts.length,5)
     assert.ok(delivery.receipts.every(row=>row.outcome==="confirmed"))
+    const parkedDraft=(await request("/api/drafts")).body.drafts.find(d=>d.id===config.draft_id)
+    const cancel=createDraftCommand(parkedDraft,"cancel_auto_approve",{},new Date(config.at))
+    assert.equal(cancel.action,"cancel_approval")
+    assert.equal((await submit(cancel)).status,"applied")
+    assert.equal((await request(mediaPath)).body.parked,false)
+    await costs("explicit_approval_cancelled",7,incurred)
     const draft=(await request("/api/drafts")).body.drafts.find(d=>d.id===config.draft_id)
     assert.equal(draft.status,"pending")
     const edit=createDraftCommand(draft,"edit",{editedText:"An edited invented weather statement."},new Date(config.at))
     await submit(edit)
     current=(await request(mediaPath)).body
     assert.equal(current.review_current,false);assert.equal(current.parked,false)
+    await costs("edited",7,incurred)
     assert.deepEqual((await request(pngPath)).body,png.body)
     assert.deepEqual((await request(originalPath)).body,original.body)
     assert.equal((await request(`/api/drafts?commandId=${approve.command_id}`)).body.recoverable_command,null)
@@ -128,6 +158,7 @@ test("actual published radar HTTP/component → conversion → joint attestation
     assert.deepEqual((await request("/api/drafts")).body,latest)
     clearCommandReference(storage,"same-operator")
     assert.equal(readCommandReference(storage,"same-operator"),null)
+    writeFileSync(config.cost_trace,JSON.stringify(costSnapshots))
   } finally {
     await new Promise(resolve=>server.close(resolve));globalThis.fetch=actualFetch
     for(const key of Object.keys(process.env))if(!Object.hasOwn(prior,key))delete process.env[key]
