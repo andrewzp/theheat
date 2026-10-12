@@ -103,6 +103,7 @@ export default function Dashboard() {
         runsError: payload.runsError,
         productHealth: payload.productHealth,
         costEvidence: payload.costEvidence,
+        localCostEvidence: payload.localCostEvidence,
         deployment: payload.deployment,
       })
       // Show the review queue in time order (newest first) — the API returns
@@ -540,7 +541,7 @@ export default function Dashboard() {
         {!loading && ["dashboard", "health"].includes(activeTab) && (
           <>
           <ProductHealthPanel health={data?.productHealth} config={modelConfig} deployment={data?.deployment} stale={Boolean(refreshError)} />
-          <CostPanel evidence={data?.costEvidence} stale={Boolean(refreshError)} loading={loading} />
+          <CostPanel evidence={data?.costEvidence} stale={Boolean(refreshError)} loading={loading} localEvidence={data?.localCostEvidence} />
           </>
         )}
 
