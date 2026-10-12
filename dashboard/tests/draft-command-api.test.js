@@ -3,7 +3,7 @@ import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 import { createServer } from "node:http"
 import { Readable } from "node:stream"
-import { spawnSync } from "node:child_process"
+import { runFixtureWorker } from "../test-support/fixture-worker.js"
 import { acceptLocalCommand } from "../lib/draft-command-client.js"
 import { createDraftCommand } from "../lib/draft-command-request.js"
 
@@ -136,8 +136,8 @@ test("real Next draft handlers over HTTP accept, conflict, review and park in Po
     })
     return { status: response.status, body: await response.json(), headers: response.headers }
   }
-  function consume(commandId) {
-    const response = spawnSync(config.python, ["-m", "src.commands.preview_worker", ...config.workerArguments,
+  async function consume(commandId) {
+    const response = await runFixtureWorker(config.python, ["-m", "src.commands.preview_worker", ...config.workerArguments,
       ...(commandId ? ["--command-id", commandId] : [])], { cwd: config.root,
       env: { PATH: process.env.PATH, PYTHONPATH: config.root, no_proxy: "*" }, encoding: "utf8", timeout: 15000 })
     assert.equal(response.status, 0, response.stdout + response.stderr)
@@ -157,8 +157,8 @@ test("real Next draft handlers over HTTP accept, conflict, review and park in Po
     assert.deepEqual((await request("/api/drafts", { command: first })).body, accepted.body)
     assert.equal((await request("/api/drafts", { command: second })).status, 202)
     assert.equal((await request(`/api/drafts?commandId=${first.command_id}`)).body.status, "pending")
-    assert.equal(consume().status, "applied")
-    assert.equal(consume().code, "revision_conflict")
+    assert.equal((await consume()).status, "applied")
+    assert.equal((await consume()).code, "revision_conflict")
     const completed = await request(`/api/drafts?commandId=${first.command_id}`)
     assert.equal(completed.body.result.status, "applied")
     draft = (await request()).body.drafts[0]
@@ -166,15 +166,15 @@ test("real Next draft handlers over HTTP accept, conflict, review and park in Po
     assert.equal(draft.review_status, "needs_revalidation")
     const review = createDraftCommand(draft, "review", { reviewConfirmed: true, expectedPolicySha256: draft.editorial_policy.policy_sha256 })
     assert.equal((await request("/api/drafts", { command: review })).status, 202)
-    assert.equal(consume().status, "applied")
+    assert.equal((await consume()).status, "applied")
     draft = (await request()).body.drafts[0]
     assert.equal(draft.review_status, "passed")
     const approval = createDraftCommand(draft, "approve")
     assert.equal((await request("/api/drafts", { command: approval })).status, 403)
     assert.equal((await request("/api/drafts", { command: approval, role: "publisher" })).status, 202)
-    const result = consume()
+    const result = await consume()
     assert.equal(result.status, "applied")
-    assert.equal(consume(approval.command_id).publish_intent_id, result.publish_intent_id)
+    assert.equal((await consume(approval.command_id)).publish_intent_id, result.publish_intent_id)
     draft = (await request()).body.drafts[0]
     assert.equal(draft.parked_intent, result.publish_intent_id)
     assert.equal(draft.automatic_publication.enabled, false)
@@ -234,8 +234,8 @@ test("actual Next handlers request checks, admit a retained candidate, and inval
       ...(command ? { body: JSON.stringify(command) } : {}) })
     return { status: response.status, body: await response.json() }
   }
-  function worker(mode, command, stage) {
-    const result = spawnSync(config.python, [config.child, configFile, mode, command, ...(stage ? [stage] : [])], {
+  async function worker(mode, command, stage) {
+    const result = await runFixtureWorker(config.python, [config.child, configFile, mode, command, ...(stage ? [stage] : [])], {
       cwd: config.root, env: { PATH: process.env.PATH, PYTHONPATH: config.root, no_proxy: "*" }, encoding: "utf8", timeout: 30000 })
     assert.equal(result.status, 0, result.stdout + result.stderr)
     return JSON.parse(result.stdout)
@@ -252,9 +252,9 @@ test("actual Next handlers request checks, admit a retained candidate, and inval
     assert.equal((await request("/api/drafts", check, "viewer")).status, 403)
     assert.equal((await request("/api/drafts", check)).status, 202)
     assert.equal((await request(`/api/drafts?commandId=${check.command_id}`)).body.status, "pending")
-    assert.equal(worker("consume", check.command_id).candidate.outcome, "checks_requested")
+    assert.equal((await worker("consume", check.command_id)).candidate.outcome, "checks_requested")
     for (const stage of ["deterministic", "safety", "fact_check", "critic"]) {
-      const result = worker("stage", check.command_id, stage)
+      const result = await worker("stage", check.command_id, stage)
       assert.equal(result.outcome, "completed", JSON.stringify(result))
       candidate = (await request()).body.candidates[0]
       assert.equal(candidate.stages[stage], "passed")
@@ -262,21 +262,21 @@ test("actual Next handlers request checks, admit a retained candidate, and inval
     assert.equal(candidate.required_checks_completed, true)
     const save = createCandidateCommand(candidate, "admit_checked_candidate")
     assert.equal((await request("/api/drafts", save)).status, 202)
-    const saved = worker("consume", save.command_id)
+    const saved = await worker("consume", save.command_id)
     assert.equal(saved.candidate.outcome, "candidate_admitted")
     let draft = (await request()).body.drafts.find((d) => d.id === saved.candidate.draft_id)
     assert.equal(draft.review_status, "passed")
     assert.equal(draft.review_kind, "model")
     assert.equal(draft.status, "pending")
     assert.equal(draft.approval_binding, undefined)
-    assert.equal(worker("consume", save.command_id).state_version, saved.state_version)
+    assert.equal((await worker("consume", save.command_id)).state_version, saved.state_version)
     const approval = createDraftCommand(draft, "approve")
     assert.equal((await request("/api/drafts", approval, "publisher")).status, 202)
-    assert.ok(worker("consume", approval.command_id).publish_intent_id)
+    assert.ok((await worker("consume", approval.command_id)).publish_intent_id)
     draft = (await request()).body.drafts.find((d) => d.id === draft.id)
     const edit = createDraftCommand(draft, "edit", { editedText: "Edited after required checks; a new review is required." })
     assert.equal((await request("/api/drafts", edit)).status, 202)
-    assert.equal(worker("consume", edit.command_id).status, "applied")
+    assert.equal((await worker("consume", edit.command_id)).status, "applied")
     draft = (await request()).body.drafts.find((d) => d.id === draft.id)
     assert.equal(draft.review_status, "needs_revalidation")
     assert.equal(draft.approval_binding, undefined)

@@ -2,7 +2,7 @@ import test from "node:test"
 import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 import { createServer } from "node:http"
-import { spawnSync } from "node:child_process"
+import { runFixtureWorker } from "../test-support/fixture-worker.js"
 import { Readable } from "node:stream"
 import { mediaCommand, jointConfirmations } from "../lib/editor-media.js"
 import { createDraftCommand } from "../lib/draft-command-request.js"
@@ -34,8 +34,8 @@ test("actual authenticated HTTP → native package → review → fresh checks �
     return { status:response.status, body:response.headers.get("content-type")==="image/png" ? new Uint8Array(await response.arrayBuffer()) : await response.json() }
   }
   const mediaPath = `/api/editor-media?draftId=${config.draft_id}`
-  function worker(operation,id) {
-    const run=spawnSync(config.python,[config.child,file,operation,id],{cwd:config.root,env:prior,encoding:"utf8",timeout:60000})
+  async function worker(operation,id) {
+    const run=await runFixtureWorker(config.python,[config.child,file,operation,id],{cwd:config.root,env:prior,encoding:"utf8",timeout:60000})
     assert.equal(run.status,0,run.stdout+run.stderr)
     return JSON.parse(run.stdout.trim().split("\n").at(-1))
   }
@@ -45,9 +45,9 @@ test("actual authenticated HTTP → native package → review → fresh checks �
     const recovery=await request(`/api/drafts?commandId=${command.command_id}`,null,role)
     assert.deepEqual(recovery.body.recoverable_command,command)
     assert.equal(recovery.body.status,"pending")
-    const result=worker("consume",command.command_id)
+    const result=await worker("consume",command.command_id)
     assert.notEqual(result.status,"rejected",JSON.stringify(result))
-    assert.deepEqual(worker("consume",command.command_id),result)
+    assert.deepEqual((await worker("consume",command.command_id)),result)
     return result
   }
   try {
@@ -70,7 +70,7 @@ test("actual authenticated HTTP → native package → review → fresh checks �
     await submit(checks)
     assert.equal((await request(mediaPath)).body.checks_status,"pending")
     for(const stage of ["deterministic","safety","fact_check","critic"]){
-      const result=worker(stage,checks.command_id)
+      const result=await worker(stage,checks.command_id)
       assert.equal(result.outcome,"completed",JSON.stringify(result));assert.equal(result.checks.stages[stage],"passed")
     }
     current=(await request(mediaPath)).body

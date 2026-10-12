@@ -3,7 +3,7 @@ import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 import { createServer } from "node:http"
 import { Readable } from "node:stream"
-import { spawnSync } from "node:child_process"
+import { runFixtureWorker } from "../test-support/fixture-worker.js"
 import { createElement } from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 import SourcedGeneration, { generationCommand, WriterUsage } from "../app/components/SourcedGeneration.js"
@@ -55,9 +55,9 @@ test("actual source API -> separate batch/check workers -> admitted draft -> edi
       ...(command ? { body: JSON.stringify(command) } : {}) })
     return { status: response.status, body: await response.json() }
   }
-  function worker(operation, command) {
+  async function worker(operation, command) {
     console.error("fixture worker", operation)
-    const result = spawnSync(config.python, [config.child, configFile, operation, command], { cwd: config.root,
+    const result = await runFixtureWorker(config.python, [config.child, configFile, operation, command], { cwd: config.root,
       env: { PATH: process.env.PATH, PYTHONPATH: config.root, no_proxy: "*" }, encoding: "utf8", timeout: 30000 })
     assert.equal(result.status, 0, result.stdout + result.stderr)
     return JSON.parse(result.stdout)
@@ -71,22 +71,22 @@ test("actual source API -> separate batch/check workers -> admitted draft -> edi
     const accepted = await request("/api/generate", start)
     assert.equal(accepted.status, 202, JSON.stringify(accepted.body))
     assert.deepEqual((await request("/api/generate", start)).body, accepted.body)
-    assert.equal(worker("consume", start.command_id).status, "applied")
-    assert.equal(worker("submit", start.command_id).outcome, "submitted")
-    assert.equal(worker("collect", start.command_id).outcome, "reviewed")
+    assert.equal((await worker("consume", start.command_id)).status, "applied")
+    assert.equal((await worker("submit", start.command_id)).outcome, "submitted")
+    assert.equal((await worker("collect", start.command_id)).outcome, "reviewed")
     const usage = (await request("/api/generate")).body.briefs[0].writer_usage
     assert.equal(usage.counts.input_tokens, 17)
     assert.equal(usage.cost_usd, null)
-    assert.equal(worker("capture", start.command_id).outcome, "candidate_ready")
+    assert.equal((await worker("capture", start.command_id)).outcome, "candidate_ready")
     let state = (await request("/api/dashboard")).body
     assert.equal(state.candidates.length, 1)
     const availability = state.candidates[0].checks_available_at
     assert.ok(availability)
-    assert.equal(worker("projection", start.command_id)[0].checks_available_at, availability)
+    assert.equal((await worker("projection", start.command_id))[0].checks_available_at, availability)
     assert.equal((await request("/api/dashboard")).body.candidates[0].checks_available_at, availability)
     const early = createCandidateCommand(state.candidates[0], "request_candidate_checks")
     assert.equal((await request("/api/drafts", early)).status, 202)
-    const refused = worker("consume", early.command_id)
+    const refused = await worker("consume", early.command_id)
     assert.equal(refused.status, "rejected")
     assert.equal(refused.code, "batch_lease_busy")
     const wait = Date.parse(availability) - Date.now() + 250
@@ -96,19 +96,19 @@ test("actual source API -> separate batch/check workers -> admitted draft -> edi
     assert.equal(state.candidates[0].checks_available_at, undefined)
     const check = createCandidateCommand(state.candidates[0], "request_candidate_checks")
     assert.equal((await request("/api/drafts", check)).status, 202)
-    const requested = worker("consume", check.command_id)
+    const requested = await worker("consume", check.command_id)
     assert.equal(requested.status, "unchanged", JSON.stringify(requested))
     assert.equal(requested.candidate.outcome, "checks_requested")
-    for (const stage of ["deterministic", "safety", "fact_check", "critic"]) assert.equal(worker(stage, check.command_id).outcome, "completed")
+    for (const stage of ["deterministic", "safety", "fact_check", "critic"]) assert.equal((await worker(stage, check.command_id)).outcome, "completed")
     state = (await request("/api/dashboard")).body
     const admit = createCandidateCommand(state.candidates[0], "admit_checked_candidate")
     assert.equal((await request("/api/drafts", admit)).status, 202)
-    const admitted = worker("consume", admit.command_id)
+    const admitted = await worker("consume", admit.command_id)
     assert.equal(admitted.status, "applied")
     const draft = (await request("/api/dashboard")).body.drafts.drafts.find(d => d.id === admitted.changed_ids[0])
     const edit = createDraftCommand(draft, "edit", { editedText: "Edited after sourced generation; review is required." })
     assert.equal((await request("/api/drafts", edit)).status, 202)
-    assert.equal(worker("consume", edit.command_id).status, "applied")
+    assert.equal((await worker("consume", edit.command_id)).status, "applied")
     const final = (await request("/api/dashboard")).body.drafts.drafts.find(d => d.id === draft.id)
     assert.equal(final.review_binding, undefined)
     assert.equal(final.approval_binding, undefined)
