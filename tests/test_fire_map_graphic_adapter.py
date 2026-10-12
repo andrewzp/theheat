@@ -93,9 +93,12 @@ def test_real_svg_closeups_neighbor_dateline_and_boundaries(coordinates):
     assert spec["evidence"]["map"]["context_mode"] == "coordinate_closeup"
     root = ET.fromstring(result["svg"])
     ns = "{http://www.w3.org/2000/svg}"
-    all_text = " ".join(root.itertext())
+    visible = " ".join("".join(node.itertext()) for node in root.findall(".//" + ns + "text"))
+    assert str(spec["evidence"]["points"][0]["frp_source"]) + " MW" in visible
+    assert "Pixel A radiative power" in visible and "Not fire area" in visible
     for p in spec["evidence"]["points"]:
-        assert str(p["frp_source"]) + " MW" in all_text
+        assert str(p["frp_source"]) + " MW" in result["alt_text"]
+        assert p["label"] in visible
     circles = root.findall(".//" + ns + "circle")
     assert sum(c.attrib.get("r") == "14" for c in circles) == len(coordinates)
     assert len(result["svg"]) <= 1_000_000
@@ -106,9 +109,9 @@ def test_actual_one_km_geometry_matches_approved_example():
     g = e["map"]
     a, b, c, d = g["markers"]
     assert g["bounds"] == pytest.approx([249.9955, 34.998, 250.0155, 35.011])
-    assert math.dist(a, b) == pytest.approx(397.692307692, abs=1e-5)
-    assert math.dist(a, c) == pytest.approx(325.384615385, abs=1e-5)
-    assert all(label["x"] == p[0] and label["y"] == p[1] + 48 for label, p in zip(g["labels"], g["markers"]))
+    assert math.dist(a, b) == pytest.approx(567.6, abs=1e-5)
+    assert math.dist(a, c) == pytest.approx(464.4, abs=1e-5)
+    assert all(label["x"] == p[0] and label["y"] == p[1] + 64 for label, p in zip(g["labels"], g["markers"]))
 
 
 @pytest.mark.parametrize(
@@ -209,8 +212,9 @@ def test_coarse_regions_zero_and_exact_values_keep_all_text_at_40px():
     assert spec["evidence"]["map"]["context_mode"] == "coarse_land_locator"
     svg = render_svg(**spec)["svg"]
     root = ET.fromstring(svg)
-    text = " ".join(root.itertext())
-    assert "0.0 MW" in text and "500.1234 MW" in text
+    visible = " ".join("".join(node.itertext()) for node in root.findall(".//{http://www.w3.org/2000/svg}text"))
+    assert "0.0 MW" in visible and "500.1234 MW" not in visible
+    assert "500.1234 MW" in adapter.map_alt_text(spec["evidence"])
     styles = [node.attrib.get("style", "") for node in root.iter() if node.tag.endswith("text")]
     import re
     sizes = [float(x) for style in styles for x in re.findall(r"font-size: ([0-9.]+)px", style)]
@@ -226,7 +230,7 @@ def test_unreadable_exact_numeric_value_holds_without_shortening():
 def test_marker_overlap_guard_exact_boundary_without_source_clamping():
     # Pure layout probes retain exact source coordinates; this is not source qualification.
     span = .020
-    scale = min(1088 / span, 470 / .010)
+    scale = min(1032 / span, 710 / .010)
     for distance in (35.9, 36.1):
         points = [dict(lat=0, lon=0, frp_source=1), dict(lat=0, lon=distance / scale, frp_source=2)]
         if distance < 36:
@@ -262,7 +266,8 @@ def test_root_counterexample_cannot_draw_a_leader_through_another_label():
     # caece05 accepted C's diagonal through B's box at this exact retained input.
     old_c_end = [983.8012067407437, 1024.8333333333323]
     old_b_box = [971.8894408270712, 1031.896983382698, 999.8894408270712, 1075.896983382698]
-    assert adapter._segment_hits_box(g["markers"][2], old_c_end, old_b_box)
+    old_c_start = [949.8012067407437, 1050.8333333333323]
+    assert adapter._segment_hits_box(old_c_start, old_c_end, old_b_box)
     assert (g["labels"][2]["leader_end"], g["labels"][1]["box"]) != (old_c_end, old_b_box)
     # Independently sample every resulting segment, including its endpoints.
     # The original collision covers a substantial span and fails this regression.
@@ -291,7 +296,81 @@ def test_readiness_layout_uses_embedded_metrics_without_draw_or_native_work(monk
     monkeypatch.setattr(Path, "write_text", forbidden)
     monkeypatch.setattr(Path, "mkdir", forbidden)
     layout = renderer.map_text_layout(adapt()["evidence"])
-    assert len(layout["longitudes"]) == len(layout["latitudes"]) == len(layout["rows"]) == 3
+    assert len(layout["longitudes"]) == len(layout["latitudes"]) == 2
+    assert len(layout["point_labels"]) == 3
     spec = adapt(graphic_bundle(values=[1.2345678901234567e100]))
     with pytest.raises(adapter.MapQualificationError, match="graphic_map_labels_exceed_space"):
         renderer.map_text_layout(spec["evidence"])
+
+
+def test_primary_lead_is_not_maximum_or_count_and_exact_related_values_remain_accessible():
+    from src.media.evidence_graphic_render import map_text_layout
+    spec = adapt(graphic_bundle(values=[125.75, 500.1234567890123, 750.25, 0], coordinates=NEIGHBORS))
+    before = deepcopy(spec)
+    result = render_svg(**spec)
+    root = ET.fromstring(result["svg"])
+    visible = " ".join("".join(node.itertext()) for node in root.findall(".//{http://www.w3.org/2000/svg}text"))
+    assert "125.75 MW" in visible and "750.25 MW" not in visible
+    assert "500.1234567890123 MW" not in visible
+    assert "Pixel A radiative power" in visible and "THEHEAT" in visible and "SYNTHETIC DATA" in visible
+    assert "NASA FIRMS" in visible and "Terra / MODIS" in visible and "2032-02-29 23:59 UTC" in visible
+    assert "Location only" in visible and "Not fire area" in visible
+    assert "not fire boundaries" in visible and "not fire area or severity" in visible
+    assert "not a maximum selection or a hazard classification" in result["alt_text"]
+    assert "Exact round-trip FRP values are visible" not in result["alt_text"]
+    for point in spec["evidence"]["points"]:
+        assert f"source FRP {point['frp_source']} MW" in result["alt_text"]
+        assert f"latitude {point['lat']}, longitude {point['lon']}" in result["alt_text"]
+    assert spec == before
+    layout = map_text_layout(spec["evidence"])
+    assert layout["latitude_mode"] == "rotated_edges"
+    assert all(row["size"] >= 40 for row in layout["texts"])
+    assert next(row for row in layout["texts"] if row["text"] == "125.75 MW")["size"] == 96
+    assert [adapter.color(p["frp_source"], 1000) for p in spec["evidence"]["points"]] == ["#22385d", "#7d7c78", "#bcae6c", "#00224e"]
+
+
+def test_horizontal_cluster_uses_real_letterboxing_without_changing_coordinates():
+    from src.media.evidence_graphic_render import map_text_layout
+    points = [(35, -110 + i * .011) for i in range(4)]
+    spec = adapt(graphic_bundle(values=[125.75, 500.1234, 750.25, 0], coordinates=points))
+    before = deepcopy(spec)
+    layout = map_text_layout(spec["evidence"])
+    assert layout["latitude_mode"] == "horizontal_letterbox"
+    south, north = layout["latitudes"]
+    x, y, width, height = spec["evidence"]["map"]["rectangle"]
+    assert y > 354 and y + height < 1064
+    assert south["rotation"] == north["rotation"] == 0
+    assert south["box"][3] < y and north["box"][1] > y + height
+    assert south["box"][1] >= 354 and north["box"][3] <= 1064
+    assert south["text"] == "34.9950°N" and north["text"] == "35.0050°N"
+    assert [(p["lat"], p["lon"]) for p in spec["evidence"]["points"]] == points
+    for i, a in enumerate(layout["texts"]):
+        for b in layout["texts"][:i]:
+            x0, y0, x1, y1 = a["box"]
+            xx0, yy0, xx1, yy1 = b["box"]
+            assert x1 <= xx0 or xx1 <= x0 or y1 <= yy0 or yy1 <= y0
+    assert render_svg(**spec)["publication_approved"] is False
+    assert spec == before
+
+
+def test_narrow_map_without_axis_room_holds_in_shared_preflight():
+    from src.media.evidence_graphic_render import map_text_layout
+    spec = adapt(graphic_bundle(values=[125.75, 750.25], coordinates=[(0, 0), (10, 3)]))
+    before = deepcopy(spec)
+    with pytest.raises(adapter.MapQualificationError, match="graphic_map_labels_exceed_space"):
+        map_text_layout(spec["evidence"])
+    with pytest.raises(adapter.MapQualificationError, match="graphic_map_labels_exceed_space"):
+        render_svg(**spec)
+    assert spec == before
+
+
+def test_social_version_reconstructs_layout_and_refuses_old_or_rehashed_geometry():
+    spec = adapt()
+    assert adapter.TEMPLATE_VERSION == "p31-modis-locator-2-social"
+    assert adapter.ADAPTER_VERSION == "p31-firms-modis-map-2"
+    assert spec["evidence"]["map"]["version"] == "p31-locator-2-social"
+    for key, value in (("version", "p31-locator-1"), ("labels", []), ("rectangle", [56, 620, 1088, 470])):
+        changed = deepcopy(spec["evidence"])
+        changed["map"][key] = value
+        with pytest.raises(ValueError):
+            validate_graphic(spec["template"], changed, expected_evidence_sha256=fingerprint(changed))

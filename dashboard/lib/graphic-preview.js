@@ -46,7 +46,7 @@ export function graphicRequest(draft, manifest) {
 export const graphicRequestKey = request => request ? canonical(request) : "unavailable"
 
 const templates = {
-  modis_thermal_detection_map: { version: "p31-modis-locator-1", source: "NASA FIRMS · MODIS",
+  modis_thermal_detection_map: { version: "p31-modis-locator-2-social", source: "NASA FIRMS · MODIS",
     adapter: "src/media/fire_map_graphic_adapter.py", context: "modis_acquisition" },
   pm25_forecast_day: { version: "p31-pm25-forecast-1", source: "CAMS via Open-Meteo",
     adapter: "src/media/air_quality_graphic_adapter.py", context: "pm25_forecast_day" },

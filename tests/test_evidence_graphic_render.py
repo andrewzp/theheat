@@ -172,3 +172,20 @@ print(json.dumps({k: r[k] for k in ("cache_key", "svg_sha256", "alt_text")}))
     normal = renderer.render_svg(**specs[index])
     assert json.loads(result.stdout) == {k: normal[k] for k in ("cache_key", "svg_sha256", "alt_text")}
     assert sorted(p.name for p in tmp_path.iterdir()) == ["runtime.zip", "spec.json"]
+
+
+def test_current_map_uses_shared_measured_layout_and_keeps_current_font_bounds():
+    spec = map_spec(fire_bundle(values=[125.75, 500.1234, 750.25, 0],
+        coordinates=[(35, -110), (35, -109.989), (35.009, -110), (35.009, -109.989)]))
+    layout = renderer.map_text_layout(spec["evidence"])
+    root = ET.fromstring(renderer.render_svg(**spec)["svg"])
+    rendered = root.findall(".//" + NS + "text")
+    assert [row["text"] for row in layout["texts"]] == ["".join(node.itertext()) for node in rendered]
+    for row in layout["texts"]:
+        left, bottom, right, top = row["box"]
+        assert 20 <= left < right <= 1180 and 20 <= bottom < top <= 1480
+    assert all(row["size"] == 56 for row in layout["point_labels"])
+    for row, retained in zip(layout["point_labels"], spec["evidence"]["map"]["labels"]):
+        x0, y0, x1, y1 = row["box"]
+        assert retained["box"][0] <= x0 < x1 <= retained["box"][2]
+        assert retained["box"][1] <= y0 < y1 <= retained["box"][3]

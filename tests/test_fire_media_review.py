@@ -50,7 +50,7 @@ def test_complete_package_reuses_exact_assets_without_approving(local):
     assert prepare_media_review(**local) == {**result, "reused": True}
     packet = json.loads((Path(result["output"]) / "packet.json").read_text())
     spec = json.loads(Path(local["spec_path"]).read_text())
-    expected = "p31-modis-locator-1" if spec["template"] == "modis_thermal_detection_map" else "p31-modis-thermal-1"
+    expected = "p31-modis-locator-2-social" if spec["template"] == "modis_thermal_detection_map" else "p31-modis-thermal-1"
     assert packet["graphic_binding"]["template_version"] == expected
 
 

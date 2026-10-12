@@ -13,8 +13,8 @@ from src.media import fire_graphic_adapter as source
 from src.media.temperature_graphic_adapter import _StoredBundle
 
 TEMPLATE = "modis_thermal_detection_map"
-TEMPLATE_VERSION = "p31-modis-locator-1"
-ADAPTER_VERSION = "p31-firms-modis-map-1"
+TEMPLATE_VERSION = "p31-modis-locator-2-social"
+ADAPTER_VERSION = "p31-firms-modis-map-2"
 ORIGINAL_SHA = "1926c621afd6ac67c3f36639bb1236134a48d82226dc675d3e3df53d02d2a3de"
 DERIVED_SHA = "a37b057aca4fc9714a0c24b5d6bc9778bb5845894646e4052383ea63fa3cd50d"
 MANIFEST_SHA = "1af072edc46ae3252bf6cf0edb43993986de262a2840b2cd4907eb4866f970e9"
@@ -22,6 +22,9 @@ PALETTE = ["#00224E", "#434E6C", "#7D7C78", "#BCAE6C", "#FEE838"]
 BASEMAP = "maps/ne_110m_land_v4_1_0.json"
 MANIFEST = "maps/manifest.json"
 EPSILON = 1e-12
+MAP_FRAME = (112, 354, 1032, 710)
+LABEL_SIZE = 56
+LABEL_BOX = (36, 60)
 
 
 class MapQualificationError(ValueError):
@@ -134,13 +137,14 @@ def _segment_hits_box(a, b, box):
 
 def label_positions(markers, rectangle):
     left, bottom, width, height = rectangle
-    options = [(0, 48), (48, 48), (48, 0), (48, -48), (0, -48), (-48, -48), (-48, 0), (-48, 48)]
+    options = [(0, 64), (64, 64), (64, 0), (64, -64), (0, -64), (-64, -64), (-64, 0), (-64, 64)]
+    half_width, half_height = (v / 2 for v in LABEL_BOX)
     candidates = []
     for i, (x, y) in enumerate(markers):
         current = []
         for dx, dy in options:
             cx, cy = x + dx, y + dy
-            box = (cx - 14, cy - 22, cx + 14, cy + 22)
+            box = (cx - half_width, cy - half_height, cx + half_width, cy + half_height)
             if not (
                 left <= box[0]
                 and box[2] <= left + width
@@ -149,8 +153,8 @@ def label_positions(markers, rectangle):
             ):
                 continue
             end = (
-                cx if dx == 0 else cx - math.copysign(14, dx),
-                cy if dy == 0 else cy - math.copysign(22, dy),
+                cx if dx == 0 else cx - math.copysign(half_width, dx),
+                cy if dy == 0 else cy - math.copysign(half_height, dy),
             )
             if any(
                 j != i
@@ -209,10 +213,11 @@ def geometry(points):
         width <= 120 and height <= 60 and south >= -80 and north <= 80,
         "graphic_map_outside_locator_bounds",
     )
-    scale = min(1088 / width, 470 / height)
+    frame_x, frame_y, frame_width, frame_height = MAP_FRAME
+    scale = min(frame_width / width, frame_height / height)
     rect = [
-        56 + (1088 - width * scale) / 2,
-        620 + (470 - height * scale) / 2,
+        frame_x + (frame_width - width * scale) / 2,
+        frame_y + (frame_height - height * scale) / 2,
         width * scale,
         height * scale,
     ]
@@ -229,7 +234,7 @@ def geometry(points):
     )
     labels = label_positions(markers, rect)
     return dict(
-        version="p31-locator-1",
+        version="p31-locator-2-social",
         projection="plate_carree",
         bounds=[west, south, east, north],
         rectangle=rect,
@@ -335,7 +340,7 @@ def map_alt_text(evidence):
         "Bar lengths use exact source values; visible FRP labels are rounded to one decimal and pixel-center coordinates to four decimals.",
         "Blue-to-yellow colors show pixel FRP linearly from zero to "
         + str(evidence["map"]["axis_max"])
-        + " MW. Exact round-trip FRP values are visible; coordinate labels round to four decimals.",
+        + " MW. The exact primary A value is visible as the lead; it is not a maximum selection or a hazard classification. All exact source FRP values and pixel-center coordinates are listed in this description and retained input. Visible axis edge captions round to four decimals.",
     )
     return (
         text
@@ -347,5 +352,5 @@ def map_alt_text(evidence):
         )
         + ("Viewport crosses the dateline. " if evidence["map"]["dateline_crossing"] else "")
         + "Natural Earth 110m land4.1.0, public domain. Small islands may be absent; absence is not evidence of water. "
-        "Markers are not pixel footprints or fire perimeters. Unreadable overlaps are withheld, never displaced."
+        "The world inset shows location or the geographic viewport, not physical fire area. Markers are not pixel footprints or fire perimeters. Unreadable overlaps are withheld, never displaced."
     )

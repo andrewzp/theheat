@@ -17,7 +17,7 @@ const request = () => graphicRequest(draft(), manifest)
 function responseValue(forecast = false) {
   const req = request(), files = manifest.identity.files
   const binding = { template: forecast ? "pm25_forecast_day" : "modis_thermal_detection_map",
-    template_version: forecast ? "p31-pm25-forecast-1" : "p31-modis-locator-1",
+    template_version: forecast ? "p31-pm25-forecast-1" : "p31-modis-locator-2-social",
     source_evidence_sha256: "c".repeat(64), renderer: { library: "ReportLab", version: "4.4.9", format: "svg", schema_version: 1,
       width: 1200, height: 1500, implementation_sha256: files["src/media/evidence_graphic_render.py"],
       contract_sha256: files["src/media/evidence_graphic.py"], adapter_sha256: files[forecast ? "src/media/air_quality_graphic_adapter.py" : "src/media/fire_map_graphic_adapter.py"],
@@ -175,4 +175,12 @@ test("forecast date stays a literal local day, including noninteger timezone off
     const bad = structuredClone(good); Object.assign(bad.source_context, changes)
     await assert.rejects(validateGraphicResponse(bad, request(), manifest))
   }
+})
+
+
+test("current fire preview rejects the superseded locator presentation", async () => {
+  const value = responseValue()
+  value.binding.template_version = "p31-modis-locator-1"
+  value.cache_key = fingerprint(value.binding)
+  await assert.rejects(validateGraphicResponse(value, request(), manifest))
 })
