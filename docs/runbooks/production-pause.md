@@ -13,16 +13,19 @@ canary. Its keyless PR changes job and required offline CI remain available.
 Existing schedules and paid PR opt-in rules are unchanged; do not dispatch an
 evaluation to verify the pause. Observe an existing scheduled job's outcome.
 
-Disable the separate `refresh-thresholds.yml` workflow to stop weekly source
-acquisition. Keep `THEHEAT_SELFHEAL_REPAIR_ENABLED=0` so intentional pauses cannot
-be repaired automatically. The source/workflow observers receive the same pause
-variable: source liveness reports configured pause, and successful or unknown bot
-and voice-regression workflow results cannot resolve an existing incident while
-paused. Existing run evidence and genuine source or workflow failures remain
-visible; pause alone never closes their issues.
-The dashboard still shows retained source/workflow history, including the disabled
-threshold workflow. Configured pause does not prove running workers have stopped,
-source freshness, recovery or zero spending.
+The same variable also skips the entire `refresh-thresholds.yml` job before
+weekly or manually requested source acquisition, baseline mutation, artifact
+publication or commits. Preserve its existing enabled/disabled state; the guard
+also applies if that workflow is enabled later. Keep
+`THEHEAT_SELFHEAL_REPAIR_ENABLED=0` so intentional pauses cannot be repaired
+automatically. The source/workflow observers receive the same pause variable:
+source liveness reports configured pause, and successful or unknown bot,
+voice-regression and refresh-thresholds workflow results cannot resolve an
+existing incident while paused. Existing run evidence and genuine source or
+workflow failures remain visible; pause alone never closes their issues.
+The dashboard still shows retained source/workflow history, including an
+independently disabled threshold workflow. Configured pause does not prove running
+workers have stopped, source freshness, recovery or zero spending.
 
 The Automation area reads the single repository pause variable during its shared
 15-second status refresh. A configured collector pause is shown separately from
@@ -46,9 +49,12 @@ just to test the pause. Read the remote controls and scheduled job outcomes.
 
 1. Set the repository variable `THEHEAT_PRODUCTION_PAUSED` to `0`.
    This also restores the existing scheduled/manual paid voice-evaluation
-   eligibility; PR replay still requires its separate opt-in and existing rules.
+   and threshold-refresh eligibility; PR replay still requires its separate
+   opt-in and existing rules. Clearing the variable does not enable a disabled
+   workflow.
 2. Set the dashboard Production variable to `0` and redeploy.
-3. Re-enable `refresh-thresholds.yml` if it was enabled before the pause.
+3. Separately re-enable `refresh-thresholds.yml` only if resuming that collection
+   is authorized and it was enabled before the pause.
 4. Restore the previously recorded self-heal setting only if intended.
 
 Automatic publication has separate controls. Resuming collection does not

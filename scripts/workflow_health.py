@@ -45,6 +45,7 @@ MONITORED_WORKFLOWS: list[dict[str, str]] = [
 PAUSE_GUARDED_WORKFLOWS = frozenset({
     ("theheat-bot", "bot.yml"),
     ("voice-regression", "voice-regression.yml"),
+    ("refresh-thresholds", "refresh-thresholds.yml"),
 })
 
 # Conclusions that mean the run produced a broken result. A single red run trips
