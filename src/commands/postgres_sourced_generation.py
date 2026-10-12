@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from dataclasses import dataclass
 import hashlib
 import json
 import os
@@ -16,6 +17,7 @@ from src.editorial.policy import valid_policy
 from src.editorial.revisions import fingerprint
 from src.storage import postgres_projection as p
 from src.two_bot import negative_cache
+from src.two_bot.candidate_derivation import has_ghcn_reference
 from src.two_bot.sourced_generation import prepare as prepare_plan, identity as plan_identity, refuse, source_bundle
 
 INPUT = "sourced-generation-input-v1"
@@ -82,16 +84,22 @@ def exists(c, namespace, identity):
 
 def document(value):
     refuse(isinstance(value, dict) and set(value) == FIELDS and type(value["schema_version"]) is int
-        and value["schema_version"] == 1, "generation_input_invalid")
+        and value["schema_version"] in (1, 2), "generation_input_invalid")
     refuse(len(p._canonical(value)) <= MAX_INPUT, "generation_input_bound")
     for k in ("source_key", "source_revision"):
         refuse(isinstance(value[k], str) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}", value[k]), "generation_source_invalid")
-    refuse(value["source_key"] != "__init__" and
+    refuse(value["schema_version"] == 2 and value["source_key"] == "ghcn" or value["schema_version"] == 1 and value["source_key"] != "__init__" and
         (Path(__file__).resolve().parents[1]/"orchestrator"/"sources"/(value["source_key"]+".py")).is_file(),
         "generation_source_unknown")
     refuse(type(value["urgent"]) is bool, "generation_input_invalid")
     refuse(utc_datetime(value["captured_at"]) < utc_datetime(value["useful_until"]), "generation_window_invalid")
-    source_bundle(value["bundle"])
+    if value["schema_version"] == 2:
+        from src.two_bot.ghcn_claim_view import structural_view
+        refuse(value["source_key"] == "ghcn" and value["urgent"] is True, "generation_input_invalid")
+        structural_view(value["bundle"])
+    else:
+        refuse(not has_ghcn_reference(value["bundle"]), "generation_input_invalid")
+        source_bundle(value["bundle"])
     admission._save(value["save"], value["bundle"])
     return value
 
@@ -133,11 +141,13 @@ def current_reservation(c, reserve, identity, policy, now, *, synchronous=False)
     refuse(utc_datetime(value["valid_from"]) <= now < utc_datetime(value["valid_until"]), "generation_reservation_expired")
 
 
-def current(authority, c, identity, policy, now):
+def current(authority, c, identity, policy, now, *, resolved=None):
     config = configuration(authority)
     refuse(identity in config["current_inputs"], "generation_source_superseded")
     value = document(read(c, INPUT, identity))
     refuse(p._sha(p._canonical(value)) == identity, "generation_input_mismatch")
+    if value["schema_version"] == 2:
+        source_bundle(value["bundle"], resolved=resolved)
     # A configuration cannot nominate two current versions of the same event.
     keys = []
     for other in config["current_inputs"]:
@@ -156,7 +166,7 @@ def current(authority, c, identity, policy, now):
     return value, config
 
 
-def prepare(authority, c, state, version, command, actor, *, now, policy, editorial_policy):
+def prepare(authority, c, state, version, command, actor, *, now, policy, editorial_policy, resolved=None):
     authorize(actor, command.action)
     refuse(actor.subject == command.actor_subject and actor.authentication_context == command.authentication_context,
            "generation_actor_changed")
@@ -164,12 +174,12 @@ def prepare(authority, c, state, version, command, actor, *, now, policy, editor
     refs = command.payload
     refuse(refs["expected_state_version"] == version and refs["expected_policy_sha256"] == fingerprint(editorial_policy), "generation_context_changed")
     refuse(refs["brief_id"] == refs["brief_sha256"], "generation_input_mismatch")
-    value, config = current(authority, c, refs["brief_id"], editorial_policy, now)
-    bundle = source_bundle(value["bundle"])
+    value, config = current(authority, c, refs["brief_id"], editorial_policy, now, resolved=resolved)
+    bundle = source_bundle(value["bundle"], resolved=resolved)
     refuse(negative_cache.should_skip(state, value["save"]["event_id"], bundle, now=now) is None, "generation_negative_cache")
     if value["urgent"]:
         from src.commands import postgres_synchronous_generation as sync
-        return sync.prepare(c, value, config, state, editorial_policy, now, authority.environment)
+        return sync.prepare(c, value, config, state, editorial_policy, now, authority.environment, resolved=resolved)
     _, _, context, key = plan_identity(value, state, editorial_policy, now=now, epoch=admission.PAUSED_EPOCH)
     job = "gs_"+key
     reused = exists(c, JOB, job)
@@ -324,6 +334,22 @@ def project(authority, c, state, version, policy, now):
             captured_at=value["captured_at"], useful_until=value["useful_until"], expected_state_version=version,
             expected_policy_sha256=fingerprint(policy), status="ready", job_id=None, writer_usage=None,
             execution_mode="synchronous" if value["urgent"] else "batch")
+        if value["schema_version"] == 2:
+            from src.commands import postgres_synchronous_generation as sync
+            row["status"] = "pending_validation"
+            row["reason"] = "ghcn_source_validation_required"
+            jobs = jobs_for(c, identity, sync.JOB)
+            if len(jobs) == 1:
+                row.update(sync.project(c, jobs[0]))
+                if row["status"] == "ready":
+                    row["status"] = "pending_validation"
+            elif jobs:
+                row["status"] = "blocked"
+                row["reason"] = "generation_multiple_retained_jobs"
+            if now >= utc_datetime(value["useful_until"]):
+                row["status"] = "expired"
+            rows.append(row)
+            continue
         try:
             current(authority, c, identity, policy, now)
             _, _, _, key = plan_identity(value, state, policy, now=now, epoch=admission.PAUSED_EPOCH)
@@ -360,16 +386,107 @@ def candidates(authority, c):
     return tuple(identities)
 
 
-def candidates_for(c, identity, namespace):
-    identities = []
+def jobs_for(c, identity, namespace):
     rows = c.execute("""SELECT f.snapshot_id FROM theheat_projection.fields f
         JOIN theheat_projection.artifacts a ON a.sha=f.artifact_sha
         WHERE f.namespace=%s AND f.name_json=%s AND a.payload=%s
         ORDER BY f.snapshot_id LIMIT 17""", (namespace, b'"brief_id"', json.dumps(identity).encode())).fetchall()
     refuse(len(rows) <= 16, "generation_candidate_capacity")
-    for (job_id,) in rows:
+    return [row[0] for row in rows]
+
+
+def candidates_for(c, identity, namespace):
+    identities = []
+    for job_id in jobs_for(c, identity, namespace):
         refuse(read(c, namespace, job_id)["brief_id"] == identity, "generation_input_mismatch")
         if exists(c, CAPTURE, job_id):
             identities.append(read(c, CAPTURE, job_id)["admission_input_id"])
             refuse(len(identities) <= 16, "generation_candidate_capacity")
     return identities
+
+
+def prepare_ghcn_command(authority, command_id, *, executed=False):
+    """Resolve before the mutation connection. Completed command reads stay passive."""
+    from src.commands import postgres_synchronous_generation as sync
+    with authority.projections._connection() as c:
+        authority._validate(c)
+        if command_id is None:
+            row=c.execute("SELECT i.command_id FROM theheat_commands.intents i LEFT JOIN theheat_commands.results r USING(command_id) WHERE r.command_id IS NULL ORDER BY i.sequence LIMIT 1").fetchone()
+            if row is None:
+                return None
+            command_id=row[0]
+        stored=authority._intent(c,command_id)
+        if stored is None or (not executed and authority._result(c,command_id) is not None):
+            return None
+        command=stored[0]
+        if command.action == "request_sourced_generation":
+            value=document(read(c,INPUT,command.payload["brief_id"]))
+            bundle=value["bundle"]
+        elif command.action in {"request_candidate_checks","admit_checked_candidate"} and command.payload.get("origin_kind")=="synchronous_writer_v1":
+            value=admission.read_input(c,command.payload)
+            bundle=sync.job(c,value["generation_id"])["bundle"]
+        else:
+            return None
+        if not has_ghcn_reference(bundle):
+            return None
+    return prepare_ghcn_bundle(authority,bundle)
+
+
+def retain_ghcn(authority, run_id, selection, *, clock):
+    """Only the operator-owned source resolver may retain schema2; never allowlist it."""
+    from datetime import date, datetime, timedelta, timezone
+    from src.two_bot.ghcn_claim_view import prepare_execution, json_tree
+    from src.storage.ghcn_runtime_inputs import ghcn
+    prepared=prepare_execution(authority,run_id,selection)
+    claim=prepared.claim
+    source_revision=fingerprint(dict(reference=claim.reference,view_sha256=claim.view_sha256,
+        policy_sha256=prepared.checkpoint["policy_sha256"]))
+    with authority.projections._connection(writing=True) as c:
+        authority._validate(c)
+        version,state=authority._state(c,lock=True)
+        prepared.current(authority,c,state,version)
+        now=utc_datetime(clock())
+        rows=c.execute("""SELECT f.snapshot_id FROM theheat_projection.fields f
+            JOIN theheat_projection.artifacts a ON a.sha=f.artifact_sha
+            WHERE f.namespace=%s AND f.name_json=%s AND a.payload=%s ORDER BY f.snapshot_id LIMIT 2""",
+            (INPUT,b'"source_revision"',json.dumps(source_revision).encode())).fetchall()
+        refuse(len(rows)<=1,"generation_duplicate_enrollment")
+        if rows:
+            saved=document(read(c,INPUT,rows[0][0]))
+            refuse(saved["source_key"]=="ghcn" and saved["bundle"]==json_tree(claim.verify_saved(saved["bundle"]).to_dict())
+                and saved["save"]==prepared.save,"generation_enrollment_changed")
+            return dict(brief_id=rows[0][0],brief_sha256=rows[0][0])
+        day=date.fromisoformat(selection["signal_date"])
+        refuse(0 <= (now.date()-day).days <= ghcn.MAX_OBS_AGE_DAYS,"ghcn_observation_stale")
+        expiry=datetime.combine(day+timedelta(days=ghcn.MAX_OBS_AGE_DAYS+1),datetime.min.time(),tzinfo=timezone.utc)
+        deadline=min(now+timedelta(hours=1),expiry)
+        refuse((deadline-now).total_seconds()>600,"generation_window_or_request_invalid")
+        from src.two_bot.bundle_capture import capture_bundle
+        value=document(dict(schema_version=2,source_key="ghcn",source_revision=source_revision,
+            captured_at=utc_text(now),useful_until=utc_text(deadline),urgent=True,bundle=capture_bundle(claim.view).payload(),save=prepared.save))
+        identity=p._sha(p._canonical(value))
+        record(c,INPUT,identity,value)
+        return dict(brief_id=identity,brief_sha256=identity)
+
+
+@dataclass(frozen=True)
+class GhcnPreparationFailure:
+    code: str
+    claim: object = None
+
+    def current(self,authority,c,state,version):
+        raise CommandError(self.code,"Current GHCN source evidence is unavailable")
+
+
+def prepare_ghcn_bundle(authority,bundle):
+    from src.two_bot.ghcn_claim_view import prepare_execution, structural_view
+    from src.storage.cyclone_supply import CycloneSupplyError
+    reference=structural_view(bundle)
+    try:
+        context=prepare_execution(authority,reference["source_run_id"],reference["selection"])
+        context.claim.verify_saved(bundle)
+        return context
+    except CycloneSupplyError as exc:
+        return GhcnPreparationFailure(str(exc))
+    except OSError:
+        return GhcnPreparationFailure("ghcn_baseline_unavailable")

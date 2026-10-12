@@ -22,7 +22,7 @@ from src.editorial.policy import valid_policy
 from src.editorial.scoring import EditorialScore
 from src.editorial.revisions import _record_verified_checks_review, fingerprint, text_hash
 from src.storage import postgres_projection as p
-from src.two_bot.candidate_derivation import derive_candidate
+from src.two_bot.candidate_derivation import derive_candidate, has_ghcn_reference
 from src.two_bot.check_origin import checked_text
 
 NAMESPACE = "candidate-admission-input-v1"
@@ -205,24 +205,28 @@ def request_for(authority, c, value):
     return None
 
 
-def verified_completion(c, identity, value, *, owner, fence, state, policy, now, environment):
+def verified_completion(c, identity, value, *, owner, fence, state, policy, now, environment, resolved=None):
     observations.validate(c, environment)
     packet, enrolled = pg._packet(c, identity, environment)
     sync = value.get("origin_kind") == "synchronous_writer_v1"
     fields = ("origin_kind", "generation_id", "grant_id", "observation_sha256", "resolution_sha256", "request_sha256", "candidate_id") if sync else ("job_id", "custom_id", "candidate_id", "plan_sha256")
-    refuse(packet["schema_version"] == (4 if sync else 2) and all(packet[k] == value[k] for k in fields), "check_candidate_mismatch")
+    refuse(packet["schema_version"] == (5 if has_ghcn_reference(value["bundle"]) else 4 if sync else 2) and all(packet[k] == value[k] for k in fields), "check_candidate_mismatch")
     refuse(p._canonical(packet["bundle"]) == p._canonical(value["bundle"]) and p._canonical(packet["memory"]) == p._canonical(value["memory"]), "check_input_bytes_changed")
-    derivation = derive_candidate(packet["candidate"], value["candidate_id"], value["bundle"], policy)
+    derivation = derive_candidate(packet["candidate"], value["candidate_id"], value["bundle"], policy, resolved=resolved)
     refuse(p._canonical(derivation) == p._canonical(packet["derivation"]), "check_derivation_changed")
     pg._current(c, packet, {"owner": owner, "fence": fence, "current_context": context_for(value, policy),
-                         "checker_state_sha256": fingerprint(state)}, utc_text(now), environment)
-    proofs, outcomes = pg.verified_stage_receipts(c, identity, packet, owner=owner, fence=fence, environment=environment)
+                         "checker_state_sha256": fingerprint(state)}, utc_text(now), environment, resolved=resolved)
+    proofs, outcomes = pg.verified_stage_receipts(c, identity, packet, owner=owner, fence=fence, environment=environment, resolved=resolved)
+    return packet, outcomes, completion_proof(identity, value, packet, proofs)
+
+
+def completion_proof(identity, value, packet, proofs):
     completion = fingerprint({"check_set_id": identity, "candidate_id": value["candidate_id"], "derivation_id": packet["derivation_id"],
-        "text_sha256": text_hash(checked_text(packet)), "bundle_sha256": fingerprint(value["bundle"]),
-        "policy_sha256": fingerprint(policy), "checker_state_sha256": fingerprint(state), "stages": proofs})
+        "text_sha256": text_hash(packet["derivation"]["final_text"]), "bundle_sha256": fingerprint(value["bundle"]),
+        "policy_sha256": fingerprint(packet["policy"]), "checker_state_sha256": packet["checker_state_sha256"], "stages": proofs})
     proof = dict(schema_version=1, check_set_id=identity, candidate_id=value["candidate_id"], derivation_id=packet["derivation_id"],
-                 checker_state_sha256=fingerprint(state), completion_sha256=completion, stages=proofs)
-    return packet, outcomes, proof
+                 checker_state_sha256=packet["checker_state_sha256"], completion_sha256=completion, stages=proofs)
+    return proof
 
 
 @dataclass(frozen=True)
@@ -231,7 +235,7 @@ class Transition:
     references: dict
 
 
-def prepare(authority, c, state, version, command, actor, *, now, policy, editorial_policy, resolve_principal=None):
+def prepare(authority, c, state, version, command, actor, *, now, policy, editorial_policy, resolve_principal=None, prepared=None, clock_now=None):
     refuse(actor.subject == command.actor_subject and actor.authentication_context == command.authentication_context, "forbidden")
     authorize(actor, command.action)
     refuse(now < utc_datetime(command.expires_at), "command_expired")
@@ -255,20 +259,23 @@ def prepare(authority, c, state, version, command, actor, *, now, policy, editor
         p._require(result["candidate"]["draft_id"] == draft_id, "changed_candidate_admission")
         return Transition(Reduction(state, (), ()), dict(outcome="already_admitted", draft_id=draft_id,
             publication_approved=False, accounting_complete=False, cost_usd=None))
+    resolved = prepared.current(authority,c,state,version) if prepared is not None else None
+    now = clock_now() if clock_now is not None else now
+    refuse(now < utc_datetime(command.expires_at), "command_expired")
     refuse(refs["expected_state_version"] == version, "candidate_state_conflict")
     _current(value, version, state, editorial_policy, now)
     owner = owner_for(prior[0] if prior else command)
     sync = value.get("origin_kind") == "synchronous_writer_v1"
     if sync:
         from src.commands import postgres_synchronous_generation as synchronous, postgres_revision_checks as revisions
-        synchronous.current_candidate(authority, c, value, state, editorial_policy, now, resolve_principal)
+        synchronous.current_candidate(authority, c, value, state, editorial_policy, now, resolve_principal, resolved=resolved)
         fence = revisions.acquire(c, prior[1]["check_set_id"], owner, 300, now=utc_text(now), environment=authority.environment,
             origin_kind="synchronous_writer_v1")["lease"]["fence"] if prior else None
     else:
         leased = worker.apply(c, "acquire", dict(job_id=value["job_id"], owner=owner, ttl_seconds=300), now=utc_text(now), environment=authority.environment)
         fence = leased["lease"]["fence"]
     row = _review(c, value, owner, fence, utc_text(now), authority.environment)
-    derivation = derive_candidate(row["candidate"], value["candidate_id"], value["bundle"], editorial_policy)
+    derivation = derive_candidate(row["candidate"], value["candidate_id"], value["bundle"], editorial_policy, resolved=resolved)
     # Same deterministic preflight before request and after checks.
     args = value["save"]
     context = deepcopy(args["review_context"] or {})
@@ -276,11 +283,11 @@ def prepare(authority, c, state, version, command, actor, *, now, policy, editor
     if command.action == "admit_checked_candidate":
         refuse(prior is not None and prior[1]["check_set_id"] == refs["check_set_id"], "check_request_not_found")
         packet, outcomes, proof = verified_completion(c, refs["check_set_id"], value, owner=owner, fence=fence,
-            state=state, policy=editorial_policy, now=now, environment=authority.environment)
+            state=state, policy=editorial_policy, now=now, environment=authority.environment, resolved=resolved)
         refuse(proof["completion_sha256"] == refs["expected_completion_sha256"], "check_completion_conflict")
         context["two_bot"] = dict(signal_kind=value["bundle"]["signal_kind"], bundle=deepcopy(value["bundle"]),
             fact_check=outcomes["fact_check"], critic=outcomes["critic"], required_checks_binding=proof,
-            reviewed_text_sha256=text_hash(checked_text(packet)), reviewed_bundle_sha256=fingerprint(value["bundle"]),
+            reviewed_text_sha256=text_hash(checked_text(packet, resolved=resolved)), reviewed_bundle_sha256=fingerprint(value["bundle"]),
             reviewed_policy_sha256=fingerprint(editorial_policy), cited_impact=packet["candidate"].get("cited_impact"),
             human_impact=value["bundle"].get("human_impact"))
     plan = plan_draft_admission(state, text=derivation["final_text"], tweet_type=args["legacy_type"], event_id=args["event_id"],
@@ -288,11 +295,35 @@ def prepare(authority, c, state, version, command, actor, *, now, policy, editor
         score=args["score"], review_context=context,
         evaluator_metadata=args["evaluator_metadata"], city=args["city"], tweet_date=args["tweet_date"], cooldown_exempt=args["cooldown_exempt"])
     refuse(plan.draft is not None, plan.reason or "candidate_admission_refused")
+    # Reinterpretation and planning may block. Never promote using their start
+    # time: repeat bounded locked currentness and original actor authorization.
+    if prepared is not None:
+        prepared.current(authority, c, state, version)
+        now = clock_now() if clock_now is not None else now
+        refuse(now < utc_datetime(command.expires_at), "command_expired")
+        fresh_actor = resolve_principal(command.actor_subject) if resolve_principal is not None else None
+        refuse(fresh_actor is not None and fresh_actor.subject == command.actor_subject
+            and fresh_actor.authentication_context == command.authentication_context, "forbidden")
+        assert fresh_actor is not None
+        authorize(fresh_actor, command.action)
+        _current(value, version, state, editorial_policy, now)
+        synchronous.current_candidate(authority, c, value, state, editorial_policy, now, resolve_principal, resolved=resolved)
+        if proof is not None:
+            if packet["schema_version"] == 5:
+                # The original checker remains an authorization dependency even
+                # when a different editor submits this final admission.
+                assert prior is not None
+                check_command, check_value, check_set = runner_context(authority, c, prior[0].command_id,
+                    resolve_principal, version=version, state=state, policy=editorial_policy, now=now, resolved=resolved)
+                refuse(check_command == prior[0] and p._canonical(check_value) == p._canonical(value)
+                    and check_set == refs["check_set_id"] == prior[1]["check_set_id"], "check_request_changed")
+            pg._current(c, packet, {"owner": owner, "fence": fence, "current_context": context_for(value, editorial_policy),
+                "checker_state_sha256": fingerprint(state)}, utc_text(now), authority.environment, resolved=resolved)
     common = dict(publication_approved=False, accounting_complete=False, cost_usd=None)
     if command.action == "request_candidate_checks":
         if sync:
             from src.commands.postgres_sync_checks import enroll
-            result = enroll(c, value, refs, row, state, version, editorial_policy, now=now, environment=authority.environment)
+            result = enroll(c, value, refs, row, state, version, editorial_policy, now=now, environment=authority.environment, resolved=resolved)
             revisions.acquire(c, result["check_set_id"], owner, 300, now=utc_text(now), environment=authority.environment, origin_kind="synchronous_writer_v1")
         else:
             result = pg.apply(c, "intake", dict(job_id=value["job_id"], owner=owner, fence=fence, receipt_id=value["receipt_id"],
@@ -321,11 +352,11 @@ def _source_summary(value):
         facts=[fact(f) for f in facts[:16] if isinstance(f, dict)] if isinstance(facts, list) else [])
 
 
-def _retained_text(c, value, *, policy, now, environment):
+def _retained_text(c, value, *, policy, now, environment, resolved=None):
     if value.get("origin_kind") == "synchronous_writer_v1":
         from src.commands.postgres_synchronous_generation import verify_candidate
         row = verify_candidate(c, value)
-        return derive_candidate(row["candidate"], value["candidate_id"], value["bundle"], policy)["final_text"]
+        return derive_candidate(row["candidate"], value["candidate_id"], value["bundle"], policy, resolved=resolved)["final_text"]
     # Display only: use the existing decoder and immutable input receipt, without
     # taking a lease or certifying readiness. Intake repeats its authoritative
     # chosen-result/context/lease checks under the command lock.
@@ -344,6 +375,30 @@ def _retained_text(c, value, *, policy, now, environment):
     return derive_candidate(row["candidate"], identity, value["bundle"], policy)["final_text"]
 
 
+def passive_recorded(authority, c, value, command, packet, identity, state, version, policy, now, row):
+    """Metadata precondition, not executable validation or approval."""
+    refs = command.payload
+    refuse(command.action == "request_candidate_checks" and identity_for(value) == refs["admission_input_id"], "check_request_mismatch")
+    read_input(c, refs)
+    accepted = authority._result(c, command.command_id)
+    refuse(accepted is not None and accepted["status"] == "unchanged"
+        and accepted["candidate"]["outcome"] == "checks_requested"
+        and accepted["candidate"]["check_set_id"] == identity, "check_request_not_completed")
+    refuse(packet["schema_version"] == 5 and packet["admission_input_id"] == refs["admission_input_id"]
+        and packet["admission_input_sha256"] == refs["admission_input_sha256"], "check_input_bytes_changed")
+    fields = ("origin_kind", "generation_id", "grant_id", "observation_sha256", "resolution_sha256", "request_sha256", "candidate_id")
+    refuse(all(packet[k] == value[k] for k in fields) and packet["bundle"] == value["bundle"] and packet["memory"] == value["memory"], "check_candidate_mismatch")
+    refuse(packet["state_version"] == version and packet["checker_state_sha256"] == fingerprint(state)
+        and packet["current_context"] == context_for(value, policy) and packet["check_date"] == utc_text(now)[:10], "changed_check_context")
+    refuse(now < utc_datetime(packet["useful_until"]) and now < utc_datetime(command.expires_at), "sync_check_expired")
+    lease = c.execute("SELECT owner,fence,expires_at FROM theheat_checks.draft_leases WHERE check_set_id=%s ORDER BY fence DESC LIMIT 1", (identity,)).fetchone()
+    refuse(lease is not None and lease[0] == owner_for(command) and now < utc_datetime(lease[2]), "stale_sync_check_owner")
+    if all(v == "passed" for v in row["stages"].values()):
+        proofs, _ = pg.recorded_stage_receipts(c, identity, packet, owner=owner_for(command), fence=lease[1], environment=authority.environment)
+        proof = completion_proof(identity, value, packet, proofs)
+        row.update(status="checks_recorded", expected_completion_sha256=proof["completion_sha256"])
+
+
 def project(authority, c, allowed, *, version, state, policy, now, resolve_principal=None):
     """Read-only and explicitly allowlisted; no lease acquisition or check run."""
     refuse(isinstance(allowed, (list, tuple)) and len(allowed) <= 16 and len(set(allowed)) == len(allowed), "candidate_list_bound")
@@ -360,6 +415,7 @@ def project(authority, c, allowed, *, version, state, policy, now, resolve_princ
             source=_source_summary(value), text=None, captured_at=value["captured_at"],
             last_observed_at=None, last_completed_at=None, stage_times={},
             check_set_id=None, expected_completion_sha256=None, saved_draft_id=None)
+        resolved = None
         try:
             with expected_domain_failures():
                 prior = request_for(authority, c, value)
@@ -370,7 +426,7 @@ def project(authority, c, allowed, *, version, state, policy, now, resolve_princ
                     packet, enrolled = pg._packet(c, identity, authority.environment)
                     stages, attempts = pg._stages(c, identity, packet, enrolled)
                     row["stages"] = stages
-                    row["text"] = checked_text(packet)
+                    row["text"] = packet["derivation"]["final_text"] if packet["schema_version"] == 5 else checked_text(packet)
                     observations.validate(c, authority.environment)
                     for stage, attempt in attempts.items():
                         observed = completed = None
@@ -384,9 +440,19 @@ def project(authority, c, allowed, *, version, state, policy, now, resolve_princ
                     row["last_completed_at"] = max((t["completed_at"] for t in row["stage_times"].values() if t["completed_at"]), default=None)
                     row["status"] = "checks_pending" if all(v in ("pending", "passed") for v in stages.values()) else "checks_blocked"
                 _current(value, version, state, policy, now)
+                if has_ghcn_reference(value["bundle"]):
+                    # Listing is passive. Fresh source replay and every receipt
+                    # interpretation still happen in the admission worker.
+                    if prior:
+                        passive_recorded(authority, c, value, command, packet, identity, state, version, policy, now, row)
+                    else:
+                        from src.commands.postgres_synchronous_generation import verify_candidate
+                        row["text"] = verify_candidate(c, value)["candidate"]["tweet"]
+                    output.append(row)
+                    continue
                 if value.get("origin_kind") == "synchronous_writer_v1":
                     from src.commands.postgres_synchronous_generation import current_candidate
-                    current_candidate(authority, c, value, state, policy, now, resolve_principal)
+                    current_candidate(authority, c, value, state, policy, now, resolve_principal, resolved=resolved)
                 if prior:
                     if value.get("origin_kind") == "synchronous_writer_v1":
                         saved_lease = c.execute("SELECT fence FROM theheat_checks.draft_leases WHERE check_set_id=%s ORDER BY fence DESC LIMIT 1", (identity,)).fetchone()
@@ -394,13 +460,13 @@ def project(authority, c, allowed, *, version, state, policy, now, resolve_princ
                     else:
                         lease = worker.apply(c, "status", {"job_id": value["job_id"]}, now=utc_text(now), environment=authority.environment)["lease"]
                     pg._current(c, packet, {"owner": owner_for(command), "fence": lease["fence"],
-                        "current_context": context_for(value, policy), "checker_state_sha256": fingerprint(state)}, utc_text(now), authority.environment)
+                        "current_context": context_for(value, policy), "checker_state_sha256": fingerprint(state)}, utc_text(now), authority.environment, resolved=resolved)
                     if all(v == "passed" for v in stages.values()):
                         _, _, proof = verified_completion(c, identity, value, owner=owner_for(command), fence=lease["fence"],
-                            state=state, policy=policy, now=now, environment=authority.environment)
+                            state=state, policy=policy, now=now, environment=authority.environment, resolved=resolved)
                         row.update(status="checks_completed", required_checks_completed=True, expected_completion_sha256=proof["completion_sha256"])
                 else:
-                    row["text"] = _retained_text(c, value, policy=policy, now=now, environment=authority.environment)
+                    row["text"] = _retained_text(c, value, policy=policy, now=now, environment=authority.environment, resolved=resolved)
         except CommandError as exc:
             stale = exc.code in STALE_CODES or "changed" in exc.code or "conflict" in exc.code or exc.code == "candidate_no_longer_eligible"
             row.update(status="stale" if stale else "checks_blocked", reason=exc.code)
@@ -419,7 +485,7 @@ def project(authority, c, allowed, *, version, state, policy, now, resolve_princ
     return output
 
 
-def runner_context(authority, c, command_id, resolve, *, version, state, policy, now):
+def runner_context(authority, c, command_id, resolve, *, version, state, policy, now, resolved=None):
     found = authority._intent(c, command_id)
     refuse(found is not None, "check_request_not_found")
     command = found[0]
@@ -437,5 +503,5 @@ def runner_context(authority, c, command_id, resolve, *, version, state, policy,
     _current(value, version, state, policy, now)
     if value.get("origin_kind") == "synchronous_writer_v1":
         from src.commands.postgres_synchronous_generation import current_candidate
-        current_candidate(authority, c, value, state, policy, now, resolve)
+        current_candidate(authority, c, value, state, policy, now, resolve, resolved=resolved)
     return command, value, result["candidate"]["check_set_id"]

@@ -418,6 +418,7 @@ class PostgresCommandAuthority:
         from src.commands import postgres_sourced_generation as generation
         value = p._decode(p._canonical(value))
         generation.document(value)
+        generation.refuse(value["schema_version"] == 1, "ghcn_server_enrollment_required")
         identity = p._sha(p._canonical(value))
         with self.projections._connection(writing=True) as c:
             self._validate(c)
@@ -425,6 +426,11 @@ class PostgresCommandAuthority:
             generation.refuse(self.environment == "local", "local_generation_required")
             generation.record(c, generation.INPUT, identity, value)
         return dict(brief_id=identity, brief_sha256=identity)
+
+    def retain_ghcn_generation_input(self, run_id, selection, *, clock):
+        """Trusted local operator entry; paths, eligibility and save fields are server-owned."""
+        from src.commands import postgres_sourced_generation as generation
+        return generation.retain_ghcn(self, run_id, selection, clock=clock)
 
     def retain_generation_reservation(self, value: dict) -> dict:
         """Retain an explicit invented local allowance; not exposed to HTTP."""
@@ -731,6 +737,8 @@ class PostgresCommandAuthority:
             command_id = _id(command_id)
         from src.commands import postgres_ghcn_source_results as ghcn_source
         ghcn_prepared = ghcn_source.preflight(self, command_id) if hasattr(self, "ghcn_baseline") else None
+        from src.commands import postgres_sourced_generation as generation_domain
+        generation_prepared = generation_domain.prepare_ghcn_command(self, command_id)
         with self.projections._connection(writing=True) as c:
             self._validate(c)
             version, state = self._state(c, lock=True)
@@ -821,8 +829,11 @@ class PostgresCommandAuthority:
                             from src.commands import postgres_sourced_generation as generation_domain
                             from src.commands.reducer import Reduction
                             with c.transaction():
+                                resolved = generation_prepared.current(self,c,state,version) if generation_prepared is not None else None
+                                clock = _clock(now)
                                 generation = generation_domain.prepare(self, c, state, version, command, actor,
-                                    now=clock, policy=policy, editorial_policy=editorial_policy)
+                                    now=clock, policy=policy, editorial_policy=editorial_policy,
+                                    resolved=resolved)
                             reduction = Reduction(state, (), ())
                         elif command.action in CANDIDATE_ACTIONS:
                             from src.commands import postgres_candidate_admission as admission
@@ -830,7 +841,7 @@ class PostgresCommandAuthority:
                             # roll back every domain write (including a new lease).
                             with c.transaction(), admission.expected_domain_failures():
                                 candidate_transition = admission.prepare(self, c, state, version, command, actor,
-                                    now=clock, policy=policy, editorial_policy=editorial_policy, resolve_principal=resolve_principal)
+                                    now=clock, policy=policy, editorial_policy=editorial_policy, resolve_principal=resolve_principal, prepared=generation_prepared, clock_now=lambda:_clock(now))
                             reduction = candidate_transition.reduction
                         elif command.action in MEDIA_ACTIONS:
                             if hasattr(self, "editor_media_configuration") and command.action != "remove_media_revision":
@@ -989,6 +1000,9 @@ class PostgresCommandAuthority:
 
     def candidate_projection(self, allowed: tuple[str, ...], *, now: datetime, resolve_principal=None) -> list[dict]:
         from src.commands import postgres_candidate_admission as admission
+        admission.refuse(isinstance(allowed, (list, tuple)) and len(allowed) <= 16 and len(set(allowed)) == len(allowed), "candidate_list_bound")
+        for identity in allowed:
+            admission.refuse(isinstance(identity,str) and admission.re.fullmatch(r"[a-f0-9]{64}",identity), "invalid_candidate_allowlist")
         with self.projections._connection() as c:
             self._validate(c)
             version, state = self._state(c, lock=True)
@@ -997,7 +1011,8 @@ class PostgresCommandAuthority:
         return result
 
     def execute_candidate_check_once(self, command_id: str, resolve_principal, *, clock,
-                                     reservation: dict | None = None, enabled: bool = False) -> dict:
+                                     reservation: dict | None = None, enabled: bool = False,
+                                     transport_options: dict | None = None) -> dict:
         """Separate explicitly enabled runner using the existing four-stage executor.
 
         Reauthorize and compare the locked state for every grant/observation/read.
@@ -1011,6 +1026,9 @@ class PostgresCommandAuthority:
             return execute_check_once(self, "", current_context={}, checker_state={}, owner="", clock=clock)
         authority = self
         command_id = _id(command_id)
+        from src.commands import postgres_sourced_generation as generation
+        prepared = generation.prepare_ghcn_command(authority, command_id, executed=True)
+        resolved = prepared.claim if prepared is not None else None
 
         def transaction(operation, payload=None, *, now=None, raw=None, request=None, receipt=None):
             at = utc_datetime(now if now is not None else clock())
@@ -1027,8 +1045,11 @@ class PostgresCommandAuthority:
                         granted = postgres_check_observations._scoped_attempt(c, payload["check_set_id"], payload["stage"], payload["grant_id"], authority.environment)
                         admission.refuse(granted["binding"]["owner"] == admission.owner_for(original[0]), "check_owner_mismatch")
                         return postgres_check_observations.apply(c, "observe", payload, now=utc_text(at), raw=raw, environment=authority.environment)
+                if prepared is not None:
+                    prepared.current(authority,c,state,version)
+                    at=max(at,utc_datetime(clock()))
                 command, value, identity = admission.runner_context(authority, c, command_id, resolve_principal,
-                    version=version, state=state, policy=current_editorial_policy(), now=at)
+                    version=version, state=state, policy=current_editorial_policy(), now=at, resolved=resolved)
                 if operation == "context":
                     return command, value, identity, state
                 if operation == "lease":
@@ -1042,7 +1063,7 @@ class PostgresCommandAuthority:
                 admission.refuse(payload["check_set_id"] == identity, "check_request_mismatch")
                 if operation in {"begin", "complete", "status"}:
                     admission.refuse(payload["owner"] == admission.owner_for(command), "check_owner_mismatch")
-                    return postgres_checks.apply(c, operation, payload, now=utc_text(at), environment=authority.environment, request=request, receipt=receipt)
+                    return postgres_checks.apply(c, operation, payload, now=utc_text(at), environment=authority.environment, request=request, receipt=receipt, resolved=resolved)
                 if operation in {"read", "observe"}:
                     return postgres_check_observations.apply(c, operation, payload, now=utc_text(at), environment=authority.environment, raw=raw)
                 reader = postgres_check_observations.read_response if operation == "response" else postgres_check_observations.read_request
@@ -1050,6 +1071,7 @@ class PostgresCommandAuthority:
 
         command, value, identity, state = transaction("context")
         class ScopedAuthority:
+            resolved_check_context = resolved
             def acquire_check_lease(self, check_set_id, owner, ttl_seconds, *, now):
                 admission.refuse(check_set_id == identity, "check_request_mismatch")
                 if value.get("origin_kind") == "synchronous_writer_v1":
@@ -1069,7 +1091,8 @@ class PostgresCommandAuthority:
             def read_check_response(self, check_set_id, stage, grant_id):
                 return transaction("response", dict(check_set_id=check_set_id, stage=stage, grant_id=grant_id))
         return execute_check_once(ScopedAuthority(), identity, current_context=admission.context_for(value, current_editorial_policy()),
-            checker_state=state, owner=admission.owner_for(command), clock=clock, reservation=reservation, enabled=enabled)
+            checker_state=state, owner=admission.owner_for(command), clock=clock, reservation=reservation, enabled=enabled,
+            transport_options=transport_options)
 
     def read(self) -> tuple[int, dict]:
         with self.projections._connection() as c:

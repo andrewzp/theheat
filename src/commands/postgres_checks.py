@@ -140,13 +140,13 @@ def _packet(c, identity, environment):
     return packet, at
 
 
-def _current(c, packet, payload, at, environment):
-    if packet.get("schema_version") == 4:
+def _current(c, packet, payload, at, environment, *, resolved=None):
+    if packet.get("schema_version") in (4, 5):
         from src.commands.postgres_sync_checks import current
-        return current(c, packet, payload, at, environment)
+        return current(c, packet, payload, at, environment, resolved=resolved)
     if packet.get("schema_version") == 3:
-        from src.commands.postgres_revision_checks import current
-        return current(c, packet, payload, at, environment)
+        from src.commands.postgres_revision_checks import current as revision_current
+        return revision_current(c, packet, payload, at, environment)
     verification = checks.packet_verification(packet)
     checks._require(verification == "verified_current_formatter", verification)
     s._sha(payload["checker_state_sha256"])
@@ -183,7 +183,7 @@ def _attempt(c, identity, stage, packet, enrolled_at):
                     and enrolled_at <= at < spend._time(packet["useful_until"])
                     and at[:10] == packet["check_date"] and type(binding["fence"]) is int, "changed_check_attempt")
     _raw(c, "request_artifacts", request_sha)
-    if packet.get("schema_version") in (3, 4):
+    if packet.get("schema_version") in (3, 4, 5):
         from src.commands.postgres_revision_checks import historical_lease
         lease = historical_lease(c, identity, binding["fence"])
     else:
@@ -276,7 +276,7 @@ def _intake(c, payload, at, environment):
                 publication_approved=False, dispatch_granted=False)
 
 
-def apply(c, action, payload, *, now, environment, request=None, receipt=None):
+def apply(c, action, payload, *, now, environment, request=None, receipt=None, resolved=None):
     fields = {"intake": checks._REVIEW_FIELDS | {"custom_id", "bundle", "memory", "checker_state"},
               "status": checks._BASE, "begin": checks._BASE | {"stage", "reservation"},
               "complete": checks._BASE | {"stage", "grant_id"}}
@@ -302,15 +302,15 @@ def apply(c, action, payload, *, now, environment, request=None, receipt=None):
     if action == "status":
         reason = None
         try:
-            _current(c, packet, payload, at, environment)
+            _current(c, packet, payload, at, environment, resolved=resolved)
         except (checks.CheckJournalError, r.BatchResultError, w.BatchWorkerError):
-            verification = check_origin.packet_verification(packet)
+            verification = check_origin.packet_verification(packet, resolved=resolved)
             reason = verification if verification not in check_origin.EXECUTABLE else "check_context_not_current"
         return dict(check_set_id=payload["check_set_id"], stages=stages, blocked_reason=reason,
                     required_checks_completed=reason is None and all(v == "passed" for v in stages.values()),
                     publication_approved=False, dispatch_granted=False, accounting_complete=False, cost_usd=None)
     if action == "begin":
-        _current(c, packet, payload, at, environment)
+        _current(c, packet, payload, at, environment, resolved=resolved)
     stage = payload["stage"]
     checks._require(stage in checks.STAGES, "unknown_required_check")
     prior = attempts[stage]
@@ -351,7 +351,7 @@ def apply(c, action, payload, *, now, environment, request=None, receipt=None):
         checks._require(terminal["sha256"] == p._sha(raw) and canonical_json(terminal["document"]).encode() == raw, "conflicting_check_completion")
         return dict(reused=True, disposition=terminal["disposition"], publication_approved=False)
     try:
-        _current(c, packet, payload, at, environment)
+        _current(c, packet, payload, at, environment, resolved=resolved)
     except (checks.CheckJournalError, r.BatchResultError, w.BatchWorkerError):
         disposition = "stale"
     digest = _artifact(c, "receipt_artifacts", raw)
@@ -359,9 +359,35 @@ def apply(c, action, payload, *, now, environment, request=None, receipt=None):
     return dict(reused=False, disposition=disposition, publication_approved=False)
 
 
-def verified_stage_receipts(c, identity, packet, *, owner, fence, environment):
-    """One exact request/raw-response interpreter for both retained origins."""
+def recorded_stage_receipts(c, identity, packet, *, owner, fence, environment):
+    """Exact retained receipts only; never a scientific/current completion verdict."""
     from src.commands import postgres_check_observations as observations
+
+    def require_proof(condition, code):
+        if not condition:
+            raise CommandError(code, "Retained check evidence is unavailable; refresh its current status")
+
+    _, enrolled = _packet(c, identity, environment)
+    stages, attempts = _stages(c, identity, packet, enrolled)
+    require_proof(set(stages) == set(checks.STAGES) and all(v == "passed" for v in stages.values()), "required_checks_incomplete")
+    proofs, records = {}, {}
+    for stage in checks.STAGES:
+        attempt = attempts[stage]
+        require_proof(attempt["binding"]["owner"] == owner and attempt["binding"]["fence"] == fence, "check_lease_changed")
+        terminal = _terminal(c, attempt)
+        observation = observations._observation(c, identity, stage, attempt)
+        require_proof(observation is not None and observation["complete"] is True, "check_response_not_retained")
+        raw = observations._raw(c, "raw_artifacts", observation["raw_sha256"])
+        request = _raw(c, "request_artifacts", attempt["binding"]["request_sha256"])
+        require_proof(terminal["document"]["execution_status"] == "completed" and terminal["document"]["verdict"] == "pass", "required_check_not_passed")
+        proofs[stage] = dict(grant_id=attempt["grant_id"], request_sha256=p._sha(request),
+            observation_sha256=observation["raw_sha256"], receipt_sha256=terminal["sha256"])
+        records[stage] = (attempt, terminal, observation, request, raw)
+    return proofs, records
+
+
+def verified_stage_receipts(c, identity, packet, *, owner, fence, environment, resolved=None):
+    """One exact request/raw-response interpreter for both retained origins."""
     from src.two_bot import check_requests
 
     def require_proof(condition, code):
@@ -370,26 +396,17 @@ def verified_stage_receipts(c, identity, packet, *, owner, fence, environment):
         if not condition:
             raise CommandError(code, "Retained check evidence is unavailable; refresh its current status")
 
-    _, enrolled = _packet(c, identity, environment)
-    stages, attempts = _stages(c, identity, packet, enrolled)
-    require_proof(all(v == "passed" for v in stages.values()), "required_checks_incomplete")
-    proofs, outcomes = {}, {}
+    proofs, records = recorded_stage_receipts(c, identity, packet, owner=owner, fence=fence, environment=environment)
+    outcomes = {}
     for stage in checks.STAGES:
-        attempt = attempts[stage]
-        require_proof(attempt["binding"]["owner"] == owner and attempt["binding"]["fence"] == fence, "check_lease_changed")
-        terminal = _terminal(c, attempt)
-        observation = observations._observation(c, identity, stage, attempt)
-        require_proof(observation is not None, "check_response_not_retained")
-        expected = canonical_json(check_requests.prepare_request(packet, stage)).encode()
-        require_proof(_raw(c, "request_artifacts", attempt["binding"]["request_sha256"]) == expected, "check_request_not_exact")
-        raw = observations._raw(c, "raw_artifacts", observation["raw_sha256"])
+        attempt, terminal, observation, request, raw = records[stage]
+        expected = canonical_json(check_requests.prepare_request(packet, stage, resolved=resolved)).encode()
+        require_proof(request == expected, "check_request_not_exact")
         if stage == "deterministic":
-            require_proof(raw == canonical_json(check_requests.deterministic_result(packet)).encode(), "deterministic_check_changed")
-        outcome = check_requests.interpret_observation(packet, stage, observation, raw)
+            require_proof(raw == canonical_json(check_requests.deterministic_result(packet, resolved=resolved)).encode(), "deterministic_check_changed")
+        outcome = check_requests.interpret_observation(packet, stage, observation, raw, resolved=resolved)
         expected_receipt = dict(outcome, grant_id=attempt["grant_id"], request_sha256=p._sha(expected))
         require_proof(p._canonical(expected_receipt) == p._canonical(terminal["document"]), "check_receipt_not_exact")
         require_proof(outcome["execution_status"] == "completed" and outcome["verdict"] == "pass", "required_check_not_passed")
-        proofs[stage] = dict(grant_id=attempt["grant_id"], request_sha256=p._sha(expected),
-                             observation_sha256=observation["raw_sha256"], receipt_sha256=terminal["sha256"])
         outcomes[stage] = outcome["result"]
     return proofs, outcomes

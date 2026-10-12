@@ -19,18 +19,18 @@ def refuse(condition, code):
         raise CommandError(code, "Sourced generation is unavailable; refresh the retained brief")
 
 
-def source_bundle(value):
+def source_bundle(value, *, resolved=None):
     try:
-        bundle = retained_bundle(value)
+        bundle = retained_bundle(value, resolved=resolved)
         refuse(capture_bundle(bundle).payload() == value, "generation_bundle_changed")
-        refuse(audit_story_bundle(bundle).prompt_ready, "generation_evidence_not_ready")
+        refuse(audit_story_bundle(resolved.full if resolved is not None else bundle).prompt_ready, "generation_evidence_not_ready")
         return bundle
     except (TypeError, ValueError, AttributeError):
         raise CommandError("generation_evidence_not_ready", "Retained source evidence requires repair") from None
 
 
-def identity(value, state, policy, *, now, epoch):
-    bundle = source_bundle(value["bundle"])
+def identity(value, state, policy, *, now, epoch, resolved=None):
+    bundle = source_bundle(value["bundle"], resolved=resolved)
     memory = build_memory_slice(deepcopy(state), bundle, now=now)
     context = dict(bundle_sha256=fingerprint(value["bundle"]), memory_sha256=fingerprint(memory.to_dict()),
                    policy_sha256=fingerprint(policy), publication_epoch=epoch)

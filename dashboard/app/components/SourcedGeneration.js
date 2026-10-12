@@ -8,6 +8,13 @@ export function generationCommand(brief, now = new Date()) {
     payload: Object.fromEntries(keys.map((key) => [key, brief[key]])) }
 }
 
+export const sourceStatus = status => status === "pending_validation" ? "Needs a source check" : status.replaceAll("_", " ")
+export function GenerationRequest({ brief, pending, busy, readOnly, pendingAction, onClick }) {
+  return h("button", { type: "button", className: "btn", style: { minHeight: 44 },
+    disabled: busy || readOnly || pendingAction || !pending && (!brief || !["ready", "pending_validation"].includes(brief.status)), onClick },
+  pending ? "Retry same request" : "Request draft")
+}
+
 export function WriterUsage({ usage }) {
   if (!usage) return null
   const counts = usage.counts || {}
@@ -82,13 +89,14 @@ export default function SourcedGeneration({ onRefresh, readOnly = false, onReque
     h("select", { id: "generation-brief", value: selected, onChange: e => setSelected(e.target.value), disabled: busy || !!pending || pendingAction,
       style: { minHeight: 44, maxWidth: "100%", width: "100%" } },
       h("option", { value: "" }, "Choose retained evidence"),
-      ...briefs.map(item => h("option", { key: item.brief_id, value: item.brief_id }, `${item.where} · ${item.signal_kind} · ${item.status}`))),
-    brief && h("p", null, `${brief.source_key} · ${brief.when} · ${brief.status.replaceAll("_", " ")}`),
+      ...briefs.map(item => h("option", { key: item.brief_id, value: item.brief_id }, `${item.where} · ${item.signal_kind} · ${sourceStatus(item.status)}`))),
+    brief && h("p", null, `${brief.source_key} · ${brief.when} · ${sourceStatus(brief.status)}`),
     brief && h("p", null, `${brief.execution_mode === "synchronous" ? "Urgent · one synchronous draft" : "Routine · one batch draft"}. Evidence expires ${brief.useful_until}.`),
-    brief?.reason && h("p", { className: "runtime-note" }, `Held: ${brief.reason.replaceAll("_", " ")}. No automatic retry.`),
+    brief?.status === "pending_validation" && h("p", { className: "runtime-note" }, "The source is checked before writing."),
+    brief?.reason && brief.status !== "pending_validation" && h("p", { className: "runtime-note" }, `Held: ${brief.reason.replaceAll("_", " ")}. No automatic retry.`),
     brief && h(WriterUsage, { usage: brief.writer_usage }),
     h("div", { className: "preview-actions" },
-      h("button", { type: "button", className: "btn", style: { minHeight: 44 }, disabled: busy || readOnly || pendingAction || !pending && (!brief || brief.status !== "ready"), onClick: start }, pending ? "Retry same request" : "Request draft"),
+      h(GenerationRequest, { brief, pending, busy, readOnly, pendingAction, onClick: start }),
       h("button", { type: "button", className: "btn", style: { minHeight: 44 }, disabled: busy, onClick: refresh }, "Check progress")),
     h("p", { role: "status", "aria-live": "polite" }, message))
 }

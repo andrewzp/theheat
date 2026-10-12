@@ -63,10 +63,10 @@ def reservation(value):
         provider="anthropic", role="writer", model=value["policy"]["models"]["writer"])
 
 
-def prepare(c, value, config, state, policy, now, environment):
+def prepare(c, value, config, state, policy, now, environment, *, resolved=None):
     from src.commands.postgres_sync_checks import upgraded
     refuse(upgraded(c), "sync_check_migration_required")
-    bundle, memory, context, key = identity(value, state, policy, now=now, epoch=admission.PAUSED_EPOCH)
+    bundle, memory, context, key = identity(value, state, policy, now=now, epoch=admission.PAUSED_EPOCH, resolved=resolved)
     identity_value = "gss_"+key
     reserve = config["reservations"]["synchronous"]
     if generation.exists(c, JOB, identity_value):
@@ -108,13 +108,13 @@ def runner_identity(authority, c, command_id):
     return stored[0], refs, value
 
 
-def active(authority, c, command_id, resolve, state, policy, now):
+def active(authority, c, command_id, resolve, state, policy, now, *, resolved=None):
     command, refs, saved = runner_identity(authority, c, command_id)
     actor = resolve(command.actor_subject)
     refuse(actor is not None and actor.subject == command.actor_subject and actor.authentication_context == command.authentication_context, "forbidden")
     authorize(actor, command.action)
-    value, config = generation.current(authority, c, saved["brief_id"], policy, now)
-    _, _, context, _ = identity(value, state, policy, now=now, epoch=admission.PAUSED_EPOCH)
+    value, config = generation.current(authority, c, saved["brief_id"], policy, now, resolved=resolved)
+    _, _, context, _ = identity(value, state, policy, now=now, epoch=admission.PAUSED_EPOCH, resolved=resolved)
     refuse(saved["context"] == context and saved["reservation"] == config["reservations"]["synchronous"]
         and now < utc_datetime(saved["useful_until"]) and (state.get("publication_control") or {}).get("enabled") is not True, "generation_context_changed")
     return command, saved, value
@@ -140,14 +140,14 @@ def attempt(c, saved):
     return value
 
 
-def begin(c, saved, command, wire, now, environment, state, brief):
+def begin(c, saved, command, wire, now, environment, state, brief, *, resolved=None):
     from src.commands.preview_ingress import strict_json
     refuse(type(wire) is bytes and 0 < len(wire) <= 2_000_000 and strict_json(wire) == saved["request"], "generation_wire_changed")
     if attempt(c, saved) is not None:
         return None
     # The cache can change after reservation or SDK construction. Only a new
     # dispatch needs this locked-state gate; original raw/replay stays passive.
-    refuse(not negative_cache.should_skip(state, brief["save"]["event_id"], source_bundle(brief["bundle"]), now=now),
+    refuse(not negative_cache.should_skip(state, brief["save"]["event_id"], source_bundle(brief["bundle"], resolved=resolved), now=now),
         "generation_negative_cache")
     result = spend.apply(c, "dispatch", {"intent_id":saved["intent_id"]}, now=utc_text(now), environment=environment)
     refuse(result["dispatch_granted"] is True, "generation_grant_unavailable")
@@ -230,14 +230,14 @@ def resolution(c, saved):
     return computed
 
 
-def resolve(c, saved, value, state, version, now):
+def resolve(c, saved, value, state, version, now, *, resolved=None):
     computed = resolution(c, saved)
     if generation.exists(c, RESOLUTION, saved["generation_id"]):
         return computed
     if computed["disposition"] == "writer_kill":
         verdict = computed["writer_result"]
         updated = deepcopy(state)
-        negative_cache.record_result(updated, value["save"]["event_id"], source_bundle(value["bundle"]), dict(
+        negative_cache.record_result(updated, value["save"]["event_id"], source_bundle(value["bundle"], resolved=resolved), dict(
             cacheable=verdict["kill_scope"] == "evidence" and verdict["kill_code"] in negative_cache.EVIDENCE_KILL_CODES,
             kill_scope=verdict["kill_scope"], kill_code=verdict["kill_code"], kill_stage="writer", kill_reason=verdict["kill_reason"],
             negative_cache_input_sha=saved["negative_cache_input_sha"], negative_cache_epoch=saved["negative_cache_epoch"]), now=utc_datetime(computed["observed_at"]))
@@ -281,8 +281,8 @@ def verify_candidate(c, value):
     return dict(candidate=result["writer_result"], candidate_id=result["candidate_id"], eligible_for_checks=True)
 
 
-def capture(c, saved, brief, state, version, policy, now):
-    result = resolve(c, saved, brief, state, version, now)
+def capture(c, saved, brief, state, version, policy, now, *, resolved=None):
+    result = resolve(c, saved, brief, state, version, now, resolved=resolved)
     if result["disposition"] != "candidate":
         return dict(terminal=True, reason=result["disposition"], cost_usd=None)
     if generation.exists(c, generation.CAPTURE, saved["generation_id"]):
@@ -304,6 +304,8 @@ def capture(c, saved, brief, state, version, policy, now):
 def execute(authority, command_id, resolver, *, operation, clock, transport_factory):
     from src.editorial.policy import current_editorial_policy
     refuse(operation in {"write", "capture", "interpret"}, "generation_operation_refused")
+    prepared = generation.prepare_ghcn_command(authority, command_id, executed=True)
+    resolved = prepared.claim if prepared is not None else None
     def transaction(action, wire=None, response=None):
         with authority.projections._connection(writing=action != "context") as c:
             authority._validate(c)
@@ -315,14 +317,17 @@ def execute(authority, command_id, resolver, *, operation, clock, transport_fact
             if action == "retain":
                 _, _, saved = runner_identity(authority, c, command_id)
                 return retain(c, saved, response, now, authority.environment)
-            command, saved, brief = active(authority, c, command_id, resolver, state, policy, now)
+            if prepared is not None:
+                prepared.current(authority,c,state,version)
+                now=utc_datetime(clock())
+            command, saved, brief = active(authority, c, command_id, resolver, state, policy, now, resolved=resolved)
             if action == "context":
                 return saved, attempt(c, saved)
             if action == "begin":
-                return begin(c, saved, command, wire, now, authority.environment, state, brief)
+                return begin(c, saved, command, wire, now, authority.environment, state, brief, resolved=resolved)
             if action == "interpret":
-                return resolve(c, saved, brief, state, version, now)
-            return capture(c, saved, brief, state, version, policy, now)
+                return resolve(c, saved, brief, state, version, now, resolved=resolved)
+            return capture(c, saved, brief, state, version, policy, now, resolved=resolved)
     if operation in {"capture", "interpret"}:
         result = transaction(operation)
         if operation == "interpret":
@@ -363,7 +368,7 @@ def project(c, identity):
     return result
 
 
-def current_candidate(authority, c, value, state, policy, now, resolve_principal=None):
+def current_candidate(authority, c, value, state, policy, now, resolve_principal=None, *, resolved=None):
     saved = job(c, value["generation_id"])
     granted = attempt(c, saved)
     refuse(granted is not None and callable(resolve_principal), "authorization_unavailable")
@@ -371,8 +376,8 @@ def current_candidate(authority, c, value, state, policy, now, resolve_principal
     refuse(actor is not None and actor.subject == granted["actor_subject"]
         and actor.authentication_context == granted["authentication_context"], "forbidden")
     authorize(actor, "request_sourced_generation")
-    brief, config = generation.current(authority, c, saved["brief_id"], policy, now)
-    _, _, context, _ = identity(brief, state, policy, now=now, epoch=admission.PAUSED_EPOCH)
+    brief, config = generation.current(authority, c, saved["brief_id"], policy, now, resolved=resolved)
+    _, _, context, _ = identity(brief, state, policy, now=now, epoch=admission.PAUSED_EPOCH, resolved=resolved)
     refuse(context == saved["context"] and config["reservations"]["synchronous"] == saved["reservation"]
         and now < utc_datetime(saved["useful_until"]), "generation_context_changed")
     return verify_candidate(c, value)

@@ -96,17 +96,17 @@ def validate_revision(packet):
     return "verified_saved_draft_revision"
 
 
-def packet_verification(packet):
-    if type(packet) is dict and type(packet.get("schema_version")) is int and packet["schema_version"] == 4:
+def packet_verification(packet, *, resolved=None):
+    if type(packet) is dict and type(packet.get("schema_version")) is int and packet["schema_version"] in (4, 5):
         from src.two_bot.synchronous_origin import validate
-        return validate(packet)
+        return validate(packet, resolved=resolved)
     if type(packet) is dict and type(packet.get("schema_version")) is int and packet["schema_version"] == 3:
         return validate_revision(packet)
     return candidate.packet_verification(packet)
 
 
-def checked_text(packet):
-    result = packet_verification(packet)
+def checked_text(packet, *, resolved=None):
+    result = packet_verification(packet, resolved=resolved)
     require(result in EXECUTABLE, result)
     if result == "verified_synchronous_writer":
         return packet["derivation"]["final_text"]
@@ -114,6 +114,6 @@ def checked_text(packet):
 
 
 def spending_job(packet):
-    if packet.get("schema_version") == 4:
+    if packet.get("schema_version") in (4, 5):
         return packet["generation_id"]
     return "draftcheck_" + packet["enrollment_id"] if packet.get("schema_version") == 3 else packet["job_id"]
