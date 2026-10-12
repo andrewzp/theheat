@@ -1,6 +1,6 @@
 """Explicitly invented radar/source data. No real specimen or source fetch."""
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import io
 from pathlib import Path
 
@@ -15,7 +15,8 @@ from src.two_bot.intern.disasters import build_severe_weather_bundle
 AT = datetime(2026, 6, 8, 12, 0, tzinfo=timezone.utc)
 
 
-def feature():
+def feature(at=AT):
+    day = at.date().isoformat()
     return {
         "type": "Feature",
         "id": "https://api.weather.gov/alerts/invented-radar-case",
@@ -37,11 +38,11 @@ def feature():
             "description": "Invented test warning; no actual weather claim.",
             "instruction": "Invented fixture only.",
             "senderName": "NWS Invented Test Office",
-            "sent": "2026-06-08T06:58:00-05:00",
-            "effective": "2026-06-08T06:58:00-05:00",
-            "onset": "2026-06-08T06:58:00-05:00",
-            "expires": "2026-06-08T07:45:00-05:00",
-            "ends": "2026-06-08T07:30:00-05:00",
+            "sent": f"{day}T06:58:00-05:00",
+            "effective": f"{day}T06:58:00-05:00",
+            "onset": f"{day}T06:58:00-05:00",
+            "expires": f"{day}T07:45:00-05:00",
+            "ends": f"{day}T07:30:00-05:00",
             "references": [],
             "parameters": {
                 "tornadoDamageThreat": ["CATASTROPHIC"],
@@ -51,37 +52,39 @@ def feature():
     }
 
 
-def parsed(monkeypatch, item=None):
+def parsed(monkeypatch, item=None, *, at=AT):
     class Clock(datetime):
         @classmethod
         def now(cls, tz=None):
-            return AT
+            return at
 
     class Day(_freshness.date):
         @classmethod
         def today(cls):
-            return AT.date()
+            return at.date()
 
     monkeypatch.setattr(nws_alerts, "datetime", Clock)
     monkeypatch.setattr(_freshness, "date", Day)
     with responses.RequestsMock() as calls:
-        calls.add(responses.GET, r.ALERT_URL, json={"features": [item or feature()]}, status=200)
+        calls.add(responses.GET, r.ALERT_URL, json={"features": [item or feature(at)]}, status=200)
         alerts = nws_alerts.fetch_alerts(strict=True)
         assert len(calls.calls) == 1 and "message_type=alert%2Cupdate" in calls.calls[0].request.url
     return alerts
 
 
-def bundle(monkeypatch):
-    return build_severe_weather_bundle(parsed(monkeypatch)[0])
+def bundle(monkeypatch, *, at=AT):
+    return build_severe_weather_bundle(parsed(monkeypatch, at=at)[0])
 
 
-def input_document():
+def input_document(*, at=AT):
+    minute = at - timedelta(minutes=1)
+    literal = minute.strftime("%m/%d/%Y %H:%M UTC (06:59 CDT)")
     frame = Image.new("P", (600, 550), 0)
     frame.putpalette([15, 35, 65, 240, 210, 30, 230, 60, 40, 45, 170, 100] + [0] * 756)
     draw = ImageDraw.Draw(frame)
     draw.rectangle((150, 120, 400, 360), fill=2)
     draw.text((15, 15), "INVENTED OFFLINE FIXTURE - KTLX - NOT ACTUAL WEATHER", fill=1)
-    draw.text((15, 45), "06/08/2026 11:59 UTC (06:59 CDT)", fill=1)
+    draw.text((15, 45), literal, fill=1)
     draw.text((190, 200), "Oklahoma City", fill=1)
     draw.text((15, 490), "NATIONAL WEATHER SERVICE - INVENTED LABEL FIXTURE", fill=1)
     output = io.BytesIO()
@@ -106,11 +109,11 @@ def input_document():
             height=550,
             frame_count=1,
         ),
-        retrieved_at=utc_text(AT),
+        retrieved_at=utc_text(at),
         receipt=dict(sha256=r.digest(receipt), byte_count=len(receipt)),
         metadata=dict(
-            time_literal="06/08/2026 11:59 UTC (06:59 CDT)",
-            frame_minute_utc="2026-06-08T11:59:00Z",
+            time_literal=literal,
+            frame_minute_utc=utc_text(minute),
             precision="minute",
             issued_utc=None,
             subtype=None,

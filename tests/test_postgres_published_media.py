@@ -40,13 +40,13 @@ def radar_case(store, core, monkeypatch, tmp_path, native_dependencies):
     monkeypatch.setenv("GEMINI_API_KEY", "invented-offline-key")
     monkeypatch.setattr(safety, "GEMINI_API_KEY", "invented-offline-key")
     core[2].initialize_synchronous_checks(now=sourced.NOW)
-    bundle = f.bundle(monkeypatch)
+    bundle = f.bundle(monkeypatch, at=sourced.NOW)
     value = dict(
         schema_version=1,
         source_key="nws_alerts",
         source_revision="invented-tornado-alert-one",
         captured_at=utc_text(sourced.NOW),
-        useful_until="2026-06-08T12:30:00Z",
+        useful_until="2026-09-29T12:30:00Z",
         urgent=True,
         bundle=bundle.to_dict(),
         save=dict(
@@ -83,18 +83,18 @@ def radar_case(store, core, monkeypatch, tmp_path, native_dependencies):
         value=value,
         config=config,
         bundle=bundle,
-        text="The NWS has issued a catastrophic-category tornado warning for the invented test area.",
+        text="The NWS has issued a tornado warning for the invented test area.",
     )
     assert sourced.request(case)["status"] == "applied"
     sent, factory = sync.transport(case)
-    assert sourced.run(case, "write", factory)["outcome"] == "received"
+    assert sourced.run(case, "write", factory)["outcome"] == "response_retained"
     sync.checked(case, monkeypatch)
     assert len(sent) == 1
     core[2].initialize_media_staging()
     core[2].initialize_media_commands()
     core[2].initialize_revision_checks(now=editor.AT)
     store.configure_editor_media(**native_dependencies, scratch=tmp_path / "native")
-    doc, raw, references, receipt = f.input_document()
+    doc, raw, references, receipt = f.input_document(at=sourced.NOW)
     retained = published.retain(store, doc, raw, references, receipt)
     selection = dict(schema_version=1, selections={refs["brief_id"]: retained["input_sha256"]})
     published.configure(store, lambda: selection)
@@ -180,17 +180,18 @@ def test_retained_input_exact_retry_changed_bytes_and_native_review(radar_case, 
     ) == case["store"].result(command.command_id)
 
 
-def test_published_deadline_packet_six_and_park_expiry(radar_case, monkeypatch):
+def test_published_deadline_packet_six_and_park_expiry(radar_case, monkeypatch, record_property):
     case = radar_case
     attach(case)
     result = editor.complete_revision(case, monkeypatch)
     packet = case["store"].check_execution(
         "read", {"check_set_id": result["revision_checks"]["check_set_id"]}, now=utc_text(editor.AT)
     )["packet"]
-    assert packet["schema_version"] == 6 and packet["useful_until"] == "2026-06-08T12:14:00Z"
+    assert packet["schema_version"] == 6 and packet["useful_until"] == "2026-09-29T12:14:00.000000Z"
     from src.two_bot.check_origin import packet_verification
 
     assert packet_verification(packet) == "verified_saved_draft_revision"
+    record_property("published_revision_packet", json.dumps(packet, sort_keys=True))
     old = {**packet, "schema_version": 3}
     with pytest.raises(ValueError, match="invalid_revision_check_origin"):
         packet_verification(old)
@@ -337,17 +338,17 @@ def test_published_unknown_delivery_ack_never_resends(radar_case, core, tmp_path
 
 
 def test_overbound_alert_never_reserves_or_grants(store, core, monkeypatch):
-    item = f.feature()
+    item = f.feature(sourced.NOW)
     item["properties"]["instruction"] = "x" * 40000
     from src.two_bot.intern.disasters import build_severe_weather_bundle
 
-    bundle = build_severe_weather_bundle(f.parsed(monkeypatch, item)[0])
+    bundle = build_severe_weather_bundle(f.parsed(monkeypatch, item, at=sourced.NOW)[0])
     value = dict(
         schema_version=1,
         source_key="nws_alerts",
         source_revision="invented-overbound",
         captured_at=utc_text(sourced.NOW),
-        useful_until="2026-06-08T12:30:00Z",
+        useful_until="2026-09-29T12:30:00Z",
         urgent=True,
         bundle=bundle.to_dict(),
         save=dict(
@@ -362,6 +363,107 @@ def test_overbound_alert_never_reserves_or_grants(store, core, monkeypatch):
         ),
     )
     before = editor.all_application_rows(core[3])
-    with pytest.raises(CommandError, match="Retained source evidence requires repair"):
+    with pytest.raises(CommandError) as caught:
         store.retain_generation_input(value)
+    assert caught.value.code == "generation_evidence_not_ready"
     assert editor.all_application_rows(core[3]) == before
+
+
+def test_actual_pointer_wait_crossing_frame_deadline_has_no_new_authority(
+    radar_case, core, monkeypatch
+):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event, get_ident
+    import time
+
+    case = radar_case
+    attach(case)
+    command, identity, packet = editor.request_revision(case)
+    before = editor.all_application_rows(core[3])
+    expired, entering = Event(), Event()
+    main_thread = get_ident()
+    original_state = case["store"]._state
+
+    def state(connection, *, lock=False):
+        if get_ident() != main_thread:
+            entering.set()
+        return original_state(connection, lock=lock)
+
+    monkeypatch.setattr(case["store"], "_state", state)
+
+    def clock():
+        return packet["useful_until"] if expired.is_set() else utc_text(editor.AT)
+
+    with ThreadPoolExecutor(max_workers=1) as workers:
+        with case["store"].projections._connection(writing=True) as connection:
+            original_state(connection, lock=True)
+            future = workers.submit(
+                editor.run_revision, case, command, packet, "deterministic", clock=clock
+            )
+            assert entering.wait(timeout=10)
+            observed_lock_wait = False
+            for _ in range(100):
+                if admin(
+                    core[3],
+                    "SELECT count(*) FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock'",
+                )[0][0]:
+                    observed_lock_wait = True
+                    break
+                time.sleep(0.01)
+            assert observed_lock_wait and not future.done()
+            expired.set()
+        with pytest.raises(CommandError):
+            future.result(timeout=30)
+    assert editor.all_application_rows(core[3]) == before
+    assert admin(
+        core[3], "SELECT count(*) FROM theheat_checks.attempts WHERE check_set_id=%s", (identity,)
+    ) == [(0,)]
+
+
+@pytest.mark.parametrize("drift", ["frame_expired", "lease_expired", "clock_backward"])
+def test_completion_delay_rolls_back_pass_but_keeps_original_raw(
+    radar_case, core, monkeypatch, drift
+):
+    from src.commands import postgres_checks
+    from tests import test_check_executor as executor
+
+    case = radar_case
+    attach(case)
+    command, identity, packet = editor.request_revision(case)
+    assert editor.run_revision(case, command, packet, "deterministic")["outcome"] == "completed"
+    sent, _ = executor.provider(monkeypatch, [executor.envelope("NO")])
+    original_apply = postgres_checks.apply
+    advanced = False
+    prior_rows = None
+
+    def apply(c, operation, payload, **kwargs):
+        nonlocal advanced, prior_rows
+        if operation == "complete" and payload.get("stage") == "safety":
+            # This snapshot already contains the actual SDK response and original
+            # grant, committed by passive observation before interpretation.
+            prior_rows = editor.all_application_rows(core[3])
+            value = original_apply(c, operation, payload, **kwargs)
+            advanced = True
+            return value
+        return original_apply(c, operation, payload, **kwargs)
+
+    monkeypatch.setattr(postgres_checks, "apply", apply)
+    changed = (
+        packet["useful_until"]
+        if drift == "frame_expired"
+        else utc_text(editor.AT + timedelta(seconds=301 if drift == "lease_expired" else -1))
+    )
+    report = editor.run_revision(
+        case, command, packet, "safety", clock=lambda: changed if advanced else utc_text(editor.AT)
+    )
+    assert report["outcome"] == "reconciliation_required" and advanced and len(sent) == 1
+    assert prior_rows is not None and editor.all_application_rows(core[3]) == prior_rows
+    saved = case["store"].check_execution(
+        "read", {"check_set_id": identity}, now=utc_text(editor.AT)
+    )
+    assert saved["attempts"]["safety"]["observation"] is not None
+    assert admin(
+        core[3],
+        "SELECT count(*) FROM theheat_checks.receipts WHERE grant_id=%s",
+        (saved["attempts"]["safety"]["grant_id"],),
+    ) == [(0,)]

@@ -963,25 +963,56 @@ class PostgresCommandAuthority:
                     packet, _ = postgres_checks._packet(c, payload["check_set_id"], authority.environment)
                     domain.refuse(attempt["binding"]["owner"] == "revision-checks:" + packet["enrollment_id"], "check_owner_mismatch")
                     return postgres_check_observations.apply(c, "observe", payload, now=utc_text(at), raw=raw, environment=authority.environment)
+                # A trusted clock sampled before a connection/pointer wait is
+                # not authority for a later grant or interpretation.
+                locked_at = utc_datetime(clock())
+                domain.refuse(locked_at >= at, "revision_check_clock_regressed")
+                at = locked_at
                 _, identity, packet, _ = domain.runner_context(authority, c, command_id, resolve_principal,
                     state, version, current_editorial_policy(), at)
                 owner = "revision-checks:" + packet["enrollment_id"]
+
+                def fresh(previous):
+                    sampled = utc_datetime(clock())
+                    domain.refuse(sampled >= previous, "revision_check_clock_regressed")
+                    domain.refuse(sampled < utc_datetime(packet["useful_until"])
+                        and utc_text(sampled)[:10] == packet["check_date"], "revision_checks_obsolete")
+                    return sampled
+
                 if operation == "context":
+                    fresh(at)
                     return identity, packet, state, owner
                 domain.refuse(payload["check_set_id"] == identity, "check_request_mismatch")
-                latest = c.execute("SELECT owner,expires_at FROM theheat_checks.draft_leases WHERE check_set_id=%s ORDER BY fence DESC LIMIT 1", (identity,)).fetchone()
+                latest = c.execute("SELECT fence,owner,expires_at FROM theheat_checks.draft_leases WHERE check_set_id=%s ORDER BY fence DESC LIMIT 1", (identity,)).fetchone()
+                at = fresh(at)
                 if latest is not None and operation != "lease":
-                    domain.refuse(latest[0] == owner and at < utc_datetime(latest[1]), "stale_revision_check_owner")
+                    domain.refuse(latest[1] == owner and at < utc_datetime(latest[2]), "stale_revision_check_owner")
+                    if operation in {"begin", "complete"}:
+                        domain.refuse(payload["fence"] == latest[0], "stale_revision_check_owner")
                 if operation == "lease":
                     domain.refuse(payload["owner"] == owner, "check_owner_mismatch")
-                    return revisions.acquire(c, identity, owner, payload["ttl_seconds"], now=utc_text(at), environment=authority.environment)
-                if operation in {"begin", "complete", "status"}:
+                    value = revisions.acquire(c, identity, owner, payload["ttl_seconds"], now=utc_text(at), environment=authority.environment)
+                elif operation in {"begin", "complete", "status"}:
                     domain.refuse(payload["owner"] == owner, "check_owner_mismatch")
-                    return postgres_checks.apply(c, operation, payload, now=utc_text(at), request=request, receipt=receipt, environment=authority.environment)
-                if operation == "read":
-                    return postgres_check_observations.apply(c, "read", payload, now=utc_text(at), environment=authority.environment)
-                reader = postgres_check_observations.read_response if operation == "response" else postgres_check_observations.read_request
-                return reader(c, identity, payload["stage"], payload["grant_id"], environment=authority.environment)
+                    value = postgres_checks.apply(c, operation, payload, now=utc_text(at), request=request, receipt=receipt, environment=authority.environment)
+                elif operation == "read":
+                    value = postgres_check_observations.apply(c, "read", payload, now=utc_text(at), environment=authority.environment)
+                else:
+                    reader = postgres_check_observations.read_response if operation == "response" else postgres_check_observations.read_request
+                    value = reader(c, identity, payload["stage"], payload["grant_id"], environment=authority.environment)
+                # Cheap final bounds follow all blocking/proof/write work. A
+                # refusal escapes this owning transaction and rolls back every
+                # new lease, hold, attempt or terminal receipt. Passive observe
+                # deliberately returns above under its original grant instead.
+                if operation in {"lease", "begin", "complete"}:
+                    final_lease = c.execute("SELECT fence,owner,expires_at FROM theheat_checks.draft_leases WHERE check_set_id=%s ORDER BY fence DESC LIMIT 1", (identity,)).fetchone()
+                    ended = fresh(at)
+                    expected_fence = value["lease"]["fence"] if operation == "lease" else payload["fence"]
+                    domain.refuse(final_lease is not None and final_lease[0] == expected_fence
+                        and final_lease[1] == owner and ended < utc_datetime(final_lease[2]), "stale_revision_check_owner")
+                else:
+                    fresh(at)
+                return value
 
         identity, packet, state, owner = transaction("context")
         class ScopedAuthority:

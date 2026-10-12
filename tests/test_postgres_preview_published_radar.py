@@ -73,7 +73,9 @@ elif operation=="consume":""",
 )
 
 
-def test_published_radar_source_to_park_restore(radar_case, core, cluster, monkeypatch, tmp_path):
+def test_published_radar_source_to_park_restore(
+    radar_case, core, cluster, monkeypatch, tmp_path, record_property
+):
     case = radar_case
     for key in tuple(os.environ):
         if key.startswith("PG") or any(
@@ -95,7 +97,6 @@ def test_published_radar_source_to_park_restore(radar_case, core, cluster, monke
     operators.write_text(
         json.dumps(
             {
-                "schema_version": 1,
                 "operators": [
                     dict(
                         username=role,
@@ -233,6 +234,26 @@ def test_published_radar_source_to_park_restore(radar_case, core, cluster, monke
                     == "unavailable"
                 )
                 assert original(restored, proposal) == case["original"]
+                record_property(
+                    "published_journey",
+                    json.dumps(
+                        dict(
+                            writer_sdk_posts=len(case["provider_requests"]),
+                            revision_model_sdk_posts=3,
+                            local_platform_mutations=len(accepted),
+                            replay_mutations=0,
+                            restored_all_application_rows=True,
+                            restored_state=True,
+                            original_sha256=__import__("hashlib")
+                            .sha256(case["original"])
+                            .hexdigest(),
+                            png_sha256=__import__("hashlib").sha256(expected_png).hexdigest(),
+                            pending_edit_consumed=True,
+                            historical_bytes_after_edit=True,
+                            simulated_operator_attestation=True,
+                        )
+                    ),
+                )
             finally:
                 admin(
                     params,
