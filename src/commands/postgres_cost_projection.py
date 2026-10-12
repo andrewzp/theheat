@@ -130,6 +130,27 @@ class Read:
         self.cache[key] = (receipt, value)
         return receipt, value
 
+    def admission(self, identity):
+        from src.commands.postgres_authority import _command, _decode, _id, MAX_BODY, NAMESPACE
+        _id(identity)
+        key = ("admission_command", identity)
+        if key in self.cache:
+            return self.cache[key]
+        join = "FROM theheat_commands.intents i JOIN theheat_commands.results r USING(command_id) WHERE i.command_id=%s"
+        sizes = self.execute("SELECT octet_length(i.command_bytes),octet_length(r.result_bytes) "+join,(identity,)).fetchone()
+        require(sizes is not None and all(type(n) is int and 0 < n <= MAX_BODY for n in sizes))
+        self.charge(sum(sizes))
+        row = self.execute("SELECT i.command_bytes,i.digest,r.result_bytes,r.digest,r.state_version,r.namespace,r.snapshot_id,i.accepted_at "+join,(identity,)).fetchone()
+        require(row is not None and (len(row[0]),len(row[2])) == sizes)
+        command, result = _command(row[0],row[1]), _decode(row[2],row[3])
+        require(command.command_id == result.get("command_id") == identity and command.action == "admit_checked_candidate"
+                and result.get("digest") == command.digest and result.get("actor_subject") == command.actor_subject
+                and result.get("status") == "applied" and type(result.get("state_version")) is int
+                and result["state_version"] == row[4] and row[5] == NAMESPACE and row[6] == str(row[4]))
+        time_order(command.requested_at,row[7],result["completed_at"])
+        self.cache[key] = (command,result)
+        return command,result
+
     def dispatch(self, identity, at):
         require(self.execute("SELECT recorded_at FROM theheat_spending.events WHERE intent_id=%s AND kind='dispatched'", (identity,)).fetchone() == (spend._time(at),))
 
@@ -269,6 +290,100 @@ def _packet(reader, identity):
     return packet,row[3]
 
 
+def _sync_capture(reader, capture):
+    """Stored writer/capture references, never candidate interpretation."""
+    shape(capture,sync.INPUT_FIELDS)
+    require(type(capture["schema_version"]) is int and capture["schema_version"]==2 and capture["origin_kind"]==synchronous_origin.ORIGIN)
+    parent=_sync(reader,capture["generation_id"])
+    _,resolution=reader.projection(sync.RESOLUTION,capture["generation_id"])
+    require(parent["attempt"] is not None and parent["observation"] is not None
+            and capture["grant_id"]==parent["attempt"]["grant_id"] and capture["observation_sha256"]==sync.digest(parent["observation"])
+            and capture["resolution_sha256"]==sync.digest(resolution) and resolution["disposition"]=="candidate"
+            and resolution["candidate_id"]==capture["candidate_id"]
+            and capture["candidate_id"]==fingerprint(dict(origin_kind=synchronous_origin.ORIGIN,generation_id=capture["generation_id"],
+                grant_id=capture["grant_id"],observation_sha256=capture["observation_sha256"],candidate=resolution["writer_result"]))
+            and capture["request_sha256"]==parent["job"]["request_sha256"] and capture["bundle"]==parent["job"]["bundle"]
+            and capture["memory"]==parent["job"]["memory"] and capture["current_context"]==parent["job"]["context"])
+    time_order(parent["observation"]["observed_at"],capture["captured_at"])
+    return parent,resolution
+
+
+def _batch_source_capture(reader, capture, source):
+    from src.commands import postgres_candidate_admission as admission, postgres_batch_results as results, batch_result_journal as r
+    from src.commands import postgres_batch_worker as worker, batch_worker_journal as w
+    shape(capture,admission.INPUT_FIELDS)
+    require(type(capture["schema_version"]) is int and capture["schema_version"]==1
+            and admission.input_id(capture["job_id"],capture["custom_id"],capture["candidate_id"])==source["admission_input_id"]
+            and capture["job_id"]==source["job_id"] and capture["plan_sha256"]==source["plan_sha256"])
+    registration,plan=_batch_plan(reader,capture["job_id"])
+    _,job=reader.projection(generation.JOB,capture["job_id"])
+    shape(job,{"brief_id","memory","context","reservation","negative_cache_input_sha","negative_cache_epoch","custom_id"})
+    brief=_brief(reader,job["brief_id"])
+    require(registration["plan_sha256"]==source["plan_sha256"] and job["brief_id"]==source["brief_id"]
+            and plan["samples"]==1 and len(plan["requests"])==1 and brief["urgent"] is False
+            and job["custom_id"]==capture["custom_id"]==plan["requests"][0]["custom_id"]
+            and job["context"]==capture["current_context"]=={k:plan[k] for k in w._CONTEXT}
+            and job["memory"]==capture["memory"] and fingerprint(job["memory"])==plan["memory_sha256"]
+            and brief["bundle"]==capture["bundle"] and fingerprint(brief["bundle"])==plan["bundle_sha256"])
+    reader.validate("results",results.validate)
+    identity=capture["receipt_id"]
+    size=reader.execute("SELECT octet_length(binding) FROM theheat_batch_results.receipts WHERE receipt_id=%s",(identity,)).fetchone()
+    require(size is not None and 2<=size[0]<=4096)
+    reader.charge(size[0])
+    row=reader.execute("SELECT job_id,grant_id,metadata_sha256,results_sha256,binding,binding_sha256,recorded_at FROM theheat_batch_results.receipts WHERE receipt_id=%s",(identity,)).fetchone()
+    require(row is not None and len(row[4])==size[0] and p._sha(row[4])==row[5])
+    binding=p._decode(row[4])
+    r._binding(binding)
+    require(p._canonical(binding)==row[4] and fingerprint(binding)==identity and binding["complete"] is True
+            and binding==dict(job_id=row[0],grant_id=row[1],metadata_sha256=row[2],results_sha256=row[3],complete=True)
+            and row[0]==capture["job_id"])
+    reader.validate("worker",worker.validate)
+    submitted=reader.execute("SELECT fence,grant_id,recorded_at FROM theheat_batch_work.submissions WHERE job_id=%s",(row[0],)).fetchone()
+    require(submitted is not None and submitted[1]==row[1])
+    lease=reader.execute("SELECT owner,recorded_at,expires_at FROM theheat_batch_work.leases WHERE job_id=%s AND fence=%s",(row[0],submitted[0])).fetchone()
+    require(lease is not None and lease[1]<=submitted[2]<lease[2]
+            and row[1]==w._grant(registration,dict(owner=lease[0],fence=submitted[0]),submitted[2]))
+    reader.dispatch(registration["intent_id"],submitted[2])
+    time_order(registration["registered_at"],submitted[2],row[6],capture["captured_at"])
+    return brief,plan["useful_until"]
+
+
+def _revision_source(reader, packet):
+    from src.commands.postgres_candidate_admission import NAMESPACE
+    ref=packet["source_origin"]
+    shape(ref,{"namespace","snapshot_id","canonical_sha256"})
+    require(ref["namespace"]==check_origin.SOURCE_NAMESPACE and ref["snapshot_id"]==fingerprint(dict(draft_id=packet["draft_target"]["draft_id"])))
+    receipt,source=reader.projection(ref["namespace"],ref["snapshot_id"])
+    common={"schema_version","draft_id","event_id","admission_command_id","admission_input_id","admission_input_sha256",
+        "brief_id","bundle_sha256","memory_sha256","source_useful_until","provenance_useful_until"}
+    version=source.get("schema_version")
+    require(type(version) is int and version in {1,2})
+    shape(source,common | ({"job_id","plan_sha256"} if version==1 else {"origin_kind"}|synchronous_origin.REFERENCES))
+    require(receipt.canonical_sha256==ref["canonical_sha256"] and source["draft_id"]==packet["draft_target"]["draft_id"]
+            and source["event_id"]==packet["bundle"]["event_id"] and source["bundle_sha256"]==fingerprint(packet["bundle"])
+            and source["memory_sha256"]==fingerprint(packet["memory"])
+            and source["source_useful_until"]==packet["source_useful_until"] and source["provenance_useful_until"]==packet["provenance_useful_until"])
+    command,result=reader.admission(source["admission_command_id"])
+    require(result["candidate"]["draft_id"]==source["draft_id"]
+            and all(command.payload[k]==source[k] for k in ("admission_input_id","admission_input_sha256")))
+    captured_receipt,capture=reader.projection(NAMESPACE,source["admission_input_id"])
+    require(captured_receipt.canonical_sha256==source["admission_input_sha256"]
+            and capture["bundle"]==packet["bundle"] and capture["memory"]==packet["memory"])
+    if version==2:
+        require(source["origin_kind"]==synchronous_origin.ORIGIN and sync.input_id(capture)==source["admission_input_id"]
+                and all(source[k]==capture[k] for k in synchronous_origin.REFERENCES)
+                and all(command.payload[k]==capture[k] for k in ("origin_kind","generation_id","candidate_id")))
+        parent,_=_sync_capture(reader,capture)
+        brief,provenance=parent["brief"],parent["job"]["useful_until"]
+        require(parent["job"]["brief_id"]==source["brief_id"])
+    else:
+        require(all(command.payload[k]==capture[k] for k in ("job_id","custom_id","candidate_id")))
+        brief,provenance=_batch_source_capture(reader,capture,source)
+    require(source["source_useful_until"]==brief["useful_until"] and source["provenance_useful_until"]==provenance)
+    time_order(capture["captured_at"],result["completed_at"],packet["captured_at"])
+    return source["brief_id"],_source_run(reader,brief)
+
+
 def _check(reader, record, attempt_row):
     identity,stage,grant,binding_sha,request_sha,at = attempt_row
     loaded=_packet(reader,identity)
@@ -292,37 +407,14 @@ def _check(reader, record, attempt_row):
     reader.dispatch(intent["intent_id"],at)
     refs=origin("required_check",check_set_id=identity,stage=stage,grant_id=grant,request_sha256=request_sha)
     if packet["schema_version"] in {4,5}:
-        parent=_sync(reader,packet["generation_id"])
-        _,resolution=reader.projection(sync.RESOLUTION,packet["generation_id"])
         capture_receipt,capture=reader.projection("candidate-admission-input-v1",packet["admission_input_id"])
-        require(parent["attempt"] is not None and parent["observation"] is not None
-                and packet["grant_id"]==parent["attempt"]["grant_id"] and packet["observation_sha256"]==sync.digest(parent["observation"])
-                and packet["resolution_sha256"]==sync.digest(resolution) and capture_receipt.canonical_sha256==packet["admission_input_sha256"]
-                and sync.input_id(capture)==packet["admission_input_id"])
-        shape(capture,sync.INPUT_FIELDS)
-        require(type(capture["schema_version"]) is int and capture["schema_version"]==2 and capture["origin_kind"]==synchronous_origin.ORIGIN)
-        shape(resolution,{"schema_version","generation_id","observation_sha256","parser_version","disposition","writer_result","candidate_id","usage","observed_at"})
-        require(resolution["schema_version"]==1 and resolution["generation_id"]==packet["generation_id"] and resolution["parser_version"]=="writer_message_v1"
-                and resolution["candidate_id"]==packet["candidate_id"] and resolution["observation_sha256"]==packet["observation_sha256"]
-                and resolution["disposition"]=="candidate" and resolution["writer_result"]==packet["candidate"]
-                and packet["candidate_id"]==fingerprint(dict(origin_kind=synchronous_origin.ORIGIN,generation_id=packet["generation_id"],
-                    grant_id=packet["grant_id"],observation_sha256=packet["observation_sha256"],candidate=packet["candidate"])))
-        require(all(capture[k]==packet[k] for k in synchronous_origin.REFERENCES | {"bundle","memory","current_context"})
-                and packet["request_sha256"]==parent["job"]["request_sha256"] and packet["bundle"]==parent["job"]["bundle"]
-                and packet["memory"]==parent["job"]["memory"] and packet["current_context"]==parent["job"]["context"])
+        require(capture_receipt.canonical_sha256==packet["admission_input_sha256"] and sync.input_id(capture)==packet["admission_input_id"]
+                and all(capture[k]==packet[k] for k in synchronous_origin.REFERENCES | {"bundle","memory","current_context"}))
+        parent,resolution=_sync_capture(reader,capture)
+        require(packet["candidate"]==resolution["writer_result"])
         refs.update(brief_id=parent["job"]["brief_id"],generation_id=packet["generation_id"],source_run_id=_source_run(reader,parent["brief"]))
     elif packet["schema_version"]==3:
-        ref=packet["source_origin"]
-        shape(ref,{"namespace","snapshot_id","canonical_sha256"})
-        require(ref["namespace"]==check_origin.SOURCE_NAMESPACE and ref["snapshot_id"]==fingerprint(dict(draft_id=packet["draft_target"]["draft_id"])))
-        receipt,source=reader.projection(ref["namespace"],ref["snapshot_id"])
-        require(receipt.canonical_sha256==ref["canonical_sha256"] and source["draft_id"]==packet["draft_target"]["draft_id"]
-                and source["event_id"]==packet["bundle"]["event_id"] and source["bundle_sha256"]==fingerprint(packet["bundle"])
-                and source["memory_sha256"]==fingerprint(packet["memory"])
-                and source["source_useful_until"]==packet["source_useful_until"] and source["provenance_useful_until"]==packet["provenance_useful_until"])
-        if "brief_id" in source:
-            _brief(reader,source["brief_id"])
-            refs["brief_id"]=source["brief_id"]
+        refs["brief_id"],refs["source_run_id"]=_revision_source(reader,packet)
     else:
         saved=reader.projection(generation.JOB,packet["job_id"],optional=True)
         if saved:

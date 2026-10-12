@@ -39,3 +39,33 @@ def test_incomplete_response_not_parsed(monkeypatch):
     monkeypatch.setattr(retained_usage,"decode",lambda *_:pytest.fail("partial bytes must not be parsed"))
     value=extract(b'{}',provider="google",stage="safety",model="invented",observed_at=None,complete=False)
     assert value["status"]=="unavailable" and value["reason"]=="response_incomplete"
+
+
+@pytest.mark.parametrize('field,changed',[
+    ('promptTokenCount',99),('trafficType','DIFFERENT'),
+    ('promptTokensDetails',[dict(modality='TEXT',tokenCount=99)]),
+    ('promptTokensDetails',[dict(modality='IMAGE',tokenCount=10)]),
+    ('promptTokenCount',True),('trafficType',17),
+])
+def test_google_terminal_camelcase_counts_labels_and_nested_disagreement(field,changed):
+    metadata=dict(promptTokenCount=10,trafficType='ON_DEMAND',promptTokensDetails=[dict(modality='TEXT',tokenCount=10)])
+    terminal=dict(metadata,**{field:changed})
+    result=read(dict(usageMetadata=metadata),terminal_usage=terminal)
+    assert result['status']=='invalid' and all(v is None for v in result['counts'].values())
+    assert all(v is None for v in result['labels'].values()) and all(v is None for v in result['breakdowns'].values())
+
+
+def test_terminal_presence_null_zero_and_equal_normalized_fields():
+    assert read(dict(usageMetadata=dict(promptTokenCount=0)),terminal_usage=dict(promptTokenCount=0))['counts']['prompt_token_count']==0
+    assert read(dict(usageMetadata=dict(promptTokenCount=None)),terminal_usage=dict(promptTokenCount=None))['status']=='present'
+    assert read(dict(usageMetadata=dict(promptTokenCount=None)),terminal_usage=dict(promptTokenCount=0))['status']=='invalid'
+    # Absent is not a fabricated zero or a field falsely reported by both sides.
+    value=read(dict(usageMetadata={}),terminal_usage=dict(promptTokenCount=0))
+    assert value['counts']['prompt_token_count'] is None and value['status']=='present'
+    value=read(dict(usageMetadata=dict(promptTokenCount=0)),terminal_usage={})
+    assert value['counts']['prompt_token_count']==0
+    details=[dict(modality='TEXT',tokenCount=0),dict(modality='IMAGE',tokenCount=3)]
+    assert read(dict(usageMetadata=dict(promptTokensDetails=details)),terminal_usage=dict(promptTokensDetails=list(reversed(details))))['status']=='present'
+    assert read(dict(usage=dict(input_tokens=7,cache_creation=dict(ephemeral_1h_input_tokens=3))),'anthropic',
+        terminal_usage=dict(counts={'input_tokens':7,'cache_creation.ephemeral_1h_input_tokens':3}))['status']=='present'
+    assert read(dict(usage=dict(input_tokens=7)),'anthropic',terminal_usage=dict(counts={'input_tokens':8}))['status']=='invalid'

@@ -652,3 +652,124 @@ def test_batch_detached_extra_duplicate_wrong_custom_envelopes_are_invalid():
         result=cost._detached_usage(dict(raw=b'\n'.join(p._canonical(v) for v in values),observed_at=spend._time(NOW),complete=True,
             batch_custom_id='one',batch_metadata=b'{"id":"batch"}',batch_provider_id='batch'),row)
         assert result['status']=='invalid' and result['counts']['input_tokens'] is None
+
+
+def test_actual_google_terminal_disagreement_preserves_hold(urgent,monkeypatch):
+    from copy import deepcopy
+    batch_source.request(urgent)
+    _,factory=sync_source.transport(urgent)
+    batch_source.run(urgent,'write',factory)
+    sync_source.checked(urgent,monkeypatch)
+    original=cost.Read.document
+    seen=[]
+    def document(self,table,digest):
+        value=original(self,table,digest)
+        if table=='receipt_artifacts' and value['usage'] is not None:
+            assert value['usage']['promptTokenCount']==19
+            value=deepcopy(value)
+            value['usage']['promptTokenCount']=99
+            seen.append(True)
+        return value
+    before=urgent['store'].read()
+    with monkeypatch.context() as local:
+        passive_traps(local)
+        local.setattr(cost.Read,'document',document)
+        value=urgent['store'].local_cost_projection(now=sync_source.candidate.AT)
+    assert value['status']=='available' and len(seen)==3,value
+    assert value['summary']['commitments_micro_usd']['held']=='35'
+    assert all(r['usage']['status']=='invalid' and r['usage']['counts']['prompt_token_count'] is None for r in value['requests'] if r['role']!='writer')
+    assert value['requests'][0]['recorded_settlement_micro_usd'] is None
+    assert urgent['store'].read()==before
+
+
+def source_origin_counterexamples(case,monkeypatch):
+    from copy import deepcopy
+    from dataclasses import replace
+    from uuid import uuid4
+    import time
+    from src.storage import postgres_projection as p
+    from src.two_bot.check_origin import SOURCE_NAMESPACE
+    authority=case['store']
+    with authority.projections._connection() as c:
+        raw=c.execute("SELECT a.payload FROM theheat_checks.sets s JOIN theheat_checks.packet_artifacts a ON a.sha=s.packet_sha256 WHERE s.origin_kind='saved_draft_revision_v1'").fetchone()[0]
+        packet=p._decode(raw)
+        reader=cost.Read(c,time.monotonic()+3)
+        source_receipt,source=reader.projection(SOURCE_NAMESPACE,packet['source_origin']['snapshot_id'])
+    fields={'schema_version':99,'admission_command_id':str(uuid4()),'admission_input_id':'a'*64,'admission_input_sha256':'b'*64}
+    fields.update({'job_id':'changed-job','plan_sha256':'d'*64} if source['schema_version']==1 else {'generation_id':'gss_'+'a'*64,'grant_id':'b'*64,'resolution_sha256':'c'*64})
+    original=cost.Read.projection
+    for field,value in fields.items():
+        changed=deepcopy(source)
+        changed[field]=value
+        changed_receipt=replace(source_receipt,canonical_sha256=p._sha(p._canonical(changed)))
+        changed_packet=deepcopy(packet)
+        changed_packet['source_origin']['canonical_sha256']=changed_receipt.canonical_sha256
+        def projection(self,namespace,identity,**kwargs):
+            if namespace==SOURCE_NAMESPACE:
+                return changed_receipt,changed
+            return original(self,namespace,identity,**kwargs)
+        with monkeypatch.context() as local:
+            passive_traps(local)
+            local.setattr(cost.Read,'projection',projection)
+            with authority.projections._connection() as c:
+                with pytest.raises(ValueError):
+                    cost._revision_source(cost.Read(c,time.monotonic()+3),changed_packet)
+
+
+def media_history_readback(case,core,cluster,tmp_path,monkeypatch):
+    import threading
+    from src.commands.postgres_authority import PostgresCommandAuthority
+    from src.commands.preview_ingress import PreviewServer,Operators
+    from tests.test_postgres_preview_command_ingress import clean_environment,operator_file,ORIGIN
+    from tests.test_postgres_command_authority import options
+    from tests import test_postgres_editor_media as media
+    from src.commands import preview_media_worker
+    assert media.action(case,'edit_revision',{'text':'Edited invented wording after the retained media checks.'})[1]['status']=='applied'
+    source_origin_counterexamples(case,monkeypatch)
+    # A new operator adapter has no current allowlist/renderer configuration;
+    # historical cost evidence must survive that restart and elapsed expiry.
+    reopened=PostgresCommandAuthority(**options(core[3]))
+    with monkeypatch.context() as local:
+        for key in tuple(os.environ):
+            if key not in clean_environment() and ('TOKEN' in key or 'SECRET' in key or 'PASSWORD' in key or 'API_KEY' in key or key.startswith('PG')):
+                local.delenv(key)
+        local.delenv('NODE_ENV',raising=False)
+        operators=Operators(operator_file(tmp_path/'cost-history-operators.json'))
+        server=PreviewServer(reopened,operators,port=0,origin=ORIGIN)
+        thread=threading.Thread(target=server.serve_forever,daemon=True)
+        thread.start()
+        record=dict(case,params=core[3],server=server,operators=operators,environment=clean_environment())
+        try:
+            with local.context() as guarded:
+                passive_traps(guarded)
+                guarded.setattr(preview_media_worker,'run_native',lambda *a,**k:pytest.fail('Cost read invoked renderer'))
+                value=reopened.local_cost_projection(now=media.AT+timedelta(days=100))
+            assert value['status']=='available',value
+            assert len(value['requests'])==7
+            restored_readback(record,value,cluster,tmp_path)
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(5)
+
+
+@pytest.mark.parametrize('admitted',['modis'],indirect=True)
+def test_corrected_batch_media_source_after_edit_restart_and_restore(admitted,core,cluster,tmp_path,monkeypatch):
+    from tests import test_postgres_editor_media as media
+    media.prepare_and_attach(admitted)
+    media.complete_revision(admitted,monkeypatch)
+    media_history_readback(admitted,core,cluster,tmp_path,monkeypatch)
+
+
+def test_corrected_sync_media_source_after_edit_restart_and_restore(urgent,core,cluster,tmp_path,monkeypatch,native_dependencies):
+    from tests import test_postgres_editor_media as media
+    batch_source.request(urgent)
+    _,factory=sync_source.transport(urgent)
+    batch_source.run(urgent,'write',factory)
+    sync_source.checked(urgent,monkeypatch)
+    core[2].initialize_media_staging()
+    core[2].initialize_media_commands()
+    urgent['store'].configure_editor_media(**native_dependencies,scratch=tmp_path/'native')
+    media.prepare_and_attach(urgent)
+    media.complete_revision(urgent,monkeypatch)
+    media_history_readback(urgent,core,cluster,tmp_path,monkeypatch)
