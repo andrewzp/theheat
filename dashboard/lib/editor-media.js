@@ -7,6 +7,16 @@ export const jointConfirmations = {
   alt_text_agrees: "The full image description agrees with the graphic and tweet.",
 }
 
+export const publishedConfirmations = {
+  raster_labels_match: "I checked the original station, complete timestamp, dBZ scale and warning legend.",
+  named_point_context_matches: "Oklahoma City is visibly labeled; this is point context, not the full warning footprint or impact proof.",
+  unaltered_product_reuse_conditions_met: "The original marks and credits are preserved and the product reuse conditions are met.",
+}
+
+export function confirmationsFor(packet) {
+  return packet?.schema_version === 2 ? { ...jointConfirmations, ...publishedConfirmations } : jointConfirmations
+}
+
 export function mediaCommand(view, action, review, now = new Date()) {
   const payload = { expected_policy_sha256: view.expected_policy_sha256 }
   if (["prepare_media_revision", "request_revision_checks", "approve_media_revision"].includes(action))

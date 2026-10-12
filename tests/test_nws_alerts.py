@@ -27,14 +27,15 @@ SAMPLE_RESPONSE = {
         },
         {
             "properties": {
-                "event": "Flash Flood Emergency",
+                "event": "Tornado Warning",
+                "status": "Actual", "category": "Met", "messageType": "Alert",
                 "severity": "Extreme",
                 "areaDesc": "Montgomery County, TX",
                 "headline": "Flash Flood Emergency for Montgomery County",
                 "description": "Life-threatening flash flooding. Move to higher ground immediately.",
                 "senderName": "NWS Houston TX",
                 "id": "urn:oid:2.49.0.1.840.0.abc123",
-                "parameters": {},
+                "parameters": {"tornadoDamageThreat": ["CATASTROPHIC"], "tornadoDetection": ["OBSERVED"]},
             }
         },
         # These should all be FILTERED OUT — routine severe weather
@@ -81,8 +82,8 @@ SAMPLE_RESPONSE = {
 class TestTrackedEvents:
     def test_only_emergency_tier_and_hurricanes_tracked(self):
         """Routine severe weather is filtered out at the source."""
-        assert "Tornado Emergency" in TRACKED_EVENTS
-        assert "Flash Flood Emergency" in TRACKED_EVENTS
+        assert "Tornado Emergency" not in TRACKED_EVENTS
+        assert "Flash Flood Emergency" not in TRACKED_EVENTS
         assert "Hurricane Warning" in TRACKED_EVENTS
         assert "Extreme Wind Warning" in TRACKED_EVENTS
         assert "Storm Surge Warning" in TRACKED_EVENTS
@@ -104,7 +105,7 @@ class TestTrackedEvents:
 class TestFetchAlerts:
     @responses.activate
     def test_only_emergency_and_hurricane_events_returned(self):
-        """Of 6 alerts in response, only 2 (Hurricane Warning + Flash Flood Emergency) pass."""
+        """Of 6 alerts in response, only 2 (Hurricane Warning + catastrophic Tornado Warning) pass."""
         responses.add(
             responses.GET,
             "https://api.weather.gov/alerts/active",
@@ -114,7 +115,7 @@ class TestFetchAlerts:
         alerts = fetch_alerts()
         assert len(alerts) == 2
         types = {a.event_type for a in alerts}
-        assert types == {"Hurricane Warning", "Flash Flood Emergency"}
+        assert types == {"Hurricane Warning", "Tornado Warning"}
 
     @responses.activate
     def test_rich_data_captured(self):

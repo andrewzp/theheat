@@ -217,7 +217,10 @@ def enroll(c, state, version, draft, *, now, policy, profile, environment):
     at = spend._time(utc_text(now))
     deadline = min(utc_datetime(retained["source_useful_until"]), utc_datetime(retained["provenance_useful_until"]),
                    now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1))
-    packet = dict(schema_version=3, origin_kind=origin.ORIGIN, enrollment_id="", draft_target=_identity(draft),
+    published = draft.get("media_attachment", {}).get("schema_version") == 2
+    if published:
+        deadline = min(deadline, utc_datetime(draft["media_attachment"]["published"]["useful_until"]))
+    packet = dict(schema_version=6 if published else 3, origin_kind=origin.ORIGIN, enrollment_id="", draft_target=_identity(draft),
         final_text=draft["text"], text_sha256=_identity(draft)["text_sha256"], state_version=version,
         state_sha256=p._sha(p._canonical(state)), source_origin=ref,
         current_context=dict(bundle_sha256=fingerprint(captured["bundle"]), memory_sha256=fingerprint(captured["memory"]),

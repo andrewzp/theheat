@@ -1,13 +1,14 @@
 "use client"
 
 import React, { useEffect, useState } from "react"
-import { jointConfirmations, mediaCommand, mediaStatus, sameMediaTarget, retainedMediaBlob } from "../../lib/editor-media.js"
+import { confirmationsFor, mediaCommand, mediaStatus, sameMediaTarget, retainedMediaBlob } from "../../lib/editor-media.js"
 
 const h = React.createElement
 
 export function EditorMediaPanel({ view, role, busy, imageUrl, imageError, confirmations, setConfirmations, reason, setReason, submit, refresh }) {
   const packet = view.packet, media = packet?.media
-  const accepted = !!imageUrl && Object.keys(jointConfirmations).every(k => confirmations[k] === true) && !!reason.trim()
+  const checks = confirmationsFor(packet)
+  const accepted = !!imageUrl && Object.keys(checks).every(k => confirmations[k] === true) && !!reason.trim()
   const button = (label, action, disabled = false) => h("button", { type: "button", className: "btn sm",
     disabled: busy || role === "viewer" || disabled, style: { minHeight:44 }, onClick: () => submit(action) }, label)
   return h(React.Fragment, null,
@@ -16,11 +17,16 @@ export function EditorMediaPanel({ view, role, busy, imageUrl, imageError, confi
     packet && h("figure", { className:"graphic-preview-figure" },
       imageUrl ? h("img", { src:imageUrl, alt:media.alt_text, width:media.width, height:media.height })
         : h("p", {role:"status"}, imageError || "Loading the retained graphic…"),
-      h("figcaption", null, h("strong", null, "Invented local graphic"), h("p", null, view.text),
+      h("figcaption", null, h("strong", null, packet.schema_version === 2 ? (packet.synthetic ? "Invented radar test image" : "Published NWS radar · human label review required") : "Invented local graphic"), h("p", null, view.text),
+        packet.schema_version === 2 && h(React.Fragment, null,
+          h("p", null, `KTLX · ${packet.published.frame_minute_utc} · dBZ · NATIONAL WEATHER SERVICE`),
+          h("p", null, packet.published.context),
+          h("p", null, `Eligible only before ${packet.published.useful_until}; status must be rechecked before any action.`),
+          h("a", { href:`/api/editor-media?draftId=${encodeURIComponent(view.draft_id)}&proposal=${view.preparation.proposal_sha256}&original=1`, target:"_blank", rel:"noopener noreferrer" }, "Inspect the unchanged original at full size")) ,
         h("details", null, h("summary", null, "Read the full image description"), h("p", null, media.alt_text)))),
     packet && !view.review_current && h("fieldset", { disabled:busy || role === "viewer" || !imageUrl },
       h("legend", null, "Review text and graphic together"),
-      Object.entries(jointConfirmations).map(([key,label]) => h("label", { key, style:{ display:"flex", gap:10, alignItems:"flex-start", padding:"8px 0" } },
+      Object.entries(checks).map(([key,label]) => h("label", { key, style:{ display:"flex", gap:10, alignItems:"flex-start", padding:"8px 0" } },
         h("input", { type:"checkbox", checked:confirmations[key] === true,
           onChange:event => setConfirmations({ ...confirmations, [key]:event.target.checked }) }), label)),
       h("label", null, "Review note", h("textarea", { value:reason, maxLength:2000, rows:3, style:{ width:"100%" },
@@ -79,7 +85,7 @@ export function EditorMedia({ draft, editing, updating, submitCommand }) {
     }
     return () => { control.abort(); if(url) URL.revokeObjectURL(url) }
   }, [currentView, draft.operator_role, editing, updating])
-  if (!draft.local_preview || !["fire", "air_quality_hazard"].includes(draft.type)) return null
+  if (!draft.local_preview || !["fire", "air_quality_hazard", "severe_weather"].includes(draft.type)) return null
   return h("section", { className:"graphic-preview", "aria-label":"Local text and graphic review", style:{ overflowWrap:"anywhere" } },
     h("h3", null, "Text and graphic"),
     editing || updating ? h("p", { role:"status" }, editing ? "Save or cancel the text edit before reviewing a graphic." : "Waiting for the local action to finish. Previous review controls are paused.")

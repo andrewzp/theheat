@@ -16,6 +16,7 @@ from typing import Any
 from src.commands.schema import Principal, utc_datetime
 from src.editorial.revisions import fingerprint
 from src.media.review_packet import MediaReviewError, build_media_review_packet
+from src.media.published_radar import EXTRA_CONFIRMATIONS
 
 CONFIRMATIONS = frozenset({
     "text_matches_data", "graphic_matches_data", "text_graphic_agree",
@@ -75,7 +76,7 @@ def _payload(value: Any) -> dict:
     )
     checks = payload["confirmations"]
     _require(
-        isinstance(checks, dict) and set(checks) == CONFIRMATIONS
+        isinstance(checks, dict) and set(checks) in (CONFIRMATIONS, CONFIRMATIONS | EXTRA_CONFIRMATIONS)
         and all(value is None or type(value) is bool for value in checks.values()),
         "Supply each explicit joint-review confirmation",
     )
@@ -104,7 +105,7 @@ def validate_joint_review_payload(value: Any) -> dict:
 def _body(packet: dict, payload: dict, principal: Principal, reviewed_at: str) -> dict:
     utc_datetime(reviewed_at)
     return {
-        "schema_version": 1,
+        "schema_version": packet["schema_version"],
         "reviewed_at": reviewed_at,
         "reviewer": {
             "subject": principal.subject, "role_at_review": principal.role,
@@ -136,6 +137,8 @@ def record_joint_media_review(
             packet["packet_sha256"] == expected_packet_sha256,
             "Preview changed since the requested review",
         )
+        expected_checks = CONFIRMATIONS | EXTRA_CONFIRMATIONS if packet["schema_version"] == 2 else CONFIRMATIONS
+        _require(set(decision["confirmations"]) == expected_checks, "Joint confirmations differ from the media family")
         body = _object(_body(packet, decision, actor, reviewed_at))
         return {**body, "review_sha256": fingerprint(body)}
     except MediaReviewError:
@@ -169,10 +172,12 @@ def joint_media_review_status(
             "Review differs from the trusted retained decision",
         )
         _require(
-            type(body["schema_version"]) is int and body["schema_version"] == 1,
+            type(body["schema_version"]) is int and body["schema_version"] in (1, 2) and body["schema_version"] == body["packet"]["schema_version"],
             "Unsupported review schema",
         )
         decision = _payload({key: body[key] for key in ("decision", "confirmations", "reason")})
+        expected_checks = CONFIRMATIONS | EXTRA_CONFIRMATIONS if body["schema_version"] == 2 else CONFIRMATIONS
+        _require(set(decision["confirmations"]) == expected_checks, "Joint confirmations differ from the media family")
         provenance = body["reviewer"]
         _require(
             isinstance(provenance, dict)

@@ -32,6 +32,8 @@ def run_nws_alerts(bot_state: BotState, current_run: dict | None) -> None:
                     _fact("Max wind gust", alert.max_wind_gust or "—"),
                     _fact("Max hail", alert.max_hail_size or "—"),
                     _fact("Tornado detection", alert.tornado_detection or "—"),
+                    _fact("Radar evidence", (alert.source_evidence or {}).get("status", "held")),
+                    _fact("Radar hold", ", ".join((alert.source_evidence or {}).get("reasons", [])) or "—"),
                 ],
             )
             # Severe weather: ported to two-bot writer 2026-05-03.

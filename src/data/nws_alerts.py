@@ -10,7 +10,7 @@ hurricane-related (rare by definition).
 """
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime, timezone
 
 import requests
 
@@ -24,8 +24,6 @@ NWS_URL = "https://api.weather.gov/alerts/active"
 # some part of the US, it's not in this list. Tornado Warnings in tornado
 # alley in April are routine — we skip them and only keep Tornado Emergency.
 TRACKED_EVENTS = {
-    "Tornado Emergency",      # Extremely rare, catastrophic tornado confirmed
-    "Flash Flood Emergency",  # Extremely rare, catastrophic flooding
     "Hurricane Warning",      # Hurricanes themselves are rare, each one is news
     "Extreme Wind Warning",   # Only issued for major hurricane eyewalls (115+ mph)
     "Storm Surge Warning",    # Hurricane-specific, rare
@@ -51,6 +49,7 @@ class SevereWeatherAlert:
     max_hail_size: str = ""   # e.g. "2.00 IN"
     tornado_detection: str = ""  # "RADAR INDICATED" or "OBSERVED"
     sender_name: str = ""     # e.g. "NWS Topeka KS"
+    source_evidence: dict | None = None
 
 
 def fetch_alerts(*, strict: bool = False) -> list[SevereWeatherAlert]:
@@ -58,7 +57,7 @@ def fetch_alerts(*, strict: bool = False) -> list[SevereWeatherAlert]:
     try:
         resp = fetch_with_retry(
             NWS_URL,
-            params={"status": "actual", "message_type": "alert"},
+            params={"status": "actual", "message_type": "alert,update"},
             headers={
                 "User-Agent": "(theheat-bot, contact@theheat.app)",
                 "Accept": "application/geo+json",
@@ -68,8 +67,11 @@ def fetch_alerts(*, strict: bool = False) -> list[SevereWeatherAlert]:
             backoff_base=1.0,
         )
         data = resp.json()
+        from src.commands.schema import utc_text
+        from src.media.published_radar import rare_tornado, source_envelope
+        captured_at = utc_text(datetime.now(timezone.utc))
 
-        alerts = []
+        alerts: list[SevereWeatherAlert] = []
         payload_dates = []
         seen_events = set()
 
@@ -80,7 +82,8 @@ def fetch_alerts(*, strict: bool = False) -> list[SevereWeatherAlert]:
             )
             event = props.get("event", "")
 
-            if event not in TRACKED_EVENTS:
+            emergency = rare_tornado(props)
+            if not emergency and (event not in TRACKED_EVENTS or props.get("messageType", "Alert") != "Alert"):
                 continue
 
             severity = props.get("severity", "Unknown")
@@ -119,6 +122,7 @@ def fetch_alerts(*, strict: bool = False) -> list[SevereWeatherAlert]:
                 max_hail_size=max_hail_size,
                 tornado_detection=tornado_detection,
                 sender_name=sender_name,
+                source_evidence=source_envelope(feature, captured_at),
             ))
 
         if newest_date := newest_freshness_date(payload_dates):
