@@ -49,12 +49,14 @@ test("actual source API -> separate batch/check workers -> admitted draft -> edi
   })
   await new Promise((resolve, reject) => { server.once("error", reject); server.listen(Number(new URL(config.origin).port), "127.0.0.1", resolve) })
   async function request(path, command, role = "editor") {
+    console.error("fixture request", path, command?.action || "read", role)
     const response = await actualFetch(config.origin + path, { method: command ? "POST" : "GET",
       headers: { Origin: config.origin, Authorization: `Basic ${Buffer.from(`${role}:invented-${role}`).toString("base64")}`, "Content-Type": "application/json" },
       ...(command ? { body: JSON.stringify(command) } : {}) })
     return { status: response.status, body: await response.json() }
   }
   function worker(operation, command) {
+    console.error("fixture worker", operation)
     const result = spawnSync(config.python, [config.child, configFile, operation, command], { cwd: config.root,
       env: { PATH: process.env.PATH, PYTHONPATH: config.root, no_proxy: "*" }, encoding: "utf8", timeout: 30000 })
     assert.equal(result.status, 0, result.stdout + result.stderr)
