@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parents[2]
 POLICY_FILES = (
     "src/storage/hosted_staging.py", "src/storage/postgres_projection.py",
     "src/storage/scientific_supply.py", "src/commands/preview_ingress.py",
+    "src/commands/postgres_source_results.py", "src/orchestrator/source_result_client.py",
     "src/storage/cyclone_supply.py", "src/storage/physical_events.py",
     "src/orchestrator/cyclone_episodes.py", "src/orchestrator/cyclones.py",
     "src/editorial/newsworthiness.py", "src/editorial/report_development.py",

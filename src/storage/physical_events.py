@@ -224,21 +224,23 @@ class PhysicalEpisodeSession:
         require(expected_head is None or head[0].canonical_sha256 == sha(expected_head), "episode_head_changed")
         return head
 
-    def _records(self, members):
+    def _records(self, members, connection=None):
         cache = {}
         items = []
         for member in members:
             require(type(member) is dict and set(member) == {"run_id", "run_sha256", "assertion_key", "content_sha256"})
             key = (uuid(member["run_id"]), sha(member["run_sha256"]))
             if key not in cache:
-                cache[key] = CycloneSupplySession(self.repository, key[0]).read(expected_sha=key[1])[2]
+                source = CycloneSupplySession(self.repository, key[0])
+                cache[key] = (source.read(expected_sha=key[1]) if connection is None else
+                              source.read_on_connection(connection, expected_sha=key[1]))[2]
             matches = [row for row in cache[key]["rows"] if digest(row) == sha(member["content_sha256"])]
             require(len(matches) == 1 and assertion_key(matches[0]["advisory"]) == sha(member["assertion_key"]), "episode_member_changed")
             items.append((matches[0], cache[key]["source_outcome"]["status"]))
         return items
 
-    def _items(self, members):
-        return [item for item, _ in self._records(members)]
+    def _items(self, members, connection=None):
+        return [item for item, _ in self._records(members, connection)]
 
     @staticmethod
     def _previous_bindings(previous, previous_sha):
@@ -247,14 +249,16 @@ class PhysicalEpisodeSession:
             bindings.append(_binding(previous["episode_id"], previous_sha, previous["qualified_content_sha256"]))
         return bindings
 
-    def apply_retained_run(self, run_id, run_sha256, *, operation_id, expected_heads, now, cities):
+    def _run_plan(self, run_id, run_sha256, *, operation_id, expected_heads, now, cities, connection=None):
         self._validate()
         uuid(operation_id)
         instant(now)
         require(type(expected_heads) is dict and type(cities) is list)
         cities = freeze(cities)
         require(len(cities) <= 50000, "episode_geography_bound")
-        _, advisories, envelope = CycloneSupplySession(self.repository, run_id).read(expected_sha=run_sha256)
+        source = CycloneSupplySession(self.repository, run_id)
+        _, advisories, envelope = (source.read(expected_sha=run_sha256) if connection is None else
+                                   source.read_on_connection(connection, expected_sha=run_sha256))
         groups: dict = {}
         held = []
         for advisory, item in zip(advisories, envelope["rows"], strict=True):
@@ -265,7 +269,7 @@ class PhysicalEpisodeSession:
                 groups.setdefault(episode, []).append(dict(run_id=run_id, run_sha256=run_sha256,
                     assertion_key=assertion_key(item["advisory"]), content_sha256=digest(item)))
         if len(groups) > MAX_EPISODES:
-            return dict(episodes=[], held=[dict(reason="episode_inventory_bound", run_id=run_id, run_sha256=run_sha256)])
+            return [], [dict(reason="episode_inventory_bound", run_id=run_id, run_sha256=run_sha256)]
         require(set(expected_heads) == set(groups), "expected_episode_heads_required")
         results = []
         for episode, members in sorted(groups.items()):
@@ -275,8 +279,35 @@ class PhysicalEpisodeSession:
             payload = freeze(dict(schema_version=1, policy=POLICY, episode_id=episode, run_id=run_id,
                 run_sha256=run_sha256, operation_id=operation_id, expected_head=expected, now=now,
                 cities=cities, source_status=envelope["source_outcome"]["status"]))
-            results.append(self._apply(payload, members))
-        return dict(episodes=results, held=held)
+            results.append((payload, members))
+        return results, held
+
+    def apply_retained_run(self, run_id, run_sha256, *, operation_id, expected_heads, now, cities):
+        plan, held = self._run_plan(run_id, run_sha256, operation_id=operation_id,
+            expected_heads=expected_heads, now=now, cities=cities)
+        return dict(episodes=[self._apply(payload, members) for payload, members in plan], held=held)
+
+    @staticmethod
+    def lock_episode(connection, episode):
+        lock = int(digest(_episode(episode))[:16], 16)
+        connection.execute("SELECT pg_advisory_xact_lock(%s)", (lock if lock < 2**63 else lock-2**64,))
+
+    def apply_retained_run_on_connection(self, connection, run_id, run_sha256, *, operation_id, expected_heads, now, cities):
+        """All source/member reads and episode writes use one caller transaction."""
+        self._validate()
+        self.repository._validate(connection)
+        plan, held = self._run_plan(run_id, run_sha256, operation_id=operation_id,
+            expected_heads=expected_heads, now=now, cities=cities, connection=connection)
+        for payload, _ in plan:
+            self.lock_episode(connection, payload["episode_id"])
+        # Refuse every stale head before the first effect. Exact old operations
+        # retain their existing idempotent result when used by a local caller.
+        for payload, _ in plan:
+            key = _prefix(payload["episode_id"])+payload["operation_id"]
+            if self._operation(connection, key, payload) is None:
+                head = self._head(connection, payload["episode_id"])
+                require(payload["expected_head"] == (head[0].canonical_sha256 if head else None), "episode_head_changed")
+        return dict(episodes=[self._apply_on_connection(connection, payload, members) for payload, members in plan], held=held)
 
     def _operation(self, connection, key, payload):
         found = connection.execute(f"SELECT 1 FROM {p.SCHEMA}.versions WHERE namespace=%s AND snapshot_id=%s", (OPERATION, key)).fetchone()
@@ -292,54 +323,8 @@ class PhysicalEpisodeSession:
         try:
             with self.repository._connection(writing=True) as connection:
                 self.repository._validate(connection)
-                lock = int(digest(episode)[:16], 16)
-                if lock >= 2**63:
-                    lock -= 2**64
-                connection.execute("SELECT pg_advisory_xact_lock(%s)", (lock,))
-                prior_result = self._operation(connection, key, payload)
-                if prior_result is not None:
-                    return prior_result
-                head = self._head(connection, episode)
-                actual = head[0].canonical_sha256 if head else None
-                require(payload["expected_head"] == actual, "episode_head_changed")
-                previous = head[1] if head else None
-                members = list(previous["members"]) if previous else []
-                known = {member["content_sha256"] for member in members}
-                qualified = {digest(item) for item, status in self._records(members) if status == "success"}
-                for member in incoming:
-                    content = member["content_sha256"]
-                    # A later complete run may qualify previously failed-only
-                    # bytes. Keep both immutable provenance references, without
-                    # renewing the advisory issuance or duplicating facts.
-                    if content not in known or (payload["source_status"] == "success" and content not in qualified):
-                        members.append(member)
-                        known.add(content)
-                        if payload["source_status"] == "success":
-                            qualified.add(content)
-                recoverable = bool(previous and "source_failed" in previous["holds"]
-                    and payload["source_status"] == "success"
-                    and max(instant(item["advisory"]["issued_at"]) for item in self._items(incoming))
-                        >= instant(previous["latest_retained_issued_at"]))
-                # Full immutable source inventory already exists if this bounded
-                # projection cannot grow. No pruning or arbitrary event winner.
-                limit = len(members) > MAX_MEMBERS or (previous is not None and previous["sequence"] >= MAX_MEMBERS)
-                if previous and "episode_member_bound" in previous["holds"]:
-                    result = dict(episode_id=episode, status="held", reason="episode_member_bound", revision_sha256=actual)
-                elif limit:
-                    value = self._bounded_hold(payload, previous, actual)
-                    encoded, fields = p._snapshot(value)
-                    receipt = self.repository._record(connection, REVISION, _prefix(episode)+f'{value["sequence"]:010d}', encoded, fields)
-                    result = dict(episode_id=episode, status="held", reason="episode_member_bound", revision_sha256=receipt.canonical_sha256)
-                elif previous and members == previous["members"] and not recoverable:
-                    result = dict(episode_id=episode, status="duplicate", revision_sha256=actual)
-                else:
-                    value = self._next(payload, previous, actual, members, incoming)
-                    encoded, fields = p._snapshot(value)
-                    receipt = self.repository._record(connection, REVISION, _prefix(episode)+f'{value["sequence"]:010d}', encoded, fields)
-                    result = dict(episode_id=episode, status="held" if value["state"] == "held" else "committed",
-                                  revision_sha256=receipt.canonical_sha256)
-                encoded, fields = p._snapshot(dict(payload=payload, result=result))
-                self.repository._record(connection, OPERATION, key, encoded, fields)
+                self.lock_episode(connection, episode)
+                result = self._apply_on_connection(connection, payload, incoming)
             return result
         except p.ProjectionError as exc:
             if str(exc) != "write_outcome_unknown":
@@ -350,6 +335,55 @@ class PhysicalEpisodeSession:
                 result = self._operation(connection, key, payload)
             require(result is not None, "episode_write_outcome_unknown")
             return result
+
+    def _apply_on_connection(self, connection, payload, incoming):
+        episode = payload["episode_id"]
+        key = _prefix(episode)+payload["operation_id"]
+        prior_result = self._operation(connection, key, payload)
+        if prior_result is not None:
+            return prior_result
+        head = self._head(connection, episode)
+        actual = head[0].canonical_sha256 if head else None
+        require(payload["expected_head"] == actual, "episode_head_changed")
+        previous = head[1] if head else None
+        members = list(previous["members"]) if previous else []
+        known = {member["content_sha256"] for member in members}
+        qualified = {digest(item) for item, status in self._records(members, connection) if status == "success"}
+        for member in incoming:
+            content = member["content_sha256"]
+            # A later complete run may qualify previously failed-only
+            # bytes. Keep both immutable provenance references, without
+            # renewing the advisory issuance or duplicating facts.
+            if content not in known or (payload["source_status"] == "success" and content not in qualified):
+                members.append(member)
+                known.add(content)
+                if payload["source_status"] == "success":
+                    qualified.add(content)
+        recoverable = bool(previous and "source_failed" in previous["holds"]
+            and payload["source_status"] == "success"
+            and max(instant(item["advisory"]["issued_at"]) for item in self._items(incoming, connection))
+                >= instant(previous["latest_retained_issued_at"]))
+        # Full immutable source inventory already exists if this bounded
+        # projection cannot grow. No pruning or arbitrary event winner.
+        limit = len(members) > MAX_MEMBERS or (previous is not None and previous["sequence"] >= MAX_MEMBERS)
+        if previous and "episode_member_bound" in previous["holds"]:
+            result = dict(episode_id=episode, status="held", reason="episode_member_bound", revision_sha256=actual)
+        elif limit:
+            value = self._bounded_hold(payload, previous, actual)
+            encoded, fields = p._snapshot(value)
+            receipt = self.repository._record(connection, REVISION, _prefix(episode)+f'{value["sequence"]:010d}', encoded, fields)
+            result = dict(episode_id=episode, status="held", reason="episode_member_bound", revision_sha256=receipt.canonical_sha256)
+        elif previous and members == previous["members"] and not recoverable:
+            result = dict(episode_id=episode, status="duplicate", revision_sha256=actual)
+        else:
+            value = self._next(payload, previous, actual, members, incoming, connection)
+            encoded, fields = p._snapshot(value)
+            receipt = self.repository._record(connection, REVISION, _prefix(episode)+f'{value["sequence"]:010d}', encoded, fields)
+            result = dict(episode_id=episode, status="held" if value["state"] == "held" else "committed",
+                          revision_sha256=receipt.canonical_sha256)
+        encoded, fields = p._snapshot(dict(payload=payload, result=result))
+        self.repository._record(connection, OPERATION, key, encoded, fields)
+        return result
 
     def _bounded_hold(self, payload, previous, previous_sha):
         # Incoming membership is unassigned, not truncated. Its complete retained
@@ -370,8 +404,8 @@ class PhysicalEpisodeSession:
         self._revision(value, payload["episode_id"])
         return value
 
-    def _next(self, payload, previous, previous_sha, members, incoming):
-        records = self._records(members)
+    def _next(self, payload, previous, previous_sha, members, incoming, connection=None):
+        records = self._records(members, connection)
         # Membership proves retention, not successful acquisition. Scientific
         # consumers receive only unique assertions from complete-success runs.
         items = list({digest(item): item for item, _ in records}.values())
@@ -380,9 +414,9 @@ class PhysicalEpisodeSession:
         latest_qualified = max(qualified.values(), key=lambda item: instant(item["advisory"]["issued_at"]))["advisory"]["issued_at"] if qualified else None
         episode = payload["episode_id"]
         require(all(episode_id(decode_advisory(item["advisory"])) == episode for item in items), "episode_membership_changed")
-        previous_items = self._items(previous["members"]) if previous else []
+        previous_items = self._items(previous["members"], connection) if previous else []
         holds = list(previous["holds"]) if previous and previous["state"] == "held" else []
-        incoming_latest = max(instant(item["advisory"]["issued_at"]) for item in self._items(incoming))
+        incoming_latest = max(instant(item["advisory"]["issued_at"]) for item in self._items(incoming, connection))
         if (payload["source_status"] == "success" and latest_qualified is not None
                 and incoming_latest >= instant(latest_retained)):
             holds = [hold for hold in holds if hold != "source_failed"]

@@ -13,7 +13,7 @@ from uuid import UUID
 from src.commands import postgres_batch, postgres_batch_results, postgres_batch_worker, postgres_spending
 from src.commands import postgres_check_observations, postgres_checks, postgres_media, postgres_media_commands
 from src.commands.reducer import AutomaticPolicy, reduce_command
-from src.commands.schema import COVERAGE_ACTIONS, REPORT_ACTIONS, GENERATION_ACTIONS, CANDIDATE_ACTIONS, MEDIA_ACTIONS, EDITOR_MEDIA_ACTIONS, Command, CommandError, Principal, authorize, canonical_json, utc_datetime, utc_text
+from src.commands.schema import SOURCE_ACTIONS, COVERAGE_ACTIONS, REPORT_ACTIONS, GENERATION_ACTIONS, CANDIDATE_ACTIONS, MEDIA_ACTIONS, EDITOR_MEDIA_ACTIONS, Command, CommandError, Principal, authorize, canonical_json, utc_datetime, utc_text
 from src.editorial.policy import current_editorial_policy
 from src.storage import postgres_projection as p
 
@@ -359,6 +359,15 @@ class PostgresCommandAuthority:
             self._pointer(c, lock=True)
             saved = postgres_batch.read(c, job_id, environment=self.environment)
             return postgres_batch._plan_bytes(c, saved["plan_sha256"])
+
+    def configure_source_results(self) -> None:
+        from src.commands import postgres_source_results as sources
+        self.source_results_enabled = True
+        sources.configured(self)
+
+    def source_run_projection(self, run_id: str) -> dict:
+        from src.commands import postgres_source_results as sources
+        return sources.projection(self, run_id)
 
     def configure_coverage(self, load_configuration) -> None:
         from src.commands import postgres_coverage as coverage
@@ -734,10 +743,19 @@ class PostgresCommandAuthority:
                     delivery_plan = None
                     report_transition = None
                     coverage_outcome = None
+                    source_transition = None
                     try:
                         if actor is None:
                             raise CommandError("forbidden", "Operator authorization was revoked before execution")
-                        if command.action in COVERAGE_ACTIONS:
+                        if command.action in SOURCE_ACTIONS:
+                            from src.commands import postgres_source_results as sources
+                            from src.commands.reducer import Reduction
+                            with c.transaction(), sources.expected_domain_failures():
+                                source_transition = sources.prepare(self, c, state, command, actor,
+                                    now=clock, editorial_policy=editorial_policy)
+                            clock = source_transition.completed_at
+                            reduction = Reduction(source_transition.state, (), ())
+                        elif command.action in COVERAGE_ACTIONS:
                             from src.commands import postgres_coverage as coverage
                             from src.commands.reducer import Reduction
                             with c.transaction(), coverage.expected_domain_failures():
@@ -789,6 +807,8 @@ class PostgresCommandAuthority:
                             reduction = reduce_command(state, command, actor, now=clock, policy=policy, editorial_policy=editorial_policy)
                         result = {"status": "applied" if reduction.changed_ids else "unchanged", "changed_ids": list(reduction.changed_ids),
                                   "identities": list(reduction.identities), "publish_intent_id": reduction.publish_intent_id}
+                        if source_transition is not None:
+                            result.update(status="applied" if source_transition.state_changed else "unchanged", source_run=source_transition.outcome)
                         if coverage_outcome is not None:
                             result.update(status="applied", coverage=coverage_outcome)
                         if report_transition is not None:
@@ -803,12 +823,12 @@ class PostgresCommandAuthority:
                             result[editor_media[0]] = editor_media[1]
                         if delivery_plan is not None:
                             result["delivery"] = delivery.references(delivery_plan)
-                        if reduction.changed_ids:
+                        if reduction.changed_ids or (source_transition is not None and source_transition.state_changed):
                             changed = reduction.state
                     except CommandError as exc:
                         result = {"status": "rejected", "code": exc.code, "message": str(exc)}
                     except (ValueError, TypeError, UnicodeError, OverflowError):
-                        if command.action in MEDIA_ACTIONS | EDITOR_MEDIA_ACTIONS | CANDIDATE_ACTIONS | GENERATION_ACTIONS | REPORT_ACTIONS | COVERAGE_ACTIONS:
+                        if command.action in SOURCE_ACTIONS | MEDIA_ACTIONS | EDITOR_MEDIA_ACTIONS | CANDIDATE_ACTIONS | GENERATION_ACTIONS | REPORT_ACTIONS | COVERAGE_ACTIONS:
                             # Domain preparation converts deterministic input errors
                             # itself; storage/implementation uncertainty rolls back.
                             raise
@@ -822,6 +842,10 @@ class PostgresCommandAuthority:
                         version += 1
                         self.projections._record(c, NAMESPACE, str(version), encoded, fields)
                         c.execute(f"UPDATE {SCHEMA}.state SET version=%s,snapshot_id=%s WHERE singleton=1", (version, str(version)))
+                    if source_transition is not None:
+                        # A late deadline/clock refusal rolls back ALL source and
+                        # state effects. The exact accepted intent remains pending.
+                        clock = sources.final_clock(command, clock)
                     result.update(command_id=command.command_id, digest=command.digest, state_version=version,
                                   completed_at=utc_text(clock), actor_subject=command.actor_subject)
                     encoded_result = _body(result)

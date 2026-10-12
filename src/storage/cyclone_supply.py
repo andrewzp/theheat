@@ -178,6 +178,15 @@ class CycloneSupplySession:
         require(expected_sha is None or receipt.canonical_sha256 == sha(expected_sha), "cyclone_supply_changed")
         return receipt, [decode_advisory(row["advisory"]) for row in value["rows"]], value
 
+    def read_on_connection(self, connection, *, expected_sha=None):
+        """Use the caller's validated transaction; never hide storage uncertainty."""
+        environment(self.repository)
+        uuid(self.supply_run_id)
+        receipt, value = self.repository._read(connection, NAMESPACE, "run:"+self.supply_run_id)
+        validate_envelope(value, self.supply_run_id)
+        require(expected_sha is None or receipt.canonical_sha256 == sha(expected_sha), "cyclone_supply_changed")
+        return receipt, [decode_advisory(row["advisory"]) for row in value["rows"]], value
+
 
 def validate_envelope(value, run_id):
     require(type(value) is dict and set(value) == set("schema_version source supply_run_id captured_at producer_revision evidence_class raw_response_available source_outcome rows".split()))

@@ -16,10 +16,11 @@ MAX_TARGETS = 500
 MEDIA_ACTIONS = frozenset({"attach_media_revision", "remove_media_revision", "review_media_revision"})
 EDITOR_MEDIA_ACTIONS = frozenset({"prepare_media_revision", "request_revision_checks", "approve_media_revision"})
 CANDIDATE_ACTIONS = frozenset({"request_candidate_checks", "admit_checked_candidate"})
+SOURCE_ACTIONS = frozenset({"commit_nhc_source_run"})
 REPORT_ACTIONS = frozenset({"open_report_evidence"})
 COVERAGE_ACTIONS = frozenset({"evaluate_reference_coverage"})
 GENERATION_ACTIONS = frozenset({"request_sourced_generation"})
-ACTIONS = COVERAGE_ACTIONS | REPORT_ACTIONS | EDITOR_MEDIA_ACTIONS | GENERATION_ACTIONS | CANDIDATE_ACTIONS | MEDIA_ACTIONS | frozenset({"edit_revision", "select_candidate", "record_review", "approve_revision",
+ACTIONS = SOURCE_ACTIONS | COVERAGE_ACTIONS | REPORT_ACTIONS | EDITOR_MEDIA_ACTIONS | GENERATION_ACTIONS | CANDIDATE_ACTIONS | MEDIA_ACTIONS | frozenset({"edit_revision", "select_candidate", "record_review", "approve_revision",
                      "schedule_revision", "cancel_approval", "reject_revision", "bulk_reject"})
 _HEX = re.compile(r"[a-f0-9]{64}")
 
@@ -116,6 +117,7 @@ def _validate_payload(action: str, payload: Any, *, allow_legacy_review: bool = 
     if not isinstance(payload, dict):
         raise CommandError("invalid_payload", "Payload must be an object")
     required = {
+        "commit_nhc_source_run": {"supply_run_id", "supply_sha256", "runtime_input_sha256", "expected_episode_heads", "expected_policy_sha256"},
         "evaluate_reference_coverage": {"set_id", "expected_set_sha256", "expected_state_version", "expected_policy_sha256"},
         "open_report_evidence": {"lineage_id", "report_sha256", "expected_policy_sha256", "episode_reference"},
         "prepare_media_revision": {"expected_policy_sha256", "expected_renderer_profile_sha256"},
@@ -136,6 +138,21 @@ def _validate_payload(action: str, payload: Any, *, allow_legacy_review: bool = 
         required = {"confirmed", "reason"}  # Retained old intent must receive a terminal refusal, not wedge the journal.
     if set(payload) != required:
         raise CommandError("invalid_payload", "Payload fields do not match the action")
+    if action in SOURCE_ACTIONS:
+        try:
+            if str(UUID(payload["supply_run_id"])) != payload["supply_run_id"]:
+                raise ValueError
+        except (ValueError, TypeError, AttributeError):
+            raise CommandError("invalid_source_identity", "Supply the exact retained NHC run") from None
+        for key in ("supply_sha256", "runtime_input_sha256"):
+            if type(payload[key]) is not str or not _HEX.fullmatch(payload[key]):
+                raise CommandError("invalid_source_identity", "Supply exact retained NHC fingerprints")
+        heads = payload["expected_episode_heads"]
+        if type(heads) is not dict or len(heads) > 64 or any(type(key) is not str
+                or not re.fullmatch(r"ep1:cyclone:nhc:(?:AL|EP)(?:0[1-9]|[1-4][0-9])[0-9]{4}", key)
+                or int(key[-4:]) == 0 or (value is not None and (type(value) is not str or not _HEX.fullmatch(value)))
+                for key, value in heads.items()):
+            raise CommandError("invalid_source_heads", "Supply the complete bounded episode head map")
     if action in COVERAGE_ACTIONS:
         if not isinstance(payload["set_id"], str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}", payload["set_id"]):
             raise CommandError("invalid_coverage_identity", "Supply the retained reference-set identity")
@@ -245,8 +262,10 @@ class Command:
         clock = utc_datetime(utc_text(now))
         if requested > clock + timedelta(minutes=5) or expires <= requested or expires > requested + timedelta(days=1):
             raise CommandError("invalid_time", "Command time window is invalid")
+        if action in SOURCE_ACTIONS and expires > requested + timedelta(minutes=10):
+            raise CommandError("invalid_time", "Source commands expire within ten minutes")
         rows = body["targets"]
-        if not isinstance(rows, list) or (rows != [] if action in CANDIDATE_ACTIONS | GENERATION_ACTIONS | REPORT_ACTIONS | COVERAGE_ACTIONS else not 1 <= len(rows) <= MAX_TARGETS or (action != "bulk_reject" and len(rows) != 1)):
+        if not isinstance(rows, list) or (rows != [] if action in SOURCE_ACTIONS | CANDIDATE_ACTIONS | GENERATION_ACTIONS | REPORT_ACTIONS | COVERAGE_ACTIONS else not 1 <= len(rows) <= MAX_TARGETS or (action != "bulk_reject" and len(rows) != 1)):
             raise CommandError("invalid_targets", "Supply one target, or an explicit bounded set for bulk rejection")
         targets = tuple(DraftTarget.parse(row) for row in rows)
         if len({row.draft_id for row in targets}) != len(targets):
