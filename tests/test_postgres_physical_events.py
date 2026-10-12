@@ -214,6 +214,99 @@ def test_unordered_or_failed_source_versions_stay_held(repository, mode):
     assert episodes.read_current(EPISODE)[1]["opportunities"] == []
 
 
+@pytest.mark.parametrize("status", ["failed", "degraded"])
+def test_complete_success_recovers_same_assertion_without_renewing_freshness(repository, status):
+    repo = repository[1]
+    episodes = PhysicalEpisodeSession(repo)
+    failed, failed_receipt, original = capture(repo, [advisory()], status=status)
+    held_head = apply(failed, failed_receipt, episodes, {EPISODE: None})["episodes"][0]["revision_sha256"]
+    held = episodes.read_current(EPISODE)[1]
+    assert held["observed_at"] is None and held["qualified_content_sha256"] == []
+    assert held["latest_retained_issued_at"] == advisory().issued_at
+    recovered, receipt, _ = capture(repo, [advisory()], now="2026-10-11T13:00:00Z")
+    operation = str(uuid.uuid4())
+    result = apply(recovered, receipt, episodes, {EPISODE: held_head}, operation=operation)
+    current = episodes.read_current(EPISODE)[1]
+    assert result["episodes"][0]["status"] == "committed" and current["holds"] == []
+    assert current["members"][0] == held["members"][0] and len(current["members"]) == 2
+    assert len(current["qualified_content_sha256"]) == 1
+    assert current["observed_at"] == advisory().issued_at and current["opportunities"] == []
+    assert current["previous_bindings"] == []  # held evidence never became writer authority
+    assert apply(recovered, receipt, PhysicalEpisodeSession(repo), {EPISODE: held_head}, operation=operation) == result
+    assert failed.read()[2] == original
+    duplicate, duplicate_receipt, _ = capture(repo, [advisory()])
+    assert apply(duplicate, duplicate_receipt, episodes, {EPISODE: digest(current)})["episodes"][0]["status"] == "duplicate"
+    with pytest.raises(CycloneSupplyError, match="episode_source_not_current"):
+        prepare_episode_requests(episodes, EPISODE, digest(current), {}, now="2026-10-14T12:00:00Z")
+
+
+def test_failed_only_history_cannot_create_crossing_or_ri_after_later_recovery(repository):
+    repo = repository[1]
+    episodes = PhysicalEpisodeSession(repo)
+    failed, receipt, _ = capture(repo, [advisory(issued_at="2026-10-10T06:00:00Z", wind_kt=60)], status="failed")
+    held = apply(failed, receipt, episodes, {EPISODE: None})["episodes"][0]["revision_sha256"]
+    latest, receipt, _ = capture(repo, [advisory(advisory_number="5", issued_at="2026-10-11T06:00:00Z", wind_kt=100)])
+    head = apply(latest, receipt, episodes, {EPISODE: held})["episodes"][0]["revision_sha256"]
+    current = episodes.read_current(EPISODE)[1]
+    assert current["holds"] == [] and len(current["members"]) == 2
+    assert len(current["qualified_content_sha256"]) == 1
+    assert prepare_episode_requests(episodes, EPISODE, head, {}, now=NOW) == []
+    next_run, receipt, _ = capture(repo, [advisory(advisory_number="6", issued_at="2026-10-11T12:00:00Z", wind_kt=115)])
+    head = apply(next_run, receipt, episodes, {EPISODE: head})["episodes"][0]["revision_sha256"]
+    requests = prepare_episode_requests(episodes, EPISODE, head, {}, now=NOW)
+    assert len(requests) == 1 and requests[0]["bundle"]["signal_kind"] == "cyclone_tier_crossing"
+    assert requests[0]["bundle"]["raw_signal_dump"]["from_category"] == 3
+    assert len(requests[0]["bundle"]["raw_signal_dump"]["physical_episode"]["source_assertion_refs"]) == 2
+
+
+def test_newer_failed_evidence_stays_held_against_older_success(repository):
+    repo = repository[1]
+    episodes, head, second, _ = seed(repo)
+    failed, receipt, _ = capture(repo, [advisory(advisory_number="3", issued_at="2026-10-11T12:00:00Z", wind_kt=115)], status="failed")
+    head = apply(failed, receipt, episodes, {EPISODE: head})["episodes"][0]["revision_sha256"]
+    older, receipt, _ = capture(repo, second.read()[1])
+    head = apply(older, receipt, episodes, {EPISODE: head})["episodes"][0]["revision_sha256"]
+    current = episodes.read_current(EPISODE)[1]
+    assert current["holds"] == ["source_failed"] and current["state"] == "held"
+    assert current["observed_at"] == "2026-10-11T06:00:00Z"
+    assert current["latest_retained_issued_at"] == "2026-10-11T12:00:00Z"
+    with pytest.raises(CycloneSupplyError, match="episode_consumer_held"):
+        prepare_episode_requests(episodes, EPISODE, head, {}, now=NOW)
+    degraded, receipt, _ = capture(repo, failed.read()[1], status="degraded")
+    apply(degraded, receipt, episodes, {EPISODE: head})
+    assert episodes.read_current(EPISODE)[1]["state"] == "held"
+
+
+@pytest.mark.parametrize("hold", ["identity_or_revision_conflict", "late_evidence_derivation_review", "geography_context_changed", "relationship_resolution_required"])
+def test_source_recovery_cannot_clear_unrelated_holds(repository, hold):
+    repo = repository[1]
+    episodes, head, second, second_receipt = seed(repo)
+    cities = []
+    if hold == "relationship_resolution_required":
+        result = episodes.retain_relationship(proposal_id=str(uuid.uuid4()), hazard="cyclone", kind="uncertain_identity",
+            evidence_refs=[dict(namespace=NAMESPACE, snapshot_id="run:"+second.supply_run_id, sha256=second_receipt.canonical_sha256)],
+            expected_heads={EPISODE: head}, now=NOW)
+        head = result["episodes"][0]["revision_sha256"]
+    elif hold == "identity_or_revision_conflict":
+        conflict, receipt, _ = capture(repo, [replace(second.read()[1][0], wind_kt=80)])
+        head = apply(conflict, receipt, episodes, {EPISODE: head})["episodes"][0]["revision_sha256"]
+    elif hold == "late_evidence_derivation_review":
+        old, receipt, _ = capture(repo, [advisory(advisory_number="0", issued_at="2026-10-10T12:00:00Z")])
+        head = apply(old, receipt, episodes, {EPISODE: head})["episodes"][0]["revision_sha256"]
+    else:
+        cities = [dict(name="Invented", country="Cuba", lat=20.0, lon=-75.0, population=100000)]
+    latest = advisory(advisory_number="3", issued_at="2026-10-11T12:00:00Z", wind_kt=100)
+    failed, receipt, _ = capture(repo, [latest], status="failed")
+    head = apply(failed, receipt, episodes, {EPISODE: head}, cities=cities)["episodes"][0]["revision_sha256"]
+    complete, receipt, _ = capture(repo, [latest])
+    apply(complete, receipt, episodes, {EPISODE: head}, cities=cities)
+    current = episodes.read_current(EPISODE)[1]
+    assert "source_failed" not in current["holds"] and hold in current["holds"]
+    assert current["state"] == "held" and current["opportunities"] == []
+    with pytest.raises(CycloneSupplyError, match="episode_consumer_held"):
+        episodes.prepare_story_context(EPISODE, digest(current))
+
+
 def test_one_transaction_concurrent_cas_and_exact_operation_retry(repository):
     episodes, head, _, _ = seed(repository[1])
     sessions = [capture(repository[1], [advisory(advisory_number=str(number), issued_at="2026-10-11T12:00:00Z", wind_kt=115)]) for number in (3, 4)]
@@ -526,6 +619,9 @@ def test_bounds_hold_current_consumer_and_keep_complete_source_inventory(reposit
     assert value["state"] == "held" and len(value["members"]) == 2
     assert value["correction_notices"][0]["run_sha256"] == receipt.canonical_sha256
     assert len(new.read()[1]) == 1
+    retry = apply(new, receipt, episodes, {EPISODE: digest(value)})
+    assert retry["episodes"][0]["reason"] == "episode_member_bound"
+    assert episodes.read_current(EPISODE)[1] == value
     with pytest.raises(CycloneSupplyError, match="episode_consumer_held"):
         episodes.prepare_story_context(EPISODE, digest(value))
 
@@ -571,7 +667,18 @@ def test_fresh_process_and_owned_dump_restore_resume_exact_consumer(repository, 
     import psycopg
     repo = repository[1]
     episodes, head, _, _ = seed(repo)
+    original = prepare_episode_requests(episodes, EPISODE, head, {}, now=NOW)
+    later = advisory(advisory_number="3", issued_at="2026-10-11T12:00:00Z", wind_kt=100)
+    failed, failed_receipt, failed_bytes = capture(repo, [later], status="failed")
+    held_head = apply(failed, failed_receipt, episodes, {EPISODE: head})["episodes"][0]["revision_sha256"]
+    complete, receipt, _ = capture(repo, [later])
+    operation = str(uuid.uuid4())
+    result = apply(complete, receipt, episodes, {EPISODE: held_head}, operation=operation)
+    head = result["episodes"][0]["revision_sha256"]
     expected = prepare_episode_requests(episodes, EPISODE, head, {}, now=NOW)
+    assert expected[0]["opportunity_id"] == original[0]["opportunity_id"]
+    assert expected[0]["bundle"]["raw_signal_dump"]["advisory_number"] == "3"
+    assert failed.read()[2] == failed_bytes
     assert _fresh_process(repo, EPISODE, head) == expected
     args, command, root = cluster
     dump = root / ("episodes-"+uuid.uuid4().hex+".dump")
@@ -584,6 +691,8 @@ def test_fresh_process_and_owned_dump_restore_resume_exact_consumer(repository, 
         command("pg_restore", *common, "--single-transaction", "-d", name, dump)
         restored = p.PostgresProjectionRepository(socket_directory=args["host"], port=args["port"], database=name, user=repo.user)
         assert _fresh_process(restored, EPISODE, head) == expected
+        assert apply(complete, receipt, PhysicalEpisodeSession(restored), {EPISODE: held_head}, operation=operation) == result
+        assert CycloneSupplySession(restored, failed.supply_run_id).read()[2] == failed_bytes
         assert episodes.read_current(EPISODE)[0].canonical_sha256 == head
     finally:
         with psycopg.connect(**args) as c:

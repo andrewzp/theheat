@@ -77,7 +77,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/storage/hosted_staging.py": "54e82a1b070db00b70b3e7c2f82b900a1d6b7c55b9fa4935d726accc7997a7d5",
     "src/storage/migrations/009_media_staging.sql": "50fda50ed8e36047b8580d897c1fc6ef5c5989c69e439a79bc04d3e694496c2c",
     "src/storage/migrations/010_media_commands.sql": "87941e603ce94900d3568fae261501850e8ff8766b9f75fb9adfac36a7338add",
-    "src/storage/physical_events.py": "d8ea95bdd8e0f04afb6ab603bb6f1c79ac956fca5b851976f2397e827d16fb6c",
+    "src/storage/physical_events.py": "12818095ecbd6bf1fba2c05a4e1f36deb0188932a7a7ccae3f5d6a8b47c72523",
     "src/storage/postgres_projection.py": "932c6f19baef022325a2b7e84369e6d211607aedf30dd776bba140d365de27ce",
     "src/storage/scientific_supply.py": "8fc9d34bb12ca67cbeab2dc111beb028b0b5550a45076f45a9acb6a7a988fb20",
     "src/two_bot/air_quality_claims.py": "b2d5232a2cd8678614ec9baeb3d20fc2e9097ed635244f2373891707c03711b8",
@@ -123,5 +123,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "4a828a22e451889f630e994add6ba38c463d44369d24d2e22c2ff85e7f0387e5"
   },
   "schema_version": 1,
-  "source_sha256": "df6a6141d7c5656a35731d7f4157f27a928608b524344e627ccd60c24c5e3aa4"
+  "source_sha256": "79f87aa584c636b0980f612d98855a102544f6db231c5854aa95f2fe9b6d0061"
 }

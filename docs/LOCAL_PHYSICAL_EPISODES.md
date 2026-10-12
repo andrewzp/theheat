@@ -27,6 +27,15 @@ and its success callbacks follow their existing path.
   crosses a country border. Different full IDs, years, basins and authorities are
   not merged by names, nearby tracks or a language model.
 
+Only complete-success source runs qualify evidence for current stories, prior
+category or rapid-intensification history. Failed/degraded-only assertions remain
+immutable retained provenance. A complete success at the same or later advisory
+can clear the operational source-failure hold; conflicts, late evidence,
+geography, relationship and bounds holds remain. Reacquiring identical evidence
+adds successful provenance without changing its original issuance or freshness.
+Held revisions never become trusted story-memory bindings. An eligible opportunity
+can be rebuilt after recovery with its original identity; detection is not posting.
+
 ## Durable preparation and replay
 
 `CycloneSupplySession.capture` freezes a caller-fixed run ID, capture time,

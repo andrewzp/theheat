@@ -183,7 +183,7 @@ class PhysicalEpisodeSession:
 
     @staticmethod
     def _revision(value, episode):
-        require(type(value) is dict and set(value) == set("schema_version policy episode_id sequence previous_sha256 previous_bindings members state holds opportunities seen_opportunities areas correction_notices observed_at detection_context".split()), "invalid_episode_revision")
+        require(type(value) is dict and set(value) == set("schema_version policy episode_id sequence previous_sha256 previous_bindings members qualified_content_sha256 latest_retained_issued_at last_qualified_opportunities state holds opportunities seen_opportunities areas correction_notices observed_at detection_context".split()), "invalid_episode_revision")
         require(type(value["schema_version"]) is int and value["schema_version"] == 1 and value["policy"] == POLICY)
         require(value["episode_id"] == _episode(episode))
         require(type(value["sequence"]) is int and 1 <= value["sequence"] <= MAX_MEMBERS + 1)
@@ -191,13 +191,23 @@ class PhysicalEpisodeSession:
         if value["previous_sha256"] is not None:
             sha(value["previous_sha256"])
         require(type(value["members"]) is list and (0 if value["state"] == "held" else 1) <= len(value["members"]) <= MAX_MEMBERS)
-        require(type(value["previous_bindings"]) is list and len(value["previous_bindings"]) == value["sequence"] - 1)
+        require(type(value["previous_bindings"]) is list and len(value["previous_bindings"]) <= value["sequence"] - 1)
         for binding in value["previous_bindings"]:
             validate_binding(binding)
             require(binding["episode_id"] == episode)
         require(value["state"] in {"confirmed_source_identity", "held"})
-        for key in ("holds", "opportunities", "seen_opportunities", "areas", "correction_notices"):
+        for key in ("holds", "opportunities", "last_qualified_opportunities", "seen_opportunities", "areas", "correction_notices"):
             require(type(value[key]) is list)
+        refs = value["qualified_content_sha256"]
+        require(type(refs) is list and len(refs) <= len(value["members"]) and len(refs) == len(set(refs)))
+        for ref in refs:
+            sha(ref)
+        require(set(refs) <= {member["content_sha256"] for member in value["members"]})
+        require(value["state"] == "held" or bool(refs))
+        if value["latest_retained_issued_at"] is not None:
+            instant(value["latest_retained_issued_at"])
+        else:
+            require(not value["members"])
         if value["observed_at"] is not None:
             instant(value["observed_at"])
         else:
@@ -214,7 +224,7 @@ class PhysicalEpisodeSession:
         require(expected_head is None or head[0].canonical_sha256 == sha(expected_head), "episode_head_changed")
         return head
 
-    def _items(self, members):
+    def _records(self, members):
         cache = {}
         items = []
         for member in members:
@@ -224,8 +234,18 @@ class PhysicalEpisodeSession:
                 cache[key] = CycloneSupplySession(self.repository, key[0]).read(expected_sha=key[1])[2]
             matches = [row for row in cache[key]["rows"] if digest(row) == sha(member["content_sha256"])]
             require(len(matches) == 1 and assertion_key(matches[0]["advisory"]) == sha(member["assertion_key"]), "episode_member_changed")
-            items.append(matches[0])
+            items.append((matches[0], cache[key]["source_outcome"]["status"]))
         return items
+
+    def _items(self, members):
+        return [item for item, _ in self._records(members)]
+
+    @staticmethod
+    def _previous_bindings(previous, previous_sha):
+        bindings = list(previous["previous_bindings"]) if previous else []
+        if previous and previous["state"] == "confirmed_source_identity":
+            bindings.append(_binding(previous["episode_id"], previous_sha, previous["qualified_content_sha256"]))
+        return bindings
 
     def apply_retained_run(self, run_id, run_sha256, *, operation_id, expected_heads, now, cities):
         self._validate()
@@ -285,7 +305,21 @@ class PhysicalEpisodeSession:
                 previous = head[1] if head else None
                 members = list(previous["members"]) if previous else []
                 known = {member["content_sha256"] for member in members}
-                members.extend(member for member in incoming if member["content_sha256"] not in known)
+                qualified = {digest(item) for item, status in self._records(members) if status == "success"}
+                for member in incoming:
+                    content = member["content_sha256"]
+                    # A later complete run may qualify previously failed-only
+                    # bytes. Keep both immutable provenance references, without
+                    # renewing the advisory issuance or duplicating facts.
+                    if content not in known or (payload["source_status"] == "success" and content not in qualified):
+                        members.append(member)
+                        known.add(content)
+                        if payload["source_status"] == "success":
+                            qualified.add(content)
+                recoverable = bool(previous and "source_failed" in previous["holds"]
+                    and payload["source_status"] == "success"
+                    and max(instant(item["advisory"]["issued_at"]) for item in self._items(incoming))
+                        >= instant(previous["latest_retained_issued_at"]))
                 # Full immutable source inventory already exists if this bounded
                 # projection cannot grow. No pruning or arbitrary event winner.
                 limit = len(members) > MAX_MEMBERS or (previous is not None and previous["sequence"] >= MAX_MEMBERS)
@@ -296,10 +330,10 @@ class PhysicalEpisodeSession:
                     encoded, fields = p._snapshot(value)
                     receipt = self.repository._record(connection, REVISION, _prefix(episode)+f'{value["sequence"]:010d}', encoded, fields)
                     result = dict(episode_id=episode, status="held", reason="episode_member_bound", revision_sha256=receipt.canonical_sha256)
-                elif previous and members == previous["members"]:
+                elif previous and members == previous["members"] and not recoverable:
                     result = dict(episode_id=episode, status="duplicate", revision_sha256=actual)
                 else:
-                    value = self._next(payload, previous, actual, members)
+                    value = self._next(payload, previous, actual, members, incoming)
                     encoded, fields = p._snapshot(value)
                     receipt = self.repository._record(connection, REVISION, _prefix(episode)+f'{value["sequence"]:010d}', encoded, fields)
                     result = dict(episode_id=episode, status="held" if value["state"] == "held" else "committed",
@@ -320,29 +354,39 @@ class PhysicalEpisodeSession:
     def _bounded_hold(self, payload, previous, previous_sha):
         # Incoming membership is unassigned, not truncated. Its complete retained
         # run is bound in the notice/operation. A terminal head blocks stale use.
-        bindings = list(previous["previous_bindings"]) if previous else []
-        if previous and previous["members"]:
-            bindings.append(_binding(payload["episode_id"], previous_sha,
-                                     [m["content_sha256"] for m in previous["members"]]))
+        bindings = self._previous_bindings(previous, previous_sha)
         value = dict(schema_version=1, policy=POLICY, episode_id=payload["episode_id"],
             sequence=previous["sequence"]+1 if previous else 1, previous_sha256=previous_sha,
             previous_bindings=bindings, members=previous["members"] if previous else [],
-            state="held", holds=["episode_member_bound"], opportunities=[],
+            state="held", holds=sorted(set((previous["holds"] if previous else []) + ["episode_member_bound"])), opportunities=[],
             seen_opportunities=previous["seen_opportunities"] if previous else [], areas=[],
             correction_notices=[dict(reason="unassigned_retained_supply", run_id=payload["run_id"],
                                      run_sha256=payload["run_sha256"])],
             observed_at=previous["observed_at"] if previous else None,
+            latest_retained_issued_at=previous["latest_retained_issued_at"] if previous else None,
+            qualified_content_sha256=previous["qualified_content_sha256"] if previous else [],
+            last_qualified_opportunities=previous["last_qualified_opportunities"] if previous else [],
             detection_context=dict(cities=payload["cities"], as_of=payload["now"]))
         self._revision(value, payload["episode_id"])
         return value
 
-    def _next(self, payload, previous, previous_sha, members):
-        items = self._items(members)
+    def _next(self, payload, previous, previous_sha, members, incoming):
+        records = self._records(members)
+        # Membership proves retention, not successful acquisition. Scientific
+        # consumers receive only unique assertions from complete-success runs.
+        items = list({digest(item): item for item, _ in records}.values())
+        qualified = {digest(item): item for item, status in records if status == "success"}
+        latest_retained = max(items, key=lambda item: instant(item["advisory"]["issued_at"]))["advisory"]["issued_at"]
+        latest_qualified = max(qualified.values(), key=lambda item: instant(item["advisory"]["issued_at"]))["advisory"]["issued_at"] if qualified else None
         episode = payload["episode_id"]
         require(all(episode_id(decode_advisory(item["advisory"])) == episode for item in items), "episode_membership_changed")
         previous_items = self._items(previous["members"]) if previous else []
         holds = list(previous["holds"]) if previous and previous["state"] == "held" else []
-        if payload["source_status"] == "failed":
+        incoming_latest = max(instant(item["advisory"]["issued_at"]) for item in self._items(incoming))
+        if (payload["source_status"] == "success" and latest_qualified is not None
+                and incoming_latest >= instant(latest_retained)):
+            holds = [hold for hold in holds if hold != "source_failed"]
+        elif payload["source_status"] != "success" or latest_qualified is None or instant(latest_qualified) < instant(latest_retained):
             holds.append("source_failed")
         if any(re.fullmatch(r"[0-9]+[A-Za-z]?", item["advisory"]["advisory_number"]) is None for item in items):
             holds.append("source_advisory_number_unresolved")
@@ -360,22 +404,22 @@ class PhysicalEpisodeSession:
         if previous and previous["detection_context"]["cities"] != payload["cities"]:
             holds.append("geography_context_changed")
         seen = list(previous["seen_opportunities"]) if previous else []
-        opportunities, areas, forecast_holds = ([], [], []) if holds else _detect(episode, items,
-            previous["opportunities"] if previous else [], payload["cities"], payload["now"])
+        opportunities, areas, forecast_holds = ([], [], []) if holds else _detect(episode, list(qualified.values()),
+            previous["last_qualified_opportunities"] if previous else [], payload["cities"], payload["now"])
         notices = list(previous["correction_notices"]) if previous else []
         if "identity_or_revision_conflict" in holds:
             notices.append(dict(reason="source_revision_conflict", old_revision_sha256=previous_sha,
                 affected_opportunity_ids=seen, conflicting_content_sha256=[digest(item) for item in items]))
-        previous_bindings = list(previous["previous_bindings"]) if previous else []
-        if previous:
-            previous_bindings.append(_binding(episode, previous_sha, [m["content_sha256"] for m in previous["members"]]))
+        previous_bindings = self._previous_bindings(previous, previous_sha)
         value = dict(schema_version=1, policy=POLICY, episode_id=episode,
             sequence=previous["sequence"]+1 if previous else 1, previous_sha256=previous_sha,
             previous_bindings=previous_bindings, members=members,
             state="held" if holds else "confirmed_source_identity", holds=sorted(set(holds+forecast_holds)),
             opportunities=opportunities, seen_opportunities=sorted(set(seen+[row["opportunity_id"] for row in opportunities])),
             areas=areas, correction_notices=notices,
-            observed_at=max(items, key=lambda item: instant(item["advisory"]["issued_at"]))["advisory"]["issued_at"],
+            observed_at=latest_qualified, latest_retained_issued_at=latest_retained,
+            qualified_content_sha256=list(qualified),
+            last_qualified_opportunities=(previous["last_qualified_opportunities"] if previous else []) if holds else opportunities,
             detection_context=dict(cities=payload["cities"], as_of=payload["now"]))
         self._revision(value, episode)
         return value
@@ -383,9 +427,10 @@ class PhysicalEpisodeSession:
     def prepare_story_context(self, episode, revision_sha):
         receipt, value = self.read_current(episode, expected_head=revision_sha)
         require(value["state"] == "confirmed_source_identity", "episode_consumer_held")
-        self._items(value["members"])
+        qualified = list(dict.fromkeys(digest(item) for item, status in self._records(value["members"]) if status == "success"))
+        require(qualified == value["qualified_content_sha256"], "episode_qualified_members_changed")
         self.read_current(episode, expected_head=revision_sha)
-        binding = _binding(episode, receipt.canonical_sha256, [m["content_sha256"] for m in value["members"]])
+        binding = _binding(episode, receipt.canonical_sha256, qualified)
         context = EpisodeContext(p._canonical(binding), p._canonical(value["previous_bindings"]+[binding]))
         return context, value
 
@@ -435,7 +480,7 @@ class PhysicalEpisodeSession:
                     require(previous["sequence"] < MAX_MEMBERS and previous["members"], "relationship_revision_bound")
                     value = freeze(previous)
                     value.update(sequence=previous["sequence"]+1, previous_sha256=expected,
-                        previous_bindings=previous["previous_bindings"]+[_binding(episode, expected, [m["content_sha256"] for m in previous["members"]])],
+                        previous_bindings=self._previous_bindings(previous, expected),
                         state="held", holds=sorted(set(previous["holds"]+["relationship_resolution_required"])), opportunities=[])
                     value["correction_notices"].append(dict(reason="unconfirmed_relationship", proposal_sha256=digest(payload),
                                                           affected_opportunity_ids=previous["seen_opportunities"]))
