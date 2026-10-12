@@ -71,7 +71,19 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        partition: [core, postgres, media]
+        include:
+          - partition: core
+            postgres-shard: all
+          - partition: media
+            postgres-shard: all
+          - partition: postgres
+            postgres-shard: '0'
+          - partition: postgres
+            postgres-shard: '1'
+          - partition: postgres
+            postgres-shard: '2'
+          - partition: postgres
+            postgres-shard: '3'
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@v6
@@ -150,7 +162,7 @@ jobs:
       # `voice_replay` tests live in tests/voice_regression/ and call the
       # real Anthropic writer. They run in voice-regression.yml (daily
       # canary + weekly full + writer-path PR gate), not in this suite.
-      - run: python -m pytest tests/ -v -m "not voice_replay" --ci-partition=${{ matrix.partition }} --durations=20 -o faulthandler_timeout=120
+      - run: python -m pytest tests/ -v -m "not voice_replay" --ci-partition=${{ matrix.partition }} --ci-postgres-shard=${{ matrix.postgres-shard }} --durations=20 -o faulthandler_timeout=120
         env:
           THEHEAT_TEST_POSTGRES: "1"
           THEHEAT_POSTGRES_BINDIR: /usr/lib/postgresql/17/bin
