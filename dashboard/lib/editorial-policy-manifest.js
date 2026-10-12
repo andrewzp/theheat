@@ -75,7 +75,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/media/crw_graphic_adapter.py": "5503a2527f3bf32351685a5c2a54fc41a543dc387ae7005c101461237588f6e1",
     "src/media/evidence_graphic.py": "7c266f6c7855bb47b3daa4a7e4a2640caba9c97262c8caa90ca596906e21c7f8",
     "src/media/fire_graphic_adapter.py": "343acd087bcbf3f566837bcf2a1799187002a734641c947b599d6f9f025e9833",
-    "src/media/fire_map_graphic_adapter.py": "100022948068e446617100f11a13368f4356838672750d09cc44ff2c2c9d34e2",
+    "src/media/fire_map_graphic_adapter.py": "6d14353badca1b5ef37ba752ec3e1efb3508114bc104ebc508b6ddd91d16678c",
     "src/media/joint_review.py": "54aff9dd95e9e85f7efbe5faa03742d3654ab2259bf2a39a36692b248a9be44b",
     "src/media/maps/NOTICE.md": "f6ebf3caca500621c4b2c9f9fe9aad802099b82a4a1c21c479daf97d29aabac0",
     "src/media/maps/manifest.json": "1af072edc46ae3252bf6cf0edb43993986de262a2840b2cd4907eb4866f970e9",
@@ -164,5 +164,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "4a828a22e451889f630e994add6ba38c463d44369d24d2e22c2ff85e7f0387e5"
   },
   "schema_version": 1,
-  "source_sha256": "bb5546887681e92b7cce1cb429128f5834d0500cd1462072b94c411c6394426e"
+  "source_sha256": "62ad297559357e7c26e218b65045dff1f9dbaec1d049091f73992f84046f30ca"
 }
