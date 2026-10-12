@@ -903,6 +903,9 @@ def test_png_projection_requires_successful_prepare_and_retained_record(admitted
     ref = result["media_preparation"]
     original_png = view(case, png=ref["proposal_sha256"])
     before = all_application_rows(core[3]), case["store"].read()
+    with pytest.raises(CommandError) as exc:
+        view(case, png="f"*64)
+    assert exc.value.code == "media_preparation_not_retained"
     original_result = case["store"]._result
     for status in ("rejected", "pending"):
         with monkeypatch.context() as patch:
@@ -910,7 +913,7 @@ def test_png_projection_requires_successful_prepare_and_retained_record(admitted
                 {**original_result(c, identity), "status":status} if identity == cmd.command_id else original_result(c, identity)))
             with pytest.raises(CommandError) as exc:
                 view(case, png=ref["proposal_sha256"])
-            assert exc.value.code == "media_draft_mismatch"
+            assert exc.value.code == "media_preparation_not_retained"
     original_read = generation.read
     for key, wrong in (("draft_id", "another-draft"), ("packet_sha256", "f"*64), ("command_id", str(uuid4()))):
         with monkeypatch.context() as patch:
@@ -926,3 +929,79 @@ def test_png_projection_requires_successful_prepare_and_retained_record(admitted
             assert exc.value.code == "media_preparation_not_retained"
     assert view(case, png=ref["proposal_sha256"]) == original_png
     assert (all_application_rows(core[3]), case["store"].read()) == before
+
+
+@pytest.mark.parametrize("admitted", ["modis"], indirect=True)
+def test_historical_png_outlives_journal_window_and_current_editability(admitted, core):
+    from copy import deepcopy
+    from src.commands import postgres_authority as authority_module
+    from src.commands.schema import CommandError
+    from src.storage import postgres_projection as p
+    case = admitted
+    prepared, png = prepare_and_attach(case)
+    reference = prepared["preparation"]
+    attached_view = view(case)
+    unrelated_id = next(d["id"] for d in case["store"].read()[1]["drafts"] if d["id"] != case["draft_id"])
+    unrelated = dict(case, draft_id=unrelated_id)
+    unchanged_text = next(d["text"] for d in case["store"].read()[1]["drafts"] if d["id"] == unrelated_id)
+    original, completed = action(unrelated, "edit_revision", {"text":unchanged_text})
+    assert completed["status"] == "unchanged"
+    authority = case["store"]
+    prior = authority.read()
+    # Insert consistent invented historical rows in one real PG transaction.
+    # This is archive fixture setup, not 1,025 executed application mutations.
+    inserted = []
+    with authority.projections._connection(writing=True) as c:
+        authority._validate(c)
+        version, _ = authority._state(c, lock=True)
+        for _ in range(1025):
+            request = {k:v for k,v in original.as_dict().items() if k in (
+                "command_id", "action", "requested_at", "expires_at", "targets", "payload")}
+            request["command_id"] = str(uuid4())
+            command = Command.from_request(request, candidate.EDITOR, environment="local", now=AT)
+            raw = authority_module._body(command.as_dict())
+            row = c.execute("INSERT INTO theheat_commands.intents(command_id,digest,command_bytes,accepted_at) VALUES(%s,%s,%s,%s) RETURNING sequence",
+                (command.command_id, command.digest, raw, utc_text(AT))).fetchone()
+            receipt = dict(command_id=command.command_id, sequence=row[0], accepted_at=utc_text(AT), digest=command.digest)
+            authority._event(c, command.command_id, "accepted", utc_text(AT), receipt)
+            result = dict(deepcopy(completed), command_id=command.command_id, digest=command.digest, state_version=version)
+            encoded = authority_module._body(result)
+            c.execute("INSERT INTO theheat_commands.results VALUES(%s,%s,%s,%s,%s,%s)",
+                (command.command_id, encoded, p._sha(encoded), version, authority_module.NAMESPACE, str(version)))
+            authority._event(c, command.command_id, "completed", result["completed_at"], result)
+            inserted.append(command.command_id)
+        for command_id in (inserted[0], inserted[-1]):
+            assert authority._intent(c, command_id)[0].command_id == command_id
+            assert authority._result(c, command_id)["status"] == "unchanged"
+        window = c.execute("SELECT i.command_id FROM theheat_commands.intents i JOIN theheat_commands.results r USING(command_id) ORDER BY i.sequence DESC LIMIT 1024").fetchall()
+        assert len(window) == 1024 and reference["command_id"] not in {row[0] for row in window}
+    before = all_application_rows(core[3])
+    assert authority.read() == prior and view(case, png=reference["proposal_sha256"]) == png
+    with pytest.raises(CommandError) as exc:
+        view(unrelated, png=reference["proposal_sha256"])
+    assert exc.value.code == "media_preparation_not_retained"
+    assert all_application_rows(core[3]) == before
+    assert action(case, "reject_revision", {"reason":"Invented rejection after retained preparation"})[1]["status"] == "applied"
+    rejected = authority.read()
+    draft = next(d for d in rejected[1]["drafts"] if d["id"] == case["draft_id"])
+    assert draft["status"] == "rejected" and "media_attachment" in draft
+    # Current removal construction is deliberately ineligible. Its existing
+    # refusal cannot block this separately anchored historical byte response.
+    with pytest.raises(ValueError, match="editable"):
+        domain.build_media_removal_proposal(rejected[1], case["draft_id"], expected_revision=_identity(draft), at=utc_text(AT))
+    before = all_application_rows(core[3])
+    assert view(case, png=reference["proposal_sha256"]) == png
+    assert all_application_rows(core[3]) == before
+    for name, payload, actor in (
+        ("remove_media_revision", dict(expected_policy_sha256=attached_view["expected_policy_sha256"],
+            expected_proposal_sha256=attached_view["removal"]["expected_proposal_sha256"], confirmed=True, reason="Invented refused removal"), candidate.EDITOR),
+        ("attach_media_revision", dict(proposal_sha256=reference["proposal_sha256"], expected_policy_sha256=attached_view["expected_policy_sha256"],
+            expected_packet_sha256=prepared["packet"]["packet_sha256"], review=dict(decision="accept", confirmations={k:True for k in CONFIRMATIONS}, reason="Invented refused attach")), candidate.EDITOR),
+        ("approve_media_revision", dict(expected_policy_sha256=attached_view["expected_policy_sha256"],
+            expected_renderer_profile_sha256=attached_view["expected_renderer_profile_sha256"], expected_packet_sha256=attached_view["packet"]["packet_sha256"],
+            expected_review_sha256=attached_view["expected_review_sha256"], expected_check_completion_sha256="f"*64,
+            reason="Invented refused approval"), candidate.PUBLISHER),
+    ):
+        assert action(case, name, payload, actor=actor)[1]["status"] == "rejected"
+        assert authority.read() == rejected
+    assert view(case, png=reference["proposal_sha256"]) == png
