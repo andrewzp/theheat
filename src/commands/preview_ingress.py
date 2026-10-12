@@ -27,7 +27,7 @@ from src.editorial.policy import current_editorial_policy
 from src.storage.postgres_projection import ProjectionError
 
 AUTH_CONTEXT = "verified-local-preview-basic-v1"
-ALLOWED_ACTIONS = frozenset({"edit_revision", "record_review", "approve_revision",
+ALLOWED_ACTIONS = frozenset({"open_report_evidence", "edit_revision", "record_review", "approve_revision",
                              "reject_revision", "cancel_approval", "select_candidate",
                              "request_candidate_checks", "admit_checked_candidate", "request_sourced_generation",
                              "prepare_media_revision", "attach_media_revision", "review_media_revision", "remove_media_revision",
@@ -234,6 +234,9 @@ class PreviewHandler(BaseHTTPRequestHandler):
                                  "candidates": self.server.authority.candidate_projection(self.server.candidate_inputs + self.server.authority.generated_candidate_inputs(), now=datetime.now(UTC)),
                                  "local_preview": True, "publication_enabled": False})
                 return
+            if self.command == "GET" and self.path == "/reports":
+                self.reply(200, self.server.authority.report_projection(now=datetime.now(UTC)))
+                return
             if self.command == "GET" and self.path == "/generation":
                 self.reply(200, self.server.authority.generation_projection(now=datetime.now(UTC)))
                 return
@@ -329,6 +332,7 @@ def arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--database-port", type=int, default=55473)
     parser.add_argument("--operators", required=True)
     parser.add_argument("--generation-inputs")
+    parser.add_argument("--report-inputs")
     parser.add_argument("--media-rasterizer")
     parser.add_argument("--media-scratch")
     parser.add_argument("--media-dependency-manifest")
@@ -339,6 +343,9 @@ def adapter(args) -> tuple[PostgresCommandAuthority, Operators]:
     operators = Operators(args.operators)
     authority = PostgresCommandAuthority(socket_directory=args.socket_directory, database=args.database,
                                          user=args.user, port=args.database_port, environment="local")
+    if getattr(args, "report_inputs", None):
+        from src.commands.postgres_report_development import private_configuration as report_configuration
+        authority.configure_report_development(report_configuration(args.report_inputs))
     if getattr(args, "generation_inputs", None):
         from src.commands.postgres_sourced_generation import private_configuration
         authority.configure_sourced_generation(private_configuration(args.generation_inputs))

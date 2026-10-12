@@ -114,12 +114,7 @@ def prepare_report_development(session, lineage_id, report_sha256, *, episode_re
         context, projection = resolve_story_context(session, lineage_id, report_sha256, episode_reference)
         from src.orchestrator.cyclone_episodes import prepare_episode_requests
         prepared = prepare_episode_requests(PhysicalEpisodeSession(session.repository), episode_reference["episode_id"],
-            episode_reference["revision_sha256"], snapshot, now=now)
-        # Before the shared hook is integrated, keep this annotation outside
-        # every prepared bundle, memory and request. It cannot change the hash
-        # of factual generation inputs or create a new provider permission.
-        for row in prepared:
-            row["reports_for_evidence_review"] = context.annotations(row["bundle"]["raw_signal_dump"]["physical_episode"])
+            episode_reference["revision_sha256"], snapshot, now=now, report_context=context)
     session.read_current(lineage_id, report_sha256)
     projection["development_status"] = "evidence_review_required"
     return dict(report=projection, prepared_stories=prepared, generation_available=False, publication_enabled=False)

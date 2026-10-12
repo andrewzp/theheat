@@ -13,7 +13,7 @@ from uuid import UUID
 from src.commands import postgres_batch, postgres_batch_results, postgres_batch_worker, postgres_spending
 from src.commands import postgres_check_observations, postgres_checks, postgres_media, postgres_media_commands
 from src.commands.reducer import AutomaticPolicy, reduce_command
-from src.commands.schema import GENERATION_ACTIONS, CANDIDATE_ACTIONS, MEDIA_ACTIONS, EDITOR_MEDIA_ACTIONS, Command, CommandError, Principal, authorize, canonical_json, utc_datetime, utc_text
+from src.commands.schema import REPORT_ACTIONS, GENERATION_ACTIONS, CANDIDATE_ACTIONS, MEDIA_ACTIONS, EDITOR_MEDIA_ACTIONS, Command, CommandError, Principal, authorize, canonical_json, utc_datetime, utc_text
 from src.editorial.policy import current_editorial_policy
 from src.storage import postgres_projection as p
 
@@ -334,6 +334,16 @@ class PostgresCommandAuthority:
             self._pointer(c, lock=True)
             saved = postgres_batch.read(c, job_id, environment=self.environment)
             return postgres_batch._plan_bytes(c, saved["plan_sha256"])
+
+    def configure_report_development(self, load_configuration) -> None:
+        """Explicit retained local inputs; no report upload or trust verdict API."""
+        from src.commands import postgres_report_development as reports
+        self.report_configuration = load_configuration
+        reports.configuration(self)
+
+    def report_projection(self, *, now: datetime) -> dict:
+        from src.commands import postgres_report_development as reports
+        return reports.projection(self, now=_clock(now))
 
     def configure_sourced_generation(self, load_configuration) -> None:
         """Explicit local adapter input; no ambient backend selection."""
@@ -687,10 +697,18 @@ class PostgresCommandAuthority:
                     candidate_transition = None
                     generation = None
                     editor_media = None
+                    report_transition = None
                     try:
                         if actor is None:
                             raise CommandError("forbidden", "Operator authorization was revoked before execution")
-                        if command.action in EDITOR_MEDIA_ACTIONS:
+                        if command.action in REPORT_ACTIONS:
+                            from src.commands import postgres_report_development as reports
+                            from src.commands.reducer import Reduction
+                            with c.transaction(), reports.expected_domain_failures():
+                                report_transition = reports.prepare(self, c, state, command, actor,
+                                    now=clock, editorial_policy=editorial_policy)
+                            reduction = Reduction(state, (), ())
+                        elif command.action in EDITOR_MEDIA_ACTIONS:
                             from src.commands import postgres_editor_media as editor_domain
                             with c.transaction():
                                 reduction, result_key, references = editor_domain.boundary(self, c, state, version,
@@ -724,6 +742,8 @@ class PostgresCommandAuthority:
                             reduction = reduce_command(state, command, actor, now=clock, policy=policy, editorial_policy=editorial_policy)
                         result = {"status": "applied" if reduction.changed_ids else "unchanged", "changed_ids": list(reduction.changed_ids),
                                   "identities": list(reduction.identities), "publish_intent_id": reduction.publish_intent_id}
+                        if report_transition is not None:
+                            result.update(status="applied", report_development=report_transition.outcome)
                         if generation is not None:
                             result.update(status="applied", generation=generation)
                         if candidate_transition is not None:
@@ -737,7 +757,7 @@ class PostgresCommandAuthority:
                     except CommandError as exc:
                         result = {"status": "rejected", "code": exc.code, "message": str(exc)}
                     except (ValueError, TypeError, UnicodeError, OverflowError):
-                        if command.action in MEDIA_ACTIONS | EDITOR_MEDIA_ACTIONS | CANDIDATE_ACTIONS | GENERATION_ACTIONS:
+                        if command.action in MEDIA_ACTIONS | EDITOR_MEDIA_ACTIONS | CANDIDATE_ACTIONS | GENERATION_ACTIONS | REPORT_ACTIONS:
                             # Domain preparation converts deterministic input errors
                             # itself; storage/implementation uncertainty rolls back.
                             raise

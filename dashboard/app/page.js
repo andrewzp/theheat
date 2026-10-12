@@ -1,4 +1,5 @@
 "use client"
+import ReportsForReview from "./components/ReportsForReview.js"
 import SourcedGeneration from "./components/SourcedGeneration.js"
 
 import { useEffect, useState, useCallback, useRef } from "react"
@@ -550,7 +551,10 @@ export default function Dashboard() {
             setStageFilter={setSuppressionsStageFilter}
           />
         ) : activeTab === "sources" ? (
-          <SourcesView sources={sources} stats={sourcesStats} />
+          <>
+            <SourcesView sources={sources} stats={sourcesStats} />
+            {data?.local_preview && <ReportsForReview readOnly={data?.operator_role === "viewer"} />}
+          </>
         ) : activeTab === "health" ? (
           <SourceHealthContent embedded sources={sources} stats={sourcesStats} error={stateError || ""} />
         ) : activeTab === "pipeline" ? (

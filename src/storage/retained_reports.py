@@ -376,3 +376,49 @@ def legacy_news_document(event, *, lineage_id, captured_at):
         upstream_lineage_refs=[], claims=[claim], limits=["Retained legacy result metadata only; original report and scientific semantics unavailable"],
         captured_at=captured_at, reference_review=dict(candidate_id=None, adjudication="pending_human_and_source_review",
             benchmark_eligible=False, importance=None, detection_deadline=None, bot_match="not_evaluated"), legacy_metadata=frozen(event))
+
+
+@dataclass(frozen=True)
+class RetainedNewsReportLane:
+    """Explicit local mapping of already-returned exact result entries.
+
+    Owner-supplied identities are immutable operations, never headline matching.
+    No fetch, verification, translation, budget request or automatic enrollment.
+    """
+    session: RetainedReportSession
+    assignments: tuple
+    captured_at: str
+
+    def __call__(self, result):
+        from dataclasses import asdict
+        from src.data.newsworthiness import NewsRetrievalResult
+        require(type(self.session) is RetainedReportSession and type(result) is NewsRetrievalResult,
+                "explicit_retained_news_result_required")
+        self.session._validate()
+        require(type(self.assignments) is tuple and len(self.assignments) <= 16, "report_configuration_bound")
+        utc_datetime(self.captured_at)
+        documents = []
+        seen = set()
+        for row in self.assignments:
+            fixed(row, "event_index event_sha256 lineage_id expected_head operation_id")
+            index = row["event_index"]
+            require(type(index) is int and 0 <= index < len(result.events), "report_result_changed")
+            require(digest(result.events[index]) == sha(row["event_sha256"]), "report_result_changed")
+            require(row["lineage_id"] not in seen, "report_configuration_invalid")
+            seen.add(row["lineage_id"])
+            value = legacy_news_document(result.events[index], lineage_id=row["lineage_id"], captured_at=self.captured_at)
+            value["previous_report_sha256"] = row["expected_head"]
+            documents.append((row, value))
+        # Retain the exact already-returned result including verification usage;
+        # no guessed source URL/acquisition time for this aggregate artifact.
+        raw = p._canonical(asdict(result))
+        artifact = self.session.retain_artifact(raw, declared_sha256=p._sha(raw), metadata=dict(
+            media_type="application/json", source_url=None, retrieved_at=None, original_artifact_id=None,
+            extraction=None))
+        receipts = []
+        for row, value in documents:
+            value["artifact_refs"] = [artifact.snapshot_id]
+            value["legacy_metadata"] = dict(event=value["legacy_metadata"], retrieval_artifact_id=artifact.snapshot_id)
+            receipts.append(self.session.retain_revision(value, expected_head=row["expected_head"], operation_id=row["operation_id"]))
+        return dict(status="retained_metadata_only", reports=receipts, retrieval_artifact_id=artifact.snapshot_id,
+                    generation_available=False, publication_enabled=False)

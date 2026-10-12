@@ -16,8 +16,9 @@ MAX_TARGETS = 500
 MEDIA_ACTIONS = frozenset({"attach_media_revision", "remove_media_revision", "review_media_revision"})
 EDITOR_MEDIA_ACTIONS = frozenset({"prepare_media_revision", "request_revision_checks", "approve_media_revision"})
 CANDIDATE_ACTIONS = frozenset({"request_candidate_checks", "admit_checked_candidate"})
+REPORT_ACTIONS = frozenset({"open_report_evidence"})
 GENERATION_ACTIONS = frozenset({"request_sourced_generation"})
-ACTIONS = EDITOR_MEDIA_ACTIONS | GENERATION_ACTIONS | CANDIDATE_ACTIONS | MEDIA_ACTIONS | frozenset({"edit_revision", "select_candidate", "record_review", "approve_revision",
+ACTIONS = REPORT_ACTIONS | EDITOR_MEDIA_ACTIONS | GENERATION_ACTIONS | CANDIDATE_ACTIONS | MEDIA_ACTIONS | frozenset({"edit_revision", "select_candidate", "record_review", "approve_revision",
                      "schedule_revision", "cancel_approval", "reject_revision", "bulk_reject"})
 _HEX = re.compile(r"[a-f0-9]{64}")
 
@@ -114,6 +115,7 @@ def _validate_payload(action: str, payload: Any, *, allow_legacy_review: bool = 
     if not isinstance(payload, dict):
         raise CommandError("invalid_payload", "Payload must be an object")
     required = {
+        "open_report_evidence": {"lineage_id", "report_sha256", "expected_policy_sha256", "episode_reference"},
         "prepare_media_revision": {"expected_policy_sha256", "expected_renderer_profile_sha256"},
         "request_revision_checks": {"expected_policy_sha256", "expected_renderer_profile_sha256", "expected_packet_sha256", "expected_review_sha256"},
         "approve_media_revision": {"expected_policy_sha256", "expected_renderer_profile_sha256", "expected_packet_sha256", "expected_review_sha256", "expected_check_completion_sha256", "reason"},
@@ -132,6 +134,19 @@ def _validate_payload(action: str, payload: Any, *, allow_legacy_review: bool = 
         required = {"confirmed", "reason"}  # Retained old intent must receive a terminal refusal, not wedge the journal.
     if set(payload) != required:
         raise CommandError("invalid_payload", "Payload fields do not match the action")
+    if action in REPORT_ACTIONS:
+        if not isinstance(payload["lineage_id"], str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}", payload["lineage_id"]):
+            raise CommandError("invalid_report_identity", "Supply the retained report identity")
+        if not isinstance(payload["report_sha256"], str) or not _HEX.fullmatch(payload["report_sha256"]):
+            raise CommandError("invalid_report_identity", "Supply the exact report fingerprint")
+        episode = payload["episode_reference"]
+        if episode is not None:
+            if (not isinstance(episode, dict) or set(episode) != {"episode_id", "revision_sha256", "claim_id"}
+                    or not isinstance(episode["episode_id"], str)
+                    or not re.fullmatch(r"ep1:cyclone:nhc:(?:AL|EP)(?:0[1-9]|[1-4][0-9])[0-9]{4}", episode["episode_id"])
+                    or not isinstance(episode["revision_sha256"], str) or not _HEX.fullmatch(episode["revision_sha256"])
+                    or not isinstance(episode["claim_id"], str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}", episode["claim_id"])):
+                raise CommandError("invalid_report_identity", "Supply an exact source-scoped episode reference")
     if action in GENERATION_ACTIONS:
         for key in ("brief_id", "brief_sha256"):
             if not isinstance(payload[key], str) or not _HEX.fullmatch(payload[key]):
@@ -222,7 +237,7 @@ class Command:
         if requested > clock + timedelta(minutes=5) or expires <= requested or expires > requested + timedelta(days=1):
             raise CommandError("invalid_time", "Command time window is invalid")
         rows = body["targets"]
-        if not isinstance(rows, list) or (rows != [] if action in CANDIDATE_ACTIONS | GENERATION_ACTIONS else not 1 <= len(rows) <= MAX_TARGETS or (action != "bulk_reject" and len(rows) != 1)):
+        if not isinstance(rows, list) or (rows != [] if action in CANDIDATE_ACTIONS | GENERATION_ACTIONS | REPORT_ACTIONS else not 1 <= len(rows) <= MAX_TARGETS or (action != "bulk_reject" and len(rows) != 1)):
             raise CommandError("invalid_targets", "Supply one target, or an explicit bounded set for bulk rejection")
         targets = tuple(DraftTarget.parse(row) for row in rows)
         if len({row.draft_id for row in targets}) != len(targets):

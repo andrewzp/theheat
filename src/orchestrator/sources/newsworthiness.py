@@ -13,8 +13,13 @@ this IS a source row the sentinel watches like any other.
 
 from __future__ import annotations
 
+from copy import deepcopy
 import os
 import time
+from typing import TYPE_CHECKING, overload
+
+if TYPE_CHECKING:
+    from src.storage.retained_reports import RetainedNewsReportLane
 
 from src import state
 from src.data.newsworthiness import fetch_news_events
@@ -28,14 +33,22 @@ def _enabled() -> bool:
     return os.environ.get("THEHEAT_NEWSWORTHINESS_ENABLED", "") == "1"
 
 
-def run_newsworthiness(bot_state: BotState, current_run: dict | None) -> None:
+@overload
+def run_newsworthiness(bot_state: BotState, current_run: dict | None, *, retention_observer: None = None) -> None: ...
+
+
+@overload
+def run_newsworthiness(bot_state: BotState, current_run: dict | None, *, retention_observer: RetainedNewsReportLane) -> dict | None: ...
+
+
+def run_newsworthiness(bot_state: BotState, current_run: dict | None, *, retention_observer=None) -> dict | None:
     source_start = time.perf_counter()
     if not _enabled():
         _record_source_run(
             current_run, bot_state, SOURCE_KEY, source_start,
             status="skipped", note="THEHEAT_NEWSWORTHINESS_ENABLED is not 1",
         )
-        return
+        return None
 
     print("[alerts] Retrieving newsworthiness events (NIFC + grounded search)...")
     try:
@@ -45,8 +58,19 @@ def run_newsworthiness(bot_state: BotState, current_run: dict | None) -> None:
             current_run, bot_state, SOURCE_KEY, source_start,
             status="failed", observed=0, error=f"newsworthiness fetch failed: {exc}",
         )
-        return
+        return None
 
+    retained = None
+    if retention_observer is not None:
+        from src.storage.retained_reports import RetainedNewsReportLane
+        # Explicit local opt-in only. Observer failure is returned separately;
+        # source state/health and retrieval call counts remain the legacy result.
+        try:
+            if type(retention_observer) is not RetainedNewsReportLane:
+                raise ValueError("explicit_retained_news_lane_required")
+            retained = retention_observer(deepcopy(result))
+        except Exception:  # noqa: BLE001 — no report storage failure may stop source health.
+            retained = {"status": "retention_unavailable", "generation_available": False, "publication_enabled": False}
     state.record_news_events(bot_state, result.events)
     observed = len(result.events)
     note_bits = [
@@ -72,3 +96,4 @@ def run_newsworthiness(bot_state: BotState, current_run: dict | None) -> None:
         details={"verification": usage},
         error_class="verification_budget" if budget_limited and not failures else None,
     )
+    return retained

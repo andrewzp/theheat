@@ -1,6 +1,7 @@
 """Metadata-only report intake under the existing local command transaction."""
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import dataclass
 import os
 from pathlib import Path
@@ -170,7 +171,12 @@ def prepare(authority, c, state, command, actor, *, now, editorial_policy):
         draft_mutated=False, provider_request_created=False, publication_enabled=False))
 
 
-def expected_failure(exc):
-    if isinstance(exc, ReportError):
-        return CommandError(str(exc), "Retained report evidence changed or requires review. Refresh this report.")
-    raise exc
+@contextmanager
+def expected_domain_failures():
+    # Only named deterministic report/source identity errors become terminal.
+    # Projection/connection/resolver uncertainty leaves the accepted command pending.
+    from src.storage.cyclone_supply import CycloneSupplyError
+    try:
+        yield
+    except (ReportError, CycloneSupplyError) as exc:
+        raise CommandError(str(exc), "Retained report evidence changed or requires review. Refresh this report.") from None

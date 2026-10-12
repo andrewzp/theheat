@@ -322,3 +322,50 @@ def test_report_correction_makes_old_open_item_unavailable_until_reconfigured(re
     with repo._connection() as c:
         _, item = domain._latest(c, original["lineage_id"])
     assert item["previous_sha256"] == old["item_sha256"] and item["sequence"] == 2
+
+
+@pytest.mark.parametrize("mode", ["retained", "mismatch", "observer_failure"])
+def test_actual_news_source_observer_uses_returned_result_without_extra_calls(repository, monkeypatch, mode):
+    from src.data.newsworthiness import NewsRetrievalResult
+    from src.orchestrator.sources import newsworthiness as runner
+    from src.storage.retained_reports import RetainedNewsReportLane
+    event = dict(kind="fire", headline="Invented retained news", window_start="2026-10-11", confidence="verified",
+        impact=[dict(claim="reported effects", value=4, source_name="Invented agency", url="https://example.test/news", as_of="unknown")])
+    returned = NewsRetrievalResult(events=[event], verify_calls=1, verify_fetches=1)
+    calls = []
+    monkeypatch.setenv("THEHEAT_NEWSWORTHINESS_ENABLED", "1")
+    monkeypatch.setattr(runner, "fetch_news_events", lambda: calls.append("fetch") or deepcopy(returned))
+    monkeypatch.setattr(runner.time, "perf_counter", lambda: 1.0)
+    class Clock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return NOW
+    monkeypatch.setattr(runner.state, "datetime", Clock)
+    baseline, observed = {}, {}
+    assert runner.run_newsworthiness(baseline, None) is None
+    session = RetainedReportSession(repository[1])
+    lane = RetainedNewsReportLane(session, (dict(event_index=0, event_sha256=digest(event) if mode != "mismatch" else "a"*64,
+        lineage_id="fixture:news", expected_head=None, operation_id=str(uuid4())),), NOW_TEXT)
+    if mode == "observer_failure":
+        monkeypatch.setattr(RetainedNewsReportLane, "__call__", lambda *a: (_ for _ in ()).throw(OSError("invented storage outage")))
+    result = runner.run_newsworthiness(observed, None, retention_observer=lane)
+    assert observed == baseline and calls == ["fetch", "fetch"]
+    if mode != "retained":
+        assert result["status"] == "retention_unavailable"
+        return
+    assert result["status"] == "retained_metadata_only"
+    report = result["reports"][0]
+    receipt, document = session.read_current(report["lineage_id"], report["report_sha256"])
+    assert document["legacy_metadata"]["event"] == event
+    assert all(value is None for value in document["claims"][0]["times"].values())
+    artifact = session.read_artifact(result["retrieval_artifact_id"])
+    import json
+    assert json.loads(artifact[2])["verify_calls"] == 1
+    authority, config = authority_fixture(repository[1], report["report_sha256"])
+    config["current_reports"][0]["lineage_id"] = report["lineage_id"]
+    command = command_fixture(report["report_sha256"])
+    command.payload["lineage_id"] = report["lineage_id"]
+    with repository[1]._connection(writing=True) as c:
+        result = domain.prepare(authority, c, {}, command, Principal("fixture-editor", "editor", "fixture-session"),
+            now=NOW, editorial_policy=current_editorial_policy())
+    assert result.outcome["status"] == "evidence_review_required" and not result.outcome["provider_request_created"]

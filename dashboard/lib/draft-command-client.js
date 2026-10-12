@@ -38,7 +38,7 @@ async function boundedBody(body, maxBytes, signal) {
 
 export async function localCommandRequest(request, path, { method = "GET", raw } = {}) {
   const config = configuration(request)
-  if (!/^\/(?:state|generation|commands(?:\/[a-f0-9-]{36}(?:\/abandon)?)?|drafts\/[A-Za-z0-9_.:-]{1,200}\/media(?:\/[a-f0-9]{64}\/preview\.png)?)$/.test(path)) fail("invalid_command_route", 400)
+  if (!/^\/(?:state|generation|reports|commands(?:\/[a-f0-9-]{36}(?:\/abandon)?)?|drafts\/[A-Za-z0-9_.:-]{1,200}\/media(?:\/[a-f0-9]{64}\/preview\.png)?)$/.test(path)) fail("invalid_command_route", 400)
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), 8000)
   try {

@@ -12,7 +12,7 @@ from src.storage.cyclone_supply import CycloneSupplySession, environment, instan
 from src.storage.physical_events import EVENTS, PhysicalEpisodeSession
 
 
-def prepare_episode_requests(session, episode_id, revision_sha256, snapshot, *, now):
+def prepare_episode_requests(session, episode_id, revision_sha256, snapshot, *, now, report_context=None):
     """Resolve current authority, then consume the actual intern/audit/memory seam."""
     from src.data.cyclones import LandThreatEvent
     from src.orchestrator.cyclones import _bundle_for_cyclone_event
@@ -53,6 +53,11 @@ def prepare_episode_requests(session, episode_id, revision_sha256, snapshot, *, 
             bundle_sha256=fingerprint(captured.payload()), memory_sha256=fingerprint(memory.to_dict()),
             policy_sha256=fingerprint(policy),
             provider_transport="not_attempted", callback_enrollment="not_supported"))
+    if report_context is not None:
+        from src.editorial.report_development import ReportContext
+        require(type(report_context) is ReportContext, "explicit_report_context_required")
+        for row in results:
+            row["reports_for_evidence_review"] = report_context.annotations(context.binding)
     # Refuse drift during member resolution or construction; this read is the
     # preparation boundary, not permission for a later provider/check grant.
     session.read_current(episode_id, expected_head=revision_sha256)
