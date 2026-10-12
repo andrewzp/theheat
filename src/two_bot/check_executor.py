@@ -17,7 +17,7 @@ from src.commands import check_journal as checks
 from src.commands.schema import canonical_json, utc_datetime
 from src.editorial.policy import current_editorial_policy
 from src.editorial.revisions import fingerprint
-from src.two_bot import check_requests
+from src.two_bot import check_requests, check_origin
 from src.two_bot.check_transport import (
     CheckObservation,
     GoogleCheckTransport,
@@ -31,8 +31,7 @@ from src.voice import safety
 class CheckAuthority(Protocol):
     """Only the grant-bound storage operations required by this local runner."""
 
-    def batch_work(self, action: str, payload: dict, *, now: str,
-                   raw: bytes | None = None) -> dict: ...
+    def acquire_check_lease(self, check_set_id: str, owner: str, ttl_seconds: int, *, now: str) -> dict: ...
 
     def candidate_checks(self, action: str, payload: dict, *, now: str,
                          request: bytes | None = None, receipt: dict | None = None) -> dict: ...
@@ -145,20 +144,15 @@ def execute_check_once(
             return _report("blocked", reason="invalid_current_check_context")
         saved = _read(authority, check_set_id, clock)
         packet = saved["packet"]
-        from src.two_bot.candidate_derivation import packet_verification
-        verification = packet_verification(packet)
-        if verification != "verified_current_formatter":
+        verification = check_origin.packet_verification(packet)
+        if verification not in check_origin.EXECUTABLE:
             return _report("blocked", reason=verification)
         check_requests.retained_inputs(packet)
         policy = current_editorial_policy()
         if policy is None:
             return _report("blocked", reason="current_check_policy_unavailable")
         context = dict(current_context, policy_sha256=fingerprint(policy))
-        leased = authority.batch_work(
-            "acquire",
-            dict(job_id=packet["job_id"], owner=owner, ttl_seconds=LEASE_SECONDS),
-            now=clock(),
-        )
+        leased = authority.acquire_check_lease(check_set_id, owner, LEASE_SECONDS, now=clock())
         identity = dict(
             check_set_id=check_set_id,
             owner=owner,

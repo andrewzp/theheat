@@ -9,7 +9,8 @@ from typing import Any, cast
 from src.editorial.revisions import fingerprint
 from src.state_schema import BotState
 from src.two_bot import critic, fact_check, pipeline
-from src.two_bot.candidate_derivation import checked_text, retained_bundle
+from src.two_bot.candidate_derivation import retained_bundle
+from src.two_bot.check_origin import checked_text
 from src.two_bot.evidence_contract import audit_story_bundle
 from src.two_bot.types import MemorySlice, StoryBundle
 from src.voice import safety

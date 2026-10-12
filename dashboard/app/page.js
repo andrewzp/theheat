@@ -17,6 +17,7 @@ import { SuppressedView } from "./components/SuppressedView.js"
 import { hot10IsStale, hot10StaleDays, timeAgo, todayTweetCount } from "../lib/format.js"
 import { draftReviewControls, draftTextLength, revisionKey } from "../lib/draft-review-ui.js"
 import { createDraftCommand, createCandidateCommand } from "../lib/draft-command-request.js"
+import { recoveryKey, saveCommandReference, readCommandReference, clearCommandReference, withCommandReference, abandonmentBody } from "../lib/local-command-recovery.js"
 import "./dashboard.css"
 
 export default function Dashboard() {
@@ -34,6 +35,9 @@ export default function Dashboard() {
   const [selectedDraftId, setSelectedDraftId] = useState(null)
   const [draftFeedback, setDraftFeedback] = useState(null)
   const [pendingCommand, setPendingCommand] = useState(null)
+  const pendingCommandRef = useRef(null)
+  const recoveredScope = useRef(null)
+  const recoveryScope = useRef(null)
   const previewSeen = useRef(false)
 
   // Compose
@@ -87,6 +91,7 @@ export default function Dashboard() {
         state: payload.state,
         candidates: payload.candidates || [],
         operator_role: payload.operator_role,
+        operator_subject: payload.operator_subject,
         local_preview: payload.local_preview === true,
         stateBackend: payload.stateBackend,
         stateError: payload.stateError,
@@ -159,6 +164,38 @@ export default function Dashboard() {
     }
   }, [fetchData])
 
+  useEffect(() => {
+    const key = data?.local_preview ? recoveryKey(window.location.origin, data.operator_subject) : null
+    recoveryScope.current = key
+    if (!key || recoveredScope.current === key) return
+    recoveredScope.current = key
+    const saved = readCommandReference(window.sessionStorage, key)
+    pendingCommandRef.current = saved
+    setPendingCommand(saved)
+    setDraftAction(saved?.draftId || null)
+    if (!saved) return
+    const control = new AbortController()
+    fetch(`/api/drafts?commandId=${encodeURIComponent(saved.command.command_id)}`, { cache:"no-store", signal:control.signal })
+      .then(async response => {
+        const value = await response.json()
+        if (!response.ok) throw new Error("The previous action is unresolved. Check its result before creating another action.")
+        if (control.signal.aborted || recoveryScope.current !== key || pendingCommandRef.current?.command.command_id !== saved.command.command_id) return
+        const command = value.recoverable_command
+        if (command?.command_id === saved.command.command_id && command.payload && command.targets) {
+          const recovered = await withCommandReference({ ...saved, command })
+          if (control.signal.aborted || recoveryScope.current !== key || pendingCommandRef.current?.command.command_id !== saved.command.command_id) return
+          saveCommandReference(window.sessionStorage, key, recovered)
+          pendingCommandRef.current = recovered
+          setPendingCommand(recovered)
+        }
+        setDraftFeedback({ type:"pending", draftId:saved.draftId, text:"Recovered the previous local action. Check its result; no action was repeated." })
+      }).catch(error => {
+        if (!control.signal.aborted && recoveryScope.current === key && pendingCommandRef.current?.command.command_id === saved.command.command_id)
+          setDraftFeedback({ type:"error", draftId:saved.draftId, text:error.message })
+      })
+    return () => control.abort()
+  }, [data?.local_preview, data?.operator_subject])
+
   async function trigger(mode) {
     if (data?.local_preview) { setTriggerResult("Collection is unavailable in local preview."); return }
     setTriggering(mode)
@@ -180,48 +217,88 @@ export default function Dashboard() {
   }
 
   async function submitLocalCommand(saved) {
+    if (!saved.command.payload) return checkLocalCommand()
+    if (pendingCommandRef.current && pendingCommandRef.current.command.command_id !== saved.command.command_id) return
+    pendingCommandRef.current = saved
     setPendingCommand(saved)
     setDraftAction(saved.draftId)
+    const scope = recoveryScope.current
+    let sent = false
     try {
+      saved = await withCommandReference(saved)
+      if (scope !== recoveryScope.current || pendingCommandRef.current?.command.command_id !== saved.command.command_id) return
+      if (!saveCommandReference(window.sessionStorage, scope, saved)) throw new Error("Cannot retain the action reference in this browser; submission was not sent")
+      pendingCommandRef.current = saved
+      setPendingCommand(saved)
+      sent = true
       const response = await fetch("/api/drafts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(saved.command) })
       const result = await response.json()
+      if (scope !== recoveryScope.current || pendingCommandRef.current?.command.command_id !== saved.command.command_id) return
       if (!response.ok) {
-        // A definite input/auth rejection can be corrected. An unavailable
-        // response leaves acceptance uncertain and retains the original body.
-        if (response.status < 500 && !pendingCommand) { setPendingCommand(null); setDraftAction(null) }
         throw new Error(result.error || "Local authority unavailable")
       }
       setDraftFeedback({ type: "pending", draftId: saved.draftId, text: "Accepted and waiting for the local consumer. Your edit is preserved." })
     } catch (error) {
+      if (scope !== recoveryScope.current || pendingCommandRef.current?.command.command_id !== saved.command.command_id) return
+      if (!sent) {
+        pendingCommandRef.current = null
+        setPendingCommand(null); setDraftAction(null)
+        clearCommandReference(window.sessionStorage, scope)
+      }
       setDraftFeedback({ type: "error", draftId: saved.draftId, text: `${error.message}. Check the result or retry the same action. Your edit is preserved.` })
     }
   }
 
-  async function checkLocalCommand() {
-    if (!pendingCommand) return
+  async function checkLocalCommand(abandon = false) {
+    const saved = pendingCommandRef.current
+    if (!saved) return
+    const scope = recoveryScope.current
     try {
-      const response = await fetch(`/api/drafts?commandId=${encodeURIComponent(pendingCommand.command.command_id)}`, { cache: "no-store" })
+      const body = abandon === true ? abandonmentBody(saved) : null
+      if (abandon === true && !body) throw new Error("This legacy reference has no fingerprint. Inspect its retained result before closing it")
+      const response = body ? await fetch(`/api/local-command-recovery?commandId=${encodeURIComponent(saved.command.command_id)}`, {
+        method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body) })
+        : await fetch(`/api/drafts?commandId=${encodeURIComponent(saved.command.command_id)}`, { cache: "no-store" })
       const payload = await response.json()
+      if (scope !== recoveryScope.current || pendingCommandRef.current?.command.command_id !== saved.command.command_id) return
       if (!response.ok) throw new Error(payload.error || "Local authority unavailable")
+      let reference = saved
+      if (payload.recoverable_command?.command_id === saved.command.command_id) {
+        const recovered = await withCommandReference({ ...saved, command:payload.recoverable_command })
+        if (scope !== recoveryScope.current || pendingCommandRef.current?.command.command_id !== saved.command.command_id) return
+        saveCommandReference(window.sessionStorage, recoveryScope.current, recovered)
+        pendingCommandRef.current = recovered
+        setPendingCommand(recovered)
+        reference = recovered
+      }
+      if (payload.receipt?.command_id !== saved.command.command_id || !reference.request_sha256 ||
+          payload.submission_reference?.request_sha256 !== reference.request_sha256 ||
+          payload.submission_reference?.original_action !== reference.original_action) throw new Error("The result does not match this operator's submission reference")
       if (payload.status === "pending") {
-        setDraftFeedback({ type: "pending", draftId: pendingCommand.draftId, text: "Still waiting for the local consumer. Your edit is preserved." })
+        setDraftFeedback({ type: "pending", draftId: saved.draftId, text: "Still waiting for the local consumer. Your edit is preserved." })
         return
       }
       const result = payload.result
-      if (!result || !["applied", "unchanged", "rejected"].includes(result.status)) throw new Error("Unrecognized command result")
+      if (!result || result.command_id !== saved.command.command_id || result.actor_subject !== data.operator_subject ||
+          !["applied", "unchanged", "rejected"].includes(result.status)) throw new Error("Unrecognized command result")
+      const abandoned = result.code === "submission_abandoned"
       const rejected = result.status === "rejected"
-      setDraftFeedback({ type: rejected ? "error" : "success", draftId: pendingCommand.draftId,
-        text: rejected ? `${result.message} Your edit is preserved.`
+      setDraftFeedback({ type: rejected ? "error" : "success", draftId: saved.draftId,
+        text: abandoned ? "The previous submission was never accepted and is now closed. Nothing was changed."
+          : rejected ? `${result.message} Your edit is preserved.`
           : result.publish_intent_id ? "Approved locally. The intent is parked; nothing will be published."
-          : pendingCommand.action === "review" ? "Human review recorded for this exact version."
-          : pendingCommand.action === "edit" ? "Saved. Review this version against its sources before approval." : "Local command completed." })
+          : saved.action === "review" ? "Human review recorded for this exact version."
+          : saved.action === "edit" ? "Saved. Review this version against its sources before approval." : "Local command completed." })
       if (!rejected && result.candidate?.draft_id) setSelectedDraftId(result.candidate.draft_id)
-      if (!rejected) { setEditingId(null); setEditText(""); setEditingRevision(null) }
+      if (!rejected && !abandoned) { setEditingId(null); setEditText(""); setEditingRevision(null) }
       setPendingCommand(null)
+      pendingCommandRef.current = null
+      clearCommandReference(window.sessionStorage, recoveryScope.current)
       setDraftAction(null)
       await fetchData()
     } catch (error) {
-      setDraftFeedback({ type: "error", draftId: pendingCommand.draftId, text: `${error.message}. The same action is retained for retry; your edit is preserved.` })
+      if (scope !== recoveryScope.current || pendingCommandRef.current?.command.command_id !== saved.command.command_id) return
+      setDraftFeedback({ type: "error", draftId: saved.draftId, text: `${error.message}. The same action is retained for retry; your edit is preserved.` })
     }
   }
 
@@ -337,11 +414,14 @@ export default function Dashboard() {
         {data?.local_preview && (
           <div className="card full" role="status">
             <strong>Invented local preview</strong>
-            <p>Approvals are parked. Collection, generation and publication are unavailable.</p>
-            {pendingCommand && activeTab !== "workbench" && (
+            <p>Use invented retained sources for explicit local draft generation. Approvals are parked. Production collection, drafting and publishing remain paused.</p>
+            {pendingCommand && (
               <div className="draft-actions">
                 <button className="btn sm" type="button" onClick={checkLocalCommand}>Check result</button>
-                <button className="btn sm" type="button" onClick={() => submitLocalCommand(pendingCommand)}>Retry same action</button>
+                {pendingCommand.command.payload && <button className="btn sm" type="button" onClick={() => submitLocalCommand(pendingCommand)}>Retry same action</button>}
+                {abandonmentBody(pendingCommand) ? <button className="btn sm" type="button" disabled={data.operator_role === "viewer"} onClick={() => checkLocalCommand(true)}>Resolve missing submission</button>
+                  : !pendingCommand.command.payload && <p>Legacy reference: inspect its retained result before closing it. A missing fingerprint prevents safe closure.</p>}
+                {draftFeedback && <p role="status">{draftFeedback.text}</p>}
               </div>
             )}
           </div>
@@ -503,6 +583,7 @@ export default function Dashboard() {
             draftAction={draftAction}
             draftFeedback={draftFeedback}
             pendingCommand={pendingCommand}
+            submitLocalCommand={submitLocalCommand}
             checkLocalCommand={checkLocalCommand}
             retryLocalCommand={() => pendingCommand && submitLocalCommand(pendingCommand)}
             botRuns={runHistory}

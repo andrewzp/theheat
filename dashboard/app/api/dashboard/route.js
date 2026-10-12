@@ -160,7 +160,7 @@ export async function GET(request) {
     const local = previewConfigured() ? (await localCommandRequest(request, "/state")).payload : null
     const state = local ? local.state : await readStateStore()
     results.local_preview = !!local
-    if (local) { results.candidates = local.candidates || []; results.operator_role = local.role }
+    if (local) { results.candidates = local.candidates || []; results.operator_role = local.role; results.operator_subject = local.operator_subject }
     results.costEvidence = buildCostEvidence(state, {scenario: url.searchParams.get("cost_scenario")})
     results.state = projectStateForDashboard(state)
     results.stateBackend = local ? "local command preview" : getStateBackend()

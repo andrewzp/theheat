@@ -13,10 +13,11 @@ from src.editorial.publication import valid_epoch
 
 MAX_COMMAND_BYTES = 128 * 1024
 MAX_TARGETS = 500
-MEDIA_ACTIONS = frozenset({"attach_media_revision", "remove_media_revision"})
+MEDIA_ACTIONS = frozenset({"attach_media_revision", "remove_media_revision", "review_media_revision"})
+EDITOR_MEDIA_ACTIONS = frozenset({"prepare_media_revision", "request_revision_checks", "approve_media_revision"})
 CANDIDATE_ACTIONS = frozenset({"request_candidate_checks", "admit_checked_candidate"})
 GENERATION_ACTIONS = frozenset({"request_sourced_generation"})
-ACTIONS = GENERATION_ACTIONS | CANDIDATE_ACTIONS | MEDIA_ACTIONS | frozenset({"edit_revision", "select_candidate", "record_review", "approve_revision",
+ACTIONS = EDITOR_MEDIA_ACTIONS | GENERATION_ACTIONS | CANDIDATE_ACTIONS | MEDIA_ACTIONS | frozenset({"edit_revision", "select_candidate", "record_review", "approve_revision",
                      "schedule_revision", "cancel_approval", "reject_revision", "bulk_reject"})
 _HEX = re.compile(r"[a-f0-9]{64}")
 
@@ -77,7 +78,7 @@ class Principal:
 
 
 def authorize(principal: Principal, action: str) -> None:
-    if principal.role == "viewer" or (action in {"approve_revision", "schedule_revision"} and principal.role != "publisher"):
+    if principal.role == "viewer" or (action in {"approve_revision", "schedule_revision", "approve_media_revision"} and principal.role != "publisher"):
         raise CommandError("forbidden", "This operator does not currently have permission for the action")
 
 
@@ -113,6 +114,10 @@ def _validate_payload(action: str, payload: Any, *, allow_legacy_review: bool = 
     if not isinstance(payload, dict):
         raise CommandError("invalid_payload", "Payload must be an object")
     required = {
+        "prepare_media_revision": {"expected_policy_sha256", "expected_renderer_profile_sha256"},
+        "request_revision_checks": {"expected_policy_sha256", "expected_renderer_profile_sha256", "expected_packet_sha256", "expected_review_sha256"},
+        "approve_media_revision": {"expected_policy_sha256", "expected_renderer_profile_sha256", "expected_packet_sha256", "expected_review_sha256", "expected_check_completion_sha256", "reason"},
+        "review_media_revision": {"proposal_sha256", "expected_packet_sha256", "expected_policy_sha256", "review"},
         "request_sourced_generation": {"brief_id", "brief_sha256", "expected_state_version", "expected_policy_sha256"},
         "edit_revision": {"text"}, "select_candidate": {"candidate_rank", "candidate_sha256"},
         "record_review": {"confirmed", "reason", "expected_policy_sha256"}, "approve_revision": {"reason"},
@@ -150,11 +155,11 @@ def _validate_payload(action: str, payload: Any, *, allow_legacy_review: bool = 
         raise CommandError("editorial_policy_unverified", "Supply the exact policy fingerprint shown during review")
     if action == "record_review" and payload["confirmed"] is not True:
         raise CommandError("review_confirmation_required", "Confirm review against the exact source evidence")
-    if action in MEDIA_ACTIONS:
-        for key in ("proposal_sha256", "expected_proposal_sha256", "expected_packet_sha256"):
+    if action in MEDIA_ACTIONS | EDITOR_MEDIA_ACTIONS:
+        for key in ("proposal_sha256", "expected_proposal_sha256", "expected_packet_sha256", "expected_renderer_profile_sha256", "expected_review_sha256", "expected_check_completion_sha256"):
             if key in payload and (not isinstance(payload[key], str) or not _HEX.fullmatch(payload[key])):
                 raise CommandError("invalid_media_identity", "Supply exact lowercase media fingerprints")
-        if action == "attach_media_revision":
+        if action in {"attach_media_revision", "review_media_revision"}:
             # Local import avoids the joint-review module's Principal dependency.
             from src.media.joint_review import validate_joint_review_payload
             try:
@@ -163,7 +168,7 @@ def _validate_payload(action: str, payload: Any, *, allow_legacy_review: bool = 
                 raise CommandError("invalid_media_review", "Supply a complete explicit joint review") from None
             if review["decision"] != "accept":
                 raise CommandError("media_acceptance_required", "Attachment requires explicit joint acceptance")
-        elif payload["confirmed"] is not True:
+        elif action == "remove_media_revision" and payload["confirmed"] is not True:
             raise CommandError("media_removal_confirmation_required", "Confirm removal of the exact graphic revision")
     if action == "select_candidate" and (type(payload["candidate_rank"]) is not int or not 1 <= payload["candidate_rank"] <= 100):
         raise CommandError("invalid_candidate", "Candidate rank must be an integer from 1 to 100")
@@ -252,6 +257,9 @@ class Command:
             raise CommandError("invalid_journal", "Stored command is not valid JSON") from exc
         if not isinstance(row, dict) or type(row.get("schema_version")) is not int or row["schema_version"] != 1:
             raise CommandError("invalid_journal", "Unsupported stored command schema")
+        if row.get("action") == "abandon_submission":
+            from src.commands.submission_recovery import stored
+            return stored(row)
         request = {key: row[key] for key in ("command_id", "action", "requested_at", "expires_at", "targets", "payload") if key in row}
         principal = Principal(_string(row.get("actor_subject"), "Subject", 200), "publisher",
                               _string(row.get("authentication_context"), "Authentication context", 200))

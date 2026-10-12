@@ -1,6 +1,6 @@
 {
   "identity": {
-    "archive_sha256": "8fe35e7c364a3425e0ac79c36e1edd4768551b36caaa10a7aaed4c006cfef827",
+    "archive_sha256": "e312c43ede65dd659d4a95567d3bd9cf6760a0f45ccd63b5e247461fe8a483a4",
     "deployment_files": {
       "api/graphic_preview.py": "abbde75deff02ba22b67df70f7783d33d8150bd119a5514f8007feb43191e0c9",
       "pyproject.toml": "6d161405a3084285699805cd15f4c0584aab66806b7f3414a5de8e6eef61290b",
@@ -12,7 +12,7 @@
       "src/dashboard_preview/auth.py": "dd10dcf251c94d36e9234ad01186b3e841378c92c827d6ef18ff164e13de0b99",
       "src/dashboard_preview/errors.py": "c2a4c012149b98948da00e157bb3a23a8a807fc0bc95d8088537dd788e687dcd",
       "src/dashboard_preview/http.py": "69e14e4a1d9d8e9c1cf41b09a9a4b8367aa330e751f5f2ee27ed978675cbe1d4",
-      "src/dashboard_preview/preview.py": "92267b7d45bfdb6370e3555702fe7110ebcd82576298808c17a34baa51b58561",
+      "src/dashboard_preview/preview.py": "c4967dc2eeb4634b87e51f305cd5e5798cc581d4bd3b4db20501e41608447dfc",
       "src/dashboard_preview/reader.py": "cd4e1cb8937adac0c9acfeb90be51b239144b45043c1f0a90e3961938b9c4373",
       "src/data/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "src/data/_freshness.py": "21e6f9bed82e769ad82a8b798e31e0faeb2851c4849fdaf99d90852fd8fa2c79",
@@ -77,12 +77,12 @@
       "src/two_bot/types.py": "36ed2e6475a655f4112012486795702159ed546c3040e8ef1874b7a0b02a9035"
     },
     "format": "saved-source-svg-preview-v2",
-    "policy_source_sha256": "79f87aa584c636b0980f612d98855a102544f6db231c5854aa95f2fe9b6d0061",
+    "policy_source_sha256": "f6337c3100fc171a032cf42d55c49f6a71734bb7b5caf85be8daf8525577cbf8",
     "resource_sources": {
       "src/data/registry/country_codes.json": "data/country_codes.json",
       "src/data/registry/place_registry.json": "data/place_registry.json"
     },
     "schema_version": 1
   },
-  "runtime_sha256": "c7b30ca7d562c8b095fd70e55e083bd991809bf08cde56dccfd13d70abd19c69"
+  "runtime_sha256": "7315feb4f7ca88260d7a8caef342c59f1f7832e443f2ce042ab774b2f7e1f09d"
 }

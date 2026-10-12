@@ -10,6 +10,7 @@ import json
 from src.commands import check_journal as checks, postgres_checks as pg
 from src.commands import postgres_spending as spend, spend_journal as s
 from src.storage import postgres_projection as p
+from src.two_bot import check_origin
 
 SCHEMA = "theheat_check_executions"
 MIGRATION = p.MIGRATION.with_name("008_check_observations.sql")
@@ -114,7 +115,7 @@ def _read(c, identity, environment):
                                if attempt["binding"]["reservation"] is not None else None),
                     observation=_observation(c, identity, stage, attempt))
         for stage, attempt in attempts.items() if attempt is not None
-    }, derivation_verification=checks.packet_verification(packet), publication_approved=False)
+    }, derivation_verification=check_origin.packet_verification(packet), publication_approved=False)
 
 
 def apply(c, action, payload, *, now, environment, raw=None):

@@ -16,13 +16,12 @@ from src.commands import postgres_batch as batch, postgres_batch_results as resu
 from src.commands import postgres_batch_worker as worker, postgres_checks as pg
 from src.commands import postgres_check_observations as observations
 from src.commands.reducer import Reduction, _identity
-from src.commands.schema import CommandError, authorize, canonical_json, utc_datetime, utc_text
+from src.commands.schema import CommandError, authorize, utc_datetime, utc_text
 from src.editorial.draft_admission import evaluator_fields, plan_draft_admission, resolve_admission_place_facts
 from src.editorial.policy import valid_policy
 from src.editorial.scoring import EditorialScore
 from src.editorial.revisions import _record_verified_checks_review, fingerprint, text_hash
 from src.storage import postgres_projection as p
-from src.two_bot import check_requests
 from src.two_bot.candidate_derivation import checked_text, derive_candidate
 
 NAMESPACE = "candidate-admission-input-v1"
@@ -197,27 +196,7 @@ def verified_completion(c, identity, value, *, owner, fence, state, policy, now,
     refuse(p._canonical(derivation) == p._canonical(packet["derivation"]), "check_derivation_changed")
     pg._current(c, packet, {"owner": owner, "fence": fence, "current_context": context_for(value, policy),
                          "checker_state_sha256": fingerprint(state)}, utc_text(now), environment)
-    stages, attempts = pg._stages(c, identity, packet, enrolled)
-    refuse(all(v == "passed" for v in stages.values()), "required_checks_incomplete")
-    proofs, outcomes = {}, {}
-    for stage in checks.STAGES:
-        attempt = attempts[stage]
-        refuse(attempt["binding"]["owner"] == owner and attempt["binding"]["fence"] == fence, "check_lease_changed")
-        terminal = pg._terminal(c, attempt)
-        observation = observations._observation(c, identity, stage, attempt)
-        refuse(observation is not None, "check_response_not_retained")
-        expected = canonical_json(check_requests.prepare_request(packet, stage)).encode()
-        refuse(pg._raw(c, "request_artifacts", attempt["binding"]["request_sha256"]) == expected, "check_request_not_exact")
-        raw = observations._raw(c, "raw_artifacts", observation["raw_sha256"])
-        if stage == "deterministic":
-            refuse(raw == canonical_json(check_requests.deterministic_result(packet)).encode(), "deterministic_check_changed")
-        outcome = check_requests.interpret_observation(packet, stage, observation, raw)
-        expected_receipt = dict(outcome, grant_id=attempt["grant_id"], request_sha256=p._sha(expected))
-        refuse(p._canonical(expected_receipt) == p._canonical(terminal["document"]), "check_receipt_not_exact")
-        refuse(outcome["execution_status"] == "completed" and outcome["verdict"] == "pass", "required_check_not_passed")
-        proofs[stage] = dict(grant_id=attempt["grant_id"], request_sha256=p._sha(expected),
-                             observation_sha256=observation["raw_sha256"], receipt_sha256=terminal["sha256"])
-        outcomes[stage] = outcome["result"]
+    proofs, outcomes = pg.verified_stage_receipts(c, identity, packet, owner=owner, fence=fence, environment=environment)
     completion = fingerprint({"check_set_id": identity, "candidate_id": value["candidate_id"], "derivation_id": packet["derivation_id"],
         "text_sha256": text_hash(checked_text(packet)), "bundle_sha256": fingerprint(value["bundle"]),
         "policy_sha256": fingerprint(policy), "checker_state_sha256": fingerprint(state), "stages": proofs})
@@ -290,6 +269,8 @@ def prepare(authority, c, state, version, command, actor, *, now, policy, editor
         return Transition(Reduction(state, (), ()), dict(common, outcome="checks_requested", check_set_id=result["check_set_id"]))
     assert plan.draft is not None and proof is not None
     _record_verified_checks_review(plan.draft, policy=editorial_policy, at=utc_text(now))
+    from src.commands.postgres_revision_checks import retain_source
+    retain_source(c, plan.draft, command, refs, value, environment=authority.environment)
     return Transition(Reduction(plan.state, plan.changed_ids, (_identity(plan.draft),)), dict(common, outcome="candidate_admitted",
         check_set_id=refs["check_set_id"], completion_sha256=proof["completion_sha256"], draft_id=draft_id,
         suppressions=list(plan.suppressions)))

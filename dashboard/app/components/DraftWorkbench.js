@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { ForecastEvidence } from "./ForecastEvidence.js"
 import { GraphicPreview } from "./GraphicPreview.js"
+import { EditorMedia } from "./EditorMedia.js"
 import { formatDuration, timeAgo } from "../../lib/format.js"
 import { draftReviewControls, draftTextLength, revisionKey } from "../../lib/draft-review-ui.js"
 import {
@@ -36,6 +37,7 @@ export function DraftWorkbench({
   pendingCommand,
   checkLocalCommand,
   retryLocalCommand,
+  submitLocalCommand,
   botRuns,
 }) {
   const [reviewConfirmedIdentity, setReviewConfirmedIdentity] = useState("")
@@ -205,7 +207,9 @@ export function DraftWorkbench({
                 )}
 
                 <ForecastEvidence key={reviewKey} draft={selectedDraft} />
-                <GraphicPreview key={`graphic:${reviewKey}`} draft={selectedDraft} editing={editingId === selectedDraft.id} updating={draftAction === selectedDraft.id} />
+                {selectedDraft.local_preview
+                  ? <EditorMedia key={`media:${reviewKey}`} draft={selectedDraft} editing={editingId === selectedDraft.id} updating={!!draftAction || !!pendingCommand} submitCommand={submitLocalCommand} />
+                  : <GraphicPreview key={`graphic:${reviewKey}`} draft={selectedDraft} editing={editingId === selectedDraft.id} updating={draftAction === selectedDraft.id} />}
 
                 {controls.canReview && editingId !== selectedDraft.id && (
                   <div className="workbench-panel">

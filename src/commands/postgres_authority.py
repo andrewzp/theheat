@@ -13,7 +13,7 @@ from uuid import UUID
 from src.commands import postgres_batch, postgres_batch_results, postgres_batch_worker, postgres_spending
 from src.commands import postgres_check_observations, postgres_checks, postgres_media, postgres_media_commands
 from src.commands.reducer import AutomaticPolicy, reduce_command
-from src.commands.schema import GENERATION_ACTIONS, CANDIDATE_ACTIONS, MEDIA_ACTIONS, Command, CommandError, Principal, authorize, canonical_json, utc_datetime, utc_text
+from src.commands.schema import GENERATION_ACTIONS, CANDIDATE_ACTIONS, MEDIA_ACTIONS, EDITOR_MEDIA_ACTIONS, Command, CommandError, Principal, authorize, canonical_json, utc_datetime, utc_text
 from src.editorial.policy import current_editorial_policy
 from src.storage import postgres_projection as p
 
@@ -212,6 +212,28 @@ class PostgresCommandAuthority:
             self._validate(c, runtime=False)
             self._pointer(c, lock=True)
             postgres_checks.install(c, self.environment)
+
+    def initialize_revision_checks(self, *, now: datetime | None = None) -> None:
+        """Explicit owner-only catalog evolution; no runtime migration fallback."""
+        from src.commands import postgres_revision_checks
+        with self.projections._connection(writing=True) as c:
+            self._validate(c, runtime=False)
+            self._pointer(c, lock=True)
+            postgres_revision_checks.install(c, self.environment, now=utc_text(_clock(now)))
+
+    def acquire_check_lease(self, check_set_id: str, owner: str, ttl_seconds: int, *, now: str) -> dict:
+        from src.commands import postgres_revision_checks as revisions
+        with self.projections._connection(writing=True) as c:
+            self._validate(c)
+            self._pointer(c, lock=True)
+            postgres_checks.validate(c, self.environment)
+            packet, _ = postgres_checks._packet(c, check_set_id, self.environment)
+            if packet.get("schema_version") == 3:
+                result = revisions.acquire(c, check_set_id, owner, ttl_seconds, now=now, environment=self.environment)
+            else:
+                result = postgres_batch_worker.apply(c, "acquire", dict(job_id=packet["job_id"], owner=owner,
+                    ttl_seconds=ttl_seconds), now=now, environment=self.environment)
+        return result
 
     def candidate_checks(self, action: str, payload: dict, *, now: str,
                          request: bytes | None = None, receipt: dict | None = None) -> dict:
@@ -533,7 +555,7 @@ class PostgresCommandAuthority:
         utc_datetime(result.get("completed_at"))
         self.projections._read(c, namespace, snapshot_id)
         self._verify_event(c, command_id, "completed", result["completed_at"], result)
-        if cmd.action == "attach_media_revision" and result["status"] == "applied":
+        if cmd.action in {"attach_media_revision", "review_media_revision"} and result["status"] == "applied":
             postgres_media_commands.read(c, cmd, result, self.environment)
         return result
 
@@ -541,6 +563,8 @@ class PostgresCommandAuthority:
         if not isinstance(command, Command) or not isinstance(principal, Principal):
             raise CommandError("invalid_command", "A validated command and trusted principal are required")
         command = Command.from_stored(canonical_json(command.as_dict()))
+        if command.action == "abandon_submission":
+            raise CommandError("invalid_action", "Submission closure requires the dedicated local boundary")
         principal = Principal(principal.subject, principal.role, principal.authentication_context)
         if command.environment != self.environment:
             raise CommandError("environment_mismatch", "Command belongs to another authority environment")
@@ -569,8 +593,58 @@ class PostgresCommandAuthority:
                 self._event(c, command.command_id, "accepted", at, receipt)
         return receipt
 
+    def abandon_submission(self, command_id, body, principal, resolve_principal, *, now=None):
+        """Serialize proven absence with acceptance. Never cancel real work."""
+        from src.commands import submission_recovery as recovery
+        if self.environment != "local":
+            raise CommandError("local_recovery_only", "Submission recovery is local only")
+        command_id = _id(command_id)
+        reference = recovery.reference(body)
+        if not isinstance(principal, Principal):
+            raise CommandError("forbidden", "Current operator required")
+        authorize(principal, recovery.ACTION)
+        with self.projections._connection(writing=True) as c:
+            self._validate(c)
+            version, _ = self._state(c, lock=True)
+            try:
+                current = resolve_principal(principal.subject)
+            except Exception:
+                raise CommandError("authorization_unavailable", "Current authorization unavailable") from None
+            if (not isinstance(current, Principal) or current.subject != principal.subject
+                or current.authentication_context != principal.authentication_context):
+                raise CommandError("forbidden", "Current operator identity required")
+            authorize(current, recovery.ACTION)
+            prior = self._intent(c, command_id)
+            if prior:
+                original, receipt = prior
+                expected = original.payload if original.action == recovery.ACTION else dict(
+                    original_action=original.action, request_sha256=recovery.request_sha(original))
+                if original.actor_subject != current.subject or reference != expected:
+                    raise CommandError("submission_reference_conflict", "The reference does not belong to this operator and request")
+                result = self._result(c, command_id)
+                p._require(original.action != recovery.ACTION or result is not None, "incomplete_submission_closure")
+            else:
+                at = _clock(now)
+                original = recovery.make(command_id, reference, current, at)
+                raw = _body(original.as_dict())
+                row = c.execute(f"INSERT INTO {SCHEMA}.intents(command_id,digest,command_bytes,accepted_at) VALUES(%s,%s,%s,%s) RETURNING sequence",
+                    (command_id, original.digest, raw, utc_text(at))).fetchone()
+                receipt = dict(command_id=command_id, sequence=row[0], accepted_at=utc_text(at), digest=original.digest)
+                self._event(c, command_id, "accepted", utc_text(at), receipt)
+                result = dict(status="unchanged", code="submission_abandoned", changed_ids=[], identities=[],
+                    publish_intent_id=None, command_id=command_id, digest=original.digest, state_version=version,
+                    completed_at=utc_text(at), actor_subject=current.subject)
+                encoded = _body(result)
+                c.execute(f"INSERT INTO {SCHEMA}.results VALUES(%s,%s,%s,%s,%s,%s)",
+                    (command_id, encoded, p._sha(encoded), version, NAMESPACE, str(version)))
+                self._event(c, command_id, "completed", utc_text(at), result)
+            return dict(status="completed" if result else "pending", result=result, receipt=receipt,
+                submission_reference=reference,
+                recoverable_command=None if original.action == recovery.ACTION else recovery.request(original),
+                local_preview=True, publication_enabled=False)
+
     def consume(self, resolve_principal: Callable[[str], Principal | None], *, command_id: str | None = None,
-                now: datetime | None = None, policy: AutomaticPolicy = AutomaticPolicy()) -> dict | None:
+                now: datetime | None = None, policy: AutomaticPolicy = AutomaticPolicy(), _prepared_media=None) -> dict | None:
         if command_id is not None:
             command_id = _id(command_id)
         with self.projections._connection(writing=True) as c:
@@ -593,7 +667,10 @@ class PostgresCommandAuthority:
                     p._require(intent is not None, "corrupt_command_intent")
                     assert intent is not None
                     command, _ = intent
+                    p._require(command.action != "abandon_submission", "incomplete_submission_closure")
                     p._require(command.environment == self.environment, "command_environment_mismatch")
+                    if command.action == "prepare_media_revision" and _prepared_media is None:
+                        raise CommandError("native_preparation_required", "The separate native worker must prepare this graphic")
                     clock = _clock(now)
                     # Resolver failures are infrastructure uncertainty, never a
                     # durable rejection. An explicit None is actual revocation.
@@ -609,10 +686,17 @@ class PostgresCommandAuthority:
                     media_transition = None
                     candidate_transition = None
                     generation = None
+                    editor_media = None
                     try:
                         if actor is None:
                             raise CommandError("forbidden", "Operator authorization was revoked before execution")
-                        if command.action in GENERATION_ACTIONS:
+                        if command.action in EDITOR_MEDIA_ACTIONS:
+                            from src.commands import postgres_editor_media as editor_domain
+                            with c.transaction():
+                                reduction, result_key, references = editor_domain.boundary(self, c, state, version,
+                                    command, actor, editorial_policy, clock, resolve_principal, _prepared_media)
+                            editor_media = (result_key, references)
+                        elif command.action in GENERATION_ACTIONS:
                             from src.commands import postgres_sourced_generation as generation_domain
                             from src.commands.reducer import Reduction
                             with c.transaction():
@@ -628,6 +712,11 @@ class PostgresCommandAuthority:
                                     now=clock, policy=policy, editorial_policy=editorial_policy)
                             reduction = candidate_transition.reduction
                         elif command.action in MEDIA_ACTIONS:
+                            if hasattr(self, "editor_media_configuration") and command.action != "remove_media_revision":
+                                from src.commands import postgres_editor_media as editor_domain
+                                draft, current_media = editor_domain.command_inputs(self, c, state, command, actor, editorial_policy, clock)
+                                if command.action in {"attach_media_revision", "review_media_revision"}:
+                                    editor_domain.package_current(self, c, draft, command.payload["proposal_sha256"], current_media, editorial_policy)
                             media_transition = postgres_media_commands.prepare(c, state, command, actor,
                                 now=clock, editorial_policy=editorial_policy, environment=self.environment)
                             reduction = media_transition.reduction
@@ -641,12 +730,14 @@ class PostgresCommandAuthority:
                             result["candidate"] = candidate_transition.references
                         if media_transition is not None:
                             result["media"] = media_transition.references
+                        if editor_media is not None:
+                            result[editor_media[0]] = editor_media[1]
                         if reduction.changed_ids:
                             changed = reduction.state
                     except CommandError as exc:
                         result = {"status": "rejected", "code": exc.code, "message": str(exc)}
                     except (ValueError, TypeError, UnicodeError, OverflowError):
-                        if command.action in MEDIA_ACTIONS | CANDIDATE_ACTIONS | GENERATION_ACTIONS:
+                        if command.action in MEDIA_ACTIONS | EDITOR_MEDIA_ACTIONS | CANDIDATE_ACTIONS | GENERATION_ACTIONS:
                             # Domain preparation converts deterministic input errors
                             # itself; storage/implementation uncertainty rolls back.
                             raise
@@ -666,9 +757,85 @@ class PostgresCommandAuthority:
                     c.execute(f"INSERT INTO {SCHEMA}.results VALUES(%s,%s,%s,%s,%s,%s)",
                               (command.command_id, encoded_result, p._sha(encoded_result), version, NAMESPACE, str(version)))
                     self._event(c, command.command_id, "completed", utc_text(clock), result)
-                    if command.action == "attach_media_revision" and result["status"] == "applied":
+                    if command.action in {"attach_media_revision", "review_media_revision"} and result["status"] == "applied":
                         self._result(c, command.command_id)
         return result
+
+    def configure_editor_media(self, *, rasterizer, scratch, dependency_manifest):
+        from src.commands.postgres_editor_media import configure
+        configure(self, rasterizer=rasterizer, scratch=scratch, dependency_manifest=dependency_manifest)
+
+    def editor_media_projection(self, draft_id, resolve_principal, *, now, png_proposal=None):
+        from src.commands import postgres_editor_media as domain
+        with self.projections._connection() as c:
+            self._validate(c)
+            version, state = self._state(c, lock=True)
+            return domain.projection(self, c, draft_id, state=state, version=version,
+                policy=current_editorial_policy(), now=_clock(now), resolve_principal=resolve_principal, png_proposal=png_proposal)
+
+    def execute_revision_check_once(self, command_id, resolve_principal, *, clock, reservation=None, enabled=False):
+        from src.commands import postgres_editor_media as domain, postgres_revision_checks as revisions
+        from src.two_bot.check_executor import execute_check_once
+        if type(enabled) is not bool:
+            raise ValueError("check_execution_flag_requires_boolean")
+        if not enabled:
+            return execute_check_once(self, "", current_context={}, checker_state={}, owner="", clock=clock)
+        command_id = _id(command_id)
+        authority = self
+
+        def transaction(operation, payload=None, *, now=None, raw=None, request=None, receipt=None):
+            at = utc_datetime(now if now is not None else clock())
+            with authority.projections._connection(writing=operation in {"lease", "begin", "complete", "observe"}) as c:
+                authority._validate(c)
+                version, state = authority._state(c, lock=True)
+                if operation == "observe":
+                    # Passive evidence retention follows the committed original
+                    # grant even after permissions, source or current state drift.
+                    intent = authority._intent(c, command_id)
+                    result = authority._result(c, command_id)
+                    domain.refuse(intent is not None and intent[0].action == "request_revision_checks"
+                        and result is not None and result["status"] == "unchanged"
+                        and result["revision_checks"]["check_set_id"] == payload["check_set_id"], "check_request_mismatch")
+                    attempt = postgres_check_observations._scoped_attempt(c, payload["check_set_id"], payload["stage"], payload["grant_id"], authority.environment)
+                    packet, _ = postgres_checks._packet(c, payload["check_set_id"], authority.environment)
+                    domain.refuse(attempt["binding"]["owner"] == "revision-checks:" + packet["enrollment_id"], "check_owner_mismatch")
+                    return postgres_check_observations.apply(c, "observe", payload, now=utc_text(at), raw=raw, environment=authority.environment)
+                _, identity, packet, _ = domain.runner_context(authority, c, command_id, resolve_principal,
+                    state, version, current_editorial_policy(), at)
+                owner = "revision-checks:" + packet["enrollment_id"]
+                if operation == "context":
+                    return identity, packet, state, owner
+                domain.refuse(payload["check_set_id"] == identity, "check_request_mismatch")
+                latest = c.execute("SELECT owner,expires_at FROM theheat_checks.draft_leases WHERE check_set_id=%s ORDER BY fence DESC LIMIT 1", (identity,)).fetchone()
+                if latest is not None and operation != "lease":
+                    domain.refuse(latest[0] == owner and at < utc_datetime(latest[1]), "stale_revision_check_owner")
+                if operation == "lease":
+                    domain.refuse(payload["owner"] == owner, "check_owner_mismatch")
+                    return revisions.acquire(c, identity, owner, payload["ttl_seconds"], now=utc_text(at), environment=authority.environment)
+                if operation in {"begin", "complete", "status"}:
+                    domain.refuse(payload["owner"] == owner, "check_owner_mismatch")
+                    return postgres_checks.apply(c, operation, payload, now=utc_text(at), request=request, receipt=receipt, environment=authority.environment)
+                if operation == "read":
+                    return postgres_check_observations.apply(c, "read", payload, now=utc_text(at), environment=authority.environment)
+                reader = postgres_check_observations.read_response if operation == "response" else postgres_check_observations.read_request
+                return reader(c, identity, payload["stage"], payload["grant_id"], environment=authority.environment)
+
+        identity, packet, state, owner = transaction("context")
+        class ScopedAuthority:
+            def acquire_check_lease(self, check_set_id, owner, ttl_seconds, *, now):
+                return transaction("lease", dict(check_set_id=check_set_id, owner=owner, ttl_seconds=ttl_seconds), now=now)
+            def candidate_checks(self, action, payload, *, now, request=None, receipt=None):
+                domain.refuse(action in {"begin", "complete", "status"}, "check_operation_refused")
+                return transaction(action, payload, now=now, request=request, receipt=receipt)
+            def check_execution(self, action, payload, *, now, raw=None):
+                domain.refuse(action in {"read", "observe"}, "check_operation_refused")
+                return transaction(action, payload, now=now, raw=raw)
+            def read_check_request(self, check_set_id, stage, grant_id):
+                return transaction("request", dict(check_set_id=check_set_id, stage=stage, grant_id=grant_id))
+            def read_check_response(self, check_set_id, stage, grant_id):
+                return transaction("response", dict(check_set_id=check_set_id, stage=stage, grant_id=grant_id))
+        return execute_check_once(ScopedAuthority(), identity, current_context=packet["current_context"], checker_state=state,
+                                  owner=owner, clock=clock, reservation=reservation, enabled=True)
 
     def capture_candidate_input(self, payload: dict, *, now: datetime) -> dict:
         """Trusted local fixture-producer input; no HTTP route grants this ability."""
@@ -728,6 +895,9 @@ class PostgresCommandAuthority:
 
         command, value, identity, state = transaction("context")
         class ScopedAuthority:
+            def acquire_check_lease(self, check_set_id, owner, ttl_seconds, *, now):
+                admission.refuse(check_set_id == identity, "check_request_mismatch")
+                return transaction("batch", dict(job_id=value["job_id"], owner=owner, ttl_seconds=ttl_seconds), now=now)
             def batch_work(self, action, payload, *, now, raw=None):
                 admission.refuse(action == "acquire" and raw is None, "check_operation_refused")
                 return transaction("batch", payload, now=now)

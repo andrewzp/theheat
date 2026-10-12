@@ -17,7 +17,13 @@ def main() -> int:
     args = parser.parse_args()
     try:
         authority, operators = adapter(args)
-        result = authority.consume(operators.resolve, command_id=args.command_id, policy=AutomaticPolicy())
+        try:
+            result = authority.consume(operators.resolve, command_id=args.command_id, policy=AutomaticPolicy())
+        except CommandError as exc:
+            if exc.code != "native_preparation_required":
+                raise
+            from src.commands.preview_media_worker import consume_media_once
+            result = consume_media_once(authority, operators.resolve, command_id=args.command_id)
         print(json.dumps({"result": result, "publication_enabled": False}))
     except (ValueError, OSError, CommandError, ProjectionError):
         print('{"error":"local_consumer_unavailable","retry_same_command":true}')

@@ -65,6 +65,26 @@ def _retained_bundle_json(bundle, *, code="graphic_unavailable"):
     return encoded
 
 
+def qualified_spec(bundle, *, synthetic=False):
+    """Shared Python qualification; callers own authentication/currentness."""
+    _retained_bundle_json(bundle)
+    if bundle["signal_kind"] == "fire":
+        receipts = [bundle["raw_signal_dump"]["acquisition_provenance"],
+                    *[r["acquisition_evidence"] for r in bundle.get("related_signals", [])]]
+        spec = fire_graphic_spec(_StoredBundle(bundle), expected_bundle_sha256=fingerprint(bundle),
+                                expected_receipt_sha256=[fingerprint(r) for r in receipts], synthetic=synthetic)
+        return spec, "NASA FIRMS · MODIS", {"kind": "modis_acquisition", "acquired_at": spec["evidence"]["acquired_at"]}
+    if bundle["signal_kind"] == "air_quality_hazard":
+        spec = pm25_graphic_spec(_StoredBundle(bundle), expected_bundle_sha256=fingerprint(bundle),
+                                expected_window_sha256=fingerprint(bundle["raw_signal_dump"]["forecast_window"]), synthetic=synthetic)
+        evidence = spec["evidence"]
+        window = evidence["input_binding"]["bundles"][0]["bundle"]["raw_signal_dump"]["forecast_window"]
+        return spec, "CAMS via Open-Meteo", {"kind": "pm25_forecast_day",
+            **{key: evidence[key] for key in ("valid_date", "timezone", "valid_start", "valid_end")},
+            **{key: window[key] for key in ("requested_at", "retrieved_at")}}
+    raise PreviewError("graphic_unavailable")
+
+
 def build_preview(request, *, policy_sha, runtime_sha, read_state, budget, synthetic=False):
     check_request(request, policy_sha, runtime_sha)
     try:
@@ -74,25 +94,7 @@ def build_preview(request, *, policy_sha, runtime_sha, read_state, budget, synth
         bundle = deepcopy(draft["review_context"]["two_bot"]["bundle"])
         # Bound the full retained story before canonical hashing and validation.
         retained_bundle = _retained_bundle_json(bundle)
-        if bundle["signal_kind"] == "fire":
-            receipts = [bundle["raw_signal_dump"]["acquisition_provenance"],
-                        *[r["acquisition_evidence"] for r in bundle.get("related_signals", [])]]
-            spec = fire_graphic_spec(_StoredBundle(bundle), expected_bundle_sha256=fingerprint(bundle),
-                                    expected_receipt_sha256=[fingerprint(r) for r in receipts], synthetic=synthetic)
-            source = "NASA FIRMS · MODIS"
-            context = {"kind": "modis_acquisition", "acquired_at": spec["evidence"]["acquired_at"]}
-        elif bundle["signal_kind"] == "air_quality_hazard":
-            spec = pm25_graphic_spec(_StoredBundle(bundle), expected_bundle_sha256=fingerprint(bundle),
-                                    expected_window_sha256=fingerprint(bundle["raw_signal_dump"]["forecast_window"]),
-                                    synthetic=synthetic)
-            evidence = spec["evidence"]
-            window = evidence["input_binding"]["bundles"][0]["bundle"]["raw_signal_dump"]["forecast_window"]
-            source = "CAMS via Open-Meteo"
-            context = {"kind": "pm25_forecast_day",
-                       **{key: evidence[key] for key in ("valid_date", "timezone", "valid_start", "valid_end")},
-                       **{key: window[key] for key in ("requested_at", "retrieved_at")}}
-        else:
-            raise PreviewError("graphic_unavailable")
+        spec, source, context = qualified_spec(bundle, synthetic=synthetic)
         budget.remaining()
         rendered = render_svg(**spec)
         budget.remaining()

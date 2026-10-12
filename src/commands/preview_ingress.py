@@ -29,7 +29,9 @@ from src.storage.postgres_projection import ProjectionError
 AUTH_CONTEXT = "verified-local-preview-basic-v1"
 ALLOWED_ACTIONS = frozenset({"edit_revision", "record_review", "approve_revision",
                              "reject_revision", "cancel_approval", "select_candidate",
-                             "request_candidate_checks", "admit_checked_candidate", "request_sourced_generation"})
+                             "request_candidate_checks", "admit_checked_candidate", "request_sourced_generation",
+                             "prepare_media_revision", "attach_media_revision", "review_media_revision", "remove_media_revision",
+                             "request_revision_checks", "approve_media_revision"})
 
 
 def safe_environment() -> None:
@@ -211,10 +213,24 @@ class PreviewHandler(BaseHTTPRequestHandler):
             if actor is None:
                 self.reply(401, {"error": "Local sign-in required", "code": "unauthorized"})
                 return
+            media_route = re.fullmatch(r"/drafts/([A-Za-z0-9_.:-]{1,200})/media(?:/([a-f0-9]{64})/preview\.png)?", self.path)
+            if self.command == "GET" and media_route:
+                value = self.server.authority.editor_media_projection(media_route[1], self.server.operators.resolve,
+                    now=datetime.now(UTC), png_proposal=media_route[2])
+                if media_route[2]:
+                    self.send_response(200)
+                    for name, content in (("Content-Type", "image/png"), ("Content-Length", str(len(value))),
+                        ("Cache-Control", "private, no-store"), ("X-Content-Type-Options", "nosniff"), ("Connection", "close")):
+                        self.send_header(name, content)
+                    self.end_headers()
+                    self.wfile.write(value)
+                else:
+                    self.reply(200, value)
+                return
             if self.command == "GET" and self.path == "/state":
                 version, state = self.server.authority.read()
                 self.reply(200, {"state_version": version, "state": state,
-                                 "editorial_policy": current_editorial_policy(), "role": actor.role,
+                                 "editorial_policy": current_editorial_policy(), "role": actor.role, "operator_subject": actor.subject,
                                  "candidates": self.server.authority.candidate_projection(self.server.candidate_inputs + self.server.authority.generated_candidate_inputs(), now=datetime.now(UTC)),
                                  "local_preview": True, "publication_enabled": False})
                 return
@@ -234,11 +250,22 @@ class PreviewHandler(BaseHTTPRequestHandler):
                 if intent is None:
                     self.reply(404, {"error": "Command has not been durably accepted", "code": "command_not_found"})
                     return
-                self.reply(200, {"status": "completed" if result else "pending", "result": result,
+                recovered = None
+                submission_reference = None
+                if intent[0].actor_subject == actor.subject:
+                    from src.commands import submission_recovery as recovery
+                    submission_reference = intent[0].payload if intent[0].action == recovery.ACTION else dict(
+                        original_action=intent[0].action, request_sha256=recovery.request_sha(intent[0]))
+                if intent[0].actor_subject == actor.subject and intent[0].action != "abandon_submission":
+                    stored = intent[0].as_dict()
+                    recovered = {key:stored[key] for key in ("command_id", "action", "requested_at", "expires_at", "targets", "payload")}
+                self.reply(200, {"status": "completed" if result else "pending", "result": result, "recoverable_command":recovered,
+                                 "submission_reference":submission_reference,
                                  "receipt": intent[1],
                                  "local_preview": True, "publication_enabled": False})
                 return
-            if self.command != "POST" or self.path != "/commands":
+            recovery_route = re.fullmatch(r"/commands/([a-f0-9-]{36})/abandon", self.path)
+            if self.command != "POST" or (self.path != "/commands" and not recovery_route):
                 self.reply(404, {"error": "Preview route not found"})
                 return
             if origin != self.server.origin:
@@ -271,6 +298,11 @@ class PreviewHandler(BaseHTTPRequestHandler):
                 return
             body = strict_json(raw)
             now = datetime.now(UTC)
+            if recovery_route:
+                result = self.server.authority.abandon_submission(recovery_route[1], body, actor,
+                    self.server.operators.resolve, now=now)
+                self.reply(200, result)
+                return
             command = Command.from_request(body, actor, environment="local", now=now)
             if command.action not in ALLOWED_ACTIONS:
                 self.reply(400, {"error": "Action unavailable in local preview", "code": "preview_action_unavailable"})
@@ -297,6 +329,9 @@ def arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--database-port", type=int, default=55473)
     parser.add_argument("--operators", required=True)
     parser.add_argument("--generation-inputs")
+    parser.add_argument("--media-rasterizer")
+    parser.add_argument("--media-scratch")
+    parser.add_argument("--media-dependency-manifest")
 
 
 def adapter(args) -> tuple[PostgresCommandAuthority, Operators]:
@@ -307,6 +342,11 @@ def adapter(args) -> tuple[PostgresCommandAuthority, Operators]:
     if getattr(args, "generation_inputs", None):
         from src.commands.postgres_sourced_generation import private_configuration
         authority.configure_sourced_generation(private_configuration(args.generation_inputs))
+    if getattr(args, "media_rasterizer", None) or getattr(args, "media_scratch", None) or getattr(args, "media_dependency_manifest", None):
+        if not (args.media_rasterizer and args.media_scratch and args.media_dependency_manifest):
+            raise ValueError("explicit_media_profile_required")
+        authority.configure_editor_media(rasterizer=args.media_rasterizer, scratch=args.media_scratch,
+            dependency_manifest=args.media_dependency_manifest)
     return authority, operators
 
 
