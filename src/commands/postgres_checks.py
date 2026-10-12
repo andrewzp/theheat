@@ -10,7 +10,7 @@ import json
 from src.commands import batch_journal as b, check_journal as checks, spend_journal as s
 from src.commands import postgres_batch as batch, postgres_batch_results as results, postgres_spending as spend
 from src.commands import batch_result_journal as r, batch_worker_journal as w
-from src.commands.schema import canonical_json
+from src.commands.schema import CommandError, canonical_json
 from src.editorial.revisions import fingerprint
 from src.storage import postgres_projection as p
 from src.two_bot import check_origin
@@ -354,25 +354,32 @@ def verified_stage_receipts(c, identity, packet, *, owner, fence, environment):
     """One exact request/raw-response interpreter for both retained origins."""
     from src.commands import postgres_check_observations as observations
     from src.two_bot import check_requests
+
+    def require_proof(condition, code):
+        # These explicit evidence refutations are durable command refusals.
+        # Reader/interpreter errors still propagate as journal uncertainty.
+        if not condition:
+            raise CommandError(code, "Retained check evidence is unavailable; refresh its current status")
+
     _, enrolled = _packet(c, identity, environment)
     stages, attempts = _stages(c, identity, packet, enrolled)
-    checks._require(all(v == "passed" for v in stages.values()), "required_checks_incomplete")
+    require_proof(all(v == "passed" for v in stages.values()), "required_checks_incomplete")
     proofs, outcomes = {}, {}
     for stage in checks.STAGES:
         attempt = attempts[stage]
-        checks._require(attempt["binding"]["owner"] == owner and attempt["binding"]["fence"] == fence, "check_lease_changed")
+        require_proof(attempt["binding"]["owner"] == owner and attempt["binding"]["fence"] == fence, "check_lease_changed")
         terminal = _terminal(c, attempt)
         observation = observations._observation(c, identity, stage, attempt)
-        checks._require(observation is not None, "check_response_not_retained")
+        require_proof(observation is not None, "check_response_not_retained")
         expected = canonical_json(check_requests.prepare_request(packet, stage)).encode()
-        checks._require(_raw(c, "request_artifacts", attempt["binding"]["request_sha256"]) == expected, "check_request_not_exact")
+        require_proof(_raw(c, "request_artifacts", attempt["binding"]["request_sha256"]) == expected, "check_request_not_exact")
         raw = observations._raw(c, "raw_artifacts", observation["raw_sha256"])
         if stage == "deterministic":
-            checks._require(raw == canonical_json(check_requests.deterministic_result(packet)).encode(), "deterministic_check_changed")
+            require_proof(raw == canonical_json(check_requests.deterministic_result(packet)).encode(), "deterministic_check_changed")
         outcome = check_requests.interpret_observation(packet, stage, observation, raw)
         expected_receipt = dict(outcome, grant_id=attempt["grant_id"], request_sha256=p._sha(expected))
-        checks._require(p._canonical(expected_receipt) == p._canonical(terminal["document"]), "check_receipt_not_exact")
-        checks._require(outcome["execution_status"] == "completed" and outcome["verdict"] == "pass", "required_check_not_passed")
+        require_proof(p._canonical(expected_receipt) == p._canonical(terminal["document"]), "check_receipt_not_exact")
+        require_proof(outcome["execution_status"] == "completed" and outcome["verdict"] == "pass", "required_check_not_passed")
         proofs[stage] = dict(grant_id=attempt["grant_id"], request_sha256=p._sha(expected),
                              observation_sha256=observation["raw_sha256"], receipt_sha256=terminal["sha256"])
         outcomes[stage] = outcome["result"]
