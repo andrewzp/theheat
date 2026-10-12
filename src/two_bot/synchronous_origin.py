@@ -20,9 +20,9 @@ def enrollment_id(packet):
     return fingerprint({key: packet[key] for key in KEY_FIELDS})
 
 
-def validate(packet):
+def validate(packet, *, resolved=None):
     require(type(packet) is dict and set(packet) == FIELDS and type(packet["schema_version"]) is int
-        and packet["schema_version"] == 4 and packet["origin_kind"] == ORIGIN, "invalid_sync_check_packet")
+        and packet["schema_version"] in (4, 5) and packet["origin_kind"] == ORIGIN, "invalid_sync_check_packet")
     require(type(packet["generation_id"]) is str and re.fullmatch(r"gss_[0-9a-f]{64}", packet["generation_id"]), "invalid_sync_generation")
     for key in REFERENCES - {"generation_id"} | {"enrollment_id", "derivation_id", "text_sha256", "checker_state_sha256",
             "state_sha256", "admission_input_id", "admission_input_sha256"}:
@@ -40,12 +40,19 @@ def validate(packet):
     candidate_id = fingerprint(dict(origin_kind=ORIGIN, generation_id=packet["generation_id"], grant_id=packet["grant_id"],
         observation_sha256=packet["observation_sha256"], candidate=packet["candidate"]))
     require(candidate_id == packet["candidate_id"], "changed_sync_candidate")
-    computed = derivation.derive_candidate(packet["candidate"], candidate_id, packet["bundle"], packet["policy"])
-    require(computed == packet["derivation"] and fingerprint(computed) == packet["derivation_id"]
-        and computed["text_sha256"] == packet["text_sha256"], "changed_sync_derivation")
+    ghcn = packet["schema_version"] == 5
+    require(derivation.has_ghcn_reference(packet["bundle"]) == ghcn, "invalid_sync_check_bundle_version")
+    if ghcn:
+        from src.two_bot.ghcn_claim_view import structural_view
+        structural_view(packet["bundle"])
+    verification = derivation.inspect_derivation(packet["derivation"], packet["candidate"], candidate_id,
+        packet["bundle"], packet["policy"], resolved=resolved)
+    require(verification in {"verified_current_formatter", "retained_ghcn_derivation"}, verification)
+    require(fingerprint(packet["derivation"]) == packet["derivation_id"]
+        and packet["derivation"]["text_sha256"] == packet["text_sha256"], "changed_sync_derivation")
     require(packet["required_stages"] == ["deterministic", "safety", "fact_check", "critic"], "missing_sync_check_stage")
     captured = utc_datetime(packet["captured_at"])
     require(packet["check_date"] == captured.date().isoformat() and captured < utc_datetime(packet["useful_until"])
         <= captured.replace(hour=0, minute=0, second=0, microsecond=0)+timedelta(days=1), "invalid_sync_check_window")
     require(enrollment_id(packet) == packet["enrollment_id"], "changed_sync_enrollment")
-    return "verified_synchronous_writer"
+    return "retained_synchronous_writer" if verification == "retained_ghcn_derivation" else "verified_synchronous_writer"

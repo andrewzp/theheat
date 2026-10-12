@@ -6,7 +6,7 @@ import { Readable } from "node:stream"
 import { runFixtureWorker } from "../test-support/fixture-worker.js"
 import { createElement } from "react"
 import { renderToStaticMarkup } from "react-dom/server"
-import SourcedGeneration, { generationCommand, WriterUsage } from "../app/components/SourcedGeneration.js"
+import SourcedGeneration, { generationCommand, WriterUsage, GenerationRequest, sourceStatus } from "../app/components/SourcedGeneration.js"
 import { createCandidateCommand, createDraftCommand } from "../lib/draft-command-request.js"
 
 test("source chooser labels and reference-only command use the actual component", () => {
@@ -119,4 +119,23 @@ test("actual source API -> separate batch/check workers -> admitted draft -> edi
     for (const key of Object.keys(process.env)) if (!Object.hasOwn(saved, key)) delete process.env[key]
     Object.assign(process.env, saved)
   }
+})
+
+
+test("pending source validation enables only the existing bounded request action", () => {
+  for (const status of ["ready", "pending_validation"]) {
+    const props = { brief: { status }, pending: null, busy: false, readOnly: false, pendingAction: false }
+    assert.doesNotMatch(renderToStaticMarkup(createElement(GenerationRequest, props)), /disabled/)
+    for (const key of ["busy", "readOnly", "pendingAction"]) {
+      assert.match(renderToStaticMarkup(createElement(GenerationRequest, { ...props, [key]: true })), /disabled/)
+    }
+  }
+  for (const status of ["blocked", "expired", "queued", "unknown"]) {
+    assert.match(renderToStaticMarkup(createElement(GenerationRequest, { brief: { status } })), /disabled/)
+  }
+  assert.equal(sourceStatus("pending_validation"), "Needs a source check")
+  assert.equal(sourceStatus("ready"), "ready")
+  const retry = renderToStaticMarkup(createElement(GenerationRequest, { pending: { command_id: "existing" } }))
+  assert.match(retry, /Retry same request/)
+  assert.doesNotMatch(retry, /disabled/)
 })

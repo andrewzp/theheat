@@ -819,3 +819,45 @@ def test_executor_refuses_mismatched_scoped_observation(case, monkeypatch, part)
     result = run(case, "safety")
     assert result["reason"] == "check_observation_not_exact" and len(sent) == 1
     assert not result["publication_approved"] and result["cost_usd"] is None
+
+
+def test_explicit_local_options_use_actual_sdk_once_without_ambient_key(case, monkeypatch):
+    assert run(case)["outcome"] == "completed"
+    monkeypatch.delenv("GEMINI_API_KEY")
+    sent=[]
+    def handle(request):
+        sent.append(request)
+        return httpx.Response(200, stream=httpx.ByteStream(envelope("NO")), request=request)
+    result=run(case,"safety",transport_options={"api_key":"invented-explicit-key","http_transport":httpx.MockTransport(handle)})
+    assert result["checks"]["stages"]["safety"]=="passed" and len(sent)==1
+    attempt=saved(case)["attempts"]["safety"]
+    expected=canonical_json(check_requests.prepare_request(saved(case)["packet"],"safety")).encode()
+    assert attempt["binding"]["request_sha256"]==hashlib.sha256(expected).hexdigest()
+    assert sent[0].method=="POST" and "generateContent" in str(sent[0].url)
+    assert b"invented-explicit-key" not in json.dumps(saved(case)).encode()
+
+
+@pytest.mark.parametrize("options,reason",[( {},"invalid_check_transport_options"),
+    ({"api_key":"invented"},"invalid_check_transport_options"),
+    ({"api_key":"invented","http_transport":None},"invalid_check_transport_options"),
+    ({"api_key":"invented","http_transport":object(),"model":"other"},"invalid_check_transport_options"),
+    ({"api_key":"","http_transport":object()},"missing_check_credential")])
+def test_malformed_explicit_capability_cannot_grant_or_construct(case,monkeypatch,options,reason):
+    assert run(case)["outcome"]=="completed"
+    def forbidden(**kwargs):
+        raise AssertionError("No transport construction")
+    monkeypatch.setattr(executor,"GoogleCheckTransport",forbidden)
+    result=run(case,"safety",transport_options=options)
+    assert result["outcome"]=="blocked" and result["reason"]==reason
+    assert "safety" not in saved(case)["attempts"]
+
+
+def test_disabled_and_deterministic_never_inspect_explicit_capability(case,monkeypatch):
+    class Forbidden:
+        def __iter__(self):
+            raise AssertionError("Capability inspected")
+    capability=Forbidden()
+    result=executor.execute_check_once(None,"",current_context=None,checker_state=None,owner="",clock=None,transport_options=capability)
+    assert result["outcome"]=="disabled"
+    monkeypatch.setattr(executor,"GoogleCheckTransport",lambda **kw:pytest.fail("Deterministic transport"))
+    assert run(case,transport_options=capability)["checks"]["stages"]["deterministic"]=="passed"

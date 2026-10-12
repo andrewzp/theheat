@@ -1,0 +1,252 @@
+strongest_signal: AllTimeRecord | MonthlyRecord | AbsoluteExtremeEvent | AnomalyEvent | RecordEvent | None = None
+strongest_score: EditorialScore | None = None
+strongest_event_id: str | None = None
+strongest_headline = ""
+strongest_facts = []
+strongest_type = ""
+strongest_city = ""
+signal_year = (bundle.signal_date or date.today()).year
+# Default these so the bottom-of-loop event-log capture
+# works whether or not the if-cascade fires.
+
+if bundle.all_time_high:
+    ev: AllTimeRecord = bundle.all_time_high
+    if not state.is_duplicate(bot_state, ev.event_id):
+        score = score_all_time_record(
+            ev.new_temp_c, ev.old_record_c, ev.old_record_year,
+            ev.years_of_data, kind="high",
+        )
+        if _should_draft(score, ev.event_id):
+            strongest_signal = ev
+            strongest_score = score
+            strongest_event_id = ev.event_id
+            strongest_type = "all_time_high"
+            strongest_city = ev.city
+            strongest_headline = f"{ev.city} on pace for its hottest in {ev.years_of_data}yr archive"
+            strongest_facts = [
+                _fact("Forecast high", _temp_pair_c(ev.new_temp_c)),
+                _fact("Prior archive max", _temp_pair_c(ev.old_record_c)),
+                _fact("Prior max year", ev.old_record_year),
+                _fact("Archive span", f"{ev.years_of_data} years"),
+                _fact("Country", ev.country),
+            ]
+            signal_counts["all_time"] += 1
+
+if strongest_signal is None and bundle.all_time_low:
+    ev = bundle.all_time_low
+    if not state.is_duplicate(bot_state, ev.event_id):
+        score = score_all_time_record(
+            ev.new_temp_c, ev.old_record_c, ev.old_record_year,
+            ev.years_of_data, kind="low",
+        )
+        if _should_draft(score, ev.event_id):
+            strongest_signal = ev
+            strongest_score = score
+            strongest_event_id = ev.event_id
+            strongest_type = "all_time_low"
+            strongest_city = ev.city
+            strongest_headline = f"{ev.city} hit its coldest reading in {ev.years_of_data}yr archive"
+            strongest_facts = [
+                _fact("Observed low", _temp_pair_c(ev.new_temp_c)),
+                _fact("Prior archive min", _temp_pair_c(ev.old_record_c)),
+                _fact("Prior min year", ev.old_record_year),
+                _fact("Archive span", f"{ev.years_of_data} years"),
+                _fact("Country", ev.country),
+            ]
+            signal_counts["all_time"] += 1
+
+if strongest_signal is None and bundle.monthly_high:
+    ev_mh: MonthlyRecord = bundle.monthly_high
+    # Suppress "hottest April ever - old record set in 2026"
+    # tweets. When the prior record was set in the same year as
+    # this reading, the "hottest ever" framing reads as nonsense.
+    if (
+        not state.is_duplicate(bot_state, ev_mh.event_id)
+        and ev_mh.old_record_year != signal_year
+    ):
+        score = score_monthly_record(
+            ev_mh.new_temp_c, ev_mh.old_record_c, ev_mh.old_record_year,
+            ev_mh.month, ev_mh.years_of_data, kind="high",
+        )
+        if _should_draft(score, ev_mh.event_id):
+            month_name = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][ev_mh.month]
+            strongest_signal = ev_mh
+            strongest_score = score
+            strongest_event_id = ev_mh.event_id
+            strongest_type = "monthly_high"
+            strongest_city = ev_mh.city
+            strongest_headline = f"{ev_mh.city} on pace for hottest {month_name} on record"
+            strongest_facts = [
+                _fact("Forecast high", _temp_pair_c(ev_mh.new_temp_c)),
+                _fact(f"Prior {month_name} max", _temp_pair_c(ev_mh.old_record_c)),
+                _fact("Prior year", ev_mh.old_record_year),
+                _fact("Archive span", f"{ev_mh.years_of_data} years"),
+            ]
+            signal_counts["monthly"] += 1
+
+if strongest_signal is None and bundle.monthly_low:
+    ev_ml: MonthlyRecord = bundle.monthly_low
+    if (
+        not state.is_duplicate(bot_state, ev_ml.event_id)
+        and ev_ml.old_record_year != signal_year
+    ):
+        score = score_monthly_record(
+            ev_ml.new_temp_c, ev_ml.old_record_c, ev_ml.old_record_year,
+            ev_ml.month, ev_ml.years_of_data, kind="low",
+        )
+        if _should_draft(score, ev_ml.event_id):
+            month_name = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][ev_ml.month]
+            strongest_signal = ev_ml
+            strongest_score = score
+            strongest_event_id = ev_ml.event_id
+            strongest_type = "monthly_low"
+            strongest_city = ev_ml.city
+            strongest_headline = f"{ev_ml.city} hit its coldest {month_name} reading on record"
+            strongest_facts = [
+                _fact("Observed low", _temp_pair_c(ev_ml.new_temp_c)),
+                _fact(f"Prior {month_name} min", _temp_pair_c(ev_ml.old_record_c)),
+                _fact("Prior year", ev_ml.old_record_year),
+                _fact("Archive span", f"{ev_ml.years_of_data} years"),
+            ]
+            signal_counts["monthly"] += 1
+
+if strongest_signal is None and bundle.absolute_extreme:
+    ev_ae: AbsoluteExtremeEvent = bundle.absolute_extreme
+    if not state.is_duplicate(bot_state, ev_ae.event_id):
+        score = score_absolute_extreme(
+            ev_ae.today_temp_c,
+            ev_ae.lat,
+            ev_ae.band_label,
+            ev_ae.threshold_c,
+            kind=ev_ae.kind,
+        )
+        if _should_draft(score, ev_ae.event_id):
+            strongest_signal = ev_ae
+            strongest_score = score
+            strongest_event_id = ev_ae.event_id
+            strongest_type = "absolute_extreme"
+            strongest_city = ev_ae.city
+            strongest_headline = (
+                f"{ev_ae.city}: {ev_ae.today_temp_c:.1f}C "
+                f"({ev_ae.band_label} absolute extreme)"
+            )
+            strongest_facts = [
+                _fact("City", ev_ae.city),
+                _fact("Country", ev_ae.country),
+                _fact("Temperature", _temp_pair_c(ev_ae.today_temp_c)),
+                _fact("Latitude band", ev_ae.band_label),
+                _fact("Band threshold", _temp_pair_c(ev_ae.threshold_c)),
+                _fact("Kind", ev_ae.kind),
+                _fact("Data source", ev_ae.data_source),
+            ]
+            signal_counts["absolute_extreme"] += 1
+
+if strongest_signal is None and bundle.anomaly_hot:
+    ev_ah: AnomalyEvent = bundle.anomaly_hot
+    if not state.is_duplicate(bot_state, ev_ah.event_id):
+        score = score_anomaly(
+            ev_ah.today_temp_c, ev_ah.historical_mean_c, ev_ah.anomaly_c,
+            kind="hot",
+        )
+        if _should_draft(score, ev_ah.event_id):
+            strongest_signal = ev_ah
+            strongest_score = score
+            strongest_event_id = ev_ah.event_id
+            strongest_type = "anomaly_hot"
+            strongest_city = ev_ah.city
+            strongest_headline = f"{ev_ah.city}: +{ev_ah.anomaly_c:.1f}C above normal"
+            strongest_facts = [
+                _fact("Today", _temp_pair_c(ev_ah.today_temp_c)),
+                _fact("Historical mean", _temp_pair_c(ev_ah.historical_mean_c)),
+                _fact("Anomaly", f"+{ev_ah.anomaly_c:.1f}C"),
+            ]
+            signal_counts["anomaly"] += 1
+
+if strongest_signal is None and bundle.anomaly_cold:
+    ev_ac: AnomalyEvent = bundle.anomaly_cold
+    if not state.is_duplicate(bot_state, ev_ac.event_id):
+        score = score_anomaly(
+            ev_ac.today_temp_c, ev_ac.historical_mean_c, ev_ac.anomaly_c,
+            kind="cold",
+        )
+        if _should_draft(score, ev_ac.event_id):
+            strongest_signal = ev_ac
+            strongest_score = score
+            strongest_event_id = ev_ac.event_id
+            strongest_type = "anomaly_cold"
+            strongest_city = ev_ac.city
+            strongest_headline = f"{ev_ac.city}: {ev_ac.anomaly_c:.1f}C below normal"
+            strongest_facts = [
+                _fact("Observed low", _temp_pair_c(ev_ac.today_temp_c)),
+                _fact("Historical mean low", _temp_pair_c(ev_ac.historical_mean_c)),
+                _fact("Anomaly", f"{ev_ac.anomaly_c:.1f}C"),
+            ]
+            signal_counts["anomaly"] += 1
+
+if (
+    strongest_signal is None
+    and bundle.calendar_date_high
+    # #414: a city inside a fired records-cluster has its individual
+    # daily draft suppressed — the dome is the story (all-time/monthly
+    # winners above are untouched; they keep their bigger draft).
+    and bundle.calendar_date_high.event_id
+    not in records_cluster_suppressed_ids
+):
+    ev_cdh: RecordEvent = bundle.calendar_date_high
+    if not state.is_duplicate(bot_state, ev_cdh.event_id):
+        score = score_record_event(
+            ev_cdh.new_temp_c, ev_cdh.old_record_c, ev_cdh.old_record_year,
+        )
+        if _should_draft(score, ev_cdh.event_id):
+            strongest_signal = ev_cdh
+            strongest_score = score
+            strongest_event_id = ev_cdh.event_id
+            strongest_type = "record"
+            strongest_city = ev_cdh.city
+            strongest_headline = f"{ev_cdh.city} is forecast to challenge a heat record"
+            strongest_facts = [
+                _fact("Forecast high", _temp_pair_c(ev_cdh.new_temp_c)),
+                _fact("Previous record", _temp_pair_c(ev_cdh.old_record_c)),
+                _fact("Old record year", ev_cdh.old_record_year),
+                _fact("Record gap", f"+{ev_cdh.new_temp_c - ev_cdh.old_record_c:.1f}C"),
+                _fact("Country", ev_cdh.country),
+            ]
+            signal_counts["calendar"] += 1
+            # Track only heat records for the simultaneous-records
+            # lane, preserving enough station detail for roll-call.
+            simultaneous_record_stations.append({
+                "city": ev_cdh.city,
+                "country": ev_cdh.country,
+                "temp_c": ev_cdh.new_temp_c,
+                "kind": "high",
+                "old_record_c": ev_cdh.old_record_c,
+                "old_record_year": ev_cdh.old_record_year,
+                "margin_c": round(ev_cdh.new_temp_c - ev_cdh.old_record_c, 1),
+                "elevation_m": city_elevations.get((ev_cdh.city, ev_cdh.country)),
+                "signal_date": (bundle.signal_date or date.today()).isoformat(),
+                "event_id": ev_cdh.event_id,
+                "evidence": deepcopy(ev_cdh.evidence),
+            })
+
+if strongest_signal is None and bundle.calendar_date_low:
+    ev_cdl: RecordEvent = bundle.calendar_date_low
+    if not state.is_duplicate(bot_state, ev_cdl.event_id):
+        score = score_record_low_event(
+            ev_cdl.new_temp_c, ev_cdl.old_record_c, ev_cdl.old_record_year,
+        )
+        if _should_draft(score, ev_cdl.event_id):
+            strongest_signal = ev_cdl
+            strongest_score = score
+            strongest_event_id = ev_cdl.event_id
+            strongest_type = "record_low"
+            strongest_city = ev_cdl.city
+            strongest_headline = f"{ev_cdl.city} hit a daily cold record"
+            strongest_facts = [
+                _fact("Observed low", _temp_pair_c(ev_cdl.new_temp_c)),
+                _fact("Previous record low", _temp_pair_c(ev_cdl.old_record_c)),
+                _fact("Old record year", ev_cdl.old_record_year),
+                _fact("Record gap", f"{ev_cdl.new_temp_c - ev_cdl.old_record_c:.1f}C"),
+                _fact("Country", ev_cdl.country),
+            ]
+            signal_counts["calendar"] += 1
+

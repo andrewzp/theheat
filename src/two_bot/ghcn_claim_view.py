@@ -1,7 +1,7 @@
 """A selected claim view, rebuilt from complete locally retained GHCN evidence.
 
-This is request preparation only. It does not create a spend/check/approval
-context; ordinary candidate hydration explicitly refuses this reference format.
+Only a freshly resolved typed context can execute this reference format.
+Passive retained packets never mint spending, check or approval authority.
 """
 from __future__ import annotations
 
@@ -10,6 +10,8 @@ from dataclasses import dataclass
 import json
 import math
 import time
+import stat
+from pathlib import Path
 
 from src.commands import postgres_ghcn_source_results as domain
 from src.editorial.policy import current_editorial_policy
@@ -122,31 +124,32 @@ class ResolvedClaim:
         return self.view
 
 
-def resolve(authority, run_id, selection) -> ResolvedClaim:
-    environment(authority.projections)
-    baseline=domain.configured(authority)
+def _read_source(authority, c, run_id, selection):
     inputs.fixed(selection,"station_id signal_date signal_field")
     require(selection["signal_field"] in TYPES, "ghcn_selection_unsupported")
     uuid(run_id)
-    anchor=time.monotonic()
-    with authority.projections._connection() as c:
-        authority._validate(c)
-        receipt,value,deps,_,_,envelope=domain.read_input(authority,c,run_id)
-        result_receipt,result=authority.projections._read(c,inputs.RESULT,"run:"+run_id)
-        require(result["status"]=="applied" and result["source_status"]=="success"
-                and result["runtime_input_sha256"]==receipt.canonical_sha256
-                and result["supply_run_id"]==run_id and result["supply_sha256"]==value["supply_sha256"]
-                and result["dependency_sha256"]==value["dependency_sha256"]
-                and result["effects_sha256"]==value["effects_sha256"], "ghcn_claim_result_changed")
-        accepted=authority._intent(c,result["command_id"])
-        completed=authority._result(c,result["command_id"])
-        require(accepted is not None and accepted[0].action==domain.ACTION
-                and accepted[0].digest==result["command_digest"]
-                and accepted[0].payload["runtime_input_sha256"]==receipt.canonical_sha256
-                and accepted[0].payload["supply_run_id"]==run_id
-                and completed is not None and completed.get("status")=="applied"
-                and completed.get("source_run")==domain.outcome(result_receipt,result), "ghcn_claim_command_not_applied")
-        responses=inputs.read_responses(c,value["responses"])
+    receipt,value,deps,_,_,envelope=domain.read_input(authority,c,run_id)
+    result_receipt,result=authority.projections._read(c,inputs.RESULT,"run:"+run_id)
+    require(result["status"]=="applied" and result["source_status"]=="success"
+            and result["runtime_input_sha256"]==receipt.canonical_sha256
+            and result["supply_run_id"]==run_id and result["supply_sha256"]==value["supply_sha256"]
+            and result["dependency_sha256"]==value["dependency_sha256"]
+            and result["effects_sha256"]==value["effects_sha256"], "ghcn_claim_result_changed")
+    accepted=authority._intent(c,result["command_id"])
+    completed=authority._result(c,result["command_id"])
+    require(accepted is not None and accepted[0].action==domain.ACTION
+            and accepted[0].digest==result["command_digest"]
+            and accepted[0].payload["runtime_input_sha256"]==receipt.canonical_sha256
+            and accepted[0].payload["supply_run_id"]==run_id
+            and completed is not None and completed.get("status")=="applied"
+            and completed.get("source_run")==domain.outcome(result_receipt,result), "ghcn_claim_command_not_applied")
+    responses=inputs.read_responses(c,value["responses"])
+    return receipt,value,deps,envelope,result_receipt,result,responses
+
+
+def _reconstruct(authority, run_id, selection, material, anchor):
+    baseline=domain.configured(authority)
+    receipt,value,deps,envelope,result_receipt,result,responses=material
     require(deps["policy_sha256"]==digest(current_editorial_policy())
             and deps["configuration"]==inputs.configuration()
             and deps["baseline_pins"]==dict(database_sha256=baseline.database_sha256,manifest_sha256=baseline.manifest_sha256), "ghcn_claim_context_changed")
@@ -188,3 +191,159 @@ def resolve(authority, run_id, selection) -> ResolvedClaim:
         raw_bytes=sum(len(r.raw or b"") for r in responses),
         calendar_counts={k:len(v["calendar_samples"]) for k,v in evidence["baseline"]["variables"].items()},
         monthly_counts={k:len(v["monthly_samples"]) for k,v in evidence["baseline"]["variables"].items()}))
+
+
+def resolve(authority, run_id, selection) -> ResolvedClaim:
+    environment(authority.projections)
+    anchor=time.monotonic()
+    with authority.projections._connection() as c:
+        authority._validate(c)
+        material=_read_source(authority,c,run_id,selection)
+    return _reconstruct(authority,run_id,selection,material,anchor)
+
+
+def baseline_footprint(baseline):
+    """Fixed trusted-local metadata fence, not a filesystem/SQL transaction."""
+    rows: list[tuple[str, tuple | None]] = []
+    paths=(baseline.database, baseline.manifest, *(Path(str(baseline.database)+suffix) for suffix in ("-wal","-shm","-journal")))
+    for index,path in enumerate(paths):
+        require(path.is_absolute(), "ghcn_baseline_path")
+        try:
+            meta=path.lstat()
+        except FileNotFoundError:
+            require(index >= 2, "ghcn_baseline_missing")
+            rows.append((str(path),None))
+            continue
+        require(stat.S_ISREG(meta.st_mode), "ghcn_baseline_nonregular")
+        rows.append((str(path),(meta.st_mode,meta.st_dev,meta.st_ino,meta.st_size,meta.st_mtime_ns,meta.st_ctime_ns)))
+    return (baseline.database_sha256,baseline.manifest_sha256,tuple(rows))
+
+
+def _source_pins(material):
+    receipt,value,deps,envelope,result_receipt,result,responses=material
+    return digest(dict(input=receipt.canonical_sha256,result=result_receipt.canonical_sha256,
+        value=value,dependencies=deps,supply=envelope,outcome=result,responses=[r.metadata() for r in responses]))
+
+
+def _checkpoint(authority,c,state,version,material,selection):
+    # Query the exact selected event too, even when no GHCN draft exists yet.
+    _,_,_,bundles,_,_=domain.read_input(authority,c,material[1]["supply_run_id"])
+    chosen=[b for b in bundles if b.station_id==selection["station_id"] and b.signal_date.isoformat()==selection["signal_date"]]
+    require(len(chosen)==1, "ghcn_claim_member_absent")
+    event=getattr(chosen[0],selection["signal_field"])
+    require(event is not None, "ghcn_claim_event_absent")
+    targets=inputs.state_dependencies(state)["targets"]
+    targets=targets+[dict(id="ghcn-event-query:"+event.event_id,event_id=event.event_id)]
+    delivery=domain.delivery_dependency(authority,c,targets)
+    require(not delivery["protection_codes"], "ghcn_delivery_protected")
+    return dict(state_version=version,state_sha256=digest(state),source_sha256=_source_pins(material),
+        delivery=delivery,policy_sha256=digest(current_editorial_policy()),configuration=inputs.configuration())
+
+
+@dataclass(frozen=True)
+class ExecutionContext:
+    """Server-owned per-invocation proof, never serialized or accepted from HTTP."""
+    authority: object
+    claim: ResolvedClaim
+    checkpoint: dict
+    footprint: tuple
+    valid_until: float
+    save: dict
+
+    def _current(self,authority,c,state,version):
+        require(authority is self.authority and time.monotonic() <= self.valid_until, "ghcn_preparation_expired")
+        ref=self.claim.reference
+        material=_read_source(authority,c,ref["source_run_id"],ref["selection"])
+        require(_checkpoint(authority,c,state,version,material,ref["selection"])==self.checkpoint,
+            "ghcn_execution_context_changed")
+        require(baseline_footprint(domain.configured(authority))==self.footprint,"ghcn_baseline_changed")
+        require(time.monotonic() <= self.valid_until,"ghcn_preparation_expired")
+        return self.claim
+
+    def current(self,authority,c,state,version):
+        from src.commands.schema import CommandError
+        from src.storage.cyclone_supply import CycloneSupplyError
+        try:
+            return self._current(authority,c,state,version)
+        except CycloneSupplyError as exc:
+            raise CommandError(str(exc),"Current GHCN evidence changed; refresh the retained brief") from None
+        except OSError:
+            raise CommandError("ghcn_baseline_unavailable","Current GHCN baseline is unavailable") from None
+
+
+def prepare_execution(authority,run_id,selection):
+    """Read on the owned connection, replay on verified detached bytes outside it."""
+    anchor=time.monotonic()
+    baseline=domain.configured(authority)
+    with authority.projections._connection() as c:
+        authority._validate(c)
+        version,state=authority._state(c,lock=True)
+        material=_read_source(authority,c,run_id,selection)
+        checkpoint=_checkpoint(authority,c,state,version,material,selection)
+    before=baseline_footprint(baseline)
+    claim=_reconstruct(authority,run_id,selection,material,anchor)
+    require(before==baseline_footprint(baseline),"ghcn_baseline_changed")
+    from src.orchestrator.sources import open_meteo as source
+    from src.storage.scientific_supply import ScientificSupplySession
+    detached=deepcopy(state)
+    session=ScientificSupplySession(authority.projections,run_id,"replay")
+    bundles=[_row(row,model.ExtremeSignalBundle,decoding=True) for row in material[3]["bundles"]]
+    with source._isolated_replay(session), source._suppression_context(detached,source="retained_ghcn_replay",run_id=run_id):
+        suppressed,_,_,individual,_=source._scientific_prepass(detached,bundles)
+        candidates=[b for b in individual if b.station_id==selection["station_id"] and b.signal_date.isoformat()==selection["signal_date"]]
+        require(len(candidates)==1,"ghcn_individual_not_selected")
+        member=candidates[0]
+        selected=source._select_individual_signal(detached,member,suppressed,{})
+    require(selected.signal is not None and selected.legacy_type==TYPES[selection["signal_field"]]
+        and selected.event_id==claim.full.event_id,"ghcn_selection_not_dispatch_winner")
+    elite=selected.legacy_type in {"all_time_high","all_time_low"} or (
+        selected.legacy_type in {"anomaly_hot","anomaly_cold"} and abs(selected.signal.anomaly_c)>=18)
+    save=dict(legacy_type=selected.legacy_type,event_id=selected.event_id,score=selected.score.as_dict(),city=selected.city,
+        tweet_date=selection["signal_date"],cooldown_exempt=elite,evaluator_metadata=None,
+        review_context=source._review_context(source=f"NOAA GHCN-Daily (station {member.station_id})",
+            source_key="open_meteo_extreme_signals",headline=selected.headline,facts=selected.facts,
+            current_run=dict(id=run_id,mode="retained_local",started_at=material[1]["acquisition_started_at"])))
+    require(time.monotonic()<=anchor+domain.PREPARATION_SECONDS,"ghcn_preparation_expired")
+    return ExecutionContext(authority,claim,checkpoint,before,anchor+domain.PREPARATION_SECONDS,save)
+
+
+def structural_view(value):
+    """Passive closed shape only: no source replay, baseline, or scientific pass."""
+    from dataclasses import fields
+    from datetime import date
+    from src.commands.schema import canonical_json
+    from src.storage.cyclone_supply import sha
+    names={f.name for f in fields(StoryBundle)}
+    optional={"country","related_signals","human_impact"}
+    require(type(value) is dict and names-optional <= set(value) <= names,"ghcn_claim_view_shape")
+    require(all(value[key] for key in optional if key in value),"ghcn_claim_view_shape")
+    require(len(canonical_json(value).encode())<=32768,"ghcn_claim_view_bound")
+    raw=value["raw_signal_dump"]
+    require(type(raw) is dict and type(raw.get("ghcn_claim_view")) is dict,"ghcn_claim_view_shape")
+    ref=raw["ghcn_claim_view"]
+    inputs.fixed(ref,"schema_version kind scope source_run_id source_result runtime_input scientific_supply selection member_sha256 full_story observation_revision baseline_revision baseline_artifact original_archives")
+    require(type(ref["schema_version"]) is int and ref["schema_version"]==1
+        and ref["kind"]=="ghcn_claim_view_v1" and ref["scope"]=="selected_claim_warrants","ghcn_claim_view_shape")
+    uuid(ref["source_run_id"])
+    selection=ref["selection"]
+    inputs.fixed(selection,"station_id signal_date signal_field")
+    require(selection["signal_field"] in TYPES and date.fromisoformat(selection["signal_date"]).isoformat()==selection["signal_date"],"ghcn_claim_view_shape")
+    for key,namespace in (("source_result",inputs.RESULT),("runtime_input",inputs.INPUT),("scientific_supply",NAMESPACE)):
+        item=ref[key]
+        inputs.fixed(item,"namespace snapshot_id sha256")
+        require(item["namespace"]==namespace and item["snapshot_id"]=="run:"+ref["source_run_id"],"ghcn_claim_view_reference")
+        sha(item["sha256"])
+    inputs.fixed(ref["full_story"],"codec sha256")
+    require(ref["full_story"]["codec"]=="revision-fingerprint-v1-json-default","ghcn_claim_view_reference")
+    sha(ref["full_story"]["sha256"])
+    sha(ref["member_sha256"])
+    inputs.fixed(ref["baseline_artifact"],"database_sha256 manifest_sha256")
+    for pin in ref["baseline_artifact"].values():
+        sha(pin)
+    archives=ref["original_archives"]
+    require(type(archives) is list and len(archives)==1,"ghcn_claim_view_reference")
+    inputs.fixed(archives[0],"kind key retrieved_at status raw_sha256 failure_code")
+    require(archives[0]["kind"]=="station_archive" and archives[0]["key"]==selection["station_id"]
+        and archives[0]["status"]=="success" and archives[0]["failure_code"] is None,"ghcn_claim_view_reference")
+    sha(archives[0]["raw_sha256"])
+    return ref

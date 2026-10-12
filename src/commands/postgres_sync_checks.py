@@ -63,7 +63,7 @@ def install(c, environment, *, now):
 def packet(c, identity, row, raw):
     from src.commands import postgres_synchronous_generation as sync
     value = p._decode(raw)
-    checks._require(origin.validate(value) == "verified_synchronous_writer" and fingerprint(value) == identity
+    checks._require(origin.validate(value) in {"verified_synchronous_writer", "retained_synchronous_writer"} and fingerprint(value) == identity
         and row[0] is row[1] is row[5] is row[6] is None and row[4] == origin.ORIGIN
         and row[7] == origin.NAMESPACE and row[8] == value["enrollment_id"] and row[3] == value["captured_at"], "changed_sync_check_set")
     receipt, retained = p.PostgresProjectionRepository._read(c, origin.NAMESPACE, value["enrollment_id"])
@@ -72,7 +72,7 @@ def packet(c, identity, row, raw):
     return value, row[3]
 
 
-def enroll(c, value, refs, row, state, version, policy, *, now, environment):
+def enroll(c, value, refs, row, state, version, policy, *, now, environment, resolved=None):
     from src.commands import postgres_checks as pg, postgres_sourced_generation as generation
     from src.commands import postgres_synchronous_generation as sync
     from src.two_bot.candidate_derivation import derive_candidate
@@ -80,8 +80,8 @@ def enroll(c, value, refs, row, state, version, policy, *, now, environment):
     checks._require(upgraded(c), "sync_check_migration_required")
     job = sync.job(c, value["generation_id"])
     candidate = row["candidate"]
-    derived = derive_candidate(candidate, value["candidate_id"], value["bundle"], policy)
-    packet = dict(schema_version=4, origin_kind=origin.ORIGIN, enrollment_id="",
+    derived = derive_candidate(candidate, value["candidate_id"], value["bundle"], policy, resolved=resolved)
+    packet = dict(schema_version=5 if resolved is not None else 4, origin_kind=origin.ORIGIN, enrollment_id="",
         **{k:value[k] for k in origin.REFERENCES}, candidate=candidate, derivation=derived,
         derivation_id=fingerprint(derived), text_sha256=derived["text_sha256"], current_context=value["current_context"],
         useful_until=revisions.spend._time(utc_text(min(utc_datetime(job["useful_until"]), now.replace(hour=0, minute=0, second=0, microsecond=0)+timedelta(days=1)))),
@@ -92,7 +92,7 @@ def enroll(c, value, refs, row, state, version, policy, *, now, environment):
     packet["enrollment_id"] = origin.enrollment_id(packet)
     if generation.exists(c, origin.NAMESPACE, packet["enrollment_id"]):
         packet = generation.read(c, origin.NAMESPACE, packet["enrollment_id"])
-    origin.validate(packet)
+    checks._require(origin.validate(packet, resolved=resolved) == "verified_synchronous_writer", "sync_context_required")
     raw = checks._encoded(packet, pg.MAX_PACKET_BYTES)
     identity = fingerprint(packet)
     if not c.execute("SELECT 1 FROM theheat_checks.sets WHERE check_set_id=%s", (identity,)).fetchone():
@@ -105,11 +105,11 @@ def enroll(c, value, refs, row, state, version, policy, *, now, environment):
     return dict(check_set_id=identity)
 
 
-def current(c, packet, payload, at, environment):
+def current(c, packet, payload, at, environment, *, resolved=None):
     from src.commands import postgres_synchronous_generation as sync
     from src.commands.postgres_authority import PostgresCommandAuthority
     checks._require(environment == "local", "sync_check_environment_refused")
-    origin.validate(packet)
+    checks._require(origin.validate(packet, resolved=resolved) == "verified_synchronous_writer", "sync_context_required")
     checks._policy(packet["current_context"])
     sync.verify_candidate(c, packet)
     version, state = PostgresCommandAuthority._state(c, lock=True)
