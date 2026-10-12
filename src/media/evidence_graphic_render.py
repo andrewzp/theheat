@@ -438,9 +438,7 @@ def _map_drawing(drawing, evidence, text, colors):
     """The map uses the same drawing/font/native package as every other template."""
     from reportlab.graphics.shapes import Circle, Line, Path as PlotPath, Rect, String
     from reportlab.lib.colors import HexColor
-    from reportlab.pdfbase import pdfmetrics
     from src.media import fire_map_graphic_adapter as adapter
-    from src.media.fire_graphic_adapter import coordinate_label
 
     colors["ink"] = HexColor("#17212B")
     plot_bg, grid = HexColor("#F0F3F5"), HexColor("#C5CDD4")
@@ -477,60 +475,14 @@ def _map_drawing(drawing, evidence, text, colors):
         drawing.add(Line(x, bottom, x, bottom + height, strokeColor=grid, strokeWidth=1))
         drawing.add(Line(left, y, left + width, y, strokeColor=grid, strokeWidth=1))
 
-    # Longitude labels sit outside the plot; retain exactly three distinct ticks.
-    lon_boxes: list[tuple[float, float, float]] = []
-    for fraction in (0, 0.5, 1):
-        value = adapter.wrapped(west + (east - west) * fraction)
-        label = "180°" if abs(value) == 180 else f"{abs(value):.4f}°{'W' if value < 0 else 'E'}"
-        label_width = pdfmetrics.stringWidth(label, "TheHeatMono", 40)
-        x = max(56, min(1144 - label_width, left + width * fraction - label_width / 2))
-        label_y = bottom + height + 10 if fraction == 0.5 else bottom - 52
-        adapter.require(
-            all(
-                label_y != old_y or x >= end + 8 or x + label_width + 8 <= start
-                for start, end, old_y in lon_boxes
-            ),
-            "graphic_map_labels_exceed_space",
-        )
-        lon_boxes.append((x, x + label_width, label_y))
-        text(x, label_y, label, 40, "muted")
-
-    # Latitude captions stay on their graticule and avoid every measured marker/label.
-    obstacles = [(x - 20, y - 20, x + 20, y + 20) for x, y in map_["markers"]] + [
-        row["box"] for row in map_["labels"]
-    ]
-    for fraction in (0, 0.5, 1):
-        value = south + (north - south) * fraction
-        label = f"{abs(value):.4f}°{'S' if value < 0 else 'N'}"
-        label_width = pdfmetrics.stringWidth(label, "TheHeatMono", 40)
-        y = bottom + height * fraction + (6 if fraction == 0 else -42 if fraction == 1 else 6)
-        possible = [left - label_width - 12] if left - label_width - 12 >= 56 else []
-        possible += [
-            left + 8 + i * 16 for i in range(max(0, int((width - label_width - 16) / 16) + 1))
-        ]
-        box = None
-        for x in possible:
-            box = (x - 3, y - 5, x + label_width + 3, y + 41)
-            if all(
-                box[2] + 16 < a or c + 16 < box[0] or box[3] + 16 < b or d + 16 < box[1]
-                for a, b, c, d in obstacles
-            ):
-                break
-        else:
-            raise adapter.MapQualificationError("graphic_map_labels_exceed_space")
-        assert box is not None
-        obstacles.append(box)
-        drawing.add(
-            Rect(
-                box[0],
-                box[1],
-                box[2] - box[0],
-                box[3] - box[1],
-                fillColor=plot_bg,
-                strokeColor=None,
-            )
-        )
-        text(x, y, label, 40, "ink")
+    layout = map_text_layout(evidence)
+    for row in layout["longitudes"]:
+        text(row["x"], row["y"], row["text"], 40, "muted")
+    for row in layout["latitudes"]:
+        box = row["box"]
+        drawing.add(Rect(box[0], box[1], box[2] - box[0], box[3] - box[1],
+                         fillColor=plot_bg, strokeColor=None))
+        text(row["x"], row["y"], row["text"], 40, "ink")
 
     for point, (x, y), label in zip(evidence["points"], map_["markers"], map_["labels"]):
         drawing.add(Line(x, y, *label["leader_end"], strokeColor=colors["ink"], strokeWidth=2))
@@ -575,15 +527,9 @@ def _map_drawing(drawing, evidence, text, colors):
         )
     for fraction, anchor in ((0, "start"), (0.5, "middle"), (1, "end")):
         text(56 + 1088 * fraction, 477, f"{map_['axis_max'] * fraction:g} MW", 40, "muted", anchor)
-    for index, point in enumerate(evidence["points"]):
-        label = point["label"] + " · " + coordinate_label(point)
-        value = str(point["frp_source"]) + " MW"
-        adapter.require(
-            sum(pdfmetrics.stringWidth(v, "TheHeatMono", 40) for v in (label, value)) + 24 <= 1088,
-            "graphic_map_labels_exceed_space",
-        )
-        text(56, 414 - index * 52, label, 40)
-        text(1144, 414 - index * 52, value, 40, "text", "end")
+    for index, row in enumerate(layout["rows"]):
+        text(56, 414 - index * 52, row["label"], 40)
+        text(1144, 414 - index * 52, row["value"], 40, "text", "end")
 
     # The small global locator never enlarges a tiny viewport into an apparent footprint.
     inset = (56, 84, 280, 140)
@@ -618,3 +564,61 @@ def _map_drawing(drawing, evidence, text, colors):
     text(372, 140, "Location only; not extent" if tiny else "Coarse viewport outline", 40, "muted")
     text(372, 90, "Pixel centers; no perimeters", 40, "muted")
     text(56, 38, "FRP is power, not area or fire severity.", 40, "muted")
+
+
+def map_text_layout(evidence):
+    """Bounded layout only: embedded-font metrics, no drawing, native work or output.
+
+    Readiness and the actual drawing consume this same calculation. Font parsing
+    uses only retained bytes and an unregistered local TTFont instance.
+    """
+    from reportlab.pdfbase.ttfonts import TTFont
+    from src.media import fire_map_graphic_adapter as adapter
+    from src.media.fire_graphic_adapter import coordinate_label
+
+    font = TTFont("TheHeatMapLayout", BytesIO(_resource(FONT_RESOURCE)))
+    def measure(value):
+        return font.stringWidth(value, 40)
+    map_ = evidence["map"]
+    west, south, east, north = map_["bounds"]
+    left, bottom, width, height = map_["rectangle"]
+    longitudes, latitudes, rows = [], [], []
+    lon_boxes: list[tuple[float, float, float]] = []
+    for fraction in (0, 0.5, 1):
+        value = adapter.wrapped(west + (east - west) * fraction)
+        label = "180°" if abs(value) == 180 else f"{abs(value):.4f}°{'W' if value < 0 else 'E'}"
+        label_width = measure(label)
+        x = max(56, min(1144 - label_width, left + width * fraction - label_width / 2))
+        y = bottom + height + 10 if fraction == 0.5 else bottom - 52
+        adapter.require(all(y != old_y or x >= end + 8 or x + label_width + 8 <= start
+                            for start, end, old_y in lon_boxes), "graphic_map_labels_exceed_space")
+        lon_boxes.append((x, x + label_width, y))
+        longitudes.append(dict(x=x, y=y, text=label))
+
+    obstacles = [(x - 20, y - 20, x + 20, y + 20) for x, y in map_["markers"]] + [
+        row["box"] for row in map_["labels"]]
+    for fraction in (0, 0.5, 1):
+        value = south + (north - south) * fraction
+        label = f"{abs(value):.4f}°{'S' if value < 0 else 'N'}"
+        label_width = measure(label)
+        y = bottom + height * fraction + (6 if fraction == 0 else -42 if fraction == 1 else 6)
+        possible = [left - label_width - 12] if left - label_width - 12 >= 56 else []
+        possible += [left + 8 + i * 16 for i in range(max(0, int((width - label_width - 16) / 16) + 1))]
+        box = None
+        for x in possible:
+            box = (x - 3, y - 5, x + label_width + 3, y + 41)
+            if all(box[2] + 16 < a or c + 16 < box[0] or box[3] + 16 < b or d + 16 < box[1]
+                   for a, b, c, d in obstacles):
+                break
+        else:
+            raise adapter.MapQualificationError("graphic_map_labels_exceed_space")
+        assert box is not None
+        obstacles.append(box)
+        latitudes.append(dict(x=x, y=y, text=label, box=box))
+    for point in evidence["points"]:
+        label = point["label"] + " · " + coordinate_label(point)
+        value = str(point["frp_source"]) + " MW"
+        adapter.require(measure(label) + measure(value) + 24 <= 1088,
+                        "graphic_map_labels_exceed_space")
+        rows.append(dict(label=label, value=value))
+    return dict(longitudes=longitudes, latitudes=latitudes, rows=rows)

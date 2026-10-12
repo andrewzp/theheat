@@ -277,3 +277,21 @@ def test_root_counterexample_cannot_draw_a_leader_through_another_label():
                 x, y = a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])
                 assert not (left <= x <= right and bottom <= y <= top)
     assert render_svg(**spec)["publication_approved"] is False
+
+
+def test_readiness_layout_uses_embedded_metrics_without_draw_or_native_work(monkeypatch):
+    from reportlab.pdfbase import pdfmetrics
+    from src.media import evidence_graphic_render as renderer
+    def forbidden(*args, **kwargs):
+        raise AssertionError("Layout preflight attempted drawing, registration, output or native work")
+    monkeypatch.setattr(renderer, "_drawing", forbidden)
+    monkeypatch.setattr(renderer.subprocess, "run", forbidden)
+    monkeypatch.setattr(pdfmetrics, "registerFont", forbidden)
+    monkeypatch.setattr(Path, "write_bytes", forbidden)
+    monkeypatch.setattr(Path, "write_text", forbidden)
+    monkeypatch.setattr(Path, "mkdir", forbidden)
+    layout = renderer.map_text_layout(adapt()["evidence"])
+    assert len(layout["longitudes"]) == len(layout["latitudes"]) == len(layout["rows"]) == 3
+    spec = adapt(graphic_bundle(values=[1.2345678901234567e100]))
+    with pytest.raises(adapter.MapQualificationError, match="graphic_map_labels_exceed_space"):
+        renderer.map_text_layout(spec["evidence"])

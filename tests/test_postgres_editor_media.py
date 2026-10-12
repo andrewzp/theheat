@@ -59,10 +59,14 @@ def admitted(request, store, core, tmp_path, monkeypatch, native_dependencies):
     monkeypatch.setenv("GEMINI_API_KEY", "invented-offline-key")
     monkeypatch.setenv("THEHEAT_CRITIC_ENABLED", "1")
     monkeypatch.setattr(safety, "GEMINI_API_KEY", "invented-offline-key")
-    if request.param == "modis":
-        from tests.fire_graphic_helpers import graphic_bundle
+    if request.param in {"modis", "modis_long_frp"}:
+        from tests.fire_graphic_helpers import graphic_bundle as fire_bundle
 
-        text = "MODIS detected a 500 MW thermal signal in an invented region."
+        def graphic_bundle():
+            return fire_bundle(values=[1.2345678901234567e100]) if request.param == "modis_long_frp" else fire_bundle()
+
+        text = ("MODIS detected a thermal signal in this invented region." if request.param == "modis_long_frp"
+                else "MODIS detected a 500 MW thermal signal in an invented region.")
         source_key = "firms"
     else:
         from src.data.air_quality import _parse_single_location, detect_pm25_hazard
@@ -620,6 +624,21 @@ def test_complete_native_check_park_dump_restore_and_resumption(
         )
         assert not view(restored)["parked"]
         assert view(restored, png=prepared["preparation"]["proposal_sha256"]) == png
+        # Passive original evidence survives both restore/revision and a later
+        # current-resource outage; it grants no current promotion or new render.
+        from src.media import fire_map_graphic_adapter as adapter
+        from src.commands import preview_media_worker as worker
+        after_edit = all_application_rows(restored_params)
+        with monkeypatch.context() as patch:
+            patch.setattr(adapter, "resource", lambda *a, **k: (_ for _ in ()).throw(OSError("invented missing basemap")))
+            patch.setattr(worker, "run_native", lambda *a, **k: pytest.fail("Historical read invoked native renderer"))
+            held = view(restored)
+            assert held["status"] == "unavailable" and held["code"] == "graphic_map_basemap_unavailable"
+            assert not held["parked"] and not held["review_current"]
+            assert view(restored, png=prepared["preparation"]["proposal_sha256"]) == png
+            with pytest.raises(ValueError):
+                authority.read_media_proposal(prepared["preparation"]["proposal_sha256"])
+        assert all_application_rows(restored_params) == after_edit
     finally:
         admin(
             params,
@@ -843,3 +862,67 @@ def test_map_resource_drift_after_prepare_holds_without_attaching(admitted, monk
     assert case["store"].read() == state
     assert admin(core[3], "SELECT * FROM theheat_media.packages ORDER BY 1") == packages
     assert view(case, png=prepared["preparation"]["proposal_sha256"]) == png
+
+
+@pytest.mark.parametrize("admitted", ["modis_long_frp"], indirect=True)
+def test_oversized_exact_number_is_held_before_native_preparation(admitted, monkeypatch, core):
+    from src.dashboard_preview.preview import qualified_spec
+    from src.commands import preview_media_worker as worker
+    from src.media import evidence_graphic_render as renderer
+    case = admitted
+    spec, _, _ = qualified_spec(case["bundle"].to_dict(), synthetic=True)
+    digest, _ = domain.profile(case["store"], spec)
+    before = case["store"].read()
+    def forbidden(*args, **kwargs):
+        raise AssertionError("Unreadable preflight attempted native/drawing work")
+    monkeypatch.setattr(worker, "run_native", forbidden)
+    monkeypatch.setattr(renderer, "_drawing", forbidden)
+    held = view(case)
+    assert held["status"] == "unavailable" and held["code"] == "graphic_map_labels_exceed_space"
+    assert held["preparation"] is None and not held["parked"] and not held["review_current"]
+    _, result = action(case, "prepare_media_revision", dict(
+        expected_policy_sha256=fingerprint(current_editorial_policy()),
+        expected_renderer_profile_sha256=digest,
+    ))
+    assert result["status"] == "rejected" and result["code"] == "graphic_map_labels_exceed_space"
+    assert case["store"].read() == before
+    assert admin(core[3], "SELECT count(*) FROM theheat_media.packages") == [(0,)]
+    assert len(case["provider_requests"]) == 3
+
+
+@pytest.mark.parametrize("admitted", ["modis"], indirect=True)
+def test_png_projection_requires_successful_prepare_and_retained_record(admitted, monkeypatch, core):
+    from copy import deepcopy
+    from src.commands import postgres_sourced_generation as generation
+    from src.commands.schema import CommandError
+    case = admitted
+    current = view(case)
+    cmd, result = action(case, "prepare_media_revision", {k:current[k] for k in (
+        "expected_policy_sha256", "expected_renderer_profile_sha256")})
+    assert result["status"] == "unchanged"
+    ref = result["media_preparation"]
+    original_png = view(case, png=ref["proposal_sha256"])
+    before = all_application_rows(core[3]), case["store"].read()
+    original_result = case["store"]._result
+    for status in ("rejected", "pending"):
+        with monkeypatch.context() as patch:
+            patch.setattr(case["store"], "_result", lambda c, identity: (
+                {**original_result(c, identity), "status":status} if identity == cmd.command_id else original_result(c, identity)))
+            with pytest.raises(CommandError) as exc:
+                view(case, png=ref["proposal_sha256"])
+            assert exc.value.code == "media_draft_mismatch"
+    original_read = generation.read
+    for key, wrong in (("draft_id", "another-draft"), ("packet_sha256", "f"*64), ("command_id", str(uuid4()))):
+        with monkeypatch.context() as patch:
+            def changed(c, namespace, identity):
+                value = original_read(c, namespace, identity)
+                if namespace == domain.PREPARATION:
+                    value = deepcopy(value)
+                    value[key] = wrong
+                return value
+            patch.setattr(generation, "read", changed)
+            with pytest.raises(CommandError) as exc:
+                view(case, png=ref["proposal_sha256"])
+            assert exc.value.code == "media_preparation_not_retained"
+    assert view(case, png=ref["proposal_sha256"]) == original_png
+    assert (all_application_rows(core[3]), case["store"].read()) == before

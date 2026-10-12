@@ -105,7 +105,7 @@ def validate_basemap(root):
 
 
 def generate(root=ROOT):
-    validate_basemap(ROOT)
+    validate_basemap(root)
     output = BytesIO()
     files = {}
     entries = [(name, name) for name in SOURCES] + list(RESOURCES)
