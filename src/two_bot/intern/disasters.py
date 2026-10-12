@@ -49,10 +49,26 @@ def build_severe_weather_bundle(alert: SevereWeatherAlert) -> StoryBundle:
     discipline already in the prompt.
     """
 
+    from src.media.published_radar import RadarHold, interval
+    raw = asdict(alert)
+    when = ""
+    extra = []
+    envelope = alert.source_evidence
+    if isinstance(envelope, dict):
+        try:
+            when, end = interval(envelope["times"])
+            extra = [{"label": "warning_valid_start_utc", "value": when},
+                     {"label": "warning_valid_end_utc", "value": end}]
+        except (RadarHold, ValueError, KeyError, TypeError):
+            pass  # Missing source time remains an explicit evidence-gate hold.
+        if envelope.get("source_alert_id") and envelope.get("feature_sha256"):
+            raw["provenance"] = {k: envelope[k] for k in ("source_url", "source_alert_id", "feature_sha256")}
+        extra.append({"label": "radar_evidence_status", "value": envelope.get("status", "held")})
+    extra.append({"label": "claim_limit", "value": "NWS warning designation; OBSERVED may be radar-derived and is not independent eyewitness or surface-impact evidence."})
     return StoryBundle(
         signal_kind="severe_weather",
         where=alert.area,
-        when=date.today().isoformat(),
+        when=when,
         event_id=alert.event_id,
         headline_metric={"label": "event_type", "value": alert.event_type},
         current_facts=[
@@ -64,9 +80,9 @@ def build_severe_weather_bundle(alert: SevereWeatherAlert) -> StoryBundle:
             {"label": "tornado_detection", "value": alert.tornado_detection},
             {"label": "description", "value": alert.description},
             {"label": "sender_name", "value": alert.sender_name},
-        ],
+        ] + extra,
         historical_context={},
-        raw_signal_dump=asdict(alert),
+        raw_signal_dump=raw,
     )
 
 def build_global_disaster_bundle(disaster: GlobalDisasterEvent) -> StoryBundle:

@@ -96,15 +96,29 @@ def _copy(value):
     return json.loads(domain._json_bytes(value))
 
 
+def asset_limits(manifest):
+    if type(manifest) is dict and type(manifest.get("schema_version")) is int and manifest["schema_version"] == 2:
+        from src.media.published_radar import FAMILY, LIMITS
+        _require(manifest.get("family") == FAMILY, "invalid_media_asset_family")
+        return LIMITS
+    _require(type(manifest) is dict and type(manifest.get("schema_version")) is int and manifest["schema_version"] == 1,
+             "invalid_media_asset_family")
+    return _LIMITS
+
+
 def _assets(assets, manifest):
-    _require(isinstance(assets, dict) and set(assets) == set(_LIMITS), "invalid_media_asset_set")
+    limits = asset_limits(manifest)
+    _require(isinstance(assets, dict) and set(assets) == set(limits), "invalid_media_asset_set")
     _require(
-        all(type(data) is bytes and 0 < len(data) <= _LIMITS[name] for name, data in assets.items())
+        all(type(data) is bytes and 0 < len(data) <= limits[name] for name, data in assets.items())
         and sum(map(len, assets.values())) <= MAX_TOTAL_ASSET_BYTES,
         "media_asset_size_limit",
     )
     hashes = {name: hashlib.sha256(data).hexdigest() for name, data in assets.items()}
     _require(hashes == manifest["files"], "media_asset_manifest_mismatch")
+    if manifest["schema_version"] == 2:
+        from src.media.published_radar import original_header
+        original_header(assets["original.gif"], json.loads(assets["input.json"])["evidence"]["input"])
     return hashes
 
 
@@ -181,6 +195,7 @@ def retain(connection, draft_id, request, *, principal, assets, recorded_at):
         "invalid_media_draft_identity",
     )
     request = _copy(request)
+    _require(request["renderer_manifest"].get("schema_version") == 1, "published_media_requires_postgres_authority")
     _require(
         utc_datetime(request["reviewed_at"]) <= utc_datetime(recorded_at) + timedelta(minutes=5),
         "media_review_time_in_future",

@@ -58,11 +58,21 @@ def profile(authority, spec):
     binary = Path(config["rasterizer"])
     refuse(binary.is_absolute() and binary.is_file() and not binary.is_symlink()
            and os.access(binary, os.X_OK), "native_renderer_unavailable")
-    renderer = {**_renderer_identity(spec["template"], spec["evidence"]), "rasterizer_sha256": p._sha(binary.read_bytes())}
+    if spec["template"] == "published_nws_radar":
+        from importlib.metadata import version
+        from src.media import published_radar
+        renderer = dict(library="Pillow", version=version("pillow"), width=600, height=550,
+            implementation_sha256=p._sha(Path(published_radar.__file__).read_bytes()), dependencies_sha256=dependencies_sha256)
+    else:
+        renderer = {**_renderer_identity(spec["template"], spec["evidence"]), "rasterizer_sha256": p._sha(binary.read_bytes())}
     root = Path(__file__).parents[1]
-    sources = ("commands/preview_media_worker.py", "commands/postgres_editor_media.py", "dashboard_preview/preview.py")
+    sources: tuple[str, ...] = ("commands/preview_media_worker.py", "commands/postgres_editor_media.py", "dashboard_preview/preview.py")
+    if spec["template"] == "published_nws_radar":
+        sources += ("media/published_radar.py", "commands/postgres_published_media.py")
     identity = dict(schema_version=1, renderer=renderer, dependencies_sha256=dependencies_sha256,
                     sources={name:p._sha((root/name).read_bytes()) for name in sources})
+    if spec["template"] == "published_nws_radar":
+        identity["selection_sha256"] = spec["evidence"]["selection_sha256"]
     return fingerprint(identity), renderer
 
 
@@ -82,7 +92,12 @@ def inputs(authority, c, draft, policy, now):
     from src.dashboard_preview.preview import qualified_spec
     from src.media.fire_map_graphic_adapter import MapQualificationError
     try:
-        spec, label, context = qualified_spec(captured["bundle"], synthetic=True)
+        if captured["bundle"].get("signal_kind") == "severe_weather":
+            from src.commands.postgres_published_media import current as radar_current
+            spec = radar_current(authority, c, origin["brief_id"], captured["bundle"], ref, now)
+            label, context = "Published NWS radar · human label review required", spec["evidence"]["scope"]
+        else:
+            spec, label, context = qualified_spec(captured["bundle"], synthetic=True)
         if spec["template"] == "modis_thermal_detection_map":
             from src.media.evidence_graphic_render import map_text_layout
             map_text_layout(spec["evidence"])
@@ -169,6 +184,8 @@ def boundary(authority, c, state, version, command, actor, policy, now, resolve_
         refuse(type(prepared) is dict and prepared.get("command_id") == command.command_id,
                "native_preparation_required")
         refuse(prepared["checkpoint"] == fingerprint(dict(target=_identity(draft), inputs=value)), "media_preparation_obsolete")
+        if value["spec"]["template"] == "published_nws_radar":
+            refuse(now >= utc_datetime(prepared["started_at"]), "media_completion_clock_regressed")
         if prepared.get("failure"):
             refuse(False, prepared["failure"])
         manifest, assets = prepared["manifest"], prepared["assets"]
@@ -318,7 +335,7 @@ def parked(authority, c, draft, state, version, value, policy, now, resolve_prin
     return True
 
 
-def projection(authority, c, draft_id, *, state, version, policy, now, resolve_principal, png_proposal=None):
+def projection(authority, c, draft_id, *, state, version, policy, now, resolve_principal, png_proposal=None, original=False):
     matches = [d for d in state["drafts"] if isinstance(d, dict) and d.get("id") == draft_id]
     refuse(len(matches) == 1, "draft_not_found")
     draft = matches[0]
@@ -342,7 +359,7 @@ def projection(authority, c, draft_id, *, state, version, policy, now, resolve_p
         return media.read_retained_png(c, expected_proposal_sha256=reference["proposal_sha256"],
             expected_packet_sha256=reference["packet_sha256"], expected_predecessor=command.targets[0].as_dict(),
             expected_subject=command.actor_subject, expected_at=utc_text(utc_datetime(command.requested_at)),
-            environment=authority.environment)
+            environment=authority.environment, original_bytes=original)
     view = dict(draft_id=draft_id, target=_identity(draft), status="unavailable", text=draft["text"],
         publication_approved=False, local_preview=True, parked=False, review_current=False, checks_status="not_requested",
         expected_check_completion_sha256=None, preparation=None, packet=None)
@@ -367,6 +384,11 @@ def projection(authority, c, draft_id, *, state, version, policy, now, resolve_p
             break
     try:
         value = inputs(authority, c, draft, policy, now)
+        if value["spec"]["template"] == "published_nws_radar":
+            evidence = value["spec"]["evidence"]
+            view["published"] = dict(station="KTLX", frame_minute_utc=evidence["input"]["metadata"]["frame_minute_utc"],
+                units="dBZ", context="Radar context at Oklahoma City; not the full warning footprint or evidence of surface impacts.",
+                useful_until=evidence["useful_until"], synthetic=evidence["synthetic"], source_credit="NATIONAL WEATHER SERVICE")
         view.update(status="ready", expected_policy_sha256=value["policy_sha256"],
             expected_renderer_profile_sha256=value["profile_sha256"], source_label=value["source_label"], source_context=value["source_context"])
         for reference in refs:

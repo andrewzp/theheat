@@ -253,7 +253,7 @@ class PostgresCommandAuthority:
             self._pointer(c, lock=True)
             postgres_checks.validate(c, self.environment)
             packet, _ = postgres_checks._packet(c, check_set_id, self.environment)
-            if packet.get("schema_version") in (3, 4):
+            if packet.get("schema_version") in (3, 4, 6):
                 result = revisions.acquire(c, check_set_id, owner, ttl_seconds, now=now, environment=self.environment, origin_kind=packet["origin_kind"])
             else:
                 result = postgres_batch_worker.apply(c, "acquire", dict(job_id=packet["job_id"], owner=owner,
@@ -895,6 +895,18 @@ class PostgresCommandAuthority:
                         # A late deadline/clock refusal rolls back ALL source and
                         # state effects. The exact accepted intent remains pending.
                         clock = sources.final_clock(command, clock)
+                    if result["status"] in {"applied", "unchanged"} and command.action in MEDIA_ACTIONS | EDITOR_MEDIA_ACTIONS and command.action != "remove_media_revision":
+                        original_draft = next(d for d in state["drafts"] if d.get("id") == command.targets[0].draft_id)
+                        if original_draft.get("type") == "severe_weather":
+                            from src.commands import postgres_editor_media as editor_domain
+                            finished = _clock(now)
+                            editor_domain.refuse(finished >= clock, "media_completion_clock_regressed")
+                            # Outside refusal conversion: a late expiry rolls back
+                            # package/review/state effects and leaves intent pending.
+                            current_actor = editor_domain.resolve(resolve_principal, command.actor_subject,
+                                publisher=command.action == "approve_media_revision")
+                            editor_domain.command_inputs(self, c, state, command, current_actor, current_editorial_policy(), finished)
+                            clock = finished
                     result.update(command_id=command.command_id, digest=command.digest, state_version=version,
                                   completed_at=utc_text(clock), actor_subject=command.actor_subject)
                     encoded_result = _body(result)
@@ -911,13 +923,13 @@ class PostgresCommandAuthority:
         from src.commands.postgres_editor_media import configure
         configure(self, rasterizer=rasterizer, scratch=scratch, dependency_manifest=dependency_manifest)
 
-    def editor_media_projection(self, draft_id, resolve_principal, *, now, png_proposal=None):
+    def editor_media_projection(self, draft_id, resolve_principal, *, now, png_proposal=None, original=False):
         from src.commands import postgres_editor_media as domain
         with self.projections._connection() as c:
             self._validate(c)
             version, state = self._state(c, lock=True)
             value = domain.projection(self, c, draft_id, state=state, version=version,
-                policy=current_editorial_policy(), now=_clock(now), resolve_principal=resolve_principal, png_proposal=png_proposal)
+                policy=current_editorial_policy(), now=_clock(now), resolve_principal=resolve_principal, png_proposal=png_proposal, original=original)
             if png_proposal is None:
                 from src.commands import postgres_delivery as delivery
                 if delivery.upgraded(c):

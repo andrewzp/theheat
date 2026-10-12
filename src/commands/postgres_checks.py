@@ -144,7 +144,7 @@ def _current(c, packet, payload, at, environment, *, resolved=None):
     if packet.get("schema_version") in (4, 5):
         from src.commands.postgres_sync_checks import current
         return current(c, packet, payload, at, environment, resolved=resolved)
-    if packet.get("schema_version") == 3:
+    if packet.get("schema_version") in (3, 6):
         from src.commands.postgres_revision_checks import current as revision_current
         return revision_current(c, packet, payload, at, environment)
     verification = checks.packet_verification(packet)
@@ -183,7 +183,7 @@ def _attempt(c, identity, stage, packet, enrolled_at):
                     and enrolled_at <= at < spend._time(packet["useful_until"])
                     and at[:10] == packet["check_date"] and type(binding["fence"]) is int, "changed_check_attempt")
     _raw(c, "request_artifacts", request_sha)
-    if packet.get("schema_version") in (3, 4, 5):
+    if packet.get("schema_version") in (3, 4, 5, 6):
         from src.commands.postgres_revision_checks import historical_lease
         lease = historical_lease(c, identity, binding["fence"])
     else:

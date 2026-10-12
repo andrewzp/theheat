@@ -136,7 +136,8 @@ def _load(c, identity):
     capture = p._decode(raw)
     _shape(capture, _CAPTURE)
     _require(_encoded(capture) == raw and type(capture["schema_version"]) is int
-             and capture["schema_version"] == 1, "invalid_media_staging_capture")
+             and capture["schema_version"] in (1, 2)
+             and capture["schema_version"] == capture["inputs"]["renderer_manifest"]["schema_version"], "invalid_media_staging_capture")
     _require(type(capture["authority_version"]) is int and 0 <= capture["authority_version"] <= p.MAX_INTEGER,
              "invalid_media_staging_version")
     _require(_time(capture["staged_at"]) == row[1], "changed_media_staging_time")
@@ -149,8 +150,9 @@ def _load(c, identity):
     drafts = capture["predecessor_state"]["drafts"]
     _require(isinstance(drafts, list) and len(drafts) == 1 and isinstance(drafts[0], dict),
              "invalid_media_staging_predecessor")
-    _shape(capture["asset_sha256"], set(media._LIMITS))
-    assets = {name: _raw(c, digest, media._LIMITS[name]) for name, digest in capture["asset_sha256"].items()}
+    limits = media.asset_limits(capture["inputs"]["renderer_manifest"])
+    _shape(capture["asset_sha256"], set(limits))
+    assets = {name: _raw(c, digest, limits[name]) for name, digest in capture["asset_sha256"].items()}
     media._assets(assets, capture["inputs"]["renderer_manifest"])
     proposal_at = utc_datetime(_time(capture["inputs"]["at"]))
     age = utc_datetime(capture["staged_at"]) - proposal_at
@@ -178,7 +180,7 @@ def read(c, identity, environment):
 
 
 def read_retained_png(c, *, expected_proposal_sha256, expected_packet_sha256,
-                      expected_predecessor, expected_subject, expected_at, environment):
+                      expected_predecessor, expected_subject, expected_at, environment, original_bytes=False):
     """Original PNG bytes only, bound by an independently successful preparation.
 
     The authenticated editor projection resolves the exact intent/result and
@@ -198,8 +200,9 @@ def read_retained_png(c, *, expected_proposal_sha256, expected_packet_sha256,
                  == fingerprint({k:v for k,v in proposal.items() if k != "proposal_sha256"}),
                  "changed_media_staging_proposal")
         packet = proposal["packet"]
+        published = capture["schema_version"] == 2
         _shape(packet, {"schema_version", "draft_binding", "graphic_binding", "media", "synthetic",
-                        "claim_agreement_status", "publication_approved", "packet_sha256"})
+                        "claim_agreement_status", "publication_approved", "packet_sha256"} | ({"published"} if published else set()))
         _require(packet["packet_sha256"] == expected_packet_sha256
                  == fingerprint({k:v for k,v in packet.items() if k != "packet_sha256"}),
                  "changed_media_staging_packet")
@@ -215,6 +218,18 @@ def read_retained_png(c, *, expected_proposal_sha256, expected_packet_sha256,
                  and capture["inputs"]["at"] == _time(expected_at), "media_staging_preparation_mismatch")
         spec, manifest = capture["inputs"]["graphic_spec"], capture["inputs"]["renderer_manifest"]
         _shape(spec, {"template", "expected_evidence_sha256", "evidence"})
+        if published:
+            # Retained bytes use the recorded closed family, not current profile,
+            # configuration, source freshness or mutation eligibility.
+            from src.media.published_radar import packet as published_packet, original_header
+            rebuilt = published_packet(proposed, draft_identity(proposed), capture["inputs"]["editorial_policy"], spec, manifest, assets["preview.png"], historical=True)
+            original_header(assets["original.gif"], spec["evidence"]["input"])
+            _require(_encoded(rebuilt) == _encoded(packet) and proposal["schema_version"] == 1
+                and proposal["operation"] == "attach" and type(proposal["changed"]) is bool
+                and proposal["publication_approved"] is proposal["production_attachment_authorized"] is False
+                and proposal["synthetic"] is packet["synthetic"], "invalid_media_staging_capture")
+            return assets["original.gif" if original_bytes else "preview.png"]
+        _require(original_bytes is False, "media_original_unavailable")
         _shape(manifest, {"schema_version", "cache_key", "binding", "files", "synthetic", "alt_text",
                           "publication_approved", "scope"})
         binding = manifest["binding"]
@@ -268,7 +283,7 @@ def stage(c, draft_id, request, *, assets, principal, state, authority_version, 
     ledger = state.get("publish_ledger", {})
     predecessor = dict(drafts=[draft], publish_ledger={event: ledger[event]} if event in ledger else {},
                        posted_events=[event] if event in state.get("posted_events", []) else [])
-    capture = dict(schema_version=1, predecessor_state=predecessor, inputs=inputs, proposal=proposal,
+    capture = dict(schema_version=request["renderer_manifest"]["schema_version"], predecessor_state=predecessor, inputs=inputs, proposal=proposal,
                    asset_sha256=hashes, authority_version=authority_version, staged_at=staged_at,
                    submitter=dict(subject=principal.subject, role_at_staging=principal.role,
                                   authentication_context=principal.authentication_context))

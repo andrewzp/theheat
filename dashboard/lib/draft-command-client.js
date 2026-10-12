@@ -38,7 +38,7 @@ async function boundedBody(body, maxBytes, signal) {
 
 export async function localCommandRequest(request, path, { method = "GET", raw } = {}) {
   const config = configuration(request)
-  if (!/^\/(?:state|generation|reports|coverage|commands(?:\/[a-f0-9-]{36}(?:\/abandon)?)?|drafts\/[A-Za-z0-9_.:-]{1,200}\/media(?:\/[a-f0-9]{64}\/preview\.png)?)$/.test(path)) fail("invalid_command_route", 400)
+  if (!/^\/(?:state|generation|reports|coverage|commands(?:\/[a-f0-9-]{36}(?:\/abandon)?)?|drafts\/[A-Za-z0-9_.:-]{1,200}\/media(?:\/[a-f0-9]{64}\/(?:preview\.png|original\.gif))?)$/.test(path)) fail("invalid_command_route", 400)
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), 8000)
   try {
@@ -47,7 +47,13 @@ export async function localCommandRequest(request, path, { method = "GET", raw }
         ...(raw ? { "Content-Type": "application/json" } : {}) }, body: raw,
       signal: controller.signal, redirect: "error", cache: "no-store",
     })
-    const bytes = await boundedBody(response.body, 8 * 1024 * 1024, controller.signal)
+    const original = path.endsWith("/original.gif")
+    const bytes = await boundedBody(response.body, (original ? 2 : 8) * 1024 * 1024, controller.signal)
+    if (response.ok && original) {
+      const signature = new TextDecoder().decode(bytes.slice(0, 6))
+      if (response.headers.get("content-type") !== "image/gif" || bytes.length < 13 || !["GIF87a", "GIF89a"].includes(signature)) fail("invalid_media_response")
+      return { status: response.status, bytes, mimeType: "image/gif" }
+    }
     if (response.ok && path.endsWith("/preview.png")) {
       if (response.headers.get("content-type") !== "image/png" || bytes.length < 33 ||
           ![137, 80, 78, 71, 13, 10, 26, 10].every((v, i) => bytes[i] === v)) fail("invalid_media_response")

@@ -213,13 +213,13 @@ class PreviewHandler(BaseHTTPRequestHandler):
             if actor is None:
                 self.reply(401, {"error": "Local sign-in required", "code": "unauthorized"})
                 return
-            media_route = re.fullmatch(r"/drafts/([A-Za-z0-9_.:-]{1,200})/media(?:/([a-f0-9]{64})/preview\.png)?", self.path)
+            media_route = re.fullmatch(r"/drafts/([A-Za-z0-9_.:-]{1,200})/media(?:/([a-f0-9]{64})/(preview\.png|original\.gif))?", self.path)
             if self.command == "GET" and media_route:
                 value = self.server.authority.editor_media_projection(media_route[1], self.server.operators.resolve,
-                    now=datetime.now(UTC), png_proposal=media_route[2])
+                    now=datetime.now(UTC), png_proposal=media_route[2], original=media_route[3] == "original.gif")
                 if media_route[2]:
                     self.send_response(200)
-                    for name, content in (("Content-Type", "image/png"), ("Content-Length", str(len(value))),
+                    for name, content in (("Content-Type", "image/gif" if media_route[3] == "original.gif" else "image/png"), ("Content-Length", str(len(value))),
                         ("Cache-Control", "private, no-store"), ("X-Content-Type-Options", "nosniff"), ("Connection", "close")):
                         self.send_header(name, content)
                     self.end_headers()
@@ -363,6 +363,7 @@ def arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--report-inputs")
     parser.add_argument("--coverage-inputs")
     parser.add_argument("--source-results", action="store_true")
+    parser.add_argument("--published-radar-inputs")
     parser.add_argument("--media-rasterizer")
     parser.add_argument("--media-scratch")
     parser.add_argument("--media-dependency-manifest")
@@ -396,6 +397,10 @@ def adapter(args) -> tuple[PostgresCommandAuthority, Operators]:
             raise ValueError("explicit_media_profile_required")
         authority.configure_editor_media(rasterizer=args.media_rasterizer, scratch=args.media_scratch,
             dependency_manifest=args.media_dependency_manifest)
+    if getattr(args, "published_radar_inputs", None):
+        from src.commands.postgres_sourced_generation import private_configuration
+        from src.commands.postgres_published_media import configure
+        configure(authority, private_configuration(args.published_radar_inputs))
     if getattr(args, "delivery_fixture", None):
         authority.configure_delivery(args.delivery_fixture)
     return authority, operators

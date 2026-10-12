@@ -41,7 +41,7 @@ def enrollment_id(packet):
 
 def validate_revision(packet):
     require(type(packet) is dict and set(packet) == FIELDS, "invalid_revision_check_packet")
-    require(type(packet["schema_version"]) is int and packet["schema_version"] == 3
+    require(type(packet["schema_version"]) is int and packet["schema_version"] in (3, 6)
             and packet["origin_kind"] == ORIGIN, "invalid_revision_check_origin")
     target = DraftTarget.parse(packet["draft_target"])
     require(type(packet["state_version"]) is int and 0 <= packet["state_version"] <= 2**53-1,
@@ -91,6 +91,18 @@ def validate_revision(packet):
     require(packet["check_date"] == captured.date().isoformat(), "changed_revision_check_day")
     deadline = min(utc_datetime(packet["source_useful_until"]), utc_datetime(packet["provenance_useful_until"]),
                    captured.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1))
+    attachment = draft.get("media_attachment", {})
+    if packet["schema_version"] == 6:
+        require(type(attachment.get("schema_version")) is int and attachment["schema_version"] == 2,
+                "invalid_published_revision_family")
+        from src.media.published_radar import FAMILY
+        published = attachment["published"]
+        require(published["family"] == FAMILY, "invalid_published_revision_family")
+        frame_deadline = min(utc_datetime(published["frame_minute_utc"]) + timedelta(minutes=15), utc_datetime(published["valid_end"]))
+        require(utc_datetime(published["useful_until"]) == frame_deadline, "invalid_published_revision_deadline")
+        deadline = min(deadline, frame_deadline)
+    else:
+        require(attachment.get("schema_version") != 2, "invalid_revision_check_origin")
     require(captured < utc_datetime(packet["useful_until"]) == deadline, "invalid_revision_check_deadline")
     require(enrollment_id(packet) == packet["enrollment_id"], "changed_revision_check_enrollment")
     return "verified_saved_draft_revision"
@@ -100,7 +112,7 @@ def packet_verification(packet, *, resolved=None):
     if type(packet) is dict and type(packet.get("schema_version")) is int and packet["schema_version"] in (4, 5):
         from src.two_bot.synchronous_origin import validate
         return validate(packet, resolved=resolved)
-    if type(packet) is dict and type(packet.get("schema_version")) is int and packet["schema_version"] == 3:
+    if type(packet) is dict and type(packet.get("schema_version")) is int and packet["schema_version"] in (3, 6):
         return validate_revision(packet)
     return candidate.packet_verification(packet)
 
@@ -116,4 +128,4 @@ def checked_text(packet, *, resolved=None):
 def spending_job(packet):
     if packet.get("schema_version") in (4, 5):
         return packet["generation_id"]
-    return "draftcheck_" + packet["enrollment_id"] if packet.get("schema_version") == 3 else packet["job_id"]
+    return "draftcheck_" + packet["enrollment_id"] if packet.get("schema_version") in (3, 6) else packet["job_id"]

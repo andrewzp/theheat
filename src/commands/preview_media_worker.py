@@ -1,6 +1,7 @@
 """One bounded native preparation; no network, provider or publishing client."""
 from __future__ import annotations
 
+import base64
 import json
 import os
 from pathlib import Path
@@ -11,7 +12,7 @@ import sys
 import tempfile
 
 from src.commands import postgres_editor_media as domain
-from src.commands.schema import CommandError
+from src.commands.schema import CommandError, utc_text
 from src.commands.postgres_authority import _clock
 from src.editorial.policy import current_editorial_policy
 from src.editorial.revisions import fingerprint
@@ -66,16 +67,22 @@ def consume_media_once(authority, resolve_principal, *, command_id=None, now=Non
             draft, value = domain.command_inputs(authority, c, state, command, actor, current_editorial_policy(), at)
             checkpoint = fingerprint(dict(target=domain._identity(draft), inputs=value))
             spec = p._decode(p._canonical(value["spec"]))
+            original = None
+            if spec["template"] == "published_nws_radar":
+                from src.commands.postgres_published_media import read
+                _, original = read(c, spec["evidence"]["input_sha256"])
     except CommandError as exc:
         if exc.code in {"not_native_preparation", "command_pending", "authorization_unavailable"}:
             raise
         # Known preflight refusal is recorded by the same command boundary.
         return authority.consume(resolve_principal, command_id=command_id, now=at, _prepared_media={})
     config = authority.editor_media_configuration
-    prepared = dict(command_id=command_id, checkpoint=checkpoint)
+    prepared = dict(command_id=command_id, checkpoint=checkpoint, started_at=utc_text(at))
     folder = Path(tempfile.mkdtemp(prefix=command_id + "-", dir=config["scratch"]))
     folder.chmod(0o700)
     request = dict(spec=spec, output_dir=str(folder), rasterizer=config["rasterizer"])
+    if original is not None:
+        request.update(original=base64.b64encode(original).decode("ascii"), renderer=value["renderer"])
     try:
         # The fixed child receives only invented source data and local paths.
         # No operator file, provider key, environment credential or command body.
@@ -88,9 +95,9 @@ def consume_media_once(authority, resolve_principal, *, command_id=None, now=Non
         manifest_path = Path(output["manifest"])
         domain.refuse(manifest_path.is_relative_to(folder) and not manifest_path.is_symlink(), "native_render_failed")
         manifest = json.loads(manifest_path.read_bytes())
-        from src.commands.media_journal import _LIMITS
+        from src.commands.media_journal import asset_limits
         assets = {}
-        for name, bound in _LIMITS.items():
+        for name, bound in asset_limits(manifest).items():
             asset = manifest_path.parent / name
             domain.refuse(not asset.is_symlink() and asset.is_file() and asset.stat().st_size <= bound, "native_render_failed")
             assets[name] = asset.read_bytes()
@@ -107,11 +114,18 @@ def consume_media_once(authority, resolve_principal, *, command_id=None, now=Non
 
 def native_child():
     from src.media.evidence_graphic_render import render_preview
-    raw = sys.stdin.buffer.read(1_010_001)
-    if len(raw) > 1_010_000:
+    raw = sys.stdin.buffer.read(4_000_001)
+    if len(raw) > 4_000_000:
         raise ValueError("native_input_bound")
     request = json.loads(raw)
-    if set(request) != {"spec", "output_dir", "rasterizer"}:
+    if request.get("spec", {}).get("template") == "published_nws_radar":
+        from src.media.published_radar import render
+        if set(request) != {"spec", "output_dir", "rasterizer", "original", "renderer"}:
+            raise ValueError("native_input_shape")
+        path = render(request["spec"], base64.b64decode(request["original"], validate=True), request["renderer"], request["output_dir"])
+        print(json.dumps({"manifest": str(path)}))
+        return
+    if len(raw) > 1_010_000 or set(request) != {"spec", "output_dir", "rasterizer"}:
         raise ValueError("native_input_shape")
     spec = request["spec"]
     path = render_preview(spec["template"], spec["evidence"], expected_evidence_sha256=spec["expected_evidence_sha256"],
