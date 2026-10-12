@@ -51,7 +51,7 @@ to the hosting platform's own logging behavior.
 
 ## Colored locator and retained images
 
-Current qualified MODIS previews use a colored locator. Equal-size markers identify the selected satellite pixel centers; their blue-to-yellow scale represents pixel-integrated radiative power in MW. They do not show fire perimeters, severity or separate fire counts. The original platform, reported UTC minute, quantitative legend and source qualifiers remain attached. Closely spaced, out-of-bounds or unreadable layouts are unavailable rather than silently altered.
+Current qualified MODIS previews use a colored locator. Equal-size markers identify the selected satellite pixel centers; their blue-to-yellow scale represents pixel-integrated radiative power in MW. They do not show fire perimeters, severity or separate fire counts. The original platform, reported UTC minute, quantitative legend and source qualifiers remain attached. Unresolvable marker or label collisions, out-of-bounds views and unreadable layouts are unavailable rather than silently altered.
 
 The coarse Natural Earth land resource is pinned and packaged locally. Coordinate close-ups omit coastlines that cannot resolve that scale and retain a separate world locator. Rendering acquires no new weather and makes no model call. Published charts and radar ingestion are not implemented by this adapter.
 
