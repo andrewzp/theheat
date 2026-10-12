@@ -13,6 +13,7 @@ from scripts import workflow_health as workflow
 NOW = datetime(2026, 11, 3, 12, tzinfo=timezone.utc)
 STALE = [{"mode": "alerts", "started_at": "2026-11-02T12:00:00Z"}]
 FRESH = [{"mode": "both", "started_at": "2026-11-03T11:00:00Z"}]
+GUARDED = [("theheat-bot", "bot.yml"), ("voice-regression", "voice-regression.yml")]
 
 
 def info(file="bot.yml", conclusion="success"):
@@ -70,19 +71,20 @@ def test_resume_requires_normal_freshness_instead_of_treating_flag_clear_as_reco
 
 
 @pytest.mark.parametrize("conclusion", ["success", "skipped", None])
-def test_paused_bot_does_not_enter_recovered_workflows(conclusion):
-    inputs = {"theheat-bot": info(conclusion=conclusion)}
+@pytest.mark.parametrize("name,file", GUARDED)
+def test_paused_workflow_does_not_enter_recovered_workflows(conclusion, name, file):
+    inputs = {name: info(file, conclusion)}
     original = deepcopy(inputs)
     report = workflow.run_workflow_health(inputs, now=NOW, production_paused=True)
     assert report["healthy"] == report["failing"] == []
     paused, = report["paused"]
-    assert paused["workflow"] == "theheat-bot"
+    assert paused["workflow"] == name
     assert paused["reason"] == "production_pause_configured"
     if conclusion == "success":
         assert paused["conclusion"] == "success"
         assert paused["run_url"] == "https://example.test/run/1"
     recovered = {r["workflow"] for r in report["healthy"]}
-    assert workflow.plan_workflow_issue_actions({}, recovered, {"theheat-bot": 999}) == []
+    assert workflow.plan_workflow_issue_actions({}, recovered, {name: 999}) == []
     assert inputs == original
 
 
@@ -101,11 +103,42 @@ def test_pause_never_masks_bot_failures_other_workflows_or_healer_errors(conclus
     assert [r["workflow"] for r in report["healthy"]] == ["time-travel-canary"]
 
 
-@pytest.mark.parametrize("name,file", [("theheat-bot", "other.yml"), ("other", "bot.yml")])
-def test_pause_requires_both_exact_bot_identifiers(name, file):
+@pytest.mark.parametrize("name,file", [
+    ("theheat-bot", "other.yml"), ("other", "bot.yml"),
+    ("voice-regression", "other.yml"), ("other", "voice-regression.yml"),
+    ("theheat-bot", "voice-regression.yml"), ("voice-regression", "bot.yml"),
+])
+def test_pause_requires_both_exact_workflow_identifiers(name, file):
     report = workflow.run_workflow_health({name: info(file)}, now=NOW, production_paused=True)
     assert report["paused"] == []
     assert [r["workflow"] for r in report["healthy"]] == [name]
+
+
+@pytest.mark.parametrize("not_paused", [False, None, "1", "true", 1])
+@pytest.mark.parametrize("name,file", GUARDED)
+def test_non_boolean_pause_preserves_observed_workflow_success(not_paused, name, file):
+    report = workflow.run_workflow_health({name: info(file)}, now=NOW, production_paused=not_paused)
+    assert report["paused"] == []
+    assert [r["workflow"] for r in report["healthy"]] == [name]
+
+
+@pytest.mark.parametrize("name,file", GUARDED)
+def test_resume_uses_run_evidence_and_skip_does_not_hide_historical_failure(name, file):
+    original = info(file, "failure")
+    original["runs"].insert(0, {
+        "id": 2, "conclusion": "skipped", "status": "completed",
+        "created_at": "2026-11-03T11:45:00Z", "html_url": "https://example.test/run/2",
+    })
+    for paused in (True, False):
+        report = workflow.run_workflow_health({name: original}, now=NOW, production_paused=paused)
+        assert report["paused"] == report["healthy"] == []
+        failed, = report["failing"]
+        assert failed["run_url"] == "https://example.test/run/1"
+        assert failed["conclusion"] == "failure" and failed["consecutive_failures"] == 1
+    resumed = workflow.run_workflow_health({name: info(file)}, now=NOW, production_paused=False)
+    assert workflow.plan_workflow_issue_actions(
+        {}, {r["workflow"] for r in resumed["healthy"]}, {name: 999},
+    ) == [{"action": "close", "workflow": name, "number": 999}]
 
 
 @pytest.mark.parametrize("value", [None, "0", "false", "true", " 1", "1 ", "1"])
@@ -128,7 +161,8 @@ def test_source_main_uses_exact_configuration_and_performs_no_github_calls(tmp_p
 
 
 @pytest.mark.parametrize("value", [None, "0", "true", "1"])
-def test_workflow_main_holds_paused_bot_issue_but_reports_real_failure(monkeypatch, capsys, value):
+@pytest.mark.parametrize("name,file", GUARDED)
+def test_workflow_main_holds_paused_issue_but_reports_real_failure(monkeypatch, capsys, value, name, file):
     monkeypatch.setenv("GITHUB_ACTIONS", "true")
     if value is None:
         monkeypatch.delenv("THEHEAT_PRODUCTION_PAUSED", raising=False)
@@ -136,18 +170,18 @@ def test_workflow_main_holds_paused_bot_issue_but_reports_real_failure(monkeypat
         monkeypatch.setenv("THEHEAT_PRODUCTION_PAUSED", value)
     monkeypatch.setattr(workflow, "_run_gh", lambda *a, **kw: pytest.fail("unexpected GitHub request"))
     monkeypatch.setattr(workflow, "fetch_runs_by_workflow", lambda: {
-        "theheat-bot": info(), "voice-regression": info("voice-regression.yml", "failure"),
+        name: info(file), "time-travel-canary": info("time-travel-canary.yml", "failure"),
     })
     monkeypatch.setattr(workflow, "fetch_selfheal_beacon", lambda: None)
-    monkeypatch.setattr(workflow, "_list_open_workflow_issues", lambda: {"theheat-bot": 999})
+    monkeypatch.setattr(workflow, "_list_open_workflow_issues", lambda: {name: 999})
     monkeypatch.setattr(workflow, "_ensure_labels", lambda: None)
     actions = []
     monkeypatch.setattr(workflow, "_create_issue", lambda name, v: actions.append(("create", name)))
     monkeypatch.setattr(workflow, "_update_issue", lambda a: actions.append(("update", a["workflow"])))
     monkeypatch.setattr(workflow, "_close_issue", lambda n, name: actions.append(("close", name)))
     assert workflow.main([]) == 0
-    assert ("create", "voice-regression") in actions
-    assert (("close", "theheat-bot") in actions) is (value != "1")
+    assert ("create", "time-travel-canary") in actions
+    assert (("close", name) in actions) is (value != "1")
     assert ("PAUSED" in capsys.readouterr().out) is (value == "1")
 
 

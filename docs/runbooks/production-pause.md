@@ -7,12 +7,19 @@ reviewed `manual_tweet` publication route retains its separate safeguards, so a
 dashboard approval is not silently accepted into a skipped run. Leave `bot.yml`
 enabled: its required PR tests are independent of this variable.
 
+The same repository variable skips both paid `voice-regression.yml` jobs before
+checkout, credentials or requests: weekly/manual/opted-in PR replay and the daily
+canary. Its keyless PR changes job and required offline CI remain available.
+Existing schedules and paid PR opt-in rules are unchanged; do not dispatch an
+evaluation to verify the pause. Observe an existing scheduled job's outcome.
+
 Disable the separate `refresh-thresholds.yml` workflow to stop weekly source
 acquisition. Keep `THEHEAT_SELFHEAL_REPAIR_ENABLED=0` so intentional pauses cannot
 be repaired automatically. The source/workflow observers receive the same pause
 variable: source liveness reports configured pause, and successful or unknown bot
-workflow results cannot resolve an existing incident while paused. Real source
-and workflow failures remain visible; pause alone never closes their issues.
+and voice-regression workflow results cannot resolve an existing incident while
+paused. Existing run evidence and genuine source or workflow failures remain
+visible; pause alone never closes their issues.
 The dashboard still shows retained source/workflow history, including the disabled
 threshold workflow. Configured pause does not prove running workers have stopped,
 source freshness, recovery or zero spending.
@@ -38,6 +45,8 @@ just to test the pause. Read the remote controls and scheduled job outcomes.
 ## Resume
 
 1. Set the repository variable `THEHEAT_PRODUCTION_PAUSED` to `0`.
+   This also restores the existing scheduled/manual paid voice-evaluation
+   eligibility; PR replay still requires its separate opt-in and existing rules.
 2. Set the dashboard Production variable to `0` and redeploy.
 3. Re-enable `refresh-thresholds.yml` if it was enabled before the pause.
 4. Restore the previously recorded self-heal setting only if intended.
@@ -47,8 +56,9 @@ authorize enabling publication or autoship; preserve those pause settings.
 
 ## Scope
 
-Offline tests and explicit development evaluations remain available. This is an
-operational pause of current production entry points, not revocation of API
+Offline tests remain available. Independently authorized development evaluations
+are separate from the guarded GitHub paid jobs. This is an operational pause of
+current production entry points, not revocation of API
 credentials. A deliberate CLI invocation, an old workflow ref without the guard,
 or an older dashboard deployment can bypass the new controls. Do not use those
 routes while production is paused. No external scheduler is changed by this

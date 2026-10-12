@@ -1,5 +1,6 @@
 name: voice-regression
 
+# Paid jobs obey THEHEAT_PRODUCTION_PAUSED before any steps or credentials.
 # Existing paid replay cadence is unchanged. Routine positive canary fixtures
 # are currently unqualified: preflight fails visibly before any provider call.
 # This means monitoring is blocked, not that provider billing failed. Do not hide
@@ -52,7 +53,7 @@ jobs:
     # or applying voice-check alone must not silently buy another full replay.
     needs: [changes]
     if: >
-      always() && (
+      always() && vars.THEHEAT_PRODUCTION_PAUSED != '1' && (
         github.event_name == 'workflow_dispatch' ||
         (github.event_name == 'schedule' && github.event.schedule == '0 9 * * 0') ||
         (github.event_name == 'pull_request' &&
@@ -82,7 +83,7 @@ jobs:
 
   canary:
     # Positive writer monitor; fixture qualification precedes every paid call.
-    if: github.event_name == 'schedule' && github.event.schedule == '17 9 * * 1-6'
+    if: vars.THEHEAT_PRODUCTION_PAUSED != '1' && github.event_name == 'schedule' && github.event.schedule == '17 9 * * 1-6'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
