@@ -44,6 +44,9 @@ def _sha(value: object) -> None:
 def retained_bundle(value: dict) -> StoryBundle:
     """Refuse silent constructor/default/projection repair of retained evidence."""
     _bounded(value, MAX_INPUT_BYTES)
+    _require(not (isinstance(value, dict) and isinstance(value.get("raw_signal_dump"), dict)
+                  and "ghcn_claim_view" in value["raw_signal_dump"]),
+             "ghcn_claim_view_requires_resolved_check_context")
     try:
         data = deepcopy(value)
         if "related_signals" in data:

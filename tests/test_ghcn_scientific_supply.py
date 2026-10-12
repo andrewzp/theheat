@@ -107,6 +107,10 @@ def test_real_prepass_sees_six_stations_before_changed_individual_caps(monkeypat
     assert len(detected) == 1 and len(detected[0]) == 6
     assert len([row for row in submitted if row["legacy_type"] == "heat_records_cluster"]) == 1
     assert len([row for row in submitted if row["legacy_type"] == "all_time_high"]) == individual_cap
+    for row in submitted:
+        if row["legacy_type"] == "all_time_high":
+            assert row["bundle"].headline_metric["label"] == "observed_high_c"
+            assert row["bundle"].raw_signal_dump["evidence"]["evidence_type"] == "observed"
     assert bundles == original
     assert state["heat_records_cluster_fired"] == {}
 
