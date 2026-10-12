@@ -17,6 +17,7 @@ def _two_bot_bundle_for_extreme_signal(
     strongest_signal,
     *,
     result_out: dict | None = None,
+    source: str = "open_meteo",
 ):
     """Return a StoryBundle for the extreme_signals dispatch loop.
 
@@ -29,13 +30,13 @@ def _two_bot_bundle_for_extreme_signal(
         from src.two_bot import intern
 
         if strongest_type in ("record", "record_low"):
-            return intern.build_record_bundle(strongest_signal)
+            return intern.build_record_bundle(strongest_signal, source=source)
         if strongest_type in ("monthly_high", "monthly_low"):
-            return intern.build_monthly_high_bundle(strongest_signal)
+            return intern.build_monthly_high_bundle(strongest_signal, source=source)
         if strongest_type in ("all_time_high", "all_time_low"):
-            return intern.build_all_time_record_bundle(strongest_signal)
+            return intern.build_all_time_record_bundle(strongest_signal, source=source)
         if strongest_type in ("anomaly_hot", "anomaly_cold"):
-            return intern.build_anomaly_bundle(strongest_signal)
+            return intern.build_anomaly_bundle(strongest_signal, source=source)
         if strongest_type == "absolute_extreme":
             return intern.build_absolute_extreme_bundle(strongest_signal)
     except Exception as exc:

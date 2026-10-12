@@ -962,6 +962,7 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
                     strongest_type,
                     strongest_signal,
                     result_out=bundle_result,
+                    source="ghcn" if bundle.station_id else "open_meteo",
                 )
                 if two_bot_bundle is None:
                     print(

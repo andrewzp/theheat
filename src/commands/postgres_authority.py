@@ -360,6 +360,19 @@ class PostgresCommandAuthority:
             saved = postgres_batch.read(c, job_id, environment=self.environment)
             return postgres_batch._plan_bytes(c, saved["plan_sha256"])
 
+    def configure_ghcn_source_results(self, baseline) -> None:
+        from src.commands import postgres_ghcn_source_results as ghcn_source
+        self.ghcn_baseline = baseline
+        ghcn_source.configured(self)
+
+    def ghcn_dependency_snapshot(self):
+        from src.commands import postgres_ghcn_source_results as ghcn_source
+        return ghcn_source.snapshot(self)
+
+    def ghcn_source_run_projection(self, run_id):
+        from src.commands import postgres_ghcn_source_results as ghcn_source
+        return ghcn_source.projection(self, run_id)
+
     def configure_source_results(self) -> None:
         from src.commands import postgres_source_results as sources
         self.source_results_enabled = True
@@ -637,6 +650,9 @@ class PostgresCommandAuthority:
         if command.actor_subject != principal.subject or command.authentication_context != principal.authentication_context:
             raise CommandError("forbidden", "Command identity does not match authenticated ingress")
         authorize(principal, command.action)
+        if command.action == "commit_ghcn_source_run":
+            from src.commands.postgres_ghcn_source_results import configured
+            configured(self)
         raw = _body(command.as_dict())
         with self.projections._connection(writing=True) as c:
             self._validate(c)
@@ -713,6 +729,8 @@ class PostgresCommandAuthority:
                 now: datetime | None = None, policy: AutomaticPolicy = AutomaticPolicy(), _prepared_media=None) -> dict | None:
         if command_id is not None:
             command_id = _id(command_id)
+        from src.commands import postgres_ghcn_source_results as ghcn_source
+        ghcn_prepared = ghcn_source.preflight(self, command_id) if hasattr(self, "ghcn_baseline") else None
         with self.projections._connection(writing=True) as c:
             self._validate(c)
             version, state = self._state(c, lock=True)
@@ -737,6 +755,9 @@ class PostgresCommandAuthority:
                     p._require(command.environment == self.environment, "command_environment_mismatch")
                     if command.action == "prepare_media_revision" and _prepared_media is None:
                         raise CommandError("native_preparation_required", "The separate native worker must prepare this graphic")
+                    if command.action == ghcn_source.ACTION and (ghcn_prepared is None
+                            or ghcn_prepared.command_id != command.command_id or ghcn_prepared.command_digest != command.digest):
+                        raise CommandError("ghcn_preparation_required", "Independent source replay must finish before consuming this command")
                     clock = _clock(now)
                     # Resolver failures are infrastructure uncertainty, never a
                     # durable rejection. An explicit None is actual revocation.
@@ -764,8 +785,12 @@ class PostgresCommandAuthority:
                             from src.commands import postgres_source_results as sources
                             from src.commands.reducer import Reduction
                             with c.transaction(), sources.expected_domain_failures():
-                                source_transition = sources.prepare(self, c, state, command, actor,
-                                    now=clock, editorial_policy=editorial_policy)
+                                if command.action == ghcn_source.ACTION:
+                                    source_transition = ghcn_source.prepare(self, c, state, version, command, actor,
+                                        now=clock, editorial_policy=editorial_policy, prepared=ghcn_prepared)
+                                else:
+                                    source_transition = sources.prepare(self, c, state, command, actor,
+                                        now=clock, editorial_policy=editorial_policy)
                             clock = source_transition.completed_at
                             reduction = Reduction(source_transition.state, (), ())
                         elif command.action in COVERAGE_ACTIONS:

@@ -298,6 +298,7 @@ def _fetch_recent_obs(
     metrics_out: dict | None = None,
     revisions_out: list | None = None,
     tracked_keys: set[tuple[str, date, str]] | None = None,
+    _runtime=None,
 ) -> dict[tuple[str, date], list[DailyObs]]:
     """Fetch recent TMAX/TMIN observations for active stations.
 
@@ -319,13 +320,16 @@ def _fetch_recent_obs(
 
     # Fetch diffs in parallel (3 requests, lightweight)
     raw_by_date: dict[date, bytes] = {}
-    with ThreadPoolExecutor(max_workers=lookback_days) as pool:
-        future_to_date = {pool.submit(_fetch_diff, d): d for d in dates}
-        for fut in as_completed(future_to_date):
-            d = future_to_date[fut]
-            content = fut.result()
-            if content is not None:
-                raw_by_date[d] = content
+    if _runtime is not None:
+        raw_by_date = _runtime.diffs(dates)
+    else:
+        with ThreadPoolExecutor(max_workers=lookback_days) as pool:
+            future_to_date = {pool.submit(_fetch_diff, d): d for d in dates}
+            for fut in as_completed(future_to_date):
+                d = future_to_date[fut]
+                content = fut.result()
+                if content is not None:
+                    raw_by_date[d] = content
 
     if metrics_out is not None:
         metrics_out.update({
@@ -347,7 +351,7 @@ def _fetch_recent_obs(
     obs_by_key: dict[tuple[str, date, str], DailyObs] = {}
     skipped_stale = 0
     for d in sorted(raw_by_date):
-        retrieved_at = utc_now()
+        retrieved_at = _runtime.diff_time(d) if _runtime is not None else utc_now()
         source_revision = hashlib.sha256(raw_by_date[d]).hexdigest()
         records = parse_superghcnd_diff_records_bytes(raw_by_date[d])
         for rec in records:
@@ -684,6 +688,7 @@ def check_extreme_signals_for_stations(
     archive_verification_limit: int = ARCHIVE_VERIFICATION_LIMIT,
     _fetch_archive_fn: Callable | None = None,
     _now_fn: Callable | None = None,
+    _runtime=None,
 ) -> tuple[list[ExtremeSignalBundle], list[CountryRecord]]:
     """Check active GHCN-Daily stations for extreme signals.
 
@@ -719,9 +724,12 @@ def check_extreme_signals_for_stations(
             "Download the thresholds-latest release asset or run scripts/build_station_thresholds.py."
         )
 
+    # Explicit retained-runtime readers never execute the legacy DDL helper.
+    reader = _runtime.open_db if _runtime is not None else open_db
+    sink = _runtime.effects if _runtime is not None else None
     # 1. Load active stations
     if stations is None:
-        with open_db(resolved_db) as conn:
+        with reader(resolved_db) as conn:
             stations = load_active_stations(conn)
 
     if max_checks is not None:
@@ -748,6 +756,8 @@ def check_extreme_signals_for_stations(
             latest_obs = _fetch_recent_obs(
                 active_ids, metrics_out=fetch_metrics, revisions_out=revisions,
                 tracked_keys=points, today=date.fromisoformat(now[:10]),
+                **({"lookback_days": _runtime.lookback, "max_obs_age_days": _runtime.max_age, "_runtime": _runtime}
+                   if _runtime is not None else {}),
             )
         except RuntimeError:
             if not points:
@@ -757,7 +767,7 @@ def check_extreme_signals_for_stations(
     else:
         latest_obs = _fetch_obs_fn(active_ids)
     metrics = _empty_pipeline_metrics() | fetch_metrics
-    with open_db(resolved_db) as conn:
+    with reader(resolved_db) as conn:
         cached = {sid: load_thresholds(conn, sid) for sid in active_ids}
     candidates = {
         sid for (sid, _), obs in latest_obs.items()
@@ -773,15 +783,22 @@ def check_extreme_signals_for_stations(
     metrics["tracked_stations_unscanned"] = len(tracked_stations - set(selected))
     snapshots = {}
     fetch_archive = _fetch_archive_fn or _fetch_station_archive
-    with ThreadPoolExecutor(max_workers=4) as pool:
-        futures = {pool.submit(fetch_archive, sid): sid for sid in selected}
-        for future in as_completed(futures):
-            sid = futures[future]
+    if _runtime is not None:
+        for sid, payload in _runtime.archives(selected):
             try:
-                snapshots[sid] = _archive_snapshot(sid, future.result(), now)
-            except (requests.RequestException, OSError, ValueError, TypeError, UnicodeError) as exc:
+                snapshots[sid] = _archive_snapshot(sid, payload, now)
+            except (requests.RequestException, OSError, ValueError, TypeError, UnicodeError):
                 metrics["archive_verification_failed"] += 1
-                log.warning("GHCN station verification unavailable for %s: %s", sid, exc)
+    else:
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            futures = {pool.submit(fetch_archive, sid): sid for sid in selected}
+            for future in as_completed(futures):
+                sid = futures[future]
+                try:
+                    snapshots[sid] = _archive_snapshot(sid, future.result(), now)
+                except (requests.RequestException, OSError, ValueError, TypeError, UnicodeError) as exc:
+                    metrics["archive_verification_failed"] += 1
+                    log.warning("GHCN station verification unavailable for %s: %s", sid, exc)
     metrics["archive_verification_verified"] = len(snapshots)
     metrics["tracked_stations_unscanned"] = len(tracked_stations - snapshots.keys())
     for lane, ids in (("tracked", tracked_stations), ("candidates", candidates)):
@@ -790,21 +807,21 @@ def check_extreme_signals_for_stations(
     # Old-dated QC updates are reviewed even when too old for a news signal.
     latest_revisions = {}
     for record, retrieved, source_revision in revisions:
-        _, added = record_observation_revision(state, record, retrieved_at=retrieved, source_revision=source_revision)
+        _, added = record_observation_revision(state, record, retrieved_at=retrieved, source_revision=source_revision, _sink=sink)
         metrics["material_revisions"] += int(added)
         latest_revisions[(record.station_id, record.obs_date, record.element)] = (record, retrieved, source_revision)
     for record, retrieved, source_revision in latest_revisions.values():
         if record.station_id not in snapshots:
-            _, findings = _retain_changed_point(state, record, retrieved, source_revision, claims)
+            _, findings = _retain_changed_point(state, record, retrieved, source_revision, claims, sink=sink)
             metrics["affected_claims"] += findings
     for sid, snapshot in snapshots.items():
-        material, findings = _retain_snapshot_revisions(state, sid, snapshot, claims, points)
+        material, findings = _retain_snapshot_revisions(state, sid, snapshot, claims, points, sink=sink)
         metrics["material_revisions"] += material
         metrics["affected_claims"] += findings
     for claim in claims:
         if claim["station_id"] not in snapshots:
             metrics["affected_claims"] += int(record_claim_finding(
-                state, claim, reason="current_archive_unverified", source_revision=None,
+                state, claim, _sink=sink, reason="current_archive_unverified", source_revision=None,
                 retrieved_at=now, details={"coverage": "station_archive_not_verified_this_run",
                                           "historical_correctness": "not_determined"},
             ))
@@ -839,7 +856,7 @@ def check_extreme_signals_for_stations(
         if _has_signal(bundle):
             signal_bundles.append(bundle)
         if snapshot is not None:
-            metrics["material_revisions"] += _retain_record_points(state, bundle, snapshot)
+            metrics["material_revisions"] += _retain_record_points(state, bundle, snapshot, sink=sink)
 
     log.info(
         "GHCN: %d stations checked, %d fired signals",
@@ -1069,20 +1086,20 @@ def _thresholds_from_verified_archive(station_id, obs, snapshot):
     return thresholds, reconciled
 
 
-def _retain_snapshot_revisions(state, station_id, snapshot, claims, points):
+def _retain_snapshot_revisions(state, station_id, snapshot, claims, points, *, sink=None):
     """Review tracked historical points regardless of news freshness cutoff."""
     material = findings = 0
     for (day, element), row in snapshot["records"].items():
         if (station_id, day, element) not in points:
             continue
-        added, linked = _retain_changed_point(state, row, snapshot["retrieved_at"], snapshot["source_revision"], claims)
+        added, linked = _retain_changed_point(state, row, snapshot["retrieved_at"], snapshot["source_revision"], claims, sink=sink)
         material += added
         findings += linked
     for claim in claims:
         if (claim["station_id"] == station_id
                 and (date.fromisoformat(claim["valid_date"]), claim["element"]) not in snapshot["records"]):
             findings += int(record_claim_finding(
-                state, claim, reason="tracked_observation_absent_from_current_archive",
+                state, claim, _sink=sink, reason="tracked_observation_absent_from_current_archive",
                 source_revision=snapshot["source_revision"], retrieved_at=snapshot["retrieved_at"],
                 details={"historical_correctness": "not_determined", "current_source_coverage": "missing"},
             ))
@@ -1098,7 +1115,7 @@ def _retain_snapshot_revisions(state, station_id, snapshot, claims, points):
         variable = "temperature_2m_max" if claim["element"] == "TMAX" else "temperature_2m_min"
         if not prior.provenance["variables"][variable].get("source_coverage_complete"):
             findings += int(record_claim_finding(
-                state, claim, reason="current_archive_comparison_gap", source_revision=snapshot["source_revision"],
+                state, claim, _sink=sink, reason="current_archive_comparison_gap", source_revision=snapshot["source_revision"],
                 retrieved_at=snapshot["retrieved_at"],
                 details={"historical_correctness": "not_determined", "variable": variable,
                          "requested_comparison_cutoff": prior.provenance["requested_comparison_cutoff"]},
@@ -1117,7 +1134,7 @@ def _retain_snapshot_revisions(state, station_id, snapshot, claims, points):
             value = prior.all_time_max_c if high else prior.all_time_min_c
         if value is not None and value != claim["reported_previous_c"]:
             findings += int(record_claim_finding(
-                state, claim, reason="current_archive_comparator_changed", source_revision=prior.provenance["revision_id"],
+                state, claim, _sink=sink, reason="current_archive_comparator_changed", source_revision=prior.provenance["revision_id"],
                 retrieved_at=snapshot["retrieved_at"], verified_change=True,
                 details={"retained_comparator_c": claim["reported_previous_c"], "current_accepted_comparator_c": value,
                          "comparison_before": claim["valid_date"], "historical_revision_timing": "not_established"},
@@ -1125,8 +1142,8 @@ def _retain_snapshot_revisions(state, station_id, snapshot, claims, points):
     return material, findings
 
 
-def _retain_changed_point(state, row, retrieved_at, source_revision, claims):
-    revision_id, added = record_observation_revision(state, row, retrieved_at=retrieved_at, source_revision=source_revision)
+def _retain_changed_point(state, row, retrieved_at, source_revision, claims, *, sink=None):
+    revision_id, added = record_observation_revision(state, row, retrieved_at=retrieved_at, source_revision=source_revision, _sink=sink)
     findings = 0
     for claim in claims:
         if (claim["station_id"], claim["valid_date"], claim["element"]) != (row.station_id, row.obs_date.isoformat(), row.element):
@@ -1134,13 +1151,13 @@ def _retain_changed_point(state, row, retrieved_at, source_revision, claims):
         changed = claim.get("reported_value_c") is not None and claim["reported_value_c"] != row.value_c
         if row.value_c is None and row.action != "delete" and not row.qflag.strip():
             findings += int(record_claim_finding(
-                state, claim, reason="tracked_observation_missing_current_value", source_revision=revision_id,
+                state, claim, _sink=sink, reason="tracked_observation_missing_current_value", source_revision=revision_id,
                 retrieved_at=retrieved_at,
                 details={"historical_correctness": "not_determined", "current_source_coverage": "missing"},
             ))
         elif row.to_daily_obs() is None or changed:
             findings += int(record_claim_finding(
-                state, claim, reason="current_source_qc_or_value_revision", source_revision=revision_id,
+                state, claim, _sink=sink, reason="current_source_qc_or_value_revision", source_revision=revision_id,
                 retrieved_at=retrieved_at, verified_change=True,
                 details={"current_value_c": row.value_c, "current_qflag": row.qflag.strip(),
                          "source_accepted": row.to_daily_obs() is not None,
@@ -1149,7 +1166,7 @@ def _retain_changed_point(state, row, retrieved_at, source_revision, claims):
     return int(added), findings
 
 
-def _retain_record_points(state, bundle, snapshot):
+def _retain_record_points(state, bundle, snapshot, *, sink=None):
     added = 0
     for field, element, scope_name in (
         ("all_time_high", "TMAX", "all_time"), ("all_time_low", "TMIN", "all_time"),
@@ -1167,7 +1184,7 @@ def _retain_record_points(state, bundle, snapshot):
         for day in (bundle.signal_date, date.fromisoformat(prior) if prior else None):
             row = snapshot["records"].get((day, element))
             if row is not None:
-                _, created = record_observation_revision(state, row, retrieved_at=snapshot["retrieved_at"], source_revision=snapshot["source_revision"])
+                _, created = record_observation_revision(state, row, retrieved_at=snapshot["retrieved_at"], source_revision=snapshot["source_revision"], _sink=sink)
                 added += int(created)
     return added
 

@@ -227,6 +227,15 @@ class ScientificSupplySession:
             receipt, value = self.repository.read(NAMESPACE, self.snapshot_id)
         except projection.ProjectionError:
             raise SupplyError("supply_storage_unavailable") from None
+        return self._decoded(receipt, value)
+
+    def read_on_connection(self, c):
+        """Same immutable codec inside an existing authority transaction."""
+        self.validate(mode=self.mode)
+        receipt, value = self.repository._read(c, NAMESPACE, self.snapshot_id)
+        return self._decoded(receipt, value)
+
+    def _decoded(self, receipt, value):
         require(type(value) is dict and set(value) == ENVELOPE_KEYS)
         require(type(value["schema_version"]) is int and value["schema_version"] == 1, "unsupported_supply_codec")
         require(value["source"] == "ghcn-daily" and value["supply_run_id"] == self.supply_run_id)

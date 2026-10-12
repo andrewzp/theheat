@@ -16,7 +16,7 @@ MAX_TARGETS = 500
 MEDIA_ACTIONS = frozenset({"attach_media_revision", "remove_media_revision", "review_media_revision"})
 EDITOR_MEDIA_ACTIONS = frozenset({"prepare_media_revision", "request_revision_checks", "approve_media_revision"})
 CANDIDATE_ACTIONS = frozenset({"request_candidate_checks", "admit_checked_candidate"})
-SOURCE_ACTIONS = frozenset({"commit_nhc_source_run"})
+SOURCE_ACTIONS = frozenset({"commit_nhc_source_run", "commit_ghcn_source_run"})
 REPORT_ACTIONS = frozenset({"open_report_evidence"})
 COVERAGE_ACTIONS = frozenset({"evaluate_reference_coverage"})
 GENERATION_ACTIONS = frozenset({"request_sourced_generation"})
@@ -117,6 +117,7 @@ def _validate_payload(action: str, payload: Any, *, allow_legacy_review: bool = 
     if not isinstance(payload, dict):
         raise CommandError("invalid_payload", "Payload must be an object")
     required = {
+        "commit_ghcn_source_run": {"supply_run_id", "supply_sha256", "runtime_input_sha256", "dependency_sha256", "expected_policy_sha256"},
         "commit_nhc_source_run": {"supply_run_id", "supply_sha256", "runtime_input_sha256", "expected_episode_heads", "expected_policy_sha256"},
         "evaluate_reference_coverage": {"set_id", "expected_set_sha256", "expected_state_version", "expected_policy_sha256"},
         "open_report_evidence": {"lineage_id", "report_sha256", "expected_policy_sha256", "episode_reference"},
@@ -145,16 +146,17 @@ def _validate_payload(action: str, payload: Any, *, allow_legacy_review: bool = 
             if str(UUID(payload["supply_run_id"])) != payload["supply_run_id"]:
                 raise ValueError
         except (ValueError, TypeError, AttributeError):
-            raise CommandError("invalid_source_identity", "Supply the exact retained NHC run") from None
-        for key in ("supply_sha256", "runtime_input_sha256"):
+            raise CommandError("invalid_source_identity", "Supply the exact retained source run") from None
+        for key in (("supply_sha256", "runtime_input_sha256", "dependency_sha256") if action == "commit_ghcn_source_run" else ("supply_sha256", "runtime_input_sha256")):
             if type(payload[key]) is not str or not _HEX.fullmatch(payload[key]):
-                raise CommandError("invalid_source_identity", "Supply exact retained NHC fingerprints")
-        heads = payload["expected_episode_heads"]
-        if type(heads) is not dict or len(heads) > 64 or any(type(key) is not str
-                or not re.fullmatch(r"ep1:cyclone:nhc:(?:AL|EP)(?:0[1-9]|[1-4][0-9])[0-9]{4}", key)
-                or int(key[-4:]) == 0 or (value is not None and (type(value) is not str or not _HEX.fullmatch(value)))
-                for key, value in heads.items()):
-            raise CommandError("invalid_source_heads", "Supply the complete bounded episode head map")
+                raise CommandError("invalid_source_identity", "Supply exact retained source fingerprints")
+        if action == "commit_nhc_source_run":
+            heads = payload["expected_episode_heads"]
+            if type(heads) is not dict or len(heads) > 64 or any(type(key) is not str
+                    or not re.fullmatch(r"ep1:cyclone:nhc:(?:AL|EP)(?:0[1-9]|[1-4][0-9])[0-9]{4}", key)
+                    or int(key[-4:]) == 0 or (value is not None and (type(value) is not str or not _HEX.fullmatch(value)))
+                    for key, value in heads.items()):
+                raise CommandError("invalid_source_heads", "Supply the complete bounded episode head map")
     if action in COVERAGE_ACTIONS:
         if not isinstance(payload["set_id"], str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}", payload["set_id"]):
             raise CommandError("invalid_coverage_identity", "Supply the retained reference-set identity")
