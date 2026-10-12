@@ -563,7 +563,7 @@ def map_text_layout(evidence):
     for fraction, anchor in ((0, "start"), (0.5, "middle"), (1, "end")):
         add(56 + 1088 * fraction, 152, f"{map_['axis_max'] * fraction:g} MW", anchor=anchor)
     add(56, 88, "Pixel centers, not fire boundaries.")
-    add(56, 30, "Power, not fire area or severity.")
+    add(56, 32, "Power, not fire area or severity.")
 
     longitudes = []
     for value, x, anchor in ((west, left, "start"), (east, left + width, "end")):
