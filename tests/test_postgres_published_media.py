@@ -284,8 +284,9 @@ def test_expiry_after_shared_state_write_rolls_back_every_effect(radar_case, mon
     clocks = iter([editor.AT, editor.AT + timedelta(minutes=14)])
     with monkeypatch.context() as patch:
         patch.setattr(authority_module, "_clock", lambda now: next(clocks))
-        with pytest.raises(CommandError, match="expired"):
+        with pytest.raises(CommandError) as caught:
             case["store"].consume(candidate.resolve, command_id=command.command_id, now=editor.AT)
+        assert caught.value.code == "command_expired"
     assert editor.all_application_rows(core[3]) == rows and case["store"].read() == before
     result = case["store"].consume(
         candidate.resolve, command_id=command.command_id, now=editor.AT + timedelta(minutes=14)
@@ -467,3 +468,113 @@ def test_completion_delay_rolls_back_pass_but_keeps_original_raw(
         "SELECT count(*) FROM theheat_checks.receipts WHERE grant_id=%s",
         (saved["attempts"]["safety"]["grant_id"],),
     ) == [(0,)]
+
+
+@pytest.mark.parametrize("drift", ["frame_expired", "lease_expired", "clock_backward"])
+def test_outbox_tail_expiry_rolls_back_park_result_and_outbox(
+    radar_case, core, tmp_path, monkeypatch, drift
+):
+    from src.commands import postgres_authority as authority_module, postgres_delivery
+    from src.commands.schema import utc_datetime
+    from tests.local_delivery_helpers import fixture_server
+
+    case = radar_case
+    prepared, _ = attach(case)
+    checked = editor.complete_revision(case, monkeypatch)
+    identity = checked["revision_checks"]["check_set_id"]
+    png = editor.view(case, png=prepared["preparation"]["proposal_sha256"])
+    core[2].initialize_delivery(now=editor.AT)
+    latest_lease = admin(core[3],
+        "SELECT expires_at FROM theheat_checks.draft_leases WHERE check_set_id=%s ORDER BY fence DESC LIMIT 1",
+        (identity,))[0][0]
+    packet = case["store"].check_execution("read", {"check_set_id": identity}, now=utc_text(editor.AT))["packet"]
+    changed_clock = (utc_datetime(packet["useful_until"]) if drift == "frame_expired" else
+        utc_datetime(latest_lease) if drift == "lease_expired" else editor.AT - timedelta(seconds=1))
+    assert editor.AT < utc_datetime(latest_lease) < utc_datetime(packet["useful_until"])
+    current = editor.view(case)
+    draft = next(d for d in case["store"].read()[1]["drafts"] if d["id"] == case["draft_id"])
+    command = Command.from_request(dict(
+        command_id=str(uuid4()), action="approve_media_revision", requested_at=utc_text(editor.AT),
+        expires_at=utc_text(editor.AT + timedelta(minutes=20)), targets=[editor._identity(draft)],
+        payload=dict(**{key: current[key] for key in ("expected_policy_sha256", "expected_renderer_profile_sha256",
+            "expected_review_sha256", "expected_check_completion_sha256")},
+            expected_packet_sha256=current["packet"]["packet_sha256"], reason="Invented tail rollback case.")),
+        candidate.PUBLISHER, environment="local", now=editor.AT)
+    with fixture_server(png, case["text"]) as (config, trace, accepted):
+        delivery.configure(case["store"], tmp_path, config)
+        case["store"].accept(command, candidate.PUBLISHER, now=editor.AT)
+        before = editor.all_application_rows(core[3])
+        state = case["store"].read()
+        prior_raw = admin(core[3], "SELECT grant_id,raw_sha256 FROM theheat_check_executions.observations ORDER BY grant_id")
+        assert len(prior_raw) >= 4
+        original_enroll = postgres_delivery.enroll
+        advanced = False
+
+        def enroll(authority, c, value, resolve_principal, now):
+            nonlocal advanced
+            original_enroll(authority, c, value, resolve_principal, now)
+            assert c.execute("SELECT count(*) FROM theheat_delivery.intents").fetchone()[0] == 1
+            assert c.execute("SELECT count(*) FROM theheat_delivery.work_items").fetchone()[0] == 2
+            assert authority._result(c, command.command_id)["status"] == "applied"
+            advanced = True
+
+        with monkeypatch.context() as patch:
+            patch.setattr(postgres_delivery, "enroll", enroll)
+            patch.setattr(authority_module, "_clock", lambda now: changed_clock if advanced else editor.AT)
+            with pytest.raises(CommandError) as caught:
+                case["store"].consume(candidate.resolve, command_id=command.command_id, now=editor.AT)
+        assert caught.value.code == ("media_completion_clock_regressed" if drift == "clock_backward" else "media_completion_expired")
+        assert advanced and editor.all_application_rows(core[3]) == before and case["store"].read() == state
+        assert case["store"].result(command.command_id) is None
+        assert admin(core[3], "SELECT count(*) FROM theheat_delivery.intents") == [(0,)]
+        assert admin(core[3], "SELECT grant_id,raw_sha256 FROM theheat_check_executions.observations ORDER BY grant_id") == prior_raw
+        assert editor.view(case)["parked"] is False and trace == [] and not accepted
+
+
+def test_native_default_clock_stays_live_through_actual_preparation_and_consume_tail(
+    radar_case, core, monkeypatch
+):
+    from src.commands import postgres_authority as authority_module, preview_media_worker
+    from src.commands.schema import utc_datetime
+
+    case = radar_case
+    current = editor.view(case)
+    draft = next(d for d in case["store"].read()[1]["drafts"] if d["id"] == case["draft_id"])
+    command = Command.from_request(dict(
+        command_id=str(uuid4()), action="prepare_media_revision", requested_at=utc_text(editor.AT),
+        expires_at=utc_text(editor.AT + timedelta(minutes=20)), targets=[editor._identity(draft)],
+        payload={k: current[k] for k in ("expected_policy_sha256", "expected_renderer_profile_sha256")}),
+        candidate.EDITOR, environment="local", now=editor.AT)
+    case["store"].accept(command, candidate.EDITOR, now=editor.AT)
+    before = editor.all_application_rows(core[3])
+    state = case["store"].read()
+    original_event = case["store"]._event
+    advanced = False
+    live_calls = []
+
+    def clock(now):
+        live_calls.append(now)
+        if now is not None:
+            return now
+        return utc_datetime("2026-09-29T12:14:00Z") if advanced else editor.AT
+
+    def event(c, command_id, kind, at, value):
+        nonlocal advanced
+        original_event(c, command_id, kind, at, value)
+        if command_id == command.command_id and kind == "completed":
+            assert value["status"] == "unchanged" and value["media_preparation"]["status"] == "staged"
+            assert c.execute("SELECT count(*) FROM theheat_media.packages").fetchone()[0] == 1
+            advanced = True
+
+    with monkeypatch.context() as patch:
+        patch.setattr(authority_module, "_clock", clock)
+        patch.setattr(preview_media_worker, "_clock", clock)
+        patch.setattr(case["store"], "_event", event)
+        # Omit now: this is the ordinary worker caller and a real native child.
+        with pytest.raises(CommandError) as caught:
+            preview_media_worker.consume_media_once(case["store"], candidate.resolve, command_id=command.command_id)
+    assert caught.value.code == "media_completion_expired"
+    assert advanced and len(live_calls) >= 4 and all(value is None for value in live_calls)
+    assert editor.all_application_rows(core[3]) == before and case["store"].read() == state
+    assert case["store"].result(command.command_id) is None
+    assert admin(core[3], "SELECT count(*) FROM theheat_media.packages") == [(0,)]

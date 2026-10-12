@@ -75,7 +75,7 @@ def consume_media_once(authority, resolve_principal, *, command_id=None, now=Non
         if exc.code in {"not_native_preparation", "command_pending", "authorization_unavailable"}:
             raise
         # Known preflight refusal is recorded by the same command boundary.
-        return authority.consume(resolve_principal, command_id=command_id, now=at, _prepared_media={})
+        return authority.consume(resolve_principal, command_id=command_id, now=now, _prepared_media={})
     config = authority.editor_media_configuration
     prepared = dict(command_id=command_id, checkpoint=checkpoint, started_at=utc_text(at))
     folder = Path(tempfile.mkdtemp(prefix=command_id + "-", dir=config["scratch"]))
@@ -109,7 +109,9 @@ def consume_media_once(authority, resolve_principal, *, command_id=None, now=Non
     # Scratch is private and retained for crash diagnosis; never repair a partial
     # cache in place. A same-command retry reconciles the durable result first.
     authority.last_native_peak_rss = resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss
-    return authority.consume(resolve_principal, command_id=command_id, now=_clock(now), _prepared_media=prepared)
+    # None preserves the live clock across the authority lock/proof/commit tail.
+    # Explicit fixture time remains deterministic; do not freeze a live sample.
+    return authority.consume(resolve_principal, command_id=command_id, now=now, _prepared_media=prepared)
 
 
 def native_child():

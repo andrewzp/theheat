@@ -895,6 +895,7 @@ class PostgresCommandAuthority:
                         # A late deadline/clock refusal rolls back ALL source and
                         # state effects. The exact accepted intent remains pending.
                         clock = sources.final_clock(command, clock)
+                    media_final_window = None
                     if result["status"] in {"applied", "unchanged"} and command.action in MEDIA_ACTIONS | EDITOR_MEDIA_ACTIONS and command.action != "remove_media_revision":
                         original_draft = next(d for d in state["drafts"] if d.get("id") == command.targets[0].draft_id)
                         if original_draft.get("type") == "severe_weather":
@@ -905,7 +906,22 @@ class PostgresCommandAuthority:
                             # package/review/state effects and leaves intent pending.
                             current_actor = editor_domain.resolve(resolve_principal, command.actor_subject,
                                 publisher=command.action == "approve_media_revision")
-                            editor_domain.command_inputs(self, c, state, command, current_actor, current_editorial_policy(), finished)
+                            _, current_media = editor_domain.command_inputs(self, c, state, command, current_actor, current_editorial_policy(), finished)
+                            deadline = min(utc_datetime(command.expires_at),
+                                utc_datetime(current_media["source"]["source_useful_until"]),
+                                utc_datetime(current_media["source"]["provenance_useful_until"]),
+                                utc_datetime(current_media["spec"]["evidence"]["useful_until"]))
+                            check_date = None
+                            if command.action in {"request_revision_checks", "approve_media_revision"}:
+                                refs = result["revision_checks"] if command.action == "request_revision_checks" else result["media_approval"]
+                                packet, _ = postgres_checks._packet(c, refs["check_set_id"], self.environment)
+                                deadline = min(deadline, utc_datetime(packet["useful_until"]))
+                                check_date = packet["check_date"]
+                                if command.action == "approve_media_revision":
+                                    lease = c.execute("SELECT fence,owner,expires_at FROM theheat_checks.draft_leases WHERE check_set_id=%s ORDER BY fence DESC LIMIT 1", (refs["check_set_id"],)).fetchone()
+                                    editor_domain.refuse(lease is not None and lease[1] == "revision-checks:" + packet["enrollment_id"], "stale_revision_check_owner")
+                                    deadline = min(deadline, utc_datetime(lease[2]))
+                            media_final_window = deadline, check_date
                             clock = finished
                     result.update(command_id=command.command_id, digest=command.digest, state_version=version,
                                   completed_at=utc_text(clock), actor_subject=command.actor_subject)
@@ -917,6 +933,15 @@ class PostgresCommandAuthority:
                         delivery.enroll(self, c, delivery_plan, resolve_principal, clock)
                     if command.action in {"attach_media_revision", "review_media_revision"} and result["status"] == "applied":
                         self._result(c, command.command_id)
+                    if media_final_window is not None:
+                        # This fence follows terminal receipt and outbox work.
+                        # It is a sampled bound, not atomic wall-clock COMMIT.
+                        # Refusal escapes the outer transaction: the accepted
+                        # intent remains, but no new result/park/outbox survives.
+                        ended = _clock(now)
+                        deadline, check_date = media_final_window
+                        editor_domain.refuse(ended >= clock, "media_completion_clock_regressed")
+                        editor_domain.refuse(ended < deadline and (check_date is None or utc_text(ended)[:10] == check_date), "media_completion_expired")
         return result
 
     def configure_editor_media(self, *, rasterizer, scratch, dependency_manifest):
