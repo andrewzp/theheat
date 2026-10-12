@@ -16,11 +16,11 @@ const request = () => graphicRequest(draft(), manifest)
 // Browser contract fixture only: source eligibility is tested by the actual Python adapter.
 function responseValue(forecast = false) {
   const req = request(), files = manifest.identity.files
-  const binding = { template: forecast ? "pm25_forecast_day" : "modis_thermal_detections",
-    template_version: forecast ? "p31-pm25-forecast-1" : "p31-modis-thermal-1",
+  const binding = { template: forecast ? "pm25_forecast_day" : "modis_thermal_detection_map",
+    template_version: forecast ? "p31-pm25-forecast-1" : "p31-modis-locator-1",
     source_evidence_sha256: "c".repeat(64), renderer: { library: "ReportLab", version: "4.4.9", format: "svg", schema_version: 1,
       width: 1200, height: 1500, implementation_sha256: files["src/media/evidence_graphic_render.py"],
-      contract_sha256: files["src/media/evidence_graphic.py"], adapter_sha256: files[forecast ? "src/media/air_quality_graphic_adapter.py" : "src/media/fire_graphic_adapter.py"],
+      contract_sha256: files["src/media/evidence_graphic.py"], adapter_sha256: files[forecast ? "src/media/air_quality_graphic_adapter.py" : "src/media/fire_map_graphic_adapter.py"],
       font_sha256: files["src/media/fonts/DejaVuSansMono.ttf"] } }
   const svg = '<svg xmlns="http://www.w3.org/2000/svg"><title>Invented browser contract fixture</title></svg>'
   return { schema_version: 2, draft_id: req.draft_id, revision_identity: req.expected_revision,

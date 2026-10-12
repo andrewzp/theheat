@@ -80,7 +80,11 @@ def inputs(authority, c, draft, policy, now):
     refuse(now < min(utc_datetime(origin["source_useful_until"]), utc_datetime(origin["provenance_useful_until"])),
            "media_source_expired")
     from src.dashboard_preview.preview import qualified_spec
-    spec, label, context = qualified_spec(captured["bundle"], synthetic=True)
+    from src.media.fire_map_graphic_adapter import MapQualificationError
+    try:
+        spec, label, context = qualified_spec(captured["bundle"], synthetic=True)
+    except MapQualificationError as exc:
+        raise CommandError(exc.code, "This source cannot be shown within the qualified map display limits") from None
     digest, renderer = profile(authority, spec)
     return dict(source_origin=ref, source=origin, spec=spec, profile_sha256=digest, renderer=renderer,
                 policy_sha256=fingerprint(policy), source_label=label, source_context=context)

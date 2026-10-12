@@ -46,8 +46,8 @@ export function graphicRequest(draft, manifest) {
 export const graphicRequestKey = request => request ? canonical(request) : "unavailable"
 
 const templates = {
-  modis_thermal_detections: { version: "p31-modis-thermal-1", source: "NASA FIRMS · MODIS",
-    adapter: "src/media/fire_graphic_adapter.py", context: "modis_acquisition" },
+  modis_thermal_detection_map: { version: "p31-modis-locator-1", source: "NASA FIRMS · MODIS",
+    adapter: "src/media/fire_map_graphic_adapter.py", context: "modis_acquisition" },
   pm25_forecast_day: { version: "p31-pm25-forecast-1", source: "CAMS via Open-Meteo",
     adapter: "src/media/air_quality_graphic_adapter.py", context: "pm25_forecast_day" },
 }
@@ -128,7 +128,7 @@ const errors = {
   403: "Open the protected dashboard address to preview this draft.",
   404: "This saved draft is no longer available. Refresh the queue.",
   409: "This draft changed or has conflicting versions. Refresh it before previewing.",
-  422: "The saved source evidence cannot support this graphic. Check the source details.",
+  422: "The saved source or display limits cannot support this graphic. No substitute was used.",
   429: "Another preview is being built. Try again in a moment.",
 }
 const unavailable = "The preview is unavailable. Your draft has not changed; try again later."

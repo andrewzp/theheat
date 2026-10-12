@@ -65,6 +65,10 @@ SOURCES = (
     'src/media/evidence_graphic.py',
     'src/media/evidence_graphic_render.py',
     'src/media/fire_graphic_adapter.py',
+    'src/media/fire_map_graphic_adapter.py',
+    'src/media/maps/ne_110m_land_v4_1_0.json',
+    'src/media/maps/manifest.json',
+    'src/media/maps/NOTICE.md',
     'src/media/fonts/DejaVuSansMono.ttf',
     'src/media/fonts/DejaVu-LICENSE.txt',
     'src/media/temperature_graphic_adapter.py',
@@ -84,7 +88,24 @@ RESOURCES = (
 DEPLOYMENT_FILES = ("api/graphic_preview.py", "pyproject.toml", "uv.lock")
 
 
+BASEMAP_PINS = {
+    "ne_110m_land_v4_1_0.zip": "1926c621afd6ac67c3f36639bb1236134a48d82226dc675d3e3df53d02d2a3de",
+    "ne_110m_land_v4_1_0.json": "a37b057aca4fc9714a0c24b5d6bc9778bb5845894646e4052383ea63fa3cd50d",
+    "manifest.json": "1af072edc46ae3252bf6cf0edb43993986de262a2840b2cd4907eb4866f970e9",
+}
+
+
+def validate_basemap(root):
+    """Package only the reviewed local map resources; never fetch or rewrite pins."""
+    for name, expected in BASEMAP_PINS.items():
+        with (root / "src/media/maps" / name).open("rb") as stream:
+            content = stream.read(1024 * 1024 + 1)
+        if len(content) > 1024 * 1024 or sha256(content).hexdigest() != expected:
+            raise ValueError("Unqualified basemap resource: " + name)
+
+
 def generate(root=ROOT):
+    validate_basemap(ROOT)
     output = BytesIO()
     files = {}
     entries = [(name, name) for name in SOURCES] + list(RESOURCES)

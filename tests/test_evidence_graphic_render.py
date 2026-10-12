@@ -23,6 +23,7 @@ from tests.ghcn_graphic_helpers import graphic_bundles
 from tests.test_air_quality_graphic_adapter import adapt as aq_spec
 from tests.test_crw_graphic_adapter import adapt as crw_spec
 from tests.test_fire_graphic_adapter import adapt as fire_spec
+from tests.test_fire_map_graphic_adapter import adapt as map_spec
 from tests.test_temperature_graphic_adapter import adapt as temperature_spec
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -34,10 +35,10 @@ def specs():
     temperatures = graphic_bundles()
     return [temperature_spec(temperatures[-1:]),
             temperature_spec(temperatures, template="temperature_trajectory"),
-            crw_spec(*graphic_inputs()), aq_spec(aq_bundle()), fire_spec(fire_bundle())]
+            crw_spec(*graphic_inputs()), aq_spec(aq_bundle()), fire_spec(fire_bundle()), map_spec(fire_bundle())]
 
 
-@pytest.mark.parametrize("index", range(5))
+@pytest.mark.parametrize("index", range(6))
 def test_real_svg_preserves_full_qualifications_and_is_deterministic(specs, index):
     spec = specs[index]
     original = deepcopy(spec)
@@ -125,12 +126,14 @@ def test_long_word_or_unrenderable_axis_never_silently_clips():
         renderer.render_svg(**fire_spec(fire_bundle([1.7e308])))
 
 
-@pytest.mark.parametrize("name", ["evidence_graphic_render.py", "evidence_graphic.py", "fire_graphic_adapter.py", renderer.FONT_RESOURCE])
-def test_packaged_resource_changes_invalidate_render_identity(specs, monkeypatch, name):
-    original = renderer.render_svg(**specs[-1])
+@pytest.mark.parametrize("index,adapter", [(4, "fire_graphic_adapter.py"), (5, "fire_map_graphic_adapter.py")])
+@pytest.mark.parametrize("resource", ["evidence_graphic_render.py", "evidence_graphic.py", "adapter", renderer.FONT_RESOURCE])
+def test_packaged_resource_changes_invalidate_render_identity(specs, monkeypatch, index, adapter, resource):
+    name = adapter if resource == "adapter" else resource
+    original = renderer.render_svg(**specs[index])
     digest = renderer._resource_digest
     monkeypatch.setattr(renderer, "_resource_digest", lambda key: "a" * 64 if key == name else digest(key))
-    changed = renderer.render_svg(**specs[-1])
+    changed = renderer.render_svg(**specs[index])
     assert changed["cache_key"] != original["cache_key"]
 
 
@@ -141,15 +144,18 @@ def test_concurrent_rendering_does_not_mix_charts_or_font_state(specs):
     assert actual == expected * 2
 
 
-def test_zip_loaded_renderer_matches_filesystem_without_extraction(specs, tmp_path):
+@pytest.mark.parametrize("index", [4, 5])
+def test_zip_loaded_renderer_matches_filesystem_without_extraction(specs, tmp_path, index):
     # This is a test-only package of public source, not the production allowlist.
     archive = tmp_path / "runtime.zip"
     with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as bundle:
         for path in sorted((ROOT / "src").rglob("*.py")):
             bundle.write(path, path.relative_to(ROOT))
         bundle.write(ROOT / "src/media" / renderer.FONT_RESOURCE, "src/media/" + renderer.FONT_RESOURCE)
+        for name in ("ne_110m_land_v4_1_0.json", "manifest.json", "NOTICE.md"):
+            bundle.write(ROOT / "src/media/maps" / name, "src/media/maps/" + name)
     fixture = tmp_path / "spec.json"
-    fixture.write_text(json.dumps(specs[-1]))
+    fixture.write_text(json.dumps(specs[index]))
     script = '''
 import json, socket, sys
 sys.dont_write_bytecode = True
@@ -163,6 +169,6 @@ print(json.dumps({k: r[k] for k in ("cache_key", "svg_sha256", "alt_text")}))
 '''
     result = subprocess.run([sys.executable, "-I", "-c", script, str(archive), str(fixture)],
                             check=True, capture_output=True, text=True, cwd=tmp_path, timeout=30)
-    normal = renderer.render_svg(**specs[-1])
+    normal = renderer.render_svg(**specs[index])
     assert json.loads(result.stdout) == {k: normal[k] for k in ("cache_key", "svg_sha256", "alt_text")}
     assert sorted(p.name for p in tmp_path.iterdir()) == ["runtime.zip", "spec.json"]

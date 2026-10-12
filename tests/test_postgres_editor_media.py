@@ -202,6 +202,8 @@ def prepare_and_attach(case):
     )
     prepared = view(case)
     assert prepared["status"] == "prepared", prepared
+    if case["bundle"].signal_kind == "fire":
+        assert prepared["packet"]["graphic_binding"]["template"] == "modis_thermal_detection_map"
     png = view(case, png=prepared["preparation"]["proposal_sha256"])
     assert png.startswith(b"\x89PNG\r\n\x1a\n") and len(png) > 1000
     _, attached = action(
@@ -796,3 +798,48 @@ def test_native_failures_restart_without_partial_asset_or_false_success(
                 == retained
             )
     assert store.read() == state
+
+
+@pytest.mark.parametrize("admitted", ["modis"], indirect=True)
+def test_current_map_selection_and_typed_display_hold_preserve_state(admitted, monkeypatch):
+    from src.media import fire_map_graphic_adapter as map_adapter
+    from src.dashboard_preview.preview import qualified_spec
+    case = admitted
+    spec, _, _ = qualified_spec(case["bundle"].to_dict(), synthetic=True)
+    assert spec["template"] == "modis_thermal_detection_map"
+    before = case["store"].read()
+    assert view(case)["status"] == "ready"
+    def unavailable(*args, **kwargs):
+        raise map_adapter.MapQualificationError("graphic_map_points_overlap")
+    monkeypatch.setattr(map_adapter, "geometry", unavailable)
+    result = view(case)
+    assert result["status"] == "unavailable" and result["code"] == "graphic_map_points_overlap"
+    assert result["preparation"] is None and not result["parked"] and not result["review_current"]
+    assert case["store"].read() == before
+
+
+@pytest.mark.parametrize("admitted", ["modis"], indirect=True)
+def test_map_resource_drift_after_prepare_holds_without_attaching(admitted, monkeypatch, core):
+    from src.media import fire_map_graphic_adapter as adapter
+    case = admitted
+    current = view(case)
+    _, result = action(case, "prepare_media_revision", {k: current[k] for k in ("expected_policy_sha256", "expected_renderer_profile_sha256")})
+    assert result["status"] == "unchanged"
+    prepared = view(case)
+    png = view(case, png=prepared["preparation"]["proposal_sha256"])
+    state = case["store"].read()
+    packages = admin(core[3], "SELECT * FROM theheat_media.packages ORDER BY 1")
+    resource = adapter.resource
+    monkeypatch.setattr(adapter, "resource", lambda name, bound: resource(name, bound) + (b" " if name == adapter.MANIFEST else b""))
+    held = view(case)
+    assert held["status"] == "unavailable" and held["reason"] == "graphic_map_basemap_unavailable"
+    _, result = action(case, "attach_media_revision", dict(
+        proposal_sha256=prepared["preparation"]["proposal_sha256"],
+        expected_policy_sha256=prepared["expected_policy_sha256"],
+        expected_packet_sha256=prepared["packet"]["packet_sha256"],
+        review=dict(decision="accept", confirmations={k: True for k in CONFIRMATIONS}, reason="Invented operator action must refuse resource drift."),
+    ))
+    assert result["status"] == "rejected" and result["code"] == "graphic_map_basemap_unavailable"
+    assert case["store"].read() == state
+    assert admin(core[3], "SELECT * FROM theheat_media.packages ORDER BY 1") == packages
+    assert view(case, png=prepared["preparation"]["proposal_sha256"]) == png
