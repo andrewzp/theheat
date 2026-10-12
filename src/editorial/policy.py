@@ -12,6 +12,10 @@ from src.editorial.revisions import fingerprint
 
 ROOT = Path(__file__).resolve().parents[2]
 POLICY_FILES = (
+    "src/media/published_radar.py",
+    "src/commands/postgres_published_media.py",
+    "src/data/nws_alerts.py",
+    "src/orchestrator/sources/nws_alerts.py",
     "src/storage/ghcn_runtime_inputs.py",
     "src/commands/postgres_ghcn_source_results.py",
     "src/orchestrator/ghcn_source_result_client.py",
