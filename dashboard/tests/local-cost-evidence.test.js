@@ -105,3 +105,16 @@ test("actual owned PostgreSQL HTTP -> dashboard API -> cost component, unavailab
     Object.assign(process.env, saved)
   }
 })
+
+
+test("canonical retained timestamps preserve supported precision; malformed wire timestamps refuse", () => {
+  for (const observed of ["2026-09-29T12:00:00.000000Z", "2026-09-29T12:00:00.120000Z", "2026-09-29T12:00:00.123456Z"]) {
+    const value = fixture(); value.requests[0].usage.observed_at = observed
+    assert.equal(localCostEvidence(value).requests[0].usage.observed_at, observed)
+    assert.match(render({localEvidence: value}), /Local requests and reserved allowance/)
+  }
+  for (const observed of ["2026-09-29T12:00:00Z", "bad", "2026-02-30T12:00:00.000000Z", "2026-09-29T12:00:00.1234567Z"]) {
+    const value = fixture(); value.requests[0].usage.observed_at = observed
+    assert.equal(localCostEvidence(value).status, "unavailable")
+  }
+})

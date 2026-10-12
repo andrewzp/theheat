@@ -578,6 +578,8 @@ def _row(record):
 
 
 def _detached_usage(value, row):
+    # Canonical display only; leave original retained observation bytes intact.
+    value = dict(value, observed_at=spend._time(value["observed_at"]))
     if "batch_custom_id" in value:
         try:
             metadata=usage.decode(value.pop("batch_metadata"))

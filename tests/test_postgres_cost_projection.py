@@ -773,3 +773,25 @@ def test_corrected_sync_media_source_after_edit_restart_and_restore(urgent,core,
     media.prepare_and_attach(urgent)
     media.complete_revision(urgent,monkeypatch)
     media_history_readback(urgent,core,cluster,tmp_path,monkeypatch)
+
+
+@pytest.mark.parametrize('original,canonical',[
+    ('2026-09-29T12:00:00Z','2026-09-29T12:00:00.000000Z'),
+    ('2026-09-29T12:00:00.000000Z','2026-09-29T12:00:00.000000Z'),
+    ('2026-09-29T12:00:00.12Z','2026-09-29T12:00:00.120000Z'),
+    ('2026-09-29T12:00:00.123456Z','2026-09-29T12:00:00.123456Z'),
+])
+def test_detached_usage_display_canonical_time_preserves_evidence(original,canonical):
+    raw=b'{"usage":{"input_tokens":11,"output_tokens":7}}'
+    detached=dict(raw=raw,observed_at=original,complete=True)
+    result=cost._detached_usage(detached,dict(provider='anthropic',role='writer',requested_model='invented'))
+    assert result['status']=='present' and result['observed_at']==canonical
+    assert result['counts']['input_tokens']==11
+    assert detached==dict(raw=raw,observed_at=original,complete=True)
+
+
+@pytest.mark.parametrize('original',['bad','2026-02-30T12:00:00Z','2026-09-29T12:00:00.1234567Z',None])
+def test_detached_usage_display_refuses_malformed_time(original):
+    with pytest.raises(ValueError):
+        cost._detached_usage(dict(raw=b'{}',observed_at=original,complete=True),
+            dict(provider='anthropic',role='writer',requested_model='invented'))
