@@ -1,5 +1,5 @@
 """Actual report component/Next HTTP and separate PG consumer, invented only."""
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 import json
 from pathlib import Path
 import subprocess
@@ -53,9 +53,27 @@ def request(report):
 def test_actual_component_http_report_to_separate_consumer(report_preview, tmp_path, linked):
     case = report_preview
     if linked:
-        _, head, _, _ = physical.seed(case["authority"].projections)
-        case["config"]["current_reports"][0]["episode_reference"] = dict(episode_id=physical.EPISODE,
-            revision_sha256=head, claim_id="claim1")
+        # The actual worker uses current time. Invent current retained evidence
+        # rather than weakening source freshness or relying on a fixed test day.
+        from src.commands.schema import utc_text
+        from src.storage.physical_events import PhysicalEpisodeSession
+        now = datetime.now(UTC).replace(microsecond=0)
+        before = now-timedelta(hours=6)
+        episodes = PhysicalEpisodeSession(case["authority"].projections)
+        head = None
+        for number, issued, wind in (("1", before, 70), ("2", now, 100)):
+            source, receipt, _ = physical.capture(case["authority"].projections,
+                [physical.advisory(advisory_number=number, issued_at=utc_text(issued), wind_kt=wind)], now=utc_text(now))
+            result = physical.apply(source, receipt, episodes, {physical.EPISODE: head}, now=utc_text(now))
+            head = result["episodes"][0]["revision_sha256"]
+        document = case["document"]
+        document["previous_report_sha256"] = case["head"]
+        for key, value in (("event_start", before), ("event_end", now)):
+            label = value.date().isoformat()
+            document["claims"][0]["times"][key] = dict(original=label, utc=None, date=label, precision="calendar", timezone=None)
+        corrected = case["session"].retain_revision(document, expected_head=case["head"], operation_id=str(uuid4()))
+        case["config"]["current_reports"][0].update(report_sha256=corrected["report_sha256"],
+            episode_reference=dict(episode_id=physical.EPISODE, revision_sha256=head, claim_id="claim1"))
         case["path"].write_text(json.dumps(case["config"]))
     before = case["authority"].read()
     config = tmp_path/"http-report.json"
