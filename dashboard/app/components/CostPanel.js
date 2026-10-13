@@ -93,7 +93,7 @@ function LocalCosts({evidence, stale}) {
   const note = text => h("p", {className: "runtime-note"}, text)
   return h("section", {className: "local-cost-section", "aria-label": "Local requests and reserved allowance"},
     h("h3", null, "Local requests and reserved allowance"),
-    note("Local workflow only · final bill unavailable"),
+    note(evidence.scope === "hosted_staging_fixture" ? "Hosted staging fixture only · final bill unavailable" : "Local workflow only · final bill unavailable"),
     evidence.status !== "available" ? h("p", {role: "status"}, "Local cost records unavailable.") : h(React.Fragment, null,
       h("p", {className: "runtime-note", role: "status"}, `${stale ? "Refresh failed · last loaded snapshot: " : "Observed: "}${localTimestamp(evidence.snapshot.observed_at)}.`),
       h("dl", {className: "runtime-settings cost-counts"},

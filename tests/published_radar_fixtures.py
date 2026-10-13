@@ -2,6 +2,7 @@
 
 from datetime import datetime, timedelta, timezone
 import io
+from zoneinfo import ZoneInfo
 from pathlib import Path
 
 from PIL import Image, ImageDraw
@@ -78,7 +79,7 @@ def bundle(monkeypatch, *, at=AT):
 
 def input_document(*, at=AT):
     minute = at - timedelta(minutes=1)
-    literal = minute.strftime("%m/%d/%Y %H:%M UTC (06:59 CDT)")
+    literal = minute.strftime("%m/%d/%Y %H:%M UTC") + minute.astimezone(ZoneInfo("America/Chicago")).strftime(" (%H:%M %Z)")
     frame = Image.new("P", (600, 550), 0)
     frame.putpalette([15, 35, 65, 240, 210, 30, 230, 60, 40, 45, 170, 100] + [0] * 756)
     draw = ImageDraw.Draw(frame)

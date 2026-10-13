@@ -12,6 +12,7 @@ import os
 import stat
 from uuid import NAMESPACE_URL, uuid5
 
+from src.commands import hosted_fixture
 from src.commands import postgres_revision_checks as revisions
 from src.commands import postgres_checks as checks
 from src.commands import postgres_media as media, postgres_media_commands as media_commands
@@ -30,7 +31,7 @@ SCOPE = "local_joint_media"
 
 
 def configure(authority, *, rasterizer, scratch, dependency_manifest):
-    refuse(authority.environment == "local", "editor_media_local_only")
+    refuse(hosted_fixture.allowed(authority), "editor_media_local_only")
     binary, folder = Path(rasterizer), Path(scratch)
     refuse(binary.is_absolute() and folder.is_absolute() and not binary.is_symlink()
            and binary.is_file() and os.access(binary, os.X_OK), "native_renderer_unavailable")
@@ -48,7 +49,7 @@ def profile(authority, spec):
     """Actual native closure, independent of the dashboard SVG manifest."""
     from src.media.evidence_graphic_render import _renderer_identity
     config = getattr(authority, "editor_media_configuration", None)
-    refuse(authority.environment == "local" and type(config) is dict, "editor_media_unavailable")
+    refuse(hosted_fixture.allowed(authority) and type(config) is dict, "editor_media_unavailable")
     assert isinstance(config, dict)
     from src.media.native_profile import load
     try:

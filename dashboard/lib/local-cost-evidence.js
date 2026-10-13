@@ -46,7 +46,7 @@ export function localCostEvidence(value) {
         && ["unavailable", "unconfigured"].includes(value.status)
         && ["journal_unavailable", "not_configured", "local_only", "projection_timeout", "projection_limited"].includes(value.reason)) return structuredClone(value)
     if (!keys(value, ["schema_version", "status", "reason", "scope", "actual_bill_available", "accounting_complete", "production_enforcement", "snapshot", "integrity_scope", "summary", "requests", "details_truncated", "total_intents", "shown_intents", "omitted_intents"])
-        || value.schema_version !== 1 || value.status !== "available" || value.reason !== null || value.scope !== "local_shared_authority"
+        || value.schema_version !== 1 || value.status !== "available" || value.reason !== null || !["local_shared_authority", "hosted_staging_fixture"].includes(value.scope)
         || [value.actual_bill_available, value.accounting_complete, value.production_enforcement].some(v => v !== false)
         || !keys(value.snapshot, ["state_version", "observed_at"]) || !integer(value.snapshot.state_version, Number.MAX_SAFE_INTEGER) || !stamp(value.snapshot.observed_at)
         || !keys(value.integrity_scope, ["summary", "details"]) || value.integrity_scope.summary !== "existing_catalog_constraints_aggregate" || value.integrity_scope.details !== "selected_rows_hash_and_join_checked") return unknown()

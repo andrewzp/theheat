@@ -121,7 +121,8 @@ class PostgresCommandAuthority:
 
     def initialize_delivery(self, *, now: datetime) -> None:
         """Explicit owner-only local catalog upgrade; never a sender activation."""
-        from src.commands import postgres_delivery as delivery
+        from src.commands import postgres_delivery as delivery, hosted_fixture
+        p._require(hosted_fixture.allowed(self, purpose="owner"), "explicit_staging_config_required")
         with self.projections._connection(writing=True) as c:
             self._validate(c, runtime=False)
             self._pointer(c, lock=True)
@@ -428,7 +429,9 @@ class PostgresCommandAuthority:
         with self.projections._connection(writing=True) as c:
             self._validate(c)
             self._pointer(c, lock=True)
-            generation.refuse(self.environment == "local", "local_generation_required")
+            from src.commands import hosted_fixture
+            generation.refuse(hosted_fixture.allowed(self), "local_generation_required")
+            hosted_fixture.profile(c, self.environment)
             generation.record(c, generation.INPUT, identity, value)
         return dict(brief_id=identity, brief_sha256=identity)
 
@@ -446,7 +449,9 @@ class PostgresCommandAuthority:
         with self.projections._connection(writing=True) as c:
             self._validate(c)
             self._pointer(c, lock=True)
-            generation.refuse(self.environment == "local", "local_generation_required")
+            from src.commands import hosted_fixture
+            generation.refuse(hosted_fixture.allowed(self), "local_generation_required")
+            hosted_fixture.profile(c, self.environment)
             generation.record(c, generation.RESERVATION, identity, value)
         return dict(estimate_sha256=identity, reserve_micro_usd=value["reserve_micro_usd"])
 
@@ -966,7 +971,7 @@ class PostgresCommandAuthority:
                     value["delivery"] = delivery.projection(self, c, draft_id, resolve_principal, _clock(now))
             return value
 
-    def execute_revision_check_once(self, command_id, resolve_principal, *, clock, reservation=None, enabled=False):
+    def execute_revision_check_once(self, command_id, resolve_principal, *, clock, reservation=None, enabled=False, transport_options=None):
         from src.commands import postgres_editor_media as domain, postgres_revision_checks as revisions
         from src.two_bot.check_executor import execute_check_once
         if type(enabled) is not bool:
@@ -1059,7 +1064,7 @@ class PostgresCommandAuthority:
             def read_check_response(self, check_set_id, stage, grant_id):
                 return transaction("response", dict(check_set_id=check_set_id, stage=stage, grant_id=grant_id))
         return execute_check_once(ScopedAuthority(), identity, current_context=packet["current_context"], checker_state=state,
-                                  owner=owner, clock=clock, reservation=reservation, enabled=True)
+                                  owner=owner, clock=clock, reservation=reservation, enabled=True, transport_options=transport_options)
 
     def capture_candidate_input(self, payload: dict, *, now: datetime) -> dict:
         """Trusted local fixture-producer input; no HTTP route grants this ability."""
