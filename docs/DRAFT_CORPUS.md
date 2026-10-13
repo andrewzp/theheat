@@ -11,6 +11,22 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-10-13 — Daily corpus grading (0 fresh drafts; 15 carry-overs from Oct 8/Oct 10, previously graded)
+
+**Context:** Gist read via git-clone (success). Queue: 15 pending — exact match to the Oct 10/11 set
+(newest draft: Simon Cat 3 [15], created Oct 10T03:33Z); zero drafts entered since Oct 11. No
+re-grading; all grades stand. (Step 0's reset of `main` shows docs ending Jul 6 — `main` is stale
+relative to this rolling branch; a first-pass grade from `main` was discarded on discovering these
+15 drafts were already graded here. Operator: `main` has not received the daily docs since Jul 6.)
+
+**Staleness as of ~Oct 13:** all 15 are now >48h (63–150h). Time-baked and superseded: the 6 Oct 7–8
+dust/PM2.5 forecasts (Quetta, Arequipa, Riyadh, Shah Alam, Kano, Klang) and the 6 storm advisories
+(Isaias ×3, Simon ×3; later NHC products exist). The 3 fire detections are past-tense. Bulk-reject
+skipped: `gh auth status` shows `GH_TOKEN` invalid; no gist-write tool. Operator should reject via
+dashboard. Beacon write also failed (HTTP 403 on Actions variables via proxy).
+
+**A-rate:** — (no fresh drafts). Last measured: 0% (0/8, Oct 10). No proposal evidence changes.
+
 ## 2026-10-11 — Daily corpus grading (0 fresh drafts; 15 carry-overs from Oct 8/Oct 10, previously graded)
 
 **Context:** Step 0 reset `main` (tip `e66c8c6`); `daily-plan-current` picked up at `b2306be` (Oct 10).

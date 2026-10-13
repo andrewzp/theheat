@@ -2,6 +2,8 @@
 
 Living plan for closing the gap between the bot's current voice quality and the **resumption bar** (majority A-grade rate per cycle). Refined daily by the autonomous grading agent (cron `0 15 * * *`), reviewed and implemented by the human operator.
 
+> **Oct 13: 0 fresh drafts — queue identical to Oct 10/11's 15 graded drafts; no re-grade, no proposal evidence changes.** All 15 now >48h; gist bulk-reject skipped (`GH_TOKEN` invalid). Operator: `main` docs stale since Jul 6.
+>
 > **Oct 11: 0 fresh drafts — queue is an exact match to Oct 10's 15 graded drafts; no re-grade.**
 > No proposal evidence changes (P_close/P_tier/P_url/A10 as of Oct 10). 7 Oct 8-graded drafts
 > are now >48h with elapsed baked dates, and Isaias [5] / Simon [12],[13] are superseded by later
