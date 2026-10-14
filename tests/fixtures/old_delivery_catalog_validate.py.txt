@@ -1,0 +1,19 @@
+def validate_core_catalog(c, original, environment):
+    """Called by the command validator instead of altering its old metadata."""
+    row = c.execute("SELECT receipt_bytes,sha FROM theheat_commands.delivery_upgrade WHERE singleton=1").fetchone()
+    p._require(row is not None and type(row[0]) is bytes and 0 < len(row[0]) <= 16384
+               and p._sha(row[0]) == row[1], "delivery_upgrade_receipt_required")
+    receipt = p._decode(row[0])
+    p._require(type(receipt) is dict and set(receipt) == {
+        "version", "original_metadata", "command_catalog_sha256", "delivery_catalog_sha256",
+        "migration_sha256", "installed_at"} and p._canonical(receipt) == row[0]
+        and type(receipt["version"]) is int and receipt["version"] == 1
+        and receipt["original_metadata"] == list(original)
+        and receipt["migration_sha256"] == p._sha(MIGRATION.read_bytes())
+        and utc_text(utc_datetime(receipt["installed_at"])) == receipt["installed_at"]
+        and receipt["command_catalog_sha256"] == p._catalog(c, "theheat_commands"), "changed_delivery_upgrade")
+    metadata = c.execute(f"SELECT {','.join(META)} FROM {SCHEMA}.metadata WHERE singleton=1").fetchone()
+    p._require(metadata is not None and metadata[0] == 1 and metadata[1] == receipt["migration_sha256"]
+        and metadata[2] == receipt["delivery_catalog_sha256"] == p._catalog(c, SCHEMA)
+        and metadata[3] == environment == original[3] == "local"
+        and tuple(metadata[4:]) == tuple(original[4:]), "changed_delivery_catalog")

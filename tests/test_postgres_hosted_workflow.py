@@ -16,7 +16,6 @@ import subprocess
 import sys
 import threading
 import time
-from types import ModuleType
 from uuid import uuid4
 
 import httpx
@@ -950,20 +949,13 @@ def test_preview_profile_is_explicit_atomic_and_old_reader_refuses(tls_database,
         assert value["version"] == 2 and value["environment"] == "preview"
         assert value["migration_sha256"] == p._sha(delivery.MIGRATION.read_bytes())
         assert value["preview_migration_sha256"] == p._sha(delivery.PREVIEW_MIGRATION.read_bytes())
-        source_bytes = subprocess.run(
-            [
-                "git",
-                "show",
-                "d142f0429fd0842bc9f573a604dd874549416516:src/commands/postgres_delivery.py",
-            ],
-            capture_output=True,
-            check=True,
-            timeout=5,
-        ).stdout
-        old = ModuleType("exact_d142_delivery")
-        exec(compile(source_bytes, "d142_postgres_delivery.py", "exec"), old.__dict__)
+        # Exact d142 validator bytes; independent of Git history in shallow CI.
+        source_bytes = Path(__file__).with_name("fixtures").joinpath("old_delivery_catalog_validate.py.txt").read_bytes()
+        assert p._sha(source_bytes) == "36a92b1cdb6174c46d71175177f75b46f84064abd17b319f4ff60f2207a9ce08"
+        namespace = dict(vars(delivery))
+        exec(compile(source_bytes, "old_delivery_catalog_validate.py.txt", "exec"), namespace)
         with pytest.raises(p.ProjectionError, match="changed_delivery_upgrade"):
-            old.validate_core_catalog(c, original[1:], "preview")
+            namespace["validate_core_catalog"](c, original[1:], "preview")
     owner.initialize_delivery(now=now())
     with runtime.projections._connection() as c:
         assert (
