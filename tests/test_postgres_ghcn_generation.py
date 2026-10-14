@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import time
 from uuid import uuid4
 
 import pytest
@@ -79,10 +80,26 @@ def ghcn_case(database,source_bytes,tmp_path,monkeypatch):
 
 
 def worker(case,operation,identity="",fault=""):
-    child=subprocess.run([sys.executable,str(CHILD),str(case["config_path"]),operation,identity,fault],cwd=ROOT,
+    arguments=[sys.executable]
+    evidence=os.environ.get("P25_I3_EVIDENCE_DIR")
+    if evidence:
+        directory=Path(evidence)
+        directory.mkdir(parents=True,exist_ok=True)
+        if os.environ.get("P25_I3_PROFILE_WORKERS")=="1":
+            sequence=case.setdefault("worker_sequence",0)
+            case["worker_sequence"]=sequence+1
+            profile=directory/f"{sequence:03d}-{operation}-{fault or 'ordinary'}.prof"
+            arguments.extend(["-m","cProfile","-o",str(profile)])
+    started=time.monotonic()
+    child=subprocess.run([*arguments,str(CHILD),str(case["config_path"]),operation,identity,fault],cwd=ROOT,
         env=case["environment"],capture_output=True,text=True,timeout=120)
+    elapsed=time.monotonic()-started
     assert child.returncode==0,child.stdout+child.stderr
-    return json.loads(child.stdout.splitlines()[-1])
+    result=json.loads(child.stdout.splitlines()[-1])
+    if evidence:
+        with (directory/"worker-timings.jsonl").open("a") as stream:
+            stream.write(json.dumps(dict(operation=operation,fault=fault,elapsed_seconds=elapsed,result=result),sort_keys=True)+"\n")
+    return result
 
 
 def command(case,action,refs):
@@ -171,7 +188,7 @@ def test_actual_source_http_one_writer_four_checks_pending_draft(ghcn_case,recor
             assert not passive["attempts"]["safety"].get("terminal")
             manifest.write_bytes(saved_manifest)
         completed=worker(case,stage,check["command_id"])
-        assert completed["outcome"]=="completed" and completed["checks"]["stages"][stage]=="passed",completed
+        assert completed["outcome"]=="completed" and completed["checks"]["stages"][stage]=="passed",json.dumps(dict(requested_stage=stage,result=completed),sort_keys=True)
     if os.environ.get("P25_I3_EVIDENCE_DIR"):
         directory=Path(os.environ["P25_I3_EVIDENCE_DIR"])
         directory.mkdir(parents=True,exist_ok=True)
@@ -382,3 +399,12 @@ def test_matching_looking_recorded_receipts_never_replace_fresh_interpretation(g
     result=submit(case,admit)
     assert result["status"]=="rejected" and result["code"]=="check_receipt_not_exact",result
     assert case["authority"].read()==before
+
+
+def test_checkpoint_reuses_one_transaction_read_but_refuses_later_source_tamper(ghcn_case):
+    case=ghcn_case
+    config=dict(case["config"],probe_owner=case["params"])
+    case["config_path"].write_text(json.dumps(config))
+    result=worker(case,"checkpoint_probe")
+    assert result==dict(reads=4,distinct_validated_connections=3,full_source_preserved=True,
+        later_source_tamper_refused="corrupt_projection_identity")

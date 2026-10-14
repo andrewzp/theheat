@@ -154,6 +154,17 @@ def log(row):
     with Path(cfg["trace"]).open("a") as stream:
         stream.write(json.dumps(row,sort_keys=True)+"\n")
 from src.two_bot import writer,fact_check,critic,ghcn_claim_view
+from src.two_bot import check_executor
+from src.commands.schema import utc_datetime
+original_window_available=check_executor._window_available
+def traced_window_available(packet,lease,now):
+    available=original_window_available(packet,lease,now)
+    log(dict(kind="check_window",operation=operation,fault=fault,now=now,
+        lease_expires_at=lease["expires_at"],useful_until=packet["useful_until"],
+        lease_remaining_seconds=(utc_datetime(lease["expires_at"])-utc_datetime(now)).total_seconds(),
+        available=available))
+    return available
+check_executor._window_available=traced_window_available
 for module,name,index,label in ((writer,"build_writer_user_prompt",0,"writer_view"),(fact_check,"prepare_request",1,"fact_view"),
     (critic,"prepare_request",1,"critic_view"),(fact_check,"local_rejection",2,"local_fact_full")):
     original_function=getattr(module,name)
@@ -164,7 +175,54 @@ for module,name,index,label in ((writer,"build_writer_user_prompt",0,"writer_vie
             byte_count=len(canonical_json(encoded).encode()),compact="ghcn_claim_view" in bundle.raw_signal_dump))
         return _original(*args,**kwargs)
     setattr(module,name,traced)
-if operation=="enroll":
+if operation=="checkpoint_probe":
+    import psycopg
+    from src.storage import postgres_projection
+    from src.storage.scientific_supply import NAMESPACE
+    from tests.test_postgres_editor_media import all_application_rows
+    owner=cfg["probe_owner"]
+    baseline=authority.ghcn_baseline
+    original_bytes=baseline.database.read_bytes(),baseline.manifest.read_bytes()
+    original_rows=all_application_rows(owner)
+    reads=[]
+    read_input=ghcn_claim_view.domain.read_input
+    def traced_read(*args,**kwargs):
+        reads.append(args[1])
+        return read_input(*args,**kwargs)
+    ghcn_claim_view.domain.read_input=traced_read
+    prepared=prepare_execution(authority,cfg["run_id"],cfg["selection"])
+    assert len(reads)==1
+    for _ in range(2):
+        with authority.projections._connection() as c:
+            authority._validate(c)
+            version,state=authority._state(c,lock=True)
+            assert prepared.current(authority,c,state,version) is prepared.claim
+    assert len(reads)==3 and len({id(c) for c in reads})==3
+    evidence=prepared.claim.full.raw_signal_dump["evidence"]["baseline"]["variables"]
+    assert all(len(value["calendar_samples"])==366 for value in evidence.values())
+    assert all(value["source_missing_count"]==value["source_qc_rejected_count"]==1 for value in evidence.values())
+    assert all_application_rows(owner)==original_rows
+    assert (baseline.database.read_bytes(),baseline.manifest.read_bytes())==original_bytes
+    # Explicit owner-corruption fixture. The same prepared context must reread
+    # the source on a later transaction, not trust its earlier validated copy.
+    with psycopg.connect(**owner) as c:
+        c.execute("SET session_replication_role=replica")
+        c.execute("UPDATE theheat_projection.versions SET canonical_sha=%s WHERE namespace=%s AND snapshot_id=%s",
+                  ("f"*64,NAMESPACE,"run:"+cfg["run_id"]))
+        c.execute("SET session_replication_role=origin")
+    with authority.projections._connection() as c:
+        authority._validate(c)
+        version,state=authority._state(c,lock=True)
+        try:
+            prepared.current(authority,c,state,version)
+        except postgres_projection.ProjectionError as error:
+            assert str(error)=="corrupt_projection_identity"
+        else:
+            raise AssertionError("Changed source was reused from a previous transaction")
+    assert len(reads)==4
+    result=dict(reads=4,distinct_validated_connections=3,full_source_preserved=True,
+        later_source_tamper_refused="corrupt_projection_identity")
+elif operation=="enroll":
     if fault=="lower_priority":
         cfg["selection"]=dict(cfg["selection"],signal_field="monthly_high")
     result=authority.retain_ghcn_generation_input(cfg["run_id"],cfg["selection"],clock=clock)

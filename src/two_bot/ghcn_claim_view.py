@@ -128,7 +128,7 @@ def _read_source(authority, c, run_id, selection):
     inputs.fixed(selection,"station_id signal_date signal_field")
     require(selection["signal_field"] in TYPES, "ghcn_selection_unsupported")
     uuid(run_id)
-    receipt,value,deps,_,_,envelope=domain.read_input(authority,c,run_id)
+    receipt,value,deps,bundles,_,envelope=domain.read_input(authority,c,run_id)
     result_receipt,result=authority.projections._read(c,inputs.RESULT,"run:"+run_id)
     require(result["status"]=="applied" and result["source_status"]=="success"
             and result["runtime_input_sha256"]==receipt.canonical_sha256
@@ -144,12 +144,12 @@ def _read_source(authority, c, run_id, selection):
             and completed is not None and completed.get("status")=="applied"
             and completed.get("source_run")==domain.outcome(result_receipt,result), "ghcn_claim_command_not_applied")
     responses=inputs.read_responses(c,value["responses"])
-    return receipt,value,deps,envelope,result_receipt,result,responses
+    return receipt,value,deps,envelope,result_receipt,result,responses,bundles
 
 
 def _reconstruct(authority, run_id, selection, material, anchor):
     baseline=domain.configured(authority)
-    receipt,value,deps,envelope,result_receipt,result,responses=material
+    receipt,value,deps,envelope,result_receipt,result,responses,_=material
     require(deps["policy_sha256"]==digest(current_editorial_policy())
             and deps["configuration"]==inputs.configuration()
             and deps["baseline_pins"]==dict(database_sha256=baseline.database_sha256,manifest_sha256=baseline.manifest_sha256), "ghcn_claim_context_changed")
@@ -220,14 +220,17 @@ def baseline_footprint(baseline):
 
 
 def _source_pins(material):
-    receipt,value,deps,envelope,result_receipt,result,responses=material
+    receipt,value,deps,envelope,result_receipt,result,responses,_=material
     return digest(dict(input=receipt.canonical_sha256,result=result_receipt.canonical_sha256,
         value=value,dependencies=deps,supply=envelope,outcome=result,responses=[r.metadata() for r in responses]))
 
 
 def _checkpoint(authority,c,state,version,material,selection):
     # Query the exact selected event too, even when no GHCN draft exists yet.
-    _,_,_,bundles,_,_=domain.read_input(authority,c,material[1]["supply_run_id"])
+    # _read_source already validated and decoded this supply on this connection.
+    # Reuse those objects only for this checkpoint; every later transaction calls
+    # _read_source again before reaching here. No evidence is cached across calls.
+    bundles=material[7]
     chosen=[b for b in bundles if b.station_id==selection["station_id"] and b.signal_date.isoformat()==selection["signal_date"]]
     require(len(chosen)==1, "ghcn_claim_member_absent")
     event=getattr(chosen[0],selection["signal_field"])

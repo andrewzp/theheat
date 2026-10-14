@@ -135,7 +135,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/two_bot/critic.py": "47c01ae89323dde6d764d40994f1eb0a1f652f1e69022981ede236d74bb10cf5",
     "src/two_bot/evidence_contract.py": "506c86325dd4b589d5cd4f202461b65447f323218ccbaa8eacc0c92230e8f6a8",
     "src/two_bot/fact_check.py": "fd175d28a10910410027e88f5c06494f40d12988b361c0105c8e0102a6b5e0d5",
-    "src/two_bot/ghcn_claim_view.py": "b78aac7e5a6247e111700c49b75af12665e0deb480c954870dc49828c7646d82",
+    "src/two_bot/ghcn_claim_view.py": "b2835790258988d04aef422ec6d0069d3080e73bf2ddc338e1d6d0b0fa078081",
     "src/two_bot/intern/__init__.py": "2e34d6b9975fb831edbad10ed06d66aad2e8569a29cfd4cf17784177b91205e0",
     "src/two_bot/intern/_shared.py": "1296c3f3520ed3862d8d3c9d2d0437a21f1999efbaf9808fd829674f9a054a53",
     "src/two_bot/intern/air_quality.py": "f4fc20d4c197d4f604e1fa53e43ef02b658613940863eb5f4d41e0995d6c8ff0",
@@ -170,5 +170,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "4a828a22e451889f630e994add6ba38c463d44369d24d2e22c2ff85e7f0387e5"
   },
   "schema_version": 1,
-  "source_sha256": "5ca636862a2fa3734958ebef21e87eb9303182ccbf8c8661fb355b3df6d4cb6c"
+  "source_sha256": "f75ddb969da2c902db4448296f657ac7a463b1207e7c4898aed365ba0cd3cd3f"
 }
