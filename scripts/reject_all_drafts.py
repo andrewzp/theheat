@@ -1,19 +1,23 @@
 #!/usr/bin/env python
-"""Operator tool: reject EVERY pending draft (clear the review queue).
+"""Operator tool: reject pending drafts.
 
-Marks all `status == "pending"` drafts as `rejected` via the bot's own conflict-safe
-`read_state`/`write_state`, so it merges cleanly against a concurrent bot run instead of
-clobbering the Gist. Only touches pending drafts — posted / already-rejected drafts are
-left alone. Rejecting is low-harm and reversible in spirit: a still-live event will simply
-re-draft next cycle; stale ones stay gone (the point).
+With no arguments, the existing Gist workflow rereads and retries false writes
+up to five times. Its GET/PATCH merge is not an atomic compare-and-swap and may
+race concurrent writers. Each retry selects the then-current pending drafts.
 
-Run in GitHub Actions (where GIST_ID + GITHUB_TOKEN live) via the reject-all-drafts
-workflow. Locally it needs GIST_ID + GITHUB_TOKEN in the environment.
+Explicit --command-endpoint, --command-origin, --operators, --subject and
+--request-file options select the local authenticated authority instead. This
+mode retains one fixed revision-bound request for recovery; it never falls back
+to Gist. Acceptance is pending until the separate consumer finishes. Publishing
+and the legacy workflow's default backend are unchanged.
 """
 
 from __future__ import annotations
 
+import argparse
+import json
 import os
+from pathlib import Path
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -48,5 +52,23 @@ def reject_all_pending() -> int:
     raise SystemExit(1)
 
 
+def main(argv=None) -> int:
+    parser = argparse.ArgumentParser(description="Reject pending drafts; local command mode is explicit and opt-in.")
+    for name in ("command-endpoint", "command-origin", "operators", "subject", "request-file"):
+        parser.add_argument("--" + name)
+    args = parser.parse_args(argv)
+    values = vars(args)
+    if not any(value is not None for value in values.values()):
+        reject_all_pending()
+        return 0
+    if not all(values.values()):
+        parser.error("Command mode requires all five explicit options; legacy fallback is unavailable.")
+    from src.commands.bulk_rejection_client import BulkRejectionClient
+    result = BulkRejectionClient(args.command_endpoint, args.command_origin,
+        Path(args.operators), args.subject, Path(args.request_file)).run()
+    print(json.dumps(result, sort_keys=True))
+    return {"noop": 0, "applied": 0, "unchanged": 0, "pending": 2, "unknown": 3}.get(result["status"], 1)
+
+
 if __name__ == "__main__":
-    reject_all_pending()
+    raise SystemExit(main())
