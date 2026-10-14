@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 import hashlib
+from html.parser import HTMLParser
 import json
 import re
 from typing import Any
@@ -251,6 +252,93 @@ def _normalize_url(value: Any) -> str:
     return url
 
 
+class _AdvisoryProductParser(HTMLParser):
+    """Recover one closed pre with text/inert links; surrounding HTML is not evidence."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.has_markup = False
+        self.product_count = 0
+        self.in_product = False
+        self.in_anchor = False
+        self.closed_product = False
+        self.invalid_product = False
+        self.parts: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        self.has_markup = True
+        if self.in_product:
+            # NHC embeds ordinary links in its text product. Preserve their
+            # visible text, never their URL/attributes or hidden/active markup.
+            if (tag == "a" and not self.in_anchor and len(attrs) <= 1
+                    and all(name == "href" for name, _ in attrs)):
+                self.in_anchor = True
+            else:
+                self.invalid_product = True
+        if tag == "pre":
+            self.product_count += 1
+            self.in_product = True
+
+    def handle_endtag(self, tag: str) -> None:
+        self.has_markup = True
+        if tag == "pre":
+            if not self.in_product or self.in_anchor:
+                self.invalid_product = True
+            self.in_product = False
+            self.closed_product = True
+        elif tag == "a" and self.in_product:
+            if not self.in_anchor:
+                self.invalid_product = True
+            self.in_anchor = False
+        elif self.in_product:
+            self.invalid_product = True
+
+    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        self.has_markup = True
+        if tag == "pre" or self.in_product:
+            self.invalid_product = True
+
+    def handle_data(self, data: str) -> None:
+        if self.in_product:
+            self.parts.append(data)
+
+    def handle_comment(self, data: str) -> None:
+        self.has_markup = True
+        if self.in_product:
+            self.invalid_product = True
+
+    def handle_decl(self, decl: str) -> None:
+        self.handle_comment(decl)
+
+    handle_pi = handle_comment
+    unknown_decl = handle_comment
+
+
+def _extract_advisory_product(text: str) -> str:
+    """Keep plain text, or exactly one unambiguous complete HTML text product.
+
+    HTMLParser decodes character references once and preserves preformatted line
+    structure. It does not execute scripts or fetch linked resources. A recovered
+    product is still subject to the caller's text limit and scientific checks.
+    """
+    parser = _AdvisoryProductParser()
+    try:
+        parser.feed(text)
+        if re.match(r"</?pre(?:[\s/]|$)", parser.rawdata, re.IGNORECASE):
+            return ""
+        parser.close()
+    except (ValueError, AssertionError):
+        return ""
+    # Also recognize unfinished markup that HTMLParser left as ordinary data.
+    if not parser.has_markup and not re.search(r"<[A-Za-z!/?]", text):
+        return text if text.strip() else ""
+    if (parser.product_count != 1 or not parser.closed_product
+            or parser.in_product or parser.invalid_product):
+        return ""
+    product = "".join(parser.parts)
+    return product if product.strip() else ""
+
+
 def _fetch_advisory_text(url: str, *, acquisition: dict | None = None) -> str:
     if not url:
         return ""
@@ -261,10 +349,10 @@ def _fetch_advisory_text(url: str, *, acquisition: dict | None = None) -> str:
             timeout=15,
             attempts=2,
         )
-        text = response.text
+        text = _extract_advisory_product(response.text)
         if acquisition is not None:
-            # Successful fetch of a nonempty product, prior to the legacy cap.
-            # This says only that application truncation did not omit bytes.
+            # Completeness concerns the recovered product, not surrounding HTML.
+            # Neither recovery nor completeness certifies identity or truth.
             acquisition["complete"] = bool(text) and len(text) <= 8000
         return text[:8000]
     except requests.RequestException:
