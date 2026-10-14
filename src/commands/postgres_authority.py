@@ -966,7 +966,7 @@ class PostgresCommandAuthority:
                     value["delivery"] = delivery.projection(self, c, draft_id, resolve_principal, _clock(now))
             return value
 
-    def execute_revision_check_once(self, command_id, resolve_principal, *, clock, reservation=None, enabled=False):
+    def execute_revision_check_once(self, command_id, resolve_principal, *, clock, reservation=None, enabled=False, transport_options=None):
         from src.commands import postgres_editor_media as domain, postgres_revision_checks as revisions
         from src.two_bot.check_executor import execute_check_once
         if type(enabled) is not bool:
@@ -1059,7 +1059,7 @@ class PostgresCommandAuthority:
             def read_check_response(self, check_set_id, stage, grant_id):
                 return transaction("response", dict(check_set_id=check_set_id, stage=stage, grant_id=grant_id))
         return execute_check_once(ScopedAuthority(), identity, current_context=packet["current_context"], checker_state=state,
-                                  owner=owner, clock=clock, reservation=reservation, enabled=True)
+                                  owner=owner, clock=clock, reservation=reservation, enabled=True, transport_options=transport_options)
 
     def capture_candidate_input(self, payload: dict, *, now: datetime) -> dict:
         """Trusted local fixture-producer input; no HTTP route grants this ability."""

@@ -8,7 +8,7 @@ from uuid import uuid4
 import pytest
 
 from src.commands import postgres_published_media as published, postgres_media
-from src.commands.schema import utc_text, Command, CommandError
+from src.commands.schema import utc_text, Command, CommandError, canonical_json
 from src.editorial.revisions import fingerprint
 from src.media import published_radar as radar
 from src.media.joint_review import CONFIRMATIONS
@@ -578,3 +578,56 @@ def test_native_default_clock_stays_live_through_actual_preparation_and_consume_
     assert editor.all_application_rows(core[3]) == before and case["store"].read() == state
     assert case["store"].result(command.command_id) is None
     assert admin(core[3], "SELECT count(*) FROM theheat_media.packages") == [(0,)]
+
+
+def test_revision_explicit_transport_uses_existing_sdk_and_passive_receipt(radar_case, monkeypatch):
+    """Original revision method; fixture clock is explicit, no ambient key."""
+    import httpx
+    from src.commands import postgres_checks
+    from src.two_bot import check_requests
+    from src.two_bot.check_origin import spending_job
+    from tests import test_check_executor as executor
+    case = radar_case
+    attach(case)
+    command, identity, packet = editor.request_revision(case)
+    store = case['store']
+    monkeypatch.delenv('GEMINI_API_KEY', raising=False)
+    monkeypatch.delenv('ANTHROPIC_API_KEY', raising=False)
+    # Undo only the inherited setup fixture's transport factory: this case must
+    # exercise the production explicit-capability path and actual SDK class.
+    from src.two_bot import check_executor, check_transport
+    monkeypatch.setattr(check_executor, 'GoogleCheckTransport', check_transport.GoogleCheckTransport)
+    sent = []
+    def respond(request):
+        sent.append(request.content)
+        assert request.method == 'POST' and request.url.host == 'generativelanguage.googleapis.com'
+        return httpx.Response(200, stream=httpx.ByteStream(executor.envelope('NO')))
+    def run(reservation=None, capability=None, enabled=True):
+        return store.execute_revision_check_once(command.command_id, candidate.resolve,
+            clock=lambda: utc_text(editor.AT), reservation=reservation, enabled=enabled, transport_options=capability)
+    class Unreadable(dict):
+        def __iter__(self):
+            raise AssertionError('Disabled/deterministic/passive path inspected transport')
+    assert run(capability=Unreadable(), enabled=False)['outcome'] == 'disabled'
+    assert run(capability=Unreadable())['checks']['stages']['deterministic'] == 'passed'
+    stage='safety'
+    raw=canonical_json(check_requests.prepare_request(packet,stage)).encode()
+    reservation=dict(intent_id='explicit-revision-safety',job_id=spending_job(packet),request_sha256=__import__('hashlib').sha256(raw).hexdigest(),
+        provider='google',role=stage,model=packet['policy']['models'][stage],estimate_sha256='e'*64,reserve_micro_usd=5)
+    blocked=run(reservation,dict(api_key='invented',http_transport=object()))
+    assert blocked['reason']=='invalid_check_transport_options' and sent==[]
+    original=postgres_checks.apply
+    def fail_terminal(c, operation, payload, **kwargs):
+        if operation=='complete':
+            raise CommandError('invented_after_raw', 'Invented interruption after exact raw retention')
+        return original(c,operation,payload,**kwargs)
+    with monkeypatch.context() as patch:
+        patch.setattr(postgres_checks,'apply',fail_terminal)
+        interrupted=run(reservation,dict(api_key='invented-explicit',http_transport=httpx.MockTransport(respond)))
+        assert interrupted['outcome']=='reconciliation_required' and interrupted['reason']=='check_execution_not_confirmed'
+    retained=store.check_execution('read', {'check_set_id':identity}, now=utc_text(editor.AT))
+    assert retained['attempts']['safety']['observation']['complete'] is True
+    assert len(sent)==1
+    recovered=run(reservation,Unreadable())
+    assert recovered['outcome']=='completed' and recovered['checks']['stages']['safety']=='passed'
+    assert len(sent)==1
