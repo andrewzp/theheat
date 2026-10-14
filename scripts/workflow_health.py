@@ -243,6 +243,7 @@ def run_workflow_health(
     beacon: Mapping[str, Any] | None = None,
     now: datetime | None = None,
     production_paused: bool = False,
+    paid_evaluation_enabled: bool | None = None,
 ) -> dict[str, Any]:
     """Classify every workflow + the self-heal heartbeat; bucket and summarize."""
     now = now or datetime.now(timezone.utc)
@@ -256,6 +257,11 @@ def run_workflow_health(
             # A successful workflow may contain only skipped jobs. Keep its run
             # details, but never resolve an incident from pause intent alone.
             verdict = {**verdict, "category": "paused", "reason": "production_pause_configured"}
+        elif (paid_evaluation_enabled is False and (name, file) == ("voice-regression", "voice-regression.yml")
+                and verdict["category"] != "failing"):
+            # Disabled evaluation is not evidence of writer health or recovery.
+            # None means the caller did not supply configuration, not disabled.
+            verdict = {**verdict, "category": "paused", "reason": "paid_evaluation_disabled"}
         verdicts.append(verdict)
 
     liveness = selfheal_liveness_verdict(beacon, now=now)
@@ -601,8 +607,11 @@ def _print_report(report: Mapping[str, Any]) -> None:
         f"{s['failing']} failing, {s['healthy']} healthy, {s['unknown']} unknown, "
         f"{s.get('paused', 0)} paused"
     )
-    if report.get("paused"):
+    paused_reasons = {v.get("reason") for v in report.get("paused", [])}
+    if "production_pause_configured" in paused_reasons:
         print("  PAUSED   Collection pause configured; workflow success does not establish recovery.")
+    if "paid_evaluation_disabled" in paused_reasons:
+        print("  PAUSED   Paid evaluations disabled; writer health and recovery are not established.")
     for v in report["failing"]:
         print(f"  FAILING  {v['workflow']} [{v.get('conclusion')}]: {v.get('run_url')}")
 
@@ -621,6 +630,7 @@ def main(argv: list[str] | None = None) -> int:
     report = run_workflow_health(
         runs_by_workflow, beacon=beacon,
         production_paused=os.environ.get("THEHEAT_PRODUCTION_PAUSED") == "1",
+        paid_evaluation_enabled=os.environ.get("THEHEAT_PAID_EVALUATION_ENABLED") == "1",
     )
     _print_report(report)
 
