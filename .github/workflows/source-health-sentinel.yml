@@ -64,4 +64,5 @@ jobs:
           # stale-heartbeat meta-guard would silently never fire.
           SELFHEAL_BEACON: ${{ vars.SELFHEAL_BEACON }}
           THEHEAT_PRODUCTION_PAUSED: ${{ vars.THEHEAT_PRODUCTION_PAUSED }}
+          THEHEAT_PAID_EVALUATION_ENABLED: ${{ vars.THEHEAT_PAID_EVALUATION_ENABLED }}
         run: python scripts/workflow_health.py

@@ -13,7 +13,17 @@ canary. Its keyless PR changes job and required offline CI remain available.
 Existing schedules and paid PR opt-in rules are unchanged; do not dispatch an
 evaluation to verify the pause. Observe an existing scheduled job's outcome.
 
-The same variable also skips the entire `refresh-thresholds.yml` job before
+Both paid jobs also require the independent repository variable
+`THEHEAT_PAID_EVALUATION_ENABLED=1`. Unset, zero or malformed values keep them
+disabled, including manual dispatch. This opt-in does not override production
+pause or the separate paid PR opt-in, buy credits, establish fixture qualification
+or impose a hard dollar cap. Collection resume alone does not enable evaluations.
+The workflow observer receives the same value and holds existing voice-regression
+incidents while evaluation is disabled; a skipped or successful workflow is not
+proof of writer recovery. Genuine current and retained historical failures remain
+visible, and the report distinguishes disabled evaluations from collection pause.
+
+The production-pause variable also skips the entire `refresh-thresholds.yml` job before
 weekly or manually requested source acquisition, baseline mutation, artifact
 publication or commits. Preserve its existing enabled/disabled state; the guard
 also applies if that workflow is enabled later. Keep
@@ -48,14 +58,19 @@ just to test the pause. Read the remote controls and scheduled job outcomes.
 ## Resume
 
 1. Set the repository variable `THEHEAT_PRODUCTION_PAUSED` to `0`.
-   This also restores the existing scheduled/manual paid voice-evaluation
-   and threshold-refresh eligibility; PR replay still requires its separate
-   opt-in and existing rules. Clearing the variable does not enable a disabled
-   workflow.
+   This restores collection and threshold-refresh eligibility, but paid voice
+   evaluation remains separately controlled by `THEHEAT_PAID_EVALUATION_ENABLED`.
+   Clearing the variable does not enable a disabled workflow.
 2. Set the dashboard Production variable to `0` and redeploy.
 3. Separately re-enable `refresh-thresholds.yml` only if resuming that collection
    is authorized and it was enabled before the pause.
 4. Restore the previously recorded self-heal setting only if intended.
+
+Leave `THEHEAT_PAID_EVALUATION_ENABLED` unset or `0` unless paid evaluations are
+separately authorized. Explicit `1` restores their existing scheduled/manual
+eligibility only when production pause is clear; PR replay still requires its
+own opt-in and existing rules. Qualified fixtures and usable provider access
+remain necessary, and enabling this flag does not establish monitoring success.
 
 Automatic publication has separate controls. Resuming collection does not
 authorize enabling publication or autoship; preserve those pause settings.

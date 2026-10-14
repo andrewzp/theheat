@@ -167,13 +167,20 @@ def test_source_main_uses_exact_configuration_and_performs_no_github_calls(tmp_p
 
 
 @pytest.mark.parametrize("value", [None, "0", "true", "1"])
+@pytest.mark.parametrize("evaluation_value", [None, "0", "true", " 1", "1 ", "1"])
 @pytest.mark.parametrize("name,file", GUARDED)
-def test_workflow_main_holds_paused_issue_but_reports_real_failure(monkeypatch, capsys, value, name, file):
+def test_workflow_main_holds_paused_issue_but_reports_real_failure(
+    monkeypatch, capsys, value, evaluation_value, name, file,
+):
     monkeypatch.setenv("GITHUB_ACTIONS", "true")
     if value is None:
         monkeypatch.delenv("THEHEAT_PRODUCTION_PAUSED", raising=False)
     else:
         monkeypatch.setenv("THEHEAT_PRODUCTION_PAUSED", value)
+    if evaluation_value is None:
+        monkeypatch.delenv("THEHEAT_PAID_EVALUATION_ENABLED", raising=False)
+    else:
+        monkeypatch.setenv("THEHEAT_PAID_EVALUATION_ENABLED", evaluation_value)
     monkeypatch.setattr(workflow, "_run_gh", lambda *a, **kw: pytest.fail("unexpected GitHub request"))
     monkeypatch.setattr(workflow, "fetch_runs_by_workflow", lambda: {
         name: info(file), "time-travel-canary": info("time-travel-canary.yml", "failure"),
@@ -187,8 +194,13 @@ def test_workflow_main_holds_paused_issue_but_reports_real_failure(monkeypatch, 
     monkeypatch.setattr(workflow, "_close_issue", lambda n, name: actions.append(("close", name)))
     assert workflow.main([]) == 0
     assert ("create", "time-travel-canary") in actions
-    assert (("close", name) in actions) is (value != "1")
-    assert ("PAUSED" in capsys.readouterr().out) is (value == "1")
+    evaluation_disabled = name == "voice-regression" and evaluation_value != "1"
+    held = value == "1" or evaluation_disabled
+    assert (("close", name) in actions) is (not held)
+    stdout = capsys.readouterr().out
+    assert ("PAUSED" in stdout) is held
+    assert ("Collection pause configured" in stdout) is (value == "1")
+    assert ("Paid evaluations disabled" in stdout) is (value != "1" and evaluation_disabled)
 
 
 def test_sentinel_steps_receive_pause_intent_without_extra_permissions():
@@ -196,7 +208,100 @@ def test_sentinel_steps_receive_pause_intent_without_extra_permissions():
     steps = {step["name"]: step for step in content["jobs"]["sentinel"]["steps"] if "name" in step}
     for name in ("Reconcile source-failure issues", "Reconcile workflow-health issues"):
         assert steps[name]["env"]["THEHEAT_PRODUCTION_PAUSED"] == "${{ vars.THEHEAT_PRODUCTION_PAUSED }}"
+    assert steps["Reconcile workflow-health issues"]["env"]["THEHEAT_PAID_EVALUATION_ENABLED"] == "${{ vars.THEHEAT_PAID_EVALUATION_ENABLED }}"
     assert content["permissions"] == {"contents": "read", "issues": "write", "actions": "read"}
+
+
+@pytest.mark.parametrize("conclusion", ["success", "skipped", None, "cancelled"])
+def test_disabled_evaluation_holds_incident_and_preserves_run_evidence(conclusion):
+    inputs = {"voice-regression": info("voice-regression.yml", conclusion)}
+    original = deepcopy(inputs)
+    observed = workflow.run_workflow_health(inputs, now=NOW)
+    prior, = observed["healthy"] or observed["unknown"]
+    report = workflow.run_workflow_health(inputs, now=NOW, paid_evaluation_enabled=False)
+    assert report["healthy"] == report["failing"] == report["unknown"] == []
+    paused, = report["paused"]
+    assert paused == {**prior, "category": "paused", "reason": "paid_evaluation_disabled"}
+    assert report["summary"]["paused"] == report["summary"]["total"] == 1
+    if conclusion == "success":
+        assert paused["conclusion"] == "success"
+        assert paused["run_url"] == "https://example.test/run/1"
+    assert workflow.plan_workflow_issue_actions(
+        {}, {r["workflow"] for r in report["healthy"]}, {"voice-regression": 999},
+    ) == []
+    assert inputs == original
+
+
+def test_disabled_evaluation_with_no_runs_is_not_a_recovery():
+    report = workflow.run_workflow_health(
+        {"voice-regression": {"file": "voice-regression.yml", "runs": []}},
+        now=NOW, paid_evaluation_enabled=False,
+    )
+    assert report["healthy"] == report["failing"] == report["unknown"] == []
+    paused, = report["paused"]
+    assert paused["reason"] == "paid_evaluation_disabled"
+    assert paused["run_url"] is None
+    assert workflow.plan_workflow_issue_actions({}, set(), {"voice-regression": 999}) == []
+
+
+@pytest.mark.parametrize("conclusion", sorted(workflow.FAILING_CONCLUSIONS))
+@pytest.mark.parametrize("newer_skipped", [False, True])
+def test_disabled_evaluation_preserves_current_and_historical_failures(conclusion, newer_skipped):
+    inputs = {"voice-regression": info("voice-regression.yml", conclusion)}
+    if newer_skipped:
+        inputs["voice-regression"]["runs"].insert(0, {
+            "id": 2, "conclusion": "skipped", "status": "completed",
+            "created_at": "2026-11-03T11:45:00Z", "html_url": "https://example.test/run/2",
+        })
+    baseline = workflow.run_workflow_health(inputs, now=NOW)
+    for paused in (False, True):
+        report = workflow.run_workflow_health(
+            inputs, now=NOW, production_paused=paused, paid_evaluation_enabled=False,
+        )
+        assert report == baseline
+        failed, = report["failing"]
+        assert failed["run_url"] == "https://example.test/run/1"
+        assert failed["conclusion"] == conclusion and failed["consecutive_failures"] == 1
+        assert report["healthy"] == report["paused"] == []
+        actions = workflow.plan_workflow_issue_actions({"voice-regression": failed}, set(), {})
+        assert [(action["action"], action["workflow"]) for action in actions] == [("create", "voice-regression")]
+
+
+@pytest.mark.parametrize("name,file", [
+    ("theheat-bot", "bot.yml"),
+    ("refresh-thresholds", "refresh-thresholds.yml"),
+    ("other", "voice-regression.yml"),
+    ("voice-regression", "other.yml"),
+    ("voice-regression", ".github/workflows/voice-regression.yml"),
+    ("voice-regression-copy", "voice-regression.yml"),
+])
+def test_disabled_evaluation_requires_both_exact_identifiers(name, file):
+    inputs = {name: info(file)}
+    assert workflow.run_workflow_health(inputs, now=NOW, paid_evaluation_enabled=False) == workflow.run_workflow_health(inputs, now=NOW)
+
+
+@pytest.mark.parametrize("enabled", [True, None, 0, 1, "false", "0", "1", "", [], {}])
+@pytest.mark.parametrize("conclusion", ["success", "skipped", "failure"])
+def test_only_exact_false_changes_evaluation_verdict(enabled, conclusion):
+    inputs = {"voice-regression": info("voice-regression.yml", conclusion)}
+    assert workflow.run_workflow_health(inputs, now=NOW, paid_evaluation_enabled=enabled) == workflow.run_workflow_health(inputs, now=NOW)
+
+
+def test_production_pause_reason_takes_precedence_and_selfheal_stays_independent(capsys):
+    inputs = {"voice-regression": info("voice-regression.yml")}
+    beacon = {"outcome": "error", "run_at": "2026-11-03T11:00:00Z"}
+    baseline = workflow.run_workflow_health(inputs, now=NOW, production_paused=True, beacon=beacon)
+    report = workflow.run_workflow_health(
+        inputs, now=NOW, production_paused=True, paid_evaluation_enabled=False, beacon=beacon,
+    )
+    assert report == baseline
+    assert report["paused"][0]["reason"] == "production_pause_configured"
+    assert [r["workflow"] for r in report["failing"]] == [workflow.SELFHEAL_SOURCE]
+    workflow._print_report(report)
+    stdout = capsys.readouterr().out
+    assert "Collection pause configured" in stdout
+    assert "Paid evaluations disabled" not in stdout
+    assert "FAILING" in stdout
 
 
 def test_source_apply_holds_liveness_issue_without_stopping_real_failure_actions(tmp_path, monkeypatch):
