@@ -9,6 +9,7 @@ from datetime import UTC, datetime, timedelta
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import socket
 import subprocess
@@ -52,7 +53,7 @@ from tests.local_delivery_helpers import fixture_server
 from tests.test_spend_journal import LIMITS
 from tests.test_postgres_hosted_staging import (
     tls_cluster as tls_cluster,
-    tls_database as tls_database,
+    tls_database as base_tls_database,
 )
 from tests.test_postgres_hosted_staging import isolated_environment as isolated_environment
 from tests.native_profile_helpers import native_dependencies as native_dependencies
@@ -70,6 +71,82 @@ SCHEMAS = (
     "theheat_media_commands",
     "theheat_delivery",
 )
+
+
+@pytest.fixture
+def tls_database(tls_cluster, monkeypatch, tmp_path):
+    # Capture every physical PostgreSQL connection from before this database's
+    # bootstrap, including libpq children. Cluster creation is a separate local
+    # test prerequisite, and post-test DROP cleanup is not a hosted operation.
+    log = tls_cluster[0] / "server.log"
+    (tmp_path / "connection-log-start").write_text(str(log.stat().st_size))
+    fixture = base_tls_database.__wrapped__(tls_cluster, monkeypatch)
+    value = next(fixture)
+    try:
+        yield value
+    finally:
+        with pytest.raises(StopIteration):
+            next(fixture)
+
+
+RESTART_CHILD = """import json,sys,psycopg
+from datetime import datetime,UTC
+from src.storage import hosted_staging as h
+from src.commands.postgres_authority import PostgresCommandAuthority
+from src.commands.preview_ingress import Operators
+from src.commands import postgres_delivery
+from src.commands.preview_delivery_worker import execute_delivery_once
+from src.commands.schema import utc_text
+v=json.load(sys.stdin);h._PORT=v['port'];calls=[];original=psycopg.connect
+def counted(*args,**kwargs):
+    calls.append(dict(host=kwargs.get('host'),database=kwargs.get('dbname'),user=kwargs.get('user')))
+    return original(*args,**kwargs)
+psycopg.connect=counted
+a=PostgresCommandAuthority.for_hosted_staging(h.HostedStagingConfig.load(v['config'],trusted_identity=v['identity']))
+o=Operators(v['operators'])
+if v['operation']=='reconcile':
+    postgres_delivery.configure(a,v['delivery'])
+    result=execute_delivery_once(a,v['intent'],'bluesky','create',o.resolve,owner='invented-h2-restarted',clock=lambda:utc_text(datetime.now(UTC)),enabled=True,reconcile=True)
+    assert result['outcome']=='confirmed' and result['reconciled']
+elif v['operation']=='inspect':
+    result=dict(state=a.read(),costs=a.local_cost_projection(now=datetime.now(UTC)))
+else:
+    assert v['operation']=='resume'
+    result=a.consume(o.resolve,command_id=v['pending'])
+    assert result['status']=='applied'
+    assert a.consume(o.resolve,command_id=v['pending'])==result
+print(json.dumps(dict(result=result,dials=calls)))
+"""
+
+
+def restart(config, *, port, operators, operation, **values):
+    packet = dict(config=str(config.config_path), identity=str(config.identity_path),
+                  port=port, operators=str(operators), operation=operation, **values)
+    child = subprocess.run([sys.executable, "-c", RESTART_CHILD], input=json.dumps(packet),
+                           text=True, capture_output=True, check=True, timeout=30)
+    return json.loads(child.stdout)
+
+
+def connection_receipt(tls_cluster, tmp_path, in_process, children):
+    log = tls_cluster[0] / "server.log"
+    offset = int((tmp_path / "connection-log-start").read_text())
+    raw = log.read_bytes()[offset:]
+    (tmp_path / "physical-connections.log").write_bytes(raw)
+    received = [line for line in raw.decode().splitlines() if "connection received:" in line]
+    authorized = [line for line in raw.decode().splitlines() if "connection authorized:" in line]
+    assert len(received) == len(authorized)  # No uncounted failed/ongoing dial.
+    roles = {}
+    for line in authorized:
+        user = re.search(r"user=(\S+)", line)[1]
+        roles[user] = roles.get(user, 0) + 1
+    child_count = sum(len(item["dials"]) for item in children)
+    # One source-database bootstrap before the in-process counter, and one
+    # physical connection for each non-parallel pg_dump/pg_restore invocation.
+    assert len(received) == len(in_process) + child_count + 3
+    return dict(physical_dials=len(received), in_process_dials=len(in_process),
+                child_dials=child_count, bootstrap_dials=1, dump_restore_dials=2,
+                roles=roles, server_log_sha256=hashlib.sha256(raw).hexdigest(),
+                post_test_local_cleanup_excluded=True)
 
 
 def now():
@@ -293,6 +370,8 @@ def snapshot(args):
             "SELECT pg_get_userbyid(d.defaclrole),n.nspname,d.defaclobjtype,d.defaclacl::text FROM pg_default_acl d LEFT JOIN pg_namespace n ON n.oid=d.defaclnamespace WHERE n.nspname=ANY(%s) ORDER BY 1,2,3",
             (list(SCHEMAS),),
         ).fetchall()
+        memberships = c.execute("SELECT pg_get_userbyid(roleid),pg_get_userbyid(member),admin_option,inherit_option,set_option FROM pg_auth_members WHERE pg_get_userbyid(member) IN ('fixture_owner','fixture_runtime') ORDER BY 1,2").fetchall()
+        assert memberships == []
         roles = c.execute(
             "SELECT rolname,rolsuper,rolcreaterole,rolcreatedb,rolreplication,rolbypassrls,rolinherit,rolconnlimit FROM pg_roles WHERE rolname IN ('fixture_owner','fixture_runtime') ORDER BY 1"
         ).fetchall()
@@ -302,6 +381,7 @@ def snapshot(args):
         acls=acls,
         defaults=defaults,
         roles=roles,
+        memberships=memberships,
         row_count=total,
         bytes=size,
     )
@@ -317,6 +397,16 @@ def test_continuous_preview_tls_source_radar_delivery_cost_restore(
     monkeypatch.setattr(safety, "GEMINI_API_KEY", "invented-availability-only")
     original_connect = psycopg.connect
     dials = []
+    children = []
+    phases = []
+
+    def phase(name):
+        offset = int((tmp_path / "connection-log-start").read_text())
+        raw = (tls_cluster[0] / "server.log").read_bytes()[offset:]
+        total = raw.count(b"connection received:")
+        phases.append(dict(name=name, total=total,
+                           dials=total - (phases[-1]["total"] if phases else 0)))
+
 
     def counted(*args, **kwargs):
         dials.append(
@@ -345,6 +435,7 @@ def test_continuous_preview_tls_source_radar_delivery_cost_restore(
 
     monkeypatch.setattr(PostgresCommandAuthority, "local_cost_projection", passive_cost)
     owner, store, args = install(tls_database)
+    phase("source_database_bootstrap_and_catalog_install")
     at = now().replace(second=0, microsecond=0)
     bundle = actual_bundle(at)
     value = dict(
@@ -389,6 +480,7 @@ def test_continuous_preview_tls_source_radar_delivery_cost_restore(
     retained = published.retain(store, doc, original, references, receipt)
     selection = dict(schema_version=1, selections={refs["brief_id"]: retained["input_sha256"]})
     published.configure(store, lambda: selection)
+    phase("retained_source_reservation_and_media_configuration")
     text = "The NWS has issued a tornado warning for the invented test area."
     with server(store, tmp_path) as (http, operators, http_trace):
         http("GET", "/state", role=None, status=401)
@@ -404,6 +496,7 @@ def test_continuous_preview_tls_source_radar_delivery_cost_restore(
                 expected_policy_sha256=fingerprint(current_editorial_policy()),
             ),
         )
+        assert http("POST", "/commands", role="viewer", body=command, status=403).json()["code"] == "forbidden"
         sent, factory = sync.transport(dict(text=text))
         assert (
             store.execute_sourced_generation_once(
@@ -447,6 +540,7 @@ def test_continuous_preview_tls_source_radar_delivery_cost_restore(
             dict(candidate, **{k: view[k] for k in ("check_set_id", "expected_completion_sha256")}),
         )
         draft_id = result["candidate"]["draft_id"]
+        phase("authenticated_source_writer_initial_checks_saved_draft")
 
         def draft():
             return next(v for v in store.read()[1]["drafts"] if v["id"] == draft_id)
@@ -506,9 +600,11 @@ def test_continuous_preview_tls_source_radar_delivery_cost_restore(
             ),
             draft=draft(),
         )
+        phase("native_original_graphic_joint_review_revision_enrollment")
         revision_calls = check_stages(
             store, operators, checks, result["revision_checks"]["check_set_id"], text, revision=True
         )
+        phase("revision_checks")
         with fixture_server(png, text, mode={("bluesky", "create"): "drop"}) as (
             delivery_config,
             trace,
@@ -539,6 +635,7 @@ def test_continuous_preview_tls_source_radar_delivery_cost_restore(
             )
             assert media()["parked"] is True
             intent = draft()["approval_binding"]["publish_intent_id"]
+            phase("fixture_configuration_and_parked_approval")
             for platform, stages in delivery.STAGES.items():
                 for stage in stages:
                     result = execute_delivery_once(
@@ -553,34 +650,23 @@ def test_continuous_preview_tls_source_radar_delivery_cost_restore(
                     )
                     if (platform, stage) == ("bluesky", "create"):
                         assert result["outcome"] == "unknown", result
-                        result = execute_delivery_once(
-                            store,
-                            intent,
-                            platform,
-                            stage,
-                            operators.resolve,
-                            owner="invented-h2",
-                            clock=clock,
-                            enabled=True,
-                            reconcile=True,
-                        )
+                        child = restart(tls_database[0][1], port=args["port"],
+                                        operators=operators.path, operation="reconcile",
+                                        delivery=str(delivery_path), intent=intent)
+                        children.append(child)
+                        result = child["result"]
                     assert result["outcome"] == "confirmed", result
-                    again = execute_delivery_once(
-                        store,
-                        intent,
-                        platform,
-                        stage,
-                        operators.resolve,
-                        owner="invented-h2",
-                        clock=clock,
-                        enabled=True,
-                    )
-                    assert again["outcome"] == "confirmed" and again["network_mutation"] is False
+            # Replay the reconciled final stage once. Exhaustive per-stage
+            # passive retries remain in the unchanged delivery tests.
+            again = execute_delivery_once(store, intent, "bluesky", "create", operators.resolve,
+                                          owner="invented-h2", clock=clock, enabled=True)
+            assert again["outcome"] == "confirmed" and again["network_mutation"] is False
             assert (
                 len(accepted) == 5
                 and [v["method"] for v in trace].count("POST") == 5
                 and [v["method"] for v in trace].count("GET") == 1
             )
+            phase("five_posts_restart_receipt_get_and_no_resend")
             before = snapshot(args)
             costs = http("GET", "/state").json()["local_cost"]
             assert costs["status"] == "available" and costs["scope"] == "hosted_staging_fixture", (
@@ -592,10 +678,18 @@ def test_continuous_preview_tls_source_radar_delivery_cost_restore(
             )
             assert all(v["recorded_settlement_micro_usd"] is None for v in costs["requests"])
             assert snapshot(args) == before
+            # Explicit future observation only; active commands always use the
+            # real clock. This does not claim a 15-minute wait or latency SLA.
+            expired_cost = store.local_cost_projection(now=at + timedelta(minutes=16))
+            assert expired_cost["requests"] == costs["requests"]
+            assert expired_cost["summary"]["commitments_micro_usd"] == costs["summary"]["commitments_micro_usd"]
+            assert snapshot(args) == before
             with store.projections._connection() as c:
                 identities = c.execute(
                     "SELECT a.intent_id,a.grant_id,a.request_sha256,o.raw_sha256,o.recorded_at FROM theheat_checks.attempts a JOIN theheat_check_executions.observations o USING(grant_id) WHERE a.stage!='deterministic'"
                 ).fetchall()
+                commands = c.execute("SELECT command_bytes FROM theheat_commands.intents").fetchall()
+                assert commands and all(json.loads(row[0])["environment"] == "preview" for row in commands)
                 assert len(identities) == 6
                 for intent, grant, request_sha, raw_sha, observed_at in identities:
                     row = next(v for v in costs["requests"] if v["intent_id"] == intent)
@@ -613,6 +707,7 @@ def test_continuous_preview_tls_source_radar_delivery_cost_restore(
                 costs,
                 tmp_path / "cost-http.json",
             )
+            phase("passive_cost_identity_expiry_http_and_preservation")
             _, result = action(
                 http,
                 store,
@@ -661,13 +756,23 @@ def test_continuous_preview_tls_source_radar_delivery_cost_restore(
                 original=original,
                 png=png,
             )
-            restored = restore(tls_database, tls_cluster, tmp_path, case, preserved)
+            phase("cancellation_edit_pending_command_and_source_inventory")
+            child = restart(tls_database[0][1], port=args["port"],
+                            operators=operators.path, operation="inspect")
+            children.append(child)
+            assert child["result"]["state"] == list(state)
+            assert child["result"]["costs"]["requests"] == costs["requests"]
+            phase("fresh_process_source_state_and_passive_cost")
+            restored = restore(tls_database, tls_cluster, tmp_path, case, preserved, children)
+            phase("restore_database_dump_restore_restart_once_and_passive_assets")
             assert snapshot(args) == preserved and store.read() == state
+            phase("final_source_preservation")
             assert len(sent) == 1 and len(initial_calls) == len(revision_calls) == 3
             record_property(
                 "hosted_local_workflow",
                 json.dumps(
                     dict(
+                        phases=phases,
                         real_clock=True,
                         hosted_calls=0,
                         writer_posts=1,
@@ -677,7 +782,11 @@ def test_continuous_preview_tls_source_radar_delivery_cost_restore(
                         receipt_gets=1,
                         http_requests=len(http_trace),
                         tls_application_dials=len([v for v in dials if v["host"] == "localhost"]),
-                        all_connections=len(dials),
+                        all_in_process_connections=len(dials),
+                        physical_connections=connection_receipt(tls_cluster, tmp_path, dials, children),
+                        restart_before_reconciliation=True,
+                        restart_before_dump=True,
+                        passive_expiry_probe="explicit future time, not a wall-clock wait",
                         seconds=time.monotonic() - started,
                         row_count=preserved["row_count"],
                         retained_repr_bytes=preserved["bytes"],
@@ -689,7 +798,7 @@ def test_continuous_preview_tls_source_radar_delivery_cost_restore(
             )
 
 
-def restore(tls_database, tls_cluster, tmp_path, case, preserved):
+def restore(tls_database, tls_cluster, tmp_path, case, preserved, children):
     configs, args = tls_database
     root, admin, run, cert, data = tls_cluster
     name = "h2_restore_" + uuid4().hex
@@ -784,33 +893,10 @@ def restore(tls_database, tls_cluster, tmp_path, case, preserved):
         assert authority.local_cost_projection(now=now())["requests"] == case["costs"]["requests"]
         # A genuine fresh Python process reconstructs only pinned configuration;
         # original pending command ID is consumed once with a real trusted clock.
-        packet = dict(
-            config=str(config_path),
-            identity=str(identity_path),
-            port=args["port"],
-            operators=case["operators"],
-            pending=case["pending"]["command_id"],
-        )
-        code = """import json,sys
-from src.storage import hosted_staging as h
-from src.commands.postgres_authority import PostgresCommandAuthority
-from src.commands.preview_ingress import Operators
-v=json.load(sys.stdin);h._PORT=v['port']
-a=PostgresCommandAuthority.for_hosted_staging(h.HostedStagingConfig.load(v['config'],trusted_identity=v['identity']))
-o=Operators(v['operators']);first=a.consume(o.resolve,command_id=v['pending'])
-assert first['status']=='applied'
-assert a.consume(o.resolve,command_id=v['pending'])==first
-print(json.dumps(first))
-"""
-        child = subprocess.run(
-            [sys.executable, "-c", code],
-            input=json.dumps(packet),
-            text=True,
-            capture_output=True,
-            check=True,
-            timeout=30,
-        )
-        result = json.loads(child.stdout)
+        child = restart(config, port=args["port"], operators=case["operators"],
+                        operation="resume", pending=case["pending"]["command_id"])
+        children.append(child)
+        result = child["result"]
         assert result["status"] == "applied" and authority.read()[0] == case["source_state"][0] + 1
         current = authority.read()[1]["drafts"][0]
         assert (
@@ -1012,3 +1098,30 @@ def test_preview_unknown_or_mixed_receipt_refuses(tls_database, drift):
     with pytest.raises(p.ProjectionError, match="changed_delivery_(upgrade|catalog)"):
         owner.initialize_delivery(now=now())
     assert runtime.local_cost_projection(now=now())["status"] == "unavailable"
+
+
+@pytest.mark.parametrize("drift", ["owner_at_runtime", "bare_repository", "wrong_config_type", "changed_config"])
+def test_preview_capability_refusal_does_not_dial(tls_database, monkeypatch, drift):
+    owner, runtime, _ = tls.authorities(tls_database)
+    from types import SimpleNamespace
+    authority = runtime
+    if drift == "owner_at_runtime":
+        authority = owner
+    elif drift == "bare_repository":
+        authority.projections = SimpleNamespace(environment="preview", user="fixture_runtime")
+    elif drift == "wrong_config_type":
+        authority.projections._hosted_config = SimpleNamespace(parameters=lambda: {})
+    else:
+        config = authority.projections._hosted_config
+        config.config_path.write_text("{}")
+    def no_dial(*args, **kwargs):
+        raise AssertionError("Refused preview capability attempted a PostgreSQL connection")
+    with monkeypatch.context() as patch:
+        patch.setattr(psycopg, "connect", no_dial)
+        if drift == "changed_config":
+            with pytest.raises(p.ProjectionError, match="staging_configuration_changed"):
+                hosted_fixture.allowed(authority)
+        else:
+            assert not hosted_fixture.allowed(authority)
+            with pytest.raises(ValueError, match="explicit_staging_config_required"):
+                PreviewServer.for_hosted_fixture(authority, None, port=0, origin="http://127.0.0.1:3137")

@@ -310,7 +310,7 @@ def tls_cluster():
                 "-l",
                 root / "server.log",
                 "-o",
-                f"-k {sock} -p {port} -c listen_addresses=127.0.0.1 -c ssl=on -c ssl_cert_file={cert} -c ssl_key_file={key}",
+                f"-k {sock} -p {port} -c listen_addresses=127.0.0.1 -c ssl=on -c ssl_cert_file={cert} -c ssl_key_file={key} -c log_connections=on",
                 "-w",
                 "start",
             )
