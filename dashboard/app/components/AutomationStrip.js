@@ -32,7 +32,15 @@ function dotColorForRoutine(routine) {
   return "green"
 }
 
-export function AutomationStatusStrip({ status, error }) {
+export function AutomationStatusStrip({ status, error, localPreview = false }) {
+  if (localPreview === true) {
+    return (
+      <div className="automation-strip">
+        <span className="automation-title">Local preview</span>
+        <span>Live collection and publishing are off in this test dashboard.</span>
+      </div>
+    )
+  }
   if (error) {
     return (
       <div className="automation-strip automation-strip-error">

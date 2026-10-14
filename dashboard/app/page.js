@@ -130,7 +130,7 @@ export default function Dashboard() {
 
     if (previewSeen.current) {
       setAutomation(null)
-      setAutomationError("Local preview: collection and publication are unavailable.")
+      setAutomationError(null)
       return
     }
 
@@ -415,7 +415,7 @@ export default function Dashboard() {
   return (
     <>
 
-      <AutomationStatusStrip status={automation} error={automationError} />
+      <AutomationStatusStrip status={automation} error={automationError} localPreview={data?.local_preview === true} />
 
       <div className="dash">
         {data?.local_preview && (
