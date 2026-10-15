@@ -7,16 +7,17 @@ import pytest
 from src.dashboard_preview.errors import PreviewError
 from src.dashboard_preview.preview import build_preview
 from src.dashboard_preview.reader import Budget
-from tests.dashboard_graphic_helpers import POLICY, RUNTIME, saved_preview
+from tests.dashboard_graphic_helpers import POLICY, RUNTIME, saved_preview, saved_pm25_preview
 
 
-def test_actual_python_binding_is_accepted_by_browser_contract(tmp_path):
+@pytest.mark.parametrize("fixture", [saved_preview, saved_pm25_preview], ids=["modis", "pm25"])
+def test_actual_python_binding_is_accepted_by_browser_contract(tmp_path, fixture):
     """Catch cross-language identity drift that an invented JSON response misses."""
     from pathlib import Path
     import subprocess
     root = Path(__file__).resolve().parents[1]
     manifest = json.loads((root / "dashboard/lib/graphic-runtime-manifest.json").read_text())
-    state, request = saved_preview()
+    state, request = fixture()
     policy, runtime = manifest["identity"]["policy_source_sha256"], manifest["runtime_sha256"]
     request.update(expected_policy_source_sha256=policy, expected_preview_runtime_sha256=runtime)
     body = preview(state, request, policy_sha=policy, runtime_sha=runtime)
@@ -55,13 +56,16 @@ def test_real_graphic_preserves_complete_state_and_binds_exact_saved_revision():
     assert result["publication_approved"] is False and result["attachment"] is False
     assert result["preview_runtime_sha256"] == RUNTIME
     assert "SYNTHETIC" in result["alt_text"] and "simultaneity" in result["alt_text"]
-    assert result["source_time"] == "2032-02-29T23:59:00Z" and len(body) <= 1024 * 1024
+    assert result["schema_version"] == 2 and "source_time" not in result
+    assert result["source_context"] == {"kind": "modis_acquisition", "acquired_at": "2032-02-29T23:59:00Z"}
+    assert len(body) <= 1024 * 1024
     assert "raw_signal_dump" not in result and "drafts" not in result
 
 
+@pytest.mark.parametrize("fixture", [saved_preview, saved_pm25_preview], ids=["modis", "pm25"])
 @pytest.mark.parametrize("field", ["text", "decision_revision", "status", "revision_conflicts"])
-def test_change_during_render_discards_asset(field):
-    state, request = saved_preview()
+def test_change_during_render_discards_asset(field, fixture):
+    state, request = fixture()
     changed = deepcopy(state)
     changed["drafts"][0][field] = {"text": "Changed", "decision_revision": 1,
                                   "status": "approved", "revision_conflicts": ["conflict"]}[field]
@@ -120,3 +124,39 @@ def test_boolean_revision_is_not_an_integer():
     request["expected_revision"]["decision_revision"] = False
     with pytest.raises(PreviewError):
         preview(state, request, read_state=lambda: pytest.fail("unexpected read"))
+
+
+@pytest.mark.parametrize("fixture", [saved_preview, saved_pm25_preview], ids=["modis", "pm25"])
+def test_source_numeric_type_drift_after_render_refuses_unchanged_editorial_revision(fixture):
+    from src.editorial.revisions import draft_identity
+
+    state, request = fixture()
+    changed = deepcopy(state)
+    raw = changed["drafts"][0]["review_context"]["two_bot"]["bundle"]["raw_signal_dump"]
+    if "forecast_window" in raw:
+        values = raw["forecast_window"]["series"]["dust"]["values"]
+        assert type(values[0]) is float and values[0].is_integer()
+        values[0] = int(values[0])
+    else:
+        assert type(raw["confidence"]) is float and raw["confidence"].is_integer()
+        raw["confidence"] = int(raw["confidence"])
+    assert draft_identity(state["drafts"][0]) == draft_identity(changed["drafts"][0])
+    reads = iter([state, changed])
+    with pytest.raises(PreviewError) as error:
+        preview(state, request, read_state=lambda: next(reads))
+    assert error.value.code == "stale_preview"
+
+
+@pytest.mark.parametrize("fixture", [saved_preview, saved_pm25_preview], ids=["modis", "pm25"])
+def test_source_object_key_order_is_not_source_drift(fixture):
+    state, request = fixture()
+
+    def reordered(value):
+        if isinstance(value, dict):
+            return {key: reordered(value[key]) for key in reversed(value)}
+        if isinstance(value, list):
+            return [reordered(item) for item in value]
+        return value
+
+    reads = iter([state, reordered(deepcopy(state))])
+    assert json.loads(preview(state, request, read_state=lambda: next(reads)))["schema_version"] == 2

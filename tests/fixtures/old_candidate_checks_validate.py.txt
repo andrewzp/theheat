@@ -1,0 +1,10 @@
+def validate(c, environment):
+    results.validate(c, environment)
+    if not c.execute("SELECT 1 FROM pg_namespace WHERE nspname=%s", (SCHEMA,)).fetchone():
+        raise checks.CheckJournalError("check_migration_required")
+    row = c.execute(f"SELECT version,migration_sha,catalog_sha,environment,owner_role,runtime_role FROM {SCHEMA}.metadata WHERE singleton=1").fetchone()
+    checks._require(row is not None and row[0] == 1 and row[1] == p._sha(MIGRATION.read_bytes()), "unsupported_check_schema")
+    checks._require(row[2] == p._catalog(c, SCHEMA), "changed_check_schema")
+    checks._require(row[3] == environment, "check_environment_mismatch")
+    roles = c.execute("SELECT owner_role,runtime_role FROM theheat_commands.metadata WHERE singleton=1").fetchone()
+    checks._require(tuple(row[4:]) == roles, "check_role_mismatch")

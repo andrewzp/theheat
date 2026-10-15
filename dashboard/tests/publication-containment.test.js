@@ -90,10 +90,14 @@ test("paused scheduling API rejects a current reviewed draft before writing or d
   } finally { globalThis.fetch = previous }
 })
 
-test("composer offers a writing preview without a publication action", () => {
+test("composer uses retained evidence without a direct provider or publication action", () => {
   const page = readFileSync(new URL("../app/page.js", import.meta.url), "utf8")
+  const component = readFileSync(new URL("../app/components/SourcedGeneration.js", import.meta.url), "utf8")
+  const route = readFileSync(new URL("../app/api/generate/route.js", import.meta.url), "utf8")
   assert.ok(!page.includes('fetch("/api/post"'))
-  assert.ok(page.includes("Publishing requires a sourced draft"))
+  assert.ok(page.includes("<SourcedGeneration"))
+  assert.ok(component.includes("Publishing remains off"))
+  assert.ok(!route.includes("Anthropic") && !route.includes("SYSTEM_PROMPT"))
 })
 
 test("shared Python and JavaScript control merge contract", () => {

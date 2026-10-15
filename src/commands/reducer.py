@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from typing import Any
 from uuid import NAMESPACE_URL, uuid5
 
-from src.commands.schema import MEDIA_ACTIONS, Command, CommandError, Principal, authorize, utc_datetime, utc_text, valid_epoch
+from src.commands.schema import SOURCE_ACTIONS, GENERATION_ACTIONS, CANDIDATE_ACTIONS, MEDIA_ACTIONS, EDITOR_MEDIA_ACTIONS, Command, CommandError, Principal, authorize, utc_datetime, utc_text, valid_epoch
 from src.editorial.revisions import (
     bind_reviewed_revision, decision_revision, draft_identity, has_unresolved_publish,
     fingerprint, invalidate_text, record_human_review, revoke_approval, review_is_current,
@@ -91,8 +91,16 @@ def reduce_command(state: dict, command: Command, principal: Principal, *, now: 
     authorize(principal, command.action)
     if now >= utc_datetime(command.expires_at):
         raise CommandError("command_expired", "This command expired; refresh the draft before trying again")
-    if command.action in MEDIA_ACTIONS:
+    if command.action == "abandon_submission":
+        raise CommandError("invalid_action", "Submission closure is not a draft mutation")
+    if command.action in SOURCE_ACTIONS:
+        raise CommandError("source_backend_unsupported", "This reducer has no atomic source-result authority")
+    if command.action in MEDIA_ACTIONS | EDITOR_MEDIA_ACTIONS:
         raise CommandError("media_backend_unsupported", "This reducer has no atomic media authority")
+    if command.action in GENERATION_ACTIONS:
+        raise CommandError("generation_backend_unsupported", "This reducer has no sourced generation authority")
+    if command.action in CANDIDATE_ACTIONS:
+        raise CommandError("candidate_backend_unsupported", "This reducer has no atomic candidate authority")
     # Read and validate EVERY fixed target before creating or changing any copy.
     original = _target_drafts(state, command)
     updated = deepcopy(state)

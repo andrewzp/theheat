@@ -10,9 +10,10 @@ import json
 from src.commands import batch_journal as b, check_journal as checks, spend_journal as s
 from src.commands import postgres_batch as batch, postgres_batch_results as results, postgres_spending as spend
 from src.commands import batch_result_journal as r, batch_worker_journal as w
-from src.commands.schema import canonical_json
+from src.commands.schema import CommandError, canonical_json
 from src.editorial.revisions import fingerprint
 from src.storage import postgres_projection as p
+from src.two_bot import check_origin
 
 SCHEMA = "theheat_checks"
 MIGRATION = p.MIGRATION.with_name("007_candidate_checks.sql")
@@ -27,10 +28,14 @@ def validate(c, environment):
         raise checks.CheckJournalError("check_migration_required")
     row = c.execute(f"SELECT version,migration_sha,catalog_sha,environment,owner_role,runtime_role FROM {SCHEMA}.metadata WHERE singleton=1").fetchone()
     checks._require(row is not None and row[0] == 1 and row[1] == p._sha(MIGRATION.read_bytes()), "unsupported_check_schema")
-    checks._require(row[2] == p._catalog(c, SCHEMA), "changed_check_schema")
     checks._require(row[3] == environment, "check_environment_mismatch")
     roles = c.execute("SELECT owner_role,runtime_role FROM theheat_commands.metadata WHERE singleton=1").fetchone()
     checks._require(tuple(row[4:]) == roles, "check_role_mismatch")
+    from src.commands import postgres_revision_checks as revisions
+    if revisions.upgraded(c):
+        revisions.validate_catalog(c, revisions.metadata(c, SCHEMA), environment, roles)
+    else:
+        checks._require(row[2] == p._catalog(c, SCHEMA), "changed_check_schema")
 
 
 def install(c, environment):
@@ -57,7 +62,9 @@ def install(c, environment):
 
 def _at(c, now):
     at = spend._time(now)
-    latest = c.execute(f"SELECT MAX(recorded_at) FROM (SELECT MAX(recorded_at) AS recorded_at FROM {SCHEMA}.sets UNION ALL SELECT MAX(recorded_at) FROM {SCHEMA}.attempts UNION ALL SELECT MAX(recorded_at) FROM {SCHEMA}.receipts) clocks").fetchone()[0]
+    from src.commands.postgres_revision_checks import upgraded
+    extra = f" UNION ALL SELECT MAX(recorded_at) FROM {SCHEMA}.draft_leases" if upgraded(c) else ""
+    latest = c.execute(f"SELECT MAX(recorded_at) FROM (SELECT MAX(recorded_at) AS recorded_at FROM {SCHEMA}.sets UNION ALL SELECT MAX(recorded_at) FROM {SCHEMA}.attempts UNION ALL SELECT MAX(recorded_at) FROM {SCHEMA}.receipts{extra}) clocks").fetchone()[0]
     checks._require(latest is None or at >= latest, "check_clock_went_backwards")
     return at
 
@@ -93,10 +100,21 @@ def _review(c, payload, at, environment):
 
 def _packet(c, identity, environment):
     s._sha(identity)
-    row = c.execute(f"SELECT job_id,custom_id,packet_sha256,recorded_at FROM {SCHEMA}.sets WHERE check_set_id=%s", (identity,)).fetchone()
+    from src.commands import postgres_revision_checks as revisions
+    from src.commands import postgres_sync_checks as sync
+    extra = ",origin_kind,draft_namespace,draft_enrollment_id" if revisions.upgraded(c) else ""
+    if sync.upgraded(c):
+        extra += ",sync_namespace,sync_enrollment_id"
+    row = c.execute(f"SELECT job_id,custom_id,packet_sha256,recorded_at{extra} FROM {SCHEMA}.sets WHERE check_set_id=%s", (identity,)).fetchone()
     checks._require(row is not None, "check_set_not_found")
-    job, custom, digest, at = row
+    job, custom, digest, at = row[:4]
     packet = _document(c, "packet_artifacts", digest)
+    if len(row) == 9 and row[4] == "synchronous_writer_v1":
+        return sync.packet(c, identity, row, _raw(c, "packet_artifacts", digest))
+    checks._require(len(row) != 9 or row[7] is row[8] is None, "changed_check_origin")
+    if len(row) >= 7 and row[4] == check_origin.ORIGIN:
+        return revisions.packet(c, identity, row, _raw(c, "packet_artifacts", digest))
+    checks._require(len(row) == 4 or (row[4] == "batch_candidate" and row[5] is row[6] is None), "changed_check_origin")
     checks._shape(packet, checks._PACKET_FIELDS | ({"derivation", "derivation_id"} if packet.get("schema_version") == 2 else set()))
     checks._require(type(packet["schema_version"]) is int and packet["schema_version"] in (1, 2)
                     and fingerprint(packet) == identity and packet["job_id"] == job
@@ -122,7 +140,13 @@ def _packet(c, identity, environment):
     return packet, at
 
 
-def _current(c, packet, payload, at, environment):
+def _current(c, packet, payload, at, environment, *, resolved=None):
+    if packet.get("schema_version") in (4, 5):
+        from src.commands.postgres_sync_checks import current
+        return current(c, packet, payload, at, environment, resolved=resolved)
+    if packet.get("schema_version") in (3, 6):
+        from src.commands.postgres_revision_checks import current as revision_current
+        return revision_current(c, packet, payload, at, environment)
     verification = checks.packet_verification(packet)
     checks._require(verification == "verified_current_formatter", verification)
     s._sha(payload["checker_state_sha256"])
@@ -141,7 +165,7 @@ def _current(c, packet, payload, at, environment):
 
 def _reservation(reservation, packet, stage, request_sha):
     s._intent(reservation)
-    checks._require(reservation["job_id"] == packet["job_id"] and reservation["role"] == stage
+    checks._require(reservation["job_id"] == check_origin.spending_job(packet) and reservation["role"] == stage
                     and reservation["request_sha256"] == request_sha and reservation["provider"] == "google"
                     and reservation["model"] == packet["policy"]["models"][stage], "check_reservation_mismatch")
 
@@ -159,7 +183,11 @@ def _attempt(c, identity, stage, packet, enrolled_at):
                     and enrolled_at <= at < spend._time(packet["useful_until"])
                     and at[:10] == packet["check_date"] and type(binding["fence"]) is int, "changed_check_attempt")
     _raw(c, "request_artifacts", request_sha)
-    lease = c.execute("SELECT owner,recorded_at,expires_at FROM theheat_batch_work.leases WHERE job_id=%s AND fence=%s", (packet["job_id"], binding["fence"])).fetchone()
+    if packet.get("schema_version") in (3, 4, 5, 6):
+        from src.commands.postgres_revision_checks import historical_lease
+        lease = historical_lease(c, identity, binding["fence"])
+    else:
+        lease = c.execute("SELECT owner,recorded_at,expires_at FROM theheat_batch_work.leases WHERE job_id=%s AND fence=%s", (packet["job_id"], binding["fence"])).fetchone()
     checks._require(lease is not None and lease[0] == binding["owner"] and lease[1] <= at < lease[2], "changed_check_attempt")
     if stage == "deterministic":
         checks._require(intent is None and binding["reservation"] is None, "changed_check_attempt")
@@ -243,12 +271,12 @@ def _intake(c, payload, at, environment):
         checks._require(c.execute(f"SELECT COUNT(*) FROM {SCHEMA}.sets").fetchone()[0] < checks.MAX_SETS, "check_set_capacity")
         results.review(c, review_input, now=at, environment=environment)
         digest = _artifact(c, "packet_artifacts", raw)
-        c.execute(f"INSERT INTO {SCHEMA}.sets VALUES(%s,%s,%s,%s,%s)", (identity, packet["job_id"], packet["custom_id"], digest, at))
+        c.execute(f"INSERT INTO {SCHEMA}.sets(check_set_id,job_id,custom_id,packet_sha256,recorded_at) VALUES(%s,%s,%s,%s,%s)", (identity, packet["job_id"], packet["custom_id"], digest, at))
     return dict(check_set_id=identity, reused=bool(prior), required_checks_completed=False,
                 publication_approved=False, dispatch_granted=False)
 
 
-def apply(c, action, payload, *, now, environment, request=None, receipt=None):
+def apply(c, action, payload, *, now, environment, request=None, receipt=None, resolved=None):
     fields = {"intake": checks._REVIEW_FIELDS | {"custom_id", "bundle", "memory", "checker_state"},
               "status": checks._BASE, "begin": checks._BASE | {"stage", "reservation"},
               "complete": checks._BASE | {"stage", "grant_id"}}
@@ -274,15 +302,15 @@ def apply(c, action, payload, *, now, environment, request=None, receipt=None):
     if action == "status":
         reason = None
         try:
-            _current(c, packet, payload, at, environment)
+            _current(c, packet, payload, at, environment, resolved=resolved)
         except (checks.CheckJournalError, r.BatchResultError, w.BatchWorkerError):
-            verification = checks.packet_verification(packet)
-            reason = verification if verification != "verified_current_formatter" else "check_context_not_current"
+            verification = check_origin.packet_verification(packet, resolved=resolved)
+            reason = verification if verification not in check_origin.EXECUTABLE else "check_context_not_current"
         return dict(check_set_id=payload["check_set_id"], stages=stages, blocked_reason=reason,
                     required_checks_completed=reason is None and all(v == "passed" for v in stages.values()),
                     publication_approved=False, dispatch_granted=False, accounting_complete=False, cost_usd=None)
     if action == "begin":
-        _current(c, packet, payload, at, environment)
+        _current(c, packet, payload, at, environment, resolved=resolved)
     stage = payload["stage"]
     checks._require(stage in checks.STAGES, "unknown_required_check")
     prior = attempts[stage]
@@ -323,9 +351,62 @@ def apply(c, action, payload, *, now, environment, request=None, receipt=None):
         checks._require(terminal["sha256"] == p._sha(raw) and canonical_json(terminal["document"]).encode() == raw, "conflicting_check_completion")
         return dict(reused=True, disposition=terminal["disposition"], publication_approved=False)
     try:
-        _current(c, packet, payload, at, environment)
+        _current(c, packet, payload, at, environment, resolved=resolved)
     except (checks.CheckJournalError, r.BatchResultError, w.BatchWorkerError):
         disposition = "stale"
     digest = _artifact(c, "receipt_artifacts", raw)
     c.execute(f"INSERT INTO {SCHEMA}.receipts VALUES(%s,%s,%s,%s)", (prior["grant_id"], digest, disposition, at))
     return dict(reused=False, disposition=disposition, publication_approved=False)
+
+
+def recorded_stage_receipts(c, identity, packet, *, owner, fence, environment):
+    """Exact retained receipts only; never a scientific/current completion verdict."""
+    from src.commands import postgres_check_observations as observations
+
+    def require_proof(condition, code):
+        if not condition:
+            raise CommandError(code, "Retained check evidence is unavailable; refresh its current status")
+
+    _, enrolled = _packet(c, identity, environment)
+    stages, attempts = _stages(c, identity, packet, enrolled)
+    require_proof(set(stages) == set(checks.STAGES) and all(v == "passed" for v in stages.values()), "required_checks_incomplete")
+    proofs, records = {}, {}
+    for stage in checks.STAGES:
+        attempt = attempts[stage]
+        require_proof(attempt["binding"]["owner"] == owner and attempt["binding"]["fence"] == fence, "check_lease_changed")
+        terminal = _terminal(c, attempt)
+        observation = observations._observation(c, identity, stage, attempt)
+        require_proof(observation is not None and observation["complete"] is True, "check_response_not_retained")
+        raw = observations._raw(c, "raw_artifacts", observation["raw_sha256"])
+        request = _raw(c, "request_artifacts", attempt["binding"]["request_sha256"])
+        require_proof(terminal["document"]["execution_status"] == "completed" and terminal["document"]["verdict"] == "pass", "required_check_not_passed")
+        proofs[stage] = dict(grant_id=attempt["grant_id"], request_sha256=p._sha(request),
+            observation_sha256=observation["raw_sha256"], receipt_sha256=terminal["sha256"])
+        records[stage] = (attempt, terminal, observation, request, raw)
+    return proofs, records
+
+
+def verified_stage_receipts(c, identity, packet, *, owner, fence, environment, resolved=None):
+    """One exact request/raw-response interpreter for both retained origins."""
+    from src.two_bot import check_requests
+
+    def require_proof(condition, code):
+        # These explicit evidence refutations are durable command refusals.
+        # Reader/interpreter errors still propagate as journal uncertainty.
+        if not condition:
+            raise CommandError(code, "Retained check evidence is unavailable; refresh its current status")
+
+    proofs, records = recorded_stage_receipts(c, identity, packet, owner=owner, fence=fence, environment=environment)
+    outcomes = {}
+    for stage in checks.STAGES:
+        attempt, terminal, observation, request, raw = records[stage]
+        expected = canonical_json(check_requests.prepare_request(packet, stage, resolved=resolved)).encode()
+        require_proof(request == expected, "check_request_not_exact")
+        if stage == "deterministic":
+            require_proof(raw == canonical_json(check_requests.deterministic_result(packet, resolved=resolved)).encode(), "deterministic_check_changed")
+        outcome = check_requests.interpret_observation(packet, stage, observation, raw, resolved=resolved)
+        expected_receipt = dict(outcome, grant_id=attempt["grant_id"], request_sha256=p._sha(expected))
+        require_proof(p._canonical(expected_receipt) == p._canonical(terminal["document"]), "check_receipt_not_exact")
+        require_proof(outcome["execution_status"] == "completed" and outcome["verdict"] == "pass", "required_check_not_passed")
+        outcomes[stage] = outcome["result"]
+    return proofs, outcomes

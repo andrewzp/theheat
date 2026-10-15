@@ -35,8 +35,12 @@ from src.orchestrator.sources.synthesis import run_synthesis
 from src.orchestrator.sources.usgs_quakes import run_usgs_quakes
 
 
-def run_alerts(bot_state: BotState, current_run: dict | None = None) -> BotState:
+def run_alerts(bot_state: BotState, current_run: dict | None = None, *, ghcn_supply=None) -> BotState:
     """Check all alert data sources and save drafts."""
+    if ghcn_supply is not None:
+        from src.storage.scientific_supply import ScientificSupplySession, require
+        require(type(ghcn_supply) is ScientificSupplySession, "explicit_supply_session_required")
+        ghcn_supply.validate(mode="capture")
     _activate_suppression_ctx(
         bot_state,
         source="alerts",
@@ -106,6 +110,7 @@ def run_alerts(bot_state: BotState, current_run: dict | None = None) -> BotState
                         cities,
                         us_city_state_map,
                         city_elevations,
+                        **({"ghcn_supply": ghcn_supply} if ghcn_supply is not None else {}),
                     ),
                 ),
                 SourceRunner("firms", lambda: run_firms(bot_state, current_run)),
@@ -182,6 +187,7 @@ def run_alerts(bot_state: BotState, current_run: dict | None = None) -> BotState
             cities,
             us_city_state_map,
             city_elevations,
+            **({"ghcn_supply": ghcn_supply} if ghcn_supply is not None else {}),
         )
         run_firms(bot_state, current_run)
         run_fire_footprint(bot_state, current_run)

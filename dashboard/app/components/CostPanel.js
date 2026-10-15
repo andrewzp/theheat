@@ -1,4 +1,5 @@
 import React from "react"
+import { localCostEvidence } from "../../lib/local-cost-evidence.js"
 
 const h = React.createElement
 const count = value => Number.isSafeInteger(value) && value >= 0 ? value.toLocaleString("en-US") : "Unknown"
@@ -30,7 +31,7 @@ function Metric({title, children}) {
   return h("div", null, h("dt", null, title), h("dd", null, children))
 }
 
-export function CostPanel({evidence, stale = false, loading = false}) {
+export function CostPanel({evidence, stale = false, loading = false, localEvidence}) {
   const recorded = evidence?.recorded, scenario = evidence?.scenario
   const period = scenario?.observation_period
   const note = (text, props = {}) => h("p", {className: "runtime-note", ...props}, text)
@@ -71,5 +72,50 @@ export function CostPanel({evidence, stale = false, loading = false}) {
       scenario?.invalid ? note("Invalid evidence is present. Invalid records and their conflicting counterparts are excluded.") : null,
       note("The scenario covers at most 32 recent observations, not a calendar month. Excluded responses do not cost zero. A missing cache count creates a range for eligible tokens only; it does not bound account charges."),
       note("Grounding, tools, cache storage, taxes, other pricing tiers and uncaptured requests are not included. Thinking tokens are counted separately from answer tokens. Actual account pricing and bills are unverified."),
-      note("The monthly ledger can miss concurrent or unsaved activity. Neither view proves complete accounting, savings or an enforced spending cap.")))
+      note("The monthly ledger can miss concurrent or unsaved activity. Neither view proves complete accounting, savings or an enforced spending cap.")),
+    localEvidence === undefined ? null : h(LocalCosts, {evidence: localCostEvidence(localEvidence), stale}))
+}
+
+
+export function formatMicroUsd(value) {
+  if (typeof value !== "string" || !/^(0|[1-9][0-9]{0,17})$/.test(value)) return "Unknown"
+  const amount = BigInt(value), fraction = String(amount % 1000000n).padStart(6, "0").replace(/0+$/, "")
+  return `$${(amount / 1000000n).toLocaleString("en-US")}${fraction ? `.${fraction.padEnd(2, "0")}` : ".00"}`
+}
+
+const roles = {writer: "Writing", safety: "Safety", fact_check: "Fact check", critic: "Critic", news: "News", repair: "Repair"}
+const usageLabels = {input_tokens: "Input tokens", output_tokens: "Output tokens", prompt_token_count: "Prompt tokens",
+  candidates_token_count: "Answer tokens", thoughts_token_count: "Thinking tokens", cached_content_token_count: "Cached tokens",
+  total_token_count: "Total tokens", tool_use_prompt_token_count: "Tool prompt tokens", cache_creation_input_tokens: "Cache creation tokens",
+  cache_read_input_tokens: "Cache read tokens"}
+const localTimestamp = value => value ? `${value.slice(0, 10)} ${value.slice(11, 19)} UTC` : "Unknown"
+function LocalCosts({evidence, stale}) {
+  const note = text => h("p", {className: "runtime-note"}, text)
+  return h("section", {className: "local-cost-section", "aria-label": "Local requests and reserved allowance"},
+    h("h3", null, "Local requests and reserved allowance"),
+    note("Local workflow only · final bill unavailable"),
+    evidence.status !== "available" ? h("p", {role: "status"}, "Local cost records unavailable.") : h(React.Fragment, null,
+      h("p", {className: "runtime-note", role: "status"}, `${stale ? "Refresh failed · last loaded snapshot: " : "Observed: "}${localTimestamp(evidence.snapshot.observed_at)}.`),
+      h("dl", {className: "runtime-settings cost-counts"},
+        h(Metric, {title: "Reserved allowance"}, formatMicroUsd(evidence.summary.commitments_micro_usd.held)),
+        h(Metric, {title: "Daily commitments"}, formatMicroUsd(evidence.summary.commitments_micro_usd.daily)),
+        h(Metric, {title: "Monthly commitments"}, formatMicroUsd(evidence.summary.commitments_micro_usd.monthly)),
+        h(Metric, {title: "Requests awaiting a final charge"}, count(evidence.total_intents - evidence.summary.reservation_counts.settled - evidence.summary.reservation_counts.released))),
+      note("Commitments come from local reservation records; they are not bills. Detailed usage covers only the requests shown below. Do not add these amounts to the estimates above."),
+      evidence.total_intents === 0 ? note("No local requests recorded.") : note(`Showing ${evidence.shown_intents} of ${evidence.total_intents} requests${evidence.details_truncated ? ` · ${evidence.omitted_intents} omitted` : ""}.`),
+      h("ul", {className: "local-cost-requests"}, evidence.requests.map(row => h("li", {key: row.intent_id},
+        h("details", null,
+          h("summary", null, `${roles[row.role] || "Other request"} · ${row.reservation_state} · ${row.charge_status === "recorded_settlement" ? `Recorded settlement ${formatMicroUsd(row.recorded_settlement_micro_usd)}` : "Final charge unknown"}`),
+          note(`${row.provider} · ${row.requested_model} · ${localTimestamp(row.reserved_at)}`),
+          row.reservation_state === "uncertain" ? note("Outcome unknown; allowance remains reserved.") : null,
+          note(`Reserved: ${formatMicroUsd(row.reserve_micro_usd)}. Currently held: ${formatMicroUsd(row.held_micro_usd)}.`),
+          row.charge_status === "recorded_settlement" ? note("This is a recorded settlement, not invoice reconciliation.") : null,
+          row.usage.status === "unavailable" ? note(row.usage.reason === "projection_limited" ? "Usage exceeds this view’s read limit; the reservation is included above." : "Retained usage unavailable; missing usage is not zero.")
+            : row.usage.status === "invalid" ? note("Retained usage is invalid; the charge remains unknown.")
+              : row.usage.status === "absent" ? note("The response did not report usage; the charge remains unknown.")
+                : h("dl", {className: "runtime-settings cost-counts"}, Object.entries(row.usage.counts).map(([key, value]) => h(Metric, {key, title: usageLabels[key] || key.replaceAll("_", " ").replaceAll(".", " · ")}, count(value)))),
+          row.usage.unsupported_fields ? note("The response includes unsupported usage fields; coverage is incomplete.") : null,
+          note(`Request reference: ${row.intent_id}`),
+          row.origin.grant_id ? note(`Grant reference: ${row.origin.grant_id}`) : null,
+          row.origin.raw_sha256 ? note(`Response reference: ${row.origin.raw_sha256}`) : null))))))
 }

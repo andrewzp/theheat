@@ -13,11 +13,13 @@ import hashlib
 import os
 from typing import Protocol
 
+import httpx
+
 from src.commands import check_journal as checks
 from src.commands.schema import canonical_json, utc_datetime
 from src.editorial.policy import current_editorial_policy
 from src.editorial.revisions import fingerprint
-from src.two_bot import check_requests
+from src.two_bot import check_requests, check_origin
 from src.two_bot.check_transport import (
     CheckObservation,
     GoogleCheckTransport,
@@ -31,8 +33,7 @@ from src.voice import safety
 class CheckAuthority(Protocol):
     """Only the grant-bound storage operations required by this local runner."""
 
-    def batch_work(self, action: str, payload: dict, *, now: str,
-                   raw: bytes | None = None) -> dict: ...
+    def acquire_check_lease(self, check_set_id: str, owner: str, ttl_seconds: int, *, now: str) -> dict: ...
 
     def candidate_checks(self, action: str, payload: dict, *, now: str,
                          request: bytes | None = None, receipt: dict | None = None) -> dict: ...
@@ -67,7 +68,8 @@ def _report(outcome, *, reason=None, stage=None, status=None):
 def _finish(authority, identity, packet, stage, attempt, clock):
     # A grant from another adapter/version must not be interpreted as this
     # executor's exact request merely because its role/model labels match.
-    expected = canonical_json(check_requests.prepare_request(packet, stage)).encode()
+    resolved = getattr(authority, "resolved_check_context", None)
+    expected = canonical_json(check_requests.prepare_request(packet, stage, resolved=resolved)).encode()
     binding = attempt["binding"]
     if (
         hashlib.sha256(expected).hexdigest() != binding["request_sha256"]
@@ -86,7 +88,7 @@ def _finish(authority, identity, packet, stage, attempt, clock):
         or hashlib.sha256(raw).hexdigest() != observation["raw_sha256"]
     ):
         return _report("reconciliation_required", reason="check_observation_not_exact", stage=stage)
-    outcome = check_requests.interpret_observation(packet, stage, observation, raw)
+    outcome = check_requests.interpret_observation(packet, stage, observation, raw, resolved=resolved)
     receipt = dict(outcome, grant_id=attempt["grant_id"], request_sha256=binding["request_sha256"])
     # A recovered observation still belongs to the original execution owner.
     # If its lease expired, completion is retained as stale rather than promoted.
@@ -126,6 +128,7 @@ def execute_check_once(
     clock: Callable[[], str],
     reservation: dict | None = None,
     enabled: bool = False,
+    transport_options: dict | None = None,
 ) -> dict:
     """No generic checker callback and no retry, rewrite or synchronous fallback.
 
@@ -138,6 +141,7 @@ def execute_check_once(
     if not enabled:
         return _report("disabled")
     stage = None
+    resolved = getattr(authority, "resolved_check_context", None)
     transport = None
     report = None
     try:
@@ -145,20 +149,15 @@ def execute_check_once(
             return _report("blocked", reason="invalid_current_check_context")
         saved = _read(authority, check_set_id, clock)
         packet = saved["packet"]
-        from src.two_bot.candidate_derivation import packet_verification
-        verification = packet_verification(packet)
-        if verification != "verified_current_formatter":
+        verification = check_origin.packet_verification(packet, resolved=resolved)
+        if verification not in check_origin.EXECUTABLE:
             return _report("blocked", reason=verification)
-        check_requests.retained_inputs(packet)
+        check_requests.retained_inputs(packet, resolved=resolved)
         policy = current_editorial_policy()
         if policy is None:
             return _report("blocked", reason="current_check_policy_unavailable")
         context = dict(current_context, policy_sha256=fingerprint(policy))
-        leased = authority.batch_work(
-            "acquire",
-            dict(job_id=packet["job_id"], owner=owner, ttl_seconds=LEASE_SECONDS),
-            now=clock(),
-        )
+        leased = authority.acquire_check_lease(check_set_id, owner, LEASE_SECONDS, now=clock())
         identity = dict(
             check_set_id=check_set_id,
             owner=owner,
@@ -181,17 +180,27 @@ def execute_check_once(
             return _report(
                 "blocked", reason="required_check_not_passed", stage=stage, status=status
             )
-        request = check_requests.prepare_request(packet, stage)
+        request = check_requests.prepare_request(packet, stage, resolved=resolved)
         encoded = canonical_json(request).encode()
         if stage != "deterministic":
             if not _window_available(packet, leased["lease"], clock()):
                 return _report("blocked", reason="insufficient_check_window", stage=stage)
-            key = (
-                safety.GEMINI_API_KEY if stage == "safety" else os.environ.get("GEMINI_API_KEY", "")
-            )
+            if transport_options is not None:
+                # An in-process local capability, never request data or evidence.
+                # Validate only for a new model call; disabled/deterministic and
+                # original-attempt recovery never inspect credentials/transports.
+                if (type(transport_options) is not dict or set(transport_options) != {"api_key", "http_transport"}
+                        or not isinstance(transport_options["http_transport"], httpx.BaseTransport)):
+                    return _report("blocked", reason="invalid_check_transport_options", stage=stage)
+                key = transport_options["api_key"]
+            else:
+                if packet["schema_version"] == 5:
+                    return _report("blocked", reason="local_check_transport_required", stage=stage)
+                key = safety.GEMINI_API_KEY if stage == "safety" else os.environ.get("GEMINI_API_KEY", "")
             if not isinstance(key, str) or not key.strip():
                 return _report("blocked", reason="missing_check_credential", stage=stage)
-            transport = GoogleCheckTransport(api_key=key, model=request["model"])
+            transport = GoogleCheckTransport(api_key=key, model=request["model"],
+                **({"http_transport": transport_options["http_transport"]} if transport_options is not None else {}))
         try:
             grant = authority.candidate_checks(
                 "begin",
@@ -215,7 +224,7 @@ def execute_check_once(
             )
         if stage == "deterministic":
             observed = CheckObservation(
-                canonical_json(check_requests.deterministic_result(packet)).encode(),
+                canonical_json(check_requests.deterministic_result(packet, resolved=resolved)).encode(),
                 None,
                 True,
                 "local",

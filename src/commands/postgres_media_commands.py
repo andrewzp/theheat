@@ -12,7 +12,7 @@ from datetime import timedelta
 from src.commands import postgres_media as media
 from src.commands.reducer import Reduction, _identity, _target_drafts
 from src.commands.schema import Command, CommandError, Principal, authorize, utc_datetime
-from src.editorial.revisions import draft_identity, fingerprint
+from src.editorial.revisions import draft_identity, fingerprint, revoke_approval
 from src.media.attachment import build_media_attachment_proposal, build_media_removal_proposal
 from src.media.joint_review import MAX_REVIEW_BYTES, record_joint_media_review
 from src.storage import postgres_projection as p
@@ -84,7 +84,7 @@ def prepare(c, state, command, actor, *, now, editorial_policy, environment):
     if fingerprint(editorial_policy) != command.payload["expected_policy_sha256"]:
         raise CommandError("editorial_policy_changed", "Editorial policy changed since media review")
     package = None
-    if command.action == "attach_media_revision":
+    if command.action in {"attach_media_revision", "review_media_revision"}:
         package = _package(c, command.payload["proposal_sha256"], environment)
     try:
         return _prepare(state, command, actor, now, editorial_policy, package)
@@ -99,6 +99,33 @@ def _prepare(state, command, actor, now, policy, package):
     target = command.targets[0]
     payload = command.payload
     review = None
+    if command.action == "review_media_revision":
+        original = _target_drafts(state, command)[0]
+        if "media_attachment" not in original:
+            raise CommandError("media_attachment_required", "Attach a graphic before reviewing it again")
+        inputs, assets = package["capture"]["inputs"], package["assets"]
+        review = record_joint_media_review(original, payload=payload["review"], principal=actor,
+            reviewed_at=command.requested_at, expected_packet_sha256=payload["expected_packet_sha256"],
+            expected_draft_identity=draft_identity(original), editorial_policy=policy,
+            graphic_spec=inputs["graphic_spec"], renderer_manifest=inputs["renderer_manifest"], png_bytes=assets["preview.png"])
+        if review["decision"] != "accept":
+            raise CommandError("media_acceptance_required", "The exact graphic requires joint acceptance")
+        proposed = deepcopy(original)
+        revoke_approval(proposed)
+        proposed.pop("review_binding", None)
+        two = proposed.get("review_context", {}).get("two_bot")
+        if isinstance(two, dict):
+            proposed["review_context"]["two_bot"] = {k: v for k, v in two.items() if k in ("bundle", "signal_kind")}
+        proposed.update(status="pending", updated_at=command.requested_at)
+        binding = dict(schema_version=1, proposal_sha256=payload["proposal_sha256"], packet_sha256=review["packet"]["packet_sha256"],
+                       review_sha256=review["review_sha256"], command_id=command.command_id)
+        proposed["media_review_binding"] = binding
+        updated = deepcopy(state)
+        updated["drafts"] = [proposed if isinstance(d, dict) and d.get("id") == target.draft_id else d for d in updated["drafts"]]
+        references = dict(proposal_sha256=binding["proposal_sha256"], packet_sha256=binding["packet_sha256"],
+                          review_sha256=binding["review_sha256"], synthetic=review["synthetic"], editorial_policy=deepcopy(policy),
+                          publication_approved=False, production_attachment_authorized=False)
+        return MediaTransition(Reduction(updated, (target.draft_id,), (_identity(proposed),)), references, review)
     if command.action == "attach_media_revision":
         capture, assets = package["capture"], package["assets"]
         inputs = capture["inputs"]
@@ -173,7 +200,7 @@ def read(c, command: Command, result: dict, environment):
 
 def _read(c, command, result, environment):
     row = c.execute(f"SELECT proposal_sha256,review_sha256,artifact_sha256,reviewed_at FROM {SCHEMA}.reviews WHERE command_id=%s", (command.command_id,)).fetchone()
-    p._require(row is not None and command.action == "attach_media_revision"
+    p._require(row is not None and command.action in {"attach_media_revision", "review_media_revision"}
                and result["status"] == "applied", "media_command_review_not_found")
     raw = media._raw(c, row[2], MAX_REVIEW_BYTES)
     record = p._decode(raw)
@@ -187,8 +214,9 @@ def _read(c, command, result, environment):
     p._require(type(version) is int and version > 0, "invalid_media_command_version")
     _, before = p.PostgresProjectionRepository._read(c, "command-core-v1", str(version - 1))
     _, after = p.PostgresProjectionRepository._read(c, "command-core-v1", str(version))
+    policy = result["media"]["editorial_policy"] if command.action == "review_media_revision" else package["capture"]["inputs"]["editorial_policy"]
     transition = prepare(c, before, command, actor, now=utc_datetime(result["completed_at"]),
-        editorial_policy=package["capture"]["inputs"]["editorial_policy"], environment=environment)
+        editorial_policy=policy, environment=environment)
     p._require(p._canonical(transition.review) == raw
                and p._canonical(transition.reduction.state) == p._canonical(after)
                and p._canonical(transition.references) == p._canonical(result["media"])

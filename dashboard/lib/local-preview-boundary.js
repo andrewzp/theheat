@@ -48,7 +48,7 @@ export function localPreviewGuard(request) {
     localPreviewConfiguration(request)
     const path = new URL(request.url).pathname
     if (path.startsWith("/api/")) {
-      const methods = { "/api/drafts": ["GET", "POST"], "/api/dashboard": ["GET"] }[path]
+      const methods = { "/api/drafts": ["GET", "POST"], "/api/dashboard": ["GET"], "/api/generate": ["GET", "POST"], "/api/reports": ["GET", "POST"], "/api/coverage": ["GET", "POST"], "/api/editor-media": ["GET"], "/api/local-command-recovery": ["POST"] }[path]
       if (!methods) refuse("local_preview_route_unavailable")
       if (!methods.includes(request.method)) refuse("local_preview_method_refused", 405)
     }

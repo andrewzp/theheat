@@ -113,8 +113,10 @@ def tracked_points(state):
     return points
 
 
-def record_observation_revision(state, record, *, retrieved_at, source_revision):
+def record_observation_revision(state, record, *, retrieved_at, source_revision, _sink=None):
     """Retain one explicitly material point. Repeated identical values are no-op."""
+    if _sink is not None:
+        _sink.observation(record, retrieved_at=retrieved_at, source_revision=source_revision)
     semantic = {
         "kind": "observation_revision", "source_product": "noaa-ghcn-daily-v2",
         "station_id": record.station_id, "valid_date": record.obs_date.isoformat(),
@@ -182,8 +184,11 @@ def _invalidate_unpublished_evidence(draft, finding, state):
 
 
 def record_claim_finding(state, claim, *, reason, source_revision, retrieved_at, details,
-                         verified_change=False):
+                         verified_change=False, _sink=None):
     """Link a current source finding to exact retained text, never a correction."""
+    if _sink is not None:
+        _sink.finding(claim, reason=reason, source_revision=source_revision, retrieved_at=retrieved_at,
+                      details=details)
     semantic = {
         "kind": "affected_claim", "reason": reason, "source_revision": source_revision,
         "claim": deepcopy(claim), "details": deepcopy(details),

@@ -10,7 +10,7 @@ from typing import Protocol
 
 from src.commands import batch_worker_journal as worker
 from src.commands.batch_result_journal import MAX_RESULT_BYTES
-from src.commands.sqlite_authority import SQLiteAuthority
+from src.two_bot.batch_authority import BatchAuthority
 from src.two_bot.batch_transport import (
     ACK_LIMIT, LEASE_SECONDS, AnthropicBatchTransport, BatchDownload, BatchTransportError,
 )
@@ -98,7 +98,7 @@ def _read_once(authority, identity, status, plan, context, clock, transport):
 
 
 def collect_batch_once(
-    authority: SQLiteAuthority,
+    authority: BatchAuthority,
     job_id: str,
     *,
     current_context: dict,
@@ -157,7 +157,7 @@ def collect_batch_once(
     try:
         registration = authority.batch_status(job_id)
         plan = contract.validated_batch_plan(
-            authority.read_artifact(registration["plan_sha256"]),
+            authority.read_batch_plan(job_id),
             expected_plan_sha256=registration["plan_sha256"],
         )
         transport = (transport_factory or (

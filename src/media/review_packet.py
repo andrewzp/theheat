@@ -75,7 +75,7 @@ def _identifier(value: Any) -> bool:
     )
 
 
-def _png_size(png: bytes) -> tuple[int, int]:
+def _png_size(png: bytes, *, dimensions=(WIDTH, HEIGHT)) -> tuple[int, int]:
     _require(
         isinstance(png, bytes) and 33 <= len(png) <= MAX_PNG_BYTES,
         "PNG bytes are missing or outside the byte bound",
@@ -87,7 +87,7 @@ def _png_size(png: bytes) -> tuple[int, int]:
     width, height, depth, color, compression, filtering, interlace = struct.unpack(
         ">IIBBBBB", png[16:29]
     )
-    _require((width, height) == (WIDTH, HEIGHT), "PNG dimensions differ from the template")
+    _require((width, height) == dimensions, "PNG dimensions differ from the template")
     _require(
         depth == 8 and color in (2, 6) and compression == filtering == 0 and interlace in (0, 1),
         "Unsupported rendered PNG header",
@@ -167,9 +167,12 @@ def _build(
         "Draft differs from the independent requested identity",
     )
     _require(valid_policy(policy), "Current editorial policy is unavailable")
+    if spec.get("template") == "published_nws_radar":
+        from src.media.published_radar import packet as published_packet
+        return published_packet(draft, identity, policy, spec, manifest, png_bytes)
     _require(
         set(spec) == {"template", "expected_evidence_sha256", "evidence"}
-        and spec["template"] in {"temperature_comparator", "crw_regional_anomaly", "pm25_forecast_day", "modis_thermal_detections"},
+        and spec["template"] in {"temperature_comparator", "crw_regional_anomaly", "pm25_forecast_day", "modis_thermal_detections", "modis_thermal_detection_map"},
         "Only a qualified single-bundle graphic is supported",
     )
     _require(_sha(spec["expected_evidence_sha256"]), "Graphic evidence fingerprint is invalid")
@@ -186,6 +189,9 @@ def _build(
     if spec["template"] == "modis_thermal_detections":
         from src.media.fire_graphic_adapter import ADAPTER_VERSION as fire_version
         adapter_versions = {fire_version}
+    if spec["template"] == "modis_thermal_detection_map":
+        from src.media.fire_map_graphic_adapter import ADAPTER_VERSION as map_version
+        adapter_versions = {map_version}
     input_binding = evidence["input_binding"]
     _require(
         input_binding["adapter_version"] in adapter_versions and len(input_binding["bundles"]) == 1,
@@ -321,7 +327,8 @@ def media_attachment_content(validated_packet: dict) -> dict:
     builder first; approval paths must independently revalidate current inputs.
     """
     return deepcopy({
-        "schema_version": 1,
+        "schema_version": validated_packet["schema_version"],
+        **({"published": validated_packet["published"]} if validated_packet["schema_version"] == 2 else {}),
         "graphic_binding": validated_packet["graphic_binding"],
         "media": validated_packet["media"],
         "synthetic": validated_packet["synthetic"],

@@ -90,8 +90,8 @@ def test_pr_and_display_branch_job_exclusions_remain_explicit(workflow):
 
 def test_required_offline_suite_and_own_production_smoke_gate_remain(workflow):
     test, run = workflow["jobs"]["test-partition"], workflow["jobs"]["run"]
-    suite = next(step for step in test["steps"] if step.get("run", "").startswith("python -m pytest tests/"))
-    assert suite["run"] == 'python -m pytest tests/ -v -m "not voice_replay" --ci-partition=${{ matrix.partition }} --durations=20 -o faulthandler_timeout=120'
+    suite = next(step for step in test["steps"] if step.get("run", "").startswith("python -m pytest tests/ -v "))
+    assert suite["run"] == 'python -m pytest tests/ -v -m "not voice_replay" --ci-partition=${{ matrix.partition }} --ci-postgres-shard=${{ matrix.postgres-shard }} --durations=20 -o faulthandler_timeout=120'
     assert suite["env"]["THEHEAT_TEST_POSTGRES"] == "1"
     assert {step.get("name") for step in test["steps"]} >= {
         "SQLite backend smoke", "Test dashboard", "Build dashboard",
@@ -99,6 +99,21 @@ def test_required_offline_suite_and_own_production_smoke_gate_remain(workflow):
     assert any(step.get("name") == "Smoke gate" for step in run["steps"])
     assert test["timeout-minutes"] == "35"
     assert run["timeout-minutes"] == "20"
+
+
+def test_native_capture_smoke_is_early_media_only_and_does_not_replace_full_suite(workflow):
+    steps = workflow["jobs"]["test-partition"]["steps"]
+    smoke, = [step for step in steps if step.get("name") == "Verify native graphics dependency capture"]
+    assert smoke["if"] == "matrix.partition == 'media'"
+    assert smoke["timeout-minutes"] == "2"
+    assert smoke["run"] == ('python -m pytest tests/test_postgres_media_native_profile.py::'
+        'test_actual_capture_and_verification_never_inspects_loaders_under_lock '
+        '-q -m "not voice_replay" --ci-partition=media -o faulthandler_timeout=90')
+    assert "continue-on-error" not in smoke and "env" not in smoke
+    packages = next(s for s in steps if s.get("name") == "Install PostgreSQL 17 contract-test binaries")
+    suite = next(s for s in steps if s.get("run", "").startswith("python -m pytest tests/ -v "))
+    assert steps.index(packages) < steps.index(smoke) < steps.index(suite)
+    assert "if" not in suite and "continue-on-error" not in suite
 
 
 def test_required_check_fails_for_unsuccessful_or_skipped_partition(workflow):
@@ -120,12 +135,16 @@ def test_required_check_fails_for_unsuccessful_or_skipped_partition(workflow):
 def test_partitions_preserve_every_check_without_repeating_dashboard(workflow):
     worker = workflow["jobs"]["test-partition"]
     assert worker["strategy"] == {
-        "fail-fast": "false", "matrix": {"partition": ["core", "postgres", "media"]},
+        "fail-fast": "false", "matrix": {"include": [
+            {"partition":"core", "postgres-shard":"all"},
+            {"partition":"media", "postgres-shard":"all"},
+            *({"partition":"postgres", "postgres-shard":str(shard)} for shard in range(8)),
+        ]},
     }
     for step in worker["steps"]:
         if step.get("name") in {"SQLite backend smoke", "Test dashboard", "Build dashboard"}:
             assert step["if"] == "matrix.partition == 'core'"
-    suite = next(s for s in worker["steps"] if s.get("run", "").startswith("python -m pytest"))
+    suite = next(s for s in worker["steps"] if s.get("run", "").startswith("python -m pytest tests/ -v "))
     assert "if" not in suite and "continue-on-error" not in worker
 
 
@@ -156,7 +175,7 @@ def test_actual_collection_hook_keeps_preview_ingress_in_postgres(partition):
     original = list(items)
     deselected = []
     config = SimpleNamespace(
-        getoption=lambda name: partition,
+        getoption=lambda name: {"--ci-partition":partition, "--ci-postgres-shard":"all"}[name],
         hook=SimpleNamespace(pytest_deselected=lambda items: deselected.extend(items)),
     )
     pytest_collection_modifyitems(config, items)
@@ -189,7 +208,7 @@ def test_only_database_partitions_install_binaries_with_bounded_steps(workflow):
     python_packages = next(step for step in steps if step.get("run", "").startswith("pip install"))
     assert "requirements-postgres.txt" in python_packages["run"]
     assert "if" not in python_packages and "continue-on-error" not in python_packages
-    suite = next(step for step in steps if step.get("run", "").startswith("python -m pytest"))
+    suite = next(step for step in steps if step.get("run", "").startswith("python -m pytest tests/ -v "))
     assert suite["env"] == {
         "THEHEAT_TEST_POSTGRES": "1", "THEHEAT_POSTGRES_BINDIR": "/usr/lib/postgresql/17/bin",
     }
@@ -230,7 +249,7 @@ def test_dependency_shell_steps_fail_closed_without_system_access(workflow, tmp_
     else:
         assert completed_steps == [0, 0, 0], result.stderr
         assert [call["phase"] for call in calls] == phases
-        assert json.loads((tmp_path / "packages.json").read_text()) == ["postgresql-17", "postgresql-client-17"]
+        assert json.loads((tmp_path / "packages.json").read_text()) == ["postgresql-17", "postgresql-client-17", "poppler-utils"]
 
 
 def test_immediate_python_output_is_scoped_to_the_bot_step(workflow):

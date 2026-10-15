@@ -213,9 +213,12 @@ def _drawing(template, evidence):
             y -= size + 12
         return y
 
-    text(56, 1418, "THEHEAT", 48)
-    text(1144, 1418, "SYNTHETIC DATA" if evidence["synthetic"] else "REVIEW PREVIEW", 40, "warm", "end")
-    if template == "modis_thermal_detections":
+    if template != "modis_thermal_detection_map":
+        text(56, 1418, "THEHEAT", 48)
+        text(1144, 1418, "SYNTHETIC DATA" if evidence["synthetic"] else "REVIEW PREVIEW", 40, "warm", "end")
+    if template == "modis_thermal_detection_map":
+        _map_drawing(drawing, evidence, colors)
+    elif template == "modis_thermal_detections":
         from src.media.fire_graphic_adapter import coordinate_label, frp_axis, frp_label
         from reportlab.graphics.shapes import Line
         text(56, 1320, chart_title(template, evidence), 62)
@@ -430,3 +433,178 @@ def _drawing(template, evidence):
         for note in notes:
             bottom = block(bottom, note)
     return drawing
+
+
+def _map_drawing(drawing, evidence, colors):
+    """Draw only the geometry and shared measured layout qualified for this input."""
+    from reportlab.graphics.shapes import Circle, Group, Line, Path as PlotPath, Rect, String
+    from reportlab.lib.colors import HexColor
+    from src.media import fire_map_graphic_adapter as adapter
+
+    colors["ink"] = HexColor("#17212B")
+    plot_bg, grid = HexColor("#F0F3F5"), HexColor("#C5CDD4")
+    map_ = evidence["map"]
+    west, south, east, north = map_["bounds"]
+    left, bottom, width, height = map_["rectangle"]
+    layout = map_text_layout(evidence)
+    drawing.add(Rect(left, bottom, width, height, fillColor=plot_bg, strokeColor=grid, strokeWidth=2))
+    rings, _ = adapter.basemap()
+
+    def outline(bounds, rectangle, color):
+        x, y, w, h = rectangle
+        a, b, c, d = bounds
+        path = PlotPath(strokeColor=color, strokeWidth=1.3, fillColor=None)
+        for x1, y1, x2, y2 in adapter.clipped_segments(rings, bounds):
+            path.moveTo(x + (x1 - a) / (c - a) * w, y + (y1 - b) / (d - b) * h)
+            path.lineTo(x + (x2 - a) / (c - a) * w, y + (y2 - b) / (d - b) * h)
+        drawing.add(path)
+
+    if map_["context_mode"] == "coarse_land_locator":
+        outline(map_["bounds"], map_["rectangle"], HexColor("#84939D"))
+    for fraction in (0, 0.5, 1):
+        x, y = left + width * fraction, bottom + height * fraction
+        drawing.add(Line(x, bottom, x, bottom + height, strokeColor=grid, strokeWidth=1))
+        drawing.add(Line(left, y, left + width, y, strokeColor=grid, strokeWidth=1))
+
+    for point, (x, y), label in zip(evidence["points"], map_["markers"], map_["labels"]):
+        drawing.add(Line(x, y, *label["leader_end"], strokeColor=colors["ink"], strokeWidth=2))
+        drawing.add(Circle(x, y, 17, fillColor=HexColor("#FFFFFF"), strokeColor=None))
+        drawing.add(Circle(x, y, 14,
+                          fillColor=HexColor(adapter.color(point["frp_source"], map_["axis_max"])),
+                          strokeColor=colors["ink"], strokeWidth=2))
+        box = label["box"]
+        drawing.add(Rect(box[0], box[1], box[2] - box[0], box[3] - box[1], fillColor=plot_bg, strokeColor=None))
+
+    for i in range(64):
+        drawing.add(Rect(56 + i * 17, 208, 17, 24,
+                         fillColor=HexColor(adapter.color((i + 0.5) / 64 * map_["axis_max"], map_["axis_max"])),
+                         strokeColor=None))
+
+    # Keep the true geographic viewport. A tiny crosshair is a locator, never a footprint.
+    ix, iy, iw, ih = layout["inset"]
+    drawing.add(Rect(ix, iy, iw, ih, fillColor=HexColor("#14202B"), strokeColor=grid, strokeWidth=1))
+    outline([-180, -90, 180, 90], layout["inset"], HexColor("#9BA9B5"))
+    viewport_width = (east - west) / 360 * iw
+    viewport_height = (north - south) / 180 * ih
+    if viewport_width < 2 or viewport_height < 2:
+        x = ix + (adapter.wrapped((west + east) / 2) + 180) / 360 * iw
+        y = iy + ((south + north) / 2 + 90) / 180 * ih
+        # Clip the locator arms at the world edges, including exactly +/-180 degrees.
+        drawing.add(Line(max(ix, x - 5), y, min(ix + iw, x + 5), y, strokeColor=colors["text"], strokeWidth=2))
+        drawing.add(Line(x, max(iy, y - 5), x, min(iy + ih, y + 5), strokeColor=colors["text"], strokeWidth=2))
+    else:
+        for shift in (-360, 0, 360):
+            a, b = max(-180, west + shift), min(180, east + shift)
+            if a < b:
+                drawing.add(Rect(ix + (a + 180) / 360 * iw, iy + (south + 90) / 180 * ih,
+                                 (b - a) / 360 * iw, viewport_height, fillColor=None,
+                                 strokeColor=colors["text"], strokeWidth=2))
+
+    for row in layout["texts"]:
+        label = String(0, 0, row["text"], fontName="TheHeatMono", fontSize=row["size"],
+                       fillColor=colors[row["color"]], textAnchor=row["anchor"])
+        group = Group()
+        group.add(label)
+        group.translate(row["x"], row["y"])
+        group.rotate(row["rotation"])
+        drawing.add(group)
+
+
+def map_text_layout(evidence):
+    """One bounded embedded-font calculation for readiness and actual drawing.
+
+    Geometry is reconstructed by the source adapter during input validation; this
+    derived placement is covered by the renderer/profile hash, never caller text.
+    No drawing, font registration, native work or output occurs here.
+    """
+    from reportlab.pdfbase.ttfonts import TTFont
+    from src.media import fire_map_graphic_adapter as adapter
+
+    font = TTFont("TheHeatMapLayout", BytesIO(_resource(FONT_RESOURCE)))
+    ascent, descent = font.face.ascent / 1000, font.face.descent / 1000
+    map_ = evidence["map"]
+    west, south, east, north = map_["bounds"]
+    left, bottom, width, height = map_["rectangle"]
+    inset = (824, 1230, 320, 160)
+    texts: list[dict] = []
+
+    def clear(a, b, gap=4):
+        return a[2] + gap <= b[0] or b[2] + gap <= a[0] or a[3] + gap <= b[1] or b[3] + gap <= a[1]
+
+    def row(x, y, value, size=44, color="muted", anchor="start", rotation=0, maxwidth=1088):
+        measured = font.stringWidth(value, size)
+        adapter.require(size >= 40 and measured <= maxwidth, "graphic_map_labels_exceed_space")
+        offset = {"start": 0, "middle": measured / 2, "end": measured}[anchor]
+        box = ([x - offset, y + descent * size, x + measured - offset, y + ascent * size]
+               if rotation == 0 else [x - ascent * size, y - offset, x - descent * size, y + measured - offset])
+        adapter.require(box[0] >= 20 and box[1] >= 20 and box[2] <= WIDTH - 20 and box[3] <= HEIGHT - 20,
+                        "graphic_map_labels_exceed_space")
+        return dict(x=x, y=y, text=value, size=size, color=color, anchor=anchor, rotation=rotation, box=box)
+
+    def add(*args, **kwargs):
+        value = row(*args, **kwargs)
+        adapter.require(all(clear(value["box"], old["box"]) for old in texts), "graphic_map_labels_exceed_space")
+        texts.append(value)
+        return value
+
+    # A neutral exact source measurement, never a maximum selection or hazard class.
+    add(56, 1448, "THEHEAT", 40, "text")
+    add(1144, 1448, "SYNTHETIC DATA" if evidence["synthetic"] else "REVIEW PREVIEW", 40, "warm", "end")
+    add(56, 1326, str(evidence["points"][0]["frp_source"]) + " MW", 96, "text", maxwidth=740)
+    add(56, 1252, "Pixel A radiative power", 48, "text", maxwidth=740)
+    add(56, 1192, f"NASA FIRMS · {evidence['satellite']} / MODIS", maxwidth=740)
+    add(56, 1140, evidence["acquired_at"][:16].replace("T", " ") + " UTC", maxwidth=740)
+    add(56, 1088, "Coordinate close-up; coastline omitted" if map_["context_mode"] == "coordinate_closeup"
+        else "Coarse locator; not distance or area", 40)
+    add(824, 1402, "World locator", 40, maxwidth=320)
+    add(824, 1186, "Location only", 40, maxwidth=320)
+    add(824, 1142, "Not fire area", 40, maxwidth=320)
+    add(56, 252, "Pixel radiative power (MW)", 48, "text")
+    for fraction, anchor in ((0, "start"), (0.5, "middle"), (1, "end")):
+        add(56 + 1088 * fraction, 152, f"{map_['axis_max'] * fraction:g} MW", anchor=anchor)
+    add(56, 88, "Pixel centers, not fire boundaries.")
+    add(56, 32, "Power, not fire area or severity.")
+
+    longitudes = []
+    for value, x, anchor in ((west, left, "start"), (east, left + width, "end")):
+        value = adapter.wrapped(value)
+        label = "180°" if abs(value) == 180 else f"{abs(value):.4f}°{'W' if value < 0 else 'E'}"
+        longitudes.append(add(x, 304, label, anchor=anchor))
+
+    plot = [left, bottom, left + width, bottom + height]
+    fixed_obstacles = [plot, [824, 1230, 1144, 1390], [56, 208, 1144, 232]]
+    adapter.require(all(clear(t["box"], obstacle, 0) for t in texts for obstacle in fixed_obstacles),
+                    "graphic_map_labels_exceed_space")
+    captions = [f"{abs(v):.4f}°{'S' if v < 0 else 'N'}" for v in (south, north)]
+    rotated = [row(64, bottom, captions[0], rotation=90),
+               row(64, bottom + height, captions[1], anchor="end", rotation=90)]
+
+    def usable_axes(candidates):
+        return (clear(candidates[0]["box"], candidates[1]["box"])
+                and all(clear(t["box"], old["box"]) for t in candidates for old in texts)
+                and all(clear(t["box"], obstacle, 0) for t in candidates for obstacle in fixed_obstacles))
+
+    if usable_axes(rotated) and all(bottom <= t["box"][1] and t["box"][3] <= bottom + height for t in rotated):
+        latitudes, latitude_mode = rotated, "rotated_edges"
+    else:
+        # Only genuine vertical letterboxing may hold horizontal edge captions.
+        lower = row(left, bottom - ascent * 44 - 12, captions[0])
+        upper = row(left, bottom + height - descent * 44 + 12, captions[1])
+        latitudes, latitude_mode = [lower, upper], "horizontal_letterbox"
+        frame_bottom, frame_top = adapter.MAP_FRAME[1], adapter.MAP_FRAME[1] + adapter.MAP_FRAME[3]
+        adapter.require(all(frame_bottom <= t["box"][1] and t["box"][3] <= frame_top for t in latitudes)
+                        and usable_axes(latitudes), "graphic_map_labels_exceed_space")
+    texts.extend(latitudes)
+
+    point_labels = []
+    for point, label in zip(evidence["points"], map_["labels"]):
+        t = row(label["x"], label["y"] - (ascent + descent) * adapter.LABEL_SIZE / 2,
+                point["label"], adapter.LABEL_SIZE, "ink", "middle")
+        a, b, c, d = label["box"]
+        adapter.require(a <= t["box"][0] and b <= t["box"][1] and t["box"][2] <= c and t["box"][3] <= d,
+                        "graphic_map_labels_exceed_space")
+        adapter.require(all(clear(t["box"], old["box"]) for old in texts), "graphic_map_labels_exceed_space")
+        point_labels.append(t)
+        texts.append(t)
+    return dict(texts=texts, longitudes=longitudes, latitudes=latitudes, point_labels=point_labels,
+                latitude_mode=latitude_mode, inset=inset)

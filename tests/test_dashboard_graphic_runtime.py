@@ -62,3 +62,19 @@ print(json.dumps({"unavailable": m["PreviewHandler"] is m["UnavailableHandler"],
     else:
         assert payload["sources"] and all(name.startswith(str(tmp_path / "graphic-runtime.zip") + "/")
                                            for name in payload["sources"])
+
+
+@pytest.mark.parametrize("name", ["ne_110m_land_v4_1_0.zip", "ne_110m_land_v4_1_0.json", "manifest.json"])
+def test_alternate_packaging_root_must_validate_its_own_resources(tmp_path, name):
+    paths = set(SOURCES) | {source for _, source in RESOURCES} | {
+        "dashboard/" + filename for filename in DEPLOYMENT_FILES
+    } | {"dashboard/lib/editorial-policy-manifest.js", "src/media/maps/ne_110m_land_v4_1_0.zip"}
+    for relative in paths:
+        destination = tmp_path / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(ROOT / relative, destination)
+    assert generate(tmp_path) == generate(ROOT)
+    with (tmp_path / "src/media/maps" / name).open("ab") as stream:
+        stream.write(b" ")
+    with pytest.raises(ValueError, match="Unqualified basemap resource"):
+        generate(tmp_path)

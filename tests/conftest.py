@@ -2,6 +2,8 @@
 
 import os
 import socket
+from hashlib import sha256
+from pathlib import Path
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
@@ -37,11 +39,27 @@ def pytest_addoption(parser):
         "--ci-partition", choices=("all", "core", "postgres", "media"), default="all",
         help="Disjoint offline CI file partitions; ordinary local runs select all.",
     )
+    parser.addoption(
+        "--ci-postgres-shard", choices=("all", "0", "1", "2", "3", "4", "5", "6", "7"), default="all",
+        help="Stable file shard within --ci-partition=postgres; all preserves the complete partition.",
+    )
+
+
+def _ci_postgres_shard(path):
+    # Anchor to this repository, not the working directory or randomized hash().
+    # Every parameter and test in a module shares its module-scoped fixtures.
+    relative = path.resolve().relative_to(Path(__file__).resolve().parents[1]).as_posix()
+    # Keep the heavy published-media module together on the lighter shard.
+    # Its default hash overloaded shard7; all other module assignments stay stable.
+    if relative == "tests/test_postgres_published_media.py":
+        return "2"
+    return str(int(sha256(relative.encode("utf-8")).hexdigest(), 16) % 8)
 
 
 @pytest.hookimpl(trylast=True)
 def pytest_collection_modifyitems(config, items):
     partition = config.getoption("--ci-partition")
+    shard = config.getoption("--ci-postgres-shard")
     if partition == "all":
         return
     selected, deselected = [], []
@@ -52,7 +70,8 @@ def pytest_collection_modifyitems(config, items):
             else "postgres" if filename.startswith("test_postgres_")
             else "core"
         )
-        (selected if group == partition else deselected).append(item)
+        keep = group == partition and (group != "postgres" or shard == "all" or _ci_postgres_shard(item.path) == shard)
+        (selected if keep else deselected).append(item)
     items[:] = selected
     config.hook.pytest_deselected(items=deselected)
 
@@ -121,6 +140,8 @@ def _hermetic_connect(self, address, *args, **kwargs):
 
 
 def pytest_configure(config):
+    if config.getoption("--ci-postgres-shard") != "all" and config.getoption("--ci-partition") != "postgres":
+        raise pytest.UsageError("A specific --ci-postgres-shard requires --ci-partition=postgres")
     config.addinivalue_line(
         "markers",
         "allow_network: opt out of the hermeticity gate and allow real outbound connections",

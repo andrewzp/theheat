@@ -17,6 +17,7 @@ def _two_bot_bundle_for_extreme_signal(
     strongest_signal,
     *,
     result_out: dict | None = None,
+    source: str = "open_meteo",
 ):
     """Return a StoryBundle for the extreme_signals dispatch loop.
 
@@ -29,13 +30,13 @@ def _two_bot_bundle_for_extreme_signal(
         from src.two_bot import intern
 
         if strongest_type in ("record", "record_low"):
-            return intern.build_record_bundle(strongest_signal)
+            return intern.build_record_bundle(strongest_signal, source=source)
         if strongest_type in ("monthly_high", "monthly_low"):
-            return intern.build_monthly_high_bundle(strongest_signal)
+            return intern.build_monthly_high_bundle(strongest_signal, source=source)
         if strongest_type in ("all_time_high", "all_time_low"):
-            return intern.build_all_time_record_bundle(strongest_signal)
+            return intern.build_all_time_record_bundle(strongest_signal, source=source)
         if strongest_type in ("anomaly_hot", "anomaly_cold"):
-            return intern.build_anomaly_bundle(strongest_signal)
+            return intern.build_anomaly_bundle(strongest_signal, source=source)
         if strongest_type == "absolute_extreme":
             return intern.build_absolute_extreme_bundle(strongest_signal)
     except Exception as exc:
@@ -63,6 +64,7 @@ def _try_two_bot_draft(
     cooldown_exempt: bool = False,
     draft_metadata: dict | None = None,
     result_out: dict | None = None,
+    generation_client=None,
 ) -> bool:
     """Run the live two-bot pipeline (writer → claim extract → fact-check
     → memory) and save the draft. Returns True iff a draft was saved.
@@ -83,6 +85,21 @@ def _try_two_bot_draft(
     dashboard surfaces it. These are *post-score* kills, distinct from
     the editorial-gate near-misses captured by ``_should_draft``.
     """
+    if generation_client is not None:
+        from src.commands.schema import CommandError
+        try:
+            queued = generation_client.submit(bundle, score=score, legacy_type=legacy_type, event_id=event_id,
+                review_context=review_context, city=city, tweet_date=tweet_date,
+                cooldown_exempt=cooldown_exempt, draft_metadata=draft_metadata)
+            if result_out is not None:
+                result_out.clear()
+                result_out.update(queued)
+        except CommandError as exc:
+            if result_out is not None:
+                result_out.clear()
+                result_out.update(kill_stage="generation_start", kill_reason=exc.code)
+        return False  # Queued is not a saved draft; never fall back to a provider.
+
     from src.two_bot.pipeline import generate_draft
 
     # When the caller supplies ``result_out`` (Phase A funnel drain), generate_draft

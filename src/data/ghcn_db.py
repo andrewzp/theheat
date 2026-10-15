@@ -92,6 +92,33 @@ def open_db(path: Path | str = DEFAULT_DB_PATH) -> Generator[sqlite3.Connection,
         conn.close()
 
 
+@contextmanager
+def open_db_readonly(path: Path | str) -> Generator[sqlite3.Connection, None, None]:
+    """Read a separately verified immutable artifact without DDL or migration."""
+    path = Path(path)
+    if not path.is_file() or path.is_symlink():
+        raise ValueError("ghcn_baseline_unavailable")
+    for suffix in ("-wal", "-journal"):
+        sidecar = Path(str(path) + suffix)
+        if sidecar.exists() and sidecar.stat().st_size:
+            raise ValueError("ghcn_baseline_uncheckpointed")
+    conn = sqlite3.connect(path.resolve().as_uri() + "?mode=ro&immutable=1", uri=True)
+    try:
+        conn.execute("PRAGMA query_only=ON")
+        required = {
+            "stations": {"station_id", "name", "country_code", "country_name", "state", "lat", "lon", "elevation_m",
+                         "archive_years", "tmax_archive_years", "tmin_archive_years", "is_active"},
+            "thresholds": {"station_id", "kind", "month", "day", "value_c", "record_year"},
+            "meta": {"key", "value"}, "threshold_provenance": {"station_id", "payload_json"},
+        }
+        for table, columns in required.items():
+            if not columns <= {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}:
+                raise ValueError("ghcn_baseline_schema_required")
+        yield conn
+    finally:
+        conn.close()
+
+
 def _migrate_schema(conn: sqlite3.Connection) -> None:
     """Apply additive schema fixes for existing threshold DB assets."""
     cols = {

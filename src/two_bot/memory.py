@@ -205,7 +205,7 @@ def _memory(state: BotState) -> MemoryState:
 def bundle_memory_snapshot(bundle: StoryBundle) -> dict:
     """Persist the small bundle subset needed to record publish memory later."""
 
-    return {
+    snapshot = {
         "signal_kind": bundle.signal_kind,
         "where": bundle.where,
         "when": bundle.when,
@@ -216,18 +216,34 @@ def bundle_memory_snapshot(bundle: StoryBundle) -> dict:
         ],
     }
 
+    if "physical_episode" in bundle.raw_signal_dump:
+        from src.storage.physical_events import validate_binding
+        snapshot["physical_episode"] = validate_binding(bundle.raw_signal_dump["physical_episode"])
+    return snapshot
 
-def build_memory_slice(state: BotState, bundle: StoryBundle) -> MemorySlice:
+
+def build_memory_slice(state: BotState, bundle: StoryBundle, *, now: datetime | None = None, episode_context=None) -> MemorySlice:
     """Assemble the relevant memory for the writer."""
 
     from src.data.places import country_key
+    bound = "physical_episode" in bundle.raw_signal_dump
+    if bound:
+        from src.storage.physical_events import EpisodeContext
+        if type(episode_context) is not EpisodeContext:
+            raise ValueError("resolved_episode_context_required")
+        episode_context.validate(bundle.raw_signal_dump["physical_episode"])
+    elif episode_context is not None:
+        raise ValueError("unexpected_episode_context")
     memory = _memory(state)
     country = _country_for(bundle)
-    event_keys = {
+    event_keys = set() if bound else {
         key for key in (_event_base(bundle.event_id), _event_series_key(bundle))
         if key
     }
-    cutoff = datetime.now(UTC).timestamp() - (30 * 24 * 60 * 60)
+    instant = now if now is not None else datetime.now(UTC)
+    if instant.tzinfo is None:
+        raise ValueError("memory_clock_requires_timezone")
+    cutoff = instant.timestamp() - (30 * 24 * 60 * 60)
 
     same_country_rows = []
     for row in memory.get("shipped_tweets", []):
@@ -247,6 +263,13 @@ def build_memory_slice(state: BotState, bundle: StoryBundle) -> MemorySlice:
     fallback_region_match = None
     for row in memory.get("ongoing_events", []):
         if not isinstance(row, dict):
+            continue
+        if bound:
+            if episode_context.contains(row):
+                ongoing_event = row
+                break
+            continue
+        if row.get("physical_episode") is not None:
             continue
         if row.get("event_id") == bundle.event_id:
             ongoing_event = row
@@ -274,7 +297,7 @@ def build_memory_slice(state: BotState, bundle: StoryBundle) -> MemorySlice:
     # geography / scale) so the feed doesn't read like two fires in a row.
     # shipped_rows is already most-recent-first; preserve that order while
     # deduping so the writer sees the freshest category first.
-    category_cutoff = datetime.now(UTC).timestamp() - _CATEGORY_COOLDOWN_SECONDS
+    category_cutoff = instant.timestamp() - _CATEGORY_COOLDOWN_SECONDS
     recent_categories: list[str] = []
     seen_categories: set[str] = set()
     for row in shipped_rows:
@@ -291,9 +314,14 @@ def build_memory_slice(state: BotState, bundle: StoryBundle) -> MemorySlice:
         recent_categories.append(category)
 
     same_event_rows = []
-    if event_keys:
+    if bound:
+        same_event_rows = [row for row in memory.get("shipped_tweets", [])
+                           if isinstance(row, dict) and episode_context.contains(row) and _tweet_text(row)]
+    elif event_keys:
         for row in memory.get("shipped_tweets", []):
             if not isinstance(row, dict):
+                continue
+            if row.get("physical_episode") is not None:
                 continue
             row_keys = {
                 key for key in (_event_base(row.get("event_id")), row.get("event_series_key"))
@@ -347,6 +375,11 @@ def record_shipped(
         "country": country,
         "shipped_at": now,
     }
+    binding = None
+    if "physical_episode" in bundle.raw_signal_dump:
+        from src.storage.physical_events import validate_binding
+        binding = validate_binding(bundle.raw_signal_dump["physical_episode"])
+        shipped_row["physical_episode"] = binding
     if tweet_id:
         shipped_row["tweet_id"] = tweet_id
     if event_series_key:
@@ -369,7 +402,9 @@ def record_shipped(
 
     events = memory.setdefault("ongoing_events", [])
     existing = next(
-        (row for row in events if isinstance(row, dict) and row.get("event_id") == bundle.event_id),
+        (row for row in events if isinstance(row, dict)
+         and (row.get("physical_episode", {}).get("episode_id") == binding["episode_id"] if binding
+              else row.get("physical_episode") is None and row.get("event_id") == bundle.event_id)),
         None,
     )
     if existing is None:
@@ -381,11 +416,14 @@ def record_shipped(
                 "first_seen": _today_iso(),
                 "last_seen": _today_iso(),
                 "days_running": 1,
+                **({"physical_episode": binding} if binding else {}),
                 "signal_kind": bundle.signal_kind,
             }
         )
         return
 
+    if binding:
+        existing["physical_episode"] = binding
     existing["region"] = bundle.where
     existing["country"] = country
     existing["last_seen"] = _today_iso()
@@ -431,7 +469,8 @@ def _story_bundle_from_metadata(two_bot: dict, draft: dict) -> StoryBundle | Non
         headline_metric={},
         current_facts=current_facts,
         historical_context={},
-        raw_signal_dump={},
+        raw_signal_dump=({"physical_episode": payload["physical_episode"]}
+                         if "physical_episode" in payload else {}),
     )
 
 

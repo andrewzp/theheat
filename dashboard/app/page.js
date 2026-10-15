@@ -1,4 +1,7 @@
 "use client"
+import CoverageEvidence from "./components/CoverageEvidence.js"
+import ReportsForReview from "./components/ReportsForReview.js"
+import SourcedGeneration from "./components/SourcedGeneration.js"
 
 import { useEffect, useState, useCallback, useRef } from "react"
 import { AutomationStatusStrip } from "./components/AutomationStrip.js"
@@ -15,11 +18,14 @@ import { COST_SCENARIO } from "../lib/usage-cost-contract.js"
 import { SuppressedView } from "./components/SuppressedView.js"
 import { hot10IsStale, hot10StaleDays, timeAgo, todayTweetCount } from "../lib/format.js"
 import { draftReviewControls, draftTextLength, revisionKey } from "../lib/draft-review-ui.js"
-import { createDraftCommand } from "../lib/draft-command-request.js"
+import { createDraftCommand, createCandidateCommand, localCommandEndpoint } from "../lib/draft-command-request.js"
+import { recoveryKey, saveCommandReference, readCommandReference, clearCommandReference, withCommandReference, abandonmentBody } from "../lib/local-command-recovery.js"
 import "./dashboard.css"
 
 export default function Dashboard() {
   const [data, setData] = useState(null)
+  const [coverageReport, setCoverageReport] = useState("")
+  const clearCoverageReport = useCallback(() => setCoverageReport(""), [])
   const [loading, setLoading] = useState(true)
   const [triggering, setTriggering] = useState(null)
   const [triggerResult, setTriggerResult] = useState(null)
@@ -33,13 +39,12 @@ export default function Dashboard() {
   const [selectedDraftId, setSelectedDraftId] = useState(null)
   const [draftFeedback, setDraftFeedback] = useState(null)
   const [pendingCommand, setPendingCommand] = useState(null)
+  const pendingCommandRef = useRef(null)
+  const recoveredScope = useRef(null)
+  const recoveryScope = useRef(null)
   const previewSeen = useRef(false)
 
   // Compose
-  const [composePrompt, setComposePrompt] = useState("")
-  const [composeTweet, setComposeTweet] = useState("")
-  const [generating, setGenerating] = useState(false)
-  const [composeStatus, setComposeStatus] = useState(null)
 
   // Suppressed signals
   const [suppressions, setSuppressions] = useState([])
@@ -88,6 +93,9 @@ export default function Dashboard() {
       previewSeen.current = payload.local_preview === true
       setData({
         state: payload.state,
+        candidates: payload.candidates || [],
+        operator_role: payload.operator_role,
+        operator_subject: payload.operator_subject,
         local_preview: payload.local_preview === true,
         stateBackend: payload.stateBackend,
         stateError: payload.stateError,
@@ -95,6 +103,7 @@ export default function Dashboard() {
         runsError: payload.runsError,
         productHealth: payload.productHealth,
         costEvidence: payload.costEvidence,
+        localCostEvidence: payload.localCostEvidence,
         deployment: payload.deployment,
       })
       // Show the review queue in time order (newest first) — the API returns
@@ -121,7 +130,7 @@ export default function Dashboard() {
 
     if (previewSeen.current) {
       setAutomation(null)
-      setAutomationError("Local preview: collection and publication are unavailable.")
+      setAutomationError(null)
       return
     }
 
@@ -160,6 +169,38 @@ export default function Dashboard() {
     }
   }, [fetchData])
 
+  useEffect(() => {
+    const key = data?.local_preview ? recoveryKey(window.location.origin, data.operator_subject) : null
+    recoveryScope.current = key
+    if (!key || recoveredScope.current === key) return
+    recoveredScope.current = key
+    const saved = readCommandReference(window.sessionStorage, key)
+    pendingCommandRef.current = saved
+    setPendingCommand(saved)
+    setDraftAction(saved?.draftId || null)
+    if (!saved) return
+    const control = new AbortController()
+    fetch(`/api/drafts?commandId=${encodeURIComponent(saved.command.command_id)}`, { cache:"no-store", signal:control.signal })
+      .then(async response => {
+        const value = await response.json()
+        if (!response.ok) throw new Error("The previous action is unresolved. Check its result before creating another action.")
+        if (control.signal.aborted || recoveryScope.current !== key || pendingCommandRef.current?.command.command_id !== saved.command.command_id) return
+        const command = value.recoverable_command
+        if (command?.command_id === saved.command.command_id && command.payload && command.targets) {
+          const recovered = await withCommandReference({ ...saved, command })
+          if (control.signal.aborted || recoveryScope.current !== key || pendingCommandRef.current?.command.command_id !== saved.command.command_id) return
+          saveCommandReference(window.sessionStorage, key, recovered)
+          pendingCommandRef.current = recovered
+          setPendingCommand(recovered)
+        }
+        setDraftFeedback({ type:"pending", draftId:saved.draftId, text:"Recovered the previous local action. Check its result; no action was repeated." })
+      }).catch(error => {
+        if (!control.signal.aborted && recoveryScope.current === key && pendingCommandRef.current?.command.command_id === saved.command.command_id)
+          setDraftFeedback({ type:"error", draftId:saved.draftId, text:error.message })
+      })
+    return () => control.abort()
+  }, [data?.local_preview, data?.operator_subject])
+
   async function trigger(mode) {
     if (data?.local_preview) { setTriggerResult("Collection is unavailable in local preview."); return }
     setTriggering(mode)
@@ -181,47 +222,89 @@ export default function Dashboard() {
   }
 
   async function submitLocalCommand(saved) {
+    if (!saved.command.payload) return checkLocalCommand()
+    if (pendingCommandRef.current && pendingCommandRef.current.command.command_id !== saved.command.command_id) return
+    pendingCommandRef.current = saved
     setPendingCommand(saved)
     setDraftAction(saved.draftId)
+    const scope = recoveryScope.current
+    let sent = false
     try {
-      const response = await fetch("/api/drafts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(saved.command) })
+      saved = await withCommandReference(saved)
+      if (scope !== recoveryScope.current || pendingCommandRef.current?.command.command_id !== saved.command.command_id) return
+      if (!saveCommandReference(window.sessionStorage, scope, saved)) throw new Error("Cannot retain the action reference in this browser; submission was not sent")
+      pendingCommandRef.current = saved
+      setPendingCommand(saved)
+      sent = true
+      const response = await fetch(localCommandEndpoint(saved.command), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(saved.command) })
       const result = await response.json()
+      if (scope !== recoveryScope.current || pendingCommandRef.current?.command.command_id !== saved.command.command_id) return
       if (!response.ok) {
-        // A definite input/auth rejection can be corrected. An unavailable
-        // response leaves acceptance uncertain and retains the original body.
-        if (response.status < 500 && !pendingCommand) { setPendingCommand(null); setDraftAction(null) }
         throw new Error(result.error || "Local authority unavailable")
       }
       setDraftFeedback({ type: "pending", draftId: saved.draftId, text: "Accepted and waiting for the local consumer. Your edit is preserved." })
     } catch (error) {
+      if (scope !== recoveryScope.current || pendingCommandRef.current?.command.command_id !== saved.command.command_id) return
+      if (!sent) {
+        pendingCommandRef.current = null
+        setPendingCommand(null); setDraftAction(null)
+        clearCommandReference(window.sessionStorage, scope)
+      }
       setDraftFeedback({ type: "error", draftId: saved.draftId, text: `${error.message}. Check the result or retry the same action. Your edit is preserved.` })
     }
   }
 
-  async function checkLocalCommand() {
-    if (!pendingCommand) return
+  async function checkLocalCommand(abandon = false) {
+    const saved = pendingCommandRef.current
+    if (!saved) return
+    const scope = recoveryScope.current
     try {
-      const response = await fetch(`/api/drafts?commandId=${encodeURIComponent(pendingCommand.command.command_id)}`, { cache: "no-store" })
+      const body = abandon === true ? abandonmentBody(saved) : null
+      if (abandon === true && !body) throw new Error("This legacy reference has no fingerprint. Inspect its retained result before closing it")
+      const response = body ? await fetch(`/api/local-command-recovery?commandId=${encodeURIComponent(saved.command.command_id)}`, {
+        method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body) })
+        : await fetch(`/api/drafts?commandId=${encodeURIComponent(saved.command.command_id)}`, { cache: "no-store" })
       const payload = await response.json()
+      if (scope !== recoveryScope.current || pendingCommandRef.current?.command.command_id !== saved.command.command_id) return
       if (!response.ok) throw new Error(payload.error || "Local authority unavailable")
+      let reference = saved
+      if (payload.recoverable_command?.command_id === saved.command.command_id) {
+        const recovered = await withCommandReference({ ...saved, command:payload.recoverable_command })
+        if (scope !== recoveryScope.current || pendingCommandRef.current?.command.command_id !== saved.command.command_id) return
+        saveCommandReference(window.sessionStorage, recoveryScope.current, recovered)
+        pendingCommandRef.current = recovered
+        setPendingCommand(recovered)
+        reference = recovered
+      }
+      if (payload.receipt?.command_id !== saved.command.command_id || !reference.request_sha256 ||
+          payload.submission_reference?.request_sha256 !== reference.request_sha256 ||
+          payload.submission_reference?.original_action !== reference.original_action) throw new Error("The result does not match this operator's submission reference")
       if (payload.status === "pending") {
-        setDraftFeedback({ type: "pending", draftId: pendingCommand.draftId, text: "Still waiting for the local consumer. Your edit is preserved." })
+        setDraftFeedback({ type: "pending", draftId: saved.draftId, text: "Still waiting for the local consumer. Your edit is preserved." })
         return
       }
       const result = payload.result
-      if (!result || !["applied", "unchanged", "rejected"].includes(result.status)) throw new Error("Unrecognized command result")
+      if (!result || result.command_id !== saved.command.command_id || result.actor_subject !== data.operator_subject ||
+          !["applied", "unchanged", "rejected"].includes(result.status)) throw new Error("Unrecognized command result")
+      const abandoned = result.code === "submission_abandoned"
       const rejected = result.status === "rejected"
-      setDraftFeedback({ type: rejected ? "error" : "success", draftId: pendingCommand.draftId,
-        text: rejected ? `${result.message} Your edit is preserved.`
+      setDraftFeedback({ type: rejected ? "error" : "success", draftId: saved.draftId,
+        text: abandoned ? "The previous submission was never accepted and is now closed. Nothing was changed."
+          : rejected ? `${result.message} Your edit is preserved.`
           : result.publish_intent_id ? "Approved locally. The intent is parked; nothing will be published."
-          : pendingCommand.action === "review" ? "Human review recorded for this exact version."
-          : pendingCommand.action === "edit" ? "Saved. Review this version against its sources before approval." : "Local command completed." })
-      if (!rejected) { setEditingId(null); setEditText(""); setEditingRevision(null) }
+          : saved.action === "request_sourced_generation" ? `Writer status: ${(payload.writer_status?.status || "queued").replaceAll("_", " ")}. Required checks still gate admission; final charge remains unknown.`
+          : saved.action === "review" ? "Human review recorded for this exact version."
+          : saved.action === "edit" ? "Saved. Review this version against its sources before approval." : "Local command completed." })
+      if (!rejected && result.candidate?.draft_id) setSelectedDraftId(result.candidate.draft_id)
+      if (!rejected && !abandoned) { setEditingId(null); setEditText(""); setEditingRevision(null) }
       setPendingCommand(null)
+      pendingCommandRef.current = null
+      clearCommandReference(window.sessionStorage, recoveryScope.current)
       setDraftAction(null)
       await fetchData()
     } catch (error) {
-      setDraftFeedback({ type: "error", draftId: pendingCommand.draftId, text: `${error.message}. The same action is retained for retry; your edit is preserved.` })
+      if (scope !== recoveryScope.current || pendingCommandRef.current?.command.command_id !== saved.command.command_id) return
+      setDraftFeedback({ type: "error", draftId: saved.draftId, text: `${error.message}. The same action is retained for retry; your edit is preserved.` })
     }
   }
 
@@ -279,6 +362,7 @@ export default function Dashboard() {
   }
 
   function startEditing(draft) {
+    setSelectedDraftId(draft.id)
     setEditingId(draft.id)
     setEditText(draft.text)
     setEditingRevision(draft.revision_identity)
@@ -289,29 +373,6 @@ export default function Dashboard() {
     if (draft.id === editingId && revisionKey(draft.revision_identity) !== revisionKey(editingRevision)) {
       setEditingRevision(draft.revision_identity)
       setDraftFeedback({ type: "success", draftId: draft.id, text: "Your edit is kept. Saving will replace the latest text shown above." })
-    }
-  }
-
-  async function generateTweet() {
-    if (data?.local_preview) { setComposeStatus("Generation is unavailable in local preview."); return }
-    setGenerating(true)
-    setComposeStatus(null)
-    try {
-      const res = await fetch("/api/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: composePrompt }),
-      })
-      const result = await res.json()
-      if (result.tweet) {
-        setComposeTweet(result.tweet)
-      } else {
-        setComposeStatus(`Error: ${result.error}`)
-      }
-    } catch (e) {
-      setComposeStatus(`Error: ${e.message}`)
-    } finally {
-      setGenerating(false)
     }
   }
 
@@ -354,17 +415,20 @@ export default function Dashboard() {
   return (
     <>
 
-      <AutomationStatusStrip status={automation} error={automationError} />
+      <AutomationStatusStrip status={automation} error={automationError} localPreview={data?.local_preview === true} />
 
       <div className="dash">
         {data?.local_preview && (
           <div className="card full" role="status">
             <strong>Invented local preview</strong>
-            <p>Approvals are parked. Collection, generation and publication are unavailable.</p>
-            {pendingCommand && activeTab !== "workbench" && (
+            <p>Use invented retained sources for explicit local draft generation. Approvals are parked. Production collection, drafting and publishing remain paused.</p>
+            {pendingCommand && (
               <div className="draft-actions">
                 <button className="btn sm" type="button" onClick={checkLocalCommand}>Check result</button>
-                <button className="btn sm" type="button" onClick={() => submitLocalCommand(pendingCommand)}>Retry same action</button>
+                {pendingCommand.command.payload && <button className="btn sm" type="button" onClick={() => submitLocalCommand(pendingCommand)}>Retry same action</button>}
+                {abandonmentBody(pendingCommand) ? <button className="btn sm" type="button" disabled={data.operator_role === "viewer"} onClick={() => checkLocalCommand(true)}>Resolve missing submission</button>
+                  : !pendingCommand.command.payload && <p>Legacy reference: inspect its retained result before closing it. A missing fingerprint prevents safe closure.</p>}
+                {draftFeedback && <p role="status">{draftFeedback.text}</p>}
               </div>
             )}
           </div>
@@ -477,7 +541,7 @@ export default function Dashboard() {
         {!loading && ["dashboard", "health"].includes(activeTab) && (
           <>
           <ProductHealthPanel health={data?.productHealth} config={modelConfig} deployment={data?.deployment} stale={Boolean(refreshError)} />
-          <CostPanel evidence={data?.costEvidence} stale={Boolean(refreshError)} loading={loading} />
+          <CostPanel evidence={data?.costEvidence} stale={Boolean(refreshError)} loading={loading} localEvidence={data?.localCostEvidence} />
           </>
         )}
 
@@ -493,7 +557,13 @@ export default function Dashboard() {
             setStageFilter={setSuppressionsStageFilter}
           />
         ) : activeTab === "sources" ? (
-          <SourcesView sources={sources} stats={sourcesStats} />
+          <>
+            <SourcesView sources={sources} stats={sourcesStats} />
+            {data?.local_preview && <>
+              <CoverageEvidence readOnly={data?.operator_role === "viewer"} onOpenReport={setCoverageReport} />
+              <ReportsForReview readOnly={data?.operator_role === "viewer"} selectedLineage={coverageReport} onSelectionConsumed={clearCoverageReport} />
+            </>}
+          </>
         ) : activeTab === "health" ? (
           <SourceHealthContent embedded sources={sources} stats={sourcesStats} error={stateError || ""} />
         ) : activeTab === "pipeline" ? (
@@ -509,6 +579,10 @@ export default function Dashboard() {
         ) : activeTab === "workbench" ? (
           <DraftWorkbench
             drafts={drafts}
+            localCandidates={data?.candidates || []}
+            localRole={data?.operator_role}
+            candidateAct={(candidate, action) => submitLocalCommand({ command: createCandidateCommand(candidate, action), draftId: candidate.admission_input_id, action })}
+            refreshCandidates={fetchData}
             selectedDraftId={selectedDraftId}
             setSelectedDraftId={setSelectedDraftId}
             editingId={editingId}
@@ -522,6 +596,7 @@ export default function Dashboard() {
             draftAction={draftAction}
             draftFeedback={draftFeedback}
             pendingCommand={pendingCommand}
+            submitLocalCommand={submitLocalCommand}
             checkLocalCommand={checkLocalCommand}
             retryLocalCommand={() => pendingCommand && submitLocalCommand(pendingCommand)}
             botRuns={runHistory}
@@ -612,48 +687,8 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Compose */}
-            <div className="card full" style={{ marginBottom: 16 }}>
-              <h2>Writing preview</h2>
-              <p className="runtime-note">Previews are unsourced writing experiments. Publishing requires a sourced draft with current review in the workbench.</p>
-              <div className="compose">
-                <textarea
-                  className="compose-input"
-                  placeholder="Describe the data (e.g. 'Phoenix hit 122F today, old record 121F from 2024')..."
-                  value={composePrompt}
-                  onChange={(e) => setComposePrompt(e.target.value)}
-                  rows={2}
-                />
-                <button className="btn" disabled={generating || !composePrompt.trim()} onClick={generateTweet}>
-                  {generating ? "generating..." : "Generate Preview"}
-                </button>
-                {composeTweet && (
-                  <div className="preview-box">
-                    <div className="preview-label">
-                      PREVIEW
-                      <span className={`char-count ${composeTweet.length > 280 ? "over" : ""}`}>
-                        {composeTweet.length}/280
-                      </span>
-                    </div>
-                    <textarea
-                      className="preview-tweet"
-                      value={composeTweet}
-                      onChange={(e) => setComposeTweet(e.target.value)}
-                      rows={3}
-                    />
-                    <div className="preview-actions">
-                      <button className="btn" disabled={generating} onClick={generateTweet}>
-                        Regenerate
-                      </button>
-                      <button className="btn" onClick={() => { setComposeTweet(""); setComposeStatus(null) }}>
-                        Discard
-                      </button>
-                    </div>
-                  </div>
-                )}
-                {composeStatus && <div className="compose-status">{composeStatus}</div>}
-              </div>
-            </div>
+            <SourcedGeneration key={data?.operator_subject || "unavailable"} onRefresh={fetchData} readOnly={data?.operator_role === "viewer"}
+              pendingAction={!!pendingCommand} onRequest={data?.local_preview ? command => submitLocalCommand({ command, draftId:command.payload.brief_id, action:"request_sourced_generation" }) : undefined} />
 
             {/* Stats */}
             <div className="grid">

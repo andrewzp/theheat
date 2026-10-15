@@ -13,7 +13,7 @@ from uuid import UUID
 from src.commands import postgres_batch, postgres_batch_results, postgres_batch_worker, postgres_spending
 from src.commands import postgres_check_observations, postgres_checks, postgres_media, postgres_media_commands
 from src.commands.reducer import AutomaticPolicy, reduce_command
-from src.commands.schema import MEDIA_ACTIONS, Command, CommandError, Principal, authorize, canonical_json, utc_datetime, utc_text
+from src.commands.schema import SOURCE_ACTIONS, COVERAGE_ACTIONS, REPORT_ACTIONS, GENERATION_ACTIONS, CANDIDATE_ACTIONS, MEDIA_ACTIONS, EDITOR_MEDIA_ACTIONS, Command, CommandError, Principal, authorize, canonical_json, utc_datetime, utc_text
 from src.editorial.policy import current_editorial_policy
 from src.storage import postgres_projection as p
 
@@ -72,12 +72,27 @@ class PostgresCommandAuthority:
         )
         self.environment = environment
 
+    @classmethod
+    def for_hosted_staging(cls, config):
+        """Same transactions and role/catalog checks through an explicit TLS input."""
+        p._require(cls is PostgresCommandAuthority, "explicit_staging_config_required")
+        result = cls.__new__(cls)
+        result.projections = p.PostgresProjectionRepository.for_hosted_staging(config)
+        result.environment = "preview"
+        return result
+
     def _validate(self, c, *, runtime: bool = True) -> None:
         self.projections._validate(c, runtime=runtime)
         row = c.execute(f"SELECT version,migration_sha,catalog_sha,environment,owner_role,runtime_role FROM {SCHEMA}.metadata WHERE singleton=1").fetchone()
         p._require(row is not None and row[0] == 1 and row[1] == p._sha(MIGRATION.read_bytes()),
                    "unsupported_command_schema")
-        p._require(row[2] == p._catalog(c, SCHEMA), "changed_command_schema")
+        from src.commands import postgres_delivery as delivery
+        if delivery.upgraded(c):
+            delivery.validate_core_catalog(c, row, self.environment)
+        else:
+            p._require(c.execute("SELECT to_regnamespace('theheat_delivery')").fetchone()[0] is None,
+                       "delivery_intermediate_catalog")
+            p._require(row[2] == p._catalog(c, SCHEMA), "changed_command_schema")
         p._require(row[3] == self.environment, "command_environment_mismatch")
         roles = c.execute(f"SELECT owner_role,runtime_role FROM {p.SCHEMA}.metadata WHERE singleton=1").fetchone()
         p._require(tuple(row[4:]) == roles, "command_role_mismatch")
@@ -103,6 +118,25 @@ class PostgresCommandAuthority:
             self._validate(c, runtime=False)
             self._pointer(c, lock=True)
             postgres_media.install(c, self.environment)
+
+    def initialize_delivery(self, *, now: datetime) -> None:
+        """Explicit owner-only local catalog upgrade; never a sender activation."""
+        from src.commands import postgres_delivery as delivery
+        with self.projections._connection(writing=True) as c:
+            self._validate(c, runtime=False)
+            self._pointer(c, lock=True)
+            delivery.install(c, self.environment, now=_clock(now))
+
+    def configure_delivery(self, path) -> None:
+        from src.commands.postgres_delivery import configure
+        configure(self, path)
+
+    def delivery_projection(self, draft_id, resolve_principal, *, now):
+        from src.commands import postgres_delivery as delivery
+        with self.projections._connection() as c:
+            self._validate(c)
+            self._pointer(c, lock=True)
+            return delivery.projection(self, c, draft_id, resolve_principal, _clock(now))
 
     def initialize_media_commands(self) -> None:
         """Explicit owner migration after media staging; no production cutover."""
@@ -204,6 +238,28 @@ class PostgresCommandAuthority:
             self._pointer(c, lock=True)
             postgres_checks.install(c, self.environment)
 
+    def initialize_revision_checks(self, *, now: datetime | None = None) -> None:
+        """Explicit owner-only catalog evolution; no runtime migration fallback."""
+        from src.commands import postgres_revision_checks
+        with self.projections._connection(writing=True) as c:
+            self._validate(c, runtime=False)
+            self._pointer(c, lock=True)
+            postgres_revision_checks.install(c, self.environment, now=utc_text(_clock(now)))
+
+    def acquire_check_lease(self, check_set_id: str, owner: str, ttl_seconds: int, *, now: str) -> dict:
+        from src.commands import postgres_revision_checks as revisions
+        with self.projections._connection(writing=True) as c:
+            self._validate(c)
+            self._pointer(c, lock=True)
+            postgres_checks.validate(c, self.environment)
+            packet, _ = postgres_checks._packet(c, check_set_id, self.environment)
+            if packet.get("schema_version") in (3, 4, 6):
+                result = revisions.acquire(c, check_set_id, owner, ttl_seconds, now=now, environment=self.environment, origin_kind=packet["origin_kind"])
+            else:
+                result = postgres_batch_worker.apply(c, "acquire", dict(job_id=packet["job_id"], owner=owner,
+                    ttl_seconds=ttl_seconds), now=now, environment=self.environment)
+        return result
+
     def candidate_checks(self, action: str, payload: dict, *, now: str,
                          request: bytes | None = None, receipt: dict | None = None) -> dict:
         with self.projections._connection(writing=action != "status") as c:
@@ -258,6 +314,11 @@ class PostgresCommandAuthority:
         # A lost commit acknowledgment never returns a provisional dispatch grant.
         return result
 
+    def local_cost_projection(self, *, now):
+        """Bounded read-only local journal view; no billing or editorial authority."""
+        from src.commands.postgres_cost_projection import project
+        return project(self, now=now)
+
     def initialize_spending(self) -> None:
         """Explicit owner-only install; never selects limits or changes state."""
         with self.projections._connection(writing=True) as c:
@@ -296,6 +357,211 @@ class PostgresCommandAuthority:
             self._pointer(c, lock=True)
             result = postgres_batch.read(c, job_id, environment=self.environment)
         return result
+
+    def read_batch_plan(self, job_id: str) -> bytes:
+        with self.projections._connection() as c:
+            self._validate(c)
+            self._pointer(c, lock=True)
+            saved = postgres_batch.read(c, job_id, environment=self.environment)
+            return postgres_batch._plan_bytes(c, saved["plan_sha256"])
+
+    def configure_ghcn_source_results(self, baseline) -> None:
+        from src.commands import postgres_ghcn_source_results as ghcn_source
+        self.ghcn_baseline = baseline
+        ghcn_source.configured(self)
+
+    def ghcn_dependency_snapshot(self):
+        from src.commands import postgres_ghcn_source_results as ghcn_source
+        return ghcn_source.snapshot(self)
+
+    def ghcn_source_run_projection(self, run_id):
+        from src.commands import postgres_ghcn_source_results as ghcn_source
+        return ghcn_source.projection(self, run_id)
+
+    def configure_source_results(self) -> None:
+        from src.commands import postgres_source_results as sources
+        self.source_results_enabled = True
+        sources.configured(self)
+
+    def source_run_projection(self, run_id: str) -> dict:
+        from src.commands import postgres_source_results as sources
+        return sources.projection(self, run_id)
+
+    def configure_coverage(self, load_configuration) -> None:
+        from src.commands import postgres_coverage as coverage
+        self.coverage_configuration = load_configuration
+        coverage.configuration(self)
+
+    def coverage_projection(self, *, now: datetime) -> dict:
+        from src.commands import postgres_coverage as coverage
+        return coverage.projection(self, now=_clock(now))
+
+    def configure_report_development(self, load_configuration) -> None:
+        """Explicit retained local inputs; no report upload or trust verdict API."""
+        from src.commands import postgres_report_development as reports
+        self.report_configuration = load_configuration
+        reports.configuration(self)
+
+    def report_projection(self, *, now: datetime) -> dict:
+        from src.commands import postgres_report_development as reports
+        return reports.projection(self, now=_clock(now))
+
+    def initialize_synchronous_checks(self, *, now: datetime) -> None:
+        from src.commands import postgres_sync_checks as sync
+        with self.projections._connection(writing=True) as c:
+            self._validate(c, runtime=False)
+            self._pointer(c, lock=True)
+            sync.install(c, self.environment, now=utc_text(_clock(now)))
+
+    def configure_sourced_generation(self, load_configuration) -> None:
+        """Explicit local adapter input; no ambient backend selection."""
+        from src.commands import postgres_sourced_generation as generation
+        self.generation_configuration = load_configuration
+        generation.configuration(self)
+
+    def retain_generation_input(self, value: dict) -> dict:
+        from src.commands import postgres_sourced_generation as generation
+        value = p._decode(p._canonical(value))
+        generation.document(value)
+        generation.refuse(value["schema_version"] == 1, "ghcn_server_enrollment_required")
+        identity = p._sha(p._canonical(value))
+        with self.projections._connection(writing=True) as c:
+            self._validate(c)
+            self._pointer(c, lock=True)
+            generation.refuse(self.environment == "local", "local_generation_required")
+            generation.record(c, generation.INPUT, identity, value)
+        return dict(brief_id=identity, brief_sha256=identity)
+
+    def retain_ghcn_generation_input(self, run_id, selection, *, clock):
+        """Trusted local operator entry; paths, eligibility and save fields are server-owned."""
+        from src.commands import postgres_sourced_generation as generation
+        return generation.retain_ghcn(self, run_id, selection, clock=clock)
+
+    def retain_generation_reservation(self, value: dict) -> dict:
+        """Retain an explicit invented local allowance; not exposed to HTTP."""
+        from src.commands import postgres_sourced_generation as generation
+        value = p._decode(p._canonical(value))
+        generation.reservation_document(value)
+        identity = p._sha(p._canonical(value))
+        with self.projections._connection(writing=True) as c:
+            self._validate(c)
+            self._pointer(c, lock=True)
+            generation.refuse(self.environment == "local", "local_generation_required")
+            generation.record(c, generation.RESERVATION, identity, value)
+        return dict(estimate_sha256=identity, reserve_micro_usd=value["reserve_micro_usd"])
+
+    def generation_projection(self, *, now: datetime) -> dict:
+        from src.commands import postgres_sourced_generation as generation
+        with self.projections._connection() as c:
+            self._validate(c)
+            version, state = self._state(c, lock=True)
+            return generation.project(self, c, state, version, current_editorial_policy(), _clock(now))
+
+    def generated_candidate_inputs(self) -> tuple[str, ...]:
+        from src.commands import postgres_sourced_generation as generation
+        if not callable(getattr(self, "generation_configuration", None)):
+            return ()
+        with self.projections._connection() as c:
+            self._validate(c)
+            self._pointer(c, lock=True)
+            return generation.candidates(self, c)
+
+    def execute_sourced_generation_once(self, command_id: str, resolve_principal, *, clock,
+            operation: str, enabled: bool = False, refresh: bool = False, transport_factory=None) -> dict:
+        """One explicit existing transport operation; no scheduler or retry loop."""
+        from src.commands import postgres_sourced_generation as generation
+        from src.two_bot.batch_transport import submit_batch_once
+        from src.two_bot.batch_collector import collect_batch_once
+        generation.refuse(type(enabled) is bool, "generation_enabled_requires_boolean")
+        generation.refuse(type(refresh) is bool, "generation_refresh_requires_boolean")
+        if not enabled:
+            return dict(outcome="disabled", publication_approved=False)
+        with self.projections._connection() as c:
+            self._validate(c)
+            accepted = self._result(c, _id(command_id))
+        if accepted and accepted.get("generation", {}).get("execution_mode") == "synchronous":
+            from src.commands.postgres_synchronous_generation import execute
+            return execute(self, command_id, resolve_principal, operation=operation, clock=clock, transport_factory=transport_factory)
+        generation.refuse(operation in {"submit", "collect", "capture"}, "generation_operation_refused")
+        authority = self
+        command_id = _id(command_id)
+        owner = "generation-"+command_id
+
+        def transaction(action, payload=None, *, now=None, raw=None, metadata=None, results=None):
+            at = utc_datetime(now if now is not None else clock())
+            with authority.projections._connection(writing=action not in {"context", "status", "plan", "index"}) as c:
+                authority._validate(c)
+                version, state = authority._state(c, lock=True)
+                policy = current_editorial_policy()
+                if action in {"observe_ack", "uncertain", "record"}:
+                    # A granted attempt's bytes/cost uncertainty survive later
+                    # role, source, policy or lease drift. Lower journals bind
+                    # receipts to the exact grant; this cannot buy or promote work.
+                    _, refs, job = generation.runner_identity(authority, c, command_id)
+                else:
+                    refs, job, value = generation.runner_context(authority, c, command_id, resolve_principal, state, policy, at)
+                if action == "context":
+                    return refs, job
+                if action == "capture":
+                    return generation.capture(authority, c, refs, job, value, state, version, policy, at, owner)
+                generation.refuse(payload["job_id"] == refs["job_id"], "generation_job_mismatch")
+                if "owner" in payload:
+                    generation.refuse(payload["owner"] == owner, "generation_owner_mismatch")
+                if "current_context" in payload:
+                    generation.refuse(payload["current_context"] == job["context"], "generation_context_changed")
+                if action in {"status", "plan"}:
+                    registration = postgres_batch.read(c, refs["job_id"], environment=authority.environment)
+                    return postgres_batch._plan_bytes(c, registration["plan_sha256"]) if action == "plan" else registration
+                if action == "index":
+                    return postgres_batch_results.index(c, payload, now=utc_text(at), environment=authority.environment)
+                if action == "record":
+                    return postgres_batch_results.record(c, payload, metadata, results, now=utc_text(at), environment=authority.environment)
+                if action == "review":
+                    return postgres_batch_results.review(c, payload, now=utc_text(at), environment=authority.environment)
+                return postgres_batch_worker.apply(c, "status" if action == "worker_status" else action,
+                    payload, now=utc_text(at), raw=raw, environment=authority.environment)
+
+        refs, job = transaction("context")
+        class ScopedAuthority:
+            def batch_status(self, job_id):
+                return transaction("status", dict(job_id=job_id))
+            def read_batch_plan(self, job_id):
+                return transaction("plan", dict(job_id=job_id))
+            def batch_work(self, action, payload, *, now, raw=None):
+                generation.refuse(action in {"acquire", "begin", "uncertain", "status", "observe_ack", "adopt"}, "generation_operation_refused")
+                # Worker status differs from registration status.
+                return transaction("worker_status" if action == "status" else action, payload, now=now, raw=raw)
+            def record_batch_results(self, payload, *, metadata, results, now):
+                return transaction("record", payload, metadata=metadata, results=results, now=now)
+            def batch_results_status(self, job_id, *, now):
+                return transaction("index", dict(job_id=job_id), now=now)
+            def review_batch_results(self, payload, *, now):
+                return transaction("review", payload, now=now)
+        if operation == "capture":
+            captured = transaction("capture")
+            if captured.get("terminal"):
+                return dict(outcome="terminal", reason=captured["reason"], cost_usd=None, publication_approved=False)
+            return dict(outcome="candidate_ready", candidate=captured, publication_approved=False)
+        runner = submit_batch_once if operation == "submit" else collect_batch_once
+        from src.two_bot.batch_transport import AnthropicBatchTransport
+        import os
+        def guarded_transport():
+            inner = (transport_factory or (lambda: AnthropicBatchTransport(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))))()
+            class GuardedTransport:
+                def submit(self, requests):
+                    transaction("context")
+                    return inner.submit(requests)
+                def retrieve(self, provider_id):
+                    transaction("context")
+                    return inner.retrieve(provider_id)
+                def results(self, provider_id):
+                    transaction("context")
+                    return inner.results(provider_id)
+                def close(self):
+                    inner.close()
+            return GuardedTransport()
+        return runner(ScopedAuthority(), refs["job_id"], current_context=job["context"], owner=owner,
+            clock=clock, enabled=True, transport_factory=guarded_transport, **({"refresh": refresh} if operation == "collect" else {}))
 
     def initialize(self, initial_state: dict, *, runtime_role: str) -> None:
         encoded, fields = p._snapshot(initial_state)
@@ -379,7 +645,7 @@ class PostgresCommandAuthority:
         utc_datetime(result.get("completed_at"))
         self.projections._read(c, namespace, snapshot_id)
         self._verify_event(c, command_id, "completed", result["completed_at"], result)
-        if cmd.action == "attach_media_revision" and result["status"] == "applied":
+        if cmd.action in {"attach_media_revision", "review_media_revision"} and result["status"] == "applied":
             postgres_media_commands.read(c, cmd, result, self.environment)
         return result
 
@@ -387,12 +653,17 @@ class PostgresCommandAuthority:
         if not isinstance(command, Command) or not isinstance(principal, Principal):
             raise CommandError("invalid_command", "A validated command and trusted principal are required")
         command = Command.from_stored(canonical_json(command.as_dict()))
+        if command.action == "abandon_submission":
+            raise CommandError("invalid_action", "Submission closure requires the dedicated local boundary")
         principal = Principal(principal.subject, principal.role, principal.authentication_context)
         if command.environment != self.environment:
             raise CommandError("environment_mismatch", "Command belongs to another authority environment")
         if command.actor_subject != principal.subject or command.authentication_context != principal.authentication_context:
             raise CommandError("forbidden", "Command identity does not match authenticated ingress")
         authorize(principal, command.action)
+        if command.action == "commit_ghcn_source_run":
+            from src.commands.postgres_ghcn_source_results import configured
+            configured(self)
         raw = _body(command.as_dict())
         with self.projections._connection(writing=True) as c:
             self._validate(c)
@@ -415,10 +686,64 @@ class PostgresCommandAuthority:
                 self._event(c, command.command_id, "accepted", at, receipt)
         return receipt
 
+    def abandon_submission(self, command_id, body, principal, resolve_principal, *, now=None):
+        """Serialize proven absence with acceptance. Never cancel real work."""
+        from src.commands import submission_recovery as recovery
+        if self.environment != "local":
+            raise CommandError("local_recovery_only", "Submission recovery is local only")
+        command_id = _id(command_id)
+        reference = recovery.reference(body)
+        if not isinstance(principal, Principal):
+            raise CommandError("forbidden", "Current operator required")
+        authorize(principal, recovery.ACTION)
+        with self.projections._connection(writing=True) as c:
+            self._validate(c)
+            version, _ = self._state(c, lock=True)
+            try:
+                current = resolve_principal(principal.subject)
+            except Exception:
+                raise CommandError("authorization_unavailable", "Current authorization unavailable") from None
+            if (not isinstance(current, Principal) or current.subject != principal.subject
+                or current.authentication_context != principal.authentication_context):
+                raise CommandError("forbidden", "Current operator identity required")
+            authorize(current, recovery.ACTION)
+            prior = self._intent(c, command_id)
+            if prior:
+                original, receipt = prior
+                expected = original.payload if original.action == recovery.ACTION else dict(
+                    original_action=original.action, request_sha256=recovery.request_sha(original))
+                if original.actor_subject != current.subject or reference != expected:
+                    raise CommandError("submission_reference_conflict", "The reference does not belong to this operator and request")
+                result = self._result(c, command_id)
+                p._require(original.action != recovery.ACTION or result is not None, "incomplete_submission_closure")
+            else:
+                at = _clock(now)
+                original = recovery.make(command_id, reference, current, at)
+                raw = _body(original.as_dict())
+                row = c.execute(f"INSERT INTO {SCHEMA}.intents(command_id,digest,command_bytes,accepted_at) VALUES(%s,%s,%s,%s) RETURNING sequence",
+                    (command_id, original.digest, raw, utc_text(at))).fetchone()
+                receipt = dict(command_id=command_id, sequence=row[0], accepted_at=utc_text(at), digest=original.digest)
+                self._event(c, command_id, "accepted", utc_text(at), receipt)
+                result = dict(status="unchanged", code="submission_abandoned", changed_ids=[], identities=[],
+                    publish_intent_id=None, command_id=command_id, digest=original.digest, state_version=version,
+                    completed_at=utc_text(at), actor_subject=current.subject)
+                encoded = _body(result)
+                c.execute(f"INSERT INTO {SCHEMA}.results VALUES(%s,%s,%s,%s,%s,%s)",
+                    (command_id, encoded, p._sha(encoded), version, NAMESPACE, str(version)))
+                self._event(c, command_id, "completed", utc_text(at), result)
+            return dict(status="completed" if result else "pending", result=result, receipt=receipt,
+                submission_reference=reference,
+                recoverable_command=None if original.action == recovery.ACTION else recovery.request(original),
+                local_preview=True, publication_enabled=False)
+
     def consume(self, resolve_principal: Callable[[str], Principal | None], *, command_id: str | None = None,
-                now: datetime | None = None, policy: AutomaticPolicy = AutomaticPolicy()) -> dict | None:
+                now: datetime | None = None, policy: AutomaticPolicy = AutomaticPolicy(), _prepared_media=None) -> dict | None:
         if command_id is not None:
             command_id = _id(command_id)
+        from src.commands import postgres_ghcn_source_results as ghcn_source
+        ghcn_prepared = ghcn_source.preflight(self, command_id) if hasattr(self, "ghcn_baseline") else None
+        from src.commands import postgres_sourced_generation as generation_domain
+        generation_prepared = generation_domain.prepare_ghcn_command(self, command_id)
         with self.projections._connection(writing=True) as c:
             self._validate(c)
             version, state = self._state(c, lock=True)
@@ -439,7 +764,13 @@ class PostgresCommandAuthority:
                     p._require(intent is not None, "corrupt_command_intent")
                     assert intent is not None
                     command, _ = intent
+                    p._require(command.action != "abandon_submission", "incomplete_submission_closure")
                     p._require(command.environment == self.environment, "command_environment_mismatch")
+                    if command.action == "prepare_media_revision" and _prepared_media is None:
+                        raise CommandError("native_preparation_required", "The separate native worker must prepare this graphic")
+                    if command.action == ghcn_source.ACTION and (ghcn_prepared is None
+                            or ghcn_prepared.command_id != command.command_id or ghcn_prepared.command_digest != command.digest):
+                        raise CommandError("ghcn_preparation_required", "Independent source replay must finish before consuming this command")
                     clock = _clock(now)
                     # Resolver failures are infrastructure uncertainty, never a
                     # durable rejection. An explicit None is actual revocation.
@@ -453,10 +784,76 @@ class PostgresCommandAuthority:
                     editorial_policy = current_editorial_policy()
                     changed = None
                     media_transition = None
+                    candidate_transition = None
+                    generation = None
+                    editor_media = None
+                    delivery_plan = None
+                    report_transition = None
+                    coverage_outcome = None
+                    source_transition = None
                     try:
                         if actor is None:
                             raise CommandError("forbidden", "Operator authorization was revoked before execution")
-                        if command.action in MEDIA_ACTIONS:
+                        if command.action in SOURCE_ACTIONS:
+                            from src.commands import postgres_source_results as sources
+                            from src.commands.reducer import Reduction
+                            with c.transaction(), sources.expected_domain_failures():
+                                if command.action == ghcn_source.ACTION:
+                                    source_transition = ghcn_source.prepare(self, c, state, version, command, actor,
+                                        now=clock, editorial_policy=editorial_policy, prepared=ghcn_prepared)
+                                else:
+                                    source_transition = sources.prepare(self, c, state, command, actor,
+                                        now=clock, editorial_policy=editorial_policy)
+                            clock = source_transition.completed_at
+                            reduction = Reduction(source_transition.state, (), ())
+                        elif command.action in COVERAGE_ACTIONS:
+                            from src.commands import postgres_coverage as coverage
+                            from src.commands.reducer import Reduction
+                            with c.transaction(), coverage.expected_domain_failures():
+                                coverage_outcome = coverage.prepare(self, c, state, version, command, actor,
+                                    now=clock, editorial_policy=editorial_policy)
+                            reduction = Reduction(state, (), ())
+                        elif command.action in REPORT_ACTIONS:
+                            from src.commands import postgres_report_development as reports
+                            from src.commands.reducer import Reduction
+                            with c.transaction(), reports.expected_domain_failures():
+                                report_transition = reports.prepare(self, c, state, command, actor,
+                                    now=clock, editorial_policy=editorial_policy)
+                            reduction = Reduction(state, (), ())
+                        elif command.action in EDITOR_MEDIA_ACTIONS:
+                            from src.commands import postgres_editor_media as editor_domain
+                            with c.transaction():
+                                reduction, result_key, references = editor_domain.boundary(self, c, state, version,
+                                    command, actor, editorial_policy, clock, resolve_principal, _prepared_media)
+                                if command.action == "approve_media_revision" and hasattr(self, "delivery_configuration"):
+                                    from src.commands import postgres_delivery as delivery
+                                    proposed = next(d for d in reduction.state["drafts"] if d["id"] == command.targets[0].draft_id)
+                                    delivery_plan = delivery.prepare(self, c, proposed, command)
+                            editor_media = (result_key, references)
+                        elif command.action in GENERATION_ACTIONS:
+                            from src.commands import postgres_sourced_generation as generation_domain
+                            from src.commands.reducer import Reduction
+                            with c.transaction():
+                                resolved = generation_prepared.current(self,c,state,version) if generation_prepared is not None else None
+                                clock = _clock(now)
+                                generation = generation_domain.prepare(self, c, state, version, command, actor,
+                                    now=clock, policy=policy, editorial_policy=editorial_policy,
+                                    resolved=resolved)
+                            reduction = Reduction(state, (), ())
+                        elif command.action in CANDIDATE_ACTIONS:
+                            from src.commands import postgres_candidate_admission as admission
+                            # Deterministic refusals keep their command result but
+                            # roll back every domain write (including a new lease).
+                            with c.transaction(), admission.expected_domain_failures():
+                                candidate_transition = admission.prepare(self, c, state, version, command, actor,
+                                    now=clock, policy=policy, editorial_policy=editorial_policy, resolve_principal=resolve_principal, prepared=generation_prepared, clock_now=lambda:_clock(now))
+                            reduction = candidate_transition.reduction
+                        elif command.action in MEDIA_ACTIONS:
+                            if hasattr(self, "editor_media_configuration") and command.action != "remove_media_revision":
+                                from src.commands import postgres_editor_media as editor_domain
+                                draft, current_media = editor_domain.command_inputs(self, c, state, command, actor, editorial_policy, clock)
+                                if command.action in {"attach_media_revision", "review_media_revision"}:
+                                    editor_domain.package_current(self, c, draft, command.payload["proposal_sha256"], current_media, editorial_policy)
                             media_transition = postgres_media_commands.prepare(c, state, command, actor,
                                 now=clock, editorial_policy=editorial_policy, environment=self.environment)
                             reduction = media_transition.reduction
@@ -464,15 +861,29 @@ class PostgresCommandAuthority:
                             reduction = reduce_command(state, command, actor, now=clock, policy=policy, editorial_policy=editorial_policy)
                         result = {"status": "applied" if reduction.changed_ids else "unchanged", "changed_ids": list(reduction.changed_ids),
                                   "identities": list(reduction.identities), "publish_intent_id": reduction.publish_intent_id}
+                        if source_transition is not None:
+                            result.update(status="applied" if source_transition.state_changed else "unchanged", source_run=source_transition.outcome)
+                        if coverage_outcome is not None:
+                            result.update(status="applied", coverage=coverage_outcome)
+                        if report_transition is not None:
+                            result.update(status="applied", report_development=report_transition.outcome)
+                        if generation is not None:
+                            result.update(status="applied", generation=generation)
+                        if candidate_transition is not None:
+                            result["candidate"] = candidate_transition.references
                         if media_transition is not None:
                             result["media"] = media_transition.references
-                        if reduction.changed_ids:
+                        if editor_media is not None:
+                            result[editor_media[0]] = editor_media[1]
+                        if delivery_plan is not None:
+                            result["delivery"] = delivery.references(delivery_plan)
+                        if reduction.changed_ids or (source_transition is not None and source_transition.state_changed):
                             changed = reduction.state
                     except CommandError as exc:
                         result = {"status": "rejected", "code": exc.code, "message": str(exc)}
                     except (ValueError, TypeError, UnicodeError, OverflowError):
-                        if command.action in MEDIA_ACTIONS:
-                            # Media preparation converts deterministic input errors
+                        if command.action in SOURCE_ACTIONS | MEDIA_ACTIONS | EDITOR_MEDIA_ACTIONS | CANDIDATE_ACTIONS | GENERATION_ACTIONS | REPORT_ACTIONS | COVERAGE_ACTIONS:
+                            # Domain preparation converts deterministic input errors
                             # itself; storage/implementation uncertainty rolls back.
                             raise
                         result = {"status": "rejected", "code": "invalid_revision", "message": "Stored revision cannot be validated"}
@@ -485,15 +896,276 @@ class PostgresCommandAuthority:
                         version += 1
                         self.projections._record(c, NAMESPACE, str(version), encoded, fields)
                         c.execute(f"UPDATE {SCHEMA}.state SET version=%s,snapshot_id=%s WHERE singleton=1", (version, str(version)))
+                    if source_transition is not None:
+                        # A late deadline/clock refusal rolls back ALL source and
+                        # state effects. The exact accepted intent remains pending.
+                        clock = sources.final_clock(command, clock)
+                    media_final_window = None
+                    if result["status"] in {"applied", "unchanged"} and command.action in MEDIA_ACTIONS | EDITOR_MEDIA_ACTIONS and command.action != "remove_media_revision":
+                        original_draft = next(d for d in state["drafts"] if d.get("id") == command.targets[0].draft_id)
+                        if original_draft.get("type") == "severe_weather":
+                            from src.commands import postgres_editor_media as editor_domain
+                            finished = _clock(now)
+                            editor_domain.refuse(finished >= clock, "media_completion_clock_regressed")
+                            # Outside refusal conversion: a late expiry rolls back
+                            # package/review/state effects and leaves intent pending.
+                            current_actor = editor_domain.resolve(resolve_principal, command.actor_subject,
+                                publisher=command.action == "approve_media_revision")
+                            _, current_media = editor_domain.command_inputs(self, c, state, command, current_actor, current_editorial_policy(), finished)
+                            deadline = min(utc_datetime(command.expires_at),
+                                utc_datetime(current_media["source"]["source_useful_until"]),
+                                utc_datetime(current_media["source"]["provenance_useful_until"]),
+                                utc_datetime(current_media["spec"]["evidence"]["useful_until"]))
+                            check_date = None
+                            if command.action in {"request_revision_checks", "approve_media_revision"}:
+                                refs = result["revision_checks"] if command.action == "request_revision_checks" else result["media_approval"]
+                                packet, _ = postgres_checks._packet(c, refs["check_set_id"], self.environment)
+                                deadline = min(deadline, utc_datetime(packet["useful_until"]))
+                                check_date = packet["check_date"]
+                                if command.action == "approve_media_revision":
+                                    lease = c.execute("SELECT fence,owner,expires_at FROM theheat_checks.draft_leases WHERE check_set_id=%s ORDER BY fence DESC LIMIT 1", (refs["check_set_id"],)).fetchone()
+                                    editor_domain.refuse(lease is not None and lease[1] == "revision-checks:" + packet["enrollment_id"], "stale_revision_check_owner")
+                                    deadline = min(deadline, utc_datetime(lease[2]))
+                            media_final_window = deadline, check_date
+                            clock = finished
                     result.update(command_id=command.command_id, digest=command.digest, state_version=version,
                                   completed_at=utc_text(clock), actor_subject=command.actor_subject)
                     encoded_result = _body(result)
                     c.execute(f"INSERT INTO {SCHEMA}.results VALUES(%s,%s,%s,%s,%s,%s)",
                               (command.command_id, encoded_result, p._sha(encoded_result), version, NAMESPACE, str(version)))
                     self._event(c, command.command_id, "completed", utc_text(clock), result)
-                    if command.action == "attach_media_revision" and result["status"] == "applied":
+                    if delivery_plan is not None and result["status"] == "applied":
+                        delivery.enroll(self, c, delivery_plan, resolve_principal, clock)
+                    if command.action in {"attach_media_revision", "review_media_revision"} and result["status"] == "applied":
                         self._result(c, command.command_id)
+                    if media_final_window is not None:
+                        # This fence follows terminal receipt and outbox work.
+                        # It is a sampled bound, not atomic wall-clock COMMIT.
+                        # Refusal escapes the outer transaction: the accepted
+                        # intent remains, but no new result/park/outbox survives.
+                        ended = _clock(now)
+                        deadline, check_date = media_final_window
+                        editor_domain.refuse(ended >= clock, "media_completion_clock_regressed")
+                        editor_domain.refuse(ended < deadline and (check_date is None or utc_text(ended)[:10] == check_date), "media_completion_expired")
         return result
+
+    def configure_editor_media(self, *, rasterizer, scratch, dependency_manifest):
+        from src.commands.postgres_editor_media import configure
+        configure(self, rasterizer=rasterizer, scratch=scratch, dependency_manifest=dependency_manifest)
+
+    def editor_media_projection(self, draft_id, resolve_principal, *, now, png_proposal=None, original=False):
+        from src.commands import postgres_editor_media as domain
+        with self.projections._connection() as c:
+            self._validate(c)
+            version, state = self._state(c, lock=True)
+            value = domain.projection(self, c, draft_id, state=state, version=version,
+                policy=current_editorial_policy(), now=_clock(now), resolve_principal=resolve_principal, png_proposal=png_proposal, original=original)
+            if png_proposal is None:
+                from src.commands import postgres_delivery as delivery
+                if delivery.upgraded(c):
+                    value["delivery"] = delivery.projection(self, c, draft_id, resolve_principal, _clock(now))
+            return value
+
+    def execute_revision_check_once(self, command_id, resolve_principal, *, clock, reservation=None, enabled=False, transport_options=None):
+        from src.commands import postgres_editor_media as domain, postgres_revision_checks as revisions
+        from src.two_bot.check_executor import execute_check_once
+        if type(enabled) is not bool:
+            raise ValueError("check_execution_flag_requires_boolean")
+        if not enabled:
+            return execute_check_once(self, "", current_context={}, checker_state={}, owner="", clock=clock)
+        command_id = _id(command_id)
+        authority = self
+
+        def transaction(operation, payload=None, *, now=None, raw=None, request=None, receipt=None):
+            at = utc_datetime(now if now is not None else clock())
+            with authority.projections._connection(writing=operation in {"lease", "begin", "complete", "observe"}) as c:
+                authority._validate(c)
+                version, state = authority._state(c, lock=True)
+                if operation == "observe":
+                    # Passive evidence retention follows the committed original
+                    # grant even after permissions, source or current state drift.
+                    intent = authority._intent(c, command_id)
+                    result = authority._result(c, command_id)
+                    domain.refuse(intent is not None and intent[0].action == "request_revision_checks"
+                        and result is not None and result["status"] == "unchanged"
+                        and result["revision_checks"]["check_set_id"] == payload["check_set_id"], "check_request_mismatch")
+                    attempt = postgres_check_observations._scoped_attempt(c, payload["check_set_id"], payload["stage"], payload["grant_id"], authority.environment)
+                    packet, _ = postgres_checks._packet(c, payload["check_set_id"], authority.environment)
+                    domain.refuse(attempt["binding"]["owner"] == "revision-checks:" + packet["enrollment_id"], "check_owner_mismatch")
+                    return postgres_check_observations.apply(c, "observe", payload, now=utc_text(at), raw=raw, environment=authority.environment)
+                # A trusted clock sampled before a connection/pointer wait is
+                # not authority for a later grant or interpretation.
+                locked_at = utc_datetime(clock())
+                domain.refuse(locked_at >= at, "revision_check_clock_regressed")
+                at = locked_at
+                _, identity, packet, _ = domain.runner_context(authority, c, command_id, resolve_principal,
+                    state, version, current_editorial_policy(), at)
+                owner = "revision-checks:" + packet["enrollment_id"]
+
+                def fresh(previous):
+                    sampled = utc_datetime(clock())
+                    domain.refuse(sampled >= previous, "revision_check_clock_regressed")
+                    domain.refuse(sampled < utc_datetime(packet["useful_until"])
+                        and utc_text(sampled)[:10] == packet["check_date"], "revision_checks_obsolete")
+                    return sampled
+
+                if operation == "context":
+                    fresh(at)
+                    return identity, packet, state, owner
+                domain.refuse(payload["check_set_id"] == identity, "check_request_mismatch")
+                latest = c.execute("SELECT fence,owner,expires_at FROM theheat_checks.draft_leases WHERE check_set_id=%s ORDER BY fence DESC LIMIT 1", (identity,)).fetchone()
+                at = fresh(at)
+                if latest is not None and operation != "lease":
+                    domain.refuse(latest[1] == owner and at < utc_datetime(latest[2]), "stale_revision_check_owner")
+                    if operation in {"begin", "complete"}:
+                        domain.refuse(payload["fence"] == latest[0], "stale_revision_check_owner")
+                if operation == "lease":
+                    domain.refuse(payload["owner"] == owner, "check_owner_mismatch")
+                    value = revisions.acquire(c, identity, owner, payload["ttl_seconds"], now=utc_text(at), environment=authority.environment)
+                elif operation in {"begin", "complete", "status"}:
+                    domain.refuse(payload["owner"] == owner, "check_owner_mismatch")
+                    value = postgres_checks.apply(c, operation, payload, now=utc_text(at), request=request, receipt=receipt, environment=authority.environment)
+                elif operation == "read":
+                    value = postgres_check_observations.apply(c, "read", payload, now=utc_text(at), environment=authority.environment)
+                else:
+                    reader = postgres_check_observations.read_response if operation == "response" else postgres_check_observations.read_request
+                    value = reader(c, identity, payload["stage"], payload["grant_id"], environment=authority.environment)
+                # Cheap final bounds follow all blocking/proof/write work. A
+                # refusal escapes this owning transaction and rolls back every
+                # new lease, hold, attempt or terminal receipt. Passive observe
+                # deliberately returns above under its original grant instead.
+                if operation in {"lease", "begin", "complete"}:
+                    final_lease = c.execute("SELECT fence,owner,expires_at FROM theheat_checks.draft_leases WHERE check_set_id=%s ORDER BY fence DESC LIMIT 1", (identity,)).fetchone()
+                    ended = fresh(at)
+                    expected_fence = value["lease"]["fence"] if operation == "lease" else payload["fence"]
+                    domain.refuse(final_lease is not None and final_lease[0] == expected_fence
+                        and final_lease[1] == owner and ended < utc_datetime(final_lease[2]), "stale_revision_check_owner")
+                else:
+                    fresh(at)
+                return value
+
+        identity, packet, state, owner = transaction("context")
+        class ScopedAuthority:
+            def acquire_check_lease(self, check_set_id, owner, ttl_seconds, *, now):
+                return transaction("lease", dict(check_set_id=check_set_id, owner=owner, ttl_seconds=ttl_seconds), now=now)
+            def candidate_checks(self, action, payload, *, now, request=None, receipt=None):
+                domain.refuse(action in {"begin", "complete", "status"}, "check_operation_refused")
+                return transaction(action, payload, now=now, request=request, receipt=receipt)
+            def check_execution(self, action, payload, *, now, raw=None):
+                domain.refuse(action in {"read", "observe"}, "check_operation_refused")
+                return transaction(action, payload, now=now, raw=raw)
+            def read_check_request(self, check_set_id, stage, grant_id):
+                return transaction("request", dict(check_set_id=check_set_id, stage=stage, grant_id=grant_id))
+            def read_check_response(self, check_set_id, stage, grant_id):
+                return transaction("response", dict(check_set_id=check_set_id, stage=stage, grant_id=grant_id))
+        return execute_check_once(ScopedAuthority(), identity, current_context=packet["current_context"], checker_state=state,
+                                  owner=owner, clock=clock, reservation=reservation, enabled=True, transport_options=transport_options)
+
+    def capture_candidate_input(self, payload: dict, *, now: datetime) -> dict:
+        """Trusted local fixture-producer input; no HTTP route grants this ability."""
+        from src.commands import postgres_candidate_admission as admission
+        with self.projections._connection(writing=True) as c:
+            self._validate(c)
+            version, state = self._state(c, lock=True)
+            receipt = admission.capture(c, payload, version=version, state=state,
+                policy=current_editorial_policy(), now=_clock(now), environment=self.environment)
+        return receipt
+
+    def candidate_projection(self, allowed: tuple[str, ...], *, now: datetime, resolve_principal=None) -> list[dict]:
+        from src.commands import postgres_candidate_admission as admission
+        admission.refuse(isinstance(allowed, (list, tuple)) and len(allowed) <= 16 and len(set(allowed)) == len(allowed), "candidate_list_bound")
+        for identity in allowed:
+            admission.refuse(isinstance(identity,str) and admission.re.fullmatch(r"[a-f0-9]{64}",identity), "invalid_candidate_allowlist")
+        with self.projections._connection() as c:
+            self._validate(c)
+            version, state = self._state(c, lock=True)
+            result = admission.project(self, c, allowed, version=version, state=state,
+                policy=current_editorial_policy(), now=_clock(now), resolve_principal=resolve_principal)
+        return result
+
+    def execute_candidate_check_once(self, command_id: str, resolve_principal, *, clock,
+                                     reservation: dict | None = None, enabled: bool = False,
+                                     transport_options: dict | None = None) -> dict:
+        """Separate explicitly enabled runner using the existing four-stage executor.
+
+        Reauthorize and compare the locked state for every grant/observation/read.
+        The browser cannot select the owner, packet, role, provider or reservation.
+        """
+        from src.commands import postgres_candidate_admission as admission
+        from src.two_bot.check_executor import execute_check_once
+        if type(enabled) is not bool:
+            raise ValueError("check_execution_flag_requires_boolean")
+        if not enabled:
+            return execute_check_once(self, "", current_context={}, checker_state={}, owner="", clock=clock)
+        authority = self
+        command_id = _id(command_id)
+        from src.commands import postgres_sourced_generation as generation
+        prepared = generation.prepare_ghcn_command(authority, command_id, executed=True)
+        resolved = prepared.claim if prepared is not None else None
+
+        def transaction(operation, payload=None, *, now=None, raw=None, request=None, receipt=None):
+            at = utc_datetime(now if now is not None else clock())
+            with authority.projections._connection(writing=operation not in {"context", "read", "request", "response"}) as c:
+                authority._validate(c)
+                version, state = authority._state(c, lock=True)
+                at = max(at, utc_datetime(clock()))
+                if operation == "observe":
+                    original = authority._intent(c, command_id)
+                    if original is not None and original[0].payload.get("origin_kind") == "synchronous_writer_v1":
+                        result = authority._result(c, command_id)
+                        admission.refuse(original[0].action == "request_candidate_checks" and result is not None
+                            and result["status"] == "unchanged" and result["candidate"]["check_set_id"] == payload["check_set_id"], "check_request_mismatch")
+                        granted = postgres_check_observations._scoped_attempt(c, payload["check_set_id"], payload["stage"], payload["grant_id"], authority.environment)
+                        admission.refuse(granted["binding"]["owner"] == admission.owner_for(original[0]), "check_owner_mismatch")
+                        return postgres_check_observations.apply(c, "observe", payload, now=utc_text(at), raw=raw, environment=authority.environment)
+                if prepared is not None:
+                    prepared.current(authority,c,state,version)
+                    at=max(at,utc_datetime(clock()))
+                command, value, identity = admission.runner_context(authority, c, command_id, resolve_principal,
+                    version=version, state=state, policy=current_editorial_policy(), now=at, resolved=resolved)
+                if operation == "context":
+                    return command, value, identity, state
+                if operation == "lease":
+                    from src.commands.postgres_revision_checks import acquire
+                    admission.refuse(payload["owner"] == admission.owner_for(command), "check_owner_mismatch")
+                    return acquire(c, identity, payload["owner"], payload["ttl_seconds"], now=utc_text(at), environment=authority.environment,
+                        origin_kind="synchronous_writer_v1")
+                if operation == "batch":
+                    admission.refuse(payload["job_id"] == value["job_id"] and payload["owner"] == admission.owner_for(command), "check_request_mismatch")
+                    return postgres_batch_worker.apply(c, "acquire", payload, now=utc_text(at), environment=authority.environment)
+                admission.refuse(payload["check_set_id"] == identity, "check_request_mismatch")
+                if operation in {"begin", "complete", "status"}:
+                    admission.refuse(payload["owner"] == admission.owner_for(command), "check_owner_mismatch")
+                    return postgres_checks.apply(c, operation, payload, now=utc_text(at), environment=authority.environment, request=request, receipt=receipt, resolved=resolved)
+                if operation in {"read", "observe"}:
+                    return postgres_check_observations.apply(c, operation, payload, now=utc_text(at), environment=authority.environment, raw=raw)
+                reader = postgres_check_observations.read_response if operation == "response" else postgres_check_observations.read_request
+                return reader(c, payload["check_set_id"], payload["stage"], payload["grant_id"], environment=authority.environment)
+
+        command, value, identity, state = transaction("context")
+        class ScopedAuthority:
+            resolved_check_context = resolved
+            def acquire_check_lease(self, check_set_id, owner, ttl_seconds, *, now):
+                admission.refuse(check_set_id == identity, "check_request_mismatch")
+                if value.get("origin_kind") == "synchronous_writer_v1":
+                    return transaction("lease", dict(owner=owner, ttl_seconds=ttl_seconds), now=now)
+                return transaction("batch", dict(job_id=value["job_id"], owner=owner, ttl_seconds=ttl_seconds), now=now)
+            def batch_work(self, action, payload, *, now, raw=None):
+                admission.refuse(action == "acquire" and raw is None, "check_operation_refused")
+                return transaction("batch", payload, now=now)
+            def candidate_checks(self, action, payload, *, now, request=None, receipt=None):
+                admission.refuse(action in {"begin", "complete", "status"}, "check_operation_refused")
+                return transaction(action, payload, now=now, request=request, receipt=receipt)
+            def check_execution(self, action, payload, *, now, raw=None):
+                admission.refuse(action in {"read", "observe"}, "check_operation_refused")
+                return transaction(action, payload, now=now, raw=raw)
+            def read_check_request(self, check_set_id, stage, grant_id):
+                return transaction("request", dict(check_set_id=check_set_id, stage=stage, grant_id=grant_id))
+            def read_check_response(self, check_set_id, stage, grant_id):
+                return transaction("response", dict(check_set_id=check_set_id, stage=stage, grant_id=grant_id))
+        return execute_check_once(ScopedAuthority(), identity, current_context=admission.context_for(value, current_editorial_policy()),
+            checker_state=state, owner=admission.owner_for(command), clock=clock, reservation=reservation, enabled=enabled,
+            transport_options=transport_options)
 
     def read(self) -> tuple[int, dict]:
         with self.projections._connection() as c:

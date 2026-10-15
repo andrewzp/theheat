@@ -3,6 +3,11 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from dataclasses import dataclass
+from contextlib import contextmanager
+import threading
+
+from src.storage.scientific_supply import ScientificSupplySession, SupplyError, detached_json, require
 
 # ruff: noqa: F403,F405
 
@@ -371,32 +376,468 @@ def _run_world_cached_half(world_cities: list[dict], metrics_out: dict, bot_stat
     return om_bundles, om_country
 
 
-def _verified_ghcn_signals(bot_state: BotState, metrics: dict) -> tuple[list, list]:
+def _scientific_prepass(bot_state: BotState, bundles: list):
+    """Shared real qualification/clustering/cap path; no enqueue or health writes."""
+    # Heat records-cluster (#414) PREPASS — must run BEFORE the per-bundle loop,
+    # because that loop enqueues individual record drafts inline and a fired
+    # cluster supersedes the constituent *daily* ones. Collect ONE member per
+    # bundle at its strongest high tier (all-time > monthly > daily),
+    # INDEPENDENTLY of the cascade winner. The class fires on record
+    # SIGNIFICANCE (all-time/monthly), not a raw daily count — which is also
+    # what makes it global: world cities enter only via monthly/all-time.
+    # Flag OFF ⇒ empty sets, zero behavior change.
+    records_cluster_suppressed_ids: set[str] = set()
+    records_cluster_fired_dates: set[str] = set()
+    records_cluster_candidates: list[tuple] = []
+    preview_clusters: list[dict] = []
+    if _records_cluster_enabled():
+        from collections import defaultdict as _defaultdict
+
+        from src.editorial.records_cluster import (
+            cluster_record_stations,
+            cluster_signature,
+            cluster_tier_counts,
+            is_significant_cluster,
+            name_cluster,
+        )
+        from src.two_bot.intern import build_heat_records_cluster_bundle
+
+        _rows_by_date: dict[str, list[dict]] = _defaultdict(list)
+        for _b in bundles:
+            _d = _b.signal_date.isoformat() if type(_b.signal_date) is date else ""
+            _member = _records_cluster_member(_b, _d)
+            if _member is not None:
+                _rows_by_date[_d].append(_member)
+        for _date_iso, _rows in _rows_by_date.items():
+            for _cluster in cluster_record_stations(_rows):
+                _tier_counts = cluster_tier_counts(_cluster)
+                # Significance gate: a daily-only spatial burst is weather, not a
+                # story. Only all-time/monthly weight fires the class — daily-
+                # noise-proof, and world-tier-safe.
+                if not is_significant_cluster(_tier_counts):
+                    continue
+                _cname = name_cluster(_cluster)
+                _rc_event_id = (
+                    f"heat_records_cluster_{_date_iso}_{cluster_signature(_cluster)}"
+                )
+                if _rc_event_id in bot_state.get("heat_records_cluster_fired", {}):
+                    continue
+                if state.is_duplicate(bot_state, _rc_event_id):
+                    continue
+                _rc_score = score_heat_records_cluster(
+                    all_time_count=_tier_counts["all_time"],
+                    monthly_count=_tier_counts["monthly"],
+                    daily_count=_tier_counts["daily"],
+                    country_count=_cname.country_count,
+                    region_name=_cname.region_name,
+                )
+                if not _should_draft(_rc_score, _rc_event_id):
+                    continue
+                # Fires: supersede the flat lane for this date and suppress ONLY
+                # the constituent *daily* drafts. All-time/monthly members keep
+                # their bigger individual draft (double-coverage default — a
+                # taste call surfaced to Andrew).
+                _rc_bundle = build_heat_records_cluster_bundle(
+                    _cluster, _cname, event_id=_rc_event_id, when=_date_iso,
+                )
+                from src.data.temperature_evidence import temperature_aggregate_failures
+                if not temperature_aggregate_failures(_rc_bundle):
+                    records_cluster_fired_dates.add(_date_iso)
+                    records_cluster_suppressed_ids.update(
+                        _r["cal_event_id"] for _r in _cluster if _r.get("cal_event_id")
+                    )
+                records_cluster_candidates.append(
+                    (_rc_bundle, _rc_score, _rc_event_id, _cname, _tier_counts, _date_iso)
+                )
+                preview_clusters.append({
+                    "event_id": _rc_event_id, "date": _date_iso, "significant": True,
+                    "members": [{"station_id": row["place_key"],
+                                 "evidence_revision": row["evidence"].get("revision_id")}
+                                for row in _cluster],
+                    "aggregate_hold_codes": temperature_aggregate_failures(_rc_bundle),
+                })
+
+    # Publication diversity must not remove the stations needed to detect
+    # a regional event. Keep the historical individual cap here, after the
+    # complete scientific supply has reached the cluster prepass.
+    individual_bundles = select_individual_station_bundles(bundles)
+    return (records_cluster_suppressed_ids, records_cluster_fired_dates,
+            records_cluster_candidates, individual_bundles, preview_clusters)
+
+
+_REPLAY_LOCK = threading.Lock()
+
+
+@contextmanager
+def _isolated_replay(session: ScientificSupplySession):
+    session.validate(mode="replay")
+    require(threading.current_thread() is threading.main_thread()
+            and threading.active_count() == 1, "isolated_replay_process_required")
+    require(_REPLAY_LOCK.acquire(blocking=False), "replay_already_active")
+    try:
+        yield
+    finally:
+        _REPLAY_LOCK.release()
+
+
+def _bundle_keys(bundles):
+    return [{"station_id": bundle.station_id,
+             "signal_date": bundle.signal_date.isoformat() if bundle.signal_date is not None else None,
+             "evidence_revision": bundle.evidence.get("revision_id")} for bundle in bundles]
+
+
+def replay_retained_ghcn_supply(session: ScientificSupplySession, snapshot: dict, *, routing_mode="ghcn") -> dict:
+    """Archival preview only. Never enters live runner loops or finalization."""
+    require(type(session) is ScientificSupplySession, "explicit_supply_session_required")
+    with _isolated_replay(session):
+        result = {"schema_version": 1, "mode": "retained_replay", "supply_run_id": session.supply_run_id,
+                  "source_acquisition": "not_attempted", "world_supply": "not_replayed",
+                  "routing_mode": routing_mode, "publication_eligible": False}
+        try:
+            require(routing_mode in {"ghcn", "both"}, "invalid_replay_routing")
+            require(type(snapshot) is dict and not {"_triage_queue", "_funnel_sink"}.intersection(snapshot),
+                    "invalid_replay_snapshot")
+            detached = detached_json(snapshot)
+            initial_suppressions = len(detached.get("suppressions", []))
+            receipt, bundles, countries, envelope = session.read()
+            retained_keys = _bundle_keys(bundles)
+            if routing_mode == "both":
+                bundles, countries = partition_us_world(bundles, countries, [], [])
+            # Scope both legacy and ContextVar suppression references to the copy.
+            with _suppression_context(detached, source="retained_ghcn_replay", run_id=session.supply_run_id):
+                _, _, _, individual, clusters = _scientific_prepass(detached, bundles)
+            result.update(
+                status="available", receipt_sha256=receipt.canonical_sha256,
+                original_captured_at=envelope["captured_at"], original_source_outcome=envelope["source_outcome"],
+                retained_bundle_keys=retained_keys, routed_bundle_keys=_bundle_keys(bundles),
+                cluster_candidates=clusters, individual_bundle_keys=_bundle_keys(individual),
+                # Text/summary fields and callbacks must not escape the preview.
+                preview_suppressions=[{"stage": "score_gate", "reason": "score_below_threshold"}
+                                      for row in detached.get("suppressions", [])[initial_suppressions:][-100:]
+                                      if row.get("stage") == "score_gate"],
+            )
+            return detached_json(result)
+        except (SupplyError, ValueError, TypeError, KeyError):
+            return result | {"status": "unavailable", "error": "retained_supply_unavailable"}
+
+
+def _verified_ghcn_signals(bot_state: BotState, metrics: dict, *, ghcn_supply: ScientificSupplySession | None = None, current_run: dict | None = None) -> tuple[list, list]:
     """Contain this source unless the invoking workflow verified its exact baseline.
 
     Direct invocations without that receipt also withhold GHCN. The receipt is
     artifact integrity only; the existing scientific eligibility gates still apply.
     """
+    if ghcn_supply is not None:
+        ghcn_supply.validate(mode="capture")
     outcome = os.environ.get("THEHEAT_GHCN_THRESHOLD_VERIFICATION", "unknown")
     if outcome not in {"success", "failure", "skipped", "cancelled"}:
         outcome = "unknown"
     metrics["threshold_verification"] = outcome
+    result: tuple[list, list]
     if outcome != "success":
         metrics.update(status="failed", error="threshold_baseline_unavailable")
         print(f"[alerts] GHCN unavailable: threshold verification {outcome}")
-        return [], []
-    try:
-        result = ghcn.check_extreme_signals_for_stations(metrics_out=metrics, bot_state=bot_state)
-    except Exception:
-        # Keep independent sources available without exposing provider bodies.
-        metrics.update(status="failed", error="ghcn_fetch_failed")
-        print("[alerts] GHCN unavailable: source fetch failed")
-        return [], []
-    metrics["status"] = _classify_ghcn_source_status(metrics)
+        result = ([], [])
+    else:
+        try:
+            result = ghcn.check_extreme_signals_for_stations(metrics_out=metrics, bot_state=bot_state)
+        except Exception:
+            metrics.update(status="failed", error="ghcn_fetch_failed")
+            print("[alerts] GHCN unavailable: source fetch failed")
+            result = ([], [])
+        else:
+            metrics["status"] = _classify_ghcn_source_status(metrics)
+    if ghcn_supply is not None:
+        try:
+            receipt, bundles, countries, _ = ghcn_supply.capture(
+                result[0], result[1], metrics, orchestrator_run_id=(current_run or {}).get("id"),
+            )
+            metrics.update(supply_retention="retained", supply_snapshot_id=receipt.snapshot_id,
+                           supply_sha256=receipt.canonical_sha256)
+            return bundles, countries
+        except (SupplyError, ValueError, TypeError, KeyError):
+            metrics.update(status="failed", error="scientific_supply_unavailable", supply_retention="unavailable")
+            return [], []
     return result
 
 
-def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: list[dict], us_city_state_map: dict[str, str], city_elevations: dict[tuple[str, str], int]) -> None:
+@dataclass(frozen=True)
+class IndividualSignalSelection:
+    signal: AllTimeRecord | MonthlyRecord | AbsoluteExtremeEvent | AnomalyEvent | RecordEvent | None
+    score: EditorialScore | None
+    event_id: str | None
+    headline: str
+    facts: list
+    legacy_type: str
+    city: str
+    counts: dict
+    simultaneous: list
+
+
+def _select_individual_signal(bot_state, bundle, records_cluster_suppressed_ids, city_elevations):
+    """The existing priority cascade; caller owns suppression scope and effects."""
+    signal_counts = dict.fromkeys(("all_time", "monthly", "absolute_extreme", "anomaly", "calendar"), 0)
+    simultaneous_record_stations = []
+    strongest_signal: AllTimeRecord | MonthlyRecord | AbsoluteExtremeEvent | AnomalyEvent | RecordEvent | None = None
+    strongest_score: EditorialScore | None = None
+    strongest_event_id: str | None = None
+    strongest_headline = ""
+    strongest_facts = []
+    strongest_type = ""
+    strongest_city = ""
+    signal_year = (bundle.signal_date or date.today()).year
+    # Default these so the bottom-of-loop event-log capture
+    # works whether or not the if-cascade fires.
+
+    if bundle.all_time_high:
+        ev: AllTimeRecord = bundle.all_time_high
+        if not state.is_duplicate(bot_state, ev.event_id):
+            score = score_all_time_record(
+                ev.new_temp_c, ev.old_record_c, ev.old_record_year,
+                ev.years_of_data, kind="high",
+            )
+            if _should_draft(score, ev.event_id):
+                strongest_signal = ev
+                strongest_score = score
+                strongest_event_id = ev.event_id
+                strongest_type = "all_time_high"
+                strongest_city = ev.city
+                strongest_headline = f"{ev.city} on pace for its hottest in {ev.years_of_data}yr archive"
+                strongest_facts = [
+                    _fact("Forecast high", _temp_pair_c(ev.new_temp_c)),
+                    _fact("Prior archive max", _temp_pair_c(ev.old_record_c)),
+                    _fact("Prior max year", ev.old_record_year),
+                    _fact("Archive span", f"{ev.years_of_data} years"),
+                    _fact("Country", ev.country),
+                ]
+                signal_counts["all_time"] += 1
+
+    if strongest_signal is None and bundle.all_time_low:
+        ev = bundle.all_time_low
+        if not state.is_duplicate(bot_state, ev.event_id):
+            score = score_all_time_record(
+                ev.new_temp_c, ev.old_record_c, ev.old_record_year,
+                ev.years_of_data, kind="low",
+            )
+            if _should_draft(score, ev.event_id):
+                strongest_signal = ev
+                strongest_score = score
+                strongest_event_id = ev.event_id
+                strongest_type = "all_time_low"
+                strongest_city = ev.city
+                strongest_headline = f"{ev.city} hit its coldest reading in {ev.years_of_data}yr archive"
+                strongest_facts = [
+                    _fact("Observed low", _temp_pair_c(ev.new_temp_c)),
+                    _fact("Prior archive min", _temp_pair_c(ev.old_record_c)),
+                    _fact("Prior min year", ev.old_record_year),
+                    _fact("Archive span", f"{ev.years_of_data} years"),
+                    _fact("Country", ev.country),
+                ]
+                signal_counts["all_time"] += 1
+
+    if strongest_signal is None and bundle.monthly_high:
+        ev_mh: MonthlyRecord = bundle.monthly_high
+        # Suppress "hottest April ever - old record set in 2026"
+        # tweets. When the prior record was set in the same year as
+        # this reading, the "hottest ever" framing reads as nonsense.
+        if (
+            not state.is_duplicate(bot_state, ev_mh.event_id)
+            and ev_mh.old_record_year != signal_year
+        ):
+            score = score_monthly_record(
+                ev_mh.new_temp_c, ev_mh.old_record_c, ev_mh.old_record_year,
+                ev_mh.month, ev_mh.years_of_data, kind="high",
+            )
+            if _should_draft(score, ev_mh.event_id):
+                month_name = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][ev_mh.month]
+                strongest_signal = ev_mh
+                strongest_score = score
+                strongest_event_id = ev_mh.event_id
+                strongest_type = "monthly_high"
+                strongest_city = ev_mh.city
+                strongest_headline = f"{ev_mh.city} on pace for hottest {month_name} on record"
+                strongest_facts = [
+                    _fact("Forecast high", _temp_pair_c(ev_mh.new_temp_c)),
+                    _fact(f"Prior {month_name} max", _temp_pair_c(ev_mh.old_record_c)),
+                    _fact("Prior year", ev_mh.old_record_year),
+                    _fact("Archive span", f"{ev_mh.years_of_data} years"),
+                ]
+                signal_counts["monthly"] += 1
+
+    if strongest_signal is None and bundle.monthly_low:
+        ev_ml: MonthlyRecord = bundle.monthly_low
+        if (
+            not state.is_duplicate(bot_state, ev_ml.event_id)
+            and ev_ml.old_record_year != signal_year
+        ):
+            score = score_monthly_record(
+                ev_ml.new_temp_c, ev_ml.old_record_c, ev_ml.old_record_year,
+                ev_ml.month, ev_ml.years_of_data, kind="low",
+            )
+            if _should_draft(score, ev_ml.event_id):
+                month_name = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][ev_ml.month]
+                strongest_signal = ev_ml
+                strongest_score = score
+                strongest_event_id = ev_ml.event_id
+                strongest_type = "monthly_low"
+                strongest_city = ev_ml.city
+                strongest_headline = f"{ev_ml.city} hit its coldest {month_name} reading on record"
+                strongest_facts = [
+                    _fact("Observed low", _temp_pair_c(ev_ml.new_temp_c)),
+                    _fact(f"Prior {month_name} min", _temp_pair_c(ev_ml.old_record_c)),
+                    _fact("Prior year", ev_ml.old_record_year),
+                    _fact("Archive span", f"{ev_ml.years_of_data} years"),
+                ]
+                signal_counts["monthly"] += 1
+
+    if strongest_signal is None and bundle.absolute_extreme:
+        ev_ae: AbsoluteExtremeEvent = bundle.absolute_extreme
+        if not state.is_duplicate(bot_state, ev_ae.event_id):
+            score = score_absolute_extreme(
+                ev_ae.today_temp_c,
+                ev_ae.lat,
+                ev_ae.band_label,
+                ev_ae.threshold_c,
+                kind=ev_ae.kind,
+            )
+            if _should_draft(score, ev_ae.event_id):
+                strongest_signal = ev_ae
+                strongest_score = score
+                strongest_event_id = ev_ae.event_id
+                strongest_type = "absolute_extreme"
+                strongest_city = ev_ae.city
+                strongest_headline = (
+                    f"{ev_ae.city}: {ev_ae.today_temp_c:.1f}C "
+                    f"({ev_ae.band_label} absolute extreme)"
+                )
+                strongest_facts = [
+                    _fact("City", ev_ae.city),
+                    _fact("Country", ev_ae.country),
+                    _fact("Temperature", _temp_pair_c(ev_ae.today_temp_c)),
+                    _fact("Latitude band", ev_ae.band_label),
+                    _fact("Band threshold", _temp_pair_c(ev_ae.threshold_c)),
+                    _fact("Kind", ev_ae.kind),
+                    _fact("Data source", ev_ae.data_source),
+                ]
+                signal_counts["absolute_extreme"] += 1
+
+    if strongest_signal is None and bundle.anomaly_hot:
+        ev_ah: AnomalyEvent = bundle.anomaly_hot
+        if not state.is_duplicate(bot_state, ev_ah.event_id):
+            score = score_anomaly(
+                ev_ah.today_temp_c, ev_ah.historical_mean_c, ev_ah.anomaly_c,
+                kind="hot",
+            )
+            if _should_draft(score, ev_ah.event_id):
+                strongest_signal = ev_ah
+                strongest_score = score
+                strongest_event_id = ev_ah.event_id
+                strongest_type = "anomaly_hot"
+                strongest_city = ev_ah.city
+                strongest_headline = f"{ev_ah.city}: +{ev_ah.anomaly_c:.1f}C above normal"
+                strongest_facts = [
+                    _fact("Today", _temp_pair_c(ev_ah.today_temp_c)),
+                    _fact("Historical mean", _temp_pair_c(ev_ah.historical_mean_c)),
+                    _fact("Anomaly", f"+{ev_ah.anomaly_c:.1f}C"),
+                ]
+                signal_counts["anomaly"] += 1
+
+    if strongest_signal is None and bundle.anomaly_cold:
+        ev_ac: AnomalyEvent = bundle.anomaly_cold
+        if not state.is_duplicate(bot_state, ev_ac.event_id):
+            score = score_anomaly(
+                ev_ac.today_temp_c, ev_ac.historical_mean_c, ev_ac.anomaly_c,
+                kind="cold",
+            )
+            if _should_draft(score, ev_ac.event_id):
+                strongest_signal = ev_ac
+                strongest_score = score
+                strongest_event_id = ev_ac.event_id
+                strongest_type = "anomaly_cold"
+                strongest_city = ev_ac.city
+                strongest_headline = f"{ev_ac.city}: {ev_ac.anomaly_c:.1f}C below normal"
+                strongest_facts = [
+                    _fact("Observed low", _temp_pair_c(ev_ac.today_temp_c)),
+                    _fact("Historical mean low", _temp_pair_c(ev_ac.historical_mean_c)),
+                    _fact("Anomaly", f"{ev_ac.anomaly_c:.1f}C"),
+                ]
+                signal_counts["anomaly"] += 1
+
+    if (
+        strongest_signal is None
+        and bundle.calendar_date_high
+        # #414: a city inside a fired records-cluster has its individual
+        # daily draft suppressed — the dome is the story (all-time/monthly
+        # winners above are untouched; they keep their bigger draft).
+        and bundle.calendar_date_high.event_id
+        not in records_cluster_suppressed_ids
+    ):
+        ev_cdh: RecordEvent = bundle.calendar_date_high
+        if not state.is_duplicate(bot_state, ev_cdh.event_id):
+            score = score_record_event(
+                ev_cdh.new_temp_c, ev_cdh.old_record_c, ev_cdh.old_record_year,
+            )
+            if _should_draft(score, ev_cdh.event_id):
+                strongest_signal = ev_cdh
+                strongest_score = score
+                strongest_event_id = ev_cdh.event_id
+                strongest_type = "record"
+                strongest_city = ev_cdh.city
+                strongest_headline = f"{ev_cdh.city} is forecast to challenge a heat record"
+                strongest_facts = [
+                    _fact("Forecast high", _temp_pair_c(ev_cdh.new_temp_c)),
+                    _fact("Previous record", _temp_pair_c(ev_cdh.old_record_c)),
+                    _fact("Old record year", ev_cdh.old_record_year),
+                    _fact("Record gap", f"+{ev_cdh.new_temp_c - ev_cdh.old_record_c:.1f}C"),
+                    _fact("Country", ev_cdh.country),
+                ]
+                signal_counts["calendar"] += 1
+                # Track only heat records for the simultaneous-records
+                # lane, preserving enough station detail for roll-call.
+                simultaneous_record_stations.append({
+                    "city": ev_cdh.city,
+                    "country": ev_cdh.country,
+                    "temp_c": ev_cdh.new_temp_c,
+                    "kind": "high",
+                    "old_record_c": ev_cdh.old_record_c,
+                    "old_record_year": ev_cdh.old_record_year,
+                    "margin_c": round(ev_cdh.new_temp_c - ev_cdh.old_record_c, 1),
+                    "elevation_m": city_elevations.get((ev_cdh.city, ev_cdh.country)),
+                    "signal_date": (bundle.signal_date or date.today()).isoformat(),
+                    "event_id": ev_cdh.event_id,
+                    "evidence": deepcopy(ev_cdh.evidence),
+                })
+
+    if strongest_signal is None and bundle.calendar_date_low:
+        ev_cdl: RecordEvent = bundle.calendar_date_low
+        if not state.is_duplicate(bot_state, ev_cdl.event_id):
+            score = score_record_low_event(
+                ev_cdl.new_temp_c, ev_cdl.old_record_c, ev_cdl.old_record_year,
+            )
+            if _should_draft(score, ev_cdl.event_id):
+                strongest_signal = ev_cdl
+                strongest_score = score
+                strongest_event_id = ev_cdl.event_id
+                strongest_type = "record_low"
+                strongest_city = ev_cdl.city
+                strongest_headline = f"{ev_cdl.city} hit a daily cold record"
+                strongest_facts = [
+                    _fact("Observed low", _temp_pair_c(ev_cdl.new_temp_c)),
+                    _fact("Previous record low", _temp_pair_c(ev_cdl.old_record_c)),
+                    _fact("Old record year", ev_cdl.old_record_year),
+                    _fact("Record gap", f"{ev_cdl.new_temp_c - ev_cdl.old_record_c:.1f}C"),
+                    _fact("Country", ev_cdl.country),
+                ]
+                signal_counts["calendar"] += 1
+
+    return IndividualSignalSelection(strongest_signal, strongest_score, strongest_event_id,
+        strongest_headline, strongest_facts, strongest_type, strongest_city, signal_counts, simultaneous_record_stations)
+
+
+def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: list[dict], us_city_state_map: dict[str, str], city_elevations: dict[tuple[str, str], int], *, ghcn_supply: ScientificSupplySession | None = None) -> None:
+    if ghcn_supply is not None:
+        require(type(ghcn_supply) is ScientificSupplySession, "explicit_supply_session_required")
+        ghcn_supply.validate(mode="capture")
     # 1. Extreme climate signals — dispatched by THEHEAT_SIGNALS_PROVIDER.
     # "open_meteo" (default): 638 curated cities via Open-Meteo archive API.
     # "ghcn": ~9,449 active NOAA GHCN-Daily stations via superghcnd_diff + SQLite threshold cache.
@@ -431,7 +872,7 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
                 f"got {_signals_provider!r}"
             )
         if _signals_provider == "ghcn":
-            bundles, country_records = _verified_ghcn_signals(bot_state, ghcn_pipeline_metrics)
+            bundles, country_records = _verified_ghcn_signals(bot_state, ghcn_pipeline_metrics, ghcn_supply=ghcn_supply, current_run=current_run)
         elif _signals_provider == "open_meteo":
             bundles, country_records = _check_city_extreme_signals(
                 cities,
@@ -442,7 +883,7 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
             # owns the rest of the world (curated cities, incl. Europe). Run both
             # and partition by country so every place is sourced from exactly one
             # provider — no overlap, no fragile name/geo matching.
-            ghcn_bundles, ghcn_country = _verified_ghcn_signals(bot_state, ghcn_pipeline_metrics)
+            ghcn_bundles, ghcn_country = _verified_ghcn_signals(bot_state, ghcn_pipeline_metrics, ghcn_supply=ghcn_supply, current_run=current_run)
             # Open-Meteo only needs the non-US cities — the US comes from GHCN —
             # so skip the US city fetches entirely.
             world_cities = [c for c in cities if not is_us_location(c.get("country"))]
@@ -454,81 +895,8 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
             )
         source_promoted = 0
 
-        # Heat records-cluster (#414) PREPASS — must run BEFORE the per-bundle loop,
-        # because that loop enqueues individual record drafts inline and a fired
-        # cluster supersedes the constituent *daily* ones. Collect ONE member per
-        # bundle at its strongest high tier (all-time > monthly > daily),
-        # INDEPENDENTLY of the cascade winner. The class fires on record
-        # SIGNIFICANCE (all-time/monthly), not a raw daily count — which is also
-        # what makes it global: world cities enter only via monthly/all-time.
-        # Flag OFF ⇒ empty sets, zero behavior change.
-        records_cluster_suppressed_ids: set[str] = set()
-        records_cluster_fired_dates: set[str] = set()
-        records_cluster_candidates: list[tuple] = []
-        if _records_cluster_enabled():
-            from collections import defaultdict as _defaultdict
-
-            from src.editorial.records_cluster import (
-                cluster_record_stations,
-                cluster_signature,
-                cluster_tier_counts,
-                is_significant_cluster,
-                name_cluster,
-            )
-            from src.two_bot.intern import build_heat_records_cluster_bundle
-
-            _rows_by_date: dict[str, list[dict]] = _defaultdict(list)
-            for _b in bundles:
-                _d = _b.signal_date.isoformat() if type(_b.signal_date) is date else ""
-                _member = _records_cluster_member(_b, _d)
-                if _member is not None:
-                    _rows_by_date[_d].append(_member)
-            for _date_iso, _rows in _rows_by_date.items():
-                for _cluster in cluster_record_stations(_rows):
-                    _tier_counts = cluster_tier_counts(_cluster)
-                    # Significance gate: a daily-only spatial burst is weather, not a
-                    # story. Only all-time/monthly weight fires the class — daily-
-                    # noise-proof, and world-tier-safe.
-                    if not is_significant_cluster(_tier_counts):
-                        continue
-                    _cname = name_cluster(_cluster)
-                    _rc_event_id = (
-                        f"heat_records_cluster_{_date_iso}_{cluster_signature(_cluster)}"
-                    )
-                    if _rc_event_id in bot_state.get("heat_records_cluster_fired", {}):
-                        continue
-                    if state.is_duplicate(bot_state, _rc_event_id):
-                        continue
-                    _rc_score = score_heat_records_cluster(
-                        all_time_count=_tier_counts["all_time"],
-                        monthly_count=_tier_counts["monthly"],
-                        daily_count=_tier_counts["daily"],
-                        country_count=_cname.country_count,
-                        region_name=_cname.region_name,
-                    )
-                    if not _should_draft(_rc_score, _rc_event_id):
-                        continue
-                    # Fires: supersede the flat lane for this date and suppress ONLY
-                    # the constituent *daily* drafts. All-time/monthly members keep
-                    # their bigger individual draft (double-coverage default — a
-                    # taste call surfaced to Andrew).
-                    _rc_bundle = build_heat_records_cluster_bundle(
-                        _cluster, _cname, event_id=_rc_event_id, when=_date_iso,
-                    )
-                    from src.data.temperature_evidence import temperature_aggregate_failures
-                    if not temperature_aggregate_failures(_rc_bundle):
-                        records_cluster_fired_dates.add(_date_iso)
-                        records_cluster_suppressed_ids.update(
-                            _r["cal_event_id"] for _r in _cluster if _r.get("cal_event_id")
-                        )
-                    records_cluster_candidates.append(
-                        (_rc_bundle, _rc_score, _rc_event_id, _cname, _tier_counts, _date_iso)
-                    )
-
-        # Publication diversity must not remove the stations needed to detect
-        # a regional event. Keep the historical individual cap here, after the
-        # complete scientific supply has reached the cluster prepass.
-        individual_bundles = select_individual_station_bundles(bundles)
+        (records_cluster_suppressed_ids, records_cluster_fired_dates,
+         records_cluster_candidates, individual_bundles, _) = _scientific_prepass(bot_state, bundles)
         ghcn_pipeline_metrics["individual_station_candidates"] = sum(bool(b.station_id) for b in individual_bundles)
         ghcn_pipeline_metrics["individual_station_cap_excluded"] = sum(bool(b.station_id) for b in bundles) - ghcn_pipeline_metrics["individual_station_candidates"]
         for bundle in individual_bundles:
@@ -536,258 +904,14 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
             # all-time > monthly > absolute-extreme > anomaly > calendar-date.
             # The strongest signal wins — we don't draft multiple tweets for the same city.
 
-            strongest_signal: AllTimeRecord | MonthlyRecord | AbsoluteExtremeEvent | AnomalyEvent | RecordEvent | None = None
-            strongest_score: EditorialScore | None = None
-            strongest_event_id: str | None = None
-            strongest_headline = ""
-            strongest_facts = []
-            strongest_type = ""
-            strongest_city = ""
-            signal_year = (bundle.signal_date or date.today()).year
-            # Default these so the bottom-of-loop event-log capture
-            # works whether or not the if-cascade fires.
+            selected = _select_individual_signal(bot_state, bundle, records_cluster_suppressed_ids, city_elevations)
+            strongest_signal, strongest_score, strongest_event_id = selected.signal, selected.score, selected.event_id
+            strongest_headline, strongest_facts = selected.headline, selected.facts
+            strongest_type, strongest_city = selected.legacy_type, selected.city
             candidate_queued = False
-
-            if bundle.all_time_high:
-                ev: AllTimeRecord = bundle.all_time_high
-                if not state.is_duplicate(bot_state, ev.event_id):
-                    score = score_all_time_record(
-                        ev.new_temp_c, ev.old_record_c, ev.old_record_year,
-                        ev.years_of_data, kind="high",
-                    )
-                    if _should_draft(score, ev.event_id):
-                        strongest_signal = ev
-                        strongest_score = score
-                        strongest_event_id = ev.event_id
-                        strongest_type = "all_time_high"
-                        strongest_city = ev.city
-                        strongest_headline = f"{ev.city} on pace for its hottest in {ev.years_of_data}yr archive"
-                        strongest_facts = [
-                            _fact("Forecast high", _temp_pair_c(ev.new_temp_c)),
-                            _fact("Prior archive max", _temp_pair_c(ev.old_record_c)),
-                            _fact("Prior max year", ev.old_record_year),
-                            _fact("Archive span", f"{ev.years_of_data} years"),
-                            _fact("Country", ev.country),
-                        ]
-                        signal_counts["all_time"] += 1
-
-            if strongest_signal is None and bundle.all_time_low:
-                ev = bundle.all_time_low
-                if not state.is_duplicate(bot_state, ev.event_id):
-                    score = score_all_time_record(
-                        ev.new_temp_c, ev.old_record_c, ev.old_record_year,
-                        ev.years_of_data, kind="low",
-                    )
-                    if _should_draft(score, ev.event_id):
-                        strongest_signal = ev
-                        strongest_score = score
-                        strongest_event_id = ev.event_id
-                        strongest_type = "all_time_low"
-                        strongest_city = ev.city
-                        strongest_headline = f"{ev.city} hit its coldest reading in {ev.years_of_data}yr archive"
-                        strongest_facts = [
-                            _fact("Observed low", _temp_pair_c(ev.new_temp_c)),
-                            _fact("Prior archive min", _temp_pair_c(ev.old_record_c)),
-                            _fact("Prior min year", ev.old_record_year),
-                            _fact("Archive span", f"{ev.years_of_data} years"),
-                            _fact("Country", ev.country),
-                        ]
-                        signal_counts["all_time"] += 1
-
-            if strongest_signal is None and bundle.monthly_high:
-                ev_mh: MonthlyRecord = bundle.monthly_high
-                # Suppress "hottest April ever - old record set in 2026"
-                # tweets. When the prior record was set in the same year as
-                # this reading, the "hottest ever" framing reads as nonsense.
-                if (
-                    not state.is_duplicate(bot_state, ev_mh.event_id)
-                    and ev_mh.old_record_year != signal_year
-                ):
-                    score = score_monthly_record(
-                        ev_mh.new_temp_c, ev_mh.old_record_c, ev_mh.old_record_year,
-                        ev_mh.month, ev_mh.years_of_data, kind="high",
-                    )
-                    if _should_draft(score, ev_mh.event_id):
-                        month_name = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][ev_mh.month]
-                        strongest_signal = ev_mh
-                        strongest_score = score
-                        strongest_event_id = ev_mh.event_id
-                        strongest_type = "monthly_high"
-                        strongest_city = ev_mh.city
-                        strongest_headline = f"{ev_mh.city} on pace for hottest {month_name} on record"
-                        strongest_facts = [
-                            _fact("Forecast high", _temp_pair_c(ev_mh.new_temp_c)),
-                            _fact(f"Prior {month_name} max", _temp_pair_c(ev_mh.old_record_c)),
-                            _fact("Prior year", ev_mh.old_record_year),
-                            _fact("Archive span", f"{ev_mh.years_of_data} years"),
-                        ]
-                        signal_counts["monthly"] += 1
-
-            if strongest_signal is None and bundle.monthly_low:
-                ev_ml: MonthlyRecord = bundle.monthly_low
-                if (
-                    not state.is_duplicate(bot_state, ev_ml.event_id)
-                    and ev_ml.old_record_year != signal_year
-                ):
-                    score = score_monthly_record(
-                        ev_ml.new_temp_c, ev_ml.old_record_c, ev_ml.old_record_year,
-                        ev_ml.month, ev_ml.years_of_data, kind="low",
-                    )
-                    if _should_draft(score, ev_ml.event_id):
-                        month_name = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][ev_ml.month]
-                        strongest_signal = ev_ml
-                        strongest_score = score
-                        strongest_event_id = ev_ml.event_id
-                        strongest_type = "monthly_low"
-                        strongest_city = ev_ml.city
-                        strongest_headline = f"{ev_ml.city} hit its coldest {month_name} reading on record"
-                        strongest_facts = [
-                            _fact("Observed low", _temp_pair_c(ev_ml.new_temp_c)),
-                            _fact(f"Prior {month_name} min", _temp_pair_c(ev_ml.old_record_c)),
-                            _fact("Prior year", ev_ml.old_record_year),
-                            _fact("Archive span", f"{ev_ml.years_of_data} years"),
-                        ]
-                        signal_counts["monthly"] += 1
-
-            if strongest_signal is None and bundle.absolute_extreme:
-                ev_ae: AbsoluteExtremeEvent = bundle.absolute_extreme
-                if not state.is_duplicate(bot_state, ev_ae.event_id):
-                    score = score_absolute_extreme(
-                        ev_ae.today_temp_c,
-                        ev_ae.lat,
-                        ev_ae.band_label,
-                        ev_ae.threshold_c,
-                        kind=ev_ae.kind,
-                    )
-                    if _should_draft(score, ev_ae.event_id):
-                        strongest_signal = ev_ae
-                        strongest_score = score
-                        strongest_event_id = ev_ae.event_id
-                        strongest_type = "absolute_extreme"
-                        strongest_city = ev_ae.city
-                        strongest_headline = (
-                            f"{ev_ae.city}: {ev_ae.today_temp_c:.1f}C "
-                            f"({ev_ae.band_label} absolute extreme)"
-                        )
-                        strongest_facts = [
-                            _fact("City", ev_ae.city),
-                            _fact("Country", ev_ae.country),
-                            _fact("Temperature", _temp_pair_c(ev_ae.today_temp_c)),
-                            _fact("Latitude band", ev_ae.band_label),
-                            _fact("Band threshold", _temp_pair_c(ev_ae.threshold_c)),
-                            _fact("Kind", ev_ae.kind),
-                            _fact("Data source", ev_ae.data_source),
-                        ]
-                        signal_counts["absolute_extreme"] += 1
-
-            if strongest_signal is None and bundle.anomaly_hot:
-                ev_ah: AnomalyEvent = bundle.anomaly_hot
-                if not state.is_duplicate(bot_state, ev_ah.event_id):
-                    score = score_anomaly(
-                        ev_ah.today_temp_c, ev_ah.historical_mean_c, ev_ah.anomaly_c,
-                        kind="hot",
-                    )
-                    if _should_draft(score, ev_ah.event_id):
-                        strongest_signal = ev_ah
-                        strongest_score = score
-                        strongest_event_id = ev_ah.event_id
-                        strongest_type = "anomaly_hot"
-                        strongest_city = ev_ah.city
-                        strongest_headline = f"{ev_ah.city}: +{ev_ah.anomaly_c:.1f}C above normal"
-                        strongest_facts = [
-                            _fact("Today", _temp_pair_c(ev_ah.today_temp_c)),
-                            _fact("Historical mean", _temp_pair_c(ev_ah.historical_mean_c)),
-                            _fact("Anomaly", f"+{ev_ah.anomaly_c:.1f}C"),
-                        ]
-                        signal_counts["anomaly"] += 1
-
-            if strongest_signal is None and bundle.anomaly_cold:
-                ev_ac: AnomalyEvent = bundle.anomaly_cold
-                if not state.is_duplicate(bot_state, ev_ac.event_id):
-                    score = score_anomaly(
-                        ev_ac.today_temp_c, ev_ac.historical_mean_c, ev_ac.anomaly_c,
-                        kind="cold",
-                    )
-                    if _should_draft(score, ev_ac.event_id):
-                        strongest_signal = ev_ac
-                        strongest_score = score
-                        strongest_event_id = ev_ac.event_id
-                        strongest_type = "anomaly_cold"
-                        strongest_city = ev_ac.city
-                        strongest_headline = f"{ev_ac.city}: {ev_ac.anomaly_c:.1f}C below normal"
-                        strongest_facts = [
-                            _fact("Observed low", _temp_pair_c(ev_ac.today_temp_c)),
-                            _fact("Historical mean low", _temp_pair_c(ev_ac.historical_mean_c)),
-                            _fact("Anomaly", f"{ev_ac.anomaly_c:.1f}C"),
-                        ]
-                        signal_counts["anomaly"] += 1
-
-            if (
-                strongest_signal is None
-                and bundle.calendar_date_high
-                # #414: a city inside a fired records-cluster has its individual
-                # daily draft suppressed — the dome is the story (all-time/monthly
-                # winners above are untouched; they keep their bigger draft).
-                and bundle.calendar_date_high.event_id
-                not in records_cluster_suppressed_ids
-            ):
-                ev_cdh: RecordEvent = bundle.calendar_date_high
-                if not state.is_duplicate(bot_state, ev_cdh.event_id):
-                    score = score_record_event(
-                        ev_cdh.new_temp_c, ev_cdh.old_record_c, ev_cdh.old_record_year,
-                    )
-                    if _should_draft(score, ev_cdh.event_id):
-                        strongest_signal = ev_cdh
-                        strongest_score = score
-                        strongest_event_id = ev_cdh.event_id
-                        strongest_type = "record"
-                        strongest_city = ev_cdh.city
-                        strongest_headline = f"{ev_cdh.city} is forecast to challenge a heat record"
-                        strongest_facts = [
-                            _fact("Forecast high", _temp_pair_c(ev_cdh.new_temp_c)),
-                            _fact("Previous record", _temp_pair_c(ev_cdh.old_record_c)),
-                            _fact("Old record year", ev_cdh.old_record_year),
-                            _fact("Record gap", f"+{ev_cdh.new_temp_c - ev_cdh.old_record_c:.1f}C"),
-                            _fact("Country", ev_cdh.country),
-                        ]
-                        signal_counts["calendar"] += 1
-                        # Track only heat records for the simultaneous-records
-                        # lane, preserving enough station detail for roll-call.
-                        simultaneous_record_stations.append({
-                            "city": ev_cdh.city,
-                            "country": ev_cdh.country,
-                            "temp_c": ev_cdh.new_temp_c,
-                            "kind": "high",
-                            "old_record_c": ev_cdh.old_record_c,
-                            "old_record_year": ev_cdh.old_record_year,
-                            "margin_c": round(ev_cdh.new_temp_c - ev_cdh.old_record_c, 1),
-                            "elevation_m": city_elevations.get((ev_cdh.city, ev_cdh.country)),
-                            "signal_date": (bundle.signal_date or date.today()).isoformat(),
-                            "event_id": ev_cdh.event_id,
-                            "evidence": deepcopy(ev_cdh.evidence),
-                        })
-
-            if strongest_signal is None and bundle.calendar_date_low:
-                ev_cdl: RecordEvent = bundle.calendar_date_low
-                if not state.is_duplicate(bot_state, ev_cdl.event_id):
-                    score = score_record_low_event(
-                        ev_cdl.new_temp_c, ev_cdl.old_record_c, ev_cdl.old_record_year,
-                    )
-                    if _should_draft(score, ev_cdl.event_id):
-                        strongest_signal = ev_cdl
-                        strongest_score = score
-                        strongest_event_id = ev_cdl.event_id
-                        strongest_type = "record_low"
-                        strongest_city = ev_cdl.city
-                        strongest_headline = f"{ev_cdl.city} hit a daily cold record"
-                        strongest_facts = [
-                            _fact("Observed low", _temp_pair_c(ev_cdl.new_temp_c)),
-                            _fact("Previous record low", _temp_pair_c(ev_cdl.old_record_c)),
-                            _fact("Old record year", ev_cdl.old_record_year),
-                            _fact("Record gap", f"{ev_cdl.new_temp_c - ev_cdl.old_record_c:.1f}C"),
-                            _fact("Country", ev_cdl.country),
-                        ]
-                        signal_counts["calendar"] += 1
+            for count_key, delta in selected.counts.items():
+                signal_counts[count_key] += delta
+            simultaneous_record_stations.extend(selected.simultaneous)
 
             if strongest_signal:
                 # If strongest_signal is set, the cascade above always set
@@ -868,6 +992,7 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
                     strongest_type,
                     strongest_signal,
                     result_out=bundle_result,
+                    source="ghcn" if bundle.station_id else "open_meteo",
                 )
                 if two_bot_bundle is None:
                     print(

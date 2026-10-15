@@ -9,7 +9,8 @@ from typing import Any, cast
 from src.editorial.revisions import fingerprint
 from src.state_schema import BotState
 from src.two_bot import critic, fact_check, pipeline
-from src.two_bot.candidate_derivation import checked_text, retained_bundle
+from src.two_bot.candidate_derivation import retained_bundle
+from src.two_bot.check_origin import checked_text
 from src.two_bot.evidence_contract import audit_story_bundle
 from src.two_bot.types import MemorySlice, StoryBundle
 from src.voice import safety
@@ -17,23 +18,24 @@ from src.voice import safety
 MAX_OUTPUT_TOKENS = 4096
 
 
-def retained_inputs(packet: dict) -> tuple[StoryBundle, MemorySlice, BotState]:
+def retained_inputs(packet: dict, *, resolved=None, scientific=False) -> tuple[StoryBundle, MemorySlice, BotState]:
     """Reject constructor repair/default drift instead of inventing evidence."""
-    bundle = retained_bundle(packet["bundle"])
+    bundle = retained_bundle(packet["bundle"], resolved=resolved)
     memory = MemorySlice(**deepcopy(packet["memory"]))
-    if fingerprint(bundle.to_dict()) != fingerprint(packet["bundle"]) or fingerprint(
+    encoded_bundle = packet["bundle"] if resolved is not None else bundle.to_dict()  # verify_saved already compared the exact source-derived JSON codec.
+    if fingerprint(encoded_bundle) != fingerprint(packet["bundle"]) or fingerprint(
         memory.to_dict()
     ) != fingerprint(packet["memory"]):
         raise ValueError("retained_check_input_roundtrip_changed")
     state = deepcopy(packet["checker_state"])
     if not isinstance(state, dict) or fingerprint(state) != packet["checker_state_sha256"]:
         raise ValueError("retained_checker_state_changed")
-    return bundle, memory, cast(BotState, state)
+    return (resolved.full if scientific and resolved is not None else bundle), memory, cast(BotState, state)
 
 
-def prepare_request(packet: dict, stage: str) -> dict:
-    bundle, memory, state = retained_inputs(packet)
-    tweet = checked_text(packet)
+def prepare_request(packet: dict, stage: str, *, resolved=None) -> dict:
+    bundle, memory, state = retained_inputs(packet, resolved=resolved)
+    tweet = checked_text(packet, resolved=resolved)
     if stage == "deterministic":
         return dict(schema_version=1, stage=stage, check_set_sha256=fingerprint(packet))
     if stage == "safety":
@@ -57,9 +59,9 @@ def prepare_request(packet: dict, stage: str) -> dict:
     return request
 
 
-def deterministic_result(packet: dict) -> dict:
-    bundle, _, state = retained_inputs(packet)
-    tweet = checked_text(packet)
+def deterministic_result(packet: dict, *, resolved=None) -> dict:
+    bundle, _, state = retained_inputs(packet, resolved=resolved, scientific=True)
+    tweet = checked_text(packet, resolved=resolved)
     failures: list[str] = []
     audit = audit_story_bundle(bundle)
     if not audit.prompt_ready:
@@ -96,7 +98,7 @@ def _pairs(items):
     return result
 
 
-def interpret_observation(packet: dict, stage: str, observation: dict, raw: bytes) -> dict:
+def interpret_observation(packet: dict, stage: str, observation: dict, raw: bytes, *, resolved=None) -> dict:
     """Parse retained bytes with actual gates; unknown/malformed never passes."""
     outcome: dict[str, Any] = dict(execution_status="error", verdict=None, result={}, usage=None)
     if not observation["complete"] or (
@@ -106,7 +108,7 @@ def interpret_observation(packet: dict, stage: str, observation: dict, raw: byte
             outcome, execution_status="unavailable", result={"reason": "check_response_unavailable"}
         )
     try:
-        tweet = checked_text(packet)
+        tweet = checked_text(packet, resolved=resolved)
         value = json.loads(raw, object_pairs_hook=_pairs)
         fingerprint(value)  # No NaN/infinity or malformed Unicode.
         if stage == "deterministic":
@@ -168,7 +170,7 @@ def interpret_observation(packet: dict, stage: str, observation: dict, raw: byte
                 text += part["text"]
         if not text.strip() or len(text.encode()) > 65_536:
             raise ValueError("invalid_check_text")
-        bundle, _, state = retained_inputs(packet)
+        bundle, _, state = retained_inputs(packet, resolved=resolved, scientific=True)
         if stage == "safety":
             allowed = safety.interpret_response(text) == "allow"
             result = dict(passed=allowed)

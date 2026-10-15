@@ -1,0 +1,175 @@
+import test from "node:test"
+import assert from "node:assert/strict"
+import { readFileSync, writeFileSync } from "node:fs"
+import { createServer } from "node:http"
+import { runFixtureWorker } from "../test-support/fixture-worker.js"
+import { Readable } from "node:stream"
+import { mediaCommand, confirmationsFor } from "../lib/editor-media.js"
+import { createDraftCommand } from "../lib/draft-command-request.js"
+import { withCommandReference, abandonmentBody, saveCommandReference, readCommandReference, clearCommandReference } from "../lib/local-command-recovery.js"
+
+test("actual published radar HTTP/component → conversion → joint attestation → checks → outbox → edit", { skip:!process.env.THEHEAT_PUBLISHED_RADAR_HTTP_CONFIG }, async () => {
+  const file = process.env.THEHEAT_PUBLISHED_RADAR_HTTP_CONFIG, config = JSON.parse(readFileSync(file))
+  const prior = {...process.env}, actualFetch = globalThis.fetch
+  process.env.NODE_ENV="test"; process.env.DASHBOARD_AUTH_DISABLED="1"; process.env.THEHEAT_LOCAL_COMMAND_URL=config.endpoint
+  globalThis.fetch = (url, options) => {
+    assert.ok([config.endpoint,config.origin].includes(new URL(url).origin), "External network refused")
+    return actualFetch(url,options)
+  }
+  const routes = { "/api/editor-media":await import("../app/api/editor-media/route.js"), "/api/drafts":await import("../app/api/drafts/route.js"),
+    "/api/local-command-recovery":await import("../app/api/local-command-recovery/route.js"), "/api/dashboard":await import("../app/api/dashboard/route.js") }
+  const server = createServer(async (incoming,outgoing) => {
+    try {
+      const request = new Request(config.origin+incoming.url, { method:incoming.method, headers:incoming.headers,
+        ...(incoming.method==="POST"?{ body:Readable.toWeb(incoming), duplex:"half" }: {}) })
+      const route = routes[new URL(request.url).pathname]
+      const response = await route[incoming.method](request)
+      outgoing.writeHead(response.status,Object.fromEntries(response.headers)); outgoing.end(Buffer.from(await response.arrayBuffer()))
+    } catch { outgoing.writeHead(500); outgoing.end("failed") }
+  })
+  await new Promise((resolve,reject)=>{server.once("error",reject);server.listen(Number(new URL(config.origin).port),"127.0.0.1",resolve)})
+  async function request(path, body, role="editor") {
+    const response = await actualFetch(config.origin+path,{ method:body?"POST":"GET", headers:{Origin:config.origin,
+      Authorization:`Basic ${Buffer.from(`${role}:invented-${role}`).toString("base64")}`, "Content-Type":"application/json" }, ...(body?{body:JSON.stringify(body)}:{}) })
+    return { status:response.status, body:["image/png", "image/gif"].includes(response.headers.get("content-type")) ? new Uint8Array(await response.arrayBuffer()) : await response.json() }
+  }
+  const mediaPath = `/api/editor-media?draftId=${config.draft_id}`
+  async function worker(operation,id) {
+    const run=await runFixtureWorker(config.python,[config.child,file,operation,id],{cwd:config.root,env:prior,encoding:"utf8",timeout:60000})
+    assert.equal(run.status,0,run.stdout+run.stderr)
+    return JSON.parse(run.stdout.trim().split("\n").at(-1))
+  }
+  async function submit(command,role="editor") {
+    const accepted=await request("/api/drafts",command,role)
+    assert.equal(accepted.status,202,JSON.stringify(accepted.body))
+    const recovery=await request(`/api/drafts?commandId=${command.command_id}`,null,role)
+    assert.deepEqual(recovery.body.recoverable_command,command)
+    assert.equal(recovery.body.status,"pending")
+    const result=await worker("consume",command.command_id)
+    assert.notEqual(result.status,"rejected",JSON.stringify(result))
+    assert.deepEqual((await worker("consume",command.command_id)),result)
+    return result
+  }
+  const costSnapshots=[]
+  async function costs(label,count,expected=null) {
+    const response=await request("/api/dashboard",null,"viewer")
+    assert.equal(response.status,200,JSON.stringify(response.body))
+    const value=response.body.localCostEvidence
+    assert.equal(value.status,"available",JSON.stringify(value))
+    assert.equal(value.requests.length,count)
+    assert.equal(new Set(value.requests.map(r=>r.intent_id)).size,count)
+    assert.equal(new Set(value.requests.map(r=>r.origin.grant_id)).size,count)
+    assert.equal(value.summary.commitments_micro_usd.held,count===4?"35":"50")
+    assert.ok(value.requests.every(r=>r.charge_status==="unreconciled"&&r.recorded_settlement_micro_usd===null&&r.usage.status==="present"))
+    assert.equal(value.requests.find(r=>r.role==="writer").usage.counts.input_tokens,11)
+    for(const row of value.requests.filter(r=>r.role!=="writer")) assert.equal(row.usage.counts.prompt_token_count,19)
+    if(expected) assert.deepEqual(value.requests,expected.requests)
+    const React=await import("react"),{renderToStaticMarkup}=await import("react-dom/server"),{CostPanel}=await import("../app/components/CostPanel.js")
+    const markup=renderToStaticMarkup(React.createElement(CostPanel,{localEvidence:value}))
+    for(const text of ["Local requests and reserved allowance","Final charge unknown","Writing","Safety","Fact check","Critic"]) assert.ok(markup.includes(text),text)
+    costSnapshots.push({label,value})
+    return value
+  }
+  try {
+    await costs("before_published_review",4)
+    let current=(await request(mediaPath)).body
+    assert.equal(current.status,"ready",JSON.stringify(current))
+    const prepare=mediaCommand(current,"prepare_media_revision",null,new Date(config.at))
+    assert.equal((await request("/api/drafts",prepare,"viewer")).status,403)
+    assert.equal((await submit(prepare)).status,"unchanged")
+    current=(await request(mediaPath)).body
+    assert.equal(current.status,"prepared")
+    assert.equal(current.packet.schema_version,2)
+    const React=await import("react"),{renderToStaticMarkup}=await import("react-dom/server")
+    const {EditorMediaPanel}=await import("../app/components/EditorMedia.js")
+    const markup=renderToStaticMarkup(React.createElement(EditorMediaPanel,{view:current,role:"editor",busy:false,imageUrl:"blob:invented-retained-image",confirmations:{},reason:"",setConfirmations(){},setReason(){},submit(){},refresh(){}}))
+    assert.equal((markup.match(/type="checkbox"/g)||[]).length,8)
+    assert.ok(markup.includes("not the full warning footprint"))
+    assert.ok(markup.includes("Inspect the unchanged original at full size"))
+    assert.ok(markup.includes("Invented radar test image"))
+    assert.ok(!markup.includes("Invented local graphic"))
+    const pngPath=mediaPath+`&proposal=${current.preparation.proposal_sha256}`
+    const png=await request(pngPath)
+    assert.equal(png.status,200);assert.ok(png.body.length>1000)
+    const originalPath=pngPath+"&original=1"
+    const original=await request(originalPath)
+    assert.equal(original.status,200)
+    assert.equal(Buffer.from(original.body).toString("base64"),config.original_base64)
+    assert.equal((await request(mediaPath+"&original=1")).status,400)
+    assert.equal((await request(originalPath+"&original=1")).status,400)
+    assert.equal((await request(`/api/editor-media?draftId=draft-1&proposal=${current.preparation.proposal_sha256}`)).status,409)
+    assert.equal((await request(mediaPath+"&proposal="+"f".repeat(64))).status,409)
+    await submit(mediaCommand(current,"attach_media_revision",{decision:"accept",confirmations:Object.fromEntries(Object.keys(confirmationsFor(current.packet)).map(k=>[k,true])),reason:"Reviewed actual invented source, PNG and alt together."},new Date(config.at)))
+    current=(await request(mediaPath)).body
+    assert.equal(current.review_current,true)
+    const checks=mediaCommand(current,"request_revision_checks",null,new Date(config.at))
+    await submit(checks)
+    assert.equal((await request(mediaPath)).body.checks_status,"pending")
+    for(const stage of ["deterministic","safety","fact_check","critic"]){
+      const result=await worker(stage,checks.command_id)
+      assert.equal(result.outcome,"completed",JSON.stringify(result));assert.equal(result.checks.stages[stage],"passed")
+    }
+    current=(await request(mediaPath)).body
+    assert.equal(current.checks_status,"passed")
+    const incurred=await costs("published_checks_recorded",7)
+    const approve=mediaCommand(current,"approve_media_revision",null,new Date(config.at))
+    assert.equal((await request("/api/drafts",approve)).status,403)
+    const result=await submit(approve,"publisher")
+    assert.ok(result.publish_intent_id)
+    assert.equal((await request(mediaPath)).body.parked,true)
+    await costs("parked",7,incurred)
+    const delivery=await worker("deliver",result.delivery.intent_id)
+    assert.equal(delivery.receipts.length,5)
+    assert.ok(delivery.receipts.every(row=>row.outcome==="confirmed"))
+    const parkedDraft=(await request("/api/drafts")).body.drafts.find(d=>d.id===config.draft_id)
+    const cancel=createDraftCommand(parkedDraft,"cancel_auto_approve",{},new Date(config.at))
+    assert.equal(cancel.action,"cancel_approval")
+    assert.equal((await submit(cancel)).status,"applied")
+    assert.equal((await request(mediaPath)).body.parked,false)
+    await costs("explicit_approval_cancelled",7,incurred)
+    const draft=(await request("/api/drafts")).body.drafts.find(d=>d.id===config.draft_id)
+    assert.equal(draft.status,"pending")
+    const edit=createDraftCommand(draft,"edit",{editedText:"An edited invented weather statement."},new Date(config.at))
+    await submit(edit)
+    current=(await request(mediaPath)).body
+    assert.equal(current.review_current,false);assert.equal(current.parked,false)
+    await costs("edited",7,incurred)
+    assert.deepEqual((await request(pngPath)).body,png.body)
+    assert.deepEqual((await request(originalPath)).body,original.body)
+    assert.equal((await request(`/api/drafts?commandId=${approve.command_id}`)).body.recoverable_command,null)
+    // Reload before any acceptance: only a digest-bearing reference survives.
+    const latest=(await request("/api/drafts")).body
+    const absent=createDraftCommand(latest.drafts.find(d=>d.id===config.draft_id),"edit",{editedText:"This must never be saved."},new Date(config.at))
+    const saved=await withCommandReference({command:absent,draftId:config.draft_id,action:"edit"})
+    const rows=new Map(),storage={setItem:(k,v)=>rows.set(k,v),getItem:k=>rows.get(k),removeItem:k=>rows.delete(k)}
+    saveCommandReference(storage,"same-operator",saved)
+    const reloaded=readCommandReference(storage,"same-operator"), body=abandonmentBody(reloaded)
+    assert.equal(reloaded.command.payload,undefined)
+    assert.equal((await request(`/api/drafts?commandId=${absent.command_id}`)).status,404)
+    const path=`/api/local-command-recovery?commandId=${absent.command_id}`
+    assert.equal((await request(path,body,"viewer")).status,403)
+    assert.equal((await request("/api/drafts",{...absent,action:"abandon_submission",payload:body})).status,409)
+    const closed=await request(path,body)
+    assert.equal(closed.status,200,JSON.stringify(closed.body))
+    assert.equal(closed.body.result.code,"submission_abandoned")
+    assert.deepEqual((await request(path,body)).body,closed.body)
+    assert.equal((await request(path,body,"publisher")).status,409)
+    assert.equal((await request("/api/drafts",absent)).status,409)
+    assert.deepEqual((await request("/api/drafts")).body,latest)
+    clearCommandReference(storage,"same-operator")
+    assert.equal(readCommandReference(storage,"same-operator"),null)
+    writeFileSync(config.cost_trace,JSON.stringify(costSnapshots))
+  } finally {
+    await new Promise(resolve=>server.close(resolve));globalThis.fetch=actualFetch
+    for(const key of Object.keys(process.env))if(!Object.hasOwn(prior,key))delete process.env[key]
+    Object.assign(process.env,prior)
+  }
+})
+
+// Pure component contract is also exercised without the external HTTP fixture.
+test("published review requires eight explicit confirmations without changing generated reviews", async () => {
+  const {jointConfirmations,confirmationsFor}=await import("../lib/editor-media.js")
+  assert.equal(Object.keys(jointConfirmations).length,5)
+  assert.equal(Object.keys(confirmationsFor({schema_version:1})).length,5)
+  assert.equal(Object.keys(confirmationsFor({schema_version:2})).length,8)
+})

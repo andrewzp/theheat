@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 from datetime import datetime
+import hashlib
+from html.parser import HTMLParser
+import json
 import re
 from typing import Any
 from urllib.parse import unquote, urljoin, urlsplit
@@ -32,7 +35,7 @@ NHC_CURRENT_STORMS_URL = "https://www.nhc.noaa.gov/CurrentStorms.json"
 NHC_BASE_URL = "https://www.nhc.noaa.gov/"
 
 
-def fetch_active_cyclones(*, strict: bool = False) -> list[CycloneAdvisory]:
+def fetch_active_cyclones(*, strict: bool = False, retention_observer=None) -> list[CycloneAdvisory]:
     """Fetch active NHC Atlantic and East Pacific storm advisories."""
 
     fetched_advisories: list[CycloneAdvisory] = []
@@ -52,7 +55,8 @@ def fetch_active_cyclones(*, strict: bool = False) -> list[CycloneAdvisory]:
         for raw in payload.get("activeStorms") or []:
             if not isinstance(raw, dict):
                 continue
-            advisory = _parse_active_storm(raw)
+            advisory = (_parse_active_storm(raw) if retention_observer is None else
+                        _parse_active_storm(raw, retention_observer=retention_observer))
             if advisory is not None:
                 advisories.append(advisory)
         fetched_advisories = advisories
@@ -67,7 +71,7 @@ def fetch_active_cyclones(*, strict: bool = False) -> list[CycloneAdvisory]:
     return fetched_advisories
 
 
-def _parse_active_storm(raw: dict[str, Any]) -> CycloneAdvisory | None:
+def _parse_active_storm(raw: dict[str, Any], *, retention_observer=None) -> CycloneAdvisory | None:
     storm_id = str(_first_present(
         raw,
         "id",
@@ -141,13 +145,16 @@ def _parse_active_storm(raw: dict[str, Any]) -> CycloneAdvisory | None:
     # the storm still parses; the land-threat signal simply cannot fire.
     forecast_points: tuple[ForecastPoint, ...] = ()
     tcm_obj = raw.get("forecastAdvisory")
+    tcm_url = ""
+    acquisition: dict = {}
     if isinstance(tcm_obj, dict):
         tcm_url = _normalize_url(tcm_obj.get("url"))
-        tcm_text = _fetch_advisory_text(tcm_url)
+        tcm_text = (_fetch_advisory_text(tcm_url) if retention_observer is None else
+                    _fetch_advisory_text(tcm_url, acquisition=acquisition))
         if tcm_text:
             forecast_points = parse_nhc_forecast_advisory(tcm_text)
 
-    return CycloneAdvisory(
+    advisory = CycloneAdvisory(
         source="nhc",
         storm_id=storm_id or name,
         storm_name=name or storm_id,
@@ -163,6 +170,24 @@ def _parse_active_storm(raw: dict[str, Any]) -> CycloneAdvisory | None:
         advisory_text=advisory_text,
         forecast_points=forecast_points,
     )
+
+    if retention_observer is not None:
+        # Canonical parsed JSON row, not raw wire bytes. Do not infer product
+        # issuance/number/completeness from the current storm or truncated text.
+        from dataclasses import asdict
+        def digest(value):
+            return hashlib.sha256(json.dumps(value, sort_keys=True, ensure_ascii=False,
+                allow_nan=False, separators=(",", ":")).encode()).hexdigest()
+        forecast = tcm_obj if isinstance(tcm_obj, dict) else {}
+        retention_observer(advisory, {
+            "source_row_sha256": digest(raw),
+            "forecast_product_url": tcm_url or None,
+            "forecast_issued_at_original": _issue_time(forecast.get("issuance")) or None,
+            "forecast_advisory_number": _advisory_number(forecast.get("advNum")) or None,
+            "forecast_text_complete": acquisition.get("complete"),
+            "forecast_points_sha256": digest([asdict(point) for point in forecast_points]),
+        })
+    return advisory
 
 
 def _first_present(raw: dict[str, Any], *keys: str, default: Any = None) -> Any:
@@ -227,7 +252,94 @@ def _normalize_url(value: Any) -> str:
     return url
 
 
-def _fetch_advisory_text(url: str) -> str:
+class _AdvisoryProductParser(HTMLParser):
+    """Recover one closed pre with text/inert links; surrounding HTML is not evidence."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.has_markup = False
+        self.product_count = 0
+        self.in_product = False
+        self.in_anchor = False
+        self.closed_product = False
+        self.invalid_product = False
+        self.parts: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        self.has_markup = True
+        if self.in_product:
+            # NHC embeds ordinary links in its text product. Preserve their
+            # visible text, never their URL/attributes or hidden/active markup.
+            if (tag == "a" and not self.in_anchor and len(attrs) <= 1
+                    and all(name == "href" for name, _ in attrs)):
+                self.in_anchor = True
+            else:
+                self.invalid_product = True
+        if tag == "pre":
+            self.product_count += 1
+            self.in_product = True
+
+    def handle_endtag(self, tag: str) -> None:
+        self.has_markup = True
+        if tag == "pre":
+            if not self.in_product or self.in_anchor:
+                self.invalid_product = True
+            self.in_product = False
+            self.closed_product = True
+        elif tag == "a" and self.in_product:
+            if not self.in_anchor:
+                self.invalid_product = True
+            self.in_anchor = False
+        elif self.in_product:
+            self.invalid_product = True
+
+    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        self.has_markup = True
+        if tag == "pre" or self.in_product:
+            self.invalid_product = True
+
+    def handle_data(self, data: str) -> None:
+        if self.in_product:
+            self.parts.append(data)
+
+    def handle_comment(self, data: str) -> None:
+        self.has_markup = True
+        if self.in_product:
+            self.invalid_product = True
+
+    def handle_decl(self, decl: str) -> None:
+        self.handle_comment(decl)
+
+    handle_pi = handle_comment
+    unknown_decl = handle_comment
+
+
+def _extract_advisory_product(text: str) -> str:
+    """Keep plain text, or exactly one unambiguous complete HTML text product.
+
+    HTMLParser decodes character references once and preserves preformatted line
+    structure. It does not execute scripts or fetch linked resources. A recovered
+    product is still subject to the caller's text limit and scientific checks.
+    """
+    parser = _AdvisoryProductParser()
+    try:
+        parser.feed(text)
+        if re.match(r"</?pre(?:[\s/]|$)", parser.rawdata, re.IGNORECASE):
+            return ""
+        parser.close()
+    except (ValueError, AssertionError):
+        return ""
+    # Also recognize unfinished markup that HTMLParser left as ordinary data.
+    if not parser.has_markup and not re.search(r"<[A-Za-z!/?]", text):
+        return text if text.strip() else ""
+    if (parser.product_count != 1 or not parser.closed_product
+            or parser.in_product or parser.invalid_product):
+        return ""
+    product = "".join(parser.parts)
+    return product if product.strip() else ""
+
+
+def _fetch_advisory_text(url: str, *, acquisition: dict | None = None) -> str:
     if not url:
         return ""
     try:
@@ -237,7 +349,12 @@ def _fetch_advisory_text(url: str) -> str:
             timeout=15,
             attempts=2,
         )
-        return response.text[:8000]
+        text = _extract_advisory_product(response.text)
+        if acquisition is not None:
+            # Completeness concerns the recovered product, not surrounding HTML.
+            # Neither recovery nor completeness certifies identity or truth.
+            acquisition["complete"] = bool(text) and len(text) <= 8000
+        return text[:8000]
     except requests.RequestException:
         return ""
 

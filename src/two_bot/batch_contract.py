@@ -299,7 +299,11 @@ def _result(raw, plan, blocked):
             _require(isinstance(result["error"], dict), "invalid_provider_error")
             row["provider_error_sha256"] = fingerprint(result["error"])
         return row
-    message = result["message"]
+    return interpret_writer_message(result["message"], plan["policy"]["models"]["writer"], row)
+
+
+def interpret_writer_message(message, model, row):
+    """Shared exact provider envelope eligibility; transport identity stays outside."""
     _require(isinstance(message, dict), "invalid_message")
     row["usage"], row["usage_status"] = _usage(message)
     message_id = message.get("id")
@@ -310,7 +314,7 @@ def _result(raw, plan, blocked):
     if (
         message.get("type") != "message"
         or message.get("role") != "assistant"
-        or message.get("model") != plan["policy"]["models"]["writer"]
+        or message.get("model") != model
     ):
         row["blocked_reasons"].append("message_identity_mismatch")
     if message.get("stop_reason") != "end_turn":

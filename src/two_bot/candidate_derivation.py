@@ -41,9 +41,17 @@ def _sha(value: object) -> None:
              "invalid_derivation_hash")
 
 
-def retained_bundle(value: dict) -> StoryBundle:
+def has_ghcn_reference(value):
+    return isinstance(value, dict) and isinstance(value.get("raw_signal_dump"), dict) and "ghcn_claim_view" in value["raw_signal_dump"]
+
+
+def retained_bundle(value: dict, *, resolved=None) -> StoryBundle:
     """Refuse silent constructor/default/projection repair of retained evidence."""
     _bounded(value, MAX_INPUT_BYTES)
+    if has_ghcn_reference(value):
+        from src.two_bot.ghcn_claim_view import ResolvedClaim
+        _require(type(resolved) is ResolvedClaim, "ghcn_claim_view_requires_resolved_check_context")
+        return resolved.verify_saved(value)
     try:
         data = deepcopy(value)
         if "related_signals" in data:
@@ -74,7 +82,7 @@ def _inputs(candidate: dict, candidate_id: str, bundle: dict, policy: dict) -> N
              "invalid_derivation_candidate")
 
 
-def derive_candidate(candidate: dict, candidate_id: str, bundle: dict, policy: dict) -> dict:
+def derive_candidate(candidate: dict, candidate_id: str, bundle: dict, policy: dict, *, resolved=None) -> dict:
     """Build from an independently retained raw result, without mutating it."""
     _inputs(candidate, candidate_id, bundle, policy)
     _require(set(candidate) == {f.name for f in fields(WriterResult)}, "invalid_derivation_candidate")
@@ -86,7 +94,7 @@ def derive_candidate(candidate: dict, candidate_id: str, bundle: dict, policy: d
     _require(fingerprint(asdict(writer)) == fingerprint(candidate), "changed_derivation_candidate")
     identity = formatter_identity()
     _require(policy["source_sha256"] == identity["source_sha256"], "formatter_unavailable")
-    final = format_source_link(candidate["tweet"], retained_bundle(bundle))
+    final = format_source_link(candidate["tweet"], retained_bundle(bundle, resolved=resolved))
     result = dict(schema_version=1, raw_candidate_id=candidate_id,
                   raw_candidate_sha256=fingerprint(candidate), bundle_sha256=fingerprint(bundle),
                   policy_sha256=fingerprint(policy), formatter=identity,
@@ -96,7 +104,7 @@ def derive_candidate(candidate: dict, candidate_id: str, bundle: dict, policy: d
 
 
 def inspect_derivation(derivation: dict, candidate: dict, candidate_id: str,
-                       bundle: dict, policy: dict) -> str:
+                       bundle: dict, policy: dict, *, resolved=None) -> str:
     """Verify bindings; explicitly withhold recomputation for unavailable code."""
     _inputs(candidate, candidate_id, bundle, policy)
     _bounded(derivation, MAX_DERIVATION_BYTES)
@@ -121,13 +129,15 @@ def inspect_derivation(derivation: dict, candidate: dict, candidate_id: str,
              and derivation["policy_sha256"] == fingerprint(policy)
              and formatter["source_sha256"] == policy["source_sha256"]
              and derivation["text_sha256"] == text_hash(final), "changed_derivation_binding")
+    if has_ghcn_reference(bundle) and resolved is None:
+        return "retained_ghcn_derivation"
     try:
         current = formatter_identity()
     except (OSError, ValueError, UnicodeError):
         return "formatter_unavailable"
     if formatter != current:
         return "formatter_unavailable"
-    expected = derive_candidate(candidate, candidate_id, bundle, policy)
+    expected = derive_candidate(candidate, candidate_id, bundle, policy, resolved=resolved)
     _require(fingerprint(expected) == fingerprint(derivation), "changed_derived_text")
     return "verified_current_formatter"
 

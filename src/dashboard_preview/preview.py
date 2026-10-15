@@ -6,7 +6,8 @@ import re
 
 from src.dashboard_preview.errors import PreviewError
 from src.editorial.revisions import decision_revision, draft_identity, fingerprint, has_unresolved_publish
-from src.media.fire_graphic_adapter import fire_graphic_spec
+from src.media.air_quality_graphic_adapter import pm25_graphic_spec
+from src.media.fire_map_graphic_adapter import fire_map_graphic_spec
 from src.media.evidence_graphic_render import render_svg
 from src.media.temperature_graphic_adapter import _StoredBundle
 
@@ -55,6 +56,35 @@ def _selected(state, request):
     return draft
 
 
+def _retained_bundle_json(bundle, *, code="graphic_unavailable"):
+    # Editorial fingerprints deliberately normalize numeric types. The source
+    # warrants do not: 500.0 -> 500 can invalidate a selected-record digest.
+    encoded = json.dumps(bundle, sort_keys=True, ensure_ascii=False, allow_nan=False)
+    if len(encoded.encode("utf-8")) > 1_000_000:
+        raise PreviewError(code)
+    return encoded
+
+
+def qualified_spec(bundle, *, synthetic=False):
+    """Shared Python qualification; callers own authentication/currentness."""
+    _retained_bundle_json(bundle)
+    if bundle["signal_kind"] == "fire":
+        receipts = [bundle["raw_signal_dump"]["acquisition_provenance"],
+                    *[r["acquisition_evidence"] for r in bundle.get("related_signals", [])]]
+        spec = fire_map_graphic_spec(_StoredBundle(bundle), expected_bundle_sha256=fingerprint(bundle),
+                                expected_receipt_sha256=[fingerprint(r) for r in receipts], synthetic=synthetic)
+        return spec, "NASA FIRMS · MODIS", {"kind": "modis_acquisition", "acquired_at": spec["evidence"]["acquired_at"]}
+    if bundle["signal_kind"] == "air_quality_hazard":
+        spec = pm25_graphic_spec(_StoredBundle(bundle), expected_bundle_sha256=fingerprint(bundle),
+                                expected_window_sha256=fingerprint(bundle["raw_signal_dump"]["forecast_window"]), synthetic=synthetic)
+        evidence = spec["evidence"]
+        window = evidence["input_binding"]["bundles"][0]["bundle"]["raw_signal_dump"]["forecast_window"]
+        return spec, "CAMS via Open-Meteo", {"kind": "pm25_forecast_day",
+            **{key: evidence[key] for key in ("valid_date", "timezone", "valid_start", "valid_end")},
+            **{key: window[key] for key in ("requested_at", "retrieved_at")}}
+    raise PreviewError("graphic_unavailable")
+
+
 def build_preview(request, *, policy_sha, runtime_sha, read_state, budget, synthetic=False):
     check_request(request, policy_sha, runtime_sha)
     try:
@@ -63,26 +93,24 @@ def build_preview(request, *, policy_sha, runtime_sha, read_state, budget, synth
         original_status = draft["status"]
         bundle = deepcopy(draft["review_context"]["two_bot"]["bundle"])
         # Bound the full retained story before canonical hashing and validation.
-        if len(json.dumps(bundle, ensure_ascii=False, allow_nan=False).encode("utf-8")) > 1_000_000:
-            raise PreviewError("graphic_unavailable")
-        receipts = [bundle["raw_signal_dump"]["acquisition_provenance"],
-                    *[r["acquisition_evidence"] for r in bundle.get("related_signals", [])]]
-        spec = fire_graphic_spec(_StoredBundle(bundle), expected_bundle_sha256=fingerprint(bundle),
-                                expected_receipt_sha256=[fingerprint(r) for r in receipts], synthetic=synthetic)
+        retained_bundle = _retained_bundle_json(bundle)
+        spec, source, context = qualified_spec(bundle, synthetic=synthetic)
         budget.remaining()
         rendered = render_svg(**spec)
         budget.remaining()
         current = _selected(read_state(), request)
-        if current["status"] != original_status:
+        if (current["status"] != original_status
+                or _retained_bundle_json(current["review_context"]["two_bot"]["bundle"],
+                                         code="stale_preview") != retained_bundle):
             raise PreviewError("stale_preview")
         budget.remaining()
-        result = {"schema_version": 1, "draft_id": request["draft_id"],
+        result = {"schema_version": 2, "draft_id": request["draft_id"],
                   "revision_identity": deepcopy(request["expected_revision"]),
                   "policy_source_sha256": policy_sha, "preview_runtime_sha256": runtime_sha,
                   "binding": rendered["binding"], "cache_key": rendered["cache_key"],
                   "svg_sha256": rendered["svg_sha256"], "svg_utf8": rendered["svg"].decode("utf-8"),
                   "title": rendered["title"], "alt_text": rendered["alt_text"], "scope": rendered["scope"],
-                  "source": "NASA FIRMS · MODIS", "source_time": spec["evidence"]["acquired_at"],
+                  "source": source, "source_context": context,
                   "width": rendered["width"], "height": rendered["height"],
                   "publication_approved": False, "attachment": False}
         body = json.dumps(result, ensure_ascii=False, separators=(",", ":"), allow_nan=False).encode("utf-8")

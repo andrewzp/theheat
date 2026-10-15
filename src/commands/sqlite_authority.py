@@ -172,6 +172,8 @@ class SQLiteAuthority:
     def accept(self, command: Command, principal: Principal, *, now: datetime | None = None) -> dict:
         # A caller cannot bypass schema/actor validation by directly constructing a dataclass.
         command = Command.from_stored(canonical_json(command.as_dict()))
+        if command.action == "abandon_submission":
+            raise CommandError("invalid_action", "Submission closure is unavailable in SQLite")
         if command.environment != self.environment:
             raise CommandError("environment_mismatch", "Command belongs to another authority environment")
         if command.actor_subject != principal.subject or command.authentication_context != principal.authentication_context:
@@ -388,6 +390,13 @@ class SQLiteAuthority:
                 connection.rollback()
                 raise
 
+    def acquire_check_lease(self, check_set_id: str, owner: str, ttl_seconds: int, *, now: str) -> dict:
+        saved = self.check_execution("read", {"check_set_id": check_set_id}, now=now)
+        packet = saved["packet"]
+        if packet.get("schema_version") not in (1, 2):
+            raise ValueError("revision_check_backend_unsupported")
+        return self.batch_work("acquire", dict(job_id=packet["job_id"], owner=owner, ttl_seconds=ttl_seconds), now=now)
+
     def read_check_request(self, check_set_id: str, stage: str, grant_id: str) -> bytes:
         return self._read_check_artifact(check_set_id, stage, grant_id, response=False)
 
@@ -477,6 +486,13 @@ class SQLiteAuthority:
             connection.execute("BEGIN")
             self._check_environment(connection)
             return batch_journal.read(connection, job_id)
+
+    def read_batch_plan(self, job_id: str) -> bytes:
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN")
+            self._check_environment(connection)
+            registration = batch_journal.read(connection, job_id)
+            return domain_journal.read_artifact(connection, registration["plan_sha256"])
 
     def read(self) -> tuple[int, dict]:
         with closing(self._connect()) as connection:

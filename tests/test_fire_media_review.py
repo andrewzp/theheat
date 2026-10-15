@@ -12,15 +12,16 @@ from src.media.review_packet import build_media_review_packet, media_review_pack
 from src.media.review_package import prepare_media_review
 from tests.fire_graphic_helpers import graphic_bundle
 from tests.test_fire_graphic_adapter import adapt
+from tests.test_fire_map_graphic_adapter import adapt as map_adapt
 from tests.test_joint_media_review import make, status
 from tests.test_media_review_packet import manifest_for, structural_png
 from tests.test_media_review_package import local as local
 
 
-@pytest.fixture(scope="module")
-def seed():
+@pytest.fixture(scope="module", params=[adapt, map_adapt], ids=["historical-bar", "current-map"])
+def seed(request):
     bundle = graphic_bundle()
-    spec = adapt(bundle)
+    spec = request.param(bundle)
     png = structural_png()
     draft = {
         "id": "synthetic-thermal",
@@ -48,7 +49,9 @@ def test_complete_package_reuses_exact_assets_without_approving(local):
     assert result["claim_agreement_status"] == "unreviewed"
     assert prepare_media_review(**local) == {**result, "reused": True}
     packet = json.loads((Path(result["output"]) / "packet.json").read_text())
-    assert packet["graphic_binding"]["template_version"] == "p31-modis-thermal-1"
+    spec = json.loads(Path(local["spec_path"]).read_text())
+    expected = "p31-modis-locator-2-social" if spec["template"] == "modis_thermal_detection_map" else "p31-modis-thermal-1"
+    assert packet["graphic_binding"]["template_version"] == expected
 
 
 @pytest.mark.parametrize("changed", ["text", "policy", "receipt", "template", "asset", "bundle"])

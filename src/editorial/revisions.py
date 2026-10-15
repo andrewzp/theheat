@@ -114,6 +114,33 @@ def _checks(two_bot: dict) -> dict:
     return {"fact_check": two_bot.get("fact_check"), "critic": two_bot.get("critic")}
 
 
+def required_checks_fingerprint(value: Any) -> str | None:
+    """Validate the structured receipt proof; it does not itself prove a pass."""
+    import re
+    fields = {"schema_version", "check_set_id", "candidate_id", "derivation_id", "checker_state_sha256", "completion_sha256", "stages"}
+    stages = ("deterministic", "safety", "fact_check", "critic")
+    if not isinstance(value, dict) or set(value) != fields or type(value["schema_version"]) is not int or value["schema_version"] != 1:
+        return None
+    def sha(item):
+        return isinstance(item, str) and re.fullmatch(r"[0-9a-f]{64}", item) is not None
+    if not all(sha(value[k]) for k in fields - {"schema_version", "stages"}):
+        return None
+    if not isinstance(value["stages"], dict) or set(value["stages"]) != set(stages):
+        return None
+    for stage in stages:
+        row = value["stages"][stage]
+        if not isinstance(row, dict) or set(row) != {"grant_id", "request_sha256", "observation_sha256", "receipt_sha256"} or not all(sha(v) for v in row.values()):
+            return None
+    return fingerprint(value)
+
+
+def _proof_matches(two_bot: dict, binding: dict) -> bool:
+    if "required_checks_binding" not in two_bot:
+        return "required_checks_sha256" not in binding
+    digest = required_checks_fingerprint(two_bot["required_checks_binding"])
+    return digest is not None and digest == binding.get("required_checks_sha256")
+
+
 def _checks_pass(two_bot: dict) -> bool:
     return all(
         isinstance(two_bot.get(key), dict) and two_bot[key].get("passed") is True
@@ -154,7 +181,7 @@ def review_is_current(draft: dict, *, policy=_CURRENT_POLICY) -> bool:
     if binding.get("kind") != "model" or not _checks_pass(_two_bot(draft)):
         return False
     try:
-        return binding.get("checks_sha256") == fingerprint(_checks(_two_bot(draft)))
+        return _proof_matches(_two_bot(draft), binding) and binding.get("checks_sha256") == fingerprint(_checks(_two_bot(draft)))
     except (ValueError, TypeError, UnicodeError, OverflowError):
         return False
 
@@ -215,7 +242,20 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
-def record_model_review(draft: dict, *, policy=_CURRENT_POLICY) -> dict:
+def record_model_review(draft: dict, *, policy=_CURRENT_POLICY, at: str | None = None) -> dict:
+    return _record_model_review(draft, policy=policy, at=at, verified_required_checks=False)
+
+
+def _record_verified_checks_review(draft: dict, *, policy: dict, at: str) -> dict:
+    """Internal authority boundary, called only after retained-byte verification.
+
+    Generic save/initialization deliberately cannot mint this receipt-backed
+    authority from caller-supplied structured metadata.
+    """
+    return _record_model_review(draft, policy=policy, at=at, verified_required_checks=True)
+
+
+def _record_model_review(draft: dict, *, policy, at, verified_required_checks: bool) -> dict:
     revoke_approval(draft)
     two_bot = _two_bot(draft)
     policy = _editorial_policy(policy)
@@ -231,20 +271,25 @@ def record_model_review(draft: dict, *, policy=_CURRENT_POLICY) -> dict:
         )
     except (ValueError, TypeError, UnicodeError, OverflowError):
         proven = False
+    proof = required_checks_fingerprint(two_bot.get("required_checks_binding"))
+    if "required_checks_binding" in two_bot and (proof is None or not verified_required_checks):
+        proven = False
     if proven and not draft.get("revision_conflicts"):
         draft["review_binding"] = {
-            **draft_identity(draft), "kind": "model", "reviewed_at": _now(),
+            **draft_identity(draft), "kind": "model", "reviewed_at": at if at is not None else _now(),
             "checks_sha256": fingerprint(_checks(two_bot)),
             "editorial_policy": deepcopy(policy), "policy_sha256": fingerprint(policy),
         }
+        if proof is not None:
+            draft["review_binding"]["required_checks_sha256"] = proof
     else:
         draft.pop("review_binding", None)
     return draft
 
 
-def initialize_revision(draft: dict) -> dict:
+def initialize_revision(draft: dict, *, at: str | None = None, policy=_CURRENT_POLICY) -> dict:
     draft.setdefault("content_revision", 1)
-    return record_model_review(draft)
+    return record_model_review(draft, at=at, policy=policy)
 
 
 def record_human_review(draft: dict, *, at: str | None = None, policy=_CURRENT_POLICY) -> dict:

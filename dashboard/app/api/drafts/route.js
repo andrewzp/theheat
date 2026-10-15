@@ -91,7 +91,7 @@ export async function GET(request) {
         return priorityB - priorityA || new Date(b.created_at || 0) - new Date(a.created_at || 0)
       })
       .map((d) => ({ ...projection(d, state, local), tweet_id: d.tweet_id ?? null }))
-    return Response.json({ drafts, ...(local ? { local_preview: true, state_version: local.state_version } : {}) }, { headers: { "Cache-Control": "private, no-store" } })
+    return Response.json({ drafts, ...(local ? { local_preview: true, state_version: local.state_version, candidates: local.candidates || [], operator_role: local.role } : {}) }, { headers: { "Cache-Control": "private, no-store" } })
   } catch (error) {
     if (previewConfigured()) return previewError(error)
     return Response.json({ drafts: [], error: error.message }, { status: 500 })

@@ -148,8 +148,14 @@ def build_writer_user_prompt(
     memory: MemorySlice,
     *,
     revision_constraint: str | None = None,
+    episode_context=None,
 ) -> str:
     """Construct current copy instructions; the caller still qualifies evidence."""
+    if "physical_episode" in bundle.raw_signal_dump:
+        from src.storage.physical_events import EpisodeContext
+        if type(episode_context) is not EpisodeContext:
+            raise ValueError("resolved_episode_context_required")
+        episode_context.validate(bundle.raw_signal_dump["physical_episode"])
     prompt = WRITER_USER_PROMPT_TEMPLATE.format(
         bundle_json=_bundle_json(bundle), memory_json=_memory_json(memory),
     )

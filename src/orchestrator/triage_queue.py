@@ -240,6 +240,7 @@ def _refill_drain(
     *,
     defer_callbacks: list | None = None,
     funnel_sink: dict | None = None,
+    generation_client=None,
 ) -> int:
     """Phase C generate-and-select loop (THEHEAT_REFILL_ENABLED=1).
 
@@ -336,9 +337,13 @@ def _refill_drain(
             _funnel.record_slate_terminal(funnel_sink, candidate.event_id, "triage_cap")
 
     drafted_count = 0
+    queued_count = 0
     attempts = 0
     for idx, candidate in enumerate(ranked):
-        if drafted_count >= target or attempts >= max_attempts:
+        if generation_client is not None and (candidate.on_draft_success is not None or candidate.annual_cap_check is not None):
+            _pre_writer_kill(candidate, "generation_start", "async source callbacks are not supported")
+            continue
+        if drafted_count + queued_count >= target or attempts >= max_attempts:
             _cut(candidate, "global_cap")
             continue
 
@@ -428,7 +433,8 @@ def _refill_drain(
             continue
 
         _bump_source_field_in_run(current_run, candidate.source, "triaged_out")
-        _bump_source_field_in_run(current_run, candidate.source, "writer_attempted")
+        if generation_client is None:
+            _bump_source_field_in_run(current_run, candidate.source, "writer_attempted")
         attempts += 1
         if candidate.event_id:
             attempted_event_ids.add(candidate.event_id)
@@ -438,9 +444,21 @@ def _refill_drain(
         # kill_stage even when funnel telemetry is off.
         cand_result: dict = {}
         draft_kwargs["result_out"] = cand_result
+        if generation_client is not None:
+            draft_kwargs["generation_client"] = generation_client
         drafted = _common._try_two_bot_draft(
             candidate.bundle, bot_state, candidate.score, **draft_kwargs,
         )
+        if cand_result.get("generation_status") in {"queued", "reused"}:
+            queued_count += 1
+            success_by_category[category] = success_by_category.get(category, 0) + 1
+            if country:
+                success_by_country[country] = success_by_country.get(country, 0) + 1
+            if draft_type:
+                pending_by_type[draft_type] = pending_by_type.get(draft_type, 0) + 1
+            if funnel_sink is not None:
+                _funnel.record_slate_terminal(funnel_sink, candidate.event_id, "generation_queued")
+            continue
         if sink_active:
             _funnel.record_candidate_passes(funnel_sink, cand_result.get("stage_outcomes"))
             if drafted:
@@ -501,6 +519,7 @@ def _drain_and_write_triage_queue(
     *,
     defer_callbacks: list | None = None,
     funnel_sink: dict | None = None,
+    generation_client=None,
 ) -> int:
     """Drain the triage queue and call _try_two_bot_draft() for each survivor.
 
@@ -605,6 +624,20 @@ def _drain_and_write_triage_queue(
     for source, count in queued_by_source.items():
         _bump_source_field_in_run(current_run, source, "triaged_in", count)
 
+    if generation_client is not None:
+        eligible = []
+        for candidate in queue:
+            if candidate.on_draft_success is None and candidate.annual_cap_check is None:
+                eligible.append(candidate)
+                continue
+            # These callbacks belong to synchronous draft success. Do not invoke
+            # them or let unsupported candidates consume a generation slot.
+            _bump_source_field_in_run(current_run, candidate.source, "triaged_out")
+            if funnel_sink is not None:
+                from src.orchestrator import funnel as _funnel
+                _funnel.record_slate_terminal(funnel_sink, candidate.event_id, "generation_start")
+        queue = eligible
+
     # Cycle-scoped billing latch (codex r2 P1): an earlier drain this run
     # proved the balance dead; every candidate here would re-discover it at
     # one paid call each. Skip the whole slate — the first abort row already
@@ -635,7 +668,7 @@ def _drain_and_write_triage_queue(
     if refill_enabled:
         return _refill_drain(
             bot_state, current_run, queue,
-            defer_callbacks=defer_callbacks, funnel_sink=funnel_sink,
+            defer_callbacks=defer_callbacks, funnel_sink=funnel_sink, generation_client=generation_client,
         )
 
     # Economics P1.3 (codex r9–r11): the negative cache protects the legacy
@@ -778,7 +811,8 @@ def _drain_and_write_triage_queue(
             continue
         if candidate.event_id:
             attempted_event_ids.add(candidate.event_id)
-        _bump_source_field_in_run(current_run, candidate.source, "writer_attempted")
+        if generation_client is None:
+            _bump_source_field_in_run(current_run, candidate.source, "writer_attempted")
         draft_kwargs = {
             "legacy_type": candidate.legacy_type,
             "event_id": candidate.event_id,
@@ -796,12 +830,19 @@ def _drain_and_write_triage_queue(
         # kill_stage even when funnel telemetry is off.
         cand_result: dict = {}
         draft_kwargs["result_out"] = cand_result
+        if generation_client is not None:
+            draft_kwargs["generation_client"] = generation_client
         drafted = _common._try_two_bot_draft(
             candidate.bundle,
             bot_state,
             candidate.score,
             **draft_kwargs,
         )
+        if cand_result.get("generation_status") in {"queued", "reused"}:
+            if funnel_sink is not None:
+                from src.orchestrator import funnel as _funnel
+                _funnel.record_slate_terminal(funnel_sink, candidate.event_id, "generation_queued")
+            continue
         if funnel_sink is not None:
             from src.orchestrator import funnel as _funnel
 

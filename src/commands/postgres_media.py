@@ -1,17 +1,20 @@
 """Exact local/preview graphic staging; no draft mutation or review acceptance.
 
 The caller holds the command authority's pointer lock and transaction. Historical
-readback reconstructs the proposal, not its currentness or scientific validity.
+package reads reconstruct the proposal. Passive PNG reads use separate immutable
+preparation anchors and never return a promotable package.
 """
 from __future__ import annotations
 
 from datetime import timedelta
+import json
 import re
 
 from src.commands import media_journal as media
 from src.commands.schema import Principal, utc_datetime, utc_text
-from src.editorial.revisions import fingerprint
+from src.editorial.revisions import decision_revision, draft_identity, fingerprint
 from src.media.attachment import build_media_attachment_proposal
+from src.media.review_packet import _png_size, media_attachment_content
 from src.storage import postgres_projection as p
 
 SCHEMA = "theheat_media"
@@ -125,7 +128,7 @@ def _receipt(identity, capture_sha, capture):
                 publication_approved=False, production_attachment_authorized=False)
 
 
-def _read(c, identity):
+def _load(c, identity):
     _sha(identity)
     row = c.execute(f"SELECT capture_sha256,staged_at FROM {SCHEMA}.packages WHERE proposal_sha256=%s", (identity,)).fetchone()
     _require(row is not None, "media_staging_package_not_found")
@@ -133,7 +136,8 @@ def _read(c, identity):
     capture = p._decode(raw)
     _shape(capture, _CAPTURE)
     _require(_encoded(capture) == raw and type(capture["schema_version"]) is int
-             and capture["schema_version"] == 1, "invalid_media_staging_capture")
+             and capture["schema_version"] in (1, 2)
+             and capture["schema_version"] == capture["inputs"]["renderer_manifest"]["schema_version"], "invalid_media_staging_capture")
     _require(type(capture["authority_version"]) is int and 0 <= capture["authority_version"] <= p.MAX_INTEGER,
              "invalid_media_staging_version")
     _require(_time(capture["staged_at"]) == row[1], "changed_media_staging_time")
@@ -146,17 +150,25 @@ def _read(c, identity):
     drafts = capture["predecessor_state"]["drafts"]
     _require(isinstance(drafts, list) and len(drafts) == 1 and isinstance(drafts[0], dict),
              "invalid_media_staging_predecessor")
-    _shape(capture["asset_sha256"], set(media._LIMITS))
-    assets = {name: _raw(c, digest, media._LIMITS[name]) for name, digest in capture["asset_sha256"].items()}
+    limits = media.asset_limits(capture["inputs"]["renderer_manifest"])
+    _shape(capture["asset_sha256"], set(limits))
+    assets = {name: _raw(c, digest, limits[name]) for name, digest in capture["asset_sha256"].items()}
     media._assets(assets, capture["inputs"]["renderer_manifest"])
     proposal_at = utc_datetime(_time(capture["inputs"]["at"]))
     age = utc_datetime(capture["staged_at"]) - proposal_at
     _require(-timedelta(minutes=5) <= age <= timedelta(hours=24), "invalid_media_staging_age")
+    return dict(receipt=_receipt(identity, row[0], capture), capture=capture, assets=assets)
+
+
+def _read(c, identity):
+    package = _load(c, identity)
+    capture, assets = package["capture"], package["assets"]
+    drafts = capture["predecessor_state"]["drafts"]
     rebuilt = build_media_attachment_proposal(capture["predecessor_state"], drafts[0]["id"],
         **capture["inputs"], png_bytes=assets["preview.png"])
     _require(rebuilt["proposal_sha256"] == identity and _encoded(rebuilt) == _encoded(capture["proposal"]),
              "changed_media_staging_proposal")
-    return dict(receipt=_receipt(identity, row[0], capture), capture=capture, assets=assets)
+    return package
 
 
 def read(c, identity, environment):
@@ -164,6 +176,92 @@ def read(c, identity, environment):
     try:
         return _read(c, identity)
     except (KeyError, TypeError, AttributeError, OverflowError, RecursionError):
+        raise media.MediaJournalError("invalid_media_staging_capture") from None
+
+
+def read_retained_png(c, *, expected_proposal_sha256, expected_packet_sha256,
+                      expected_predecessor, expected_subject, expected_at, environment, original_bytes=False):
+    """Original PNG bytes only, bound by an independently successful preparation.
+
+    The authenticated editor projection resolves the exact intent/result and
+    PREPARATION record before calling. Today's rendering/science is irrelevant
+    to passive evidence, but ordinary read/stage/promotion retain full rebuilding.
+    """
+    validate(c, environment)
+    try:
+        _sha(expected_proposal_sha256)
+        _sha(expected_packet_sha256)
+        package = _load(c, expected_proposal_sha256)
+        capture, assets = package["capture"], package["assets"]
+        proposal = capture["proposal"]
+        _shape(proposal, {"schema_version", "operation", "predecessor", "changed", "proposed_draft",
+                          "packet", "synthetic", "publication_approved", "production_attachment_authorized", "proposal_sha256"})
+        _require(proposal["proposal_sha256"] == expected_proposal_sha256
+                 == fingerprint({k:v for k,v in proposal.items() if k != "proposal_sha256"}),
+                 "changed_media_staging_proposal")
+        packet = proposal["packet"]
+        published = capture["schema_version"] == 2
+        _shape(packet, {"schema_version", "draft_binding", "graphic_binding", "media", "synthetic",
+                        "claim_agreement_status", "publication_approved", "packet_sha256"} | ({"published"} if published else set()))
+        _require(packet["packet_sha256"] == expected_packet_sha256
+                 == fingerprint({k:v for k,v in packet.items() if k != "packet_sha256"}),
+                 "changed_media_staging_packet")
+        original = capture["predecessor_state"]["drafts"][0]
+        proposed = proposal["proposed_draft"]
+        original_identity = dict(draft_id=original["id"], **draft_identity(original),
+                                 decision_revision=decision_revision(original))
+        _require(all(_encoded(identity) == _encoded(expected_predecessor) for identity in (
+                     original_identity, proposal["predecessor"], capture["inputs"]["expected_revision"]))
+                 and proposed["id"] == original["id"]
+                 and proposed["event_id"] == original["event_id"]
+                 and capture["submitter"]["subject"] == expected_subject
+                 and capture["inputs"]["at"] == _time(expected_at), "media_staging_preparation_mismatch")
+        spec, manifest = capture["inputs"]["graphic_spec"], capture["inputs"]["renderer_manifest"]
+        _shape(spec, {"template", "expected_evidence_sha256", "evidence"})
+        if published:
+            # Retained bytes use the recorded closed family, not current profile,
+            # configuration, source freshness or mutation eligibility.
+            from src.media.published_radar import packet as published_packet, original_header
+            rebuilt = published_packet(proposed, draft_identity(proposed), capture["inputs"]["editorial_policy"], spec, manifest, assets["preview.png"], historical=True)
+            original_header(assets["original.gif"], spec["evidence"]["input"])
+            _require(_encoded(rebuilt) == _encoded(packet) and proposal["schema_version"] == 1
+                and proposal["operation"] == "attach" and type(proposal["changed"]) is bool
+                and proposal["publication_approved"] is proposal["production_attachment_authorized"] is False
+                and proposal["synthetic"] is packet["synthetic"], "invalid_media_staging_capture")
+            return assets["original.gif" if original_bytes else "preview.png"]
+        _require(original_bytes is False, "media_original_unavailable")
+        _shape(manifest, {"schema_version", "cache_key", "binding", "files", "synthetic", "alt_text",
+                          "publication_approved", "scope"})
+        binding = manifest["binding"]
+        _shape(binding, {"template", "template_version", "source_evidence_sha256", "renderer"})
+        _require(packet["draft_binding"] == dict(draft_id=proposed["id"], event_id=proposed["event_id"],
+                     **draft_identity(proposed), policy_sha256=fingerprint(capture["inputs"]["editorial_policy"]))
+                 and packet["graphic_binding"] == dict(template=spec["template"],
+                     template_version=binding["template_version"], evidence_sha256=spec["expected_evidence_sha256"],
+                     render_binding_sha256=fingerprint(binding), render_manifest_sha256=fingerprint(manifest))
+                 and binding["template"] == spec["template"]
+                 and binding["source_evidence_sha256"] == spec["expected_evidence_sha256"] == fingerprint(spec["evidence"])
+                 and manifest["cache_key"] == fingerprint(binding)
+                 and spec["evidence"]["event_id"] == original["event_id"], "media_staging_graphic_mismatch")
+        png = assets["preview.png"]
+        width, height = _png_size(png)
+        alt = manifest["alt_text"]
+        _require(packet["media"] == dict(mime_type="image/png", png_sha256=p._sha(png), byte_count=len(png),
+                    width=width, height=height, alt_text=alt, alt_text_sha256=p._sha(alt.encode("utf-8")))
+                 and binding["renderer"]["width"] == width and binding["renderer"]["height"] == height
+                 and assets["input.json"] == (json.dumps(spec, ensure_ascii=False, sort_keys=True, indent=2) + "\n").encode("utf-8")
+                 and assets["alt.txt"] == (alt + "\n").encode("utf-8")
+                 and proposed["media_attachment"] == media_attachment_content(packet), "media_staging_asset_mismatch")
+        _require(type(proposal["schema_version"]) is type(packet["schema_version"]) is type(manifest["schema_version"]) is int
+                 and proposal["schema_version"] == packet["schema_version"] == manifest["schema_version"] == 1
+                 and proposal["operation"] == "attach" and type(proposal["changed"]) is bool
+                 and proposal["publication_approved"] is proposal["production_attachment_authorized"] is False
+                 and packet["publication_approved"] is manifest["publication_approved"] is False
+                 and packet["claim_agreement_status"] == "unreviewed"
+                 and proposal["synthetic"] is packet["synthetic"] is manifest["synthetic"] is spec["evidence"]["synthetic"]
+                 and manifest["scope"] == spec["evidence"]["scope"], "invalid_media_staging_capture")
+        return png
+    except (KeyError, TypeError, AttributeError, ValueError, OverflowError, RecursionError):
         raise media.MediaJournalError("invalid_media_staging_capture") from None
 
 
@@ -185,7 +283,7 @@ def stage(c, draft_id, request, *, assets, principal, state, authority_version, 
     ledger = state.get("publish_ledger", {})
     predecessor = dict(drafts=[draft], publish_ledger={event: ledger[event]} if event in ledger else {},
                        posted_events=[event] if event in state.get("posted_events", []) else [])
-    capture = dict(schema_version=1, predecessor_state=predecessor, inputs=inputs, proposal=proposal,
+    capture = dict(schema_version=request["renderer_manifest"]["schema_version"], predecessor_state=predecessor, inputs=inputs, proposal=proposal,
                    asset_sha256=hashes, authority_version=authority_version, staged_at=staged_at,
                    submitter=dict(subject=principal.subject, role_at_staging=principal.role,
                                   authentication_context=principal.authentication_context))

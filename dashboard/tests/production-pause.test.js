@@ -62,7 +62,7 @@ test("production pause blocks preview and every collection mode before any exter
     const incoming = request(route, body)
     const response = await POST(incoming)
     assert.equal(response.status, 503)
-    assert.equal(response.headers.get("cache-control"), "no-store")
+    assert.equal(response.headers.get("cache-control"), route === "generate" ? "private, no-store" : "no-store")
     const payload = await response.json()
     assert.equal(payload.code, "production_paused")
     assert.match(payload.error, /data collection and draft generation are paused/i)
@@ -83,7 +83,7 @@ test("production pause preserves authentication before exposing operational stat
 })
 
 for (const resumedValue of [undefined, "0"]) {
-  test(`clearing production pause (${resumedValue ?? "unset"}) restores preview and collection dispatch`, async () => {
+  test(`clearing production pause (${resumedValue ?? "unset"}) keeps direct generation disabled and restores collection dispatch`, async () => {
     for (const [route, body] of CASES) {
       process.env.THEHEAT_PRODUCTION_PAUSED = "1"
       const { POST } = await importFresh(`app/api/${route}/route.js`)
@@ -91,20 +91,19 @@ for (const resumedValue of [undefined, "0"]) {
       if (resumedValue === undefined) delete process.env.THEHEAT_PRODUCTION_PAUSED
       else process.env.THEHEAT_PRODUCTION_PAUSED = resumedValue
       const response = await POST(request(route, body))
-      assert.equal(response.status, 200)
       const payload = await response.json()
-      const call = calls.at(-1)
-      assert.equal(call.options.method, "POST")
       if (route === "generate") {
-        assert.equal(payload.tweet, "Offline writer response.")
-        assert.equal(call.url, "https://api.anthropic.com/v1/messages")
-        assert.equal(JSON.parse(call.options.body).messages[0].content, `Write a tweet about this:\n${body.prompt}`)
+        assert.equal(response.status, 503)
+        assert.equal(payload.code, "sourced_generation_unavailable")
       } else {
+        assert.equal(response.status, 200)
+        const call = calls.at(-1)
+        assert.equal(call.options.method, "POST")
         assert.deepEqual(payload, { ok: true, mode: body.mode })
         assert.equal(call.url, "https://api.github.com/repos/andrewzp/theheat/actions/workflows/bot.yml/dispatches")
         assert.deepEqual(JSON.parse(call.options.body), { ref: "main", inputs: body })
       }
     }
-    assert.equal(calls.length, CASES.length)
+    assert.equal(calls.length, CASES.length - 1)
   })
 }

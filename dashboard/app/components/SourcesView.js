@@ -58,7 +58,7 @@ export function SourcesView({ sources, stats }) {
         <div>
           <h2>Source Health</h2>
           <p style={{ color: "#888", fontSize: 12 }}>
-            Aggregated over the last {stats?.runs_analyzed ?? 0} runs.
+            Source availability over the last {stats?.runs_analyzed ?? 0} runs; this is not event recall.
             {stats?.unhealthy_count > 0 && (
               <span style={{ color: "#f87171", marginLeft: 8 }}>
                 {stats.unhealthy_count} unhealthy

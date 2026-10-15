@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-from typing import Any
 
 from src.editorial.publication import automatic_publication_policy
 from src.editorial.scheduling import defer_to_engagement_window
@@ -11,12 +10,11 @@ from src.editorial.approval import (
     AUTOSHIP_ALLOWLIST,
     ApprovalPolicy,
     autoship_on_critic_pass_enabled,
-    recommend_approval_policy,
 )
 from src.editorial.newsworthiness import detect_impact_citation
-from src.editorial.revisions import authorize_draft, initialize_revision, review_is_current
+from src.editorial.revisions import authorize_draft, review_is_current
 from src.editorial.scoring import EditorialScore
-from src.orchestrator.caps import CITY_COOLDOWN_DAYS, ELITE_COPY_SCORE
+from src.orchestrator.caps import CITY_COOLDOWN_DAYS
 from src.orchestrator.common import (
     _parse_iso_utc,
     _utc_after_minutes_iso,
@@ -152,172 +150,30 @@ def save_draft(
     event types (fires, disasters, CO2, sea ice, etc.) omit ``city`` and
     pass through unchanged.
     """
-    fire_hold = legacy_history_reason(bot_state, event_id)
-    if fire_hold:
-        print(f"[draft] Fire history hold: {fire_hold}")
+    from src.editorial.draft_admission import plan_draft_admission, resolve_admission_place_facts
+    from src.editorial.policy import current_editorial_policy
+
+    clock = _utc_now()
+    # Plan before changing the caller: in particular, a later cooldown rejection
+    # cannot delete the stronger candidate's still-pending predecessor.
+    # These three existing cycle-only objects are neither publication history nor
+    # stored state. Preserve their original shared references when committing.
+    planning_state = {k: v for k, v in bot_state.items() if k not in {"_triage_queue", "_funnel_sink", "_reganom_live_cache"}}
+    place_facts = resolve_admission_place_facts(planning_state, event_id)
+    plan = plan_draft_admission(planning_state, text=tweet_text, tweet_type=tweet_type, place_facts=place_facts,
+        event_id=event_id, draft_id=f"draft_{clock.strftime('%Y%m%d_%H%M%S')}_{len(bot_state.get('drafts', []))}",
+        at=clock, editorial_policy=current_editorial_policy(), score=score.as_dict() if score else None,
+        candidates=candidates, candidate_score=candidate_score, review_context=review_context,
+        evaluator_metadata=evaluator_metadata, city=city, tweet_date=tweet_date, cooldown_exempt=cooldown_exempt)
+    if plan.draft is None:
+        for decision in plan.suppressions:
+            _record_save_rejection(bot_state=bot_state, **decision)
+        print(f"[draft] Not saved: {plan.reason}")
         return False
-    place_id = event_identity(event_id).get("place_id", "")
-    history_status = legacy_publication_status(bot_state, event_id)
-    if history_status in ("duplicate", "unresolved", "unregistered"):
-        return False
-    drafts = bot_state.setdefault("drafts", [])
-
-    # Don't duplicate drafts for the same event
-    if event_id and any(d.get("event_id") == event_id for d in drafts):
-        print(f"[draft] Already drafted: {event_id}")
-        _record_save_rejection(
-            bot_state=bot_state,
-            event_id=event_id,
-            score=score,
-            kill_stage="duplicate_draft",
-            kill_reason="Event already has a draft",
-            summary=tweet_text[:120] or event_id,
-        )
-        return False
-
-    # (city, date) dedup — highest signal wins
-    if city and tweet_date:
-        if _same_day_already_posted(drafts, city, tweet_date, place_id=place_id):
-            print(f"[draft] Already posted for {city} on {tweet_date}, skipping")
-            _record_save_rejection(
-                bot_state=bot_state,
-                event_id=event_id,
-                score=score,
-                kill_stage="same_day_posted",
-                kill_reason=f"Already posted for {city} on {tweet_date}",
-                summary=city,
-            )
-            return False
-
-        collision = _same_day_pending_collision(drafts, city, tweet_date, place_id=place_id)
-        if collision:
-            idx, other = collision
-            other_total = (other.get("score") or {}).get("total", 0)
-            new_total = score.total if score else 0
-            if new_total <= other_total:
-                print(
-                    f"[draft] Weaker signal for {city} on {tweet_date} "
-                    f"({new_total} ≤ {other_total}), skipping"
-                )
-                _record_save_rejection(
-                    bot_state=bot_state,
-                    event_id=event_id,
-                    score=score,
-                    kill_stage="same_day_dedup",
-                    kill_reason=(
-                        f"Weaker same-day signal for {city} "
-                        f"({new_total} <= {other_total})"
-                    ),
-                    summary=city,
-                )
-                return False
-            _record_save_rejection(
-                bot_state=bot_state,
-                event_id=other.get("event_id", ""),
-                score=other.get("score"),
-                kill_stage="same_day_superseded",
-                kill_reason=(
-                    f"Superseded by stronger same-day signal "
-                    f"({new_total} > {other_total})"
-                ),
-                summary=city,
-            )
-            drafts.pop(idx)
-            print(
-                f"[draft] Superseded pending {city} draft "
-                f"({other_total} → {new_total})"
-            )
-
-    # City cooldown — skip if we posted about this city in the last N days.
-    # Exceptional copy (candidate_score.total >= ELITE_COPY_SCORE) bypasses,
-    # even if the underlying signal wasn't flagged elite by the caller.
-    copy_is_elite = bool(
-        candidate_score
-        and isinstance(candidate_score, dict)
-        and candidate_score.get("total", 0) >= ELITE_COPY_SCORE
-    )
-    if (
-        city
-        and not cooldown_exempt
-        and not copy_is_elite
-        and _posted_city_within_days(drafts, city, CITY_COOLDOWN_DAYS, place_id=place_id)
-    ):
-        print(f"[draft] {city} in {CITY_COOLDOWN_DAYS}-day cooldown, skipping")
-        _record_save_rejection(
-            bot_state=bot_state,
-            event_id=event_id,
-            score=score,
-            kill_stage="city_cooldown",
-            kill_reason=f"{city} in {CITY_COOLDOWN_DAYS}-day cooldown",
-            summary=city,
-        )
-        return False
-
-    draft: dict[str, Any] = {
-        "id": f"draft_{_utc_now().strftime('%Y%m%d_%H%M%S')}_{len(drafts)}",
-        "text": tweet_text,
-        "type": tweet_type,
-        "event_id": event_id,
-        "created_at": _utc_now_iso(),
-        "updated_at": _utc_now_iso(),
-        "status": "pending",
-    }
-    if city:
-        draft["city"] = city
-    if tweet_date:
-        draft["tweet_date"] = tweet_date
-    if score is not None:
-        draft["score"] = score.as_dict()
-    if candidates:
-        draft["candidates"] = candidates
-    if candidate_score:
-        draft["candidate_score"] = candidate_score
-    if review_context:
-        draft["review_context"] = review_context
-    if evaluator_metadata is not None:
-        draft.update(evaluator_metadata)
-
-    policy = recommend_approval_policy(
-        tweet_type,
-        signal_total=score.total if score is not None else 0,
-        candidate_score=candidate_score,
-    )
-
-    # Bet A decision 4: a draft whose TEXT cites a sourced human_impact fact is
-    # forced manual_only regardless of signal type — including the autoship
-    # allowlist types. Death tolls are life-safety-adjacent; a human stays in
-    # the loop for every impact-carrying tweet in v1. The rule keys on what the
-    # tweet says (writer self-report + regex sweep, fail-closed), not what lane
-    # produced it — an enriched draft that does NOT cite impact keeps its #352
-    # autoship eligibility.
+    draft = plan.draft
+    policy = ApprovalPolicy(**draft["approval_policy"])
     citation = detect_impact_citation(tweet_text, review_context)
-    if citation.forced:
-        if citation.disagreement:
-            print(
-                "[draft] impact-citation signals disagree "
-                f"(writer={citation.writer_flag} regex={citation.regex_hit}) "
-                "— forcing manual review (fail-closed)"
-            )
-        policy = ApprovalPolicy(
-            key="impact_citation_manual",
-            mode="manual_only",
-            recommended_delay_minutes=None,
-            can_auto_approve=False,
-            reason=(
-                "Draft cites a sourced human-impact fact. Impact-carrying "
-                "tweets always get a human review (Bet A decision 4)."
-            ),
-        )
-        draft["forced_manual"] = "cited_impact"
-
-    if history_status == "ambiguous":
-        policy = ApprovalPolicy(key="identity_history_manual", mode="manual_only", recommended_delay_minutes=None, can_auto_approve=False, reason="Legacy publication identity cannot be attributed. Review the old publication before approving this place.")
-        draft["forced_manual"] = "ambiguous_legacy_place"
-        draft.setdefault("review_context", {})["identity_history_status"] = "ambiguous"
-
-    draft["approval_policy"] = policy.as_dict()
-    draft.setdefault("approval_mode", "manual")
-    initialize_revision(draft)
+    history_status = legacy_publication_status(bot_state, event_id)
 
     publication_policy = automatic_publication_policy(bot_state)
     if (
@@ -356,7 +212,9 @@ def save_draft(
         draft["approval_mode"] = "policy_auto"
         authorize_draft(draft, "auto", publication_epoch=publication_policy["epoch"])
 
-    drafts.append(draft)
+    bot_state["drafts"] = plan.state["drafts"]
+    for decision in plan.suppressions:
+        _record_save_rejection(bot_state=bot_state, **decision)
     # Retention belongs at state persistence, after cycle selection. Pruning
     # here could drop protected history and shift the cycle's starting index.
     print(f"[draft] Saved: {tweet_text[:60]}...")

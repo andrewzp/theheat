@@ -600,5 +600,10 @@ def test_representative_source_bundle_migration_readiness(case, bundle):
     expected = set() if case in source_identity_present else {"missing_provenance"}
     if case == "temperature_simultaneous":
         expected.add("temperature_aggregate_unqualified")
+    if case == "severe_weather":
+        # The unchanged legacy fixture has neither source provenance nor time.
+        # Never replace missing event time with the day this test happens to run.
+        assert bundle.when == ""
+        expected.update({"missing_when", "invalid_valid_time"})
     assert _error_codes(audit) == expected, (case, audit.issues)
     assert audit.prompt_ready is (not expected)

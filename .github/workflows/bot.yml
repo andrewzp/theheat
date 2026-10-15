@@ -71,7 +71,27 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        partition: [core, postgres, media]
+        include:
+          - partition: core
+            postgres-shard: all
+          - partition: media
+            postgres-shard: all
+          - partition: postgres
+            postgres-shard: '0'
+          - partition: postgres
+            postgres-shard: '1'
+          - partition: postgres
+            postgres-shard: '2'
+          - partition: postgres
+            postgres-shard: '3'
+          - partition: postgres
+            postgres-shard: '4'
+          - partition: postgres
+            postgres-shard: '5'
+          - partition: postgres
+            postgres-shard: '6'
+          - partition: postgres
+            postgres-shard: '7'
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@v6
@@ -113,7 +133,14 @@ jobs:
         if: matrix.partition != 'core'
         timeout-minutes: 5
         run: |
-          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 install -y --no-install-recommends postgresql-17 postgresql-client-17
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 install -y --no-install-recommends postgresql-17 postgresql-client-17 poppler-utils
+
+      - name: Verify native graphics dependency capture
+        if: matrix.partition == 'media'
+        timeout-minutes: 2
+        # Diagnose installed Linux loader failures before the longer PG profile.
+        # The full required media partition below still runs every test.
+        run: python -m pytest tests/test_postgres_media_native_profile.py::test_actual_capture_and_verification_never_inspects_loaders_under_lock -q -m "not voice_replay" --ci-partition=media -o faulthandler_timeout=90
 
       - name: Install dashboard dependencies
         if: matrix.partition != 'media'
@@ -143,7 +170,7 @@ jobs:
       # `voice_replay` tests live in tests/voice_regression/ and call the
       # real Anthropic writer. They run in voice-regression.yml (daily
       # canary + weekly full + writer-path PR gate), not in this suite.
-      - run: python -m pytest tests/ -v -m "not voice_replay" --ci-partition=${{ matrix.partition }} --durations=20 -o faulthandler_timeout=120
+      - run: python -m pytest tests/ -v -m "not voice_replay" --ci-partition=${{ matrix.partition }} --ci-postgres-shard=${{ matrix.postgres-shard }} --durations=20 -o faulthandler_timeout=120
         env:
           THEHEAT_TEST_POSTGRES: "1"
           THEHEAT_POSTGRES_BINDIR: /usr/lib/postgresql/17/bin

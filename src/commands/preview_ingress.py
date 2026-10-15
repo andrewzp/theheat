@@ -27,8 +27,11 @@ from src.editorial.policy import current_editorial_policy
 from src.storage.postgres_projection import ProjectionError
 
 AUTH_CONTEXT = "verified-local-preview-basic-v1"
-ALLOWED_ACTIONS = frozenset({"edit_revision", "record_review", "approve_revision",
-                             "reject_revision", "cancel_approval", "select_candidate"})
+ALLOWED_ACTIONS = frozenset({"commit_ghcn_source_run", "commit_nhc_source_run", "evaluate_reference_coverage", "open_report_evidence", "edit_revision", "record_review", "approve_revision",
+                             "reject_revision", "cancel_approval", "select_candidate",
+                             "request_candidate_checks", "admit_checked_candidate", "request_sourced_generation",
+                             "prepare_media_revision", "attach_media_revision", "review_media_revision", "remove_media_revision",
+                             "request_revision_checks", "approve_media_revision"})
 
 
 def safe_environment() -> None:
@@ -116,7 +119,7 @@ class Operators:
 
 class PreviewServer(HTTPServer):
     """Single bounded connection at a time; each request has a read deadline."""
-    def __init__(self, authority: PostgresCommandAuthority, operators: Operators, *, port: int, origin: str):
+    def __init__(self, authority: PostgresCommandAuthority, operators: Operators, *, port: int, origin: str, candidate_inputs: tuple[str, ...] = ()):
         safe_environment()
         parsed = urlsplit(origin)
         if (parsed.scheme != "http" or parsed.hostname != "127.0.0.1" or not parsed.port
@@ -124,6 +127,9 @@ class PreviewServer(HTTPServer):
             raise ValueError("explicit_loopback_origin_required")
         if authority.environment != "local":
             raise ValueError("local_authority_required")
+        if len(candidate_inputs) > 16 or len(set(candidate_inputs)) != len(candidate_inputs) or any(not re.fullmatch(r"[a-f0-9]{64}", v) for v in candidate_inputs):
+            raise ValueError("invalid_candidate_allowlist")
+        self.candidate_inputs = candidate_inputs
         self.authority, self.operators, self.origin = authority, operators, origin
         super().__init__(("127.0.0.1", port), PreviewHandler)
 
@@ -207,11 +213,47 @@ class PreviewHandler(BaseHTTPRequestHandler):
             if actor is None:
                 self.reply(401, {"error": "Local sign-in required", "code": "unauthorized"})
                 return
+            media_route = re.fullmatch(r"/drafts/([A-Za-z0-9_.:-]{1,200})/media(?:/([a-f0-9]{64})/(preview\.png|original\.gif))?", self.path)
+            if self.command == "GET" and media_route:
+                value = self.server.authority.editor_media_projection(media_route[1], self.server.operators.resolve,
+                    now=datetime.now(UTC), png_proposal=media_route[2], original=media_route[3] == "original.gif")
+                if media_route[2]:
+                    self.send_response(200)
+                    for name, content in (("Content-Type", "image/gif" if media_route[3] == "original.gif" else "image/png"), ("Content-Length", str(len(value))),
+                        ("Cache-Control", "private, no-store"), ("X-Content-Type-Options", "nosniff"), ("Connection", "close")):
+                        self.send_header(name, content)
+                    self.end_headers()
+                    self.wfile.write(value)
+                else:
+                    self.reply(200, value)
+                return
             if self.command == "GET" and self.path == "/state":
                 version, state = self.server.authority.read()
                 self.reply(200, {"state_version": version, "state": state,
-                                 "editorial_policy": current_editorial_policy(), "role": actor.role,
+                                 "editorial_policy": current_editorial_policy(), "role": actor.role, "operator_subject": actor.subject,
+                                 "candidates": self.server.authority.candidate_projection(self.server.candidate_inputs + self.server.authority.generated_candidate_inputs(), now=datetime.now(UTC), resolve_principal=self.server.operators.resolve),
+                                 "local_cost": self.server.authority.local_cost_projection(now=datetime.now(UTC)),
                                  "local_preview": True, "publication_enabled": False})
+                return
+            if self.command == "GET" and self.path == "/ghcn-source-context":
+                from src.commands.schema import authorize
+                authorize(actor, "commit_ghcn_source_run")
+                self.reply(200, self.server.authority.ghcn_dependency_snapshot())
+                return
+            if self.command == "GET" and re.fullmatch(r"/ghcn-source-runs/[a-f0-9-]{36}", self.path):
+                self.reply(200, self.server.authority.ghcn_source_run_projection(self.path.removeprefix("/ghcn-source-runs/")))
+                return
+            if self.command == "GET" and re.fullmatch(r"/source-runs/[a-f0-9-]{36}", self.path):
+                self.reply(200, self.server.authority.source_run_projection(self.path.removeprefix("/source-runs/")))
+                return
+            if self.command == "GET" and self.path == "/coverage":
+                self.reply(200, self.server.authority.coverage_projection(now=datetime.now(UTC)))
+                return
+            if self.command == "GET" and self.path == "/reports":
+                self.reply(200, self.server.authority.report_projection(now=datetime.now(UTC)))
+                return
+            if self.command == "GET" and self.path == "/generation":
+                self.reply(200, self.server.authority.generation_projection(now=datetime.now(UTC)))
                 return
             if self.command == "GET" and re.fullmatch(r"/commands/[a-f0-9-]{36}", self.path):
                 command_id = self.path.removeprefix("/commands/")
@@ -223,14 +265,35 @@ class PreviewHandler(BaseHTTPRequestHandler):
                     authority._validate(connection)
                     intent = authority._intent(connection, command_id)
                     result = authority._result(connection, command_id)
+                    writer_status = None
+                    if (intent is not None and intent[0].action == "request_sourced_generation"
+                        and intent[0].actor_subject == actor.subject and intent[0].authentication_context == actor.authentication_context
+                        and actor.role != "viewer" and result is not None and result.get("status") == "applied"
+                        and result.get("generation", {}).get("execution_mode") == "synchronous"):
+                        from src.commands import postgres_synchronous_generation as sync_generation
+                        # Passive, bounded status survives source removal. It
+                        # neither reauthorizes work nor returns raw artifacts.
+                        writer_status = dict(sync_generation.project(connection, result["generation"]["generation_id"]),
+                            historical=True, publication_approved=False)
                 if intent is None:
                     self.reply(404, {"error": "Command has not been durably accepted", "code": "command_not_found"})
                     return
-                self.reply(200, {"status": "completed" if result else "pending", "result": result,
+                recovered = None
+                submission_reference = None
+                if intent[0].actor_subject == actor.subject:
+                    from src.commands import submission_recovery as recovery
+                    submission_reference = intent[0].payload if intent[0].action == recovery.ACTION else dict(
+                        original_action=intent[0].action, request_sha256=recovery.request_sha(intent[0]))
+                if intent[0].actor_subject == actor.subject and intent[0].action != "abandon_submission":
+                    stored = intent[0].as_dict()
+                    recovered = {key:stored[key] for key in ("command_id", "action", "requested_at", "expires_at", "targets", "payload")}
+                self.reply(200, {"status": "completed" if result else "pending", "result": result, "recoverable_command":recovered,
+                                 "submission_reference":submission_reference, "writer_status":writer_status,
                                  "receipt": intent[1],
                                  "local_preview": True, "publication_enabled": False})
                 return
-            if self.command != "POST" or self.path != "/commands":
+            recovery_route = re.fullmatch(r"/commands/([a-f0-9-]{36})/abandon", self.path)
+            if self.command != "POST" or (self.path != "/commands" and not recovery_route):
                 self.reply(404, {"error": "Preview route not found"})
                 return
             if origin != self.server.origin:
@@ -263,10 +326,17 @@ class PreviewHandler(BaseHTTPRequestHandler):
                 return
             body = strict_json(raw)
             now = datetime.now(UTC)
+            if recovery_route:
+                result = self.server.authority.abandon_submission(recovery_route[1], body, actor,
+                    self.server.operators.resolve, now=now)
+                self.reply(200, result)
+                return
             command = Command.from_request(body, actor, environment="local", now=now)
             if command.action not in ALLOWED_ACTIONS:
                 self.reply(400, {"error": "Action unavailable in local preview", "code": "preview_action_unavailable"})
                 return
+            if command.action in {"request_candidate_checks", "admit_checked_candidate"} and command.payload["admission_input_id"] not in self.server.candidate_inputs + self.server.authority.generated_candidate_inputs():
+                raise CommandError("candidate_not_allowlisted", "Candidate is not in this local fixture")
             receipt = self.server.authority.accept(command, actor, now=now)
             self.reply(202, {"status": "pending", "receipt": receipt, "local_preview": True})
         except CommandError as exc:
@@ -281,11 +351,24 @@ class PreviewHandler(BaseHTTPRequestHandler):
 
 
 def arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--ghcn-database")
+    parser.add_argument("--ghcn-manifest")
+    parser.add_argument("--ghcn-database-sha256")
+    parser.add_argument("--ghcn-manifest-sha256")
     parser.add_argument("--socket-directory", required=True)
     parser.add_argument("--database", required=True)
     parser.add_argument("--user", required=True)
     parser.add_argument("--database-port", type=int, default=55473)
     parser.add_argument("--operators", required=True)
+    parser.add_argument("--generation-inputs")
+    parser.add_argument("--report-inputs")
+    parser.add_argument("--coverage-inputs")
+    parser.add_argument("--source-results", action="store_true")
+    parser.add_argument("--published-radar-inputs")
+    parser.add_argument("--media-rasterizer")
+    parser.add_argument("--media-scratch")
+    parser.add_argument("--media-dependency-manifest")
+    parser.add_argument("--delivery-fixture")
 
 
 def adapter(args) -> tuple[PostgresCommandAuthority, Operators]:
@@ -293,6 +376,34 @@ def adapter(args) -> tuple[PostgresCommandAuthority, Operators]:
     operators = Operators(args.operators)
     authority = PostgresCommandAuthority(socket_directory=args.socket_directory, database=args.database,
                                          user=args.user, port=args.database_port, environment="local")
+    ghcn_values = [getattr(args, name, None) for name in ("ghcn_database", "ghcn_manifest", "ghcn_database_sha256", "ghcn_manifest_sha256")]
+    if any(ghcn_values):
+        if not all(ghcn_values):
+            raise ValueError("ghcn_baseline_configuration_incomplete")
+        from src.storage.ghcn_runtime_inputs import Baseline
+        authority.configure_ghcn_source_results(Baseline(Path(str(ghcn_values[0])), Path(str(ghcn_values[1])), str(ghcn_values[2]), str(ghcn_values[3])))
+    if getattr(args, "source_results", False):
+        authority.configure_source_results()
+    if getattr(args, "coverage_inputs", None):
+        from src.commands.postgres_coverage import private_configuration as coverage_configuration
+        authority.configure_coverage(coverage_configuration(args.coverage_inputs))
+    if getattr(args, "report_inputs", None):
+        from src.commands.postgres_report_development import private_configuration as report_configuration
+        authority.configure_report_development(report_configuration(args.report_inputs))
+    if getattr(args, "generation_inputs", None):
+        from src.commands.postgres_sourced_generation import private_configuration
+        authority.configure_sourced_generation(private_configuration(args.generation_inputs))
+    if getattr(args, "media_rasterizer", None) or getattr(args, "media_scratch", None) or getattr(args, "media_dependency_manifest", None):
+        if not (args.media_rasterizer and args.media_scratch and args.media_dependency_manifest):
+            raise ValueError("explicit_media_profile_required")
+        authority.configure_editor_media(rasterizer=args.media_rasterizer, scratch=args.media_scratch,
+            dependency_manifest=args.media_dependency_manifest)
+    if getattr(args, "published_radar_inputs", None):
+        from src.commands.postgres_sourced_generation import private_configuration
+        from src.commands.postgres_published_media import configure
+        configure(authority, private_configuration(args.published_radar_inputs))
+    if getattr(args, "delivery_fixture", None):
+        authority.configure_delivery(args.delivery_fixture)
     return authority, operators
 
 
@@ -301,10 +412,11 @@ def main() -> int:
     arguments(parser)
     parser.add_argument("--port", type=int, required=True)
     parser.add_argument("--origin", required=True)
+    parser.add_argument("--candidate-input-id", action="append", default=[])
     args = parser.parse_args()
     try:
         authority, operators = adapter(args)
-        with PreviewServer(authority, operators, port=args.port, origin=args.origin) as server:
+        with PreviewServer(authority, operators, port=args.port, origin=args.origin, candidate_inputs=tuple(args.candidate_input_id)) as server:
             server.serve_forever()
     except (ValueError, OSError, CommandError, ProjectionError):
         print('{"error":"local_preview_unavailable"}')
