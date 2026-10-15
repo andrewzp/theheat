@@ -6,6 +6,8 @@ All notable changes to this project will be documented in this file.
 
 - Keep local command controls paused until refreshed readback succeeds for the same operator and action. Preserve the original action reference and unsaved edit when refresh fails or identity changes.
 - Preserve the original image-read failure while safely handling a separate stream-cleanup rejection.
+- Inspect an earlier local delivery's approved text, original PNG and complete description after editing, with authenticated read-only history and no restored approval.
+- Fetch bounded saved-state artifacts together on the existing PostgreSQL connection while preserving complete size, hash and canonical identity checks.
 
 ## 0.9.108.116 — 2026-10-15
 

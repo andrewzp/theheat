@@ -101,7 +101,7 @@ def test_actual_delivery_edit_history_and_authenticated_http_are_passive(admitte
             draft_id=case["draft_id"], intent_id=intent, expected=old, operators=str(operators),
             other_draft=next(d["id"] for d in case["store"].read()[1]["drafts"] if d["id"] != case["draft_id"]))))
         try:
-            result = subprocess.run([os.environ["THEHEAT_NODE24"], "--test", "--test-name-pattern=actual authenticated history", "tests/delivery-history.test.js"],
+            result = subprocess.run([os.environ.get("THEHEAT_NODE24", "node"), "--test", "--test-name-pattern=actual authenticated history", "tests/delivery-history.test.js"],
                 cwd=ROOT / "dashboard", env={**clean_environment(), "THEHEAT_DELIVERY_HISTORY_CONFIG":str(config)},
                 capture_output=True, text=True, timeout=60)
             assert result.returncode == 0, result.stdout + result.stderr
