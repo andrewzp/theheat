@@ -364,7 +364,7 @@ def project(authority, c, state, version, policy, now):
                 row["job_id"] = job_id
                 saved = worker.apply(c, "status", {"job_id": job_id}, now=utc_text(now), environment=authority.environment)
                 row["writer_usage"] = writer_usage(authority, c, job_id, now)
-                row["status"] = {"registered": "queued", "ready": "queued", "submitted": "submitted"}.get(saved["state"], "reconciliation_required")
+                row["status"] = {"registered": "queued", "reserved": "queued", "ready": "queued", "submitted": "submitted"}.get(saved["state"], "reconciliation_required")
                 if exists(c, CAPTURE, job_id):
                     row["status"] = "candidate_ready"
                 elif exists(c, RESOLUTION, job_id):
