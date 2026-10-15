@@ -276,9 +276,16 @@ def _decode(plan_raw, plan, receipt, context, at, provider_id):
             key: sum(row["provider_status"] == key for row in report["rows"])
             for key in ("succeeded", "errored", "expired", "canceled")
         }
-        if any(metadata["request_counts"][key] != value for key, value in counts.items()):
+        if plan["schema_version"] == 2:
+            # A complete download may omit or contain invalid content for one
+            # identified item. Its reported charge/status is still unknown; only
+            # unambiguous observed sibling identities can become candidates.
+            if any(value > metadata["request_counts"][key] for key, value in counts.items()):
+                reasons.append("metadata_result_counts_mismatch")
+        elif any(metadata["request_counts"][key] != value for key, value in counts.items()):
             reasons.append("metadata_result_counts_mismatch")
-    if report["complete"] and not reasons:
+    identifiable = plan["schema_version"] == 2 and "invalid_results_protocol" not in report["context_blocked_reasons"]
+    if (report["complete"] or identifiable) and not reasons:
         # The strict parser already validated every line/ID. Normalize whitespace
         # and row ordering for identity, while exact raw bytes remain retained.
         items = {

@@ -19,5 +19,5 @@ export async function GET(request) {
 export async function POST(request) {
   const error = requireDashboardAuth(request) || unavailable()
   if (error) return error
-  return acceptLocalCommand(request, "request_sourced_generation")
+  return acceptLocalCommand(request, ["request_sourced_generation", "request_important_variants"])
 }

@@ -85,6 +85,7 @@ export function DraftWorkbench({
               {savedCandidate && candidate.reason && <details><summary>Earlier candidate validation</summary><p>{candidate.reason}</p></details>}
               {candidate.saved_draft_id ? <button type="button" className="btn btn-ghost" disabled={!!pendingCommand || !!editingId} onClick={() => setSelectedDraftId(candidate.saved_draft_id)}>Open saved draft</button>
                 : candidate.status === "not_checked" ? <button type="button" className="btn btn-blue" style={{ minHeight: 44 }} disabled={localRole === "viewer" || !!pendingCommand || !!editingId || !!candidate.checks_available_at} onClick={() => candidateAct(candidate, "request_candidate_checks")}>Check candidate</button>
+                : candidate.important_slate ? (candidate.slate_can_admit ? <button type="button" className="btn btn-blue" style={{ minHeight: 44 }} disabled={localRole === "viewer" || !!pendingCommand || !!editingId} onClick={() => candidateAct(candidate, "admit_checked_slate")}>Add checked important-event draft</button> : null)
                 : (candidate.required_checks_completed || candidate.status === "checks_recorded") ? <button type="button" className="btn btn-blue" style={{ minHeight: 44 }} disabled={localRole === "viewer" || !!pendingCommand || !!editingId} onClick={() => candidateAct(candidate, "admit_checked_candidate")}>{candidate.status === "checks_recorded" ? "Validate and add to local drafts" : "Add to local drafts"}</button> : null}
             </article>
             )
@@ -417,7 +418,7 @@ export function DraftWorkbench({
                         <div key={`${selectedDraft.id}-${c.rank}`} className="candidate-item">
                           <div className="candidate-head">
                             <span>
-                              alt #{c.rank} · copy {c.score?.total || 0} · {c.source}
+                              alt #{c.rank} · {c.score?.total == null ? "score unavailable" : `copy ${c.score.total}`} · {c.source}
                             </span>
                             <button
                               type="button"

@@ -15,11 +15,11 @@ MAX_COMMAND_BYTES = 128 * 1024
 MAX_TARGETS = 500
 MEDIA_ACTIONS = frozenset({"attach_media_revision", "remove_media_revision", "review_media_revision"})
 EDITOR_MEDIA_ACTIONS = frozenset({"prepare_media_revision", "request_revision_checks", "approve_media_revision"})
-CANDIDATE_ACTIONS = frozenset({"request_candidate_checks", "admit_checked_candidate"})
+CANDIDATE_ACTIONS = frozenset({"request_candidate_checks", "admit_checked_candidate", "admit_checked_slate"})
 SOURCE_ACTIONS = frozenset({"commit_nhc_source_run", "commit_ghcn_source_run"})
 REPORT_ACTIONS = frozenset({"open_report_evidence"})
 COVERAGE_ACTIONS = frozenset({"evaluate_reference_coverage"})
-GENERATION_ACTIONS = frozenset({"request_sourced_generation"})
+GENERATION_ACTIONS = frozenset({"request_sourced_generation", "request_important_variants"})
 ACTIONS = SOURCE_ACTIONS | COVERAGE_ACTIONS | REPORT_ACTIONS | EDITOR_MEDIA_ACTIONS | GENERATION_ACTIONS | CANDIDATE_ACTIONS | MEDIA_ACTIONS | frozenset({"edit_revision", "select_candidate", "record_review", "approve_revision",
                      "schedule_revision", "cancel_approval", "reject_revision", "bulk_reject"})
 _HEX = re.compile(r"[a-f0-9]{64}")
@@ -125,6 +125,8 @@ def _validate_payload(action: str, payload: Any, *, allow_legacy_review: bool = 
         "request_revision_checks": {"expected_policy_sha256", "expected_renderer_profile_sha256", "expected_packet_sha256", "expected_review_sha256"},
         "approve_media_revision": {"expected_policy_sha256", "expected_renderer_profile_sha256", "expected_packet_sha256", "expected_review_sha256", "expected_check_completion_sha256", "reason"},
         "review_media_revision": {"proposal_sha256", "expected_packet_sha256", "expected_policy_sha256", "review"},
+        "request_important_variants": {"brief_id", "brief_sha256", "allowance_id", "allowance_sha256", "expected_state_version", "expected_policy_sha256"},
+        "admit_checked_slate": {"slate_id", "slate_sha256", "expected_state_version", "expected_policy_sha256", "expected_completion_set_sha256"},
         "request_sourced_generation": {"brief_id", "brief_sha256", "expected_state_version", "expected_policy_sha256"},
         "edit_revision": {"text"}, "select_candidate": {"candidate_rank", "candidate_sha256"},
         "record_review": {"confirmed", "reason", "expected_policy_sha256"}, "approve_revision": {"reason"},
@@ -178,12 +180,20 @@ def _validate_payload(action: str, payload: Any, *, allow_legacy_review: bool = 
                     or not isinstance(episode["claim_id"], str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}", episode["claim_id"])):
                 raise CommandError("invalid_report_identity", "Supply an exact source-scoped episode reference")
     if action in GENERATION_ACTIONS:
-        for key in ("brief_id", "brief_sha256"):
+        for key in (("brief_id", "brief_sha256", "allowance_id", "allowance_sha256") if action == "request_important_variants" else ("brief_id", "brief_sha256")):
             if not isinstance(payload[key], str) or not _HEX.fullmatch(payload[key]):
                 raise CommandError("invalid_generation_identity", "Supply exact retained brief identities")
         if type(payload["expected_state_version"]) is not int or not 0 <= payload["expected_state_version"] <= 9007199254740991:
             raise CommandError("invalid_state_version", "Supply the exact authority version")
-    if action in CANDIDATE_ACTIONS:
+    if action == "admit_checked_slate":
+        if not isinstance(payload["slate_id"], str) or not re.fullmatch(r"iv_[0-9a-f]{64}", payload["slate_id"]):
+            raise CommandError("invalid_slate_identity", "Supply the exact retained slate")
+        for key in ("slate_sha256", "expected_completion_set_sha256"):
+            if not isinstance(payload[key], str) or not _HEX.fullmatch(payload[key]):
+                raise CommandError("invalid_slate_identity", "Supply exact retained slate fingerprints")
+        if type(payload["expected_state_version"]) is not int or not 0 <= payload["expected_state_version"] <= 9007199254740991:
+            raise CommandError("invalid_state_version", "Supply the exact authority version")
+    if action in CANDIDATE_ACTIONS - {"admit_checked_slate"}:
         for key in ("admission_input_id", "admission_input_sha256", "candidate_id", "check_set_id", "expected_completion_sha256"):
             if key in payload and (not isinstance(payload[key], str) or not _HEX.fullmatch(payload[key])):
                 raise CommandError("invalid_candidate_identity", "Supply exact retained candidate identities")

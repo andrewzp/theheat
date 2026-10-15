@@ -8,6 +8,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 from uuid import UUID
 
 from src.commands import postgres_batch, postgres_batch_results, postgres_batch_worker, postgres_spending
@@ -420,6 +421,24 @@ class PostgresCommandAuthority:
         self.generation_configuration = load_configuration
         generation.configuration(self)
 
+    def configure_important_variants(self, load_configuration) -> None:
+        from src.commands import postgres_important_variants as important
+        self.important_variants_configuration = load_configuration
+        important.configuration(self)
+
+    def retain_important_allowance(self, value: dict) -> dict:
+        from src.commands import postgres_important_variants as important
+        from src.two_bot.important_variants import allowance_document
+        important.refuse(self.environment == "local", "local_generation_required")
+        value = p._decode(p._canonical(value))
+        allowance_document(value)
+        identity = p._sha(p._canonical(value))
+        with self.projections._connection(writing=True) as c:
+            self._validate(c)
+            self._pointer(c, lock=True)
+            important.record(c, important.ALLOWANCE, identity, value)
+        return dict(allowance_id=identity, allowance_sha256=identity)
+
     def retain_generation_input(self, value: dict) -> dict:
         from src.commands import postgres_sourced_generation as generation
         value = p._decode(p._canonical(value))
@@ -474,7 +493,9 @@ class PostgresCommandAuthority:
     def execute_sourced_generation_once(self, command_id: str, resolve_principal, *, clock,
             operation: str, enabled: bool = False, refresh: bool = False, transport_factory=None) -> dict:
         """One explicit existing transport operation; no scheduler or retry loop."""
-        from src.commands import postgres_sourced_generation as generation
+        from src.commands import postgres_sourced_generation
+        from src.commands import postgres_important_variants
+        generation: Any = postgres_sourced_generation
         from src.two_bot.batch_transport import submit_batch_once
         from src.two_bot.batch_collector import collect_batch_once
         generation.refuse(type(enabled) is bool, "generation_enabled_requires_boolean")
@@ -487,6 +508,9 @@ class PostgresCommandAuthority:
         if accepted and accepted.get("generation", {}).get("execution_mode") == "synchronous":
             from src.commands.postgres_synchronous_generation import execute
             return execute(self, command_id, resolve_principal, operation=operation, clock=clock, transport_factory=transport_factory)
+        important_group = bool(accepted and accepted.get("generation", {}).get("execution_mode") == "important_batch")
+        if important_group:
+            generation = postgres_important_variants
         generation.refuse(operation in {"submit", "collect", "capture"}, "generation_operation_refused")
         authority = self
         command_id = _id(command_id)
@@ -507,6 +531,8 @@ class PostgresCommandAuthority:
                     refs, job, value = generation.runner_context(authority, c, command_id, resolve_principal, state, policy, at)
                 if action == "context":
                     return refs, job
+                if action == "collection_cycle":
+                    return generation.collection_cycle(c, refs["job_id"], now=at)
                 if action == "capture":
                     return generation.capture(authority, c, refs, job, value, state, version, policy, at, owner)
                 generation.refuse(payload["job_id"] == refs["job_id"], "generation_job_mismatch")
@@ -546,11 +572,16 @@ class PostgresCommandAuthority:
             captured = transaction("capture")
             if captured.get("terminal"):
                 return dict(outcome="terminal", reason=captured["reason"], cost_usd=None, publication_approved=False)
+            if important_group:
+                from src.commands.postgres_important_variants import captured_outcome
+                return dict(**captured_outcome(captured), candidate=captured, publication_approved=False)
             return dict(outcome="candidate_ready", candidate=captured, publication_approved=False)
         runner = submit_batch_once if operation == "submit" else collect_batch_once
         from src.two_bot.batch_transport import AnthropicBatchTransport
         import os
         def guarded_transport():
+            if important_group and operation == "collect":
+                transaction("collection_cycle")
             inner = (transport_factory or (lambda: AnthropicBatchTransport(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))))()
             class GuardedTransport:
                 def submit(self, requests):
@@ -841,7 +872,11 @@ class PostgresCommandAuthority:
                             with c.transaction():
                                 resolved = generation_prepared.current(self,c,state,version) if generation_prepared is not None else None
                                 clock = _clock(now)
-                                generation = generation_domain.prepare(self, c, state, version, command, actor,
+                                prepare_generation: Callable = generation_domain.prepare
+                                if command.action == "request_important_variants":
+                                    from src.commands.postgres_important_variants import prepare as prepare_important
+                                    prepare_generation = prepare_important
+                                generation = prepare_generation(self, c, state, version, command, actor,
                                     now=clock, policy=policy, editorial_policy=editorial_policy,
                                     resolved=resolved)
                             reduction = Reduction(state, (), ())
@@ -850,9 +885,15 @@ class PostgresCommandAuthority:
                             # Deterministic refusals keep their command result but
                             # roll back every domain write (including a new lease).
                             with c.transaction(), admission.expected_domain_failures():
-                                candidate_transition = admission.prepare(self, c, state, version, command, actor,
+                                prepare_candidate: Callable = admission.prepare
+                                if command.action == "admit_checked_slate":
+                                    from src.commands.postgres_important_variants import admit
+                                    prepare_candidate = admit
+                                candidate_transition = prepare_candidate(self, c, state, version, command, actor,
                                     now=clock, policy=policy, editorial_policy=editorial_policy, resolve_principal=resolve_principal, prepared=generation_prepared, clock_now=lambda:_clock(now))
                             reduction = candidate_transition.reduction
+                            if candidate_transition.completed_at is not None:
+                                clock = candidate_transition.completed_at
                         elif command.action in MEDIA_ACTIONS:
                             if hasattr(self, "editor_media_configuration") and command.action != "remove_media_revision":
                                 from src.commands import postgres_editor_media as editor_domain
@@ -952,6 +993,13 @@ class PostgresCommandAuthority:
                         deadline, check_date = media_final_window
                         editor_domain.refuse(ended >= clock, "media_completion_clock_regressed")
                         editor_domain.refuse(ended < deadline and (check_date is None or utc_text(ended)[:10] == check_date), "media_completion_expired")
+                    if candidate_transition is not None and candidate_transition.final_window is not None:
+                        # Sample after all terminal writes; a late refusal rolls
+                        # back the whole admission and leaves its intent pending.
+                        ended = _clock(now)
+                        deadline, check_date = candidate_transition.final_window
+                        admission.refuse(ended >= clock, "candidate_completion_clock_regressed")
+                        admission.refuse(ended < deadline and utc_text(ended)[:10] == check_date, "candidate_completion_expired")
         return result
 
     def configure_editor_media(self, *, rasterizer, scratch, dependency_manifest):
@@ -1097,6 +1145,7 @@ class PostgresCommandAuthority:
         The browser cannot select the owner, packet, role, provider or reservation.
         """
         from src.commands import postgres_candidate_admission as admission
+        from src.commands.postgres_important_variants import is_group
         from src.two_bot.check_executor import execute_check_once
         if type(enabled) is not bool:
             raise ValueError("check_execution_flag_requires_boolean")
@@ -1116,12 +1165,12 @@ class PostgresCommandAuthority:
                 at = max(at, utc_datetime(clock()))
                 if operation == "observe":
                     original = authority._intent(c, command_id)
-                    if original is not None and original[0].payload.get("origin_kind") == "synchronous_writer_v1":
+                    if original is not None and (original[0].payload.get("origin_kind") == "synchronous_writer_v1" or is_group(c, original[0].payload.get("job_id"), environment=authority.environment)):
                         result = authority._result(c, command_id)
                         admission.refuse(original[0].action == "request_candidate_checks" and result is not None
                             and result["status"] == "unchanged" and result["candidate"]["check_set_id"] == payload["check_set_id"], "check_request_mismatch")
                         granted = postgres_check_observations._scoped_attempt(c, payload["check_set_id"], payload["stage"], payload["grant_id"], authority.environment)
-                        admission.refuse(granted["binding"]["owner"] == admission.owner_for(original[0]), "check_owner_mismatch")
+                        admission.refuse(granted["binding"]["owner"] == admission.owner_for(original[0], c=c), "check_owner_mismatch")
                         return postgres_check_observations.apply(c, "observe", payload, now=utc_text(at), raw=raw, environment=authority.environment)
                 if prepared is not None:
                     prepared.current(authority,c,state,version)
@@ -1129,25 +1178,31 @@ class PostgresCommandAuthority:
                 command, value, identity = admission.runner_context(authority, c, command_id, resolve_principal,
                     version=version, state=state, policy=current_editorial_policy(), now=at, resolved=resolved)
                 if operation == "context":
-                    return command, value, identity, state
+                    return command, value, identity, state, admission.owner_for(command, c=c)
                 if operation == "lease":
                     from src.commands.postgres_revision_checks import acquire
-                    admission.refuse(payload["owner"] == admission.owner_for(command), "check_owner_mismatch")
+                    admission.refuse(payload["owner"] == admission.owner_for(command, c=c), "check_owner_mismatch")
                     return acquire(c, identity, payload["owner"], payload["ttl_seconds"], now=utc_text(at), environment=authority.environment,
                         origin_kind="synchronous_writer_v1")
                 if operation == "batch":
-                    admission.refuse(payload["job_id"] == value["job_id"] and payload["owner"] == admission.owner_for(command), "check_request_mismatch")
+                    admission.refuse(payload["job_id"] == value["job_id"] and payload["owner"] == admission.owner_for(command, c=c), "check_request_mismatch")
+                    if is_group(c, value.get("job_id"), environment=authority.environment):
+                        from src.commands.postgres_important_variants import shared_lease
+                        return dict(lease=shared_lease(c, value, payload["owner"], now=at, environment=authority.environment))
                     return postgres_batch_worker.apply(c, "acquire", payload, now=utc_text(at), environment=authority.environment)
                 admission.refuse(payload["check_set_id"] == identity, "check_request_mismatch")
+                if operation == "begin" and is_group(c, value.get("job_id"), environment=authority.environment):
+                    from src.commands.postgres_important_variants import check_reservation
+                    check_reservation(c, value, payload["stage"], p._sha(request), payload.get("reservation"), environment=authority.environment)
                 if operation in {"begin", "complete", "status"}:
-                    admission.refuse(payload["owner"] == admission.owner_for(command), "check_owner_mismatch")
+                    admission.refuse(payload["owner"] == admission.owner_for(command, c=c), "check_owner_mismatch")
                     return postgres_checks.apply(c, operation, payload, now=utc_text(at), environment=authority.environment, request=request, receipt=receipt, resolved=resolved)
                 if operation in {"read", "observe"}:
                     return postgres_check_observations.apply(c, operation, payload, now=utc_text(at), environment=authority.environment, raw=raw)
                 reader = postgres_check_observations.read_response if operation == "response" else postgres_check_observations.read_request
                 return reader(c, payload["check_set_id"], payload["stage"], payload["grant_id"], environment=authority.environment)
 
-        command, value, identity, state = transaction("context")
+        command, value, identity, state, check_owner = transaction("context")
         class ScopedAuthority:
             resolved_check_context = resolved
             def acquire_check_lease(self, check_set_id, owner, ttl_seconds, *, now):
@@ -1169,7 +1224,7 @@ class PostgresCommandAuthority:
             def read_check_response(self, check_set_id, stage, grant_id):
                 return transaction("response", dict(check_set_id=check_set_id, stage=stage, grant_id=grant_id))
         return execute_check_once(ScopedAuthority(), identity, current_context=admission.context_for(value, current_editorial_policy()),
-            checker_state=state, owner=admission.owner_for(command), clock=clock, reservation=reservation, enabled=enabled,
+            checker_state=state, owner=check_owner, clock=clock, reservation=reservation, enabled=enabled,
             transport_options=transport_options)
 
     def read(self) -> tuple[int, dict]:

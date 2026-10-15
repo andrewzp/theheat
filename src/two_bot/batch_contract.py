@@ -207,6 +207,9 @@ def _plan(plan_bytes, expected_plan_sha256):
         _digest(plan_bytes) == expected_plan_sha256 and _json(plan) == plan_bytes,
         "changed_plan_bytes",
     )
+    if isinstance(plan, dict) and plan.get("schema_version") == 2:
+        from src.two_bot.important_variants import validate_plan
+        return validate_plan(plan)
     _require(isinstance(plan, dict) and set(plan) == _BINDING | {"requests"}, "invalid_plan_fields")
     binding = {key: value for key, value in plan.items() if key != "requests"}
     _binding_valid(binding)
@@ -388,15 +391,29 @@ def collect_batch_results(
         expected = {request["custom_id"] for request in plan["requests"]}
         found = {}
         for raw in lines:
-            row = _result(raw, plan, blocked)
-            cid = row["custom_id"]
+            if plan["schema_version"] == 2:
+                # Framing/identity ambiguity invalidates the whole receipt. Only
+                # content of an identified member may leave its sibling usable.
+                envelope = _parse(raw, MAX_RESULT_BYTES)
+                _require(isinstance(envelope, dict) and set(envelope) == {"custom_id", "result"}, "invalid_result_fields")
+                cid = envelope["custom_id"]
+                _require(isinstance(cid, str) and cid in expected and cid not in found, "unknown_or_duplicate_result_id")
+                try:
+                    row = _result(raw, plan, blocked)
+                except (ValueError, TypeError, KeyError, AttributeError):
+                    row = dict(custom_id=cid, provider_status="invalid", raw_sha256=_digest(raw), message_id=None,
+                        usage=None, usage_status="invalid_unpriced", cost_usd=None, blocked_reasons=[*blocked, "invalid_member_content"],
+                        candidate=None, eligible_for_checks=False, publication_approved=False)
+            else:
+                row = _result(raw, plan, blocked)
+                cid = row["custom_id"]
             _require(
                 isinstance(cid, str) and cid in expected and cid not in found,
                 "unknown_or_duplicate_result_id",
             )
             found[cid] = row
         missing = sorted(expected - set(found))
-        if missing:
+        if missing and plan["schema_version"] == 1:
             blocked.append("incomplete_results")
             for row in found.values():
                 row["blocked_reasons"].append("incomplete_results")
