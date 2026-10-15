@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.108.115 — 2026-10-15
+
+- Add an explicit local important-event allowance for two batch angles, independently check each result, retain valid alternatives and preserve both results' source and cost histories. Keep one routine writer sample, fail closed on stale reviews and leave production activation off.
+
 ## 0.9.108.114 — 2026-10-15
 
 - Queue the same PostgreSQL catalog reads together on ordinary connections while preserving exact fingerprints and transaction checks. Keep deadline-limited cost reads synchronous with their original shrinking SQL timeouts and whole read window.

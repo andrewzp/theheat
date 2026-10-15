@@ -29,7 +29,7 @@ from src.storage.postgres_projection import ProjectionError
 AUTH_CONTEXT = "verified-local-preview-basic-v1"
 ALLOWED_ACTIONS = frozenset({"commit_ghcn_source_run", "commit_nhc_source_run", "evaluate_reference_coverage", "open_report_evidence", "edit_revision", "record_review", "approve_revision",
                              "reject_revision", "bulk_reject", "cancel_approval", "select_candidate",
-                             "request_candidate_checks", "admit_checked_candidate", "request_sourced_generation",
+                             "request_candidate_checks", "admit_checked_candidate", "admit_checked_slate", "request_sourced_generation", "request_important_variants",
                              "prepare_media_revision", "attach_media_revision", "review_media_revision", "remove_media_revision",
                              "request_revision_checks", "approve_media_revision"})
 
@@ -377,6 +377,7 @@ def arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--database-port", type=int, default=55473)
     parser.add_argument("--operators", required=True)
     parser.add_argument("--generation-inputs")
+    parser.add_argument("--important-variants")
     parser.add_argument("--report-inputs")
     parser.add_argument("--coverage-inputs")
     parser.add_argument("--source-results", action="store_true")
@@ -406,6 +407,9 @@ def adapter(args) -> tuple[PostgresCommandAuthority, Operators]:
     if getattr(args, "report_inputs", None):
         from src.commands.postgres_report_development import private_configuration as report_configuration
         authority.configure_report_development(report_configuration(args.report_inputs))
+    if getattr(args, "important_variants", None):
+        from src.commands.postgres_sourced_generation import private_configuration
+        authority.configure_important_variants(private_configuration(args.important_variants))
     if getattr(args, "generation_inputs", None):
         from src.commands.postgres_sourced_generation import private_configuration
         authority.configure_sourced_generation(private_configuration(args.generation_inputs))

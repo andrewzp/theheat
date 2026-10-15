@@ -142,7 +142,7 @@ def current_reservation(c, reserve, identity, policy, now, *, synchronous=False)
     refuse(utc_datetime(value["valid_from"]) <= now < utc_datetime(value["valid_until"]), "generation_reservation_expired")
 
 
-def current(authority, c, identity, policy, now, *, resolved=None):
+def current(authority, c, identity, policy, now, *, resolved=None, require_reservation=True):
     hosted_fixture.profile(c, authority.environment)
     config = configuration(authority)
     refuse(identity in config["current_inputs"], "generation_source_superseded")
@@ -162,7 +162,8 @@ def current(authority, c, identity, policy, now, *, resolved=None):
         and policy["flags"]["critic_enabled"] and policy["flags"]["safety_llm_enabled"], "generation_policy_unavailable")
     refuse(os.environ.get("THEHEAT_PRODUCTION_PAUSED") != "1", "production_paused")
     reserve = config["reservations"]["synchronous" if value["urgent"] else "batch"] if "reservations" in config else config["reservation"]
-    current_reservation(c, reserve, identity, policy, now, synchronous=value["urgent"])
+    if require_reservation:
+        current_reservation(c, reserve, identity, policy, now, synchronous=value["urgent"])
     if not value["urgent"] and "reservations" in config:
         config = dict(current_inputs=config["current_inputs"], reservation=reserve)
     return value, config
@@ -177,6 +178,8 @@ def prepare(authority, c, state, version, command, actor, *, now, policy, editor
     refuse(refs["expected_state_version"] == version and refs["expected_policy_sha256"] == fingerprint(editorial_policy), "generation_context_changed")
     refuse(refs["brief_id"] == refs["brief_sha256"], "generation_input_mismatch")
     value, config = current(authority, c, refs["brief_id"], editorial_policy, now, resolved=resolved)
+    from src.commands.postgres_important_variants import ordinary_guard
+    ordinary_guard(c, value, refs["brief_id"])
     bundle = source_bundle(value["bundle"], resolved=resolved)
     refuse(negative_cache.should_skip(state, value["save"]["event_id"], bundle, now=now) is None, "generation_negative_cache")
     if value["urgent"]:
@@ -374,7 +377,8 @@ def project(authority, c, state, version, policy, now):
         except (CommandError, ValueError) as exc:
             row["reason"] = exc.code if isinstance(exc, CommandError) else "source_validation_unavailable"
             row["status"] = "expired" if now >= utc_datetime(value["useful_until"]) else "blocked"
-        rows.append(row)
+        from src.commands.postgres_important_variants import project_brief
+        rows.append(project_brief(authority, c, row, state, version, policy, now))
     return dict(schema_version=1, enabled=True, disabled_reason=None, briefs=rows)
 
 
@@ -385,6 +389,9 @@ def candidates(authority, c):
         for namespace in (JOB, sync.JOB):
             identities.extend(candidates_for(c, identity, namespace))
             refuse(len(identities) <= 16, "generation_candidate_capacity")
+    from src.commands.postgres_important_variants import candidate_inputs
+    identities.extend(candidate_inputs(authority, c))
+    refuse(len(identities) <= 16, "generation_candidate_capacity")
     return tuple(identities)
 
 

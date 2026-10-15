@@ -292,7 +292,7 @@ export default function Dashboard() {
         text: abandoned ? "The previous submission was never accepted and is now closed. Nothing was changed."
           : rejected ? `${result.message} Your edit is preserved.`
           : result.publish_intent_id ? "Approved locally. The intent is parked; nothing will be published."
-          : saved.action === "request_sourced_generation" ? `Writer status: ${(payload.writer_status?.status || "queued").replaceAll("_", " ")}. Required checks still gate admission; final charge remains unknown.`
+          : ["request_sourced_generation", "request_important_variants"].includes(saved.action) ? `Writer status: ${(payload.writer_status?.status || "queued").replaceAll("_", " ")}. Required checks still gate admission; final charge remains unknown.`
           : saved.action === "review" ? "Human review recorded for this exact version."
           : saved.action === "edit" ? "Saved. Review this version against its sources before approval." : "Local command completed." })
       if (!rejected && result.candidate?.draft_id) setSelectedDraftId(result.candidate.draft_id)
@@ -688,7 +688,7 @@ export default function Dashboard() {
             </div>
 
             <SourcedGeneration key={data?.operator_subject || "unavailable"} onRefresh={fetchData} readOnly={data?.operator_role === "viewer"}
-              pendingAction={!!pendingCommand} onRequest={data?.local_preview ? command => submitLocalCommand({ command, draftId:command.payload.brief_id, action:"request_sourced_generation" }) : undefined} />
+              pendingAction={!!pendingCommand} onRequest={data?.local_preview ? command => submitLocalCommand({ command, draftId:command.payload.brief_id, action:command.action }) : undefined} />
 
             {/* Stats */}
             <div className="grid">

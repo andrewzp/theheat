@@ -409,6 +409,8 @@ def _revision_source(reader, packet):
     common={"schema_version","draft_id","event_id","admission_command_id","admission_input_id","admission_input_sha256",
         "brief_id","bundle_sha256","memory_sha256","source_useful_until","provenance_useful_until"}
     version=source.get("schema_version")
+    if type(version) is int and version == 3:
+        return _important_revision_source(reader, packet, receipt, source)
     require(type(version) is int and version in {1,2})
     shape(source,common | ({"job_id","plan_sha256"} if version==1 else {"origin_kind"}|synchronous_origin.REFERENCES))
     require(receipt.canonical_sha256==ref["canonical_sha256"] and source["draft_id"]==packet["draft_target"]["draft_id"]
@@ -467,6 +469,15 @@ def _check(reader, record, attempt_row):
         refs.update(brief_id=parent["job"]["brief_id"],generation_id=packet["generation_id"],source_run_id=_source_run(reader,parent["brief"]))
     elif packet["schema_version"] in {3,6}:
         refs["brief_id"],refs["source_run_id"]=_revision_source(reader,packet)
+    elif packet["job_id"].startswith("iv_") and _batch_plan(reader, packet["job_id"])[1]["schema_version"] == 2:
+        job, brief, member, original_lease = _important_member(reader, packet)
+        require(binding["owner"] == original_lease["owner"] and binding["fence"] == original_lease["fence"]
+                and original_lease["recorded_at"] <= at < original_lease["expires_at"])
+        _, allowance = reader.projection("important-alternate-allowance-v1", job["allowance_id"])
+        require(intent == dict(allowance["check_reservations"][stage],
+                intent_id="ic_"+fingerprint(dict(job_id=packet["job_id"], slot=member["slot"], stage=stage)),
+                job_id=packet["job_id"], request_sha256=request_sha))
+        refs.update(brief_id=job["brief_id"], generation_id=packet["job_id"], source_run_id=_source_run(reader, brief))
     else:
         saved=reader.projection(generation.JOB,packet["job_id"],optional=True)
         if saved:
@@ -512,22 +523,220 @@ def _batch_plan(reader, identity, selected=None):
     return dict(job_id=identity,plan_sha256=row[0],intent_id=row[1],registered_at=row[2]),plan
 
 
+def _important_command(reader, identity, action):
+    """Bounded historical command join; no current authorization or execution."""
+    from src.commands.postgres_authority import _command, _decode, _id, MAX_BODY, NAMESPACE
+    _id(identity)
+    join = "FROM theheat_commands.intents i JOIN theheat_commands.results r USING(command_id) WHERE i.command_id=%s"
+    sizes = reader.execute("SELECT octet_length(i.command_bytes),octet_length(r.result_bytes) "+join, (identity,)).fetchone()
+    require(sizes is not None and all(type(n) is int and 0 < n <= MAX_BODY for n in sizes))
+    reader.charge(sum(sizes))
+    row = reader.execute("SELECT i.command_bytes,i.digest,r.result_bytes,r.digest,r.state_version,r.namespace,r.snapshot_id,i.accepted_at "+join, (identity,)).fetchone()
+    require(row is not None and (len(row[0]), len(row[2])) == sizes)
+    command, result = _command(row[0], row[1]), _decode(row[2], row[3])
+    require(command.command_id == result.get("command_id") == identity and command.action == action
+            and result.get("digest") == command.digest and result.get("actor_subject") == command.actor_subject
+            and result.get("status") == "applied" and type(result.get("state_version")) is int
+            and result["state_version"] == row[4] and row[5] == NAMESPACE and row[6] == str(row[4]))
+    time_order(command.requested_at, row[7], result["completed_at"])
+    return command, result
+
+
+def _important_job(reader, registration, plan, selected=None):
+    from src.commands import postgres_important_variants as group, batch_worker_journal as w
+    identity = registration["job_id"]
+    _, job = reader.projection(group.JOB, identity)
+    shape(job, {"schema_version", "brief_id", "allowance_id", "plan_sha256", "context", "memory", "policy",
+        "source_useful_until", "useful_until", "created_at", "slots", "reservation", "command_id",
+        "authorized_subject", "authentication_context", "negative_cache_input_sha", "negative_cache_epoch"})
+    receipt, allowance = reader.projection(group.ALLOWANCE, job["allowance_id"])
+    brief = _brief(reader, job["brief_id"])
+    key = fingerprint(dict(brief_id=job["brief_id"], context=job["context"], allowance_sha256=job["allowance_id"]))
+    reservation = dict(allowance["writer_reservation"], intent_id="writer_"+key, job_id=identity,
+                       request_sha256=registration["plan_sha256"])
+    require(type(job["schema_version"]) is int and job["schema_version"] == 1
+            and plan["schema_version"] == 2 and plan["samples"] == 2 and len(plan["requests"]) == 2
+            and identity == "iv_"+key and receipt.canonical_sha256 == job["allowance_id"] == plan["allowance_sha256"]
+            and allowance == plan["allowance"] and job["plan_sha256"] == registration["plan_sha256"]
+            and job["reservation"] == reservation and registration["intent_id"] == reservation["intent_id"]
+            and brief["urgent"] is False and allowance["brief_id"] == allowance["brief_sha256"] == job["brief_id"]
+            and brief["bundle"] == plan["bundle"] and job["memory"] == plan["memory"] and job["policy"] == plan["policy"]
+            and job["context"] == allowance["context"] == {k:plan[k] for k in w._CONTEXT}
+            and job["created_at"] == plan["created_at"] and job["useful_until"] == plan["useful_until"]
+            and job["source_useful_until"] == brief["useful_until"]
+            and job["authorized_subject"] == allowance["authorized_subject"]
+            and job["authentication_context"] == allowance["authentication_context"]
+            and job["slots"] == [dict(slot=i+1, custom_id=r["custom_id"], params_sha256=fingerprint(r["params"]))
+                                  for i,r in enumerate(plan["requests"])])
+    if selected is not None:
+        require(selected["intent"] == reservation)
+    command, result = _important_command(reader, job["command_id"], "request_important_variants")
+    require(command.actor_subject == job["authorized_subject"] and command.authentication_context == job["authentication_context"]
+            and all(command.payload[k] == v for k,v in dict(brief_id=job["brief_id"], brief_sha256=job["brief_id"],
+                allowance_id=job["allowance_id"], allowance_sha256=job["allowance_id"]).items())
+            and command.payload["expected_policy_sha256"] == fingerprint(job["policy"])
+            and result["generation"] == dict(brief_id=job["brief_id"], job_id=identity,
+                plan_sha256=job["plan_sha256"], intent_id=registration["intent_id"], generation_status="queued",
+                execution_mode="important_batch", slate_id=identity, slate_sha256=p._sha(p._canonical(job))))
+    _, claim = reader.projection(group.CLAIM, group.claim_id(brief, job["brief_id"]))
+    require(claim == dict(schema_version=1, job_id=identity, command_id=command.command_id,
+                         brief_id=job["brief_id"], allowance_id=job["allowance_id"]))
+    time_order(brief["captured_at"], job["created_at"], result["completed_at"])
+    return job, brief
+
+
+def _important_member(reader, packet):
+    """Historical per-slot membership, without re-running any editorial check."""
+    from src.commands import postgres_important_variants as group, postgres_candidate_admission as admission
+    registration, plan = _batch_plan(reader, packet["job_id"])
+    job, brief = _important_job(reader, registration, plan)
+    input_id = admission.input_id(packet["job_id"], packet["custom_id"], packet["candidate_id"])
+    receipt, value = reader.projection(admission.NAMESPACE, input_id)
+    shape(value, admission.INPUT_FIELDS)
+    _, capture = reader.projection(group.CAPTURE, packet["job_id"])
+    shape(capture, {"schema_version", "job_id", "plan_sha256", "receipt_id", "state_version", "state_sha256", "captured_at", "slots"})
+    require(type(capture["schema_version"]) is int and capture["schema_version"] == 1
+            and capture["job_id"] == value["job_id"] == packet["job_id"]
+            and capture["plan_sha256"] == value["plan_sha256"] == job["plan_sha256"]
+            and len(capture["slots"]) == 2 and [s["slot"] for s in capture["slots"]] == [1,2]
+            and [{k:s[k] for k in ("slot","custom_id","params_sha256")} for s in capture["slots"]] == job["slots"]
+            and admission.input_id(value["job_id"], value["custom_id"], value["candidate_id"]) == input_id
+            and all(value[k] == packet[k] for k in ("candidate_id","custom_id","bundle","memory","current_context"))
+            and value["bundle"] == brief["bundle"] and value["memory"] == job["memory"]
+            and value["current_context"] == job["context"]
+            and all(value[k] == capture[k] for k in ("receipt_id","state_version","state_sha256","captured_at")))
+    matches = [s for s in capture["slots"] if s["custom_id"] == packet["custom_id"]]
+    require(len(matches) == 1 and matches[0]["candidate"] is not None
+            and matches[0]["candidate"]["admission_input_id"] == input_id
+            and matches[0]["candidate"]["admission_input_sha256"] == receipt.canonical_sha256)
+    writer = spend._record(reader, registration["intent_id"])
+    require(writer is not None)
+    refs, evidence, _ = _batch(reader, writer, (packet["job_id"],))
+    require(evidence is not None and refs["receipt_id"] == value["receipt_id"])
+    rows = [(line, usage.decode(line)) for line in evidence["raw"].splitlines()]
+    matching = [(line,item) for line,item in rows if item["custom_id"] == value["custom_id"]]
+    require(len(matching) == 1)
+    raw, item = matching[0]
+    require(p._sha(raw) == matches[0]["raw_sha256"]
+            and value["candidate_id"] == fingerprint(dict(plan_sha256=value["plan_sha256"], custom_id=value["custom_id"], item=item)))
+    _, lease = reader.projection(group.LEASE, packet["job_id"])
+    return job, brief, matches[0], lease
+
+
+def _important_revision_source(reader, packet, receipt, source):
+    """Sealed historical membership for saved-revision costs, not approval."""
+    from src.commands import postgres_important_variants as group, postgres_candidate_admission as admission
+    shape(source, {"schema_version","origin_kind","draft_id","event_id","admission_command_id","job_id",
+        "slate_sha256","admission_sha256","admission_input_id","admission_input_sha256","brief_id",
+        "plan_sha256","bundle_sha256","memory_sha256","source_useful_until","provenance_useful_until"})
+    require(source["origin_kind"] == group.ORIGIN and receipt.canonical_sha256 == packet["source_origin"]["canonical_sha256"]
+            and source["draft_id"] == packet["draft_target"]["draft_id"] and source["event_id"] == packet["bundle"]["event_id"]
+            and source["bundle_sha256"] == fingerprint(packet["bundle"]) and source["memory_sha256"] == fingerprint(packet["memory"])
+            and source["source_useful_until"] == packet["source_useful_until"]
+            and source["provenance_useful_until"] == packet["provenance_useful_until"])
+    _, membership = reader.projection(group.ADMISSION, source["job_id"])
+    shape(membership, {"schema_version","job_id","slate_sha256","admission_command_id","draft_id","selected_slot",
+        "completion_snapshot","candidates","proofs","state_version","policy_sha256","admitted_at"})
+    require(type(membership["schema_version"]) is int and membership["schema_version"] == 1
+            and p._sha(p._canonical(membership)) == source["admission_sha256"]
+            and all(membership[k] == source[k] for k in ("job_id","slate_sha256","admission_command_id","draft_id")))
+    command, result = _important_command(reader, source["admission_command_id"], "admit_checked_slate")
+    require(command.payload["slate_id"] == source["job_id"] and command.payload["slate_sha256"] == source["slate_sha256"]
+            and command.payload["expected_completion_set_sha256"] == fingerprint(membership["completion_snapshot"])
+            and command.payload["expected_state_version"] == membership["state_version"]
+            and command.payload["expected_policy_sha256"] == membership["policy_sha256"]
+            and result["candidate"]["draft_id"] == source["draft_id"]
+            and result["candidate"]["slate_id"] == source["job_id"]
+            and result["candidate"]["admission_sha256"] == source["admission_sha256"]
+            and result["candidate"]["selected_slot"] == membership["selected_slot"])
+    drafts = [d for d in packet["checker_state"].get("drafts", []) if d.get("id") == source["draft_id"]]
+    candidates = membership["candidates"]
+    require(len(drafts) == 1 and type(candidates) is list and 1 <= len(candidates) <= 2
+            and drafts[0].get("candidates") == candidates
+            and len({c["rank"] for c in candidates}) == len(candidates)
+            and set(membership["proofs"]) == {str(c["rank"]) for c in candidates})
+    selected = None
+    for candidate in candidates:
+        provenance = candidate["provenance"]
+        loaded = _packet(reader, provenance["check_set_id"])
+        require(loaded is not None)
+        initial, enrolled = loaded
+        require(initial["schema_version"] == 2 and initial["job_id"] == source["job_id"])
+        job, brief, member, lease = _important_member(reader, initial)
+        require(source["slate_sha256"] == p._sha(p._canonical(job)) and source["brief_id"] == job["brief_id"]
+                and source["plan_sha256"] == job["plan_sha256"]
+                and source["source_useful_until"] == job["source_useful_until"]
+                and source["provenance_useful_until"] == job["useful_until"]
+                and membership["policy_sha256"] == fingerprint(job["policy"]))
+        input_id = admission.input_id(initial["job_id"], initial["custom_id"], initial["candidate_id"])
+        input_receipt, value = reader.projection(admission.NAMESPACE, input_id)
+        proofs = membership["proofs"][str(candidate["rank"])]
+        require(set(proofs["stages"]) == set(cj.STAGES))
+        rows = reader.execute("""SELECT a.stage,a.grant_id,a.binding_sha256,a.request_sha256,a.recorded_at,
+            r.receipt_sha256,r.disposition,r.recorded_at,o.metadata_sha256,o.raw_sha256,o.recorded_at
+            FROM theheat_checks.attempts a JOIN theheat_checks.receipts r USING(grant_id)
+            JOIN theheat_check_executions.observations o USING(grant_id)
+            WHERE a.check_set_id=%s LIMIT 5""", (provenance["check_set_id"],)).fetchall()
+        require(len(rows) == 4 and {r[0] for r in rows} == set(cj.STAGES))
+        actual_proofs = {}
+        for stage, grant, binding_sha, request_sha, begun, terminal_sha, disposition, finished, meta_sha, raw_sha, observed in rows:
+            binding = reader.document("binding_artifacts", binding_sha)
+            shape(binding, {"check_set_id","stage","request_sha256","reservation","owner","fence","begun_at"})
+            require(fingerprint(binding) == grant and binding["check_set_id"] == provenance["check_set_id"]
+                    and binding["stage"] == stage and binding["request_sha256"] == request_sha and binding["begun_at"] == begun
+                    and binding["owner"] == lease["owner"] and binding["fence"] == lease["fence"]
+                    and lease["recorded_at"] <= begun < lease["expires_at"])
+            terminal = reader.document("receipt_artifacts", terminal_sha)
+            require(checks._receipt_doc(terminal, dict(grant_id=grant, binding=binding)) == disposition == "passed")
+            metadata = p._decode(reader.artifact(observations.SCHEMA, "metadata_artifacts", meta_sha, 4096, minimum=1))
+            observations._metadata(metadata)
+            require(metadata["check_set_id"] == provenance["check_set_id"] and metadata["stage"] == stage
+                    and metadata["grant_id"] == grant and metadata["request_sha256"] == request_sha
+                    and metadata["raw_sha256"] == raw_sha and metadata["complete"] is True)
+            reader.artifact(checks.SCHEMA, "request_artifacts", request_sha, cj.MAX_INPUT_BYTES, minimum=1)
+            reader.artifact(observations.SCHEMA, "raw_artifacts", raw_sha, observations.MAX_RESPONSE_BYTES)
+            time_order(enrolled, begun, observed, finished, membership["admitted_at"])
+            actual_proofs[stage] = dict(grant_id=grant, request_sha256=request_sha,
+                observation_sha256=raw_sha, receipt_sha256=terminal_sha)
+        expected_proof = admission.completion_proof(provenance["check_set_id"], value, initial, actual_proofs)
+        require(proofs == expected_proof and candidate["rank"] == member["slot"]
+                and candidate["source"] == "retained_important_writer" and candidate["score"] is None
+                and candidate["text"] == initial["derivation"]["final_text"]
+                and provenance == dict(schema_version=1, job_id=source["job_id"], slot=member["slot"],
+                    admission_input_id=input_id, admission_input_sha256=input_receipt.canonical_sha256,
+                    candidate_id=initial["candidate_id"], derivation_id=initial["derivation_id"],
+                    plan_sha256=job["plan_sha256"], custom_id=initial["custom_id"], receipt_id=value["receipt_id"],
+                    completion_sha256=proofs["completion_sha256"], check_set_id=proofs["check_set_id"],
+                    bundle_sha256=fingerprint(value["bundle"]), memory_sha256=fingerprint(value["memory"]),
+                    policy_sha256=fingerprint(job["policy"])))
+        if candidate["rank"] == membership["selected_slot"]:
+            require(input_id == source["admission_input_id"] and input_receipt.canonical_sha256 == source["admission_input_sha256"])
+            selected = brief
+    require(selected is not None and selected["bundle"] == packet["bundle"])
+    time_order(membership["admitted_at"], result["completed_at"], packet["captured_at"])
+    return source["brief_id"], _source_run(reader, selected)
+
+
 def _batch(reader, record, registration_row):
     from src.commands import postgres_batch_results as results, batch_result_journal as r
     from src.commands import postgres_batch_worker as worker, batch_worker_journal as w
     reader.validate("results",results.validate)
     job_id=registration_row[0]
     registration,plan=_batch_plan(reader,job_id,record)
-    saved=reader.projection(generation.JOB,job_id,optional=True)
-    if saved is None or plan["samples"]!=1 or len(plan["requests"])!=1:
-        return origin(),None,"unsupported_origin"
-    _,job=saved
-    shape(job,{"brief_id","memory","context","reservation","negative_cache_input_sha","negative_cache_epoch","custom_id"})
-    brief=_brief(reader,job["brief_id"])
-    require(brief["urgent"] is False and job["custom_id"]==plan["requests"][0]["custom_id"]
-            and job["context"]=={k:plan[k] for k in w._CONTEXT}
-            and fingerprint(job["memory"])==plan["memory_sha256"] and fingerprint(brief["bundle"])==plan["bundle_sha256"]
-            and all(record["intent"][k]==v for k,v in job["reservation"].items()))
+    important = plan["schema_version"] == 2
+    if important:
+        job, brief = _important_job(reader, registration, plan, record)
+    else:
+        saved=reader.projection(generation.JOB,job_id,optional=True)
+        if saved is None or plan["samples"]!=1 or len(plan["requests"])!=1:
+            return origin(),None,"unsupported_origin"
+        _,job=saved
+        shape(job,{"brief_id","memory","context","reservation","negative_cache_input_sha","negative_cache_epoch","custom_id"})
+        brief=_brief(reader,job["brief_id"])
+        require(brief["urgent"] is False and job["custom_id"]==plan["requests"][0]["custom_id"]
+                and job["context"]=={k:plan[k] for k in w._CONTEXT}
+                and fingerprint(job["memory"])==plan["memory_sha256"] and fingerprint(brief["bundle"])==plan["bundle_sha256"]
+                and all(record["intent"][k]==v for k,v in job["reservation"].items()))
     refs=origin("sourced_batch_writer",brief_id=job["brief_id"],generation_id=job_id,request_sha256=registration["plan_sha256"])
     submitted=reader.execute("SELECT fence,grant_id,recorded_at FROM theheat_batch_work.submissions WHERE job_id=%s",(job_id,)).fetchone()
     if submitted is None:
@@ -582,8 +791,23 @@ def _batch(reader, record, registration_row):
     time_order(at,adoption[2])
     metadata=reader.artifact(results.SCHEMA,"metadata_artifacts",binding["metadata_sha256"],w.MAX_ACK_BYTES)
     raw=reader.artifact(results.SCHEMA,"result_artifacts",binding["results_sha256"],r.MAX_RESULT_BYTES)
+    if important:
+        meta = usage.decode(metadata)
+        require(w._ack_id(metadata, 2) == adoption[1] and meta["processing_status"] == "ended"
+                and meta["request_counts"]["processing"] == 0)
+        lines = raw.splitlines()
+        require(len(lines) <= 2)
+        items = {}
+        expected = {s["custom_id"] for s in job["slots"]}
+        for line in lines:
+            item = usage.decode(line)
+            shape(item, {"custom_id", "result"})
+            require(type(item["custom_id"]) is str and item["custom_id"] in expected and item["custom_id"] not in items)
+            items[item["custom_id"]] = item
+        require(fingerprint(items) == chosen[1])
     refs.update(raw_sha256=binding["results_sha256"],receipt_id=chosen[0])
-    return refs,dict(raw=raw,observed_at=observed_at,complete=True,batch_custom_id=job["custom_id"],batch_metadata=metadata,batch_provider_id=adoption[1]),None
+    member = dict(batch_custom_ids=[s["custom_id"] for s in job["slots"]]) if important else dict(batch_custom_id=job["custom_id"])
+    return refs,dict(raw=raw,observed_at=observed_at,complete=True,**member,batch_metadata=metadata,batch_provider_id=adoption[1]),None
 
 
 def _attribution(reader, record):
@@ -632,6 +856,14 @@ def _row(record):
 def _detached_usage(value, row):
     # Canonical display only; leave original retained observation bytes intact.
     value = dict(value, observed_at=spend._time(value["observed_at"]))
+    if "batch_custom_ids" in value:
+        try:
+            metadata = usage.decode(value["batch_metadata"])
+            require(type(metadata) is dict and metadata.get("id") == value["batch_provider_id"])
+            return usage.important_batch(value["raw"], value["batch_custom_ids"], stage=row["role"],
+                model=row["requested_model"], observed_at=value["observed_at"])
+        except (ValueError, TypeError, KeyError, UnicodeError, RecursionError):
+            return usage.empty(row["provider"], "invalid_envelope", status="invalid", observed_at=value["observed_at"], complete=True)
     if "batch_custom_id" in value:
         try:
             metadata=usage.decode(value.pop("batch_metadata"))

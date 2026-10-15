@@ -3,7 +3,9 @@ import { createElement as h, useCallback, useEffect, useState } from "react"
 
 export function generationCommand(brief, now = new Date()) {
   const keys = ["brief_id", "brief_sha256", "expected_state_version", "expected_policy_sha256"]
-  return { command_id: crypto.randomUUID(), action: "request_sourced_generation", targets: [],
+  const important = brief?.execution_mode === "important_batch"
+  if (important) keys.push("allowance_id", "allowance_sha256")
+  return { command_id: crypto.randomUUID(), action: important ? "request_important_variants" : "request_sourced_generation", targets: [],
     requested_at: now.toISOString(), expires_at: new Date(now.getTime() + 3600000).toISOString(),
     payload: Object.fromEntries(keys.map((key) => [key, brief[key]])) }
 }
@@ -12,7 +14,7 @@ export const sourceStatus = status => status === "pending_validation" ? "Needs a
 export function GenerationRequest({ brief, pending, busy, readOnly, pendingAction, onClick }) {
   return h("button", { type: "button", className: "btn", style: { minHeight: 44 },
     disabled: busy || readOnly || pendingAction || !pending && (!brief || !["ready", "pending_validation"].includes(brief.status)), onClick },
-  pending ? "Retry same request" : "Request draft")
+  pending ? "Retry same request" : brief?.execution_mode === "important_batch" ? "Request two important-event angles" : "Request draft")
 }
 
 export function WriterUsage({ usage }) {
@@ -91,7 +93,7 @@ export default function SourcedGeneration({ onRefresh, readOnly = false, onReque
       h("option", { value: "" }, "Choose retained evidence"),
       ...briefs.map(item => h("option", { key: item.brief_id, value: item.brief_id }, `${item.where} · ${item.signal_kind} · ${sourceStatus(item.status)}`))),
     brief && h("p", null, `${brief.source_key} · ${brief.when} · ${sourceStatus(brief.status)}`),
-    brief && h("p", null, `${brief.execution_mode === "synchronous" ? "Urgent · one synchronous draft" : "Routine · one batch draft"}. Evidence expires ${brief.useful_until}.`),
+    brief && h("p", null, `${brief.execution_mode === "synchronous" ? "Urgent · one synchronous draft" : brief.execution_mode === "important_batch" ? "Nominated important event · two independently checked angles" : "Routine · one batch draft"}. Evidence expires ${brief.useful_until}.`),
     brief?.status === "pending_validation" && h("p", { className: "runtime-note" }, "The source is checked before writing."),
     brief?.reason && brief.status !== "pending_validation" && h("p", { className: "runtime-note" }, `Held: ${brief.reason.replaceAll("_", " ")}. No automatic retry.`),
     brief && h(WriterUsage, { usage: brief.writer_usage }),

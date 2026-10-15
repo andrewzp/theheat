@@ -125,3 +125,58 @@ def extract(raw, *, provider, stage, model, observed_at, complete, terminal_usag
     except (ValueError, TypeError, UnicodeError, RecursionError, OverflowError):
         result = empty(provider, "invalid_envelope", status="invalid", observed_at=observed_at, complete=complete)
     return result
+
+
+def important_batch(raw, custom_ids, *, stage, model, observed_at):
+    """Two immutable Anthropic items, one fieldwise observation; never billing.
+
+    Missing or invalid values do not become zero. Counts remain separate even
+    where the provider's token categories overlap. No editorial interpretation.
+    """
+    result = empty("anthropic", "response_missing", observed_at=observed_at, complete=True)
+    try:
+        if (type(custom_ids) is not list or len(custom_ids) != 2
+                or any(type(i) is not str for i in custom_ids) or len(set(custom_ids)) != 2):
+            raise ValueError("invalid_members")
+        rows = [decode(line) for line in raw.splitlines() if line.strip()]
+        if len(rows) > 2:
+            raise ValueError("extra_members")
+        members = {}
+        for row in rows:
+            if (type(row) is not dict or set(row) != {"custom_id", "result"}
+                    or row["custom_id"] not in custom_ids or row["custom_id"] in members
+                    or type(row["result"]) is not dict):
+                raise ValueError("ambiguous_members")
+            outcome = row["result"]
+            message = outcome.get("message")
+            # An explicit error may still report real usage. Neither a writer
+            # kill nor a failed check changes the raw provider observation.
+            envelope = message if type(message) is dict else outcome
+            members[row["custom_id"]] = extract(json.dumps(envelope).encode(), provider="anthropic",
+                stage=stage, model=model, observed_at=observed_at, complete=True)
+        items = [members.get(i, empty("anthropic", "response_missing")) for i in custom_ids]
+        result["unsupported_fields"] = any(i["unsupported_fields"] for i in items)
+        errors = set().union(*(set(i["invalid_fields"]) for i in items))
+        for key in result["counts"]:
+            values = [i["counts"][key] for i in items]
+            if all(type(v) is int for v in values):
+                total = sum(values)
+                if total <= CONTRACT["count_limit"]:
+                    result["counts"][key] = total
+                else:
+                    errors.add(key)
+        for key in result["labels"]:
+            values = [i["labels"][key] for i in items]
+            result["labels"][key] = values[0] if values[0] == values[1] else None
+        models = [i["resolved_model"] for i in items]
+        result["resolved_model"] = models[0] if models[0] == models[1] else None
+        result["invalid_fields"] = sorted(errors)
+        if errors or any(i["status"] == "invalid" for i in items):
+            result.update(status="invalid", reason="invalid_envelope")
+        elif len(members) != 2:
+            result.update(status="unavailable", reason="response_missing")
+        else:
+            result.update(status="present" if all(i["status"] == "present" for i in items) else "absent", reason=None)
+    except (ValueError, TypeError, KeyError, UnicodeError, RecursionError, OverflowError):
+        result = empty("anthropic", "invalid_envelope", status="invalid", observed_at=observed_at, complete=True)
+    return result

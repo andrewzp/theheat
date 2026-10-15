@@ -172,6 +172,9 @@ def source(c, draft):
     from src.commands.postgres_authority import _command, _decode
     identity = fingerprint({"draft_id": draft["id"]})
     receipt, value = p.PostgresProjectionRepository._read(c, origin.SOURCE_NAMESPACE, identity)
+    if value.get("origin_kind") == "important_batch_slate_v1":
+        from src.commands.postgres_important_variants import source as important_source
+        return important_source(c, draft, identity, receipt, value)
     if value.get("origin_kind") == "synchronous_writer_v1":
         from src.commands.postgres_synchronous_generation import source as sync_source
         return sync_source(c, draft, identity, receipt, value)

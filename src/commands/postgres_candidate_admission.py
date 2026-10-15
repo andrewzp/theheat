@@ -8,6 +8,7 @@ from __future__ import annotations
 from copy import deepcopy
 from contextlib import contextmanager
 from dataclasses import dataclass
+from datetime import datetime
 import re
 from uuid import NAMESPACE_URL, uuid5
 
@@ -186,8 +187,10 @@ def capture(c, payload, *, version, state, policy, now, environment):
             "expected_state_version": version, "expected_policy_sha256": context["policy_sha256"]}
 
 
-def owner_for(command):
-    return "candidate-" + command.command_id
+def owner_for(command, *, c=None):
+    from src.commands.postgres_important_variants import is_group
+    job_id = command.payload.get("job_id", "")
+    return "important-" + job_id if c is not None and is_group(c, job_id, environment=command.environment) else "candidate-" + command.command_id
 
 
 def request_for(authority, c, value):
@@ -233,6 +236,8 @@ def completion_proof(identity, value, packet, proofs):
 class Transition:
     reduction: Reduction
     references: dict
+    completed_at: datetime | None = None
+    final_window: tuple[datetime, str] | None = None
 
 
 def prepare(authority, c, state, version, command, actor, *, now, policy, editorial_policy, resolve_principal=None, prepared=None, clock_now=None):
@@ -242,6 +247,11 @@ def prepare(authority, c, state, version, command, actor, *, now, policy, editor
     refuse(not policy.enabled, "candidate_publication_must_be_paused")
     refs = command.payload
     value = read_input(c, refs)
+    from src.commands import postgres_important_variants as group
+    important = group.is_group(c, value.get("job_id"), environment=authority.environment)
+    if important:
+        refuse(command.action != "admit_checked_candidate", "slate_admission_required")
+        group.current_member(authority, c, value, state, editorial_policy, now, resolve_principal)
     refuse(refs["expected_policy_sha256"] == fingerprint(editorial_policy), "candidate_policy_conflict")
     prior = request_for(authority, c, value)
     # An identical candidate already admitted returns its retained result. This
@@ -264,13 +274,15 @@ def prepare(authority, c, state, version, command, actor, *, now, policy, editor
     refuse(now < utc_datetime(command.expires_at), "command_expired")
     refuse(refs["expected_state_version"] == version, "candidate_state_conflict")
     _current(value, version, state, editorial_policy, now)
-    owner = owner_for(prior[0] if prior else command)
+    owner = owner_for(prior[0] if prior else command, c=c)
     sync = value.get("origin_kind") == "synchronous_writer_v1"
     if sync:
         from src.commands import postgres_synchronous_generation as synchronous, postgres_revision_checks as revisions
         synchronous.current_candidate(authority, c, value, state, editorial_policy, now, resolve_principal, resolved=resolved)
         fence = revisions.acquire(c, prior[1]["check_set_id"], owner, 300, now=utc_text(now), environment=authority.environment,
             origin_kind="synchronous_writer_v1")["lease"]["fence"] if prior else None
+    elif important:
+        fence = group.shared_lease(c, value, owner, now=now, environment=authority.environment, acquire=True)["fence"]
     else:
         leased = worker.apply(c, "acquire", dict(job_id=value["job_id"], owner=owner, ttl_seconds=300), now=utc_text(now), environment=authority.environment)
         fence = leased["lease"]["fence"]
@@ -392,9 +404,9 @@ def passive_recorded(authority, c, value, command, packet, identity, state, vers
         and packet["current_context"] == context_for(value, policy) and packet["check_date"] == utc_text(now)[:10], "changed_check_context")
     refuse(now < utc_datetime(packet["useful_until"]) and now < utc_datetime(command.expires_at), "sync_check_expired")
     lease = c.execute("SELECT owner,fence,expires_at FROM theheat_checks.draft_leases WHERE check_set_id=%s ORDER BY fence DESC LIMIT 1", (identity,)).fetchone()
-    refuse(lease is not None and lease[0] == owner_for(command) and now < utc_datetime(lease[2]), "stale_sync_check_owner")
+    refuse(lease is not None and lease[0] == owner_for(command, c=c) and now < utc_datetime(lease[2]), "stale_sync_check_owner")
     if all(v == "passed" for v in row["stages"].values()):
-        proofs, _ = pg.recorded_stage_receipts(c, identity, packet, owner=owner_for(command), fence=lease[1], environment=authority.environment)
+        proofs, _ = pg.recorded_stage_receipts(c, identity, packet, owner=owner_for(command, c=c), fence=lease[1], environment=authority.environment)
         proof = completion_proof(identity, value, packet, proofs)
         row.update(status="checks_recorded", expected_completion_sha256=proof["completion_sha256"])
 
@@ -459,10 +471,10 @@ def project(authority, c, allowed, *, version, state, policy, now, resolve_princ
                         lease = dict(fence=saved_lease[0]) if saved_lease else dict(fence=0)
                     else:
                         lease = worker.apply(c, "status", {"job_id": value["job_id"]}, now=utc_text(now), environment=authority.environment)["lease"]
-                    pg._current(c, packet, {"owner": owner_for(command), "fence": lease["fence"],
+                    pg._current(c, packet, {"owner": owner_for(command, c=c), "fence": lease["fence"],
                         "current_context": context_for(value, policy), "checker_state_sha256": fingerprint(state)}, utc_text(now), authority.environment, resolved=resolved)
                     if all(v == "passed" for v in stages.values()):
-                        _, _, proof = verified_completion(c, identity, value, owner=owner_for(command), fence=lease["fence"],
+                        _, _, proof = verified_completion(c, identity, value, owner=owner_for(command, c=c), fence=lease["fence"],
                             state=state, policy=policy, now=now, environment=authority.environment, resolved=resolved)
                         row.update(status="checks_completed", required_checks_completed=True, expected_completion_sha256=proof["completion_sha256"])
                 else:
@@ -481,7 +493,8 @@ def project(authority, c, allowed, *, version, state, policy, now, resolve_princ
             lease = batch_state.get("lease")
             if lease and utc_datetime(lease["expires_at"]) > now:
                 row["checks_available_at"] = lease["expires_at"]
-        output.append(row)
+        from src.commands.postgres_important_variants import project_candidate
+        output.append(project_candidate(authority, c, row, value, state, version, policy, now, resolve_principal))
     return output
 
 
@@ -504,4 +517,7 @@ def runner_context(authority, c, command_id, resolve, *, version, state, policy,
     if value.get("origin_kind") == "synchronous_writer_v1":
         from src.commands.postgres_synchronous_generation import current_candidate
         current_candidate(authority, c, value, state, policy, now, resolve, resolved=resolved)
+    from src.commands.postgres_important_variants import is_group, current_member
+    if is_group(c, value.get("job_id"), environment=authority.environment):
+        current_member(authority, c, value, state, policy, now, resolve)
     return command, value, result["candidate"]["check_set_id"]

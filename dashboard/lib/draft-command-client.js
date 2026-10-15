@@ -86,7 +86,7 @@ export async function acceptLocalCommand(request, expectedAction = null, recover
       let parsed
       try { parsed = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(raw)) }
       catch { fail("invalid_command_body", 400) }
-      if (parsed?.action !== expectedAction) fail("sourced_generation_command_required", 400)
+      if (!(Array.isArray(expectedAction) ? expectedAction.includes(parsed?.action) : parsed?.action === expectedAction)) fail("sourced_generation_command_required", 400)
     }
     // Preserve raw bytes: Python rejects duplicate JSON keys before parsing any
     // identity/action. Next must never silently normalize a hostile request.

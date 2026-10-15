@@ -16,6 +16,12 @@ export function createDraftCommand(draft, action, payload = {}, now = new Date()
 
 
 export function createCandidateCommand(candidate, action, now = new Date()) {
+  if (action === "admit_checked_slate") {
+    const keys = ["slate_id", "slate_sha256", "expected_state_version", "expected_policy_sha256", "expected_completion_set_sha256"]
+    return { command_id: crypto.randomUUID(), action, requested_at: now.toISOString(),
+      expires_at: new Date(now.getTime() + 3600000).toISOString(), targets: [],
+      payload: Object.fromEntries(keys.map(key => [key, candidate[key]])) }
+  }
   if (!["request_candidate_checks", "admit_checked_candidate"].includes(action)) throw new Error("Unknown candidate action")
   const originKeys = candidate.origin_kind === "synchronous_writer_v1" ? ["origin_kind", "generation_id"] : ["job_id", "custom_id"]
   const keys = ["admission_input_id", "admission_input_sha256", ...originKeys, "candidate_id", "expected_state_version", "expected_policy_sha256"]
@@ -26,5 +32,5 @@ export function createCandidateCommand(candidate, action, now = new Date()) {
 }
 
 export function localCommandEndpoint(command) {
-  return command.action === "request_sourced_generation" ? "/api/generate" : "/api/drafts"
+  return ["request_sourced_generation", "request_important_variants"].includes(command.action) ? "/api/generate" : "/api/drafts"
 }
