@@ -112,6 +112,7 @@ def prepare(state_path: Path, output: Path, now: datetime) -> dict:
     state = json.loads(raw_state)
     if not isinstance(state.get("drafts"), list):
         raise ValueError("trial_state_invalid")
+    retained_events = {row.get("event_id") for row in state["drafts"] if isinstance(row, dict)}
     # One existing NWS acquisition (at most its three free HTTP attempts).
     alerts = fetch_alerts(strict=True)
     alerts.sort(key=lambda a: (-score_severe_weather(a.event_type, a.severity).total, a.event_id))
@@ -120,7 +121,7 @@ def prepare(state_path: Path, output: Path, now: datetime) -> dict:
     for alert in alerts:
         if len(bundles) >= MAX_CANDIDATES:
             break
-        if (alert.event_type in kinds or is_duplicate(state, alert.event_id)
+        if (alert.event_type in kinds or alert.event_id in retained_events or is_duplicate(state, alert.event_id)
                 or not score_severe_weather(alert.event_type, alert.severity).passes):
             continue
         bundle = build_severe_weather_bundle(alert)

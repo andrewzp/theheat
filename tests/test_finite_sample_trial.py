@@ -136,6 +136,7 @@ def test_normal_transport_preserves_exact_request_and_default_retry_options():
     assert send.call_args.kwargs == original
     assert send.call_args.kwargs["config"] is original["config"]
     assert limits.google_trial_options() == {}
+    assert limits.anthropic_trial_options() == {}
 
 
 def test_real_sdk_boundaries_all_use_one_attempt_and_existing_requests(monkeypatch, tmp_path):
@@ -169,9 +170,14 @@ def test_real_sdk_boundaries_all_use_one_attempt_and_existing_requests(monkeypat
         assert fact_check._call_gemini("Invented offshore warning.", _bundle()) == "NO"
         assert critic._call_gemini("Invented offshore warning.", _bundle(), [], []) == "NO"
     assert len(value.calls) == 4
-    af.assert_called_once_with(api_key="offline-only", timeout=180.0, max_retries=0)
+    af.assert_called_once()
+    assert {k:v for k,v in af.call_args.kwargs.items() if k != "http_client"} == {
+        "api_key": "offline-only", "timeout": 180.0, "max_retries": 0}
+    assert af.call_args.kwargs["http_client"].follow_redirects is False
+    af.call_args.kwargs["http_client"].close()
     assert gf.call_count == 3
     assert all(c.kwargs["http_options"].retry_options.attempts == 1 for c in gf.call_args_list)
+    assert all(c.kwargs["http_options"].client_args["follow_redirects"] is False for c in gf.call_args_list)
     assert [c.kwargs["config"]["max_output_tokens"] for c in google_client.models.generate_content.call_args_list] == [2048,8192,8192]
 
 
@@ -288,6 +294,93 @@ def test_prepare_selects_two_kinds_once_no_purchases_and_no_state_mutation(tmp_p
     fetch.assert_called_once_with(strict=True)
     assert len(json.loads((output / "bundles.json").read_bytes())) == 2
     assert not (output / "execution-started.json").exists()
+
+
+@pytest.mark.parametrize("status", ["pending", "approved", "rejected", "posted"])
+def test_prepare_never_rebuys_an_event_already_in_retained_drafts(tmp_path, monkeypatch, status):
+    from src.data import nws_alerts
+    now = datetime.now(timezone.utc)
+    source = alert(now)
+    monkeypatch.setattr(nws_alerts, "fetch_alerts", lambda **kwargs: [source])
+    monkeypatch.setattr(trial, "binding", lambda: {"offline_binding": True})
+    state = tmp_path / "state.json"
+    state.write_text(json.dumps({"drafts": [{"event_id": source.event_id, "status": status}], "posted_events": []}))
+    assert trial.prepare(state, tmp_path / "packet", now)["candidate_count"] == 0
+
+
+def test_real_google_sdk_unicode_wire_expansion_is_blocked_before_transport(tmp_path):
+    import httpx
+    from google import genai
+    from google.genai import types
+    value, rows = budget(tmp_path)
+    value.begin_candidate("invented")
+    physical = []
+    def offline(request):
+        physical.append(request)
+        return httpx.Response(200, json={})
+    with limits.trial_scope(value):
+        options = limits.google_trial_options()
+        options["client_args"]["transport"] = httpx.MockTransport(offline)
+        with genai.Client(api_key="offline", http_options=types.HttpOptions(**options)) as client:
+            with pytest.raises(limits.TrialStopped):
+                limits.provider_call("safety", "google", {"model": limits.MODELS["safety"][1],
+                                     "contents": "☃" * 43000}, client.models.generate_content)
+    assert physical == [] and len(value.calls) == 1 and len(rows) == 1
+    assert value.calls[0]["request_bytes"] < limits.MAX_REQUEST_BYTES
+    assert value.estimated_reserved > 0 and value.stopped
+
+
+@pytest.mark.parametrize("provider", ["google", "anthropic"])
+@pytest.mark.parametrize("status", [307, 503, 200])
+def test_real_sdks_send_once_without_redirect_or_retry(tmp_path, monkeypatch, provider, status):
+    # Real pinned SDK serialization/HTTP hooks; the only transport is in-memory.
+    value, rows = budget(tmp_path)
+    value.begin_candidate("invented")
+    physical = []
+    if provider == "google":
+        import httpx as wire
+        from google import genai
+        from google.genai import types
+    else:
+        import httpx2 as wire
+        import anthropic
+    def offline(request):
+        physical.append(request)
+        assert rows[-1]["outcome"] == "wire_reserved_before_dispatch"
+        assert rows[-1]["wire_request_bytes"] == len(request.content) <= limits.MAX_REQUEST_BYTES
+        payload = ({"candidates": [{"content": {"role": "model", "parts": [{"text": "NO"}]}}]}
+                   if provider == "google" else {"id": "offline", "type": "message", "role": "assistant",
+                       "model": limits.MODELS["writer"][1], "content": [{"type": "text", "text": "offline"}],
+                       "stop_reason": "end_turn", "usage": {"input_tokens": 1, "output_tokens": 1}})
+        return wire.Response(status, headers={"location": str(request.url)} if status == 307 else {},
+                             json=payload if status == 200 else {"error": {"message": "offline", "type": "offline"}})
+    with limits.trial_scope(value):
+        if provider == "google":
+            options = limits.google_trial_options()
+            options["client_args"]["transport"] = wire.MockTransport(offline)
+            client = genai.Client(api_key="offline", http_options=types.HttpOptions(**options))
+            stage, send = "safety", client.models.generate_content
+        else:
+            real = anthropic.DefaultHttpxClient
+            monkeypatch.setattr(anthropic, "DefaultHttpxClient", lambda **kwargs: real(
+                **kwargs, transport=wire.MockTransport(offline)))
+            client = anthropic.Anthropic(api_key="offline", max_retries=0, **limits.anthropic_trial_options())
+            stage, send = "writer", client.messages.create
+        try:
+            if status == 200:
+                limits.provider_call(stage, provider, request(stage), send)
+                assert value.stopped is None
+            else:
+                with pytest.raises(Exception):
+                    limits.provider_call(stage, provider, request(stage), send)
+                assert value.stopped == "trial_provider_outcome_unknown"
+            assert len(physical) == 1
+            assert len(value.calls) == 1 and value.estimated_reserved > 0
+            with pytest.raises(limits.TrialStopped):
+                value.before_wire_dispatch(provider, physical[0])
+            assert len(physical) == 1
+        finally:
+            client.close()
 
 
 def test_execute_loop_persists_before_call_and_stops_after_uncertain_first_attempt(tmp_path, monkeypatch):

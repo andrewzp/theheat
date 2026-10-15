@@ -23,7 +23,7 @@ from src.two_bot.json_utils import (
     strip_markdown_fences as _strip_markdown_fences,  # noqa: F401 — re-exported for tests
 )
 from src.two_bot.retry import call_with_retries
-from src.two_bot.trial_budget import google_trial_options, provider_call
+from src.two_bot.trial_budget import anthropic_trial_options, google_trial_options, provider_call
 from src.two_bot.strict_contract import model_failure_snapshot
 
 
@@ -226,7 +226,7 @@ def _call_anthropic(user_prompt: str) -> str:
     # transport layer under it — 3 SDK attempts inside each of the 3
     # call_with_retries attempts, up to 9 transport calls per sample before
     # the JSON/length retry lanes even started (economics P0, 2026-07-13).
-    client = anthropic.Anthropic(api_key=api_key, timeout=180.0, max_retries=0)
+    client = anthropic.Anthropic(api_key=api_key, timeout=180.0, max_retries=0, **anthropic_trial_options())
     # The writer system prompt is large (~15.1k tokens, measured 2026-07-13
     # — an earlier "~5,700" note here was 2.6× stale) and byte-identical
     # across every call in a cron. Marking it for ephemeral prompt caching

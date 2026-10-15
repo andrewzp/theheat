@@ -45,6 +45,7 @@ class TrialBudget:
         self.candidates: set[str] = set()
         self.candidate: str | None = None
         self.calls: list[dict] = []
+        self._wire_dispatches: set[int] = set()
         self.estimated_reserved = Decimal(0)
         self.stopped: str | None = None
         self._lock = threading.Lock()
@@ -100,7 +101,9 @@ class TrialBudget:
             # or a hard provider-invoice ceiling. Hard bytes/calls/output caps are
             # independent; no discounts/free tier/unknown charge refunds assumed.
             incoming, outgoing = (Decimal(v) for v in RATES[stage])
-            reserve = (len(raw) * incoming + OUTPUT_LIMITS[stage] * outgoing) / 1_000_000
+            # SDK wire serialization may expand Unicode or add an envelope.
+            # Reserve the full wire allowance; the final HTTP hook enforces it.
+            reserve = (MAX_REQUEST_BYTES * incoming + OUTPUT_LIMITS[stage] * outgoing) / 1_000_000
             if self.estimated_reserved + reserve > MAX_ESTIMATED_USD:
                 self.stop("trial_estimated_allowance_exhausted")
             row = {"ordinal": len(self.calls) + 1, "candidate": self.candidate,
@@ -119,6 +122,36 @@ class TrialBudget:
             self.estimated_reserved += reserve
             return bounded
 
+    def before_wire_dispatch(self, provider: str, request) -> None:
+        """Guard the actual serialized SDK request before its physical send."""
+        with self._lock:
+            if self.stopped:
+                raise TrialStopped(self.stopped)
+            if self.stop_file.exists():
+                self.stop("trial_stop_requested")
+            if not self.calls or self.calls[-1]["provider"] != provider:
+                self.stop("trial_wire_unassigned")
+            row = self.calls[-1]
+            ordinal = row["ordinal"]
+            if ordinal in self._wire_dispatches:
+                self.stop("trial_wire_retry_refused")
+            host = {"google": "generativelanguage.googleapis.com", "anthropic": "api.anthropic.com"}[provider]
+            if request.method != "POST" or request.url.scheme != "https" or request.url.host != host:
+                self.stop("trial_wire_endpoint_unsupported")
+            raw = request.content
+            if len(raw) > MAX_REQUEST_BYTES:
+                self.stop("trial_wire_request_size_limit")
+            try:
+                self.journal({"ordinal": ordinal, "stage": row["stage"],
+                              "outcome": "wire_reserved_before_dispatch",
+                              "wire_request_bytes": len(raw),
+                              "wire_request_sha256": hashlib.sha256(raw).hexdigest(),
+                              "actual_cost_known": False})
+            except Exception:
+                self.stopped = "trial_wire_journal_failed"
+                raise
+            self._wire_dispatches.add(ordinal)
+
 
 @contextmanager
 def trial_scope(budget: TrialBudget) -> Iterator[None]:
@@ -132,10 +165,23 @@ def trial_scope(budget: TrialBudget) -> Iterator[None]:
 
 
 def google_trial_options() -> dict:
-    if current_trial() is None:
+    budget = current_trial()
+    if budget is None:
         return {}
     from google.genai import types
-    return {"retry_options": types.HttpRetryOptions(attempts=1)}
+    return {"retry_options": types.HttpRetryOptions(attempts=1),
+            "client_args": {"follow_redirects": False, "event_hooks": {
+                "request": [lambda request: budget.before_wire_dispatch("google", request)]}}}
+
+
+def anthropic_trial_options() -> dict:
+    budget = current_trial()
+    if budget is None:
+        return {}
+    # Use the SDK's supported client family (httpx2 in the pinned SDK).
+    from anthropic import DefaultHttpxClient
+    return {"http_client": DefaultHttpxClient(timeout=180.0, follow_redirects=False,
+            event_hooks={"request": [lambda request: budget.before_wire_dispatch("anthropic", request)]})}
 
 
 def provider_call(stage: str, provider: str, request: dict, send: Callable):

@@ -19,7 +19,9 @@ Human review is still required for factual accuracy, importance and writing qual
 - One paid dispatch per candidate/stage: writer, safety, factual check and critic.
   Eight maximum paid dispatches. An internal semantic/transport retry is refused
   before another dispatch; Google SDK retry attempts are one, Anthropic retries zero.
-- Each serialized request is at most128KiB. Maximum output tokens: writer1024,
+- Each serialized request and actual SDK HTTP body is at most128KiB. Trial-only
+  HTTP hooks journal before sending, fence a second physical send per reservation,
+  and disable redirects for both providers. Maximum output tokens: writer1024,
   safety2048, factual checker8192, critic8192. Google output includes thinking.
 - Only the trial's explicit priced model profile is allowed: Sonnet4.6 writer,
   Gemini2.5Flash safety/factual and Gemini2.5Pro critic. This pins the safety alias
@@ -37,8 +39,8 @@ Human review is still required for factual accuracy, importance and writing qual
 ## Cost interpretation
 
 The process refuses another dispatch when its **conservative token-cost scenario**
-would exceed$2. This assumes one UTF-8 request byte per input token, including the
-envelope/schema, full configured output, no free tier or cache savings, and
+would exceed$2. Each call reserves the full128KiB wire allowance at one byte per
+input token, including the envelope/schema, full configured output, no free tier or cache savings, and
 five-minute cache-write pricing for every Sonnet input token. It is deliberately
 conservative but is not exact provider token counting or an invoice guarantee.
 Hard call/byte/output bounds are separate from that estimate. Unknown charges stay
@@ -76,7 +78,10 @@ snapshot> --output <new-private-directory>` without paid calls. Local execution
 additionally requires configured provider credentials and the separately approved
 packet SHA256; expired, relocated or altered packets refuse execution. The GitHub
 workflow uses its existing secrets and prepares/executes a fresh one-hour packet
-within the explicitly approved one-shot scope. No secret needs to be copied locally.
+within the explicitly approved one-shot scope. That workflow approval covers fresh
+selection and generation under the specified limits; its internal packet SHA is
+an integrity check, not a claim of a second human approval of the selected packet.
+No secret needs to be copied locally.
 
 The three older manual evaluation workflows now require both production pause off
 and explicit paid-evaluation opt-in before any step. Leave them off for this trial.
