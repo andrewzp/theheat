@@ -80,6 +80,7 @@ export default function Dashboard() {
   const fetchData = useCallback(async () => {
     setRefreshing(true)
     setRefreshError(null)
+    let dashboardResult = { ok: false }
     try {
       const dashboardUrl = suppressionsSourceFilter
         ? `/api/dashboard?limit=50&source=${encodeURIComponent(suppressionsSourceFilter)}`
@@ -120,6 +121,7 @@ export default function Dashboard() {
       setSources(payload.sourceHealth?.sources || [])
       setSourcesStats(payload.sourceHealth?.stats || null)
       setLastUpdated(new Date().toISOString())
+      dashboardResult = { ok: true, local_preview: payload.local_preview === true, operator_subject: payload.operator_subject }
     } catch (e) {
       console.error(e)
       setRefreshError(e?.message || String(e))
@@ -131,7 +133,7 @@ export default function Dashboard() {
     if (previewSeen.current) {
       setAutomation(null)
       setAutomationError(null)
-      return
+      return dashboardResult
     }
 
     // Automation status — independent of dashboard fetch. A failure here is
@@ -150,6 +152,7 @@ export default function Dashboard() {
     } catch (err) {
       setAutomationError(err?.message || String(err))
     }
+    return dashboardResult
   }, [suppressionsSourceFilter])
 
   useEffect(() => {
@@ -258,6 +261,7 @@ export default function Dashboard() {
     const saved = pendingCommandRef.current
     if (!saved) return
     const scope = recoveryScope.current
+    const actor = data.operator_subject
     try {
       const body = abandon === true ? abandonmentBody(saved) : null
       if (abandon === true && !body) throw new Error("This legacy reference has no fingerprint. Inspect its retained result before closing it")
@@ -271,7 +275,7 @@ export default function Dashboard() {
       if (payload.recoverable_command?.command_id === saved.command.command_id) {
         const recovered = await withCommandReference({ ...saved, command:payload.recoverable_command })
         if (scope !== recoveryScope.current || pendingCommandRef.current?.command.command_id !== saved.command.command_id) return
-        saveCommandReference(window.sessionStorage, recoveryScope.current, recovered)
+        saveCommandReference(window.sessionStorage, scope, recovered)
         pendingCommandRef.current = recovered
         setPendingCommand(recovered)
         reference = recovered
@@ -284,10 +288,18 @@ export default function Dashboard() {
         return
       }
       const result = payload.result
-      if (!result || result.command_id !== saved.command.command_id || result.actor_subject !== data.operator_subject ||
+      if (!result || result.command_id !== saved.command.command_id || result.actor_subject !== actor ||
           !["applied", "unchanged", "rejected"].includes(result.status)) throw new Error("Unrecognized command result")
       const abandoned = result.code === "submission_abandoned"
       const rejected = result.status === "rejected"
+      // Keep the original action and edit fence until the current dashboard is
+      // available. A completed command does not make a failed refresh current.
+      const refreshed = await fetchData()
+      if (scope !== recoveryScope.current || pendingCommandRef.current?.command.command_id !== saved.command.command_id) return
+      if (!refreshed.ok) throw new Error("The action result is retained, but the dashboard could not be refreshed")
+      // fetchData's state update may not have reached the identity effect yet.
+      if (!refreshed.local_preview || refreshed.operator_subject !== actor ||
+          recoveryKey(window.location.origin, refreshed.operator_subject) !== scope) return
       setDraftFeedback({ type: rejected ? "error" : "success", draftId: saved.draftId,
         text: abandoned ? "The previous submission was never accepted and is now closed. Nothing was changed."
           : rejected ? `${result.message} Your edit is preserved.`
@@ -299,9 +311,8 @@ export default function Dashboard() {
       if (!rejected && !abandoned) { setEditingId(null); setEditText(""); setEditingRevision(null) }
       setPendingCommand(null)
       pendingCommandRef.current = null
-      clearCommandReference(window.sessionStorage, recoveryScope.current)
+      clearCommandReference(window.sessionStorage, scope)
       setDraftAction(null)
-      await fetchData()
     } catch (error) {
       if (scope !== recoveryScope.current || pendingCommandRef.current?.command.command_id !== saved.command.command_id) return
       setDraftFeedback({ type: "error", draftId: saved.draftId, text: `${error.message}. The same action is retained for retry; your edit is preserved.` })

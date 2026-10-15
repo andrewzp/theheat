@@ -140,6 +140,13 @@ class PostgresCommandAuthority:
             self._pointer(c, lock=True)
             return delivery.projection(self, c, draft_id, resolve_principal, _clock(now))
 
+    def delivery_content(self, draft_id, intent_id):
+        from src.commands import postgres_delivery as delivery
+        with self.projections._connection() as c:
+            self._validate(c)
+            _, state = self._state(c, lock=True)
+            return delivery.historical_content(self, c, draft_id, intent_id, state)
+
     def initialize_media_commands(self) -> None:
         """Explicit owner migration after media staging; no production cutover."""
         with self.projections._connection(writing=True) as c:

@@ -179,9 +179,9 @@ def read(c, identity, environment):
         raise media.MediaJournalError("invalid_media_staging_capture") from None
 
 
-def read_retained_png(c, *, expected_proposal_sha256, expected_packet_sha256,
+def read_retained_package(c, *, expected_proposal_sha256, expected_packet_sha256,
                       expected_predecessor, expected_subject, expected_at, environment, original_bytes=False):
-    """Original PNG bytes only, bound by an independently successful preparation.
+    """Full passive package verification, bound by a successful preparation.
 
     The authenticated editor projection resolves the exact intent/result and
     PREPARATION record before calling. Today's rendering/science is irrelevant
@@ -228,7 +228,7 @@ def read_retained_png(c, *, expected_proposal_sha256, expected_packet_sha256,
                 and proposal["operation"] == "attach" and type(proposal["changed"]) is bool
                 and proposal["publication_approved"] is proposal["production_attachment_authorized"] is False
                 and proposal["synthetic"] is packet["synthetic"], "invalid_media_staging_capture")
-            return assets["original.gif" if original_bytes else "preview.png"]
+            return package
         _require(original_bytes is False, "media_original_unavailable")
         _shape(manifest, {"schema_version", "cache_key", "binding", "files", "synthetic", "alt_text",
                           "publication_approved", "scope"})
@@ -260,9 +260,14 @@ def read_retained_png(c, *, expected_proposal_sha256, expected_packet_sha256,
                  and packet["claim_agreement_status"] == "unreviewed"
                  and proposal["synthetic"] is packet["synthetic"] is manifest["synthetic"] is spec["evidence"]["synthetic"]
                  and manifest["scope"] == spec["evidence"]["scope"], "invalid_media_staging_capture")
-        return png
+        return package
     except (KeyError, TypeError, AttributeError, ValueError, OverflowError, RecursionError):
         raise media.MediaJournalError("invalid_media_staging_capture") from None
+
+
+def read_retained_png(c, *, original_bytes=False, **expected):
+    package = read_retained_package(c, original_bytes=original_bytes, **expected)
+    return package["assets"]["original.gif" if original_bytes else "preview.png"]
 
 
 def stage(c, draft_id, request, *, assets, principal, state, authority_version, policy, now, environment):

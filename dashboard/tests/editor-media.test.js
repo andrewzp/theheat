@@ -7,6 +7,7 @@ import { jointConfirmations, mediaCommand, sameMediaTarget, retainedMediaBlob } 
 import { GET } from "../app/api/editor-media/route.js"
 import { recoveryKey, saveCommandReference, readCommandReference, clearCommandReference, withCommandReference, commandRequestSHA, abandonmentBody } from "../lib/local-command-recovery.js"
 import { createHash } from "node:crypto"
+import { spawnSync } from "node:child_process"
 
 test("reload retains only a command reference, scoped to origin and current operator", async () => {
   const rows = new Map(), storage = { getItem:k=>rows.get(k), setItem:(k,v)=>rows.set(k,v), removeItem:k=>rows.delete(k) }
@@ -154,4 +155,30 @@ test("retained image loader bounds bytes and refuses stale or invalid responses"
     globalThis.fetch=async()=>new Response(bytes,{headers:{"Content-Type":"image/png"}})
     await assert.rejects(()=>retainedMediaBlob(view(),control.signal),/cancelled/)
   } finally {globalThis.fetch=original}
+})
+
+test("failed media body cleanup preserves the primary error without an unhandled rejection", () => {
+  const moduleURL = new URL("../lib/editor-media.js", import.meta.url).href
+  const result = spawnSync(process.execPath, ["--unhandled-rejections=strict", "--input-type=module", "--eval", `
+    import assert from "node:assert/strict";
+    import { retainedMediaBlob } from ${JSON.stringify(moduleURL)};
+    const view={draft_id:"invented-draft",preparation:{proposal_sha256:"a".repeat(64)}};
+    const tick=()=>new Promise(resolve=>setImmediate(resolve));
+    for(const primary of [new Error("Invented body failure"),new DOMException("Invented canceled body","AbortError")]) {
+      globalThis.fetch=async()=>new Response(new ReadableStream({start(controller){controller.error(primary)}}),
+        {headers:{"content-type":"image/png"}});
+      await assert.rejects(()=>retainedMediaBlob(view,new AbortController().signal),error=>error===primary);
+      await tick();
+    }
+    let canceled=0;
+    globalThis.fetch=async()=>new Response(new ReadableStream({
+      start(controller){controller.enqueue(new Uint8Array(8*1024*1024+1))},
+      cancel(){canceled++;throw new Error("Invented cleanup failure")}
+    }),{headers:{"content-type":"image/png"}});
+    await assert.rejects(()=>retainedMediaBlob(view,new AbortController().signal),/size limit/);
+    await tick();
+    assert.equal(canceled,1);
+  `], { encoding:"utf8", timeout:5000 })
+  assert.ifError(result.error)
+  assert.equal(result.status,0,result.stderr || result.stdout)
 })

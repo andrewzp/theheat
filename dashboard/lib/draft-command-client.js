@@ -14,7 +14,7 @@ async function boundedBody(body, maxBytes, signal) {
   const reader = body.getReader()
   const chunks = []
   let size = 0
-  const cancel = () => { void reader.cancel() }
+  const cancel = () => { void reader.cancel().catch(() => {}) }
   signal.addEventListener("abort", cancel, { once: true })
   try {
     while (true) {
@@ -32,13 +32,15 @@ async function boundedBody(body, maxBytes, signal) {
     return bytes
   } finally {
     signal.removeEventListener("abort", cancel)
-    void reader.cancel()
+    void reader.cancel().catch(() => {})
   }
 }
 
 export async function localCommandRequest(request, path, { method = "GET", raw } = {}) {
   const config = configuration(request)
-  if (!/^\/(?:state|generation|reports|coverage|commands(?:\/[a-f0-9-]{36}(?:\/abandon)?)?|drafts\/[A-Za-z0-9_.:-]{1,200}\/media(?:\/[a-f0-9]{64}\/(?:preview\.png|original\.gif))?)$/.test(path)) fail("invalid_command_route", 400)
+  if (!/^\/(?:state|generation|reports|coverage|commands(?:\/[a-f0-9-]{36}(?:\/abandon)?)?|drafts\/[A-Za-z0-9_.:-]{1,200}\/media(?:\/[a-f0-9]{64}\/(?:preview\.png|original\.gif)|\/delivery\/[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12})?)$/.test(path)) fail("invalid_command_route", 400)
+  const history = path.includes("/media/delivery/")
+  if (history && (method !== "GET" || raw !== undefined)) fail("invalid_command_route", 400)
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), 8000)
   try {
@@ -48,6 +50,9 @@ export async function localCommandRequest(request, path, { method = "GET", raw }
       signal: controller.signal, redirect: "error", cache: "no-store",
     })
     const original = path.endsWith("/original.gif")
+    if (history && response.headers.has("content-length") &&
+        (!/^\d+$/.test(response.headers.get("content-length")) || Number(response.headers.get("content-length")) > 8 * 1024 * 1024)) fail("invalid_media_response")
+    if (history && response.ok && !/^application\/json(?:;|$)/.test(response.headers.get("content-type") || "")) fail("invalid_media_response")
     const bytes = await boundedBody(response.body, (original ? 2 : 8) * 1024 * 1024, controller.signal)
     if (response.ok && original) {
       const signature = new TextDecoder().decode(bytes.slice(0, 6))
@@ -67,7 +72,7 @@ export async function localCommandRequest(request, path, { method = "GET", raw }
   } catch (error) {
     if (error.status) throw error
     fail("local_authority_unavailable_retry_same_command")
-  } finally { clearTimeout(timer) }
+  } finally { if (history) controller.abort(); clearTimeout(timer) }
 }
 
 export const previewError = localPreviewError
@@ -98,7 +103,7 @@ export async function acceptLocalCommand(request, expectedAction = null, recover
 
 export function localDraftProjection(draft, state, local) {
   const policy = local.editorial_policy
-  return { ...projectDraft(draft, policy), local_preview: true, operator_role: local.role,
+  return { ...projectDraft(draft, policy), local_preview: true, operator_role: local.role, operator_subject: local.operator_subject,
     editorial_policy: { status: "recorded", policy, policy_sha256: fingerprint(policy), reason: "Current local command authority policy" },
     automatic_publication: { enabled: false, reason: "Local preview has no publication transport" },
     publish_blocked: hasUnresolvedPublish(draft, state), tweet_id: draft.tweet_id ?? null,
