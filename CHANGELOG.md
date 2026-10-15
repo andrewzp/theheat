@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.108.111 — 2026-10-15
+
+- Distinguish a saved draft's historical candidate checks from its current review status. Keep previous validation details inspectable and unsaved conflicts visibly blocked.
+
 ## 0.9.108.110 — 2026-10-12
 
 - Join retained sources, one-sample batch or synchronous writing, four required checks and pending-draft admission in the experimental local editor. Preserve original requests, responses and uncertain costs; revalidate original actors and deadlines before saving.
