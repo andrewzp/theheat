@@ -50,3 +50,20 @@ test("recorded checks request fresh validation without claiming approval", () =>
   assert.equal(request.action, "admit_checked_candidate")
   assert.deepEqual(Object.keys(request.payload).sort(), ["admission_input_id", "admission_input_sha256", "candidate_id", "check_set_id", "expected_completion_sha256", "expected_policy_sha256", "expected_state_version", "generation_id", "origin_kind"].sort())
 })
+
+test("saved candidate checks are historical while unadmitted conflicts stay visible", () => {
+  const saved = html({ ...row, status: "admitted", saved_draft_id: "draft-invented", reason: "candidate_state_conflict" })
+  assert.match(saved, /role="status">Saved to local drafts<\/p>/)
+  assert.match(saved, /These candidate checks are historical/)
+  assert.match(saved, /Open the saved draft for its current review status/)
+  assert.match(saved, /<summary>Earlier candidate validation<\/summary><p>candidate_state_conflict<\/p>/)
+  assert.match(saved, />Open saved draft<\/button>/)
+  assert.doesNotMatch(saved, />Check candidate<|>Add to local drafts<|>Validate and add to local drafts</)
+
+  for (const status of ["stale", "checks_blocked"]) {
+    const blocked = html({ ...row, status, reason: "candidate_state_conflict" })
+    assert.match(blocked, /role="status">[^<]* — candidate_state_conflict<\/p>/)
+    assert.doesNotMatch(blocked, /These candidate checks are historical|Earlier candidate validation|>Open saved draft</)
+    assert.doesNotMatch(blocked, />Check candidate<|>Add to local drafts<|>Validate and add to local drafts</)
+  }
+})
