@@ -12,6 +12,8 @@ import { createElement } from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 import { generationCommand, GenerationRequest } from "../app/components/SourcedGeneration.js"
 import { createCandidateCommand, createDraftCommand, localCommandEndpoint } from "../lib/draft-command-request.js"
+import { projectDraft } from "../lib/draft-revisions.js"
+import { draftReviewControls } from "../lib/draft-review-ui.js"
 
 // Compile the actual JSX component and its local imports, using the already
 // installed Next compiler. This loader is local to this test, with no hooks or
@@ -206,5 +208,50 @@ test("actual important API -> two independently checked results -> exact retaine
     globalThis.fetch = actualFetch
     for (const key of Object.keys(process.env)) if (!Object.hasOwn(saved, key)) delete process.env[key]
     Object.assign(process.env, saved)
+  }
+})
+
+
+test("local attached-media summaries route to the joint panel without claiming its state", () => {
+  for (const status of ["pending", "approved"]) {
+    const draft = { ...projectDraft({ id: "invented-media", type: "fire", text: "Invented local draft.", status,
+      media_attachment: { proposal_sha256: "a".repeat(64) } }), local_preview: true, operator_role: "publisher" }
+    assert.equal(draft.review_status, "media_review_required")
+    const html = renderToStaticMarkup(createElement(DraftWorkbench, { drafts: [draft], botRuns: [] }))
+    assert.equal((html.match(/Text and graphic status/g) || []).length, 2)
+    assert.match(html, /Publishing is unavailable\. See Text and graphic for current review status\./)
+    assert.match(html, /Use Text and graphic for joint review, required checks and local approval status\./)
+    assert.match(html, /aria-label="Local text and graphic review"/)
+    assert.doesNotMatch(html, /graphic review needed|This graphic needs joint review|Joint graphic review is not available here yet|Approval parked for this text and graphic|All four required checks passed/)
+    const controls = draftReviewControls(draft)
+    assert.equal(controls.canReview, false)
+    assert.equal(controls.canApprove, false)
+    assert.equal(controls.canSchedule, false)
+  }
+})
+
+test("production attached-media wording and text-only review guards remain unchanged", () => {
+  const draft = projectDraft({ id: "invented-production", type: "fire", text: "Invented attached draft.", status: "pending",
+    media_attachment: { proposal_sha256: "a".repeat(64) } })
+  const html = renderToStaticMarkup(createElement(DraftWorkbench, { drafts: [draft], botRuns: [] }))
+  assert.equal((html.match(/graphic review needed/g) || []).length, 2)
+  assert.match(html, /Automatic scheduling is paused or unverified\. This graphic needs joint review\./)
+  assert.match(html, /Joint graphic review is not available here yet\./)
+  assert.doesNotMatch(html, /Text and graphic status|See Text and graphic|Use Text and graphic/)
+  for (const key of ["canReview", "canApprove", "canSchedule"]) assert.equal(draftReviewControls(draft)[key], false)
+})
+
+test("local text-only and conflict summaries never acquire the attached-media routing label", () => {
+  const base = { id: "invented-local", type: "fire", text: "Invented text-only draft.", status: "pending" }
+  for (const raw of [base, { ...base, type: "rain", media_attachment: {} }, { ...base, media_attachment: {}, revision_conflicts: [{ reason: "invented conflict" }] }]) {
+    const draft = { ...projectDraft(raw), local_preview: true, operator_role: "publisher" }
+    const html = renderToStaticMarkup(createElement(DraftWorkbench, { drafts: [draft], botRuns: [] }))
+    assert.doesNotMatch(html, /Text and graphic status|See Text and graphic|Use Text and graphic/)
+    if (raw.revision_conflicts) {
+      assert.equal(draft.review_status, "conflict")
+      assert.match(html, /conflicting versions/)
+    } else assert.equal(draft.review_status, raw.media_attachment ? "media_review_required" : "policy_unverified")
+    assert.equal(draftReviewControls(draft).canApprove, false)
+    assert.equal(draftReviewControls(draft).canSchedule, false)
   }
 })
