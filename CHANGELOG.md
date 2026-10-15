@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.108.113 — 2026-10-15
+
+- Add an explicit authenticated command mode for pending-draft maintenance, preserving the exact revision set, original request deadline and same-command recovery after a lost acknowledgment. Existing production maintenance behavior is unchanged.
+
 ## 0.9.108.112 — 2026-10-15
 
 - Join experimental hosted staging generation, revision checks, graphics, delivery and cost evidence through validated fixture configuration. Preserve original requests, unknown-cost holds, current review authority and local-only defaults.

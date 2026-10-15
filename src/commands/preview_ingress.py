@@ -28,7 +28,7 @@ from src.storage.postgres_projection import ProjectionError
 
 AUTH_CONTEXT = "verified-local-preview-basic-v1"
 ALLOWED_ACTIONS = frozenset({"commit_ghcn_source_run", "commit_nhc_source_run", "evaluate_reference_coverage", "open_report_evidence", "edit_revision", "record_review", "approve_revision",
-                             "reject_revision", "cancel_approval", "select_candidate",
+                             "reject_revision", "bulk_reject", "cancel_approval", "select_candidate",
                              "request_candidate_checks", "admit_checked_candidate", "request_sourced_generation",
                              "prepare_media_revision", "attach_media_revision", "review_media_revision", "remove_media_revision",
                              "request_revision_checks", "approve_media_revision"})
