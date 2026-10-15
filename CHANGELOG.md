@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.108.117 — 2026-10-15
+
+- Keep local command controls paused until refreshed readback succeeds for the same operator and action. Preserve the original action reference and unsaved edit when refresh fails or identity changes.
+
 ## 0.9.108.116 — 2026-10-15
 
 - Direct supported local graphic drafts to their current text-and-graphic review panel without presenting the text-only review safeguard as a missing joint review. Preserve approval controls and production behavior.
