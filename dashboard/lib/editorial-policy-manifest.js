@@ -27,7 +27,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/commands/postgres_report_development.py": "4a93f353cd6560753d83afdf1ae4b9507b57318f3275351f2d9a5d8480230b68",
     "src/commands/postgres_revision_checks.py": "69e6c4207616a09db09a2503df1584106d15c625972d7ca95f2ae3508fd5c95f",
     "src/commands/postgres_source_results.py": "ae478a315644970b0f6f69dce86ff1fd331c80ea3523154867510c465ce80a67",
-    "src/commands/postgres_sourced_generation.py": "f53d54db1bc5309aef55a645b2df8312bf3101507932beb8096a3b4bfea3f719",
+    "src/commands/postgres_sourced_generation.py": "3ecf009bb0e3572676e897ee35cf138515df46b1b87d265b3c76e465025496b8",
     "src/commands/postgres_sync_checks.py": "f95ae66157aa16cddf7729edb4d600386c7a94a162f7061630614e5127d72b6c",
     "src/commands/postgres_synchronous_generation.py": "d74df2ee7a8bb4b3957fde36ff8e198e600e475d4aa594c3c401ec1f731f1ebf",
     "src/commands/preview_delivery_worker.py": "647b901ae031a9f19ff924b8caf87f035172695e22c0319755fa40a45a7f64cd",
@@ -56,7 +56,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/data/ghcn.py": "59c455a56f8aa963e27aeae1198997f7a0779a9b2f9080edab2d2c0842fc012b",
     "src/data/ghcn_db.py": "ccec1ad5673354de3dbadb07c637c294122d7f7c0ffcdfb7e8fd3e5090ee81d5",
     "src/data/ghcn_format.py": "fd3636069b477a484194c9debd6da2ede228ac1ca747746db60b5d9eb656ea18",
-    "src/data/nhc.py": "d3ab353f8c8f83d15680bbe0a67ebc0d660678766120325b9eabb5868ba5f754",
+    "src/data/nhc.py": "2cfa04ab49bd13c1231e298fa2d0e08fd833e649b93f265199ffe5a4071a7ab1",
     "src/data/nws_alerts.py": "822e28c1e38e024f41a91257c76c73e2d169af488a71eaabfe4adcf106817ac4",
     "src/data/ocean_sst_anomaly.py": "837c013cfc1f50981c42b2929f08c0f86a73475d0dfe26694ad2056cc0f94401",
     "src/data/open_meteo.py": "58fa0a9135a526370e2daa3a832b290203615187d165b47d95ac05025523d508",
@@ -172,5 +172,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "4a828a22e451889f630e994add6ba38c463d44369d24d2e22c2ff85e7f0387e5"
   },
   "schema_version": 1,
-  "source_sha256": "603881264e3b968101c6409038b115a1f3a19cbf0e3980c2ba7ac3d9db55cc49"
+  "source_sha256": "73e5e816579cb053e581dda08c3dc0ecbaea9a3fdfda34e5eec6960f673f06d1"
 }

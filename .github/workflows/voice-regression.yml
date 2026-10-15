@@ -1,7 +1,8 @@
 name: voice-regression
 
-# Paid jobs obey THEHEAT_PRODUCTION_PAUSED before any steps or credentials.
-# Existing paid replay cadence is unchanged. Routine positive canary fixtures
+# Paid jobs require THEHEAT_PAID_EVALUATION_ENABLED=1 and obey the production
+# pause before any steps or credentials. Existing schedules are unchanged.
+# Routine positive canary fixtures
 # are currently unqualified: preflight fails visibly before any provider call.
 # This means monitoring is blocked, not that provider billing failed. Do not hide
 # synthetic labels, skip the gate or retry those packets to obtain a green run.
@@ -48,12 +49,12 @@ jobs:
           fi
 
   replay:
-    # Existing scheduled/manual evaluations retain their cadence. New PR
-    # iterations require an explicit paid-evaluation opt-in: changing prompts
-    # or applying voice-check alone must not silently buy another full replay.
+    # Every paid evaluation needs its independent opt-in; collection resume
+    # alone must not buy a replay. PR iterations also retain their separate
+    # opt-in: changing prompts or applying voice-check is not sufficient.
     needs: [changes]
     if: >
-      always() && vars.THEHEAT_PRODUCTION_PAUSED != '1' && (
+      always() && vars.THEHEAT_PRODUCTION_PAUSED != '1' && vars.THEHEAT_PAID_EVALUATION_ENABLED == '1' && (
         github.event_name == 'workflow_dispatch' ||
         (github.event_name == 'schedule' && github.event.schedule == '0 9 * * 0') ||
         (github.event_name == 'pull_request' &&
@@ -83,7 +84,7 @@ jobs:
 
   canary:
     # Positive writer monitor; fixture qualification precedes every paid call.
-    if: vars.THEHEAT_PRODUCTION_PAUSED != '1' && github.event_name == 'schedule' && github.event.schedule == '17 9 * * 1-6'
+    if: vars.THEHEAT_PRODUCTION_PAUSED != '1' && vars.THEHEAT_PAID_EVALUATION_ENABLED == '1' && github.event_name == 'schedule' && github.event.schedule == '17 9 * * 1-6'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

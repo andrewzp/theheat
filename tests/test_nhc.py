@@ -350,12 +350,16 @@ def test_optional_public_fetch_failure_preserves_forecast(nested_storm, monkeypa
     "Fixture has not made landfall near Example Coast.",
     "Last year another storm made landfall near Example Coast.",
 ])
-def test_restored_public_text_cannot_certify_landfall_or_buy_checks(nested_storm, monkeypatch, fresh_state, source_text):
+@pytest.mark.parametrize("html_wrapper", [False, True])
+def test_restored_public_text_cannot_certify_landfall_or_buy_checks(nested_storm, monkeypatch, fresh_state, source_text, html_wrapper):
     from src.data.cyclones import LandfallEvent
     from src.two_bot import pipeline
     from src.two_bot.intern.disasters import build_cyclone_landfall_bundle
-    monkeypatch.setattr(nhc, "fetch_with_retry", lambda *a, **k: SimpleNamespace(text=source_text))
+    body = "<html><nav>" + "x" * 9000 + "</nav><pre>" + source_text + "</pre></html>" if html_wrapper else source_text
+    monkeypatch.setattr(nhc, "fetch_with_retry", lambda *a, **k: SimpleNamespace(text=body))
     advisory = nhc._parse_active_storm(nested_storm)
+    assert advisory is not None
+    assert advisory.advisory_text == source_text
     assert nhc.detect_landfalls([advisory]) == []
     # Keep a nonvacuous downstream gate test even when screening emits nothing.
     # An explicit unqualified synthetic event must never become a source warrant.
@@ -376,3 +380,136 @@ def test_restored_public_text_cannot_certify_landfall_or_buy_checks(nested_storm
         record_kill=lambda stage, reason: failures.append((stage, reason)),
     )
     assert outcome is None and any("unconfirmed_landfall" in reason for _, reason in failures)
+
+
+def _product_page(product):
+    return "<!DOCTYPE html><html><nav>" + "navigation " * 1000 + "</nav><pre>" + product + "</pre></html>"
+
+
+def test_html_product_after_navigation_reaches_forecast_and_observer(nested_storm, monkeypatch):
+    from dataclasses import asdict
+    import hashlib
+    import json
+    from tests.test_jtwc import _NHC_TCM_FIXTURE
+    calls = []
+    public = "Fixture remains offshore.\nNo completed landfall is reported.\n"
+
+    def fetch(url, **kwargs):
+        calls.append((url, kwargs))
+        product = public if url.endswith("MIATCPAT1.shtml") else _NHC_TCM_FIXTURE
+        return SimpleNamespace(text=_product_page(product))
+
+    monkeypatch.setattr(nhc, "fetch_with_retry", fetch)
+    observed = []
+    advisory = nhc._parse_active_storm(nested_storm, retention_observer=lambda a, m: observed.append((a, m)))
+    assert advisory is not None
+    assert advisory.advisory_text == public
+    assert len(advisory.forecast_points) == 2
+    first, second = advisory.forecast_points
+    assert (first.valid_at, first.lat, first.lon, first.max_wind_kt) == ("08/0000Z", 24.5, -122.0, 105)
+    assert (second.valid_at, second.lat, second.lon, second.max_wind_kt) == ("08/1200Z", 25.6, -123.4, 95)
+    assert advisory.wind_kt == 100 and advisory.issued_at == nested_storm["lastUpdate"]
+    assert advisory.advisory_number == "012" and advisory.public_advisory_url.endswith("MIATCPAT1.shtml")
+    assert [url for url, _ in calls] == ["https://www.nhc.noaa.gov/text/MIATCPAT1.shtml", nested_storm["forecastAdvisory"]["url"]]
+    assert all(options == {"headers": {"User-Agent": "(theheat-bot, contact@theheat.app)"}, "timeout": 15, "attempts": 2} for _, options in calls)
+    retained, metadata = observed[0]
+    assert retained == advisory and metadata["forecast_text_complete"] is True
+    assert metadata["forecast_advisory_number"] == "999"
+    assert metadata["forecast_issued_at_original"] == nested_storm["forecastAdvisory"]["issuance"]
+    assert metadata["forecast_product_url"] == nested_storm["forecastAdvisory"]["url"]
+    def encoded(value):
+        return json.dumps(value, sort_keys=True, ensure_ascii=False, allow_nan=False, separators=(",", ":")).encode()
+    assert metadata["source_row_sha256"] == hashlib.sha256(encoded(nested_storm)).hexdigest()
+    assert metadata["forecast_points_sha256"] == hashlib.sha256(encoded([asdict(point) for point in advisory.forecast_points])).hexdigest()
+
+
+@pytest.mark.parametrize("product", [
+    "Invented advisory.\nWind 55 kt.\n", "\r\nIndented\r\n  second line\r\n",
+    "Wind < 64 kt & pressure > 980 mb.", "Literal &amp; remains plain text.",
+])
+def test_plain_product_preserves_existing_bytes(monkeypatch, product):
+    monkeypatch.setattr(nhc, "fetch_with_retry", lambda *a, **k: SimpleNamespace(text=product))
+    metadata: dict = {}
+    assert nhc._fetch_advisory_text("https://www.nhc.noaa.gov/text/fixture.shtml", acquisition=metadata) == product
+    assert metadata == {"complete": True}
+
+
+def test_html_entities_decode_once_and_line_structure_is_preserved():
+    text = "\n  A &amp; B&#10;Wind &lt; 64 kt.\r\n&amp;lt;pre&amp;gt;&#x1f300;\n"
+    assert nhc._extract_advisory_product("<PRE class='product'>" + text + "</PRE>") == "\n  A & B\nWind < 64 kt.\r\n&lt;pre&gt;🌀\n"
+
+
+def test_navigation_script_style_and_comments_cannot_supply_product_claims():
+    product = "Fixture remains offshore.\n"
+    page = ('<html><nav>Fixture made landfall near Invented Coast.</nav>'
+            '<script>const x = "<pre>Made landfall</pre>";</script>'
+            '<style>p::before {content: "<pre>Made landfall</pre>"}</style>'
+            '<!-- <pre>Made landfall</pre> --><pre>' + product + '</pre></html>')
+    assert nhc._extract_advisory_product(page) == product
+
+
+def test_product_preserves_visible_anchor_text_without_attributes_or_fetches(monkeypatch):
+    calls = []
+    product = '\nSee <a href="https://invalid.example/hidden-claim">the &amp; report</a>.\n<a href="/forecast">Forecast</a> remains uncertain.\n'
+    def fetch(url, **kwargs):
+        calls.append(url)
+        return SimpleNamespace(text=_product_page(product))
+    monkeypatch.setattr(nhc, "fetch_with_retry", fetch)
+    metadata: dict = {}
+    url = "https://www.nhc.noaa.gov/text/fixture.shtml"
+    assert nhc._fetch_advisory_text(url, acquisition=metadata) == "\nSee the & report.\nForecast remains uncertain.\n"
+    assert metadata == {"complete": True} and calls == [url]
+
+
+@pytest.mark.parametrize("body", [
+    "", " \n\t", "<html><nav>Invented advisory.</nav></html>",
+    "<html", "<pre></pre>", "<pre> \n </pre>", "<pre/>",
+    "<pre>Unclosed product", "<pre>One</pre><pre>Two</pre>",
+    "<pre>One<pre>Two</pre></pre>", "<pre>One</pre><pre>",
+    "<pre>One</pre><pre", "<pre>One</pre><pre class='unfinished'",
+    "<pre>One</pre><pre/", "<pre>One</pre><PRE/",
+    "<pre>One</pre></pre>", "<pre>One<b>claim</b></pre>",
+    "<pre>One<script>claim</script></pre>", "<pre>One<style>claim</style></pre>",
+    "<pre>One<!-- hidden qualifier --></pre>",
+    '<pre><a href="/one">One<a href="/two">Two</a></a></pre>',
+    '<pre><a href="/one">Unclosed link</pre>', '<pre>Unopened link</a></pre>',
+    '<pre><a href="/one" hidden>Hidden qualifier</a></pre>',
+    '<pre><a style="display:none">Hidden qualifier</a></pre>',
+    '<pre><a href="/one" onclick="run()">Active markup</a></pre>',
+    '<pre><a href="/one" href="/two">Ambiguous link</a></pre>',
+    '<script>const x = "<pre>Invented advisory</pre>";</script>',
+    "<!-- <pre>Invented advisory</pre> -->",
+])
+def test_unusable_html_or_empty_product_is_not_optional_evidence(monkeypatch, body):
+    monkeypatch.setattr(nhc, "fetch_with_retry", lambda *a, **k: SimpleNamespace(text=body))
+    metadata: dict = {}
+    assert nhc._fetch_advisory_text("https://www.nhc.noaa.gov/text/fixture.shtml", acquisition=metadata) == ""
+    assert metadata == {"complete": False}
+
+
+@pytest.mark.parametrize("size,complete", [(7999, True), (8000, True), (8001, False), (16000, False)])
+@pytest.mark.parametrize("html_wrapper", [False, True])
+def test_limit_and_completeness_apply_to_recovered_product(monkeypatch, size, complete, html_wrapper):
+    product = "x" * size
+    body = _product_page(product) if html_wrapper else product
+    monkeypatch.setattr(nhc, "fetch_with_retry", lambda *a, **k: SimpleNamespace(text=body))
+    metadata: dict = {}
+    assert nhc._fetch_advisory_text("https://www.nhc.noaa.gov/text/fixture.shtml", acquisition=metadata) == product[:8000]
+    assert metadata == {"complete": complete}
+
+
+def test_failed_public_extraction_preserves_forecast_and_measurements(nested_storm, monkeypatch):
+    from tests.test_jtwc import _NHC_TCM_FIXTURE
+    calls = []
+
+    def fetch(url, **kwargs):
+        calls.append(url)
+        text = "<pre>one</pre><pre>two</pre>" if url.endswith("MIATCPAT1.shtml") else _product_page(_NHC_TCM_FIXTURE)
+        return SimpleNamespace(text=text)
+
+    monkeypatch.setattr(nhc, "fetch_with_retry", fetch)
+    advisory = nhc._parse_active_storm(nested_storm)
+    assert advisory is not None
+    assert advisory.advisory_text == "" and advisory.wind_kt == 100
+    assert advisory.issued_at == nested_storm["lastUpdate"] and advisory.advisory_number == "012"
+    assert len(advisory.forecast_points) == 2 and len(calls) == 2
