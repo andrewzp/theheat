@@ -11,6 +11,7 @@ from unittest.mock import patch
 import pytest
 
 from src.state import DEFAULT_STATE
+from tests.ci_traceback import Watchdog, checked_seconds
 
 # ---------------------------------------------------------------------------
 # Time-travel canary
@@ -35,6 +36,10 @@ _TIME_TRAVEL_ENV = "THEHEAT_TIME_TRAVEL_DAYS"
 
 
 def pytest_addoption(parser):
+    parser.addoption(
+        "--ci-traceback-seconds", type=float, default=0,
+        help="Opt-in GIL-held diagnostic sampling once per full test protocol; not a test deadline.",
+    )
     parser.addoption(
         "--ci-partition", choices=("all", "core", "postgres", "media"), default="all",
         help="Disjoint offline CI file partitions; ordinary local runs select all.",
@@ -145,6 +150,15 @@ def _hermetic_connect(self, address, *args, **kwargs):
 
 
 def pytest_configure(config):
+    try:
+        seconds = checked_seconds(config.getoption("--ci-traceback-seconds"))
+    except ValueError as error:
+        raise pytest.UsageError(str(error)) from None
+    if seconds:
+        if not config.pluginmanager.hasplugin("faulthandler"):
+            raise pytest.UsageError("CI traceback requires pytest fatal faulthandler reporting")
+        if float(config.getini("faulthandler_timeout") or 0) > 0:
+            raise pytest.UsageError("Do not combine CI Python sampling with native faulthandler_timeout")
     if config.getoption("--ci-postgres-shard") != "all" and config.getoption("--ci-partition") != "postgres":
         raise pytest.UsageError("A specific --ci-postgres-shard requires --ci-partition=postgres")
     config.addinivalue_line(
@@ -167,9 +181,47 @@ def pytest_configure(config):
 
 
 def pytest_unconfigure(config):
+    watchdog = getattr(config, "_theheat_ci_traceback", None)
+    if watchdog is not None:
+        watchdog.close()
     freezer = getattr(config, "_theheat_time_travel_freezer", None)
     if freezer is not None:
         freezer.stop()
+
+
+
+@pytest.hookimpl(trylast=True)
+def pytest_sessionstart(session):
+    seconds = checked_seconds(session.config.getoption("--ci-traceback-seconds"))
+    if not seconds:
+        return
+    import faulthandler
+    if not faulthandler.is_enabled():
+        raise pytest.UsageError("Fatal faulthandler reporting must remain enabled")
+    capture = session.config.pluginmanager.getplugin("capturemanager")
+    with capture.global_and_fixture_disabled():
+        watchdog = Watchdog.duplicate_stderr(seconds)
+        session.config._theheat_ci_traceback = watchdog
+        watchdog.start()
+
+
+@pytest.hookimpl(wrapper=True, tryfirst=True)
+def pytest_runtest_protocol(item):
+    watchdog = getattr(item.config, "_theheat_ci_traceback", None)
+    if watchdog is None:
+        return (yield)
+    token = watchdog.begin(item.nodeid)
+    try:
+        return (yield)
+    finally:
+        watchdog.end(token)
+
+
+@pytest.hookimpl(trylast=True)
+def pytest_sessionfinish(session):
+    watchdog = getattr(session.config, "_theheat_ci_traceback", None)
+    if watchdog is not None:
+        watchdog.close()
 
 
 @pytest.fixture(autouse=True)
