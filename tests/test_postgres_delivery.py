@@ -51,6 +51,27 @@ def run(case, intent, platform, stage, *, owner="invented-local-worker", at=edit
         owner=owner, clock=lambda:utc_text(at), enabled=True, **kwargs)
 
 
+@pytest.fixture
+def delivery_diagnostics(request, capsys, monkeypatch):
+    # Explicitly requested last by just three existing cases, after their setup.
+    # This 110-second sample does not change pytest's separate 120-second dump.
+    import sys
+    from tests.delivery_ci_diagnostics import DeliveryDiagnostics
+
+    with capsys.disabled():
+        diagnostic = DeliveryDiagnostics.duplicate_stderr(request.node.name)
+    try:
+        with monkeypatch.context() as patch:
+            for target, names in ((editor, ("prepare_and_attach", "complete_revision")),
+                                  (sys.modules[__name__], ("park", "run", "assert_live_senders_refuse"))):
+                for name in names:
+                    patch.setattr(target, name, diagnostic.wrap(name, getattr(target, name)))
+            diagnostic.start()
+            yield
+    finally:
+        diagnostic.close()
+
+
 def test_owner_catalog_upgrade_is_explicit_idempotent_and_runtime_cannot_install(core):
     before = admin(core[3], "SELECT * FROM theheat_commands.metadata")
     with pytest.raises(p.ProjectionError, match="migration_owner_required"):
@@ -109,7 +130,7 @@ def test_changed_or_partial_catalog_refused(core, change):
         core[0].read()
 
 
-def test_atomic_approval_five_stages_and_replay_do_not_change_editorial_state(admitted, core, tmp_path, monkeypatch):
+def test_atomic_approval_five_stages_and_replay_do_not_change_editorial_state(admitted, core, tmp_path, monkeypatch, delivery_diagnostics):
     case = admitted
     _, png = editor.prepare_and_attach(case)
     editor.complete_revision(case, monkeypatch)
@@ -211,7 +232,7 @@ def catalogs(params):
 
 
 @pytest.mark.parametrize("admitted", ["modis"], indirect=True)
-def test_raw_and_receipt_commit_failures_recover_without_mutation_replay(admitted, core, tmp_path, monkeypatch):
+def test_raw_and_receipt_commit_failures_recover_without_mutation_replay(admitted, core, tmp_path, monkeypatch, delivery_diagnostics):
     from contextlib import contextmanager
     from src.posting.delivery_receipts import digest
     from src.commands.schema import canonical_json
