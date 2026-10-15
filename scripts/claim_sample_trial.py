@@ -1,6 +1,7 @@
 """Refuse reruns/duplicate trial IDs using durable GitHub run metadata, no writes."""
 import json
 import os
+from pathlib import Path
 import re
 import subprocess
 
@@ -19,5 +20,7 @@ def claim(env, api):
 
 
 if __name__ == "__main__":
+    from package_sample_trial import validate_recipient
+    validate_recipient(Path(os.environ["RUNNER_TEMP"]), os.environ["RECIPIENT_CERTIFICATE"])
     claim(os.environ, lambda path: json.loads(subprocess.check_output(["gh", "api", path], timeout=30)))
     print("First execution of approved trial ID; reruns and duplicates refused.")

@@ -45,6 +45,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TRIAL_ID: ${{ inputs.trial_id }}
+          RECIPIENT_CERTIFICATE: ${{ inputs.recipient_certificate }}
         run: python scripts/claim_sample_trial.py
       - name: Install existing application dependencies
         run: pip install -r requirements.txt
