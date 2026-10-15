@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useEffect, useState } from "react"
-import { confirmationsFor, mediaCommand, mediaStatus, sameMediaTarget, retainedMediaBlob } from "../../lib/editor-media.js"
+import { confirmationsFor, mediaCommand, mediaStatus, sameMediaTarget, retainedMediaBlob, platformDescriptionStatus } from "../../lib/editor-media.js"
 import { DeliveryHistory } from "./DeliveryHistory.js"
 import { deliveryHistoryKey } from "../../lib/delivery-history.js"
 
@@ -9,7 +9,7 @@ const h = React.createElement
 
 export function EditorMediaPanel({ view, role, busy, imageUrl, imageError, confirmations, setConfirmations, reason, setReason, submit, refresh, historyDraft }) {
   const packet = view.packet, media = packet?.media
-  const checks = confirmationsFor(packet)
+  const checks = confirmationsFor(packet, view.platform_description)
   const accepted = !!imageUrl && Object.keys(checks).every(k => confirmations[k] === true) && !!reason.trim()
   const button = (label, action, disabled = false) => h("button", { type: "button", className: "btn sm",
     disabled: busy || role === "viewer" || disabled, style: { minHeight:44 }, onClick: () => submit(action) }, label)
@@ -26,6 +26,12 @@ export function EditorMediaPanel({ view, role, busy, imageUrl, imageError, confi
           h("p", null, `Eligible only before ${packet.published.useful_until}; status must be rechecked before any action.`),
           h("a", { href:`/api/editor-media?draftId=${encodeURIComponent(view.draft_id)}&proposal=${view.preparation.proposal_sha256}&original=1`, target:"_blank", rel:"noopener noreferrer" }, "Inspect the unchanged original at full size")) ,
         h("details", null, h("summary", null, "Read the full image description"), h("p", null, media.alt_text)))),
+    view.platform_description && h("section", { "aria-label":"Exact platform description" },
+      h("h4", null, "Exact platform description"),
+      h("p", { style:{whiteSpace:"pre-wrap"} }, view.platform_description.wire_text),
+      h("p", null, "The full retained description is reused exactly, including its final line break. Destinations: X and Bluesky."),
+      h("p", {role:"status"}, platformDescriptionStatus(view.platform_description.status)),
+      h("p", null, "X uses a stricter local guard: at most 1,000 Unicode characters and 1,000 UTF-8 bytes. A fit check does not qualify a live API.")),
     packet && !view.review_current && h("fieldset", { disabled:busy || role === "viewer" || !imageUrl },
       h("legend", null, "Review text and graphic together"),
       Object.entries(checks).map(([key,label]) => h("label", { key, style:{ display:"flex", gap:10, alignItems:"flex-start", padding:"8px 0" } },

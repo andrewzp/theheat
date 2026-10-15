@@ -12,7 +12,8 @@ from src.storage import postgres_projection as p
 from tests import test_postgres_editor_media as editor
 from tests import test_postgres_candidate_admission as candidate
 from tests.local_delivery_helpers import fixture_server
-from tests.test_postgres_editor_media import admitted as admitted, offline_connections as offline_connections
+from tests.test_postgres_editor_media import offline_connections as offline_connections
+from tests.radar_editor_helpers import radar_case as radar_case
 from tests.test_postgres_projection import cluster as cluster, database as database, admin
 from tests.test_postgres_command_authority import core as core, make_authority as make_authority
 from tests.test_postgres_command_authority import options
@@ -21,6 +22,11 @@ from tests.test_postgres_batch_results import worker_store as worker_store
 from tests.test_postgres_check_observations import base_store as base_store, store as store
 from tests.two_bot.test_batch_contract import inputs as inputs
 from tests.native_profile_helpers import native_dependencies as native_dependencies
+
+
+@pytest.fixture
+def admitted(radar_case):
+    return radar_case
 
 
 def install(core):
@@ -38,6 +44,28 @@ def configure(store, tmp_path, config):
     return path
 
 
+def bind_platform(case, monkeypatch):
+    """A fresh actual review/check chain after the explicit fixture is selected."""
+    from src.media.platform_description import CONFIRMATION
+    from src.media.published_radar import EXTRA_CONFIRMATIONS
+    current = editor.view(case)
+    description = current["platform_description"]
+    assert description["status"] == "fits_local_limits", description
+    raw = description["wire_text"].encode("utf-8")
+    assert len(raw) <= 1000 and len(description["wire_text"]) <= 1000 and raw.endswith(b"\n")
+    checks = editor.CONFIRMATIONS | {CONFIRMATION}
+    if current["packet"]["schema_version"] == 2:
+        checks |= EXTRA_CONFIRMATIONS
+    _, result = editor.action(case, "review_media_revision", dict(
+        proposal_sha256=current["preparation"]["proposal_sha256"],
+        expected_policy_sha256=current["expected_policy_sha256"], expected_packet_sha256=current["packet"]["packet_sha256"],
+        review=dict(decision="accept", confirmations={k:True for k in checks},
+            expected_platform_description_sha256=description["record"]["description_sha256"],
+            reason="Invented complete raw radar description and exact loopback destinations reviewed, without shortening.")))
+    assert result["status"] == "applied", result
+    editor.complete_revision(case, monkeypatch)
+
+
 def park(case):
     current = editor.view(case)
     return editor.action(case, "approve_media_revision", dict(
@@ -53,7 +81,7 @@ def run(case, intent, platform, stage, *, owner="invented-local-worker", at=edit
 
 @pytest.fixture
 def delivery_diagnostics(request, capsys, monkeypatch):
-    # Explicitly requested last by just three existing cases, after their setup.
+    # Explicitly requested last by the two radar replacement cases, after setup.
     # This 110-second sample is diagnostic only; the job deadline stays unchanged.
     import sys
     from tests.delivery_ci_diagnostics import DeliveryDiagnostics
@@ -133,10 +161,10 @@ def test_changed_or_partial_catalog_refused(core, change):
 def test_atomic_approval_five_stages_and_replay_do_not_change_editorial_state(admitted, core, tmp_path, monkeypatch, delivery_diagnostics):
     case = admitted
     _, png = editor.prepare_and_attach(case)
-    editor.complete_revision(case, monkeypatch)
     core[2].initialize_delivery(now=editor.AT)
     with fixture_server(png, case["text"]) as (config, trace, accepted):
         configure(case["store"], tmp_path, config)
+        bind_platform(case, monkeypatch)
         cmd, result = park(case)
         assert result["status"] == "applied", result
         intent = result["delivery"]["intent_id"]
@@ -231,7 +259,6 @@ def catalogs(params):
         return dict(catalogs={s:p._catalog(c, s) for (s,) in schemas}, sequences=sequences, states=states, dependencies=dependencies)
 
 
-@pytest.mark.parametrize("admitted", ["modis"], indirect=True)
 def test_raw_and_receipt_commit_failures_recover_without_mutation_replay(admitted, core, tmp_path, monkeypatch, delivery_diagnostics):
     from contextlib import contextmanager
     from src.posting.delivery_receipts import digest
@@ -239,10 +266,10 @@ def test_raw_and_receipt_commit_failures_recover_without_mutation_replay(admitte
 
     case = admitted
     _, png = editor.prepare_and_attach(case)
-    editor.complete_revision(case, monkeypatch)
     core[2].initialize_delivery(now=editor.AT)
     with fixture_server(png, case["text"]) as (config, trace, _):
         configure(case["store"], tmp_path, config)
+        bind_platform(case, monkeypatch)
         _, result = park(case)
         intent = result["delivery"]["intent_id"]
         state = case["store"].read()
@@ -329,15 +356,14 @@ def test_raw_and_receipt_commit_failures_recover_without_mutation_replay(admitte
         assert editor.all_application_rows(core[3]) == before_rows and len(trace) == 6
 
 
-@pytest.mark.parametrize("admitted", ["modis"], indirect=True)
 @pytest.mark.parametrize("drift", ["role", "expiry", "state"])
 def test_post_barrier_recheck_preserves_original_scope_and_deadline(admitted, core, tmp_path, monkeypatch, drift):
     case = admitted
     _, png = editor.prepare_and_attach(case)
-    editor.complete_revision(case, monkeypatch)
     core[2].initialize_delivery(now=editor.AT)
     with fixture_server(png, case["text"]) as (config, trace, _):
         configure(case["store"], tmp_path, config)
+        bind_platform(case, monkeypatch)
         _, result = park(case)
         intent = result["delivery"]["intent_id"]
         for key in ("ANTHROPIC_API_KEY", "GEMINI_API_KEY"):
@@ -372,15 +398,14 @@ def test_post_barrier_recheck_preserves_original_scope_and_deadline(admitted, co
             assert run(case, intent, "bluesky", "upload")["outcome"] == "confirmed" and len(trace) == 1
 
 
-@pytest.mark.parametrize("admitted", ["modis"], indirect=True)
 def test_prebarrier_fence_reclaim_lost_ack_and_empty_reconciliation(admitted, core, tmp_path, monkeypatch):
     from contextlib import contextmanager
     case = admitted
     _, png = editor.prepare_and_attach(case)
-    editor.complete_revision(case, monkeypatch)
     core[2].initialize_delivery(now=editor.AT)
     with fixture_server(png, case["text"]) as (config, trace, _):
         configure(case["store"], tmp_path, config)
+        bind_platform(case, monkeypatch)
         _, result = park(case)
         intent = result["delivery"]["intent_id"]
         for key in ("ANTHROPIC_API_KEY", "GEMINI_API_KEY"):
@@ -429,7 +454,6 @@ def test_prebarrier_fence_reclaim_lost_ack_and_empty_reconciliation(admitted, co
         assert len(trace) == 2
 
 
-@pytest.mark.parametrize("admitted", ["modis"], indirect=True)
 def test_atomic_failure_unknown_restart_full_restore_and_positive_reconciliation(admitted, core, cluster, tmp_path, monkeypatch):
     import psycopg
     from src.commands.postgres_authority import PostgresCommandAuthority
@@ -438,10 +462,10 @@ def test_atomic_failure_unknown_restart_full_restore_and_positive_reconciliation
 
     case = admitted
     prepared, png = editor.prepare_and_attach(case)
-    editor.complete_revision(case, monkeypatch)
     core[2].initialize_delivery(now=editor.AT)
     with fixture_server(png, case["text"], mode={("x", "create"):"drop"}) as (config, trace, _):
         config_path = configure(case["store"], tmp_path, config)
+        bind_platform(case, monkeypatch)
         before = case["store"].read()
         original = delivery.enroll
         def fail_after_enrollment(*args, **kwargs):
@@ -488,6 +512,8 @@ def test_atomic_failure_unknown_restart_full_restore_and_positive_reconciliation
             authority.configure_sourced_generation(lambda: case["config"])
             authority.configure_editor_media(**case["store"].editor_media_configuration)
             authority.configure_delivery(config_path)
+            from src.commands.postgres_published_media import configure as configure_published
+            configure_published(authority, lambda: case["published_config"])
             restored = dict(case, store=authority)
             assert authority.read() == state
             assert editor.all_application_rows(restored_params) == before_rows

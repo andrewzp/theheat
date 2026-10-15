@@ -14,6 +14,7 @@ from src.commands.schema import Command, canonical_json, utc_text
 from src.editorial.policy import current_editorial_policy
 from src.editorial.revisions import fingerprint, approval_is_current, review_is_current
 from src.media.joint_review import CONFIRMATIONS
+from src.media.published_radar import EXTRA_CONFIRMATIONS
 from src.two_bot import check_requests
 from src.two_bot.check_origin import spending_job
 from src.voice import safety
@@ -219,7 +220,7 @@ def prepare_and_attach(case):
             expected_packet_sha256=prepared["packet"]["packet_sha256"],
             review=dict(
                 decision="accept",
-                confirmations={k: True for k in CONFIRMATIONS},
+                confirmations={k: True for k in (CONFIRMATIONS | (EXTRA_CONFIRMATIONS if prepared["packet"]["schema_version"] == 2 else set()))},
                 reason="Invented source, text, labels and full alt reviewed together.",
             ),
         ),

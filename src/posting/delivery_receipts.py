@@ -39,6 +39,11 @@ def verify_request(value, platform, stage, prepared, request, body):
     png = prepared["png"]
     require(digest(png) == value["png_sha256"] and digest(prepared["alt"].encode()) == value["alt_sha256"],
             "delivery_retained_asset_changed")
+    if value.get("schema_version") == 2:
+        from src.media.platform_description import preflight, profiles
+        wire = preflight(value["platform_description"], raw_alt=prepared["alt"].encode("utf-8", errors="strict"),
+            png=png, expected_profiles=profiles(value["fixture"]))
+        require(wire == prepared["alt"], "delivery_request_content_changed")
     if (platform, stage) == ("x", "upload"):
         require(content_type.startswith("multipart/form-data; boundary="), "delivery_upload_type_invalid")
         message = BytesParser(policy=policy.default).parsebytes(b"Content-Type: " + content_type.encode("ascii") + b"\r\nMIME-Version: 1.0\r\n\r\n" + body)
@@ -67,6 +72,11 @@ def verify_request(value, platform, stage, prepared, request, body):
         expected = {"repo":value["fixture"]["actor"], "collection":"app.bsky.feed.post", "validate":True,
                     "record":record.model_dump(by_alias=True, exclude_none=True)}
     require(data == expected, "delivery_request_content_changed")
+    if value.get("schema_version") == 2 and (platform, stage) in {("x", "alt"), ("bluesky", "create")}:
+        actual_alt = data["alt_text"]["text"] if platform == "x" else data["record"]["embed"]["images"][0]["alt"]
+        require(actual_alt.encode("utf-8", errors="strict") == prepared["alt"].encode("utf-8", errors="strict")
+            and digest(actual_alt.encode("utf-8")) == value["platform_description"]["wire"]["sha256"],
+            "delivery_request_content_changed")
 
 
 def validate_observation(value, saved, observation, response):

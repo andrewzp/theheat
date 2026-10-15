@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.108.118 — 2026-10-15
+
+- Bind the exact retained image description to joint review, approval and local delivery requests. Check the complete selected destination set before creating a new delivery obligation or sending, while preserving historical receipts and unknown outcomes.
+- Show the exact platform description and require its explicit review. Refuse oversized descriptions and images without shortening or altering them; keep live API qualification and production publishing off.
+
 ## 0.9.108.117 — 2026-10-15
 
 - Keep local command controls paused until refreshed readback succeeds for the same operator and action. Preserve the original action reference and unsaved edit when refresh fails or identity changes.

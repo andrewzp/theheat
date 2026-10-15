@@ -16,6 +16,7 @@ from src.commands.media_journal import MediaJournalError
 from src.commands.schema import CommandError, utc_datetime, utc_text
 from src.editorial.policy import current_editorial_policy
 from src.editorial.revisions import fingerprint
+from src.media import platform_description as descriptions
 from src.posting.local_delivery import FixtureConfiguration, LEASE_SECONDS, MIN_WINDOW_SECONDS, SCOPE, STAGES, MAX_REQUEST
 from src.storage import postgres_projection as p
 
@@ -124,6 +125,32 @@ def configuration(authority):
         return config.read(), config.sha256
     except (ValueError, OSError):
         raise CommandError("delivery_configuration_changed", "The explicit local fixture configuration is unavailable") from None
+
+
+def description_profiles(authority):
+    config = configuration(authority)[0] if hasattr(authority, "delivery_configuration") else None
+    return descriptions.profiles(config)
+
+
+def description_preflight(authority, c, draft, package):
+    binding = draft.get("media_review_binding", {})
+    refuse(binding.get("schema_version") == 2, "platform_description_required")
+    command, _ = authority._intent(c, binding["command_id"])
+    retained = media_commands_review(authority, c, command)
+    record = retained["review"].get("platform_description")
+    refuse(type(record) is dict and record["description_sha256"] == binding.get("platform_description_sha256"),
+           "platform_description_changed")
+    try:
+        descriptions.preflight(record, raw_alt=package["assets"]["alt.txt"], png=package["assets"]["preview.png"],
+            expected_profiles=description_profiles(authority))
+    except descriptions.DescriptionError as exc:
+        raise CommandError(exc.code, "The complete selected delivery set is withheld") from None
+    return record
+
+
+def media_commands_review(authority, c, command):
+    from src.commands import postgres_media_commands
+    return postgres_media_commands.read(c, command, authority._result(c, command.command_id), authority.environment)
 
 
 def raw(c, digest, *, bound=MAX_REQUEST):
@@ -236,7 +263,8 @@ def prepare(authority, c, draft, command):
     hold(c, draft)
     binding = draft["approval_binding"]
     package = media.read(c, binding["media"]["proposal_sha256"], authority.environment)
-    return dict(schema_version=1, scope=SCOPE, publication_approved=False, intent_id=binding["publish_intent_id"],
+    description = description_preflight(authority, c, draft, package)
+    return dict(schema_version=2, platform_description=description, scope=SCOPE, publication_approved=False, intent_id=binding["publish_intent_id"],
                 command_id=command.command_id, draft_id=draft["id"], event_id=draft["event_id"], text=draft["text"],
                 approval_binding=binding, fixture=config, configuration_sha256=digest,
                 proposal_sha256=binding["media"]["proposal_sha256"], package=package["receipt"],
@@ -262,6 +290,9 @@ def context(authority, c, value, resolve_principal, now):
     inputs = editor.inputs(authority, c, draft, policy, now)
     refuse(editor.parked(authority, c, draft, state, version, inputs, policy, now, resolve_principal), "delivery_parked_approval_required")
     package = editor.reviewed(authority, c, draft, inputs, policy, resolve_principal)
+    refuse(value.get("schema_version") == 2, "platform_description_required")
+    description = description_preflight(authority, c, draft, package)
+    refuse(description == value.get("platform_description"), "platform_description_changed")
     refuse(package["receipt"] == value["package"] and p._sha(package["assets"]["preview.png"]) == value["png_sha256"]
            and p._sha(package["assets"]["alt.txt"]) == value["alt_sha256"], "delivery_media_changed")
     check_id = value["approval_binding"]["completion"]["check_set_id"]

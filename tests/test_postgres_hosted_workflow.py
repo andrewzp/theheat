@@ -38,6 +38,7 @@ from src.editorial.policy import current_editorial_policy
 from src.editorial.revisions import fingerprint
 from src.media import published_radar as radar
 from src.media.joint_review import CONFIRMATIONS
+from src.media.platform_description import CONFIRMATION
 from src.storage import hosted_staging as h, postgres_projection as p
 from src.two_bot import check_requests
 from src.two_bot.check_origin import spending_job
@@ -563,53 +564,55 @@ def test_continuous_preview_tls_source_radar_delivery_cost_restore(
         png = http("GET", f"/drafts/{draft_id}/media/{proposal}/preview.png").content
         assert http("GET", f"/drafts/{draft_id}/media/{proposal}/original.gif").content == original
         assert png == radar.convert(original, doc)[0]
-        _, result = action(
-            http,
-            store,
-            operators,
-            "attach_media_revision",
-            dict(
-                proposal_sha256=proposal,
-                expected_policy_sha256=view["expected_policy_sha256"],
-                expected_packet_sha256=view["packet"]["packet_sha256"],
-                review=dict(
-                    decision="accept",
-                    confirmations={k: True for k in CONFIRMATIONS | radar.EXTRA_CONFIRMATIONS},
-                    reason="Simulated operator review of invented labels; no human or source-truth evidence.",
-                ),
-            ),
-            draft=draft(),
-        )
-        view = media()
-        checks, result = action(
-            http,
-            store,
-            operators,
-            "request_revision_checks",
-            dict(
-                **{
-                    k: view[k]
-                    for k in (
-                        "expected_policy_sha256",
-                        "expected_renderer_profile_sha256",
-                        "expected_review_sha256",
-                    )
-                },
-                expected_packet_sha256=view["packet"]["packet_sha256"],
-            ),
-            draft=draft(),
-        )
-        phase("native_original_graphic_joint_review_revision_enrollment")
-        revision_calls = check_stages(
-            store, operators, checks, result["revision_checks"]["check_set_id"], text, revision=True
-        )
-        phase("revision_checks")
         with fixture_server(png, text, mode={("bluesky", "create"): "drop"}) as (
             delivery_config,
             trace,
             accepted,
         ):
             delivery_path = delivery_tests.configure(store, tmp_path, delivery_config)
+            view = media()
+            _, result = action(
+                http,
+                store,
+                operators,
+                "attach_media_revision",
+                dict(
+                    proposal_sha256=proposal,
+                    expected_policy_sha256=view["expected_policy_sha256"],
+                    expected_packet_sha256=view["packet"]["packet_sha256"],
+                    review=dict(
+                        decision="accept",
+                        expected_platform_description_sha256=view["platform_description"]["record"]["description_sha256"],
+                        confirmations={k: True for k in CONFIRMATIONS | radar.EXTRA_CONFIRMATIONS | {CONFIRMATION}},
+                        reason="Simulated operator review of invented labels; no human or source-truth evidence.",
+                    ),
+                ),
+                draft=draft(),
+            )
+            view = media()
+            checks, result = action(
+                http,
+                store,
+                operators,
+                "request_revision_checks",
+                dict(
+                    **{
+                        k: view[k]
+                        for k in (
+                            "expected_policy_sha256",
+                            "expected_renderer_profile_sha256",
+                            "expected_review_sha256",
+                        )
+                    },
+                    expected_packet_sha256=view["packet"]["packet_sha256"],
+                ),
+                draft=draft(),
+            )
+            phase("native_original_graphic_joint_review_revision_enrollment")
+            revision_calls = check_stages(
+                store, operators, checks, result["revision_checks"]["check_set_id"], text, revision=True
+            )
+            phase("revision_checks")
             view = media()
             _, result = action(
                 http,

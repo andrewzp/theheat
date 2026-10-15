@@ -17,6 +17,7 @@ from src.commands.schema import Principal, utc_datetime
 from src.editorial.revisions import fingerprint
 from src.media.review_packet import MediaReviewError, build_media_review_packet
 from src.media.published_radar import EXTRA_CONFIRMATIONS
+from src.media.platform_description import CONFIRMATION
 
 CONFIRMATIONS = frozenset({
     "text_matches_data", "graphic_matches_data", "text_graphic_agree",
@@ -66,7 +67,8 @@ def _principal(value: Any) -> Principal:
 def _payload(value: Any) -> dict:
     payload = _object(value)
     _require(
-        set(payload) == {"decision", "confirmations", "reason"},
+        set(payload) in ({"decision", "confirmations", "reason"},
+            {"decision", "confirmations", "reason", "expected_platform_description_sha256"}),
         "Review payload fields differ from the contract",
     )
     _require(
@@ -76,7 +78,8 @@ def _payload(value: Any) -> dict:
     )
     checks = payload["confirmations"]
     _require(
-        isinstance(checks, dict) and set(checks) in (CONFIRMATIONS, CONFIRMATIONS | EXTRA_CONFIRMATIONS)
+        isinstance(checks, dict) and set(checks) in (CONFIRMATIONS, CONFIRMATIONS | EXTRA_CONFIRMATIONS,
+            CONFIRMATIONS | {CONFIRMATION}, CONFIRMATIONS | EXTRA_CONFIRMATIONS | {CONFIRMATION})
         and all(value is None or type(value) is bool for value in checks.values()),
         "Supply each explicit joint-review confirmation",
     )
@@ -85,6 +88,9 @@ def _payload(value: Any) -> dict:
         "Acceptance requires all joint-review confirmations",
     )
     reason = payload["reason"]
+    extended = "expected_platform_description_sha256" in payload
+    _require((CONFIRMATION in checks) == extended and (not extended or _sha(payload["expected_platform_description_sha256"])),
+             "Supply the exact platform description shown during review")
     _require(
         isinstance(reason, str) and bool(reason.strip()) and len(reason) <= 2000,
         "Review reason must be nonempty text within 2000 characters",
@@ -102,21 +108,24 @@ def validate_joint_review_payload(value: Any) -> dict:
         raise MediaReviewError("Malformed joint-review payload") from None
 
 
-def _body(packet: dict, payload: dict, principal: Principal, reviewed_at: str) -> dict:
+def _body(packet: dict, payload: dict, principal: Principal, reviewed_at: str, platform_description=None) -> dict:
     utc_datetime(reviewed_at)
-    return {
-        "schema_version": packet["schema_version"],
+    body = {
+        "schema_version": 3 if platform_description is not None else packet["schema_version"],
         "reviewed_at": reviewed_at,
         "reviewer": {
             "subject": principal.subject, "role_at_review": principal.role,
             "authentication_context": principal.authentication_context,
         },
-        **payload,
+        **{k:v for k,v in payload.items() if k != "expected_platform_description_sha256"},
         "packet": packet,
         "synthetic": packet["synthetic"],
         "publication_approved": False,
         "production_attachment_authorized": False,
     }
+    if platform_description is not None:
+        body["platform_description"] = deepcopy(platform_description)
+    return body
 
 
 def record_joint_media_review(
@@ -132,14 +141,19 @@ def record_joint_media_review(
     try:
         actor, decision = _principal(principal), _payload(payload)
         _require(_sha(expected_packet_sha256), "Expected packet fingerprint is invalid")
+        description = current_inputs.pop("platform_description", None)
         packet = build_media_review_packet(draft, **current_inputs)
         _require(
             packet["packet_sha256"] == expected_packet_sha256,
             "Preview changed since the requested review",
         )
         expected_checks = CONFIRMATIONS | EXTRA_CONFIRMATIONS if packet["schema_version"] == 2 else CONFIRMATIONS
+        if description is not None:
+            _require(decision.get("expected_platform_description_sha256") == description["description_sha256"]
+                and description["packet_sha256"] == packet["packet_sha256"], "Platform description changed since review")
+            expected_checks = expected_checks | {CONFIRMATION}
         _require(set(decision["confirmations"]) == expected_checks, "Joint confirmations differ from the media family")
-        body = _object(_body(packet, decision, actor, reviewed_at))
+        body = _object(_body(packet, decision, actor, reviewed_at, description))
         return {**body, "review_sha256": fingerprint(body)}
     except MediaReviewError:
         raise
@@ -164,19 +178,26 @@ def joint_media_review_status(
     }
     try:
         checked = _object(record)
-        _require(set(checked) == _BODY_KEYS | {"review_sha256"}, "Invalid review fields")
-        body = {key: checked[key] for key in _BODY_KEYS}
+        keys = _BODY_KEYS | ({"platform_description"} if checked.get("schema_version") == 3 else set())
+        _require(set(checked) == keys | {"review_sha256"}, "Invalid review fields")
+        body = {key: checked[key] for key in keys}
         _require(
             _sha(expected_review_sha256) and _sha(checked["review_sha256"])
             and fingerprint(body) == checked["review_sha256"] == expected_review_sha256,
             "Review differs from the trusted retained decision",
         )
         _require(
-            type(body["schema_version"]) is int and body["schema_version"] in (1, 2) and body["schema_version"] == body["packet"]["schema_version"],
+            type(body["schema_version"]) is int and (body["schema_version"] == 3 or
+                body["schema_version"] in (1, 2) and body["schema_version"] == body["packet"]["schema_version"]),
             "Unsupported review schema",
         )
-        decision = _payload({key: body[key] for key in ("decision", "confirmations", "reason")})
-        expected_checks = CONFIRMATIONS | EXTRA_CONFIRMATIONS if body["schema_version"] == 2 else CONFIRMATIONS
+        payload = {key: body[key] for key in ("decision", "confirmations", "reason")}
+        if body["schema_version"] == 3:
+            payload["expected_platform_description_sha256"] = body["platform_description"]["description_sha256"]
+        decision = _payload(payload)
+        expected_checks = CONFIRMATIONS | EXTRA_CONFIRMATIONS if body["packet"]["schema_version"] == 2 else CONFIRMATIONS
+        if body["schema_version"] == 3:
+            expected_checks = expected_checks | {CONFIRMATION}
         _require(set(decision["confirmations"]) == expected_checks, "Joint confirmations differ from the media family")
         provenance = body["reviewer"]
         _require(
@@ -190,7 +211,7 @@ def joint_media_review_status(
             provenance["subject"], provenance["role_at_review"],
             provenance["authentication_context"],
         ))
-        canonical = _body(body["packet"], decision, original, body["reviewed_at"])
+        canonical = _body(body["packet"], decision, original, body["reviewed_at"], body.get("platform_description"))
         _require(type(body["synthetic"]) is bool, "Invalid synthetic marker")
         _require(_encoded(canonical) == _encoded(body), "Invalid review metadata")
     except (ValueError, TypeError, KeyError, AttributeError, OverflowError, RecursionError):
@@ -202,6 +223,8 @@ def joint_media_review_status(
     except (ValueError, TypeError, AttributeError):
         return {**result, "status": "reviewer_unavailable"}
     try:
+        description = current_inputs.pop("platform_description", None)
+        _require(body.get("platform_description") == description, "Platform description review is obsolete")
         packet = build_media_review_packet(draft, **current_inputs)
         # Rebuild from current evidence, never using the retained packet as input.
         _require(_encoded(body["packet"]) == _encoded(packet), "Review is obsolete")

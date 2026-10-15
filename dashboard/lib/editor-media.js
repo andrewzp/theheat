@@ -13,8 +13,20 @@ export const publishedConfirmations = {
   unaltered_product_reuse_conditions_met: "The original marks and credits are preserved and the product reuse conditions are met.",
 }
 
-export function confirmationsFor(packet) {
-  return packet?.schema_version === 2 ? { ...jointConfirmations, ...publishedConfirmations } : jointConfirmations
+export function confirmationsFor(packet, description) {
+  const result = packet?.schema_version === 2 ? { ...jointConfirmations, ...publishedConfirmations } : jointConfirmations
+  return description ? { ...result, platform_description_faithful: "The exact platform description faithfully describes this graphic and preserves its required qualifications." } : result
+}
+
+export function platformDescriptionStatus(status) {
+  return {
+    fits_local_limits: "The complete description and image fit this local test setup.",
+    platform_api_unqualified: "Live posting is not qualified for this platform setup.",
+    platform_description_x_house_limit: "This description exceeds our 1,000-character or 1,000-byte limit for X.",
+    platform_image_bluesky_limit: "This image exceeds Bluesky’s 2,000,000-byte limit.",
+    platform_description_profile_changed: "The destination setup changed. Review the current description again.",
+    platform_description_unqualified: "This description does not preserve the full retained description.",
+  }[status] || "The description or image could not be verified. Refresh before reviewing."
 }
 
 export function mediaCommand(view, action, review, now = new Date()) {
@@ -24,7 +36,8 @@ export function mediaCommand(view, action, review, now = new Date()) {
   if (["attach_media_revision", "review_media_revision"].includes(action)) {
     payload.proposal_sha256 = view.preparation.proposal_sha256
     payload.expected_packet_sha256 = view.packet.packet_sha256
-    payload.review = review
+    payload.review = view.platform_description ? { ...review,
+      expected_platform_description_sha256:view.platform_description.record.description_sha256 } : review
   } else if (["request_revision_checks", "approve_media_revision"].includes(action)) {
     payload.expected_packet_sha256 = view.packet.packet_sha256
     payload.expected_review_sha256 = view.expected_review_sha256

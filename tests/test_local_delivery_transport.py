@@ -2,6 +2,7 @@
 import time
 import os
 import signal
+import io
 
 import pytest
 
@@ -10,9 +11,13 @@ from src.posting.local_delivery import configuration, STAGES
 from tests.local_delivery_helpers import fixture_server, value
 from src.commands.schema import canonical_json
 
-PNG = b"\x89PNG\r\n\x1a\n" + b"invented bytes" * 30
+from PIL import Image
+
+_image = io.BytesIO()
+Image.new("RGB", (1, 1), "red").save(_image, format="PNG")
+PNG = _image.getvalue()
 TEXT = "An invented region recorded extreme heat."
-ALT = "Invented graphic."
+ALT = "Invented graphic.\n"
 
 
 def test_configuration_file_permissions_identity_and_ambient_credentials(tmp_path, monkeypatch):

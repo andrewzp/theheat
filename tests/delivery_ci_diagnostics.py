@@ -22,9 +22,8 @@ MAX_TOTAL_BYTES = 1_048_576
 SAMPLE_SECONDS = 110
 PHASES = ("prepare_and_attach", "complete_revision", "park", "run", "assert_live_senders_refuse")
 CASES = (
-    "test_atomic_approval_five_stages_and_replay_do_not_change_editorial_state[modis]",
-    "test_atomic_approval_five_stages_and_replay_do_not_change_editorial_state[pm25]",
-    "test_raw_and_receipt_commit_failures_recover_without_mutation_replay[modis]",
+    "test_atomic_approval_five_stages_and_replay_do_not_change_editorial_state",
+    "test_raw_and_receipt_commit_failures_recover_without_mutation_replay",
 )
 
 

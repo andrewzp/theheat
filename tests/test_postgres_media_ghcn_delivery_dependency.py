@@ -1,6 +1,6 @@
 """P14 dependency proof on genuine native-media drafts, separate from GHCN science.
 
-This deliberately does not label a MODIS draft or its receipts as temperature.
+This deliberately does not label a radar draft or its receipts as temperature.
 The GHCN source command/lock proof lives in test_postgres_ghcn_source_results.
 """
 from copy import deepcopy
@@ -12,7 +12,9 @@ from tests import test_postgres_delivery as transport
 from tests import test_postgres_editor_media as editor
 from tests import test_postgres_candidate_admission as candidate
 from tests.local_delivery_helpers import fixture_server
-from tests.test_postgres_editor_media import admitted as admitted, offline_connections as offline_connections
+from tests.test_postgres_delivery import admitted as admitted
+from tests.radar_editor_helpers import radar_case as radar_case
+from tests.test_postgres_editor_media import offline_connections as offline_connections
 from tests.test_postgres_projection import cluster as cluster, database as database, admin
 from tests.test_postgres_command_authority import core as core, make_authority as make_authority
 from tests.test_postgres_batch import spend_store as spend_store
@@ -29,16 +31,15 @@ def dependency(store,targets):
         return ghcn.delivery_dependency(store,connection,targets)
 
 
-@pytest.mark.parametrize('admitted',['modis'],indirect=True)
 @pytest.mark.parametrize('mode',['normal','drop','rejected','receipt_failure'])
 def test_original_parked_media_receipts_and_same_event_lookup_are_exact(admitted,core,tmp_path,monkeypatch,mode):
     case=admitted
     _,png=editor.prepare_and_attach(case)
-    editor.complete_revision(case,monkeypatch)
     core[2].initialize_delivery(now=editor.AT)
     behavior={('x','create'): mode if mode!='receipt_failure' else 'normal'}
     with fixture_server(png,case['text'],mode=behavior) as (config,trace,_):
         transport.configure(case['store'],tmp_path,config)
+        transport.bind_platform(case,monkeypatch)
         _,result=transport.park(case)
         assert result['status']=='applied'
         intent=result['delivery']['intent_id']
