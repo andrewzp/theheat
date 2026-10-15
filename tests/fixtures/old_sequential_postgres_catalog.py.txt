@@ -1,0 +1,49 @@
+def _catalog(connection, schema: str = SCHEMA) -> str:
+    """Fingerprint semantic catalog definitions, excluding OIDs/physical layout."""
+    queries = (
+        """SELECT n.nspname,pg_get_userbyid(n.nspowner),
+           CASE WHEN a.grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END,
+           a.privilege_type,a.is_grantable FROM pg_namespace n
+           CROSS JOIN LATERAL aclexplode(COALESCE(n.nspacl,acldefault('n',n.nspowner))) a
+           WHERE n.nspname=%s ORDER BY 1,2,3,4,5""",
+        """SELECT c.relname,c.relkind,pg_get_userbyid(c.relowner),c.relrowsecurity,c.relforcerowsecurity
+           FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+           WHERE n.nspname=%s ORDER BY c.relname""",
+        """SELECT c.relname,a.attname,format_type(a.atttypid,a.atttypmod),a.attnotnull,
+           a.attidentity,a.attgenerated,co.collname,pg_get_expr(d.adbin,d.adrelid)
+           FROM pg_attribute a JOIN pg_class c ON c.oid=a.attrelid
+           JOIN pg_namespace n ON n.oid=c.relnamespace
+           LEFT JOIN pg_attrdef d ON d.adrelid=c.oid AND d.adnum=a.attnum
+           LEFT JOIN pg_collation co ON co.oid=a.attcollation
+           WHERE n.nspname=%s AND a.attnum>0 AND NOT a.attisdropped
+           ORDER BY c.relname,a.attnum""",
+        """SELECT c.conname,c.contype,c.convalidated,pg_get_constraintdef(c.oid)
+           FROM pg_constraint c JOIN pg_namespace n ON n.oid=c.connamespace
+           WHERE n.nspname=%s ORDER BY c.conname""",
+        """SELECT c.relname,pg_get_indexdef(c.oid),i.indisvalid,i.indisready
+           FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace JOIN pg_index i ON i.indexrelid=c.oid
+           WHERE n.nspname=%s ORDER BY c.relname""",
+        """SELECT t.tgname,t.tgenabled,pg_get_triggerdef(t.oid)
+           FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_namespace n ON n.oid=c.relnamespace
+           WHERE n.nspname=%s AND NOT t.tgisinternal ORDER BY t.tgname""",
+        """SELECT p.proname,pg_get_functiondef(p.oid),p.prosecdef,p.proconfig
+           FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+           WHERE n.nspname=%s ORDER BY p.proname""",
+        """SELECT p.proname,pg_get_userbyid(p.proowner),
+           CASE WHEN a.grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END,
+           a.privilege_type,a.is_grantable FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+           CROSS JOIN LATERAL aclexplode(COALESCE(p.proacl,acldefault('f',p.proowner))) a
+           WHERE n.nspname=%s ORDER BY 1,2,3,4,5""",
+        """WITH relations AS (SELECT c.* FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname=%s)
+           SELECT c.relname::text,CASE WHEN a.grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END,
+           a.privilege_type,a.is_grantable FROM relations c
+           CROSS JOIN LATERAL aclexplode(COALESCE(c.relacl,acldefault(CASE WHEN c.relkind='S' THEN 'S'::"char" ELSE 'r'::"char" END,c.relowner))) a
+           WHERE c.relkind IN ('r','S')
+           UNION ALL
+           SELECT c.relname||'.'||col.attname,CASE WHEN a.grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END,
+           a.privilege_type,a.is_grantable FROM relations c JOIN pg_attribute col ON col.attrelid=c.oid
+           CROSS JOIN LATERAL aclexplode(col.attacl) a
+           WHERE col.attnum>0 AND NOT col.attisdropped ORDER BY 1,2,3,4""",
+    )
+    material = [connection.execute(q, (schema,)).fetchall() for q in queries]
+    return _sha(json.dumps(material, sort_keys=True, separators=(",", ":"), default=str).encode())

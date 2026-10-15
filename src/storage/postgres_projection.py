@@ -187,7 +187,12 @@ def _catalog(connection, schema: str = SCHEMA) -> str:
            CROSS JOIN LATERAL aclexplode(col.attacl) a
            WHERE col.attnum>0 AND NOT col.attisdropped ORDER BY 1,2,3,4""",
     )
-    material = [connection.execute(q, (schema,)).fetchall() for q in queries]
+    # Queue every unchanged query before waiting for results. Pipeline exit
+    # synchronizes (and raises SQL errors) on this same connection/transaction;
+    # only a complete, ordered set of results may become a fingerprint.
+    with connection.pipeline():
+        cursors = [connection.execute(q, (schema,)) for q in queries]
+    material = [cursor.fetchall() for cursor in cursors]
     return _sha(json.dumps(material, sort_keys=True, separators=(",", ":"), default=str).encode())
 
 

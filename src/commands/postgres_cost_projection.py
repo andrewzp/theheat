@@ -6,6 +6,7 @@ receive semantic replay. Immutable source links never grant editorial authority.
 from __future__ import annotations
 
 import base64
+from contextlib import contextmanager
 from datetime import timedelta
 import time
 
@@ -80,6 +81,15 @@ class Read:
         result = self.connection.execute(query, params)
         self.check()
         return result
+
+    @contextmanager
+    def pipeline(self):
+        # Cost reads must execute synchronously: each SQL statement receives the
+        # remaining deadline before execution and is checked after it returns.
+        # Delegating to the driver pipeline would check queued, unfinished SQL.
+        self.check()
+        yield
+        self.check()
 
     def __getattr__(self, name):
         return getattr(self.connection, name)

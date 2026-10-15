@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.108.114 — 2026-10-15
+
+- Queue the same PostgreSQL catalog reads together on ordinary connections while preserving exact fingerprints and transaction checks. Keep deadline-limited cost reads synchronous with their original shrinking SQL timeouts and whole read window.
+
 ## 0.9.108.113 — 2026-10-15
 
 - Add an explicit authenticated command mode for pending-draft maintenance, preserving the exact revision set, original request deadline and same-command recovery after a lost acknowledgment. Existing production maintenance behavior is unchanged.
