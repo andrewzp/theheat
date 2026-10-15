@@ -14,7 +14,7 @@ async function boundedBody(body, maxBytes, signal) {
   const reader = body.getReader()
   const chunks = []
   let size = 0
-  const cancel = () => { void reader.cancel() }
+  const cancel = () => { void reader.cancel().catch(() => {}) }
   signal.addEventListener("abort", cancel, { once: true })
   try {
     while (true) {
@@ -32,7 +32,7 @@ async function boundedBody(body, maxBytes, signal) {
     return bytes
   } finally {
     signal.removeEventListener("abort", cancel)
-    void reader.cancel()
+    void reader.cancel().catch(() => {})
   }
 }
 

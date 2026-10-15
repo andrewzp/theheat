@@ -2,6 +2,7 @@ import test from "node:test"
 import assert from "node:assert/strict"
 import { createHash } from "node:crypto"
 import { readFileSync, writeFileSync } from "node:fs"
+import { spawnSync } from "node:child_process"
 import React from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 import { DeliveryContentCard, DeliveryHistory } from "../app/components/DeliveryHistory.js"
@@ -136,6 +137,46 @@ test("history proxy refuses mixed/duplicate/body references and keeps the existi
     for(const key of Object.keys(process.env))if(!(key in saved))delete process.env[key]
     Object.assign(process.env,saved)
   }
+})
+
+test("historical proxy native stream cleanup preserves primary errors without detached rejection", () => {
+  const moduleURL=new URL("../app/api/editor-media/route.js",import.meta.url).href
+  const result=spawnSync(process.execPath,["--unhandled-rejections=strict","--input-type=module","--eval",`
+    import assert from "node:assert/strict";
+    import { GET } from ${JSON.stringify(moduleURL)};
+    const request=()=>new Request("http://127.0.0.1:3133/api/editor-media?draftId=invented&deliveryIntent=11111111-2222-4333-8444-555555555555",{
+      headers:{Host:"127.0.0.1:3133",Origin:"http://127.0.0.1:3133",Authorization:"Basic "+Buffer.from("viewer:invented").toString("base64")}});
+    const tick=()=>new Promise(resolve=>setImmediate(resolve));
+    let calls=0;
+    const check=async(status,code)=>{
+      const before=calls,response=await GET(request());
+      assert.equal(response.status,status);
+      assert.equal((await response.json()).code,code);
+      assert.equal(calls,before+1,"No transport retry");
+      await tick();
+    };
+    for(const primary of [new Error("Invented body failure"),new DOMException("Invented canceled body","AbortError")]) {
+      globalThis.fetch=async()=>{calls++;return new Response(new ReadableStream({start(controller){controller.error(primary)}}),
+        {headers:{"content-type":"application/json"}})};
+      await check(503,"local_authority_unavailable_retry_same_command");
+    }
+    let canceled=0;
+    globalThis.fetch=async()=>{calls++;return new Response(new ReadableStream({
+      start(controller){controller.enqueue(new Uint8Array(8*1024*1024+1))},
+      cancel(){canceled++;throw new Error("Invented oversize cleanup failure")}
+    }),{headers:{"content-type":"application/json"}})};
+    await check(413,"command_too_large");assert.equal(canceled,1);
+    let deadlineCanceled=0,signal;
+    globalThis.fetch=async(_url,options)=>{calls++;signal=options.signal;return new Response(new ReadableStream({
+      cancel(){deadlineCanceled++;throw new Error("Invented timeout cleanup failure")}
+    }),{headers:{"content-type":"application/json"}})};
+    const started=Date.now();
+    await check(503,"local_authority_timeout");
+    assert.ok(Date.now()-started>=7900,"Original real eight-second timer was not shortened");
+    assert.equal(signal.aborted,true);assert.equal(deadlineCanceled,1);assert.equal(calls,4);
+  `],{encoding:"utf8",timeout:15000,env:{PATH:process.env.PATH,NODE_ENV:"test",DASHBOARD_AUTH_DISABLED:"1",THEHEAT_LOCAL_COMMAND_URL:"http://127.0.0.1:3999"}})
+  assert.ifError(result.error)
+  assert.equal(result.status,0,result.stderr||result.stdout)
 })
 
 test("actual authenticated history Next ingress PG detail and PNG stay read-only",{skip:!process.env.THEHEAT_DELIVERY_HISTORY_CONFIG},async()=>{
