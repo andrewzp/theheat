@@ -22,7 +22,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/commands/postgres_delivery.py": "6c0f8af4d695dee109bac286dcdb95966cbe0e73d219553f229391e544ca7f40",
     "src/commands/postgres_editor_media.py": "bfcb1b0b577661db19adddb04da3cf8e90b15b5df90d5abe16c74a988a10420f",
     "src/commands/postgres_ghcn_source_results.py": "fc06f61b007c003e299f78dac9be51b03db74a1d65569a59e0c407eb243eab42",
-    "src/commands/postgres_important_variants.py": "d4bb78326ab68ae2b4e8c85be0ede05b73454e37ca4b9ff3e39b5cad8179617c",
+    "src/commands/postgres_important_variants.py": "eca11e40c09b5dbaf3ab50c8b5fa215067538cf3c4a77e4a32477d8260896002",
     "src/commands/postgres_media.py": "574ec6d6fa7d44be8aefeca8e43b447ec21a1cf56cae2a3a54199ca93bcee02d",
     "src/commands/postgres_media_commands.py": "9ee66157e64ca30e78cd68d1d4c35c53dd5960c5476c4155b0b0afb1e56142c6",
     "src/commands/postgres_published_media.py": "bf34d53dd3b52cb00b81542d864787b056943e64ec5c1ccaa652876d5083143c",
@@ -176,5 +176,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "4a828a22e451889f630e994add6ba38c463d44369d24d2e22c2ff85e7f0387e5"
   },
   "schema_version": 1,
-  "source_sha256": "e42407562dfca0f13b5ab55b5be7b73c5f57c553c378d6eb084b4ee117d1743f"
+  "source_sha256": "c16eae583379ccad2be9a20988cf497bb025c3d7924ed6fbce73639ac9e32acd"
 }

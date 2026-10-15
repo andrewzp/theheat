@@ -144,7 +144,20 @@ test("actual important API -> two independently checked results -> exact retaine
     await new Promise(resolve => setTimeout(resolve, wait))
     state = (await request("/api/dashboard")).body
     assert.equal(state.candidates[0].checks_available_at, undefined)
-    for (const row of state.candidates) {
+    const candidateIds = state.candidates.map(row => row.admission_input_id)
+    for (const candidateId of candidateIds) {
+      // Re-read after the first real enrollment/checks. Reusing the initial
+      // array hid a sibling disabled by its own group's live shared lease.
+      state = (await request("/api/dashboard")).body
+      const row = state.candidates.find(item => item.admission_input_id === candidateId)
+      assert.equal(row.status, "not_checked")
+      assert.equal(row.checks_available_at, undefined)
+      const html = renderToStaticMarkup(createElement(DraftWorkbench, {
+        drafts: [], localCandidates: [row], localRole: "editor", botRuns: [],
+      }))
+      const checkButton = html.match(/<button\b[^>]*>Check candidate<\/button>/)?.[0]
+      assert.ok(checkButton, "Actual projected candidate must render its real check control")
+      assert.doesNotMatch(checkButton, /disabled/)
       const check = createCandidateCommand(row, "request_candidate_checks")
       assert.equal((await request("/api/drafts", check)).status, 202)
       const requested = await worker("consume", check.command_id)

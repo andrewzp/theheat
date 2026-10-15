@@ -1180,6 +1180,19 @@ def project_candidate(authority, c, row, value, state, version, policy, now, res
             status="admitted", saved_draft_id=saved["draft_id"], required_checks_completed=False
         )
         return row
+    # A producer's live lease still delays the first check. Once the exact
+    # immutable group check lease exists, a sibling joins that same owner/fence;
+    # waiting for its expiry would make the nonrenewable group unusable.
+    if row["status"] == "not_checked" and exists(c, LEASE, job_id):
+        try:
+            current_member(authority, c, value, state, policy, now, resolve)
+            shared_lease(
+                c, value, "important-" + job_id, now=now, environment=authority.environment
+            )
+            row.pop("checks_available_at", None)
+        except CommandError as exc:
+            row.update(status="checks_blocked", reason=exc.code)
+            row.pop("checks_available_at", None)
     try:
         snapshot, verified = completion_snapshot(
             authority, c, job_id, state, version, policy, now, resolve

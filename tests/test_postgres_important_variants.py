@@ -975,3 +975,108 @@ def test_optional_aqi_absence_refuses_before_any_group_hold(important, core):
     result = start_refused(case)
     assert result["status"] == "rejected" and result["code"] == "important_aqi_fact_invalid", result
     assert admin(core[3], "SELECT count(*) FROM theheat_spending.intents") == [(0,)]
+
+
+def test_projection_keeps_producer_wait_then_allows_sibling_under_original_check_lease(
+    important, core
+):
+    from tests.test_postgres_editor_media import all_application_rows
+
+    case = important
+    capture(case)
+    ids = case["store"].generated_candidate_inputs()
+    before = all_application_rows(core[3])
+    producer = case["store"].candidate_projection(ids, now=NOW, resolve_principal=candidate.resolve)
+    assert len(producer) == 2
+    assert all(row["status"] == "not_checked" and row["checks_available_at"] for row in producer)
+    assert all_application_rows(core[3]) == before
+    first = enroll(case, 1)
+    before = all_application_rows(core[3])
+    projected = case["store"].candidate_projection(ids, now=AT, resolve_principal=candidate.resolve)
+    sibling = next(
+        row for row in projected if row["admission_input_id"] != first["refs"]["admission_input_id"]
+    )
+    assert sibling["status"] == "not_checked" and "checks_available_at" not in sibling
+    assert all_application_rows(core[3]) == before
+    with case["store"].projections._connection() as c:
+        original = group.read(c, group.LEASE, case["result"]["generation"]["job_id"])
+    second = enroll(case, 2)
+    assert second["check_set_id"] != first["check_set_id"]
+    with case["store"].projections._connection() as c:
+        assert group.read(c, group.LEASE, case["result"]["generation"]["job_id"]) == original
+    leases = admin(
+        core[3], "SELECT fence,owner,expires_at FROM theheat_batch_work.leases ORDER BY fence"
+    )
+    assert leases[-1] == (original["fence"], original["owner"], original["expires_at"])
+    assert admin(core[3], "SELECT count(*) FROM theheat_spending.intents") == [(1,)]
+
+
+@pytest.mark.parametrize(
+    "change",
+    ["expired", "replacement_lease", "source_removed", "actor_revoked", "authentication_changed"],
+)
+def test_sibling_projection_never_renews_or_ignores_invalid_original_check_authority(
+    important, core, change
+):
+    from tests.test_postgres_editor_media import all_application_rows
+    from src.commands.schema import Principal
+
+    case = important
+    capture(case)
+    first = enroll(case, 1)
+    at, resolver = AT, candidate.resolve
+    if change in {"expired", "replacement_lease"}:
+        at += timedelta(seconds=301)
+    if change == "replacement_lease":
+        case["store"].batch_work(
+            "acquire",
+            dict(
+                job_id=case["result"]["generation"]["job_id"],
+                owner="invented-new-owner",
+                ttl_seconds=60,
+            ),
+            now=utc_text(at),
+        )
+    if change == "source_removed":
+        case["config"]["current_inputs"].clear()
+    if change == "actor_revoked":
+
+        def resolver(subject):
+            return None
+
+    if change == "authentication_changed":
+
+        def resolver(subject):
+            return Principal(subject, "editor", "different-authentication")
+
+    before = all_application_rows(core[3])
+    rows = case["store"].candidate_projection(
+        case["store"].generated_candidate_inputs(), now=at, resolve_principal=resolver
+    )
+    sibling = next(
+        row for row in rows if row["admission_input_id"] != first["refs"]["admission_input_id"]
+    )
+    assert sibling["status"] == "checks_blocked"
+    assert (
+        sibling["reason"]
+        == {
+            "expired": "important_original_lease_expired",
+            "replacement_lease": "important_original_lease_expired",
+            "source_removed": "generation_source_superseded",
+            "actor_revoked": "forbidden",
+            "authentication_changed": "important_actor_changed",
+        }[change]
+    )
+    assert "checks_available_at" not in sibling
+    assert all_application_rows(core[3]) == before
+
+
+def test_ordinary_producer_availability_is_unchanged(store, inputs, monkeypatch, core):
+    from tests.test_postgres_editor_media import all_application_rows
+
+    case = candidate.unchecked.__wrapped__(store, inputs, monkeypatch, core)
+    before = all_application_rows(core[3])
+    rows = store.candidate_projection((case["refs"]["admission_input_id"],), now=NOW)
+    assert rows[0]["status"] == "not_checked" and rows[0]["checks_available_at"]
+    assert "important_slate" not in rows[0]
+    assert all_application_rows(core[3]) == before
