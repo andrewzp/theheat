@@ -57,8 +57,9 @@ real post require a separate proposal and authorization.
    Keep the private key outside Git. The workflow receives only the public PEM.
 2. Obtain approval for that trial ID, code revision, source/model profile and
    limits. Do not enable the regular paid-evaluation or collection switches.
-3. Manually dispatch `fresh-sample-trial.yml` with the approved ID, public
-   certificate and literal `APPROVE-2-USD-SAMPLE-TRIAL`. This declaration is a
+3. Manually dispatch `fresh-sample-trial.yml` with the approved ID, exact released
+   commit SHA, public certificate and literal `APPROVE-2-USD-SAMPLE-TRIAL`. Changed
+   code or an invalid/expiring encryption recipient blocks before purchases. This declaration is a
    deliberate operator action, not authentication or standing paid authorization.
 4. Inspect the existing run, not a rerun. Its safe log contains reservation
    ordinals/stages/outcomes, never exact source/history/draft text. Results are

@@ -10,6 +10,9 @@ def claim(env, api):
     identity = env["TRIAL_ID"]
     if not re.fullmatch(r"[a-f0-9]{32}", identity) or env.get("GITHUB_RUN_ATTEMPT") != "1":
         raise ValueError("sample_trial_identity_or_attempt_invalid")
+    approved = env.get("APPROVED_COMMIT_SHA", "")
+    if not re.fullmatch(r"[a-f0-9]{40}", approved) or env.get("GITHUB_SHA") != approved:
+        raise ValueError("sample_trial_release_changed")
     payload = api(f"repos/{env['GITHUB_REPOSITORY']}/actions/workflows/fresh-sample-trial.yml/runs?event=workflow_dispatch&per_page=100")
     if payload["total_count"] > 100:
         raise ValueError("sample_trial_history_window_exceeded")

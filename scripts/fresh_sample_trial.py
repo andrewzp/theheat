@@ -75,7 +75,10 @@ def binding() -> dict:
     policy = deepcopy(policy)
     policy["flags"].pop("safety_llm_enabled", None)
     return {"policy": policy, "cli_sha256": digest(Path(__file__).read_bytes()),
-            "budget_sha256": digest((ROOT / "src/two_bot/trial_budget.py").read_bytes())}
+            "budget_sha256": digest((ROOT / "src/two_bot/trial_budget.py").read_bytes()),
+            "trial_entry_points": {name: digest((ROOT / name).read_bytes()) for name in (
+                "scripts/claim_sample_trial.py", "scripts/package_sample_trial.py",
+                ".github/workflows/fresh-sample-trial.yml")}}
 
 
 def eligible(bundle: dict, now: datetime) -> bool:

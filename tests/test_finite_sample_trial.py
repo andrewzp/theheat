@@ -327,11 +327,12 @@ def load_script(name):
     return module
 
 
-@pytest.mark.parametrize("case", ["first", "rerun", "duplicate", "unobserved", "history_limit", "invalid_id"])
+@pytest.mark.parametrize("case", ["first", "rerun", "duplicate", "unobserved", "history_limit", "invalid_id", "changed_commit"])
 def test_github_claim_is_first_id_only_and_fail_closed(case):
     module = load_script("claim_sample_trial")
     identity = "a" * 32
-    env = {"TRIAL_ID": identity, "GITHUB_REPOSITORY": "fixture/repo", "GITHUB_RUN_ATTEMPT": "1", "GITHUB_RUN_ID": "10"}
+    env = {"TRIAL_ID": identity, "GITHUB_REPOSITORY": "fixture/repo", "GITHUB_RUN_ATTEMPT": "1", "GITHUB_RUN_ID": "10",
+           "APPROVED_COMMIT_SHA": "f" * 40, "GITHUB_SHA": "f" * 40}
     data = {"total_count": 1, "workflow_runs": [{"id": 10, "display_title": "Fresh sample " + identity}]}
     if case == "rerun":
         env["GITHUB_RUN_ATTEMPT"] = "2"
@@ -343,6 +344,8 @@ def test_github_claim_is_first_id_only_and_fail_closed(case):
         data["total_count"] = 101
     if case == "invalid_id":
         env["TRIAL_ID"] = "unsafe input"
+    if case == "changed_commit":
+        env["GITHUB_SHA"] = "e" * 40
     if case == "first":
         module.claim(env, lambda path: data)
     else:
