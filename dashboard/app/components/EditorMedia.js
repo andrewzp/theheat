@@ -2,10 +2,12 @@
 
 import React, { useEffect, useState } from "react"
 import { confirmationsFor, mediaCommand, mediaStatus, sameMediaTarget, retainedMediaBlob } from "../../lib/editor-media.js"
+import { DeliveryHistory } from "./DeliveryHistory.js"
+import { deliveryHistoryKey } from "../../lib/delivery-history.js"
 
 const h = React.createElement
 
-export function EditorMediaPanel({ view, role, busy, imageUrl, imageError, confirmations, setConfirmations, reason, setReason, submit, refresh }) {
+export function EditorMediaPanel({ view, role, busy, imageUrl, imageError, confirmations, setConfirmations, reason, setReason, submit, refresh, historyDraft }) {
   const packet = view.packet, media = packet?.media
   const checks = confirmationsFor(packet)
   const accepted = !!imageUrl && Object.keys(checks).every(k => confirmations[k] === true) && !!reason.trim()
@@ -44,13 +46,7 @@ export function EditorMediaPanel({ view, role, busy, imageUrl, imageError, confi
     view.checks && h("ul", null, Object.entries(view.checks).map(([stage,status]) => h("li", { key:stage }, `${stage.replaceAll("_", " ")}: ${status}`))),
     view.checks_status && !["not_requested", "pending", "passed"].includes(view.checks_status) && h("p", { role:"status" }, view.checks_status.replaceAll("_", " ")),
     view.delivery?.scope === "local_http_fixture_v1" && view.delivery.publication_approved === false && view.delivery.intents.length > 0 &&
-      h("section", { "aria-label":"Local delivery test results" }, h("h4", null, "Local delivery test"),
-        h("p", null, "These receipts describe the invented local test only. They do not authorize publishing."),
-        view.delivery.intents.map((intent, index) => h("div", { key:intent.intent_id },
-          h("p", null, `Review ${index + 1}: ${intent.current ? "current" : "no longer current; no new delivery steps"}.`),
-          h("ul", null, Object.entries(intent.stages).flatMap(([platform, stages]) => Object.entries(stages).map(([stage, receipt]) =>
-            h("li", { key:`${platform}-${stage}` }, `${platform === "x" ? "X" : "Bluesky"} ${stage === "alt" ? "image description" : stage === "upload" ? "image upload" : "post creation"}: ${
-              ({ pending:"waiting", confirmed:"confirmed by the local test", not_sent:"not sent", unknown:"outcome unknown; automatic retry blocked" })[receipt.status] || "unavailable"}`))))))),
+      h(DeliveryHistory, { key:deliveryHistoryKey(historyDraft), view, draft:historyDraft, busy }),
     h("p", { className:"graphic-preview-note" }, "Human review and model checks are separate. Model cost remains unknown until reconciled. Publishing stays unavailable."))
 }
 
@@ -91,7 +87,7 @@ export function EditorMedia({ draft, editing, updating, submitCommand }) {
     editing || updating ? h("p", { role:"status" }, editing ? "Save or cancel the text edit before reviewing a graphic." : "Waiting for the local action to finish. Previous review controls are paused.")
       : error ? h("div", { role:"alert" }, h("p", null, error), h("button", { type:"button", className:"btn sm", onClick:()=>setSerial(n=>n+1) }, "Retry status"))
       : !currentView ? h("p", { role:"status" }, "Loading current graphic status…")
-      : h(EditorMediaPanel, { view:currentView, role:draft.operator_role, busy:updating, imageUrl:image?.view === currentView ? image.url : null, imageError, confirmations, setConfirmations, reason, setReason,
+      : h(EditorMediaPanel, { view:currentView, role:draft.operator_role, busy:updating, historyDraft:draft, imageUrl:image?.view === currentView ? image.url : null, imageError, confirmations, setConfirmations, reason, setReason,
         refresh:()=>setSerial(n=>n+1), submit:action => submitCommand({ command:mediaCommand(view, action,
           { decision:"accept", confirmations, reason }), draftId:draft.id, action }) }))
 }

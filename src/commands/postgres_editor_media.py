@@ -336,31 +336,36 @@ def parked(authority, c, draft, state, version, value, policy, now, resolve_prin
     return True
 
 
+def retained_package(authority, c, draft_id, png_proposal, *, original=False):
+    # Passive historical evidence has an exact retained key. It must not
+    # depend on the current mutation eligibility or a recent-list window.
+    media._sha(png_proposal)
+    refuse(generation.exists(c, PREPARATION, png_proposal), "media_preparation_not_retained")
+    reference = generation.read(c, PREPARATION, png_proposal)
+    intent = authority._intent(c, reference["command_id"])
+    refuse(intent is not None, "media_preparation_not_retained")
+    command, _ = intent
+    result = authority._result(c, reference["command_id"])
+    refuse(command.action == "prepare_media_revision" and len(command.targets) == 1
+           and command.targets[0].draft_id == reference["draft_id"] == draft_id
+           and command.command_id == reference["command_id"] and result is not None
+           and reference["proposal_sha256"] == png_proposal and reference["status"] == "staged"
+           and reference["publication_approved"] is False and result["status"] == "unchanged"
+           and p._canonical(result["media_preparation"]) == p._canonical(reference),
+           "media_preparation_not_retained")
+    return media.read_retained_package(c, expected_proposal_sha256=reference["proposal_sha256"],
+        expected_packet_sha256=reference["packet_sha256"], expected_predecessor=command.targets[0].as_dict(),
+        expected_subject=command.actor_subject, expected_at=utc_text(utc_datetime(command.requested_at)),
+        environment=authority.environment, original_bytes=original)
+
+
 def projection(authority, c, draft_id, *, state, version, policy, now, resolve_principal, png_proposal=None, original=False):
     matches = [d for d in state["drafts"] if isinstance(d, dict) and d.get("id") == draft_id]
     refuse(len(matches) == 1, "draft_not_found")
     draft = matches[0]
     if png_proposal is not None:
-        # Passive historical evidence has an exact retained key. It must not
-        # depend on the current mutation eligibility or a recent-list window.
-        media._sha(png_proposal)
-        refuse(generation.exists(c, PREPARATION, png_proposal), "media_preparation_not_retained")
-        reference = generation.read(c, PREPARATION, png_proposal)
-        intent = authority._intent(c, reference["command_id"])
-        refuse(intent is not None, "media_preparation_not_retained")
-        command, _ = intent
-        result = authority._result(c, reference["command_id"])
-        refuse(command.action == "prepare_media_revision" and len(command.targets) == 1
-               and command.targets[0].draft_id == reference["draft_id"] == draft_id
-               and command.command_id == reference["command_id"] and result is not None
-               and reference["proposal_sha256"] == png_proposal and reference["status"] == "staged"
-               and reference["publication_approved"] is False and result["status"] == "unchanged"
-               and p._canonical(result["media_preparation"]) == p._canonical(reference),
-               "media_preparation_not_retained")
-        return media.read_retained_png(c, expected_proposal_sha256=reference["proposal_sha256"],
-            expected_packet_sha256=reference["packet_sha256"], expected_predecessor=command.targets[0].as_dict(),
-            expected_subject=command.actor_subject, expected_at=utc_text(utc_datetime(command.requested_at)),
-            environment=authority.environment, original_bytes=original)
+        package = retained_package(authority, c, draft_id, png_proposal, original=original)
+        return package["assets"]["original.gif" if original else "preview.png"]
     view = dict(draft_id=draft_id, target=_identity(draft), status="unavailable", text=draft["text"],
         publication_approved=False, local_preview=True, parked=False, review_current=False, checks_status="not_requested",
         expected_check_completion_sha256=None, preparation=None, packet=None)

@@ -229,6 +229,14 @@ class PreviewHandler(BaseHTTPRequestHandler):
             if actor is None:
                 self.reply(401, {"error": "Local sign-in required", "code": "unauthorized"})
                 return
+            history_route = re.fullmatch(r"/drafts/([A-Za-z0-9_.:-]{1,200})/media/delivery/([a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12})", self.path)
+            if self.command == "GET" and history_route:
+                if self.headers.get("Transfer-Encoding") or self.headers.get_all("Content-Length", []) not in ([], ["0"]):
+                    self.reply(400, {"error": "Body-free read required", "code": "invalid_request"})
+                    return
+                value = self.server.authority.delivery_content(history_route[1], history_route[2])
+                self.reply(200, {**value, "operator_subject": actor.subject})
+                return
             media_route = re.fullmatch(r"/drafts/([A-Za-z0-9_.:-]{1,200})/media(?:/([a-f0-9]{64})/(preview\.png|original\.gif))?", self.path)
             if self.command == "GET" and media_route:
                 value = self.server.authority.editor_media_projection(media_route[1], self.server.operators.resolve,

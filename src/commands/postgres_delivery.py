@@ -8,9 +8,11 @@ from __future__ import annotations
 
 from datetime import timedelta
 import re
+from uuid import UUID
 
 from src.commands import hosted_fixture
 from src.commands import postgres_editor_media as editor, postgres_media as media
+from src.commands.media_journal import MediaJournalError
 from src.commands.schema import CommandError, utc_datetime, utc_text
 from src.editorial.policy import current_editorial_policy
 from src.editorial.revisions import fingerprint
@@ -394,3 +396,75 @@ def projection(authority, c, draft_id, resolve_principal, now):
             platform:{stage:outcome(c, attempt(c, value, platform, stage)) for stage in stages}
             for platform,stages in STAGES.items()}))
     return dict(scope=SCOPE, publication_approved=False, intents=result)
+
+
+def historical_content(authority, c, draft_id, intent_id, state):
+    """One immutable approved content join; no current approval or renderer gate."""
+    try:
+        return _historical_content(authority, c, draft_id, intent_id, state)
+    except (MediaJournalError, KeyError, TypeError, AttributeError, OverflowError, RecursionError):
+        raise p.ProjectionError("corrupt_delivery_content") from None
+
+
+def _historical_content(authority, c, draft_id, intent_id, state):
+    validate(c, authority.environment)
+    refuse(type(intent_id) is str and str(UUID(intent_id)) == intent_id, "invalid_delivery_reference")
+    current = [d for d in state["drafts"] if type(d) is dict and d.get("id") == draft_id]
+    refuse(len(current) == 1, "draft_not_found")
+    value = read(c, intent_id)
+    refuse(value["draft_id"] == draft_id, "delivery_draft_mismatch")
+    retained = authority._intent(c, value["command_id"])
+    result = authority._result(c, value["command_id"])
+    refuse(retained is not None and result is not None, "delivery_approval_not_retained")
+    command, _ = retained
+    refuse(command.action == "approve_media_revision" and len(command.targets) == 1
+           and command.targets[0].draft_id == draft_id and result["status"] == "applied"
+           and result["delivery"] == references(value)
+           and result["publish_intent_id"] == intent_id
+           and value["created_at"] == utc_text(utc_datetime(command.requested_at)), "delivery_approval_not_retained")
+    _, approved_state = authority.projections._read(c, "command-core-v1", str(result["state_version"]))
+    matches = [d for d in approved_state["drafts"] if type(d) is dict and d.get("id") == draft_id]
+    refuse(len(matches) == 1, "delivery_approved_draft_missing")
+    draft = matches[0]
+    binding = value["approval_binding"]
+    identity = editor._identity(draft)
+    refuse(draft["approval_binding"] == binding and draft["publish_intent_id"] == intent_id
+           and draft["event_id"] == value["event_id"] and draft["text"] == value["text"]
+           and binding["scope"] == editor.SCOPE and binding["command_id"] == command.command_id
+           and binding["publisher_subject"] == command.actor_subject
+           and binding["publish_intent_id"] == intent_id
+           and binding["resulting_state_version"] == result["state_version"]
+           and all(binding[k] == v for k, v in identity.items() if k != "draft_id")
+           and binding["media"] == draft["media_review_binding"]
+           and binding["media"]["proposal_sha256"] == value["proposal_sha256"]
+           and command.payload["expected_packet_sha256"] == binding["media"]["packet_sha256"]
+           and command.payload["expected_review_sha256"] == binding["media"]["review_sha256"]
+           and command.payload["expected_check_completion_sha256"] == binding["completion"]["completion_sha256"]
+           and command.payload["expected_policy_sha256"] == binding["policy_sha256"]
+           and command.payload["expected_renderer_profile_sha256"] == binding["renderer_profile_sha256"]
+           and result["changed_ids"] == [draft_id] and result["identities"] == [identity], "delivery_approved_content_changed")
+    _, predecessor = authority.projections._read(c, "command-core-v1", str(binding["consumed_state_version"]))
+    targets = [d for d in predecessor["drafts"] if type(d) is dict and d.get("id") == draft_id]
+    refuse(len(targets) == 1 and editor._identity(targets[0]) == command.targets[0].as_dict()
+           and p._sha(p._canonical(predecessor)) == binding["consumed_state_sha256"]
+           and binding["consumed_state_version"] + 1 == result["state_version"]
+           and result["media_approval"] == dict(scope=editor.SCOPE, parked=True, publication_approved=False,
+               check_set_id=binding["completion"]["check_set_id"], completion_sha256=binding["completion"]["completion_sha256"],
+               consumed_state_version=binding["consumed_state_version"], resulting_state_version=result["state_version"]),
+           "delivery_approved_predecessor_changed")
+    package = editor.retained_package(authority, c, draft_id, value["proposal_sha256"])
+    png, alt = package["assets"]["preview.png"], package["assets"]["alt.txt"]
+    refuse(package["receipt"] == value["package"] and len(png) == value["png_byte_count"]
+           and p._sha(png) == value["png_sha256"] and p._sha(alt) == value["alt_sha256"]
+           and draft["media_attachment"] == package["capture"]["proposal"]["proposed_draft"]["media_attachment"], "delivery_media_changed")
+    packet = package["capture"]["proposal"]["packet"]
+    detail = dict(schema_version=1, draft_id=draft_id, target=editor._identity(current[0]),
+        scope=SCOPE, publication_approved=False, intent_id=intent_id, command_id=command.command_id,
+        approved_at=result["completed_at"], approved_target=identity, text=value["text"],
+        proposal_sha256=value["proposal_sha256"], packet_sha256=binding["media"]["packet_sha256"],
+        preparation_packet_sha256=packet["packet_sha256"], synthetic=packet["synthetic"],
+        media=dict(mime_type="image/png", png_sha256=value["png_sha256"], byte_count=len(png),
+            width=packet["media"]["width"], height=packet["media"]["height"],
+            alt_text=alt.decode("utf-8"), alt_text_sha256=value["alt_sha256"]))
+    refuse(len(p._canonical(detail)) <= 8 * 1024 * 1024, "delivery_content_too_large")
+    return detail
