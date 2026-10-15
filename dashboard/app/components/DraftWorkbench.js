@@ -68,7 +68,9 @@ export function DraftWorkbench({
         <section aria-label="Local unchecked candidates" className="card" style={{ marginBottom: 16 }}>
           <h3>Retained candidates</h3>
           <p>Invented local evidence. Required checks run separately. Cost is unknown; nothing is published.</p>
-          {localCandidates.map((candidate) => (
+          {localCandidates.map((candidate) => {
+            const savedCandidate = candidate.status === "admitted" && !!candidate.saved_draft_id
+            return (
             <article key={candidate.admission_input_id} style={{ padding: "12px 0", overflowWrap: "anywhere" }}>
               <strong>{candidate.source?.type}: {candidate.source?.event_id}</strong>
               <p>{candidate.source?.where} · {candidate.source?.when}</p>
@@ -77,13 +79,16 @@ export function DraftWorkbench({
               <details><summary>Retained source facts</summary><ul>{(candidate.source?.facts || []).map((fact, i) => <li key={i}>{fact.label.replaceAll("_", " ")}: {fact.value} {fact.unit}</li>)}</ul></details>
               {candidate.last_observed_at && <p className="text-muted">Last check response: {candidate.last_observed_at}</p>}
               {candidate.checks_available_at && <p role="status">The writer result is retained. Checks can begin after {new Date(candidate.checks_available_at).toLocaleTimeString()}. Refresh progress then.</p>}
-              <p role="status">{({ not_checked: "Not checked", checks_pending: "Checks pending", checks_completed: "Required checks completed", checks_recorded: "Checks recorded; source validation required", checks_blocked: "Checks blocked", stale: "Candidate changed; stage a new attempt", admitted: "Saved to local drafts" })[candidate.status] || "Unavailable"}{candidate.reason ? ` — ${candidate.reason}` : ""}</p>
+              <p role="status">{({ not_checked: "Not checked", checks_pending: "Checks pending", checks_completed: "Required checks completed", checks_recorded: "Checks recorded; source validation required", checks_blocked: "Checks blocked", stale: "Candidate changed; stage a new attempt", admitted: "Saved to local drafts" })[candidate.status] || "Unavailable"}{candidate.reason && !savedCandidate ? ` — ${candidate.reason}` : ""}</p>
+              {savedCandidate && <p className="text-muted">These candidate checks are historical. Open the saved draft for its current review status.</p>}
               <ul>{Object.entries(candidate.stages || {}).map(([stage, disposition]) => <li key={stage}>{stage.replaceAll("_", " ")}: {disposition}</li>)}</ul>
+              {savedCandidate && candidate.reason && <details><summary>Earlier candidate validation</summary><p>{candidate.reason}</p></details>}
               {candidate.saved_draft_id ? <button type="button" className="btn btn-ghost" disabled={!!pendingCommand || !!editingId} onClick={() => setSelectedDraftId(candidate.saved_draft_id)}>Open saved draft</button>
                 : candidate.status === "not_checked" ? <button type="button" className="btn btn-blue" style={{ minHeight: 44 }} disabled={localRole === "viewer" || !!pendingCommand || !!editingId || !!candidate.checks_available_at} onClick={() => candidateAct(candidate, "request_candidate_checks")}>Check candidate</button>
                 : (candidate.required_checks_completed || candidate.status === "checks_recorded") ? <button type="button" className="btn btn-blue" style={{ minHeight: 44 }} disabled={localRole === "viewer" || !!pendingCommand || !!editingId} onClick={() => candidateAct(candidate, "admit_checked_candidate")}>{candidate.status === "checks_recorded" ? "Validate and add to local drafts" : "Add to local drafts"}</button> : null}
             </article>
-          ))}
+            )
+          })}
           <button type="button" className="btn btn-ghost" style={{ minHeight: 44 }} onClick={refreshCandidates}>Refresh check progress</button>
           {localCandidates.some((candidate) => candidate.admission_input_id === draftFeedback?.draftId) && <p role="status">{draftFeedback.text}</p>}
           {pendingCommand?.command?.targets?.length === 0 && <div>
