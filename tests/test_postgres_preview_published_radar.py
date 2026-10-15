@@ -157,6 +157,7 @@ def test_published_radar_source_to_park_restore(
             delivery=str(delivery_path),
             original_base64=base64.b64encode(case["original"]).decode(),
             cost_trace=str(tmp_path / "cost-trace.json"),
+            platform_trace=str(tmp_path / "platform-review.json"),
         )
         path = tmp_path / "http.json"
         path.write_text(json.dumps(config))
@@ -175,6 +176,7 @@ def test_published_radar_source_to_park_restore(
                 timeout=240,
             )
             assert result.returncode == 0, result.stdout + result.stderr
+            record_property("platform_review_trace", config["platform_trace"])
             assert Path(config["requests"]).read_text().splitlines() == [
                 "safety",
                 "fact_check",

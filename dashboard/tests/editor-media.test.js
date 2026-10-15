@@ -3,7 +3,7 @@ import assert from "node:assert/strict"
 import React from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 import { EditorMedia, EditorMediaPanel } from "../app/components/EditorMedia.js"
-import { jointConfirmations, mediaCommand, sameMediaTarget, retainedMediaBlob } from "../lib/editor-media.js"
+import { jointConfirmations, confirmationsFor, mediaCommand, sameMediaTarget, retainedMediaBlob } from "../lib/editor-media.js"
 import { GET } from "../app/api/editor-media/route.js"
 import { recoveryKey, saveCommandReference, readCommandReference, clearCommandReference, withCommandReference, commandRequestSHA, abandonmentBody } from "../lib/local-command-recovery.js"
 import { createHash } from "node:crypto"
@@ -48,6 +48,27 @@ function view() {
     removal:{ expected_proposal_sha256:sha, requested_at:"2026-10-11T12:00:00Z", expires_at:"2026-10-11T12:05:00Z" } }
 }
 const reviewed = { decision:"accept", confirmations:Object.fromEntries(Object.keys(jointConfirmations).map(k=>[k,true])), reason:"Checked the invented source." }
+
+test("new description review displays exact wire separately and requires its sixth confirmation", () => {
+  const current=view()
+  current.platform_description={ record:{description_sha256:"b".repeat(64)}, wire_text:current.packet.media.alt_text+"\n", status:"platform_api_unqualified", qualification:"unqualified" }
+  const render=confirmations=>renderToStaticMarkup(React.createElement(EditorMediaPanel,{
+    view:current,role:"editor",imageUrl:"blob:invented",confirmations,reason:"Checked exact bytes.",setConfirmations(){},setReason(){},submit(){},refresh(){},
+  }))
+  const html=render(reviewed.confirmations)
+  assert.equal((html.match(/type="checkbox"/g)||[]).length,6)
+  assert.match(html,/Exact platform description/)
+  assert.match(html,/Read the full image description/)
+  assert.match(html,/Live posting is not qualified for this platform setup/)
+  assert.match(html,/disabled=""[^>]*>Attach reviewed graphic/)
+  const confirmed={...reviewed.confirmations,platform_description_faithful:true}
+  assert.doesNotMatch(render(confirmed),/disabled=""[^>]*>Attach reviewed graphic/)
+  const request=mediaCommand(current,"attach_media_revision",{...reviewed,confirmations:confirmed})
+  assert.equal(request.payload.review.expected_platform_description_sha256,"b".repeat(64))
+  assert.equal(Object.keys(confirmationsFor({...current.packet,schema_version:2},current.platform_description)).length,9)
+  assert.equal("platform_profile" in request.payload.review,false)
+  assert.equal("wire_text" in request.payload.review,false)
+})
 
 test("each media action carries exact references, no model verdict or browser role", () => {
   const current = view()

@@ -32,81 +32,7 @@ from tests.native_profile_helpers import native_dependencies as native_dependenc
 from tests.test_postgres_editor_media import offline_connections as offline_connections
 
 
-@pytest.fixture
-def radar_case(store, core, monkeypatch, tmp_path, native_dependencies):
-    from src.voice import safety
-
-    monkeypatch.setenv("THEHEAT_CRITIC_ENABLED", "1")
-    monkeypatch.setenv("GEMINI_API_KEY", "invented-offline-key")
-    monkeypatch.setattr(safety, "GEMINI_API_KEY", "invented-offline-key")
-    core[2].initialize_synchronous_checks(now=sourced.NOW)
-    bundle = f.bundle(monkeypatch, at=sourced.NOW)
-    value = dict(
-        schema_version=1,
-        source_key="nws_alerts",
-        source_revision="invented-tornado-alert-one",
-        captured_at=utc_text(sourced.NOW),
-        useful_until="2026-09-29T12:30:00Z",
-        urgent=True,
-        bundle=bundle.to_dict(),
-        save=dict(
-            legacy_type=bundle.signal_kind,
-            event_id=bundle.event_id,
-            score=None,
-            city="",
-            tweet_date="",
-            cooldown_exempt=False,
-            review_context=None,
-            evaluator_metadata=None,
-        ),
-    )
-    refs = store.retain_generation_input(value)
-    reserve = store.retain_generation_reservation(
-        sourced.allowance_document(
-            refs["brief_id"],
-            schema_version=2,
-            execution_mode="synchronous",
-            samples=1,
-            max_attempts=1,
-            read_budget_seconds=180,
-        )
-    )
-    config = dict(
-        schema_version=2,
-        current_inputs=[refs["brief_id"]],
-        reservations=dict(batch=None, synchronous=reserve),
-    )
-    store.configure_sourced_generation(lambda: config)
-    case = dict(
-        store=store,
-        refs=refs,
-        value=value,
-        config=config,
-        bundle=bundle,
-        text="The NWS has issued a tornado warning for the invented test area.",
-    )
-    assert sourced.request(case)["status"] == "applied"
-    sent, factory = sync.transport(case)
-    assert sourced.run(case, "write", factory)["outcome"] == "response_retained"
-    sync.checked(case, monkeypatch)
-    assert len(sent) == 1
-    core[2].initialize_media_staging()
-    core[2].initialize_media_commands()
-    core[2].initialize_revision_checks(now=editor.AT)
-    store.configure_editor_media(**native_dependencies, scratch=tmp_path / "native")
-    doc, raw, references, receipt = f.input_document(at=sourced.NOW)
-    retained = published.retain(store, doc, raw, references, receipt)
-    selection = dict(schema_version=1, selections={refs["brief_id"]: retained["input_sha256"]})
-    published.configure(store, lambda: selection)
-    case.update(
-        radar_input=doc,
-        original=raw,
-        reference_bytes=references,
-        receipt_bytes=receipt,
-        published_config=selection,
-        provider_requests=sent,
-    )
-    return case
+from tests.radar_editor_helpers import radar_case as radar_case
 
 
 def attach(case):
@@ -327,6 +253,7 @@ def test_published_unknown_delivery_ack_never_resends(radar_case, core, tmp_path
     core[2].initialize_delivery(now=editor.AT)
     with fixture_server(png, case["text"], mode="drop") as (config, trace, accepted):
         delivery.configure(case["store"], tmp_path, config)
+        delivery.bind_platform(case, monkeypatch)
         _, parked = delivery.park(case)
         assert parked["status"] == "applied"
         for key in ("GEMINI_API_KEY", "ANTHROPIC_API_KEY"):
@@ -480,28 +407,28 @@ def test_outbox_tail_expiry_rolls_back_park_result_and_outbox(
 
     case = radar_case
     prepared, _ = attach(case)
-    checked = editor.complete_revision(case, monkeypatch)
-    identity = checked["revision_checks"]["check_set_id"]
     png = editor.view(case, png=prepared["preparation"]["proposal_sha256"])
     core[2].initialize_delivery(now=editor.AT)
-    latest_lease = admin(core[3],
-        "SELECT expires_at FROM theheat_checks.draft_leases WHERE check_set_id=%s ORDER BY fence DESC LIMIT 1",
-        (identity,))[0][0]
-    packet = case["store"].check_execution("read", {"check_set_id": identity}, now=utc_text(editor.AT))["packet"]
-    changed_clock = (utc_datetime(packet["useful_until"]) if drift == "frame_expired" else
-        utc_datetime(latest_lease) if drift == "lease_expired" else editor.AT - timedelta(seconds=1))
-    assert editor.AT < utc_datetime(latest_lease) < utc_datetime(packet["useful_until"])
-    current = editor.view(case)
-    draft = next(d for d in case["store"].read()[1]["drafts"] if d["id"] == case["draft_id"])
-    command = Command.from_request(dict(
-        command_id=str(uuid4()), action="approve_media_revision", requested_at=utc_text(editor.AT),
-        expires_at=utc_text(editor.AT + timedelta(minutes=20)), targets=[editor._identity(draft)],
-        payload=dict(**{key: current[key] for key in ("expected_policy_sha256", "expected_renderer_profile_sha256",
-            "expected_review_sha256", "expected_check_completion_sha256")},
-            expected_packet_sha256=current["packet"]["packet_sha256"], reason="Invented tail rollback case.")),
-        candidate.PUBLISHER, environment="local", now=editor.AT)
     with fixture_server(png, case["text"]) as (config, trace, accepted):
         delivery.configure(case["store"], tmp_path, config)
+        delivery.bind_platform(case, monkeypatch)
+        identity = editor.view(case)["check_set_id"]
+        latest_lease = admin(core[3],
+            "SELECT expires_at FROM theheat_checks.draft_leases WHERE check_set_id=%s ORDER BY fence DESC LIMIT 1",
+            (identity,))[0][0]
+        packet = case["store"].check_execution("read", {"check_set_id": identity}, now=utc_text(editor.AT))["packet"]
+        changed_clock = (utc_datetime(packet["useful_until"]) if drift == "frame_expired" else
+            utc_datetime(latest_lease) if drift == "lease_expired" else editor.AT - timedelta(seconds=1))
+        assert editor.AT < utc_datetime(latest_lease) < utc_datetime(packet["useful_until"])
+        current = editor.view(case)
+        draft = next(d for d in case["store"].read()[1]["drafts"] if d["id"] == case["draft_id"])
+        command = Command.from_request(dict(
+            command_id=str(uuid4()), action="approve_media_revision", requested_at=utc_text(editor.AT),
+            expires_at=utc_text(editor.AT + timedelta(minutes=20)), targets=[editor._identity(draft)],
+            payload=dict(**{key: current[key] for key in ("expected_policy_sha256", "expected_renderer_profile_sha256",
+                "expected_review_sha256", "expected_check_completion_sha256")},
+                expected_packet_sha256=current["packet"]["packet_sha256"], reason="Invented tail rollback case.")),
+            candidate.PUBLISHER, environment="local", now=editor.AT)
         case["store"].accept(command, candidate.PUBLISHER, now=editor.AT)
         before = editor.all_application_rows(core[3])
         state = case["store"].read()

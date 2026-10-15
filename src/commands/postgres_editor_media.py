@@ -24,6 +24,7 @@ from src.editorial.revisions import draft_identity, fingerprint, revoke_approval
 from src.media.attachment import build_media_attachment_proposal, build_media_removal_proposal
 from src.media.joint_review import joint_media_review_status
 from src.media.review_packet import build_media_review_packet
+from src.media import platform_description as descriptions
 from src.storage import postgres_projection as p
 
 PREPARATION = "editor-media-preparation-v1"
@@ -169,9 +170,34 @@ def reviewed(authority, c, draft, value, policy, resolve_principal):
            and record["packet"]["packet_sha256"] == binding["packet_sha256"], "joint_media_review_changed")
     reviewer = resolve(resolve_principal, record["reviewer"]["subject"])
     stored = package["capture"]["inputs"]
+    platform_inputs = {}
+    if record.get("schema_version") == 3:
+        from src.commands.postgres_delivery import description_profiles
+        retained_description = record["platform_description"]
+        refuse(binding.get("schema_version") == 2 and binding.get("platform_description_sha256") == retained_description["description_sha256"],
+               "platform_description_changed")
+        checked_draft = deepcopy(draft)
+        # Parking advances the decision counter once without changing content.
+        # Only the exact retained approval transition may preserve this review.
+        reviewed_revision = retained_description["target"]["decision_revision"]
+        if draft["decision_revision"] != reviewed_revision:
+            approval = draft.get("approval_binding", {})
+            refuse(approval.get("schema_version") == 2 and approval.get("media") == binding
+                and draft["decision_revision"] == reviewed_revision + 1
+                and approval.get("decision_revision") == draft["decision_revision"], "joint_media_review_obsolete")
+            approval_intent = authority._intent(c, approval["command_id"])
+            approval_result = authority._result(c, approval["command_id"])
+            refuse(approval_intent is not None and approval_result is not None
+                and approval_intent[0].action == "approve_media_revision"
+                and approval_intent[0].targets[0].decision_revision == reviewed_revision
+                and approval_result["status"] == "applied"
+                and approval_result["publish_intent_id"] == approval["publish_intent_id"], "joint_media_review_obsolete")
+            checked_draft["decision_revision"] = reviewed_revision
+        platform_inputs["platform_description"] = media_commands.description_for(
+            checked_draft, package, policy, description_profiles(authority))
     status = joint_media_review_status(record, draft, expected_review_sha256=binding["review_sha256"],
         current_principal=reviewer, expected_draft_identity=draft_identity(draft), editorial_policy=policy,
-        graphic_spec=stored["graphic_spec"], renderer_manifest=stored["renderer_manifest"], png_bytes=package["assets"]["preview.png"])
+        graphic_spec=stored["graphic_spec"], renderer_manifest=stored["renderer_manifest"], png_bytes=package["assets"]["preview.png"], **platform_inputs)
     refuse(status["current"] is True and status["accepted"] is True, "joint_media_review_obsolete")
     return package
 
@@ -223,7 +249,7 @@ def boundary(authority, c, state, version, command, actor, policy, now, resolve_
     proposed = deepcopy(draft)
     revoke_approval(proposed)
     intent_id = str(uuid5(NAMESPACE_URL, "theheat:local-joint-media:" + command.command_id))
-    proposed["approval_binding"] = dict(schema_version=1, scope=SCOPE, **draft_identity(proposed),
+    proposed["approval_binding"] = dict(schema_version=2 if binding.get("schema_version") == 2 else 1, scope=SCOPE, **draft_identity(proposed),
         decision_revision=proposed["decision_revision"], command_id=command.command_id,
         publish_intent_id=intent_id, policy_sha256=fingerprint(policy), renderer_profile_sha256=value["profile_sha256"],
         media=deepcopy(binding), completion=completion, consumed_state_version=version,
@@ -410,6 +436,20 @@ def projection(authority, c, draft_id, *, state, version, policy, now, resolve_p
                     packet = capture["proposal"]["packet"]
                     mode = "prepared"
                 view.update(status=mode, preparation=reference, packet=packet)
+                from src.commands.postgres_delivery import description_profiles
+                prospective = deepcopy(draft) if mode == "attached" else deepcopy(package["capture"]["proposal"]["proposed_draft"])
+                if mode == "attached":
+                    revoke_approval(prospective)
+                description = media_commands.description_for(prospective, package, policy, description_profiles(authority))
+                fit = "fits_local_limits"
+                try:
+                    descriptions.preflight(description, raw_alt=package["assets"]["alt.txt"], png=package["assets"]["preview.png"],
+                        expected_profiles=description_profiles(authority))
+                except descriptions.DescriptionError as exc:
+                    fit = exc.code
+                view["platform_description"] = dict(record=description,
+                    wire_text=package["assets"]["alt.txt"].decode("utf-8"), status=fit,
+                    qualification="offline_fixture_only" if description["profiles"]["profile"] == descriptions.FIXTURE_PROFILE else "unqualified")
                 break
             except (CommandError, ValueError):
                 continue

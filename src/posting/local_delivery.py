@@ -50,12 +50,15 @@ def strict_json(raw):
 
 
 def configuration(value):
-    require(type(value) is dict and set(value) == {"schema_version", "scope", "invented", "instance_id", "origin", "routes_version", "actor"},
+    extension = {"platform_profile"} if type(value) is dict and value.get("schema_version") == 2 else set()
+    require(type(value) is dict and set(value) == extension | {"schema_version", "scope", "invented", "instance_id", "origin", "routes_version", "actor"},
             "delivery_configuration_shape")
-    require(type(value["schema_version"]) is int and value["schema_version"] == 1
+    require(type(value["schema_version"]) is int and value["schema_version"] in (1, 2)
             and value["scope"] == SCOPE and value["invented"] is True
             and type(value["routes_version"]) is int and value["routes_version"] == 1,
             "delivery_configuration_scope")
+    require(not extension or value["platform_profile"] == "credentialless-loopback-v1",
+            "delivery_configuration_profile")
     require(type(value["instance_id"]) is str and str(UUID(value["instance_id"])) == value["instance_id"],
             "delivery_instance_required")
     require(type(value["origin"]) is str and re.fullmatch(r"http://127\.0\.0\.1:[1-9][0-9]{0,4}", value["origin"]),

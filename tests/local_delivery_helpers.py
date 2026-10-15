@@ -141,7 +141,7 @@ def fixture_server(png, text, *, mode="normal", after_accept=None):
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
-    config = dict(schema_version=1, scope=SCOPE, invented=True, instance_id=instance,
+    config = dict(schema_version=2, platform_profile="credentialless-loopback-v1", scope=SCOPE, invented=True, instance_id=instance,
                   origin="http://127.0.0.1:" + str(server.server_port), routes_version=1, actor=actor)
     try:
         yield config, trace, accepted
@@ -153,6 +153,14 @@ def fixture_server(png, text, *, mode="normal", after_accept=None):
         retained.cleanup()
 
 
-def value(config, png, text="An invented region recorded extreme heat.", alt="Invented graphic."):
-    return dict(fixture=config, configuration_sha256="c" * 64, text=text, png_sha256=digest(png),
+def value(config, png, text="An invented region recorded extreme heat.", alt="Invented graphic.\n"):
+    # Low-level wire fixture only: no claim of source or human qualification.
+    from src.media.platform_description import build, profiles
+    import struct
+    width, height = struct.unpack(">II", png[16:24])
+    packet = dict(packet_sha256="a" * 64, draft_binding=dict(draft_id="invented-wire-only", policy_sha256="b" * 64),
+        graphic_binding=dict(scope="invented-serialization-only"), media=dict(alt_text=alt[:-1],
+            mime_type="image/png", png_sha256=digest(png), byte_count=len(png), width=width, height=height))
+    description = build(dict(decision_revision=1), packet, "d" * 64, alt.encode(), png, profiles(config))
+    return dict(schema_version=2, platform_description=description, fixture=config, configuration_sha256="c" * 64, text=text, png_sha256=digest(png),
                 png_byte_count=len(png), alt_sha256=digest(alt.encode()), created_at="2026-06-08T12:00:00Z")

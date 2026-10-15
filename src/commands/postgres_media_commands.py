@@ -15,6 +15,8 @@ from src.commands.schema import Command, CommandError, Principal, authorize, utc
 from src.editorial.revisions import draft_identity, fingerprint, revoke_approval
 from src.media.attachment import build_media_attachment_proposal, build_media_removal_proposal
 from src.media.joint_review import MAX_REVIEW_BYTES, record_joint_media_review
+from src.media import platform_description as descriptions
+from src.media.review_packet import build_media_review_packet
 from src.storage import postgres_projection as p
 
 SCHEMA = "theheat_media_commands"
@@ -71,7 +73,7 @@ class MediaTransition:
     review: dict | None = None
 
 
-def prepare(c, state, command, actor, *, now, editorial_policy, environment):
+def prepare(c, state, command, actor, *, now, editorial_policy, environment, platform_profiles=None):
     """Read verified storage separately from deterministic command validation."""
     validate(c, environment)
     if actor.subject != command.actor_subject:
@@ -87,31 +89,43 @@ def prepare(c, state, command, actor, *, now, editorial_policy, environment):
     if command.action in {"attach_media_revision", "review_media_revision"}:
         package = _package(c, command.payload["proposal_sha256"], environment)
     try:
-        return _prepare(state, command, actor, now, editorial_policy, package)
+        return _prepare(state, command, actor, now, editorial_policy, package, platform_profiles)
     except CommandError:
         raise
     except (ValueError, TypeError, KeyError, AttributeError, OverflowError, RecursionError):
         raise CommandError("invalid_media_revision", "The current media revision cannot be validated") from None
 
 
-def _prepare(state, command, actor, now, policy, package):
+def description_for(draft, package, policy, platform_profiles):
+    inputs, assets = package["capture"]["inputs"], package["assets"]
+    packet = build_media_review_packet(draft, expected_draft_identity=draft_identity(draft), editorial_policy=policy,
+        graphic_spec=inputs["graphic_spec"], renderer_manifest=inputs["renderer_manifest"], png_bytes=assets["preview.png"])
+    return descriptions.build(draft, packet, package["capture"]["proposal"]["proposal_sha256"],
+        assets["alt.txt"], assets["preview.png"], platform_profiles)
+
+
+def _prepare(state, command, actor, now, policy, package, platform_profiles):
     _target_drafts(state, command)
     target = command.targets[0]
     payload = command.payload
+    extended = command.action in {"attach_media_revision", "review_media_revision"} and "expected_platform_description_sha256" in payload["review"]
+    platform_inputs = {}
     review = None
     if command.action == "review_media_revision":
         original = _target_drafts(state, command)[0]
         if "media_attachment" not in original:
             raise CommandError("media_attachment_required", "Attach a graphic before reviewing it again")
         inputs, assets = package["capture"]["inputs"], package["assets"]
-        review = record_joint_media_review(original, payload=payload["review"], principal=actor,
-            reviewed_at=command.requested_at, expected_packet_sha256=payload["expected_packet_sha256"],
-            expected_draft_identity=draft_identity(original), editorial_policy=policy,
-            graphic_spec=inputs["graphic_spec"], renderer_manifest=inputs["renderer_manifest"], png_bytes=assets["preview.png"])
-        if review["decision"] != "accept":
-            raise CommandError("media_acceptance_required", "The exact graphic requires joint acceptance")
         proposed = deepcopy(original)
         revoke_approval(proposed)
+        if extended:
+            platform_inputs["platform_description"] = description_for(proposed, package, policy, platform_profiles)
+        review = record_joint_media_review(proposed, payload=payload["review"], principal=actor,
+            reviewed_at=command.requested_at, expected_packet_sha256=payload["expected_packet_sha256"],
+            expected_draft_identity=draft_identity(original), editorial_policy=policy,
+            graphic_spec=inputs["graphic_spec"], renderer_manifest=inputs["renderer_manifest"], png_bytes=assets["preview.png"], **platform_inputs)
+        if review["decision"] != "accept":
+            raise CommandError("media_acceptance_required", "The exact graphic requires joint acceptance")
         proposed.pop("review_binding", None)
         two = proposed.get("review_context", {}).get("two_bot")
         if isinstance(two, dict):
@@ -119,6 +133,8 @@ def _prepare(state, command, actor, now, policy, package):
         proposed.update(status="pending", updated_at=command.requested_at)
         binding = dict(schema_version=1, proposal_sha256=payload["proposal_sha256"], packet_sha256=review["packet"]["packet_sha256"],
                        review_sha256=review["review_sha256"], command_id=command.command_id)
+        if extended:
+            binding.update(schema_version=2, platform_description_sha256=review["platform_description"]["description_sha256"])
         proposed["media_review_binding"] = binding
         updated = deepcopy(state)
         updated["drafts"] = [proposed if isinstance(d, dict) and d.get("id") == target.draft_id else d for d in updated["drafts"]]
@@ -144,12 +160,14 @@ def _prepare(state, command, actor, now, policy, package):
             raise CommandError("media_proposal_changed", "The current graphic proposal differs from the staged package")
         if proposal["changed"] is not True:
             raise CommandError("media_already_attached", "This exact graphic is already attached")
+        if extended:
+            platform_inputs["platform_description"] = description_for(proposal["proposed_draft"], package, policy, platform_profiles)
         review = record_joint_media_review(proposal["proposed_draft"], payload=payload["review"],
             principal=actor, reviewed_at=command.requested_at,
             expected_packet_sha256=payload["expected_packet_sha256"],
             expected_draft_identity=draft_identity(proposal["proposed_draft"]), editorial_policy=policy,
             graphic_spec=inputs["graphic_spec"], renderer_manifest=inputs["renderer_manifest"],
-            png_bytes=assets["preview.png"])
+            png_bytes=assets["preview.png"], **platform_inputs)
         if review["decision"] != "accept":
             raise CommandError("media_acceptance_required", "The exact graphic requires joint acceptance")
     else:
@@ -165,6 +183,8 @@ def _prepare(state, command, actor, now, policy, package):
         binding = dict(schema_version=1, proposal_sha256=proposal["proposal_sha256"],
             packet_sha256=review["packet"]["packet_sha256"], review_sha256=review["review_sha256"],
             command_id=command.command_id)
+        if extended:
+            binding.update(schema_version=2, platform_description_sha256=review["platform_description"]["description_sha256"])
         proposed["media_review_binding"] = binding
         references.update(packet_sha256=binding["packet_sha256"], review_sha256=binding["review_sha256"],
                           synthetic=review["synthetic"])
@@ -177,6 +197,10 @@ def _prepare(state, command, actor, now, policy, package):
 def retain(c, command, transition):
     if transition.review is None:
         return
+    if transition.review.get("schema_version") == 3:
+        # The wire text is the already immutable raw alt artifact. Only bounded
+        # metadata is added; none of the original package files is rewritten.
+        media._artifact(c, p._canonical(transition.review["platform_description"]))
     raw = p._canonical(transition.review)
     p._require(0 < len(raw) <= MAX_REVIEW_BYTES, "media_review_byte_bound")
     artifact_sha = media._artifact(c, raw)
@@ -216,7 +240,11 @@ def _read(c, command, result, environment):
     _, after = p.PostgresProjectionRepository._read(c, "command-core-v1", str(version))
     policy = result["media"]["editorial_policy"] if command.action == "review_media_revision" else package["capture"]["inputs"]["editorial_policy"]
     transition = prepare(c, before, command, actor, now=utc_datetime(result["completed_at"]),
-        editorial_policy=policy, environment=environment)
+        editorial_policy=policy, environment=environment,
+        platform_profiles=record.get("platform_description", {}).get("profiles"))
+    if record.get("schema_version") == 3:
+        expected = p._canonical(record["platform_description"])
+        p._require(media._raw(c, p._sha(expected), MAX_REVIEW_BYTES) == expected, "changed_platform_description_artifact")
     p._require(p._canonical(transition.review) == raw
                and p._canonical(transition.reduction.state) == p._canonical(after)
                and p._canonical(transition.references) == p._canonical(result["media"])

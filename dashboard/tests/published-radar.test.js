@@ -51,6 +51,7 @@ test("actual published radar HTTP/component → conversion → joint attestation
     return result
   }
   const costSnapshots=[]
+  const platformEvidence={scope:"invented-actual-API-fixture"}
   async function costs(label,count,expected=null) {
     const response=await request("/api/dashboard",null,"viewer")
     assert.equal(response.status,200,JSON.stringify(response.body))
@@ -83,7 +84,13 @@ test("actual published radar HTTP/component → conversion → joint attestation
     const React=await import("react"),{renderToStaticMarkup}=await import("react-dom/server")
     const {EditorMediaPanel}=await import("../app/components/EditorMedia.js")
     const markup=renderToStaticMarkup(React.createElement(EditorMediaPanel,{view:current,role:"editor",busy:false,imageUrl:"blob:invented-retained-image",confirmations:{},reason:"",setConfirmations(){},setReason(){},submit(){},refresh(){}}))
-    assert.equal((markup.match(/type="checkbox"/g)||[]).length,8)
+    assert.equal((markup.match(/type="checkbox"/g)||[]).length,9)
+    assert.ok(markup.includes("Exact platform description"))
+    assert.ok(markup.includes("Read the full image description"))
+    assert.ok(current.platform_description.wire_text.endsWith("\n"))
+    assert.equal(current.platform_description.wire_text,current.packet.media.alt_text+"\n")
+    assert.equal(current.platform_description.status,"fits_local_limits")
+    platformEvidence.prepared=structuredClone(current)
     assert.ok(markup.includes("not the full warning footprint"))
     assert.ok(markup.includes("Inspect the unchanged original at full size"))
     assert.ok(markup.includes("Invented radar test image"))
@@ -91,6 +98,7 @@ test("actual published radar HTTP/component → conversion → joint attestation
     const pngPath=mediaPath+`&proposal=${current.preparation.proposal_sha256}`
     const png=await request(pngPath)
     assert.equal(png.status,200);assert.ok(png.body.length>1000)
+    platformEvidence.png_base64=Buffer.from(png.body).toString("base64")
     const originalPath=pngPath+"&original=1"
     const original=await request(originalPath)
     assert.equal(original.status,200)
@@ -99,9 +107,12 @@ test("actual published radar HTTP/component → conversion → joint attestation
     assert.equal((await request(originalPath+"&original=1")).status,400)
     assert.equal((await request(`/api/editor-media?draftId=draft-1&proposal=${current.preparation.proposal_sha256}`)).status,409)
     assert.equal((await request(mediaPath+"&proposal="+"f".repeat(64))).status,409)
-    await submit(mediaCommand(current,"attach_media_revision",{decision:"accept",confirmations:Object.fromEntries(Object.keys(confirmationsFor(current.packet)).map(k=>[k,true])),reason:"Reviewed actual invented source, PNG and alt together."},new Date(config.at)))
+    const attachment=mediaCommand(current,"attach_media_revision",{decision:"accept",confirmations:Object.fromEntries(Object.keys(confirmationsFor(current.packet,current.platform_description)).map(k=>[k,true])),reason:"Reviewed actual invented source, PNG and alt together."},new Date(config.at))
+    platformEvidence.attachment=structuredClone(attachment)
+    await submit(attachment)
     current=(await request(mediaPath)).body
     assert.equal(current.review_current,true)
+    platformEvidence.attached=structuredClone(current)
     const checks=mediaCommand(current,"request_revision_checks",null,new Date(config.at))
     await submit(checks)
     assert.equal((await request(mediaPath)).body.checks_status,"pending")
@@ -159,6 +170,7 @@ test("actual published radar HTTP/component → conversion → joint attestation
     clearCommandReference(storage,"same-operator")
     assert.equal(readCommandReference(storage,"same-operator"),null)
     writeFileSync(config.cost_trace,JSON.stringify(costSnapshots))
+    writeFileSync(config.platform_trace,JSON.stringify(platformEvidence))
   } finally {
     await new Promise(resolve=>server.close(resolve));globalThis.fetch=actualFetch
     for(const key of Object.keys(process.env))if(!Object.hasOwn(prior,key))delete process.env[key]
@@ -172,4 +184,5 @@ test("published review requires eight explicit confirmations without changing ge
   assert.equal(Object.keys(jointConfirmations).length,5)
   assert.equal(Object.keys(confirmationsFor({schema_version:1})).length,5)
   assert.equal(Object.keys(confirmationsFor({schema_version:2})).length,8)
+  assert.equal(Object.keys(confirmationsFor({schema_version:2},{record:{}})).length,9)
 })

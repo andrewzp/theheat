@@ -11,9 +11,11 @@ import pytest
 
 from src.commands import postgres_delivery as delivery, postgres_media as media, preview_ingress
 from src.commands.schema import CommandError
+from src.media.published_radar import EXTRA_CONFIRMATIONS
 from tests.test_postgres_preview_command_ingress import clean_environment
 from src.storage import postgres_projection as p
 from tests import test_postgres_delivery as existing, test_postgres_editor_media as editor
+from tests.radar_editor_helpers import radar_case as radar_case
 from tests.test_postgres_delivery import (
     admitted as admitted, offline_connections as offline_connections, cluster as cluster,
     database as database, core as core, make_authority as make_authority,
@@ -28,7 +30,7 @@ ROOT = Path(__file__).resolve().parents[1]
 def approved(case, core, tmp_path, monkeypatch, *, rereview=False):
     prepared, png = editor.prepare_and_attach(case)
     if rereview:
-        changed = case["text"].replace("an invented region", "this invented region")
+        changed = case["text"].replace("the invented test area", "this invented test area")
         assert changed != case["text"]
         assert editor.action(case, "edit_revision", {"text":changed})[1]["status"] == "applied"
         case["text"] = changed
@@ -36,12 +38,12 @@ def approved(case, core, tmp_path, monkeypatch, *, rereview=False):
         assert editor.action(case, "review_media_revision", dict(
             proposal_sha256=prepared["preparation"]["proposal_sha256"],
             expected_policy_sha256=current["expected_policy_sha256"], expected_packet_sha256=current["packet"]["packet_sha256"],
-            review=dict(decision="accept", confirmations={k:True for k in editor.CONFIRMATIONS}, reason="Invented changed text reviewed with original PNG."),
+            review=dict(decision="accept", confirmations={k:True for k in editor.CONFIRMATIONS | EXTRA_CONFIRMATIONS}, reason="Invented changed text reviewed with original PNG."),
         ))[1]["status"] == "applied"
-    editor.complete_revision(case, monkeypatch)
     core[2].initialize_delivery(now=editor.AT)
     with existing.fixture_server(png, case["text"]) as (config, trace, _):
         existing.configure(case["store"], tmp_path, config)
+        existing.bind_platform(case, monkeypatch)
         command, result = existing.park(case)
         assert result["status"] == "applied", result
         yield prepared, png, command, result["delivery"]["intent_id"], trace
@@ -58,7 +60,6 @@ def edited(case):
     return draft
 
 
-@pytest.mark.parametrize("admitted", ["modis", "pm25"], indirect=True)
 def test_actual_delivery_edit_history_and_authenticated_http_are_passive(admitted, core, tmp_path, monkeypatch):
     case = admitted
     with approved(case, core, tmp_path, monkeypatch) as (prepared, png, _, intent, trace):
@@ -110,10 +111,9 @@ def test_actual_delivery_edit_history_and_authenticated_http_are_passive(admitte
             server.server_close()
             thread.join(timeout=5)
         assert editor.all_application_rows(core[3]) == before and len(trace) == 1
-        assert len(case["provider_requests"]) == 3
+        assert len(case["provider_requests"]) == 1  # One genuine synchronous radar writer request.
 
 
-@pytest.mark.parametrize("admitted", ["modis"], indirect=True)
 def test_rereviewed_original_png_keeps_delivery_text_through_current_resource_outage(admitted, core, tmp_path, monkeypatch):
     case = admitted
     with approved(case, core, tmp_path, monkeypatch, rereview=True) as (prepared, png, _, intent, trace):
@@ -137,7 +137,6 @@ def test_rereviewed_original_png_keeps_delivery_text_through_current_resource_ou
         assert editor.all_application_rows(core[3]) == before and not trace
 
 
-@pytest.mark.parametrize("admitted", ["modis"], indirect=True)
 def test_history_refuses_corrupt_joins_and_missing_assets_without_mutating_evidence(admitted, core, tmp_path, monkeypatch):
     case = admitted
     with approved(case, core, tmp_path, monkeypatch) as (_, _, command, intent, trace):

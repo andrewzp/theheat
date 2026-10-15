@@ -902,13 +902,15 @@ class PostgresCommandAuthority:
                             if candidate_transition.completed_at is not None:
                                 clock = candidate_transition.completed_at
                         elif command.action in MEDIA_ACTIONS:
+                            from src.commands.postgres_delivery import description_profiles
                             if hasattr(self, "editor_media_configuration") and command.action != "remove_media_revision":
                                 from src.commands import postgres_editor_media as editor_domain
                                 draft, current_media = editor_domain.command_inputs(self, c, state, command, actor, editorial_policy, clock)
                                 if command.action in {"attach_media_revision", "review_media_revision"}:
                                     editor_domain.package_current(self, c, draft, command.payload["proposal_sha256"], current_media, editorial_policy)
                             media_transition = postgres_media_commands.prepare(c, state, command, actor,
-                                now=clock, editorial_policy=editorial_policy, environment=self.environment)
+                                now=clock, editorial_policy=editorial_policy, environment=self.environment,
+                                platform_profiles=description_profiles(self) if command.action != "remove_media_revision" else None)
                             reduction = media_transition.reduction
                         else:
                             reduction = reduce_command(state, command, actor, now=clock, policy=policy, editorial_policy=editorial_policy)

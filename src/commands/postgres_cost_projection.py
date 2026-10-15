@@ -322,9 +322,12 @@ def _revision_media_envelope(packet):
     require(type(attachment.get("schema_version")) is int and attachment["schema_version"]==2)
     media,review=packet["media"],draft.get("media_review_binding",{})
     shape(media,{"proposal_sha256","packet_sha256","review_sha256","review_command_id"})
-    shape(review,{"schema_version","proposal_sha256","packet_sha256","review_sha256","command_id"})
-    require(type(review["schema_version"]) is int and review["schema_version"]==1
+    extra={"platform_description_sha256"} if type(review) is dict and review.get("schema_version")==2 else set()
+    shape(review,{"schema_version","proposal_sha256","packet_sha256","review_sha256","command_id"}|extra)
+    require(type(review["schema_version"]) is int and review["schema_version"] in (1,2)
             and type(media["review_command_id"]) is str and media["review_command_id"]==review["command_id"])
+    if extra:
+        s._sha(review["platform_description_sha256"])
     from src.commands.postgres_authority import _id
     _id(media["review_command_id"])
     for key in ("proposal_sha256","packet_sha256","review_sha256"):
