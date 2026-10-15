@@ -324,13 +324,32 @@ class PostgresProjectionRepository:
         _require(all(type(r[2]) is int and 1 <= r[2] <= MAX_BYTES for r in refs), "corrupt_projection_artifact")
         expected_size = 2 + sum(len(r[0]) + 1 + r[2] for r in refs) + max(0, len(refs) - 1)
         _require(expected_size == byte_count <= MAX_BYTES, "corrupt_projection_identity")
+        sizes: dict[str, int] = {}
+        for _, artifact_sha, artifact_size in refs:
+            _require(artifact_sha not in sizes or sizes[artifact_sha] == artifact_size, "corrupt_projection_artifact")
+            sizes[artifact_sha] = artifact_size
+        payloads = {}
+        if sizes:
+            # Transfer each distinct artifact once, after the complete preflight.
+            # Refuse changed lengths in SQL before transferring the value; a
+            # corrupt restore must not turn one bounded read into a large batch.
+            rows = connection.execute(f"""SELECT a.sha,
+                CASE WHEN octet_length(a.payload)=wanted.byte_count THEN a.payload END
+                FROM {SCHEMA}.artifacts a
+                JOIN unnest(%s::text[],%s::integer[]) AS wanted(sha,byte_count) ON a.sha=wanted.sha
+                LIMIT %s""", (list(sizes), list(sizes.values()), len(sizes) + 1)).fetchall()
+            _require(len(rows) == len(sizes), "corrupt_projection_artifact")
+            for row in rows:
+                _require(isinstance(row, (tuple, list)) and len(row) == 2, "corrupt_projection_artifact")
+                artifact_sha, payload = row
+                _require(type(artifact_sha) is str and artifact_sha in sizes and artifact_sha not in payloads,
+                         "corrupt_projection_artifact")
+                _require(type(payload) is bytes and len(payload) == sizes[artifact_sha]
+                         and _sha(payload) == artifact_sha, "corrupt_projection_artifact")
+                payloads[artifact_sha] = payload
         restored = {}
         for name_bytes, artifact_sha, artifact_size in refs:
-            artifact = connection.execute(f"SELECT payload FROM {SCHEMA}.artifacts WHERE sha=%s", (artifact_sha,)).fetchone()
-            payload = artifact[0] if artifact else None
-            if payload is None:
-                raise ProjectionError("corrupt_projection_artifact")
-            _require(len(payload) == artifact_size and _sha(payload) == artifact_sha, "corrupt_projection_artifact")
+            payload = payloads[artifact_sha]
             name = _decode(name_bytes)
             _require(type(name) is str and name not in restored and _canonical(name) == name_bytes, "corrupt_projection_field")
             value = _decode(payload)
