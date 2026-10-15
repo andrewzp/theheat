@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 ## 0.9.108.117 — 2026-10-15
 
 - Keep local command controls paused until refreshed readback succeeds for the same operator and action. Preserve the original action reference and unsaved edit when refresh fails or identity changes.
+- Preserve the original image-read failure while safely handling a separate stream-cleanup rejection.
 
 ## 0.9.108.116 — 2026-10-15
 

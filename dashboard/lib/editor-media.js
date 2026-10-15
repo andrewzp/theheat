@@ -83,5 +83,6 @@ export async function retainedMediaBlob(view, signal) {
     for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.length}
     if(signal.aborted || bytes.length<33 || ![137,80,78,71,13,10,26,10].every((v,i)=>bytes[i]===v)) throw new Error("Invalid retained PNG")
     return new Blob([bytes],{type:"image/png"})
-  } finally { void reader.cancel() }
+  // Cleanup must not create a second, unhandled rejection after a failed read.
+  } finally { void reader.cancel().catch(() => {}) }
 }
