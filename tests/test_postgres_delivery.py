@@ -54,7 +54,7 @@ def run(case, intent, platform, stage, *, owner="invented-local-worker", at=edit
 @pytest.fixture
 def delivery_diagnostics(request, capsys, monkeypatch):
     # Explicitly requested last by just three existing cases, after their setup.
-    # This 110-second sample does not change pytest's separate 120-second dump.
+    # This 110-second sample is diagnostic only; the job deadline stays unchanged.
     import sys
     from tests.delivery_ci_diagnostics import DeliveryDiagnostics
 
