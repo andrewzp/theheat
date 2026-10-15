@@ -10,6 +10,7 @@ from pathlib import Path
 import re
 import stat
 
+from src.commands import hosted_fixture
 from src.commands import postgres_batch as batch, postgres_batch_results as results, postgres_batch_worker as worker
 from src.commands import postgres_candidate_admission as admission
 from src.commands.schema import CommandError, authorize, utc_datetime, utc_text
@@ -33,7 +34,7 @@ RESERVATION_FIELDS = {"schema_version", "basis", "provider", "role", "model", "p
 
 def configuration(authority):
     load = getattr(authority, "generation_configuration", None)
-    refuse(authority.environment == "local" and callable(load), "sourced_generation_unavailable")
+    refuse(hosted_fixture.allowed(authority) and callable(load), "sourced_generation_unavailable")
     assert callable(load)
     value = p._decode(p._canonical(load()))
     refuse(isinstance(value, dict) and (set(value) == {"current_inputs", "reservation"} or set(value) == {"schema_version", "current_inputs", "reservations"} and type(value["schema_version"]) is int and value["schema_version"] == 2), "generation_configuration_invalid")
@@ -142,6 +143,7 @@ def current_reservation(c, reserve, identity, policy, now, *, synchronous=False)
 
 
 def current(authority, c, identity, policy, now, *, resolved=None):
+    hosted_fixture.profile(c, authority.environment)
     config = configuration(authority)
     refuse(identity in config["current_inputs"], "generation_source_superseded")
     value = document(read(c, INPUT, identity))

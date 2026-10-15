@@ -249,7 +249,8 @@ def enroll(c, state, version, draft, *, now, policy, profile, environment):
 
 def current(c, packet, payload, at, environment):
     from src.commands.postgres_authority import PostgresCommandAuthority
-    checks._require(environment == "local", "revision_check_environment_refused")
+    from src.commands import hosted_fixture
+    hosted_fixture.profile(c, environment)
     origin.validate_revision(packet)
     checks._policy(packet["current_context"])
     version, state = PostgresCommandAuthority._state(c, lock=True)

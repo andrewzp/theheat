@@ -9,6 +9,7 @@ from __future__ import annotations
 from datetime import timedelta
 import re
 
+from src.commands import hosted_fixture
 from src.commands import postgres_editor_media as editor, postgres_media as media
 from src.commands.schema import CommandError, utc_datetime, utc_text
 from src.editorial.policy import current_editorial_policy
@@ -18,6 +19,7 @@ from src.storage import postgres_projection as p
 
 SCHEMA = "theheat_delivery"
 MIGRATION = p.MIGRATION.with_name("012_local_delivery.sql")
+PREVIEW_MIGRATION = p.MIGRATION.with_name("014_preview_delivery.sql")
 META = ("version", "migration_sha", "catalog_sha", "environment", "owner_role", "runtime_role")
 TABLES = ("metadata", "artifacts", "intents", "work_items", "leases", "attempts", "observations", "receipts")
 
@@ -37,10 +39,16 @@ def validate_core_catalog(c, original, environment):
     p._require(row is not None and type(row[0]) is bytes and 0 < len(row[0]) <= 16384
                and p._sha(row[0]) == row[1], "delivery_upgrade_receipt_required")
     receipt = p._decode(row[0])
-    p._require(type(receipt) is dict and set(receipt) == {
+    preview = type(receipt) is dict and type(receipt.get("version")) is int and receipt["version"] == 2
+    extension = {"preview_migration_sha256", "environment", "owner_role", "runtime_role"} if preview else set()
+    p._require(not preview or (environment == original[3] == "preview"
+        and receipt.get("preview_migration_sha256") == p._sha(PREVIEW_MIGRATION.read_bytes())
+        and receipt.get("environment") == "preview"
+        and (receipt.get("owner_role"), receipt.get("runtime_role")) == tuple(original[4:])), "changed_delivery_upgrade")
+    p._require(type(receipt) is dict and set(receipt) == extension | {
         "version", "original_metadata", "command_catalog_sha256", "delivery_catalog_sha256",
         "migration_sha256", "installed_at"} and p._canonical(receipt) == row[0]
-        and type(receipt["version"]) is int and receipt["version"] == 1
+        and type(receipt["version"]) is int and receipt["version"] == (2 if preview else 1)
         and receipt["original_metadata"] == list(original)
         and receipt["migration_sha256"] == p._sha(MIGRATION.read_bytes())
         and utc_text(utc_datetime(receipt["installed_at"])) == receipt["installed_at"]
@@ -48,12 +56,12 @@ def validate_core_catalog(c, original, environment):
     metadata = c.execute(f"SELECT {','.join(META)} FROM {SCHEMA}.metadata WHERE singleton=1").fetchone()
     p._require(metadata is not None and metadata[0] == 1 and metadata[1] == receipt["migration_sha256"]
         and metadata[2] == receipt["delivery_catalog_sha256"] == p._catalog(c, SCHEMA)
-        and metadata[3] == environment == original[3] == "local"
+        and metadata[3] == environment == original[3] == ("preview" if preview else "local")
         and tuple(metadata[4:]) == tuple(original[4:]), "changed_delivery_catalog")
 
 
 def validate(c, environment):
-    refuse(environment == "local" and upgraded(c), "delivery_migration_required")
+    refuse(environment in {"local", "preview"} and upgraded(c), "delivery_migration_required")
     original = c.execute(f"SELECT {','.join(META)} FROM theheat_commands.metadata WHERE singleton=1").fetchone()
     p._require(original is not None and original[0] == 1
                and original[1] == p._sha(p.MIGRATION.with_name("002_command_core.sql").read_bytes()),
@@ -62,7 +70,7 @@ def validate(c, environment):
 
 
 def install(c, environment, *, now):
-    refuse(environment == "local", "delivery_local_only")
+    refuse(environment in {"local", "preview"}, "delivery_local_only")
     if upgraded(c):
         validate(c, environment)
         return
@@ -72,6 +80,8 @@ def install(c, environment, *, now):
     original = c.execute(f"SELECT {','.join(META)} FROM theheat_commands.metadata WHERE singleton=1").fetchone()
     p._require(original[2] == p._catalog(c, "theheat_commands"), "changed_command_schema")
     c.execute(MIGRATION.read_text())
+    if environment == "preview":
+        c.execute(PREVIEW_MIGRATION.read_text())
     role = p._driver().sql.Identifier(original[5])
     for target in (f"SCHEMA {SCHEMA}", f"ALL TABLES IN SCHEMA {SCHEMA}", f"ALL FUNCTIONS IN SCHEMA {SCHEMA}",
                    "TABLE theheat_commands.delivery_upgrade"):
@@ -87,13 +97,16 @@ def install(c, environment, *, now):
               (p._sha(MIGRATION.read_bytes()), catalog, environment, *original[4:]))
     receipt = dict(version=1, original_metadata=list(original), command_catalog_sha256=p._catalog(c, "theheat_commands"),
                    delivery_catalog_sha256=catalog, migration_sha256=p._sha(MIGRATION.read_bytes()), installed_at=utc_text(now))
+    if environment == "preview":
+        receipt.update(version=2, preview_migration_sha256=p._sha(PREVIEW_MIGRATION.read_bytes()),
+                       environment=environment, owner_role=original[4], runtime_role=original[5])
     raw = p._canonical(receipt)
     c.execute("INSERT INTO theheat_commands.delivery_upgrade VALUES(1,%s,%s)", (raw, p._sha(raw)))
     validate(c, environment)
 
 
 def configure(authority, path):
-    refuse(authority.environment == "local", "delivery_local_only")
+    refuse(hosted_fixture.allowed(authority), "delivery_local_only")
     config = FixtureConfiguration.load(path)
     with authority.projections._connection() as c:
         authority._validate(c)
@@ -103,7 +116,7 @@ def configure(authority, path):
 
 def configuration(authority):
     config = getattr(authority, "delivery_configuration", None)
-    if authority.environment != "local" or not isinstance(config, FixtureConfiguration):
+    if not hosted_fixture.allowed(authority) or not isinstance(config, FixtureConfiguration):
         raise CommandError("delivery_fixture_configuration_required", "An explicit local fixture configuration is required")
     try:
         return config.read(), config.sha256

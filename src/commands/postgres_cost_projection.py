@@ -61,8 +61,9 @@ def unavailable(reason="journal_unavailable", *, status="unavailable"):
 
 class Read:
     """One owned transaction, one deadline and one cumulative artifact budget."""
-    def __init__(self, connection, deadline):
+    def __init__(self, connection, deadline, environment="local"):
         self.connection, self.deadline = connection, deadline
+        self.environment = environment
         self.remaining = MAX_BYTES
         self.cache: dict = {}
         self.catalogs: set = set()
@@ -91,7 +92,7 @@ class Read:
 
     def validate(self, key, validator):
         if key not in self.catalogs:
-            validator(self, "local")
+            validator(self, self.environment)
             self.catalogs.add(key)
 
     def artifact(self, schema, table, digest, limit, *, minimum=0):
@@ -640,16 +641,18 @@ def _detached_usage(value, row):
 
 def project(authority, *, now):
     """No supplied HTTP selectors; failure is isolated from the draft view."""
-    if authority.environment!="local":
-        return unavailable("local_only")
     deadline=time.monotonic()+SECONDS
     try:
+        from src.commands import hosted_fixture
+        if not hosted_fixture.allowed(authority):
+            return unavailable("local_only")
         with authority.projections._connection() as connection:
-            reader=Read(connection,deadline)
+            reader=Read(connection,deadline,authority.environment)
             authority._validate(reader)
+            hosted_fixture.profile(reader, authority.environment)
             version,_,_=authority._pointer(reader,lock=True)
             stamp=spend._time(utc_text(now))
-            status=spend.apply(reader,"status",{},now=stamp,environment="local")
+            status=spend.apply(reader,"status",{},now=stamp,environment=authority.environment)
             latest="""FROM theheat_spending.intents i LEFT JOIN LATERAL
                 (SELECT kind FROM theheat_spending.events WHERE intent_id=i.intent_id ORDER BY sequence DESC LIMIT 1) e ON true"""
             counts=dict.fromkeys(STATES,0)
@@ -675,7 +678,7 @@ def project(authority, *, now):
                     detached.append((row,evidence))
                 rows.append(row)
             totals=status["totals"]
-            result=dict(schema_version=1,status="available",reason=None,scope="local_shared_authority",actual_bill_available=False,
+            result=dict(schema_version=1,status="available",reason=None,scope="local_shared_authority" if authority.environment == "local" else "hosted_staging_fixture",actual_bill_available=False,
                 accounting_complete=False,production_enforcement=False,snapshot=dict(state_version=version,observed_at=stamp),
                 integrity_scope=dict(summary="existing_catalog_constraints_aggregate",details="selected_rows_hash_and_join_checked"),
                 summary=dict(configured_limits_micro_usd={key:str(status["limits"][field]) for key,field in (("daily","daily_micro_usd"),("monthly","monthly_micro_usd"),("per_job","per_job_micro_usd"))},

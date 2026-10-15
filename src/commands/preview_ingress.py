@@ -120,13 +120,29 @@ class Operators:
 class PreviewServer(HTTPServer):
     """Single bounded connection at a time; each request has a read deadline."""
     def __init__(self, authority: PostgresCommandAuthority, operators: Operators, *, port: int, origin: str, candidate_inputs: tuple[str, ...] = ()):
+        if authority.environment != "local":
+            raise ValueError("local_authority_required")
+        self._initialize(authority, operators, port=port, origin=origin, candidate_inputs=candidate_inputs)
+
+    @classmethod
+    def for_hosted_fixture(cls, authority, operators, *, port, origin, candidate_inputs=()):
+        from src.commands import hosted_fixture
+        safe_environment()
+        if cls is not PreviewServer or authority.environment != "preview" or not hosted_fixture.allowed(authority):
+            raise ValueError("explicit_staging_config_required")
+        with authority.projections._connection() as c:
+            authority._validate(c)
+            hosted_fixture.profile(c, authority.environment)
+        result = cls.__new__(cls)
+        result._initialize(authority, operators, port=port, origin=origin, candidate_inputs=candidate_inputs)
+        return result
+
+    def _initialize(self, authority, operators, *, port, origin, candidate_inputs):
         safe_environment()
         parsed = urlsplit(origin)
         if (parsed.scheme != "http" or parsed.hostname != "127.0.0.1" or not parsed.port
                 or parsed.username or parsed.password or parsed.path or parsed.query or parsed.fragment):
             raise ValueError("explicit_loopback_origin_required")
-        if authority.environment != "local":
-            raise ValueError("local_authority_required")
         if len(candidate_inputs) > 16 or len(set(candidate_inputs)) != len(candidate_inputs) or any(not re.fullmatch(r"[a-f0-9]{64}", v) for v in candidate_inputs):
             raise ValueError("invalid_candidate_allowlist")
         self.candidate_inputs = candidate_inputs
@@ -331,7 +347,7 @@ class PreviewHandler(BaseHTTPRequestHandler):
                     self.server.operators.resolve, now=now)
                 self.reply(200, result)
                 return
-            command = Command.from_request(body, actor, environment="local", now=now)
+            command = Command.from_request(body, actor, environment=self.server.authority.environment, now=now)
             if command.action not in ALLOWED_ACTIONS:
                 self.reply(400, {"error": "Action unavailable in local preview", "code": "preview_action_unavailable"})
                 return

@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import stat
 
+from src.commands import hosted_fixture
 from src.commands import postgres_media as media, postgres_sourced_generation as generation
 from src.commands.schema import CommandError
 from src.editorial.revisions import fingerprint
@@ -39,7 +40,7 @@ def private_bytes(path, limit):
 
 def retain(authority, value, original, references, receipt):
     """Retain already acquired input; no authority, freshness or human verdict."""
-    radar.require(authority.environment == "local", "radar_local_only")
+    radar.require(hosted_fixture.allowed(authority), "radar_local_only")
     value = radar.document(value)
     radar.original_header(original, value)
     radar.shape(references, {"product", "reuse"})
@@ -55,6 +56,7 @@ def retain(authority, value, original, references, receipt):
     identity = radar.digest(raw)
     with authority.projections._connection(writing=True) as c:
         authority._validate(c)
+        hosted_fixture.profile(c, authority.environment)
         media.validate(c, authority.environment)
         for data in (raw, original, receipt, *references.values()):
             media._artifact(c, data)
@@ -69,7 +71,7 @@ def retain(authority, value, original, references, receipt):
 
 def configure(authority, load):
     radar.require(
-        authority.environment == "local" and callable(load), "radar_configuration_invalid"
+        hosted_fixture.allowed(authority) and callable(load), "radar_configuration_invalid"
     )
     authority.published_radar_configuration = load
 
@@ -77,7 +79,7 @@ def configure(authority, load):
 def configuration(authority):
     load = getattr(authority, "published_radar_configuration", None)
     radar.require(
-        authority.environment == "local" and callable(load), "radar_selection_unavailable"
+        hosted_fixture.allowed(authority) and callable(load), "radar_selection_unavailable"
     )
     assert callable(load)
     value = p._decode(p._canonical(load()))
@@ -109,6 +111,7 @@ def read(c, identity):
 
 
 def current(authority, c, brief_id, bundle, source_origin, now):
+    hosted_fixture.profile(c, authority.environment)
     try:
         config = configuration(authority)
         radar.require(brief_id in config["selections"], "radar_selection_missing")

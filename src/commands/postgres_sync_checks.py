@@ -108,7 +108,8 @@ def enroll(c, value, refs, row, state, version, policy, *, now, environment, res
 def current(c, packet, payload, at, environment, *, resolved=None):
     from src.commands import postgres_synchronous_generation as sync
     from src.commands.postgres_authority import PostgresCommandAuthority
-    checks._require(environment == "local", "sync_check_environment_refused")
+    from src.commands import hosted_fixture
+    hosted_fixture.profile(c, environment)
     checks._require(origin.validate(packet, resolved=resolved) == "verified_synchronous_writer", "sync_context_required")
     checks._policy(packet["current_context"])
     sync.verify_candidate(c, packet)

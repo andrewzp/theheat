@@ -118,3 +118,14 @@ test("canonical retained timestamps preserve supported precision; malformed wire
     assert.equal(localCostEvidence(value).status, "unavailable")
   }
 })
+
+
+test("closed staging scope is truthful and unknown environments refuse", () => {
+  const value = {...fixture(), scope: "hosted_staging_fixture"}
+  assert.deepEqual(localCostEvidence(value), value)
+  assert.match(render({localEvidence: value}), /Hosted staging fixture only/)
+  assert.doesNotMatch(render({localEvidence: value}), /Local workflow only/)
+  for (const scope of ["preview", "production", "hosted", ""]) {
+    assert.equal(localCostEvidence({...value, scope}).status, "unavailable")
+  }
+})

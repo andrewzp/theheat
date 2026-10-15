@@ -121,7 +121,8 @@ class PostgresCommandAuthority:
 
     def initialize_delivery(self, *, now: datetime) -> None:
         """Explicit owner-only local catalog upgrade; never a sender activation."""
-        from src.commands import postgres_delivery as delivery
+        from src.commands import postgres_delivery as delivery, hosted_fixture
+        p._require(hosted_fixture.allowed(self, purpose="owner"), "explicit_staging_config_required")
         with self.projections._connection(writing=True) as c:
             self._validate(c, runtime=False)
             self._pointer(c, lock=True)
@@ -428,7 +429,9 @@ class PostgresCommandAuthority:
         with self.projections._connection(writing=True) as c:
             self._validate(c)
             self._pointer(c, lock=True)
-            generation.refuse(self.environment == "local", "local_generation_required")
+            from src.commands import hosted_fixture
+            generation.refuse(hosted_fixture.allowed(self), "local_generation_required")
+            hosted_fixture.profile(c, self.environment)
             generation.record(c, generation.INPUT, identity, value)
         return dict(brief_id=identity, brief_sha256=identity)
 
@@ -446,7 +449,9 @@ class PostgresCommandAuthority:
         with self.projections._connection(writing=True) as c:
             self._validate(c)
             self._pointer(c, lock=True)
-            generation.refuse(self.environment == "local", "local_generation_required")
+            from src.commands import hosted_fixture
+            generation.refuse(hosted_fixture.allowed(self), "local_generation_required")
+            hosted_fixture.profile(c, self.environment)
             generation.record(c, generation.RESERVATION, identity, value)
         return dict(estimate_sha256=identity, reserve_micro_usd=value["reserve_micro_usd"])
 
