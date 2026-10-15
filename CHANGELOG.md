@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.108.116 — 2026-10-15
+
+- Direct supported local graphic drafts to their current text-and-graphic review panel without presenting the text-only review safeguard as a missing joint review. Preserve approval controls and production behavior.
+
 ## 0.9.108.115 — 2026-10-15
 
 - Add an explicit local important-event allowance for two batch angles, independently check each result, retain valid alternatives and preserve both results' source and cost histories. Keep one routine writer sample, fail closed on stale reviews and leave production activation off.
