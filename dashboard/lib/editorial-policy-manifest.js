@@ -17,7 +17,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/commands/postgres_candidate_admission.py": "9460c5138e9d27f42afb3fcdf836cd634ebd6739b6b93f9eaec5d9db0895a99e",
     "src/commands/postgres_check_observations.py": "1bc106b92c74b66fa337e1fda3ac41269fa39fac977610a750e03fd27f34e2b2",
     "src/commands/postgres_checks.py": "fbadee0014f56d3d93b19668cbd8e7d9b8e024d011a79a34526719f3f305d557",
-    "src/commands/postgres_cost_projection.py": "6e738413024d5396f9727e767ed9ce43b1043b63d779e7f68694850282b5276b",
+    "src/commands/postgres_cost_projection.py": "a5b796bef50339de5961ed4d368797c66ce1e8debae13d4fe6a2e19505ad1e1a",
     "src/commands/postgres_coverage.py": "edc97725c30d16d980872962a6d7157068727b3de823bd56c4db33fa77a45e31",
     "src/commands/postgres_delivery.py": "6c0f8af4d695dee109bac286dcdb95966cbe0e73d219553f229391e544ca7f40",
     "src/commands/postgres_editor_media.py": "bfcb1b0b577661db19adddb04da3cf8e90b15b5df90d5abe16c74a988a10420f",
@@ -122,7 +122,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/storage/migrations/013_synchronous_checks.sql": "183c5b72dc9d932337eb451615e4c437da9186423a7ffdbd5da328327e606c2a",
     "src/storage/migrations/014_preview_delivery.sql": "eb4273b808de7b60c376b7249dfaca0f1be96c1b50c334d6bd8f245eceb92bfa",
     "src/storage/physical_events.py": "9706a04510f7699eccfc8b83a9ad310954e5bc4c97df23f4bf8787f5021be867",
-    "src/storage/postgres_projection.py": "932c6f19baef022325a2b7e84369e6d211607aedf30dd776bba140d365de27ce",
+    "src/storage/postgres_projection.py": "891c1b8efdafd92bd067065b9f64a8015180f7b39b641c8ecc1933616bd61b64",
     "src/storage/retained_reports.py": "21634f249fa8ccb07ecbaae34f44727bf5388bf5079bfb70c5191e946ef941ac",
     "src/storage/scientific_supply.py": "5c89128bcdc0f708477ff19579cb913f0b1081eee46ea170e3fc3979cce0896c",
     "src/two_bot/air_quality_claims.py": "b2d5232a2cd8678614ec9baeb3d20fc2e9097ed635244f2373891707c03711b8",
@@ -173,5 +173,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "4a828a22e451889f630e994add6ba38c463d44369d24d2e22c2ff85e7f0387e5"
   },
   "schema_version": 1,
-  "source_sha256": "cd154c7d746ebd3a7289a3bd455d0e245b095109ae448a4e83c5159cc786dddf"
+  "source_sha256": "e6929bf71d800159bd07661747323922e0f9f7655ab7b72115b84bcdc51bf331"
 }
