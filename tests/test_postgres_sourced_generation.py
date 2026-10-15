@@ -129,6 +129,24 @@ def test_source_start_actual_batch_required_checks_and_admission(sourced, monkey
     assert case["store"].spending("status", {}, now=utc_text(candidate.AT))["accounting_complete"] is False
 
 
+def test_reserved_batch_is_queued_and_unknown_submission_remains_held(sourced):
+    result = request(sourced)
+    projection = sourced["store"].generation_projection(now=NOW)["briefs"][0]
+    assert projection["job_id"] == result["generation"]["job_id"]
+    assert projection["status"] == "queued"
+    assert projection["writer_usage"]["usage_status"] == "absent"
+    assert projection["writer_usage"]["receipt_id"] is None
+    assert all(value is None for value in projection["writer_usage"]["counts"].values())
+    intent = result["generation"]["intent_id"]
+    assert sourced["store"].spending("status", {"intent_id": intent}, now=utc_text(NOW))["intent"]["state"] == "reserved"
+
+    sent, factory = transport(sourced, fail_post=True)
+    assert run(sourced, "submit", factory)["outcome"] == "submission_uncertain"
+    assert len(sent) == 1
+    assert sourced["store"].generation_projection(now=NOW)["briefs"][0]["status"] == "reconciliation_required"
+    assert sourced["store"].spending("status", {"intent_id": intent}, now=utc_text(NOW))["intent"]["state"] == "uncertain"
+
+
 def test_manual_automatic_same_job_and_no_second_provider_request(sourced):
     first = request(sourced)
     client = SourcedGenerationClient(sourced["store"], candidate.EDITOR, candidate.resolve, lambda: NOW)
