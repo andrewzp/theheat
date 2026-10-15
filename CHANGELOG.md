@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.108.119 — 2026-10-15
+
+- Require pause-off and explicit paid opt-in for all three legacy manual evaluation workflows.
+- Add an explicit one-shot fresh NWS sample trial with at most two candidates/eight stage dispatches, bounded requests/outputs, durable purchase holds, no automatic retries/refill and encrypted review artifacts. Keep ordinary provider requests and production publishing unchanged.
+- Separate the trial's conservative token-cost allowance from an invoice or monthly spending cap; retain unknown charges and require human quality review before any live-post proposal.
+
 ## 0.9.108.118 — 2026-10-15
 
 - Bind the exact retained image description to joint review, approval and local delivery requests. Check the complete selected destination set before creating a new delivery obligation or sending, while preserving historical receipts and unknown outcomes.

@@ -248,6 +248,9 @@ def interpret_response(raw: str) -> str:
     return "allow" if answer == "NO" else "reject"
 
 
+from src.two_bot.trial_budget import provider_call
+
+
 def check_llm_result(tweet: str) -> SafetyCheckResult:
     """A check must complete explicitly; unavailable is never a passing verdict.
 
@@ -289,7 +292,7 @@ def check_llm_result(tweet: str) -> SafetyCheckResult:
         client = genai.Client(api_key=GEMINI_API_KEY,
                              http_options=genai_types.HttpOptions(timeout=90000,
                                  retry_options=genai_types.HttpRetryOptions(attempts=1)))
-        response = client.models.generate_content(model=model, contents=prompt)
+        response = provider_call("safety", "google", dict(model=model, contents=prompt), client.models.generate_content)
         try:
             from src.two_bot.usage_ledger import record_response
             record_response("safety", response, model, "google")

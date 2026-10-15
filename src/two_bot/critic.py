@@ -35,6 +35,7 @@ from src.two_bot.prompts.critic_prompt import (
     CRITIC_USER_PROMPT_TEMPLATE,
 )
 from src.two_bot.retry import call_with_retries
+from src.two_bot.trial_budget import google_trial_options, provider_call
 from src.two_bot.types import CriticResult, StoryBundle
 
 
@@ -279,13 +280,13 @@ def _call_gemini(
     from google import genai
     from google.genai import types as genai_types
 
-    client = genai.Client(api_key=api_key, http_options=genai_types.HttpOptions(timeout=90000))
+    client = genai.Client(api_key=api_key, http_options=genai_types.HttpOptions(timeout=90000, **google_trial_options()))
     request = prepare_request(draft_text, bundle, pending_today, shipped_recent,
                               retry_suffix=retry_suffix, allow_revise=allow_revise,
                               candidate_drafts=candidate_drafts)
     response = call_with_retries(
         "gemini critic",
-        lambda: client.models.generate_content(**request),
+        lambda: provider_call("critic", "google", request, client.models.generate_content),
     )
     from src.two_bot.usage_ledger import record_response
     record_response("critic", response, CRITIC_MODEL, "google")

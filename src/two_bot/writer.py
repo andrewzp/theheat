@@ -23,6 +23,7 @@ from src.two_bot.json_utils import (
     strip_markdown_fences as _strip_markdown_fences,  # noqa: F401 — re-exported for tests
 )
 from src.two_bot.retry import call_with_retries
+from src.two_bot.trial_budget import google_trial_options, provider_call
 from src.two_bot.strict_contract import model_failure_snapshot
 
 
@@ -233,7 +234,7 @@ def _call_anthropic(user_prompt: str) -> str:
     # within the 5-minute TTL.
     response = call_with_retries(
         "anthropic writer",
-        lambda: client.messages.create(**anthropic_writer_request(user_prompt)),
+        lambda: provider_call("writer", "anthropic", anthropic_writer_request(user_prompt), client.messages.create),
     )
     # Capture this returned writer response, including missing usage metadata.
     # Failed pre-response requests and other model stages remain untracked. The WHOLE
@@ -284,14 +285,14 @@ def _call_google(user_prompt: str) -> str:
     # google-genai HttpOptions.timeout is in MILLISECONDS — see fact_check.py.
     # 180000 = 180 seconds, matching the Anthropic writer timeout for parity
     # in case the writer ever falls through to the Gemini path.
-    client = genai.Client(api_key=api_key, http_options=genai_types.HttpOptions(timeout=180000))
+    client = genai.Client(api_key=api_key, http_options=genai_types.HttpOptions(timeout=180000, **google_trial_options()))
     response = call_with_retries(
         "gemini writer",
-        lambda: client.models.generate_content(
+        lambda: provider_call("writer", "google", dict(
             model=WRITER_MODEL,
             contents=f"{WRITER_SYSTEM_PROMPT}\n\n{user_prompt}",
             config=genai_types.GenerateContentConfig(response_mime_type="application/json", response_json_schema=WRITER_OUTPUT_SCHEMA),
-        ),
+        ), client.models.generate_content),
     )
     # Economics P0.6: mirror the Anthropic capture, same fail-open boundary
     # (codex P2). Gemini token fields live on usage_metadata; unknown models
