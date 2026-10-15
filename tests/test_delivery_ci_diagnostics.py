@@ -271,3 +271,43 @@ def test_fixture_is_explicit_last_only_for_three_existing_nodes():
     assert all(node.args.args[-1].arg == "delivery_diagnostics" for node in users)
     fixture = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "delivery_diagnostics")
     assert [ast.unparse(item) for item in fixture.decorator_list] == ["pytest.fixture"]
+
+
+def test_sample_retains_outer_application_and_test_callers_after_long_copy_stack():
+    def frame(filename, function, outer):
+        return SimpleNamespace(f_code=SimpleNamespace(co_filename=filename, co_name=function),
+                               f_lineno=123, f_back=outer)
+
+    outer_path = "/long-checkout-prefix" * 40 + "/tests/test_postgres_delivery.py"
+    stack = frame(outer_path, "test_atomic_approval_five_stages", None)
+    stack = frame("src/commands/postgres_editor_media.py", "park", stack)
+    for _ in range(180):
+        stack = frame("/opt/hostedtoolcache/Python/3.12.15/x64/lib/python3.12/copy.py", "_deepcopy_dict", stack)
+    sample = diagnostic.frame_sample(stack)
+    assert sample["scanned"] == 182 and sample["omitted"] == 126
+    assert sample["truncated"] is False and sample["partial"] is True
+    assert sample["fields_truncated"] is True
+    assert len(sample["frames"]) == diagnostic.HEAD_FRAMES + diagnostic.TAIL_FRAMES
+    assert all(row["function"] == "_deepcopy_dict" for row in sample["frames"][:8])
+    assert sample["frames"][-2]["file"] == "src/commands/postgres_editor_media.py"
+    assert sample["frames"][-1]["file"].endswith("/tests/test_postgres_delivery.py")
+    assert sample["frames"][-1]["function"] == "test_atomic_approval_five_stages"
+
+
+def test_oversize_worst_escaped_unicode_sample_fits_actual_event_budget(tmp_path):
+    frame = SimpleNamespace(f_code=SimpleNamespace(co_filename="\U0001f30e" * 1_000,
+                                                  co_name="\U0001f30e" * 1_000),
+                            f_lineno=2_147_483_647, f_back=None)
+    frame.f_back = frame
+    sample = diagnostic.frame_sample(frame)
+    assert sample["scanned"] == 1_000 and sample["omitted"] == 944
+    assert sample["truncated"] is True and sample["fields_truncated"] is True and sample["partial"] is True
+    assert len(sample["frames"]) == 56
+    assert all(len(row["file"]) == 128 and len(row["function"]) == 48 for row in sample["frames"])
+    log, path = logger(tmp_path)
+    log.emit("main_thread_sample", **sample)
+    log.close()
+    emitted = path.read_bytes().splitlines(keepends=True)
+    assert len(emitted) == 2 and len(emitted[0]) <= diagnostic.MAX_EVENT_BYTES
+    assert rows(path)[0]["frames"] == sample["frames"]
+    assert rows(path)[-1]["dropped"] == 0 and rows(path)[-1]["errors"] == 0

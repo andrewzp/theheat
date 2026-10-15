@@ -1,4 +1,5 @@
 """Bounded, value-free observations for three delivery CI failures; not a fix."""
+from collections import deque
 from functools import wraps
 import json
 import os
@@ -11,7 +12,10 @@ MAX_NODES = 10_000
 MAX_DEPTH = 32
 MAX_STRING_CHARS = 65_536
 MAX_FRAMES = 1_000
-MAX_FRAME_CHARS = 8_192
+HEAD_FRAMES = 8
+TAIL_FRAMES = 48
+FILENAME_CHARS = 128
+FUNCTION_CHARS = 48
 MAX_EVENTS = 256
 MAX_EVENT_BYTES = 131_072
 MAX_TOTAL_BYTES = 1_048_576
@@ -78,21 +82,30 @@ def shape(value):
 
 
 def frame_sample(frame):
-    """Main-thread code locations only. Never inspect locals or frame values."""
-    frames = []
-    chars = 0
-    partial = False
-    while frame is not None and len(frames) < MAX_FRAMES:
+    """Scan up to 1,000 locations; retain both ends, never locals or values.
+
+    At most 56 * 176 characters, even at JSON's worst 12 bytes per escaped
+    character, leaves over 12 KiB of the 128 KiB event limit for fixed metadata.
+    """
+    head, tail = [], deque(maxlen=TAIL_FRAMES)
+    scanned = 0
+    fields_truncated = False
+    while frame is not None and scanned < MAX_FRAMES:
         filename, function = frame.f_code.co_filename, frame.f_code.co_name
-        partial |= len(filename) > 256 or len(function) > 128
-        filename, function = filename[:256], function[:128]
-        chars += len(filename) + len(function)
-        if chars > MAX_FRAME_CHARS:
-            partial = True
-            break
-        frames.append(dict(file=filename, function=function, line=frame.f_lineno))
+        fields_truncated |= len(filename) > FILENAME_CHARS or len(function) > FUNCTION_CHARS
+        # Retain the path's tail so a long checkout prefix cannot hide its basename.
+        location = dict(file=filename[-FILENAME_CHARS:], function=function[:FUNCTION_CHARS], line=frame.f_lineno)
+        if scanned < HEAD_FRAMES:
+            head.append(location)
+        else:
+            tail.append(location)
+        scanned += 1
         frame = frame.f_back
-    return dict(frames=frames, partial=partial or frame is not None)
+    frames = head + list(tail)
+    omitted = scanned - len(frames)
+    truncated = frame is not None
+    return dict(frames=frames, scanned=scanned, omitted=omitted, truncated=truncated,
+                fields_truncated=fields_truncated, partial=bool(omitted or truncated or fields_truncated))
 
 
 class DeliveryDiagnostics:
