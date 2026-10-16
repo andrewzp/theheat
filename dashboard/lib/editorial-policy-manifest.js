@@ -172,9 +172,9 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/two_bot/multisignal.py": "6faa78ed3c5d94b4bb9305e12f4a61d370e212fddee47190b15997b52fbb243e",
     "src/two_bot/pipeline.py": "d256bffeff87653cefeacabb703a5b7ef9119a585a010d13e09e99fe0de474fc",
     "src/two_bot/prompts/__init__.py": "b08ec3ae2e477637b1fa3aa7f04935b7744b5ea7548bb384965e20ade7fabd2b",
-    "src/two_bot/prompts/critic_prompt.py": "72910f153dbe2c80f28dfaebb73b15947777bb2aca2e6c06afda2e6c7eb367b1",
-    "src/two_bot/prompts/fact_check_prompt.py": "b0cc2f5e1edfc1fe56fa2ac3d35e7506f33e1a941e1b63969c36bcf098bbf8ed",
-    "src/two_bot/prompts/writer_prompt.py": "3991cdcc62edd336b6565a173d95ee46c801bf02d8fbd93ae378b660b2530561",
+    "src/two_bot/prompts/critic_prompt.py": "91ba1016531ff5523d71a988e2117495a48d5cbcd19a7f266c00dfecbc4768b7",
+    "src/two_bot/prompts/fact_check_prompt.py": "2a8372a576ee76dae2b29d79d3b68b7e2ac9e68e22334a7b488dcc994a34e83a",
+    "src/two_bot/prompts/writer_prompt.py": "749bd0d21ad3c43b599a40ab62a9858a4642a9c8a5165989852381fd38367bb3",
     "src/two_bot/provider_preflight.py": "9a6aa6b4834c04266acdde286a3ccae991a070ab9411a0d56e7b9ab519422021",
     "src/two_bot/rejected_candidate.py": "f15a69f7ac1db8c6d97f487846e6af755575fa2d59aab7a8d89cbd33b2b6e993",
     "src/two_bot/retained_usage.py": "48fbca8c9c9868a258c5bfdd0966234b4a7f07b4e21577cb1c3cfa0d9bfeeda9",
@@ -190,5 +190,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "93d7e83d4da8f785b030e97da016cae9221a5f69b8a4c1024776627c02fdb351"
   },
   "schema_version": 1,
-  "source_sha256": "c0a30a821ff1b5173798c7b2c6681b314fc2669770a743e104bb54fbf745fefd"
+  "source_sha256": "7b03fb91bb8be2ee7975bf5667bd982bb8d505e31e5a87e01613de89f9a8daec"
 }

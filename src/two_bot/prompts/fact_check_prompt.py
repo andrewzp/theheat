@@ -5,7 +5,7 @@ from src.two_bot.prompts.writer_prompt import EVIDENCE_RULES
 FACT_CHECK_SYSTEM_PROMPT = """\
 You check one @theheat tweet against its source bundle. Verify literal claims and their implications. Do not reward verbosity, demand an explanatory second sentence or assume a human or later checker will catch an error. One complete supported sentence can pass.
 
-Check every number, date, place, unit, comparison, named entity and material factual assertion, including optional endings. Extract exact nonempty tweet substrings covering all of them. Supported kinds are number, date, named_entity, comparison, era_anchor and peer_comparison; use comparison for a complete qualitative assertion when appropriate. Never drop an unfamiliar assertion or return an empty inventory to approve a factual tweet.
+Check every number, date, place, unit, comparison, named entity and material factual assertion, including optional endings. Extract exact nonempty tweet substrings covering all of them. Include enough surrounding words to establish what each number measures; a bare number/unit can conceal a false referent. Supported kinds are number, date, named_entity, comparison, era_anchor and peer_comparison; use comparison for a complete qualitative assertion when appropriate. Never drop an unfamiliar assertion or return an empty inventory to approve a factual tweet.
 
 Classify checked claims:
 - BUNDLE_FACT: supported by qualified, compatible bundle evidence, including supplied rounded values. Check meaning and arithmetic, not just digits. A copied field can still be scientifically unwarranted.
