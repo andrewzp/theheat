@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.108.122 — 2026-10-16
+
+- Handle the first configuration-report file correctly: wrap the GitHub CLI result so a genuine missing file remains distinct from an empty, malformed or unexpected response. Preserve single-file writes, no-resend behavior and all policy checks.
+
 ## 0.9.108.121 — 2026-10-16
 
 - Refresh the bot's current editorial configuration through a manual, configuration-only workflow while collection and automatic publication remain paused. Store the report separately from drafts and posting records; make no model or source requests.
