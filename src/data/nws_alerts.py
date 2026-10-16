@@ -93,10 +93,12 @@ def fetch_alerts(*, strict: bool = False) -> list[SevereWeatherAlert]:
         seen_events = set()
         # CAP references, not feed order, identify replaced typhoon messages.
         typhoon_features: dict[str, dict] = {}
+        typhoon_products = []
         conflicting_ids = set()
         for feature in data.get("features", []):
             props = feature.get("properties", {})
             if _typhoon_warning(props):
+                typhoon_products.append(props)
                 identity = props["id"]
                 if identity in typhoon_features and feature != typhoon_features[identity]:
                     conflicting_ids.add(identity)
@@ -104,8 +106,11 @@ def fetch_alerts(*, strict: bool = False) -> list[SevereWeatherAlert]:
                     typhoon_features[identity] = feature
         typhoons = [f["properties"] for identity, f in typhoon_features.items()
                     if identity not in conflicting_ids]
-        superseded = {r["identifier"] for p in typhoons if p["messageType"] == "Update"
+        # Conflicting updates still establish uncertainty about predecessors and
+        # all affected areas. Excluding their admission must not resurrect old CAP.
+        superseded = {r["identifier"] for p in typhoon_products if p["messageType"] == "Update"
                       for r in p["references"]}
+        conflicting_areas = {p["areaDesc"] for p in typhoon_products if p["id"] in conflicting_ids}
         typhoon_areas = Counter(p["areaDesc"]
                                for p in typhoons if p["id"] not in superseded)
 
@@ -120,6 +125,7 @@ def fetch_alerts(*, strict: bool = False) -> list[SevereWeatherAlert]:
             typhoon = _typhoon_warning(props)
             if event == "Typhoon Warning" and (
                 not typhoon or props["id"] in superseded or props["id"] in conflicting_ids
+                or props["areaDesc"] in conflicting_areas
                 or typhoon_areas[props["areaDesc"]] != 1
             ):
                 continue

@@ -292,3 +292,41 @@ def test_identical_typhoon_repeats_do_not_hide_a_warning_but_conflicting_same_id
     responses.add(responses.GET, "https://api.weather.gov/alerts/active", json={"features": [first, repeated]})
     selected = fetch_alerts(strict=True)
     assert len(selected) == (0 if conflicting else 1)
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+@pytest.mark.parametrize("conflict", ["headline", "references", "area"])
+@responses.activate
+def test_conflicting_typhoon_update_never_resurrects_a_referenced_predecessor(reverse, conflict):
+    old = _typhoon_feature("invented-old")
+    current = _typhoon_feature("invented-current", "Update", [{"identifier": "invented-old"}])
+    twin = deepcopy(current)
+    if conflict == "references":
+        twin["properties"]["references"] = [{"identifier": "invented-other-predecessor"}]
+    elif conflict == "area":
+        twin["properties"]["areaDesc"] = "Another affected island"
+    else:
+        twin["properties"]["headline"] = "Conflicting update content"
+    independent = _typhoon_feature("invented-independent")
+    independent["properties"]["areaDesc"] = "Unrelated third island"
+    features = [old, current, twin, independent]
+    if reverse:
+        features.reverse()
+    responses.add(responses.GET, "https://api.weather.gov/alerts/active", json={"features": features})
+    assert [a.event_id for a in fetch_alerts(strict=True)] == ["nws_invented-independent"]
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+@responses.activate
+def test_conflicting_typhoon_update_holds_other_unlinked_products_in_affected_area(reverse):
+    old = _typhoon_feature("invented-old")
+    old["properties"]["areaDesc"] = "Predecessor area"
+    current = _typhoon_feature("invented-current", "Update", [{"identifier": "invented-old"}])
+    twin = deepcopy(current)
+    twin["properties"]["headline"] = "Conflicting update content"
+    unlinked = _typhoon_feature("invented-unlinked")
+    features = [old, current, twin, unlinked]
+    if reverse:
+        features.reverse()
+    responses.add(responses.GET, "https://api.weather.gov/alerts/active", json={"features": features})
+    assert fetch_alerts(strict=True) == []

@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 
 - Refresh the bot's current editorial configuration through a manual, configuration-only workflow while collection and automatic publication remain paused. Store the report separately from drafts and posting records; make no model or source requests.
 - Bind manual review and approval to fresh matching configuration evidence, recheck it before saving, and reject stale or conflicting reports. Configuration evidence cannot enable automatic publication or establish provider access.
+- Hold referenced predecessors and affected areas when typhoon updates conflict, so excluding an uncertain update cannot revive an older warning.
 
 ## 0.9.108.120 — 2026-10-16
 
