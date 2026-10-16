@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.108.124 — 2026-10-16
+
+- Align warning-writing instructions with the existing agency-opener filter: put affected places and hazard first, then attribute naturally. Keep safety filters and all required checks unchanged; no new paid trial or measured-quality claim.
+
 ## 0.9.108.123 — 2026-10-16
 
 - Put attributed warnings first, require second sentences to earn their space, and distinguish storm motion from wind intensity across writer and checking prompts. Runtime models, one sample and required checks remain unchanged; prompt contracts do not establish live quality improvement.
