@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.108.120 — 2026-10-16
+
+- Admit exact official NWS Typhoon Warnings for the western Pacific, including referenced updates. Preserve original warning names, source IDs, full CAP evidence and forecast claim limits; keep existing score/freshness/check/cost gates.
+- Use explicit CAP references to exclude superseded typhoon messages, hold conflicting identities or ambiguous areas, and preserve other warning-update rules. Keep collection and publishing paused.
+
 ## 0.9.108.119 — 2026-10-15
 
 - Require pause-off and explicit paid opt-in for all three legacy manual evaluation workflows.
