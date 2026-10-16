@@ -1,3 +1,4 @@
+import { decodeRuntimeReportFile, RUNTIME_REPORT_FILE } from "./runtime-report.js"
 import { localCommandRequest, previewConfigured } from "./draft-command-client.js"
 import { mergeUsageObservations } from "./usage-observations.js"
 import { mergePublicationControl } from "./publication-control.js"
@@ -528,11 +529,12 @@ function mergeState(current, incoming) {
   })
 }
 
-async function readGistState({ preserveNumbers = false } = {}) {
+async function readGistState({ preserveNumbers = false, includeRuntimeReport = false } = {}) {
   const gistId = configuredGistId()
   if (!gistId) {
     const state = structuredClone(DEFAULT_STATE)
-    return preserveNumbers ? { state, document: parseGistDocument(JSON.stringify(state)) } : state
+    return preserveNumbers ? { state, document: parseGistDocument(JSON.stringify(state)), ...(includeRuntimeReport ? { runtimeReport: null } : {}) }
+      : includeRuntimeReport ? { state, runtimeReport: null } : state
   }
   const res = await fetch(`https://api.github.com/gists/${gistId}`, {
     headers: gistHeaders(),
@@ -561,9 +563,11 @@ async function readGistState({ preserveNumbers = false } = {}) {
   }
   if (preserveNumbers) {
     const document = parseGistDocument(content)
-    return { state: normalizeState(structuredClone(document.value)), document }
+    return { state: normalizeState(structuredClone(document.value)), document,
+      ...(includeRuntimeReport ? { runtimeReport: decodeRuntimeReportFile(gist?.files?.[RUNTIME_REPORT_FILE]) } : {}) }
   }
-  return normalizeState(JSON.parse(content))
+  const state = normalizeState(JSON.parse(content))
+  return includeRuntimeReport ? { state, runtimeReport: decodeRuntimeReportFile(gist?.files?.[RUNTIME_REPORT_FILE]) } : state
 }
 
 async function writeGistState(state, document) {
@@ -887,6 +891,13 @@ export async function readStateStore(request) {
   return readGistState()
 }
 
+export async function readStateWithRuntimeReport(request) {
+  if (previewConfigured() || configuredBackend() !== "gist") {
+    return { state: await readStateStore(request), runtimeReport: null }
+  }
+  return readGistState({ includeRuntimeReport: true })
+}
+
 export async function writeStateStore(state) {
   if (previewConfigured()) throw new Error("Local preview requires a domain command")
   if (configuredBackend() === "sqlite") {
@@ -927,7 +938,7 @@ function draftMutationSnapshot(draft, state) {
 // Keep the first complete raw tree and defensive state clone out of the second
 // read's lifetime. The updater never receives the authoritative raw baseline.
 async function prepareGistDraftUpdate(draftId, updater, expectedRevision) {
-  const initial = await readGistState({ preserveNumbers: true })
+  const initial = await readGistState({ preserveNumbers: true, includeRuntimeReport: true })
   const state = initial.state
   const drafts = state.drafts || []
   const draftIndex = drafts.findIndex((draft) => draft.id === draftId)
@@ -938,7 +949,7 @@ async function prepareGistDraftUpdate(draftId, updater, expectedRevision) {
   const draft = structuredClone(drafts[draftIndex])
   checkExpectedRevision(draft, expectedRevision)
   const observedSnapshot = draftMutationSnapshot(draft, state)
-  const nextDraft = await updater(draft, state)
+  const nextDraft = await updater(draft, state, { runtimeReport: initial.runtimeReport })
   if (!nextDraft) {
     return { state, draft: null }
   }
@@ -951,7 +962,7 @@ async function prepareGistDraftUpdate(draftId, updater, expectedRevision) {
   }
 }
 
-export async function updateDraftStore(draftId, updater, { expectedRevision } = {}) {
+export async function updateDraftStore(draftId, updater, { expectedRevision, confirmContext } = {}) {
   if (previewConfigured()) throw new Error("Local preview requires a domain command")
   if (configuredBackend() === "sqlite") {
     const db = connectDb()
@@ -970,11 +981,12 @@ export async function updateDraftStore(draftId, updater, { expectedRevision } = 
         }
         const draft = structuredClone(drafts[draftIndex])
         checkExpectedRevision(draft, expectedRevision)
-        const nextDraft = await updater(draft, state)
+        const nextDraft = await updater(draft, state, { runtimeReport: null })
         if (!nextDraft) {
           db.exec("COMMIT")
           return { state, draft: null }
         }
+        if (confirmContext) await confirmContext(state, { runtimeReport: null })
         nextDraft.updated_at = new Date().toISOString()
         state.drafts[draftIndex] = nextDraft
         upsertSqliteDraft(db, draftId, nextDraft, draftIndex)
@@ -993,7 +1005,7 @@ export async function updateDraftStore(draftId, updater, { expectedRevision } = 
   if (!prepared.nextDraft) return prepared
   const { nextDraft, observedSnapshot, observedNumericIdentity } = prepared
   nextDraft.updated_at = new Date().toISOString()
-  const latest = await readGistState({ preserveNumbers: true })
+  const latest = await readGistState({ preserveNumbers: true, includeRuntimeReport: true })
   const latestState = latest.state
   const latestDraft = latestState.drafts?.find((candidate) => candidate.id === draftId)
   // Reject changes visible at the second read, including approval revocation or
@@ -1001,8 +1013,9 @@ export async function updateDraftStore(draftId, updater, { expectedRevision } = 
   // Gist has no transaction here: the remaining GET-to-PATCH race is unchanged.
   if (!latestDraft || draftMutationSnapshot(latestDraft, latestState) !== observedSnapshot
     || observedNumericIdentity !== gistDraftNumericIdentity(latest.document, draftId)) throw revisionConflict()
+  if (confirmContext) await confirmContext(latestState, { runtimeReport: latest.runtimeReport })
   const mergedState = mergeDraftIntoState(latestState, nextDraft)
   await writeGistState(mergedState, latest.document)
   const mergedDraft = (mergedState.drafts || []).find((candidate) => candidate.id === draftId) || nextDraft
-  return { state: mergedState, draft: mergedDraft }
+  return { state: mergedState, draft: mergedDraft, runtimeReport: latest.runtimeReport }
 }

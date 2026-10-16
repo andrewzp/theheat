@@ -12,6 +12,10 @@ from src.editorial.revisions import fingerprint
 
 ROOT = Path(__file__).resolve().parents[2]
 POLICY_FILES = (
+    "scripts/runtime_report.py", "scripts/gen_runtime_report_workflow.py",
+    ".github/workflows/bot.yml", ".github/workflows/runtime-report.yml", "src/runtime_inventory.py",
+    "dashboard/lib/runtime-report.js", "dashboard/lib/runtime-inventory.js", "dashboard/lib/state-store.js", "dashboard/lib/publication-control.js",
+    "dashboard/app/api/config/route.js", "dashboard/app/api/dashboard/route.js", "dashboard/app/api/drafts/route.js",
     "src/two_bot/important_variants.py", "src/two_bot/batch_contract.py",
     "src/commands/postgres_important_variants.py",
     "src/commands/postgres_cost_projection.py", "src/two_bot/retained_usage.py",

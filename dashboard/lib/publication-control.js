@@ -27,12 +27,13 @@ export function configuredAutomaticPolicy(env = process.env) {
   return { enabled: env.THEHEAT_AUTOMATIC_PUBLICATION_ENABLED === "1" && epoch !== null, epoch }
 }
 
-export function dashboardAutomaticPolicy(state, { now = Date.now(), env = process.env } = {}) {
+export function dashboardAutomaticPolicy(state, { now = Date.now(), env = process.env, runtimeReport = null } = {}) {
   const configured = configuredAutomaticPolicy(env)
   const control = mergePublicationControl(state?.publication_control, null)
-  const runtime = buildRuntimeConfig(state, { now })
+  // Configuration-only evidence can veto stale release settings, never enable them.
+  const runtime = buildRuntimeConfig(state, { now, runtimeReport })
   const enabled = configured.enabled && !control.invalid_control && !control.retired_epochs.includes(configured.epoch)
-    && runtime.status === "recorded" && runtime.flags.automatic_publication_enabled === true
+    && runtime.status === "recorded" && runtime.report_kind === "bot_run" && runtime.flags.automatic_publication_enabled === true
     && runtime.flags.automatic_publication_epoch === configured.epoch
   return { enabled, epoch: configured.epoch,
     reason: enabled ? "Automatic scheduling available for the current release epoch."

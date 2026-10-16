@@ -9,6 +9,7 @@ The remaining events are either Emergency-tier (catastrophic) or
 hurricane-related (rare by definition).
 """
 
+from collections import Counter
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 
@@ -25,6 +26,7 @@ NWS_URL = "https://api.weather.gov/alerts/active"
 # alley in April are routine — we skip them and only keep Tornado Emergency.
 TRACKED_EVENTS = {
     "Hurricane Warning",      # Hurricanes themselves are rare, each one is news
+    "Typhoon Warning",        # Same cyclone warning family in the western Pacific
     "Extreme Wind Warning",   # Only issued for major hurricane eyewalls (115+ mph)
     "Storm Surge Warning",    # Hurricane-specific, rare
     # Winter-tier extremes (rare, high-impact, not the routine Winter Storm Warning):
@@ -52,6 +54,21 @@ class SevereWeatherAlert:
     source_evidence: dict | None = None
 
 
+def _typhoon_warning(props: dict) -> bool:
+    """Retain the official warning designation; never infer observed winds."""
+    if not (props.get("event") == "Typhoon Warning" and props.get("category") == "Met"
+            and props.get("status") == "Actual" and props.get("messageType") in ("Alert", "Update")
+            and isinstance(props.get("id"), str) and props["id"]
+            and isinstance(props.get("areaDesc"), str) and props["areaDesc"].strip()):
+        return False
+    if props["messageType"] == "Update":
+        refs = props.get("references")
+        return (isinstance(refs, list) and bool(refs)
+                and all(isinstance(r, dict) and isinstance(r.get("identifier"), str)
+                        and bool(r["identifier"]) and r["identifier"] != props["id"] for r in refs))
+    return True
+
+
 def fetch_alerts(*, strict: bool = False) -> list[SevereWeatherAlert]:
     """Fetch active severe weather alerts from NWS."""
     try:
@@ -74,6 +91,28 @@ def fetch_alerts(*, strict: bool = False) -> list[SevereWeatherAlert]:
         alerts: list[SevereWeatherAlert] = []
         payload_dates = []
         seen_events = set()
+        # CAP references, not feed order, identify replaced typhoon messages.
+        typhoon_features: dict[str, dict] = {}
+        typhoon_products = []
+        conflicting_ids = set()
+        for feature in data.get("features", []):
+            props = feature.get("properties", {})
+            if _typhoon_warning(props):
+                typhoon_products.append(props)
+                identity = props["id"]
+                if identity in typhoon_features and feature != typhoon_features[identity]:
+                    conflicting_ids.add(identity)
+                else:
+                    typhoon_features[identity] = feature
+        typhoons = [f["properties"] for identity, f in typhoon_features.items()
+                    if identity not in conflicting_ids]
+        # Conflicting updates still establish uncertainty about predecessors and
+        # all affected areas. Excluding their admission must not resurrect old CAP.
+        superseded = {r["identifier"] for p in typhoon_products if p["messageType"] == "Update"
+                      for r in p["references"]}
+        conflicting_areas = {p["areaDesc"] for p in typhoon_products if p["id"] in conflicting_ids}
+        typhoon_areas = Counter(p["areaDesc"]
+                               for p in typhoons if p["id"] not in superseded)
 
         for feature in data.get("features", []):
             props = feature.get("properties", {})
@@ -83,7 +122,14 @@ def fetch_alerts(*, strict: bool = False) -> list[SevereWeatherAlert]:
             event = props.get("event", "")
 
             emergency = rare_tornado(props)
-            if not emergency and (event not in TRACKED_EVENTS or props.get("messageType", "Alert") != "Alert"):
+            typhoon = _typhoon_warning(props)
+            if event == "Typhoon Warning" and (
+                not typhoon or props["id"] in superseded or props["id"] in conflicting_ids
+                or props["areaDesc"] in conflicting_areas
+                or typhoon_areas[props["areaDesc"]] != 1
+            ):
+                continue
+            if not emergency and not typhoon and (event not in TRACKED_EVENTS or props.get("messageType", "Alert") != "Alert"):
                 continue
 
             severity = props.get("severity", "Unknown")
