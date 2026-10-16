@@ -156,3 +156,42 @@ def test_transport_rejects_other_file_rename_or_oversize_before_network(monkeypa
     api = report.github_api("b" * 32, {"GITHUB_TOKEN": "invented"})
     with pytest.raises(report.ReportError, match="disallowed_operation"):
         api("PATCH", payload)
+
+
+def test_cli_null_is_wrapped_to_distinguish_a_missing_report_from_an_empty_response(monkeypatch):
+    def command(args, **kwargs):
+        # Real gh --jq emits nothing for a top-level null, reproduced live read-only.
+        query = args[args.index('--jq') + 1]
+        stdout = '{"runtime_report_file":null}\n' if query == '{runtime_report_file:(.files["runtime-inventory.json"] // null)}' else ''
+        return subprocess.CompletedProcess(args, 0, stdout=stdout, stderr='')
+    monkeypatch.setattr(report.subprocess, 'run', command)
+    assert report.github_api('b' * 32, {'GITHUB_TOKEN': 'invented'})('GET', None) is None
+
+
+@pytest.mark.parametrize('stdout', ['', 'null', '{}', '[]', '{"unexpected":null}', '{"runtime_report_file":false}', 'broken'])
+def test_unexpected_cli_envelope_never_becomes_a_missing_report(monkeypatch, stdout):
+    monkeypatch.setattr(report.subprocess, 'run', lambda args, **kwargs: subprocess.CompletedProcess(args, 0, stdout=stdout, stderr=''))
+    with pytest.raises(report.ReportError, match='response_invalid'):
+        report.github_api('b' * 32, {'GITHUB_TOKEN': 'invented'})('GET', None)
+
+
+def test_first_file_publish_roundtrip_uses_wrapped_cli_reads_and_one_patch(monkeypatch):
+    stored, calls = None, []
+    def command(args, **kwargs):
+        nonlocal stored
+        if '--jq' in args:
+            calls.append('GET')
+            assert args[args.index('--jq') + 1] == '{runtime_report_file:(.files["runtime-inventory.json"] // null)}'
+            stdout = json.dumps({'runtime_report_file': stored})
+        else:
+            calls.append('PATCH')
+            assert args[args.index('--method') + 1] == 'PATCH'
+            payload = json.loads(kwargs['input'])
+            assert list(payload['files']) == [report.FILENAME]
+            stored = payload['files'][report.FILENAME]
+            stdout = ''
+        return subprocess.CompletedProcess(args, 0, stdout=stdout, stderr='')
+    monkeypatch.setattr(report.subprocess, 'run', command)
+    result = report.publish_report(packet(), report.github_api('b' * 32, {'GITHUB_TOKEN': 'invented'}))
+    assert result['status'] == 'confirmed'
+    assert calls == ['GET', 'PATCH', 'GET']

@@ -15,7 +15,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "data/country_codes.json": "563fd9c963633bb169c88bac593ec0ccb4694e31ae0613e37d31d1c07e276a9d",
     "data/place_registry.json": "e9678ac76bfd68d03032a80858a7cb6eed6353508bbcc2cafbdf3186a38cda64",
     "scripts/gen_runtime_report_workflow.py": "aedb3e23422bb1258398511d293a1e48934b2bc2c9b74e7e8ba4aa39203f2949",
-    "scripts/runtime_report.py": "f6c9dcb773e35db7520894ba9a0d7bb61313f5a5a98b9018462386880585fb29",
+    "scripts/runtime_report.py": "5f73e3932c48464a0ef9a8b30d9cb46c670eafb188dc409ec9fcb96cf51cd8f8",
     "scripts/threshold_artifacts.py": "a72878eed6a10ac89d5d9f691b83d8eb00729758aac306593a2cda5435b1142f",
     "src/commands/batch_result_journal.py": "4bc68b019c208c37037c9b17dabb0f727395aed97891423a2d4e1be1eb4b248f",
     "src/commands/bulk_rejection_client.py": "88d6048d3e006279cc8808547a7e907c2f1b79a4cc41bcb8f5917111639ca118",
@@ -190,5 +190,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "93d7e83d4da8f785b030e97da016cae9221a5f69b8a4c1024776627c02fdb351"
   },
   "schema_version": 1,
-  "source_sha256": "5bcc4b4bca5217f63dff9dac03ec4f9275ba623f9011a4014a46eaa56eaefc7e"
+  "source_sha256": "c0a30a821ff1b5173798c7b2c6681b314fc2669770a743e104bb54fbf745fefd"
 }

@@ -115,7 +115,7 @@ def github_api(gist: str, env: dict[str, str]):
     def call(method: str, payload):
         if method == "GET":
             args = ["gh", "api", "--hostname", "github.com", f"gists/{gist}",
-                    "--jq", f'.files["{FILENAME}"] // null']
+                    "--jq", f'{{runtime_report_file:(.files["{FILENAME}"] // null)}}']
             data = None
         elif (method == "PATCH" and isinstance(payload, dict) and set(payload) == {"files"}
               and isinstance(payload["files"], dict) and set(payload["files"]) == {FILENAME}
@@ -130,7 +130,16 @@ def github_api(gist: str, env: dict[str, str]):
         response = subprocess.run(args, input=data, text=True, capture_output=True, timeout=30, env=child, check=True)
         if len(response.stdout.encode()) > MAX_BYTES * 2:
             raise ReportError("runtime_report_response_size_limit")
-        return json.loads(response.stdout) if method == "GET" else None
+        if method == "GET":
+            try:
+                envelope = json.loads(response.stdout)
+            except (TypeError, ValueError) as exc:
+                raise ReportError("runtime_report_response_invalid") from exc
+            if (not isinstance(envelope, dict) or set(envelope) != {"runtime_report_file"}
+                    or envelope["runtime_report_file"] is not None and not isinstance(envelope["runtime_report_file"], dict)):
+                raise ReportError("runtime_report_response_invalid")
+            return envelope["runtime_report_file"]
+        return None
     return call
 
 
