@@ -198,7 +198,7 @@ function metricsHealth(state, posts, sources, now) {
 }
 
 /** A read-only evidence projection. Workflow success and generation memory are not product outcomes. */
-export function buildProductHealth(rawState, { now = Date.now() } = {}) {
+export function buildProductHealth(rawState, { now = Date.now(), runtimeReport = null } = {}) {
   const clock = now instanceof Date ? now.getTime() : now
   if (!Number.isFinite(clock) || !Number.isFinite(new Date(clock).getTime())) throw new TypeError("Product health requires a valid clock")
   const state = object(rawState) ? rawState : {}
@@ -210,7 +210,7 @@ export function buildProductHealth(rawState, { now = Date.now() } = {}) {
     milestones: {
       source_observed: milestone(sources.filter((row) => identifier(row.source) && !INTERNAL_SOURCES.has(row.source) && count(row.observed) > 0).map((row) => ({ time: row.time, source: row.source, observed: row.observed, reported_status: row.status ?? null, evidence: row.evidence, timestamp_precision: row.timestamp_precision ?? "source" })), clock),
       draft_created: milestone(drafts.map((draft) => ({ time: timestamp(draft.created_at, clock), id: draft.id ?? null })), clock),
-      draft_reviewed: milestone(drafts.filter((draft) => { try { return reviewIsCurrent(draft, dashboardEditorialPolicy(state, { now: clock }).policy) } catch { return false } }).map((draft) => ({ time: timestamp(draft.review_binding.reviewed_at, clock), id: draft.id ?? null, review_kind: draft.review_binding.kind })), clock),
+      draft_reviewed: milestone(drafts.filter((draft) => { try { return reviewIsCurrent(draft, dashboardEditorialPolicy(state, { now: clock, runtimeReport }).policy) } catch { return false } }).map((draft) => ({ time: timestamp(draft.review_binding.reviewed_at, clock), id: draft.id ?? null, review_kind: draft.review_binding.kind })), clock),
       post_confirmed: milestone(posts.map(({ eligibility_time, ...post }) => post), clock),
     },
     queue: queueHealth(state, drafts, clock),

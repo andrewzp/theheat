@@ -1,7 +1,7 @@
 import { acceptLocalCommand, localCommandRequest, localDraftProjection, previewConfigured, previewError } from "../../../lib/draft-command-client.js"
 import { dashboardEditorialPolicy } from "../../../lib/editorial-policy.js"
 import { dashboardAutomaticPolicy } from "../../../lib/publication-control.js"
-import { readStateStore, updateDraftStore } from "../../../lib/state-store.js"
+import { readStateStore, readStateWithRuntimeReport, updateDraftStore } from "../../../lib/state-store.js"
 import { requireDashboardAuth } from "../../../lib/auth.js"
 import { readJsonObject } from "../../../lib/request-json.js"
 import {
@@ -63,10 +63,10 @@ function assertReviewed(draft, policy, modelOnly = false) {
   }
 }
 
-function projection(draft, state, local = null) {
+function projection(draft, state, local = null, runtimeReport = null) {
   if (local) return localDraftProjection(draft, state, local)
   try {
-    return { ...projectDraft(draft, dashboardEditorialPolicy(state).policy), editorial_policy: dashboardEditorialPolicy(state), automatic_publication: dashboardAutomaticPolicy(state), publish_blocked: hasUnresolvedPublish(draft, state) }
+    return { ...projectDraft(draft, dashboardEditorialPolicy(state, { runtimeReport }).policy), editorial_policy: dashboardEditorialPolicy(state, { runtimeReport }), automatic_publication: dashboardAutomaticPolicy(state, { runtimeReport }), publish_blocked: hasUnresolvedPublish(draft, state) }
   } catch (error) {
     return { ...draft, text: typeof draft.text === "string" ? draft.text : "[Invalid draft text]", revision_identity: null, review_status: "conflict", review_kind: null, publish_blocked: true, review_error: error.message }
   }
@@ -82,7 +82,7 @@ export async function GET(request) {
       return Response.json(payload, { headers: { "Cache-Control": "private, no-store" } })
     }
     const local = previewConfigured() ? (await localCommandRequest(request, "/state")).payload : null
-    const state = local ? local.state : await readStateStore()
+    const { state, runtimeReport } = local ? { state: local.state, runtimeReport: null } : await readStateWithRuntimeReport()
     const drafts = (state.drafts || [])
       .filter((d) => ["pending", "approved"].includes(d.status))
       .sort((a, b) => {
@@ -90,7 +90,7 @@ export async function GET(request) {
         const priorityB = (b.score?.total || 0) + (b.candidate_score?.total || 0) * 0.35
         return priorityB - priorityA || new Date(b.created_at || 0) - new Date(a.created_at || 0)
       })
-      .map((d) => ({ ...projection(d, state, local), tweet_id: d.tweet_id ?? null }))
+      .map((d) => ({ ...projection(d, state, local, runtimeReport), tweet_id: d.tweet_id ?? null }))
     return Response.json({ drafts, ...(local ? { local_preview: true, state_version: local.state_version, candidates: local.candidates || [], operator_role: local.role } : {}) }, { headers: { "Cache-Control": "private, no-store" } })
   } catch (error) {
     if (previewConfigured()) return previewError(error)
@@ -145,10 +145,12 @@ export async function POST(request) {
     let publishIntentId
     let autoApproveAt
     let minutes
-    const { draft: updatedDraft, state: updatedState } = await updateDraftStore(draftId, (draft, state) => {
+    let checkedPolicySha = null
+    let checkedAutomaticEpoch = null
+    const { draft: updatedDraft, state: updatedState, runtimeReport: updatedReport = null } = await updateDraftStore(draftId, (draft, state, { runtimeReport = null } = {}) => {
       assertExpected(draft, expectedRevision)
       assertMutable(draft, state)
-      const editorialPolicy = dashboardEditorialPolicy(state)
+      const editorialPolicy = dashboardEditorialPolicy(state, { runtimeReport })
       if (action === "edit") {
         invalidateText(draft, editedText)
         draft.manual_override = true
@@ -183,8 +185,9 @@ export async function POST(request) {
         if (body.expectedPolicySha256 !== editorialPolicy.policy_sha256) fail("Editorial policy changed since your confirmation. Refresh and review again.", 409, "editorial_policy_changed")
         recordHumanReview(draft, editorialPolicy.policy)
       } else if (action === "auto_approve") {
-        const publication = dashboardAutomaticPolicy(state)
+        const publication = dashboardAutomaticPolicy(state, { runtimeReport })
         if (!publication.enabled) fail(publication.reason, 409, "automatic_publication_paused")
+        checkedAutomaticEpoch = publication.epoch
         assertPending(draft)
         assertReviewed(draft, editorialPolicy.policy, true)
         const policy = draft.approval_policy || {}
@@ -211,16 +214,27 @@ export async function POST(request) {
         draft.publish_intent_id = publishIntentId
         draft.publish_requested_at = new Date().toISOString()
       }
+      if (["review", "approve", "auto_approve"].includes(action)) checkedPolicySha = editorialPolicy.policy_sha256
       return draft
-    }, { expectedRevision })
+    }, { expectedRevision, confirmContext: ["review", "approve", "auto_approve"].includes(action)
+      ? (latestState, { runtimeReport = null } = {}) => {
+        const current = dashboardEditorialPolicy(latestState, { runtimeReport })
+        if (!current.policy || !checkedPolicySha || current.policy_sha256 !== checkedPolicySha) {
+          fail("Editorial policy changed before this decision could be saved. Refresh and review again.", 409, "editorial_policy_changed")
+        }
+        if (action === "auto_approve") {
+          const publication = dashboardAutomaticPolicy(latestState, { runtimeReport })
+          if (!publication.enabled || publication.epoch !== checkedAutomaticEpoch) fail(publication.reason, 409, "automatic_publication_paused")
+        }
+      } : undefined })
 
     if (!updatedDraft) fail("Draft not found", 404, "draft_not_found")
     if (action !== "approve") {
       const names = { edit: "edited", select_candidate: "selected_candidate", reject: "rejected", review: "reviewed", auto_approve: "auto_approved", cancel_auto_approve: "cancelled_auto_approve" }
-      return Response.json({ ok: true, action: names[action], draft: projection(updatedDraft, updatedState), ...(autoApproveAt ? { autoApproveAt, minutes } : {}) })
+      return Response.json({ ok: true, action: names[action], draft: projection(updatedDraft, updatedState, null, updatedReport), ...(autoApproveAt ? { autoApproveAt, minutes } : {}) })
     }
 
-    if (!approvalIsCurrent(updatedDraft, "manual", dashboardEditorialPolicy(updatedState).policy) || updatedDraft.publish_intent_id !== publishIntentId || hasUnresolvedPublish(updatedDraft, updatedState)) {
+    if (!approvalIsCurrent(updatedDraft, "manual", dashboardEditorialPolicy(updatedState, { runtimeReport: updatedReport }).policy) || updatedDraft.publish_intent_id !== publishIntentId || hasUnresolvedPublish(updatedDraft, updatedState)) {
       fail("This draft changed before dispatch. Review its current version before publishing.")
     }
     let res
@@ -240,7 +254,7 @@ export async function POST(request) {
       // erasing it and retrying would conceal a potentially queued workflow.
       return Response.json({ error: "Unable to confirm workflow dispatch. Approval remains queued; check the workflow before retrying.", code: "dispatch_uncertain" }, { status: 503 })
     }
-    if (res.ok || res.status === 204) return Response.json({ ok: true, action: "approved", draft: projection(updatedDraft, updatedState) })
+    if (res.ok || res.status === 204) return Response.json({ ok: true, action: "approved", draft: projection(updatedDraft, updatedState, null, updatedReport) })
 
     const errorText = await res.text()
     // A failed old dispatch must never roll back a newer edit or approval.

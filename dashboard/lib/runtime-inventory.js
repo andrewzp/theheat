@@ -1,3 +1,5 @@
+import { configurationReportRun, reportTimestamp as timestamp } from "./runtime-report.js"
+
 // Bot settings come from the bot process, never from the dashboard's environment.
 export const RUNTIME_MAX_AGE_HOURS = 6
 const FLAG_KEYS = [
@@ -15,29 +17,23 @@ function text(value) {
   return typeof value === "string" && value.trim() ? value.slice(0, 160) : null
 }
 
-function timestamp(value) {
-  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(value)) return NaN
-  const calendar = new Date(`${value.slice(0, 10)}T00:00:00Z`)
-  if (!Number.isFinite(calendar.getTime()) || calendar.toISOString().slice(0, 10) !== value.slice(0, 10)) return NaN
-  if (Number(value.slice(11, 13)) > 23 || Number(value.slice(14, 16)) > 59 || Number(value.slice(17, 19)) > 59) return NaN
-  return Date.parse(value)
-}
-
 function sha(value) {
   return typeof value === "string" && /^[a-f0-9]{40,64}$/i.test(value) ? value : null
 }
 
-export function buildRuntimeConfig(state = {}, { now = Date.now() } = {}) {
+export function buildRuntimeConfig(state = {}, { now = Date.now(), runtimeReport = null } = {}) {
   const result = {
     status: "unknown", captured_at: null, age_hours: null, run_id: null, mode: null,
     reason: "No bot runtime inventory is recorded. Settings cannot be inferred from the dashboard server.",
     bot_git_sha: null, bot_version: null, state_backend: null,
     writer_model: null, writer_provider: null, fact_check_model: null,
     critic_model: null, safety_model: null, claim_extract_model: null,
-    editorial_policy: null, flags: {}, credentials_present: {}, capabilities: {},
+    editorial_policy: null, flags: {}, credentials_present: {}, capabilities: {}, report_kind: null,
   }
   const history = Array.isArray(state?.run_history) ? state.run_history : []
-  const latest = [...history].filter((run) => Number.isFinite(timestamp(run?.started_at)))
+  const reportRun = runtimeReport === null ? null : configurationReportRun(runtimeReport)
+  if (runtimeReport !== null && !reportRun) return { ...result, reason: "The separate configuration report is invalid; current settings are unverified." }
+  const latest = [...history, ...(reportRun ? [reportRun] : [])].filter((run) => Number.isFinite(timestamp(run?.started_at)))
     .sort((a, b) => timestamp(b.started_at) - timestamp(a.started_at))[0]
   if (!latest) return result
   // A newer uninstrumented run must not inherit an older run's settings.
@@ -57,9 +53,12 @@ export function buildRuntimeConfig(state = {}, { now = Date.now() } = {}) {
     ...result,
     status: ageHours > RUNTIME_MAX_AGE_HOURS ? "stale" : "recorded",
     captured_at: new Date(capturedAt).toISOString(), age_hours: ageHours,
+    report_kind: latest.configuration_only ? "configuration_only" : "bot_run",
     reason: ageHours > RUNTIME_MAX_AGE_HOURS
       ? `Last bot report is older than ${RUNTIME_MAX_AGE_HOURS} hours; present settings are unverified.`
-      : "Settings reported by this bot invocation; credentials and provider credits are not verified.",
+      : latest.configuration_only
+        ? "Configuration-only bot invocation; no source collection, drafting or provider access was tested."
+        : "Settings reported by this bot invocation; credentials and provider credits are not verified.",
     run_id: text(latest.id || latest.run_id), mode: text(snapshot.mode),
     bot_git_sha: sha(snapshot.git_sha), bot_version: text(snapshot.version),
     state_backend: text(snapshot.state_backend),

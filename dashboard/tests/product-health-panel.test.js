@@ -42,3 +42,11 @@ test("panel labels stale views and credential presence separately from successfu
   assert.match(markup, /Automatic scheduling after critic pass<\/dt><dd>Off/)
   assert.match(markup, /recorded-writer/)
 })
+
+test("configuration-only refresh cannot claim continued ingestion or successful provider access", () => {
+  const markup = render({ health, config: { status: "recorded", report_kind: "configuration_only",
+    flags: { automatic_publication_enabled: false } } })
+  assert.match(markup, /Configuration refreshed only/)
+  assert.match(markup, /did not collect stories, write drafts or verify provider access/)
+  assert.doesNotMatch(markup, /Ingestion and review continue/)
+})

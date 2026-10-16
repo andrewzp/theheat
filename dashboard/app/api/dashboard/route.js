@@ -2,7 +2,7 @@ import { localCostEvidence } from "../../../lib/local-cost-evidence.js"
 import { localCommandRequest, localDraftProjection, previewConfigured, previewError } from "../../../lib/draft-command-client.js"
 import { dashboardEditorialPolicy } from "../../../lib/editorial-policy.js"
 import { dashboardAutomaticPolicy } from "../../../lib/publication-control.js"
-import { getStateBackend, readStateStore } from "../../../lib/state-store.js"
+import { getStateBackend, readStateWithRuntimeReport } from "../../../lib/state-store.js"
 import { requireDashboardAuth } from "../../../lib/auth.js"
 import { buildSourceHealthPayload } from "../../../lib/source-health.js"
 import { projectStateForDashboard } from "../../../lib/projection.js"
@@ -29,7 +29,7 @@ function tsValue(s) {
   return Number.isFinite(parsed) ? parsed : 0
 }
 
-function pendingDrafts(state, local = null) {
+function pendingDrafts(state, local = null, runtimeReport = null) {
   return (state?.drafts || [])
     .filter((d) => ["pending", "approved"].includes(d.status))
     .sort((a, b) => {
@@ -42,7 +42,7 @@ function pendingDrafts(state, local = null) {
     .map((d) => {
       try {
         if (local) return localDraftProjection(d, state, local)
-        return { ...projectDraft(d, dashboardEditorialPolicy(state).policy), editorial_policy: dashboardEditorialPolicy(state), automatic_publication: dashboardAutomaticPolicy(state), publish_blocked: hasUnresolvedPublish(d, state), tweet_id: d.tweet_id ?? null }
+        return { ...projectDraft(d, dashboardEditorialPolicy(state, { runtimeReport }).policy), editorial_policy: dashboardEditorialPolicy(state, { runtimeReport }), automatic_publication: dashboardAutomaticPolicy(state, { runtimeReport }), publish_blocked: hasUnresolvedPublish(d, state), tweet_id: d.tweet_id ?? null }
       } catch (error) {
         return { ...d, text: typeof d.text === "string" ? d.text : "[Invalid draft text]", revision_identity: null, review_status: "conflict", review_kind: null, publish_blocked: true, review_error: error.message, tweet_id: d.tweet_id ?? null }
       }
@@ -159,18 +159,18 @@ export async function GET(request) {
 
   try {
     const local = previewConfigured() ? (await localCommandRequest(request, "/state")).payload : null
-    const state = local ? local.state : await readStateStore()
+    const { state, runtimeReport } = local ? { state: local.state, runtimeReport: null } : await readStateWithRuntimeReport()
     results.local_preview = !!local
     if (local) { results.candidates = local.candidates || []; results.operator_role = local.role; results.operator_subject = local.operator_subject }
     if (local) results.localCostEvidence = localCostEvidence(local.local_cost)
     results.costEvidence = buildCostEvidence(state, {scenario: url.searchParams.get("cost_scenario")})
     results.state = projectStateForDashboard(state)
     results.stateBackend = local ? "local command preview" : getStateBackend()
-    results.drafts = { drafts: pendingDrafts(state, local), posted: postedDraftsWithMetrics(state) }
+    results.drafts = { drafts: pendingDrafts(state, local, runtimeReport), posted: postedDraftsWithMetrics(state) }
     results.suppressions = suppressionsPayload(state, { sourceFilter, sinceFilter, limit })
     results.sourceHealth = buildSourceHealthPayload(state)
-    results.config = buildRuntimeConfig(state)
-    results.productHealth = buildProductHealth(state)
+    results.config = buildRuntimeConfig(state, { runtimeReport })
+    results.productHealth = buildProductHealth(state, { runtimeReport })
   } catch (error) {
     if (previewConfigured()) return previewError(error)
     results.stateError = `Failed to fetch state store: ${error.message}`
