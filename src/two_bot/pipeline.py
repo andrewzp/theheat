@@ -205,6 +205,9 @@ def _writer_sample_slate(
     memory_slice: MemorySlice,
     samples: int,
 ) -> list[WriterResult]:
+    from src.two_bot.trial_budget import current_trial, TrialStopped
+    if current_trial() is not None and samples != 1:
+        raise TrialStopped("trial_requires_one_writer_sample")
     if samples <= 1:
         return [writer.write_tweet(bundle, memory_slice)]
     with ThreadPoolExecutor(max_workers=samples) as executor:

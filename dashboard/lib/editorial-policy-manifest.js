@@ -70,7 +70,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/editorial/draft_admission.py": "1f60fce127c7caa8c1965ce5c7c7e89c7b291a56028604f0d315952c587555ec",
     "src/editorial/marine_evidence.py": "7183f93f1068d75856063cf061a1dea8751bd4dd98cc1f1f34488bcf39296f5c",
     "src/editorial/newsworthiness.py": "2df18f17c51f772b761609bf10dc1c5b7289d2b1f1e2ce6f3f9dd743dbe73236",
-    "src/editorial/policy.py": "19262676fadff61acd3f211800f30fe50a15a8a4cabfa46db4d93b72072b29db",
+    "src/editorial/policy.py": "e5c9be3f2930fc347198453a9979ec55fab900eaef1ce93abe8447bd16033332",
     "src/editorial/report_development.py": "e2ed39a9ff957683c8befff0f3b99533fdc9d90d84af88220ed13f2bf1489995",
     "src/editorial/revisions.py": "c4d6ebed696a1174b0f961eb8e69971b2b5adbaccabab5628d72ed61f662318d",
     "src/editorial/synthesis.py": "c3230d7f91f287550e158548998ed5df778148592c2989cf7155cd2a3182498b",
@@ -138,9 +138,9 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/two_bot/check_origin.py": "c1cb221177523a7911cc6d4fed83728b69dee86b500fef1431bf158bddb7a129",
     "src/two_bot/check_requests.py": "8017e57b24117bb574e4e619c53eb51ad786178a649b961176d410baa060347b",
     "src/two_bot/check_transport.py": "270d0fc919e0b4d62a8a7a03f7af7bd68bdad44be0c897b3764c96c93036ed25",
-    "src/two_bot/critic.py": "47c01ae89323dde6d764d40994f1eb0a1f652f1e69022981ede236d74bb10cf5",
+    "src/two_bot/critic.py": "37decb2edf3bd1ab71b4d2c04dd3c4f5acff883542ab3f1e99af38a6e04530d2",
     "src/two_bot/evidence_contract.py": "506c86325dd4b589d5cd4f202461b65447f323218ccbaa8eacc0c92230e8f6a8",
-    "src/two_bot/fact_check.py": "fd175d28a10910410027e88f5c06494f40d12988b361c0105c8e0102a6b5e0d5",
+    "src/two_bot/fact_check.py": "bdf40983a44b178dd8837f433cf6b81178c003ff25fa5761a0124a4d2c7c61af",
     "src/two_bot/ghcn_claim_view.py": "b2835790258988d04aef422ec6d0069d3080e73bf2ddc338e1d6d0b0fa078081",
     "src/two_bot/important_variants.py": "ff19a0e192e677a3be4fc36b064b4010c77840be3f5e999fec614f6df40d55e3",
     "src/two_bot/intern/__init__.py": "2e34d6b9975fb831edbad10ed06d66aad2e8569a29cfd4cf17784177b91205e0",
@@ -158,7 +158,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/two_bot/json_utils.py": "87bc4c7174797ed5cddf96d60af0e6e2237094859001cdeeb93eaf794497db03",
     "src/two_bot/memory.py": "33634f80d4002dd6246c5f627a8cf3db26cf8cb18fae5f81875db86f199c4bb9",
     "src/two_bot/multisignal.py": "6faa78ed3c5d94b4bb9305e12f4a61d370e212fddee47190b15997b52fbb243e",
-    "src/two_bot/pipeline.py": "53727620ccd064c201dd2b559043098685d4273a394926636ccb1b8b863562ba",
+    "src/two_bot/pipeline.py": "d256bffeff87653cefeacabb703a5b7ef9119a585a010d13e09e99fe0de474fc",
     "src/two_bot/prompts/__init__.py": "b08ec3ae2e477637b1fa3aa7f04935b7744b5ea7548bb384965e20ade7fabd2b",
     "src/two_bot/prompts/critic_prompt.py": "72910f153dbe2c80f28dfaebb73b15947777bb2aca2e6c06afda2e6c7eb367b1",
     "src/two_bot/prompts/fact_check_prompt.py": "b0cc2f5e1edfc1fe56fa2ac3d35e7506f33e1a941e1b63969c36bcf098bbf8ed",
@@ -172,10 +172,11 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/two_bot/strict_contract.py": "d4536268c08775cea808d3f2738226da9d33d7244a8c30988d5286d6dae83ca8",
     "src/two_bot/synchronous_origin.py": "f4bd7a529c1335450bcfff0289f24e616a072a323c5ecd52cadd0b236b630c4c",
     "src/two_bot/synchronous_writer.py": "64138cf214d5d8f0e881b3183db1f414896656233df37fa6bac8b0f520fd919e",
+    "src/two_bot/trial_budget.py": "59a3427b6c6b2198eace186f981cb9bcb951945f262e22af63d4e0b65a2056bd",
     "src/two_bot/types.py": "36ed2e6475a655f4112012486795702159ed546c3040e8ef1874b7a0b02a9035",
-    "src/two_bot/writer.py": "f93eb3743430e307b1fd31d628678c4a6ef5bebd1c2c35353353591eb5773f5c",
-    "src/voice/safety.py": "4a828a22e451889f630e994add6ba38c463d44369d24d2e22c2ff85e7f0387e5"
+    "src/two_bot/writer.py": "a7f5f1d8c19bec328a5d9a72181922d7034b2990e8130f10c9b84c757f95be53",
+    "src/voice/safety.py": "93d7e83d4da8f785b030e97da016cae9221a5f69b8a4c1024776627c02fdb351"
   },
   "schema_version": 1,
-  "source_sha256": "cfc643de7b1596b621e4e5900426b51db4aa55d70ffd208cd2d6242cd1ed0dfb"
+  "source_sha256": "626ecff29bc2cf407d5bc41464c9d8281bc81fd7002a4af203e8b5f7fb42718e"
 }

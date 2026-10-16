@@ -13,6 +13,7 @@ from src.two_bot.prompts.fact_check_prompt import (
     FACT_CHECK_USER_PROMPT_TEMPLATE,
 )
 from src.two_bot.retry import call_with_retries
+from src.two_bot.trial_budget import google_trial_options, provider_call
 from src.two_bot.scientific_claims import scientific_claim_failures
 from src.two_bot.strict_contract import CLAIM_KINDS, bundle_schema_issues, material_span_failures, review_snapshot
 from src.two_bot.types import ExtractedClaim, FactCheckResult, StoryBundle
@@ -175,14 +176,14 @@ def _call_gemini(tweet: str, bundle: StoryBundle, *, retry_suffix: str = "") -> 
     # with ReadTimeout in <300ms total across 3 retry attempts, silently
     # killing every draft from 2026-05-03 onward (4-day production outage).
     # 90000 = 90 seconds, the original intent.
-    client = genai.Client(api_key=api_key, http_options=genai_types.HttpOptions(timeout=90000))
+    client = genai.Client(api_key=api_key, http_options=genai_types.HttpOptions(timeout=90000, **google_trial_options()))
     request = prepare_request(tweet, bundle, retry_suffix=retry_suffix)
     response = call_with_retries(
         "gemini fact-check",
-        lambda: client.models.generate_content(
+        lambda: provider_call("fact_check", "google", dict(
             model=request["model"], contents=request["contents"],
             config=genai_types.GenerateContentConfig(**request["config"]),
-        ),
+        ), client.models.generate_content),
     )
     from src.two_bot.usage_ledger import record_response
     record_response("fact_check", response, FACT_CHECKER_MODEL, "google")

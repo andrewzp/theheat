@@ -39,6 +39,7 @@ concurrency:
 
 jobs:
   dryrun:
+    if: vars.THEHEAT_PRODUCTION_PAUSED != '1' && vars.THEHEAT_PAID_EVALUATION_ENABLED == '1'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
