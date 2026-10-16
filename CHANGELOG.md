@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.108.123 — 2026-10-16
+
+- Put attributed warnings first, require second sentences to earn their space, and distinguish storm motion from wind intensity across writer and checking prompts. Runtime models, one sample and required checks remain unchanged; prompt contracts do not establish live quality improvement.
+
+
 ## 0.9.108.122 — 2026-10-16
 
 - Handle the first configuration-report file correctly: wrap the GitHub CLI result so a genuine missing file remains distinct from an empty, malformed or unexpected response. Preserve single-file writes, no-resend behavior and all policy checks.
