@@ -1,3 +1,7 @@
+## [0.9.109.8] - 2026-10-16
+
+- Flag expired, future or unreadable saved NWS warnings before review or approval, and place held warnings after other active drafts. Preserve original evidence and editing while refusing obsolete approval before a publishing job is queued; live source checks still run before posting.
+
 ## [0.9.109.7] - 2026-10-16
 
 - Keep approved publication on X only. Preserve exact review, source checks, durable intent, X receipts and unknown-outcome duplicate protection; the dormant Bluesky adapter is not invoked.

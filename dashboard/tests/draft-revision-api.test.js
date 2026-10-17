@@ -7,6 +7,7 @@ process.env.THEHEAT_AUTOMATIC_PUBLICATION_EPOCH = "offline-test-release"
 import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 import { importFresh } from "./helpers/import-fresh.js"
+import { nwsDraft } from "./fixtures/nws-warning-evidence.js"
 import { authorizeDraft, draftIdentity, fingerprint, initializeRevision, invalidateText, recordHumanReview, reviewIsCurrent, textHash } from "./helpers/review-policy.js"
 
 const malformedAttempts = JSON.parse(readFileSync(new URL("../../tests/fixtures/publication_uncertainty_contract.json", import.meta.url))).filter((example) => example.malformed)
@@ -34,6 +35,7 @@ async function withStore(drafts, run, options = {}) {
   let state = { drafts: structuredClone(drafts), publish_ledger: options.ledger || {}, errors: [], run_history: [{ started_at: new Date().toISOString(), runtime_inventory: { editorial_policy: structuredClone(policy), schema_version: 1, captured_at: new Date().toISOString(), flags: { automatic_publication_enabled: true, automatic_publication_epoch: "offline-test-release" } } }] }
   const dispatches = []
   let writes = 0
+  let reads = 0
   const originalFetch = globalThis.fetch
   globalThis.fetch = async (url, request = {}) => {
     if (String(url).includes("/dispatches")) {
@@ -48,6 +50,7 @@ async function withStore(drafts, run, options = {}) {
       options.onWrite?.(state, writes)
       return { ok: true, status: 200, async json() { return {} } }
     }
+    options.onRead?.(state, ++reads)
     const snapshot = JSON.stringify(state)
     return { ok: true, status: 200, async json() { return { files: { "state.json": { content: snapshot } } } } }
   }
@@ -63,6 +66,92 @@ async function withStore(drafts, run, options = {}) {
 }
 function expected(draft) { return { ...draftIdentity(draft), decision_revision: draft.decision_revision ?? 0 } }
 function request(draft, action, more = {}) { return { draftId: draft.id, action, expectedRevision: expected(draft), ...more } }
+
+function timedNws(now = Date.now()) {
+  const draft = nwsDraft(), source = draft.review_context.two_bot.bundle.raw_signal_dump.source_evidence
+  draft.created_at = new Date(now).toISOString()
+  source.captured_at = new Date(now - 30000).toISOString()
+  Object.assign(source.feature.properties, {
+    sent: new Date(now - 60000).toISOString(), effective: new Date(now - 60000).toISOString(),
+    expires: new Date(now + 3600000).toISOString(), onset: new Date(now + 1800000).toISOString(),
+  })
+  return draft
+}
+
+for (const action of ["review", "approve", "auto_approve"]) {
+  for (const condition of ["expired", "invalid", "missing"]) {
+    test(`NWS ${condition} ${action} is refused before any write or dispatch`, async () => {
+      const draft = timedNws(), source = draft.review_context.two_bot.bundle.raw_signal_dump.source_evidence
+      if (condition === "expired") source.feature.properties.expires = new Date(Date.now() - 1).toISOString()
+      if (condition === "invalid") source.feature.properties.sent = "2026-02-30T00:00:00Z"
+      if (condition === "missing") delete draft.review_context.two_bot.bundle.raw_signal_dump.source_evidence
+      draft.local_preview = true // A stored/client field cannot bypass the production route's gate.
+      await withStore([draft], async ({ post, state, writes, dispatches }) => {
+        const before = structuredClone(state())
+        const result = await post(request(draft, action, { reviewConfirmed: true, expectedPolicySha256: fingerprint(policy), delayMinutes: 5 }))
+        assert.equal(result.status, 409)
+        assert.equal(result.body.code, "nws_source_review_required")
+        assert.equal(writes(), 0); assert.equal(dispatches.length, 0)
+        assert.deepEqual(state(), before)
+      })
+    })
+  }
+}
+
+test("saved NWS preparation window permits human review and one existing manual approval, without live-source claims", async () => {
+  const draft = timedNws()
+  await withStore([draft], async ({ post, state, dispatches }) => {
+    const reviewed = await post(request(draft, "review", { reviewConfirmed: true, expectedPolicySha256: fingerprint(policy) }))
+    assert.equal(reviewed.status, 200)
+    const reviewedDraft = structuredClone(state().drafts[0])
+    assert.equal(reviewedDraft.review_binding.kind, "human")
+    assert.equal((await post(request(reviewedDraft, "approve"))).status, 200)
+    assert.equal(dispatches.length, 1)
+    assert.equal(dispatches[0].inputs.tweet_text, draft.text)
+  })
+})
+
+test("NWS expiry between the two state reads refuses confirmation without a write or dispatch", async () => {
+  const base = Date.now(), draft = timedNws(base)
+  draft.review_context.two_bot.bundle.raw_signal_dump.source_evidence.feature.properties.expires = new Date(base + 60000).toISOString()
+  const originalNow = Date.now; let clock = base
+  Date.now = () => clock
+  try {
+    await withStore([draft], async ({ post, writes, dispatches }) => {
+      const result = await post(request(draft, "review", { reviewConfirmed: true, expectedPolicySha256: fingerprint(policy) }))
+      assert.equal(result.status, 409)
+      assert.equal(result.body.code, "nws_source_review_required")
+      assert.equal(writes(), 0); assert.equal(dispatches.length, 0)
+    }, { onRead: (_state, count) => { if (count === 2) clock = base + 60000 } })
+  } finally { Date.now = originalNow }
+})
+
+for (const action of ["edit", "reject", "cancel_auto_approve"]) test(`expired NWS still allows ${action}`, async () => {
+  const draft = timedNws(); draft.review_context.two_bot.bundle.raw_signal_dump.source_evidence.feature.properties.expires = new Date(Date.now() - 1).toISOString()
+  await withStore([draft], async ({ post, dispatches }) => {
+    assert.equal((await post(request(draft, action, { editedText: "Invented replacement for later review." }))).status, 200)
+    assert.equal(dispatches.length, 0)
+  })
+})
+
+test("both queue endpoints put stale high-score NWS after fresh low-score copy while preserving state", async () => {
+  const fresh = timedNws(), old = structuredClone(fresh), other = fixture("other")
+  old.id = "stale-warning"; old.score = { total: 100 }
+  old.review_context.two_bot.bundle.raw_signal_dump.source_evidence.feature.properties.expires = new Date(Date.now() - 1).toISOString()
+  fresh.score = { total: 0 }
+  await withStore([old, fresh, other], async ({ route, headers, state, writes, dispatches }) => {
+    const before = structuredClone(state())
+    const separate = await route.GET(new Request("http://localhost/api/drafts", { headers }))
+    assert.deepEqual((await separate.json()).drafts.map(d => d.id), [other.id, fresh.id, old.id])
+    const combined = await importFresh("app/api/dashboard/route.js")
+    const response = await combined.GET(new Request("http://localhost/api/dashboard", { headers }))
+    const payload = await response.json()
+    assert.equal(payload.stateError, undefined)
+    assert.deepEqual(payload.drafts.drafts.map(d => d.id), [other.id, fresh.id, old.id])
+    assert.equal(writes(), 0); assert.equal(dispatches.length, 0)
+    assert.deepEqual(state(), before)
+  })
+})
 
 for (const action of ["edit", "select_candidate"]) {
   test(`${action} revokes scheduled approval and archives old checks`, async () => {

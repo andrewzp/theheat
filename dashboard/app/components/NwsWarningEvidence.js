@@ -1,24 +1,29 @@
 import React from "react"
 import { nwsWarningForDisplay } from "../../lib/nws-warning-evidence.js"
+import { nwsSourceTiming } from "../../lib/nws-source-timing.js"
 
 const h = React.createElement
 const field = (label, value) => h("div", { key: label }, h("dt", null, label), h("dd", null, value))
 
-export function NwsWarningEvidence({ draft }) {
+export function NwsWarningEvidence({ draft, now = Date.now() }) {
   const source = nwsWarningForDisplay(draft)
-  if (source.status === "unsupported") return null
+  const timing = draft?.local_preview ? { blocked: false } : nwsSourceTiming(draft, now)
+  if (source.status === "unsupported" && !timing.blocked) return null
   const title = h("h3", null, "Warning saved with this draft")
   if (source.status !== "present") return h("section", { className: "forecast-evidence nws-warning-evidence", "aria-label": "Saved NWS warning" },
-    title, h("p", null, source.status === "missing" ? "The complete NWS warning was not saved with this draft."
+    title, timing.blocked && h("p", { className: "draft-feedback error", role: "status" }, timing.message),
+    h("p", null, source.status === "missing" ? "The complete NWS warning was not saved with this draft."
       : "The saved NWS warning cannot be displayed because its fields are missing, inconsistent or too large."),
     h("p", null, "Check the original warning before recording a human review. Missing evidence is not a passing check."))
   return h("section", { className: "forecast-evidence nws-warning-evidence", "aria-label": "Saved NWS warning" },
     title,
+    timing.blocked && h("p", { className: "draft-feedback error", role: "status" }, timing.message),
     h("p", null, "Read the full warning and preparation advice below before reviewing the text. A warning designation does not establish observed harm."),
     h("dl", { className: "forecast-fields" },
       field("Product", source.event), field("Area", source.area), field("Issuing office", source.office),
       field("Message type", source.messageType), field("Issued (source time)", source.sent),
-      field("Saved at", source.capturedAt)),
+      field("Saved at", source.capturedAt),
+      ...(timing.cutoff ? [field("Saved review window ends (UTC)", timing.cutoff)] : [])),
     h("details", { className: "forecast-details" },
       h("summary", null, "Read full warning and instructions"),
       h("h4", null, "Warning statement"),

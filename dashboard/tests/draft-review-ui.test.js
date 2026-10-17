@@ -1,6 +1,7 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import { draftReviewControls, draftTextLength, revisionKey } from "../lib/draft-review-ui.js"
+import { draftReviewControls, draftTextLength, revisionKey, reviewQueueOrder } from "../lib/draft-review-ui.js"
+import { nwsDraft } from "./fixtures/nws-warning-evidence.js"
 
 test("revised, conflicted and unresolved drafts cannot be approved or scheduled", () => {
   for (const draft of [
@@ -53,4 +54,23 @@ test("joint graphic review cannot be replaced by the text-only confirmation", ()
   assert.equal(controls.canApprove, false)
   assert.equal(controls.canSchedule, false)
   assert.equal(controls.canEdit, true)
+})
+
+test("local command preview retains its own authority currentness contract", () => {
+  const preview = { local_preview: true, operator_role: "publisher", type: "severe_weather", status: "pending", review_status: "passed", review_kind: "human" }
+  assert.equal(draftReviewControls(preview).canApprove, true)
+  assert.equal(draftReviewControls(preview).sourceHold, null)
+  assert.equal(draftReviewControls({ ...preview, operator_role: "viewer" }).canApprove, false)
+})
+
+test("client refresh cannot put a newer held warning above usable copy or mutate the received queue", () => {
+  const fresh = nwsDraft(), held = structuredClone(fresh)
+  fresh.id = "fresh"; fresh.created_at = "2026-01-01T00:10:00Z"
+  held.id = "held"; held.created_at = "2026-01-02T00:00:00Z"
+  held.review_context.two_bot.bundle.raw_signal_dump.source_evidence.feature.properties.expires = "2026-01-01T00:30:00Z"
+  const other = { id: "other", type: "hot10", created_at: "2026-01-01T00:20:00Z" }
+  const queue = [held, fresh, other], before = structuredClone(queue), now = Date.parse("2026-01-01T01:00:00Z")
+  assert.deepEqual(reviewQueueOrder(queue, { now }).map(d => d.id), ["other", "fresh", "held"])
+  assert.deepEqual(queue, before)
+  assert.deepEqual(reviewQueueOrder(queue, { now, localPreview: true }).map(d => d.id), ["held", "other", "fresh"])
 })

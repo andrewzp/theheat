@@ -17,7 +17,7 @@ import { CostPanel } from "./components/CostPanel.js"
 import { COST_SCENARIO } from "../lib/usage-cost-contract.js"
 import { SuppressedView } from "./components/SuppressedView.js"
 import { hot10IsStale, hot10StaleDays, timeAgo, todayTweetCount } from "../lib/format.js"
-import { draftReviewControls, draftTextLength, revisionKey } from "../lib/draft-review-ui.js"
+import { draftReviewControls, draftTextLength, revisionKey, reviewQueueOrder } from "../lib/draft-review-ui.js"
 import { createDraftCommand, createCandidateCommand, localCommandEndpoint } from "../lib/draft-command-request.js"
 import { recoveryKey, saveCommandReference, readCommandReference, clearCommandReference, withCommandReference, abandonmentBody } from "../lib/local-command-recovery.js"
 import "./dashboard.css"
@@ -107,14 +107,9 @@ export default function Dashboard() {
         localCostEvidence: payload.localCostEvidence,
         deployment: payload.deployment,
       })
-      // Show the review queue in time order (newest first) — the API returns
-      // drafts in insertion order, which reads as jumbled. created_at is ISO 8601,
-      // so a string compare is chronological.
-      setDrafts(
-        [...(payload.drafts?.drafts || [])].sort((a, b) =>
-          (b.created_at || "").localeCompare(a.created_at || "")
-        )
-      )
+      // Keep held warnings behind usable review items while retaining the
+      // desk's newest-first order within each group.
+      setDrafts(reviewQueueOrder(payload.drafts?.drafts || [], { localPreview: payload.local_preview === true }))
       setSuppressions(payload.suppressions?.suppressions || [])
       setSuppressionsStats(payload.suppressions?.stats || null)
       setModelConfig(payload.config || null)
@@ -626,7 +621,7 @@ export default function Dashboard() {
                         <span className="draft-type">{d.type}</span>
                         <span className="draft-time">{timeAgo(d.created_at)}</span>
                         <span className="workbench-pill">
-                          {d.publish_blocked ? "publication needs reconciliation" : d.status === "approved" ? (d.local_preview ? "local intent parked" : "awaiting publication") : controls.needsReview ? "review needed" : d.review_kind === "human" ? "human reviewed" : "model checks current"}
+                          {d.publish_blocked ? "publication needs reconciliation" : controls.sourceHold ? "source update needed" : d.status === "approved" ? (d.local_preview ? "local intent parked" : "awaiting publication") : controls.needsReview ? "review needed" : d.review_kind === "human" ? "human reviewed" : "model checks current"}
                         </span>
                       </div>
                       <div className="draft-text">{d.text}</div>
