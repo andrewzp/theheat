@@ -52,6 +52,13 @@ excludes taxes, other account usage, hosting and development-model usage. It doe
 not enforce the regular bot's monthly budget. Final posting's safety call and the
 real post require a separate proposal and authorization.
 
+Ordinary safety checks, including the final manual-post check, separately request
+at most2048 output tokens with a90-second timeout and one SDK transport attempt.
+An incomplete answer cannot pass even if its visible text is `NO`. These limits
+do not establish an invoice ceiling for the normal floating model alias or grant
+permission to call it. The separate local durable-check worker retains its
+explicit4096-token safety allowance; the finite trial retains2048.
+
 ## Operator procedure
 
 1. Review the released code/CI and the finite proposal. Create a unique32-character

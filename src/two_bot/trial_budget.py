@@ -87,6 +87,14 @@ class TrialBudget:
                 config = bounded.get("config") or {}
                 if not isinstance(config, dict):
                     config = config.model_dump(exclude_none=True)
+                # Ordinary safety now supplies this same bound explicitly.
+                # Accept only its exact existing trial limit, never caller
+                # overrides for another stage or a different output allowance.
+                if "max_output_tokens" in config:
+                    if (stage != "safety" or type(config["max_output_tokens"]) is not int
+                            or config["max_output_tokens"] != OUTPUT_LIMITS[stage]):
+                        self.stop("trial_changed_output_bound")
+                    config = {k: v for k, v in config.items() if k != "max_output_tokens"}
                 if set(config) - {"response_mime_type", "response_json_schema"}:
                     self.stop("trial_unsupported_config")
                 bounded["config"] = {**config, "max_output_tokens": OUTPUT_LIMITS[stage]}

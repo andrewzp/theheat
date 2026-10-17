@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.109.2] - 2026-10-16
+
+- Bound ordinary final safety responses to 2,048 output tokens and reject incomplete or blocked replies.
+- Preserve returned usage, close owned clients, and bind cached checks to the complete request configuration.
+
 ## 0.9.109.1 — 2026-10-16
 
 - Inspect the exact selected text when a private sample trial is rejected. Retain bounded, source-bound text before required checks inside the existing encrypted artifact; stop further trial work if retention fails. Keep ordinary generation, checks, models, spending limits and publication settings unchanged.

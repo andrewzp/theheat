@@ -52,7 +52,8 @@ def prepare_request(packet: dict, stage: str, *, resolved=None) -> dict:
     else:
         raise ValueError("unknown_required_check")
     # This local lane explicitly binds its output bound into the request. The
-    # existing synchronous defaults and runtime model settings remain unchanged.
+    # ordinary safety bound is separate; this lane retains its explicit 4096
+    # output allowance. Runtime model settings remain unchanged.
     request["config"] = dict(request.get("config", {}), max_output_tokens=MAX_OUTPUT_TOKENS)
     if request["model"] != packet["policy"]["models"][stage]:
         raise ValueError("changed_check_model")

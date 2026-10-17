@@ -167,7 +167,7 @@ def test_all_real_checks_run_in_order_without_draft_approval_or_cost_settlement(
     assert run(case)["outcome"] == "checks_completed" and len(sent) == 3
 
 
-def test_exact_shared_requests_and_explicit_batch_only_output_bound(case):
+def test_exact_shared_requests_and_distinct_explicit_local_output_bound(case):
     packet = saved(case)["packet"]
     bundle, memory, state = check_requests.retained_inputs(packet)
     pending = critic._collect_pending_today(
@@ -182,7 +182,10 @@ def test_exact_shared_requests_and_explicit_batch_only_output_bound(case):
         batch = check_requests.prepare_request(packet, stage)
         config = batch.pop("config")
         assert config.pop("max_output_tokens") == 4096
-        assert config == original.pop("config", {})
+        original_config = original.pop("config", {})
+        if stage == "safety":
+            assert original_config.pop("max_output_tokens") == 2048
+        assert config == original_config
         assert batch == original
 
 

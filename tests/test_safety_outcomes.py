@@ -32,12 +32,13 @@ def sdk(monkeypatch):
 
     response = SimpleNamespace(
         text="NO",
+        candidates=[SimpleNamespace(finish_reason="STOP")],
         usage_metadata=SimpleNamespace(
             prompt_token_count=30, candidates_token_count=1, cached_content_token_count=0
         ),
     )
     generate = Mock(return_value=response)
-    factory = Mock(return_value=SimpleNamespace(models=SimpleNamespace(generate_content=generate)))
+    factory = Mock(return_value=SimpleNamespace(models=SimpleNamespace(generate_content=generate), close=Mock()))
     monkeypatch.setattr(genai, "Client", factory)
     return generate, factory
 
@@ -108,6 +109,7 @@ def test_returned_response_is_accounted_even_if_text_access_fails(sdk):
 
     class BrokenText:
         usage_metadata = generate.return_value.usage_metadata
+        candidates = generate.return_value.candidates
 
         @property
         def text(self):
@@ -153,6 +155,7 @@ def test_completed_rejection_can_be_reused_but_changed_text_gets_another_check(s
     [
         ("GEMINI_SAFETY_MODEL", "gemini-different-fixture"),
         ("SAFETY_PROMPT_TEMPLATE", "Updated policy: {tweet}"),
+        ("SAFETY_MAX_OUTPUT_TOKENS", 1024),
     ],
 )
 def test_model_or_runtime_prompt_change_invalidates_reuse_and_editorial_policy(
@@ -256,3 +259,82 @@ def test_real_sdk_uses_bounded_timeout_and_one_transport_attempt(monkeypatch):
     finally:
         for client in clients:
             client.close()
+
+
+def test_prepared_output_bound_and_client_cleanup_are_shared_by_direct_calls(sdk):
+    generate, factory = sdk
+    assert safety.prepare_request(TEXT)["config"] == {"max_output_tokens": 2048}
+    assert safety.check_llm_result(TEXT).allowed
+    assert generate.call_args.kwargs == safety.prepare_request(TEXT)
+    factory.return_value.close.assert_called_once_with()
+    assert safety.check_llm_result(TEXT).cache_hit
+    assert factory.call_count == generate.call_count == factory.return_value.close.call_count == 1
+
+
+@pytest.mark.parametrize("candidates", [None, [], [SimpleNamespace(finish_reason="MAX_TOKENS")],
+                                     [SimpleNamespace(finish_reason="SAFETY")],
+                                     [SimpleNamespace(finish_reason=None)],
+                                     [SimpleNamespace(finish_reason="STOP")] * 2],
+                         ids=["missing", "empty", "truncated", "blocked", "unknown", "multiple"])
+def test_incomplete_no_reply_cannot_pass_or_enter_cache_but_usage_is_kept(sdk, candidates):
+    generate, factory = sdk
+    generate.return_value.candidates = candidates
+    result = safety.check_llm_result(TEXT)
+    assert result.execution_status == "failed" and not result.allowed and result.verdict is None
+    assert result.reason == "safety_incomplete_response"
+    assert not safety._SAFETY_CACHE and len(usage_ledger._BUFFER) == 1
+    factory.return_value.close.assert_called_once_with()
+
+
+def test_cleanup_failure_does_not_erase_returned_usage_or_leak_exception(sdk):
+    _, factory = sdk
+    factory.return_value.close.side_effect = RuntimeError("invented private cleanup detail")
+    result = safety.check_llm_result(TEXT)
+    assert result.allowed and len(usage_ledger._BUFFER) == 1 and result.reason is None
+
+
+@pytest.mark.parametrize("flag", ["prompt", "candidate"])
+def test_explicit_provider_block_overrides_even_a_completed_no_reply(sdk, flag):
+    generate, _ = sdk
+    if flag == "prompt":
+        generate.return_value.prompt_feedback = SimpleNamespace(block_reason="SAFETY")
+    else:
+        generate.return_value.candidates[0].safety_ratings = [SimpleNamespace(blocked=True)]
+    result = safety.check_llm_result(TEXT)
+    assert not result.allowed and result.reason == "safety_blocked_response"
+    assert len(usage_ledger._BUFFER) == 1 and not safety._SAFETY_CACHE
+
+
+@pytest.mark.parametrize("finish", ["STOP", "MAX_TOKENS", "SAFETY"])
+def test_actual_sdk_wire_output_bound_complete_status_and_cleanup(monkeypatch, finish):
+    from google import genai
+
+    real = genai.Client
+    wires, clients = [], []
+
+    def handler(request):
+        import json
+
+        payload = json.loads(request.content)
+        assert payload["generationConfig"]["maxOutputTokens"] == 2048
+        wires.append(payload)
+        return httpx.Response(200, json={
+            "candidates": [{"index": 0, "finishReason": finish,
+                            "content": {"role": "model", "parts": [{"text": "NO"}]}}],
+            "usageMetadata": {"promptTokenCount": 30, "candidatesTokenCount": 1, "totalTokenCount": 31},
+        })
+
+    def factory(**kwargs):
+        options = kwargs["http_options"]
+        assert options.timeout == 90000 and options.retry_options.attempts == 1
+        options.client_args = {"transport": httpx.MockTransport(handler)}
+        client = real(**kwargs)
+        client.close = Mock(wraps=client.close)
+        clients.append(client)
+        return client
+
+    monkeypatch.setattr(genai, "Client", factory)
+    result = safety.check_llm_result(TEXT)
+    assert result.allowed is (finish == "STOP")
+    assert len(wires) == len(usage_ledger._BUFFER) == 1
+    clients[0].close.assert_called_once_with()
