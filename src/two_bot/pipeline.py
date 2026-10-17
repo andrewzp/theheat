@@ -293,11 +293,16 @@ def generate_draft(
     state: BotState,
     *,
     result_out: dict | None = None,
+    candidate_observer: Callable[[str, int], None] | None = None,
 ) -> dict | None:
     """Run the full pipeline (writer → claim extract → fact-check) and
     return a save_draft-ready dict. Publish memory is recorded only after
     successful posting. Returns a save_draft-ready dict, or
     ``None`` if the writer kills, fact-check rejects, or anything raises.
+
+    An optional internal observer can retain the exact selected text before
+    required checks. Observation grants no check, review or approval. A failed
+    observer stops this candidate before downstream calls; normal callers omit it.
 
     Signal-agnostic. The bundle's ``signal_kind`` carries the type
     forward so the writer can dispatch on it. Used by every live signal
@@ -342,6 +347,14 @@ def generate_draft(
         stage_outcomes[stage] = outcome
         if result_out is not None:
             result_out["stage_outcomes"] = stage_outcomes
+
+    def _observe_candidate(text: str, attempt: int) -> None:
+        if candidate_observer is not None:
+            try:
+                candidate_observer(text, attempt)
+            except Exception:
+                # Observer exceptions can contain private text or disk paths.
+                raise RuntimeError("candidate_observation_failed") from None
 
     from src.editorial.policy import current_editorial_policy
     checked_policy = current_editorial_policy()
@@ -429,6 +442,7 @@ def generate_draft(
             writer_result = viable_results[selected_index]
 
         assert writer_result.tweet is not None
+        _observe_candidate(writer_result.tweet, 1)
         fact_result = _check_safety_honesty_fact(
             writer_result.tweet,
             bundle,
@@ -481,6 +495,7 @@ def generate_draft(
                     return None
                 revised_tweet = format_source_link(revised.tweet, bundle)
                 writer_result = replace(revised, tweet=revised_tweet)
+                _observe_candidate(revised_tweet, 2)
                 fact_result = _check_safety_honesty_fact(
                     revised_tweet,
                     bundle,
