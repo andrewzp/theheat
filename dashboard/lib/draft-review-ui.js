@@ -9,6 +9,13 @@ export function revisionKey(identity) {
 
 export function draftTextLength(text) { return typeof text === "string" ? Array.from(text).length : 0 }
 
+export function reviewQueueOrder(drafts, { localPreview = false, now = Date.now() } = {}) {
+  return [...drafts].sort((a, b) => {
+    const held = localPreview ? 0 : Number(nwsSourceTiming(a, now).blocked) - Number(nwsSourceTiming(b, now).blocked)
+    return held || (b.created_at || "").localeCompare(a.created_at || "")
+  })
+}
+
 export function draftReviewControls(draft, now = Date.now()) {
   const pending = draft?.status === "pending"
   const mayEdit = !draft?.local_preview || ["editor", "publisher"].includes(draft.operator_role)
