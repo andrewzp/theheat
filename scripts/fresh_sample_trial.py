@@ -20,6 +20,9 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+MAX_CAPTURE_TEXT_BYTES = 4096
+MAX_CAPTURE_BYTES = 32768
+
 from src.two_bot.trial_budget import (  # noqa: E402
     MAX_CALLS, MAX_CANDIDATES, MAX_ESTIMATED_USD, MAX_REQUEST_BYTES,
     MODELS, OUTPUT_LIMITS, TrialBudget, trial_scope,
@@ -184,6 +187,30 @@ def claim_execution(output: Path, approved_sha256: str, now: datetime) -> None:
     save(output / "execution-started.json", receipt)
 
 
+def retain_candidate_text(output: Path, bundle: dict, ordinal: int, text: str, attempt: int) -> None:
+    """Private diagnostic only; save before a selected draft can be rejected.
+
+    The existing encrypted trial archive includes this file. No text is emitted
+    to stdout, returned as a draft, or written to production state.
+    """
+    if (type(ordinal) is not int or not 1 <= ordinal <= MAX_CANDIDATES
+            or type(attempt) is not int or attempt not in (1, 2)
+            or not isinstance(text, str) or not text
+            or not isinstance(bundle.get("event_id"), str) or not bundle["event_id"]
+            or len(text.encode("utf-8")) > MAX_CAPTURE_TEXT_BYTES):
+        raise ValueError("trial_candidate_capture_invalid")
+    payload = encoded({
+        "schema_version": 1, "scope": "selected_trial_text_before_required_checks",
+        "authority": "diagnostic_only", "candidate_ordinal": ordinal, "attempt": attempt,
+        "event_id": bundle["event_id"], "bundle_sha256": digest(encoded(bundle)),
+        "text": text, "text_sha256": digest(text.encode("utf-8")),
+        "checks_complete": False, "human_reviewed": False, "approved": False,
+    })
+    if len(payload) > MAX_CAPTURE_BYTES:
+        raise ValueError("trial_candidate_capture_too_large")
+    save(output / f"candidate-{ordinal}-text-{attempt}.json", payload)
+
+
 def execute(output: Path, approved_sha256: str, now: datetime) -> dict:
     from src.two_bot.pipeline import generate_draft
     from src.two_bot.provider_preflight import current_provider_preflight
@@ -207,7 +234,7 @@ def execute(output: Path, approved_sha256: str, now: datetime) -> dict:
                   file=sys.stderr, flush=True)
 
         budget = TrialBudget(retain, output / "STOP")
-        results = []
+        results: list[dict] = []
         with redirect_stdout(log), trial_scope(budget):
             for value in bundles:
                 # Each source is rechecked immediately before its writer purchase.
@@ -216,7 +243,17 @@ def execute(output: Path, approved_sha256: str, now: datetime) -> dict:
                     break
                 budget.begin_candidate(value["event_id"])
                 detail: dict = {}
-                draft = generate_draft(StoryBundle(**value), state, result_out=detail)
+                planned_bundle = deepcopy(value)
+
+                def observe(text: str, attempt: int) -> None:
+                    try:
+                        retain_candidate_text(output, planned_bundle, len(results) + 1, text, attempt)
+                    except Exception:
+                        budget.stopped = "trial_candidate_capture_failed"
+                        raise RuntimeError("trial_candidate_capture_failed") from None
+
+                draft = generate_draft(StoryBundle(**value), state, result_out=detail,
+                                       candidate_observer=observe)
                 results.append({"event_id": value["event_id"], "draft": draft, "checks": detail})
                 save(output / f"candidate-{len(results)}.json", encoded(results[-1]))
                 if budget.stopped:

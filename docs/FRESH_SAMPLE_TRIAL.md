@@ -73,6 +73,15 @@ real post require a separate proposal and authorization.
    usage privately. Never commit plaintext packets or historical state. A passing
    model verdict is not independent scientific or human quality acceptance.
 
+Selected text is saved privately before required checks, including text later
+rejected by a deterministic rule. `candidate-<ordinal>-text-<attempt>.json` binds
+the complete text to its event and planned bundle hashes. It is diagnostic only,
+not a completed check, review, approval or production draft. Text is limited to
+4096 UTF-8 bytes and the whole receipt to32768 bytes; neither is truncated.
+If retention fails, the trial stops before further checks or another candidate,
+and already incurred purchases remain consumed. These files stay inside the
+existing encrypted artifact; ordinary generation does not register the observer.
+
 Local preparation uses `scripts/fresh_sample_trial.py prepare --state <private
 snapshot> --output <new-private-directory>` without paid calls. Local execution
 additionally requires configured provider credentials and the separately approved

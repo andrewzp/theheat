@@ -394,7 +394,7 @@ def test_execute_loop_persists_before_call_and_stops_after_uncertain_first_attem
     monkeypatch.setattr(provider_preflight, "current_provider_preflight", lambda **k: {"status": "configured_unverified"})
     send = MagicMock(side_effect=TimeoutError())
 
-    def offline_pipeline(bundle, state, result_out):
+    def offline_pipeline(bundle, state, result_out, candidate_observer):
         assert (tmp_path / "execution-started.json").exists()
         try:
             limits.provider_call("writer", "anthropic", request("writer"), send)

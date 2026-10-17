@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.109.1 — 2026-10-16
+
+- Inspect the exact selected text when a private sample trial is rejected. Retain bounded, source-bound text before required checks inside the existing encrypted artifact; stop further trial work if retention fails. Keep ordinary generation, checks, models, spending limits and publication settings unchanged.
+
 ## 0.9.108.124 — 2026-10-16
 
 - Align warning-writing instructions with the existing agency-opener filter: put affected places and hazard first, then attribute naturally. Keep safety filters and all required checks unchanged; no new paid trial or measured-quality claim.
