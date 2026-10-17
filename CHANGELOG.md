@@ -1,3 +1,7 @@
+## [0.9.109.7] - 2026-10-16
+
+- Keep approved publication on X only. Preserve exact review, source checks, durable intent, X receipts and unknown-outcome duplicate protection; the dormant Bluesky adapter is not invoked.
+
 ## [0.9.109.6] - 2026-10-16
 
 - Show the complete saved NWS warning and preparation instructions beside a draft, with original source times and an official source link for human review. Missing or inconsistent evidence stays explicitly unavailable; reading it does not approve a draft.

@@ -65,6 +65,47 @@ def _state(draft):
     return state
 
 
+@pytest.mark.parametrize("outcome", ["confirmed", "unknown", "exception", "rate_limited"])
+def test_x_only_delivery_preserves_receipt_and_never_crossposts(external, monkeypatch, outcome):
+    from src.posting import bluesky
+
+    monkeypatch.setattr(bluesky, "BLUESKY_HANDLE", "invented.test")
+    monkeypatch.setattr(bluesky, "BLUESKY_APP_PASSWORD", "invented-test-only")
+    posting.post_to_bluesky.side_effect = AssertionError("X approval must not crosspost")
+    draft = _draft()
+    identity = draft_identity(draft)
+    bot_state = _state(draft)
+    if outcome == "unknown":
+        external[1].return_value = None
+    elif outcome == "exception":
+        external[1].side_effect = TimeoutError("Invented lost X response")
+    elif outcome == "rate_limited":
+        external[1].return_value = {"error": "rate_limited"}
+
+    result = posting.post_approved(draft, bot_state)
+    expected = {"confirmed": "posted", "rate_limited": "rate_limited"}.get(outcome, "failed")
+    assert result == expected
+    external[1].assert_called_once_with(draft["text"], media_png=None, alt_text=None)
+    posting.post_to_bluesky.assert_not_called()
+    row = bot_state["publish_ledger"][draft["event_id"]]
+    assert all(row[key] == value for key, value in identity.items())
+    assert row["phase"] == {"confirmed": "confirmed", "rate_limited": "not_sent"}.get(outcome, "unknown")
+    if outcome == "confirmed":
+        assert row["tweet_id"] == draft["tweet_id"] == "tweet_current"
+        assert draft["status"] == "posted"
+        external[0].increment_daily_count.assert_called_once_with(bot_state)
+    else:
+        assert not row["tweet_id"] and not draft.get("tweet_id")
+        external[0].increment_daily_count.assert_not_called()
+
+    if outcome != "rate_limited":
+        # Restarting from retained state cannot resend a receipt or an unknown attempt.
+        restarted = deepcopy(bot_state)
+        assert posting.post_approved(restarted["drafts"][0], restarted) == "failed"
+        assert external[1].call_count == 1
+        posting.post_to_bluesky.assert_not_called()
+
+
 @pytest.mark.parametrize("mode", ["manual", "auto"])
 @pytest.mark.parametrize("outcome", ["missing_credential", "provider_error", "empty_response"])
 def test_unavailable_required_safety_blocks_real_posting_paths(external, monkeypatch, mode, outcome):
