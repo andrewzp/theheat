@@ -1,6 +1,7 @@
 ## [0.9.109.6] - 2026-10-16
 
 - Show the complete saved NWS warning and preparation instructions beside a draft, with original source times and an official source link for human review. Missing or inconsistent evidence stays explicitly unavailable; reading it does not approve a draft.
+- Install the existing PDF rasterizer dependency for both future-calendar checks and retain the tested Ubuntu 24.04 runner so native graphics fixtures run without suppressing their checks.
 
 ## [0.9.109.5] - 2026-10-16
 
