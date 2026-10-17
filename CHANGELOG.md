@@ -1,3 +1,10 @@
+## 0.9.109.4 — 2026-10-16
+
+- Lead with a supported consequence, magnitude, change, duration or rarity and use concrete language to make the story matter. Keep short copy, forecast qualifications and source attribution; do not invent impacts or urgency for personality.
+- Align writer and critic without adding model stages or changing one-sample operation, required checks or publishing controls.
+- Allow source-backed, attributed life-threatening warnings through required factual and safety review instead of rejecting the phrase as a style keyword.
+- Install the existing PostgreSQL test dependency profile in calendar checks so newer offline test modules can be collected at both future horizons.
+
 # Changelog
 
 All notable changes to this project will be documented in this file.
