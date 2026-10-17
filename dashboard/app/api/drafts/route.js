@@ -4,6 +4,7 @@ import { dashboardAutomaticPolicy } from "../../../lib/publication-control.js"
 import { readStateStore, readStateWithRuntimeReport, updateDraftStore } from "../../../lib/state-store.js"
 import { requireDashboardAuth } from "../../../lib/auth.js"
 import { readJsonObject } from "../../../lib/request-json.js"
+import { nwsSourceTiming } from "../../../lib/nws-source-timing.js"
 import {
   approvalIsCurrent,
   authorizeDraft,
@@ -31,6 +32,11 @@ function githubHeaders() {
 
 function fail(message, status = 409, code = "revision_conflict") {
   throw Object.assign(new Error(message), { status, code })
+}
+
+function assertSavedSourceTiming(draft) {
+  const timing = nwsSourceTiming(draft)
+  if (timing.blocked) fail(timing.message, 409, "nws_source_review_required")
 }
 
 function validIdentity(value) {
@@ -83,9 +89,12 @@ export async function GET(request) {
     }
     const local = previewConfigured() ? (await localCommandRequest(request, "/state")).payload : null
     const { state, runtimeReport } = local ? { state: local.state, runtimeReport: null } : await readStateWithRuntimeReport()
+    const now = Date.now()
     const drafts = (state.drafts || [])
       .filter((d) => ["pending", "approved"].includes(d.status))
       .sort((a, b) => {
+        const sourceDiff = local ? 0 : Number(nwsSourceTiming(a, now).blocked) - Number(nwsSourceTiming(b, now).blocked)
+        if (sourceDiff) return sourceDiff
         const priorityA = (a.score?.total || 0) + (a.candidate_score?.total || 0) * 0.35
         const priorityB = (b.score?.total || 0) + (b.candidate_score?.total || 0) * 0.35
         return priorityB - priorityA || new Date(b.created_at || 0) - new Date(a.created_at || 0)
@@ -150,6 +159,7 @@ export async function POST(request) {
     const { draft: updatedDraft, state: updatedState, runtimeReport: updatedReport = null } = await updateDraftStore(draftId, (draft, state, { runtimeReport = null } = {}) => {
       assertExpected(draft, expectedRevision)
       assertMutable(draft, state)
+      if (["review", "approve", "auto_approve"].includes(action)) assertSavedSourceTiming(draft)
       const editorialPolicy = dashboardEditorialPolicy(state, { runtimeReport })
       if (action === "edit") {
         invalidateText(draft, editedText)
@@ -218,6 +228,9 @@ export async function POST(request) {
       return draft
     }, { expectedRevision, confirmContext: ["review", "approve", "auto_approve"].includes(action)
       ? (latestState, { runtimeReport = null } = {}) => {
+        const latestDraft = latestState.drafts?.find(draft => draft.id === draftId)
+        if (!latestDraft) fail("This draft is no longer available.", 409, "draft_not_found")
+        assertSavedSourceTiming(latestDraft)
         const current = dashboardEditorialPolicy(latestState, { runtimeReport })
         if (!current.policy || !checkedPolicySha || current.policy_sha256 !== checkedPolicySha) {
           fail("Editorial policy changed before this decision could be saved. Refresh and review again.", 409, "editorial_policy_changed")

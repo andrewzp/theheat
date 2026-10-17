@@ -54,3 +54,10 @@ test("joint graphic review cannot be replaced by the text-only confirmation", ()
   assert.equal(controls.canSchedule, false)
   assert.equal(controls.canEdit, true)
 })
+
+test("local command preview retains its own authority currentness contract", () => {
+  const preview = { local_preview: true, operator_role: "publisher", type: "severe_weather", status: "pending", review_status: "passed", review_kind: "human" }
+  assert.equal(draftReviewControls(preview).canApprove, true)
+  assert.equal(draftReviewControls(preview).sourceHold, null)
+  assert.equal(draftReviewControls({ ...preview, operator_role: "viewer" }).canApprove, false)
+})

@@ -10,6 +10,20 @@ import { nwsDraft } from "./fixtures/nws-warning-evidence.js"
 const render = draft => renderToStaticMarkup(React.createElement(NwsWarningEvidence, { draft }))
 const envelope = draft => draft.review_context.two_bot.bundle.raw_signal_dump.source_evidence
 
+test("expired source is visibly held with original evidence retained; saved-window status never claims live currentness", () => {
+  const draft = nwsDraft(), before = structuredClone(draft)
+  const held = renderToStaticMarkup(React.createElement(NwsWarningEvidence, { draft, now: Date.parse("2026-01-01T06:00:00Z") }))
+  assert.ok(held.includes("Source update needed"))
+  assert.ok(held.includes("Review and approval are held"))
+  assert.ok(held.includes('role="status"'))
+  assert.ok(held.includes("TAIL: Dangerous winds are possible tonight"))
+  assert.ok(held.includes("Saved review window ends (UTC)"))
+  const within = renderToStaticMarkup(React.createElement(NwsWarningEvidence, { draft, now: Date.parse("2026-01-01T01:00:00Z") }))
+  assert.ok(!within.includes("Source update needed"))
+  assert.ok(within.includes("may have changed since capture"))
+  assert.deepEqual(draft, before)
+})
+
 test("actual component shows the complete retained warning beyond compact facts and its instructions", () => {
   const draft = nwsDraft(), saved = envelope(draft), html = render(draft)
   assert.ok(saved.feature.properties.description.length > 800)

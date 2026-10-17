@@ -10,6 +10,7 @@ import { hasUnresolvedPublish, projectDraft } from "../../../lib/draft-revisions
 import { buildRuntimeConfig, dashboardDeployment } from "../../../lib/runtime-inventory.js"
 import { buildProductHealth } from "../../../lib/product-health.js"
 import { buildCostEvidence } from "../../../lib/cost-evidence.js"
+import { nwsSourceTiming } from "../../../lib/nws-source-timing.js"
 
 export const runtime = "nodejs"
 
@@ -30,9 +31,12 @@ function tsValue(s) {
 }
 
 function pendingDrafts(state, local = null, runtimeReport = null) {
+  const now = Date.now()
   return (state?.drafts || [])
     .filter((d) => ["pending", "approved"].includes(d.status))
     .sort((a, b) => {
+      const sourceDiff = local ? 0 : Number(nwsSourceTiming(a, now).blocked) - Number(nwsSourceTiming(b, now).blocked)
+      if (sourceDiff) return sourceDiff
       const priorityA = (a.score?.total || 0) + (a.candidate_score?.total || 0) * 0.35
       const priorityB = (b.score?.total || 0) + (b.candidate_score?.total || 0) * 0.35
       const scoreDiff = priorityB - priorityA

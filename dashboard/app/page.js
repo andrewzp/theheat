@@ -626,7 +626,7 @@ export default function Dashboard() {
                         <span className="draft-type">{d.type}</span>
                         <span className="draft-time">{timeAgo(d.created_at)}</span>
                         <span className="workbench-pill">
-                          {d.publish_blocked ? "publication needs reconciliation" : d.status === "approved" ? (d.local_preview ? "local intent parked" : "awaiting publication") : controls.needsReview ? "review needed" : d.review_kind === "human" ? "human reviewed" : "model checks current"}
+                          {d.publish_blocked ? "publication needs reconciliation" : controls.sourceHold ? "source update needed" : d.status === "approved" ? (d.local_preview ? "local intent parked" : "awaiting publication") : controls.needsReview ? "review needed" : d.review_kind === "human" ? "human reviewed" : "model checks current"}
                         </span>
                       </div>
                       <div className="draft-text">{d.text}</div>
