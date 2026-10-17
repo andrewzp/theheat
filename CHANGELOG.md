@@ -1,3 +1,7 @@
+## [0.9.109.5] - 2026-10-16
+
+- Keep calendar-canary deadlines on real elapsed clocks while preserving future calendar, UTC and wall-time checks across credentialless child processes.
+
 ## 0.9.109.4 — 2026-10-16
 
 - Lead with a supported consequence, magnitude, change, duration or rarity and use concrete language to make the story matter. Keep short copy, forecast qualifications and source attribution; do not invent impacts or urgency for personality.
