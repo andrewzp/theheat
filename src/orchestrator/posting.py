@@ -339,7 +339,6 @@ def post_approved(draft_or_text: dict | str, bot_state: BotState) -> str:
     if event_id and event_id not in bot_state.get("posted_events", []):
         state.record_event(bot_state, event_id)
     _record_published_two_bot_memory(bot_state, snapshot)
-    post_to_bluesky(tweet_text)
     state.increment_daily_count(bot_state)
     print(f"[post] Posted to X: {tweet_text[:60]}...")
     return "posted"

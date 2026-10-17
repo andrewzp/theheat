@@ -1258,7 +1258,7 @@ class TestPostApproved:
         assert result == "posted"
         assert state["publish_ledger"]["event_1"]["tweet_id"] == "123"
         assert draft["tweet_id"] == "123"
-        mock_bluesky.assert_called_once_with("test tweet")
+        mock_bluesky.assert_not_called()
         mock_state.increment_daily_count.assert_called_once_with(state)
 
     @patch("src.main.state")
