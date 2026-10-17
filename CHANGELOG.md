@@ -1,3 +1,7 @@
+## [0.9.109.6] - 2026-10-16
+
+- Show the complete saved NWS warning and preparation instructions beside a draft, with original source times and an official source link for human review. Missing or inconsistent evidence stays explicitly unavailable; reading it does not approve a draft.
+
 ## [0.9.109.5] - 2026-10-16
 
 - Keep calendar-canary deadlines on real elapsed clocks while preserving future calendar, UTC and wall-time checks across credentialless child processes.

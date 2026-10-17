@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { ForecastEvidence } from "./ForecastEvidence.js"
+import { NwsWarningEvidence } from "./NwsWarningEvidence.js"
 import { GraphicPreview } from "./GraphicPreview.js"
 import { EditorMedia } from "./EditorMedia.js"
 import { formatDuration, timeAgo } from "../../lib/format.js"
@@ -215,6 +216,7 @@ export function DraftWorkbench({
                 )}
 
                 <ForecastEvidence key={reviewKey} draft={selectedDraft} />
+                <NwsWarningEvidence key={"nws:" + reviewKey} draft={selectedDraft} />
                 {selectedDraft.local_preview
                   ? <EditorMedia key={`media:${reviewKey}`} draft={selectedDraft} editing={editingId === selectedDraft.id} updating={!!draftAction || !!pendingCommand} submitCommand={submitLocalCommand} />
                   : <GraphicPreview key={`graphic:${reviewKey}`} draft={selectedDraft} editing={editingId === selectedDraft.id} updating={draftAction === selectedDraft.id} />}
