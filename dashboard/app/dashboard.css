@@ -736,6 +736,8 @@ h1 span { color: #666; font-weight: 400; font-size: 14px; margin-left: 8px; }
 }
 .forecast-evidence a { color: #ffb380; text-decoration: underline; text-underline-offset: 3px; }
 .forecast-details { border-top: 1px solid #383838; }
+.nws-warning-text { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.6; }
+.nws-warning-evidence .forecast-fields dd { overflow-wrap: anywhere; }
 .forecast-details > p, .forecast-details > a { display: block; margin-top: 12px; }
 .forecast-series-list { margin-top: 16px; }
 .forecast-series { border-top: 1px solid #383838; }
