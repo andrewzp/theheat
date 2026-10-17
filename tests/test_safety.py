@@ -214,9 +214,23 @@ class TestWeatherServiceBoilerplate:
         passed, _ = check_regex("Catastrophic flooding expected in Houston.")
         assert not passed
 
-    def test_life_threatening_rejected(self):
-        passed, _ = check_regex("Life-threatening storm surge at Guam.")
+    def test_life_threatening_requires_completed_safety_review(self, monkeypatch):
+        # Wording alone neither proves a warning nor completes a required check.
+        # Factual source support is checked separately by the fact checker.
+        tweet = "Life-threatening storm surge at Guam."
+        passed, reason = check_regex(tweet)
+        assert passed, reason
+        calls = []
+
+        def unavailable(text):
+            calls.append(text)
+            return False, "safety_unavailable: offline fixture"
+
+        monkeypatch.setattr("src.voice.safety.check_llm", unavailable)
+        passed, reason = run_safety_pipeline(tweet)
         assert not passed
+        assert reason == "safety_unavailable: offline fixture"
+        assert calls == [tweet]
 
     def test_deadly_rejected(self):
         passed, _ = check_regex("Deadly storm surge at Guam.")

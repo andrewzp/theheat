@@ -694,9 +694,13 @@ def test_generate_draft_returns_none_on_writer_kill(mock_writer, mock_extract, m
     assert not mock_extract.called
 
 
-def test_generate_draft_returns_none_on_fact_check_fail(mock_writer, mock_extract, mock_fact_check):
+@pytest.mark.parametrize("tweet", [
+    "Conakry, Guinea: hottest May.",
+    "Conakry, Guinea could face life-threatening winds, the weather service warns.",
+])
+def test_generate_draft_returns_none_on_fact_check_fail(mock_writer, mock_extract, mock_fact_check, tweet):
     mock_writer.return_value = WriterResult(
-        tweet="Conakry, Guinea: hottest May.",
+        tweet=tweet,
         kill_reason=None,
         angle_chosen="rarity",
         era_anchor_used=None,
@@ -713,6 +717,7 @@ def test_generate_draft_returns_none_on_fact_check_fail(mock_writer, mock_extrac
     result = generate_draft(_monthly_high_bundle(), state)
 
     assert result is None
+    mock_fact_check.assert_called_once()
     # Critically, memory is NOT written when fact-check fails — even though
     # the writer succeeded. record_shipped only fires on the full happy path.
     assert state["memory"]["shipped_tweets"] == []

@@ -77,7 +77,8 @@ BANNED_PATTERNS = [
     re.compile(r"HURRICANE.FORCE", re.IGNORECASE),
     re.compile(r"EXTREME force", re.IGNORECASE),
     re.compile(r"\bcatastrophic\b", re.IGNORECASE),
-    re.compile(r"life.threatening", re.IGNORECASE),
+    # Attributed life-threatening warnings need source/factual review, not a
+    # blanket style rejection. Passing this text-only layer proves no facts.
     re.compile(r"\bdeadly\b", re.IGNORECASE),
     re.compile(r"\bkiller\b", re.IGNORECASE),
     re.compile(r"\bmonster storm\b", re.IGNORECASE),
