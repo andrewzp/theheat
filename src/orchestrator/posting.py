@@ -15,6 +15,7 @@ from src.editorial.approval import (
 )
 from src.editorial.publication import automatic_approval_allowed, observe_publication_policy
 from src.orchestrator.draft_save import _critic_passed
+from src.orchestrator.nws_publication import current_nws_source as _current_nws_source
 from src.editorial.revisions import (
     approval_is_current,
     binding_matches,
@@ -25,6 +26,14 @@ from src.editorial.revisions import (
 
 
 _DEFAULT_MIN_TWEET_SPACING_MIN = 15
+
+
+def _hold_nws_draft(draft: dict, reason: str) -> None:
+    revoke_approval(draft)
+    draft["status"] = "pending"
+    draft["approval_mode"] = "manual"
+    draft["post_error"] = f"NWS warning needs fresh source review: {reason}"
+    _touch_draft(draft)
 
 
 def _demote_autoship_to_manual(draft: dict, reason: str) -> None:
@@ -228,6 +237,11 @@ def post_approved(draft_or_text: dict | str, bot_state: BotState) -> str:
         draft["post_error"] = "Legacy place evidence requires identity review"
         return "failed"
 
+    source_hold = _current_nws_source(draft, live=False)
+    if source_hold:
+        _hold_nws_draft(draft, source_hold)
+        return "failed"
+
     # Capture this before any sender mutation for the storage stale-read check.
     expected_draft = deepcopy(draft) if tracked else None
     snapshot = deepcopy(draft)
@@ -278,6 +292,13 @@ def post_approved(draft_or_text: dict | str, bot_state: BotState) -> str:
         return "failed"
 
     media_png, alt_text = _hot10_media_for_draft(snapshot)
+    source_hold = _current_nws_source(snapshot, live=True)
+    if source_hold:
+        row["phase"] = "not_sent"
+        draft["publish_outcome"] = "not_sent"
+        draft.pop("autoship_attempted", None)
+        _hold_nws_draft(draft, source_hold)
+        return "failed"
     # Storage/media work may outlive a configuration change. Recompute live
     # policy immediately before transport; a stored runtime report cannot send.
     if not approval_is_current(snapshot, mode):
@@ -344,7 +365,7 @@ def run_manual_tweet(bot_state: BotState, current_run: dict | None = None) -> Bo
         )
         return bot_state
 
-    if draft_id and (not draft or draft.get("id") != draft_id):
+    if not draft or draft.get("id") != draft_id:
         reason = f"Draft not found for id {draft_id}"
         print(f"[manual] {reason}, skipping")
         _record_source_run(
@@ -406,6 +427,17 @@ def run_manual_tweet(bot_state: BotState, current_run: dict | None = None) -> Bo
             draft["post_error"] = reason
         _record_source_run(current_run, bot_state, "manual_publish", manual_start,
                            status="failed", observed=1, error=reason)
+        return bot_state
+
+    source_hold = _current_nws_source(draft, live=True)
+    if source_hold:
+        _hold_nws_draft(draft, source_hold)
+        _record_source_run(current_run, bot_state, "manual_publish", manual_start,
+                           status="failed", observed=1, error=draft["post_error"])
+        return bot_state
+    if not approval_is_current(draft, "manual"):
+        _record_source_run(current_run, bot_state, "manual_publish", manual_start,
+                           status="failed", observed=1, error="Editorial policy changed before final safety")
         return bot_state
 
     passed, safety_reason = run_safety_pipeline(tweet_text)
@@ -588,6 +620,16 @@ def process_due_drafts(bot_state: BotState, current_run: dict | None = None) -> 
             )
             _demote_autoship_to_manual(draft, identity_reason)
             failures.append(f"{draft.get('id')}: {identity_reason}")
+            continue
+
+        source_hold = _current_nws_source(draft, live=True)
+        if source_hold:
+            _hold_nws_draft(draft, source_hold)
+            failures.append(f"{draft.get('id')}: {source_hold}")
+            continue
+        if not approval_is_current(draft, "auto"):
+            _demote_autoship_to_manual(draft, "Editorial policy changed before final safety")
+            failures.append(f"{draft.get('id')}: policy changed")
             continue
 
         # Safety check before auto-posting (same gate as manual path)

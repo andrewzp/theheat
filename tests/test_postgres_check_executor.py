@@ -29,7 +29,7 @@ case, run, saved, provider, envelope = legacy.case, legacy.run, legacy.saved, le
 # Keep SQLite's original assertions. SQL/commit/process tests below use PG itself.
 from tests.test_check_executor import (
     test_disabled_performs_zero_io,
-    test_exact_shared_requests_and_explicit_batch_only_output_bound,
+    test_exact_shared_requests_and_distinct_explicit_local_output_bound,
     test_failures_never_retry_or_advance_and_keep_unknown_spend,
     test_retained_response_recovers_after_parser_crash_without_second_post,
     test_lost_commit_ack_never_rebuys,

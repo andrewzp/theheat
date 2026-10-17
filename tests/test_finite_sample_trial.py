@@ -159,7 +159,8 @@ def test_real_sdk_boundaries_all_use_one_attempt_and_existing_requests(monkeypat
     af = MagicMock(return_value=anthropic_client)
     monkeypatch.setattr(anthropic, "Anthropic", af)
     google_client = MagicMock()
-    google_client.models.generate_content.return_value = SimpleNamespace(text="NO", usage_metadata=None)
+    google_client.models.generate_content.return_value = SimpleNamespace(
+        text="NO", usage_metadata=None, candidates=[SimpleNamespace(finish_reason="STOP")])
     gf = MagicMock(return_value=google_client)
     monkeypatch.setattr(genai, "Client", gf)
     value, _ = budget(tmp_path)
@@ -179,6 +180,24 @@ def test_real_sdk_boundaries_all_use_one_attempt_and_existing_requests(monkeypat
     assert all(c.kwargs["http_options"].retry_options.attempts == 1 for c in gf.call_args_list)
     assert all(c.kwargs["http_options"].client_args["follow_redirects"] is False for c in gf.call_args_list)
     assert [c.kwargs["config"]["max_output_tokens"] for c in google_client.models.generate_content.call_args_list] == [2048,8192,8192]
+
+
+@pytest.mark.parametrize("stage,explicit", [("safety", 2048), ("safety", 2049), ("safety", 1024),
+                                           ("safety", True), ("safety", "2048"), ("critic", 8192)])
+def test_only_exact_existing_safety_trial_bound_can_be_supplied(tmp_path, stage, explicit):
+    value, _ = budget(tmp_path)
+    value.begin_candidate("invented")
+    payload = request(stage)
+    payload["config"] = {"max_output_tokens": explicit}
+    send = MagicMock(return_value=SimpleNamespace(text="offline"))
+    with limits.trial_scope(value):
+        if stage == "safety" and type(explicit) is int and explicit == 2048:
+            limits.provider_call(stage, "google", payload, send)
+            assert send.call_count == 1 and send.call_args.kwargs["config"]["max_output_tokens"] == 2048
+        else:
+            with pytest.raises(limits.TrialStopped, match="changed_output_bound"):
+                limits.provider_call(stage, "google", payload, send)
+            assert not send.called and not value.calls
 
 
 def test_threaded_writer_slate_refused_inside_trial(tmp_path):

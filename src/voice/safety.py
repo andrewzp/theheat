@@ -7,6 +7,7 @@ from collections import OrderedDict
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 import hashlib
+import json
 import threading
 import time
 import re
@@ -208,6 +209,7 @@ SAFETY_PROMPT_TEMPLATE = (
 )
 SAFETY_CACHE_SECONDS = 300
 SAFETY_CACHE_SIZE = 128
+SAFETY_MAX_OUTPUT_TOKENS = 2048
 _CACHE_LOCK = threading.Lock()
 _SAFETY_CACHE: OrderedDict[tuple[str, str, str], tuple[float, "SafetyCheckResult"]] = OrderedDict()
 
@@ -238,7 +240,8 @@ def prepare_request(tweet: str) -> dict:
         raise ValueError("Safety prompt must review the exact tweet")
     prompt = SAFETY_PROMPT_TEMPLATE.format(tweet=tweet)
     prompt.encode("utf-8")
-    return dict(model=GEMINI_SAFETY_MODEL, contents=prompt)
+    return dict(model=GEMINI_SAFETY_MODEL, contents=prompt,
+                config={"max_output_tokens": SAFETY_MAX_OUTPUT_TOKENS})
 
 
 def interpret_response(raw: str) -> str:
@@ -268,14 +271,16 @@ def check_llm_result(tweet: str) -> SafetyCheckResult:
     except (ValueError, UnicodeError):
         return SafetyCheckResult("failed", None, "safety_invalid_input", model, text_sha, prompt_sha, at)
     try:
-        prompt = prepare_request(tweet)["contents"]
+        request = prepare_request(tweet)
+        prompt = request["contents"]
         prompt_sha = hashlib.sha256(prompt.encode("utf-8")).hexdigest()
+        request_sha = hashlib.sha256(json.dumps(request, sort_keys=True, allow_nan=False).encode("utf-8")).hexdigest()
     except (ValueError, UnicodeError, KeyError):
         return SafetyCheckResult("failed", None, "safety_invalid_prompt", model, text_sha, prompt_sha, at)
     if not GEMINI_API_KEY:
         return SafetyCheckResult("unavailable", None, "safety_unavailable: missing credential", model, text_sha, prompt_sha, at)
 
-    key = (model, prompt_sha, text_sha)
+    key = (model, request_sha, text_sha)
     clock = time.monotonic()
     with _CACHE_LOCK:
         cached = _SAFETY_CACHE.get(key)
@@ -293,15 +298,31 @@ def check_llm_result(tweet: str) -> SafetyCheckResult:
                              http_options=genai_types.HttpOptions(timeout=90000, **{
                                  "retry_options": genai_types.HttpRetryOptions(attempts=1),
                                  **google_trial_options()}))
-        response = provider_call("safety", "google", dict(model=model, contents=prompt), client.models.generate_content)
+        try:
+            response = provider_call("safety", "google", request, client.models.generate_content)
+        finally:
+            try:
+                client.close()
+            except Exception:
+                pass  # Cleanup cannot discard a returned response or cause another purchase.
         try:
             from src.two_bot.usage_ledger import record_response
             record_response("safety", response, model, "google")
         except Exception:
             pass  # Accounting cannot change an already returned check response.
+        candidates = getattr(response, "candidates", None)
+        if (not isinstance(candidates, list) or len(candidates) != 1
+                or getattr(candidates[0], "finish_reason", None) != "STOP"):
+            return SafetyCheckResult("failed", None, "safety_incomplete_response", model, text_sha, prompt_sha, at)
+        blocked = getattr(getattr(response, "prompt_feedback", None), "block_reason", None)
+        ratings = getattr(candidates[0], "safety_ratings", None)
+        if (blocked not in (None, "BLOCK_REASON_UNSPECIFIED")
+                or (ratings is not None and (not isinstance(ratings, list)
+                    or any(getattr(rating, "blocked", None) is True for rating in ratings)))):
+            return SafetyCheckResult("failed", None, "safety_blocked_response", model, text_sha, prompt_sha, at)
         try:
             verdict = interpret_response(response.text or "")
-        except ValueError:
+        except (ValueError, AttributeError, TypeError):
             return SafetyCheckResult("failed", None, "safety_invalid_response: expected YES or NO", model, text_sha, prompt_sha, at)
         result = SafetyCheckResult("completed", verdict,
             None if verdict == "allow" else "LLM flagged as potentially harmful", model,
