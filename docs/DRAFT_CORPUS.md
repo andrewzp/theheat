@@ -11,6 +11,94 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-10-02 — Daily corpus grading (7 fresh drafts; first graded cycle since Jul 6)
+
+**Context:** Gist read via git-clone path (success). Queue: 7 pending, all created Sep 30T17:49Z
+– Oct 1T20:47Z; none overlap the Jul 6 batch (queue fully turned over during the ~3-month
+gap in this corpus). Grading is editorial only — per the Sept 29 evaluation boundary note in
+`QUALITY_TREND.md`, these grades are not factual qualification or authorization to resume
+posting. Docs worked from `main` (daee063); the `daily-plan-current` rolling branch no longer
+exists on origin, so this cycle's commit goes to the session branch instead.
+
+**Staleness review as of 2026-10-02 ~15:10 UTC:** oldest draft ([1] Riyadh dust, 45.3h) and [2]
+Mecca (45.3h) are under 48h; every draft uses past-tense measurement framing, none says
+"forecast/today". 0 mechanical bulk-reject candidates. **But [6] Hurricane Rachel Cat 2 is
+superseded** by [7] Rachel Cat 3 (+~10h, 105 kt vs 85 kt) — posting [6] now would announce a
+tier the storm already left. Operator should reject [6] regardless of age. No gist write attempted (no
+candidate crossed 48h); [1]/[2] cross 48h at ~17:50 UTC today, tomorrow's run should expect them
+gone or aged out.
+
+**Grade distribution (7 fresh drafts):** 0 A / 0 B+ / 3 B- / 4 C-range (C+ ×3, C ×1) / 0 D-F.
+**A-rate: 0% (0/7).** Gap from bar: 50 pp.
+
+**Headline finding:** **P_dust's defining failure is absent for the first time.** All four
+PM-family drafts ([1] [2] [4] [5]) state a WHO multiple (26×, 4×, 14×, 5.9×; arithmetic
+checked against 45 / 15 µg/m³ guidelines — all correct). The prior record was 0 of 11
+`dust_event` drafts with the anchor. What the anchor did not buy: a close. Every one of the 7
+drafts ends on a bare fact, a cross-reference or a parenthetical source tag — no mechanism,
+no consequence, no named mechanic. The batch is calibrated and mute.
+
+### B- (3)
+
+**[1] Riyadh dust_event (4,338 µg/m³ max; PM10 mean 1,176 = 26× WHO).** "about 26× the WHO
+daily guideline" is the calibration P_dust asked for. Then it stops: "A concurrent PM2.5
+signal reached 162 µg/m³ the same day" is a second data point, not a close. "dust daily
+maximum" is pipeline vocabulary. P_close failing (no-close subtype).
+
+**[2] Mecca dust_event (622 µg/m³; 4× WHO).** The only draft of the seven with a closing
+beat: "Two major Saudi cities, one dust event." Short, period-and-restate shape, benign. Two
+problems: it asserts a causal unity ("one dust event") two model grid points ~900 km apart do
+not establish, and it recycles [1]'s Riyadh number as its own second clause — the same story
+filed twice. Closest thing to a mechanic in the batch, still B-.
+
+**[4] Riyadh air_quality_hazard (PM2.5 213 µg/m³, 14× WHO).** Cleanest arithmetic and the
+sibling type's usual unprompted WHO multiple. The parenthetical "(CAMS global model, 45 km
+resolution)" is a source label doing the closer's job — honest, but it lands as a footnote
+where a consequence belongs. Third Riyadh PM draft in two days ([1], [2] by reference, [4]).
+
+### C+ (3)
+
+**[3] Brazil Cerrado fire (888 MW; neighbours 1,584 / 1,018 MW).** "very-high intensity,
+satellite-confirmed at 100% confidence" is bucket-name plus QC jargon — a possible P_tier
+instance (see plan; unconfirmed whether "very-high" is a literal bundle tier label — grep of
+`src/` found no match). Opener verb "logged" is not on the banned-verb list. Date baked ("on
+Oct. 1"). October is the Cerrado burn season; the draft never says so, the cheapest
+ecosystem-specificity move on the table, as it was for the Mali/Siberia fire A-s.
+
+**[5] Taiz, Yemen dust_event (PM10 ~266 µg/m³, 5.9× WHO).** WHO anchor present. Wodehouse
+problem: "~266" and "about 5.9×" hedge twice when the exact value is in the bundle (P4-class,
+approximation when exact is available). Peak "829" follows as a bare second figure. No close.
+
+**[7] Hurricane Rachel Cat 3 (105 kt / 121 mph, 950 mb, advisory 019).** Correct and
+well-sourced: kt→mph conversion given, advisory number cited. But Cat 3 is the major-hurricane
+line and the draft never says so — the only thing that makes this tier crossing newsworthy
+is left implicit. Reads as wire copy.
+
+### C (1)
+
+**[6] Hurricane Rachel Cat 2 (85 kt, 972 mb).** Same storm, ~10h earlier, kt only (no mph),
+no close, and superseded by [7]. Recommend reject on supersession, not on voice alone.
+
+### Patterns named
+
+1. **Calibrated but closeless.** WHO anchor present 4/4; close present 0/7 (only [2]'s
+   "one dust event" approaches one, and it over-claims). P_close 17th cycle, new subtype:
+   *data-list ending* (a second figure or source tag where the close should be).
+2. **P_dust counter-evidence, first cycle** — see plan; not yet archivable (needs 3+ cycles).
+3. **Same-event duplicate drafting.** Riyadh appears in [1], [2] (by reference) and [4];
+   Rachel appears as [6] and [7]. Operational, not a voice proposal.
+4. **No era anchors, no banned-formula openers, no plant-comparison regex hits, no political
+   anchors.** P1/P2/P3 watch-list items all clean.
+5. **Wodehouse (P4-class):** [5] tilde + "about" double hedge. 1 occurrence.
+6. **A-reference mechanics:** none (0 A-grades).
+
+### Followups
+
+- Operator: reject [6] (superseded); consider [1]/[2]/[4] as a Riyadh-consolidation decision.
+- P_dust fix appears to have landed or the bundle changed (WHO multiple now present on
+  `dust_event`); confirm in `git log` whether a deliberate change shipped before archiving.
+- Next cycle: check whether any dust/air-quality draft adds a consequence close.
+
 ## 2026-07-06 — Daily corpus grading (0 fresh drafts; 15 carry-overs from Jul 5, previously graded)
 
 **Context:** Gist read via git-clone path (success; no rate limit). Queue: 15 pending drafts —
