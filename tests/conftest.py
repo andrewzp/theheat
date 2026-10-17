@@ -2,6 +2,7 @@
 
 import os
 import socket
+import time
 from hashlib import sha256
 from pathlib import Path
 from copy import deepcopy
@@ -160,8 +161,15 @@ def pytest_configure(config):
         from freezegun import freeze_time
 
         target = datetime.now(timezone.utc) + timedelta(days=int(days_raw))
+        # Calendar shifts must not change elapsed-time coordinates shared with
+        # credentialless children. Their OS monotonic clocks do not time-travel.
+        elapsed_clocks = {name: getattr(time, name) for name in (
+            "monotonic", "monotonic_ns", "perf_counter", "perf_counter_ns",
+        )}
         freezer = freeze_time(target, tick=True)
         freezer.start()
+        for name, clock in elapsed_clocks.items():
+            setattr(time, name, clock)
         config._theheat_time_travel_freezer = freezer
         print(f"[time-travel] clock shifted +{days_raw}d to {target.isoformat()}")
 
