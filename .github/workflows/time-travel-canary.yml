@@ -46,10 +46,20 @@ jobs:
           python-version: '3.12'
           cache: pip
 
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: dashboard/package-lock.json
+
+      - name: Install dashboard dependencies
+        working-directory: dashboard
+        run: npm ci
+
       - name: Install dependencies
         run: pip install -r requirements.txt -r requirements-graphics.txt
 
       - name: Run the suite at +${{ matrix.days }} days
         env:
           THEHEAT_TIME_TRAVEL_DAYS: ${{ matrix.days }}
-        run: python -m pytest -q
+        run: python -m pytest -q -m "not voice_replay"

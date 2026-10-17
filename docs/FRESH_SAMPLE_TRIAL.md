@@ -101,3 +101,20 @@ No secret needs to be copied locally.
 
 The three older manual evaluation workflows now require both production pause off
 and explicit paid-evaluation opt-in before any step. Leave them off for this trial.
+
+For a later, separately authorized post, a retained NWS warning must still match
+its current official source. The Gist-backed manual and due senders recheck it
+before final paid safety and immediately before platform transport. Missing,
+changed, withdrawn, superseded, ambiguous or unavailable source evidence returns
+the draft to pending manual review and revokes approval; a newer warning is never
+adopted automatically. Issuance may be at most six hours old, effective time must
+have begun, and the earliest expiration/end must not have passed. A future weather
+onset may support a forecast; it is not proof of observed conditions. Other source
+families are unchanged by this NWS check.
+
+Each free recheck uses only the fixed NWS active-alert endpoint, at most three
+physical attempts, a 30-second socket timeout, no redirects, and a 32-MiB streamed
+decoded-byte limit. These are not a hard total wall-clock deadline. Source failure
+after a saved intent records `not_sent`; an unknown platform delivery remains
+unresolved and must never be blindly retried. This adds no paid-call or publishing
+authorization, and does not qualify other sources or prove their currentness.

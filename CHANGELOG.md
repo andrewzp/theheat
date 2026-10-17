@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.109.3] - 2026-10-16
+
+- Recheck retained NWS warnings before final paid safety and transport; hold expired, changed, superseded or unavailable evidence without adopting a successor.
+- Install the dashboard runtime for future-clock checks while keeping paid replay excluded.
+
 ## [0.9.109.2] - 2026-10-16
 
 - Bound ordinary final safety responses to 2,048 output tokens and reject incomplete or blocked replies.

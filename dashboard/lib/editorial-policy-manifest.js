@@ -81,7 +81,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/editorial/draft_admission.py": "1f60fce127c7caa8c1965ce5c7c7e89c7b291a56028604f0d315952c587555ec",
     "src/editorial/marine_evidence.py": "7183f93f1068d75856063cf061a1dea8751bd4dd98cc1f1f34488bcf39296f5c",
     "src/editorial/newsworthiness.py": "2df18f17c51f772b761609bf10dc1c5b7289d2b1f1e2ce6f3f9dd743dbe73236",
-    "src/editorial/policy.py": "8a8c1613173440325ffba46e6aa8723e25f7cd76cb478ec3b66f39f5f2ea5d7b",
+    "src/editorial/policy.py": "86776d9ea80e1916250927d7e6cf9a1d2e0b372f11e29d9155be422d1b09e43c",
     "src/editorial/report_development.py": "e2ed39a9ff957683c8befff0f3b99533fdc9d90d84af88220ed13f2bf1489995",
     "src/editorial/revisions.py": "c4d6ebed696a1174b0f961eb8e69971b2b5adbaccabab5628d72ed61f662318d",
     "src/editorial/synthesis.py": "c3230d7f91f287550e158548998ed5df778148592c2989cf7155cd2a3182498b",
@@ -107,7 +107,8 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/orchestrator/dedup.py": "e3ad15f1eb544e0d130a29f41e8090fb8839805e57877cf0b45c74438ac8b791",
     "src/orchestrator/draft_save.py": "52edc55203eab0b391a22480f4c37241097f1a53979c7d4aba3e4cb7240e2638",
     "src/orchestrator/ghcn_source_result_client.py": "d30d22b50ffd270f647187e11fc8b17fe7f7dff28368e492b1d86fc0131cf1cd",
-    "src/orchestrator/posting.py": "04f5ac31cd2edf3dd5deee318df27ada4a08859a50e635c0772bc9492d2cfc59",
+    "src/orchestrator/nws_publication.py": "a9f02e8cec20827257f10db53ebb0dd15ff7aefca9924dea6750cba315cbad29",
+    "src/orchestrator/posting.py": "9dfe3bc2e33c66eb69f4dd0dd44da3735817333eebddb7b1246feb54bc0cc854",
     "src/orchestrator/source_result_client.py": "c1c8ae63f62169dcc26f87c8746b1994302cd36e26d6cb2146ff8a803fe089fb",
     "src/orchestrator/sources/air_quality.py": "254d2a44d4bf534b19cf18ae49574ebc3616895e5fe6ef2399f1d46bc26f5d50",
     "src/orchestrator/sources/coral_dhw.py": "6596f95e1ba183c4833d365c9d1d1b009e299e28e555295351fb061899d37e2f",
@@ -190,5 +191,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "719bc9f0217007d1c31974026fe69f7e994a4b10dad0d6dd7bc63bb313d8c2cf"
   },
   "schema_version": 1,
-  "source_sha256": "a3c36962edaabf1bfa2f44f39838a6dc0286403826907dc0c1ea236e7ee93354"
+  "source_sha256": "d7d654c8ec17a5cbe53f37cc7b33d2ae81d9b83d446a09831835b79a455f7ca4"
 }
