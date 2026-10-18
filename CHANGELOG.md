@@ -1,5 +1,7 @@
 ## [0.9.109.9] - 2026-10-18
 
+- Pin the social SDKs to the versions required by the existing tested delivery profile, preventing fresh environments from silently selecting unsupported versions.
+
 - Distinguish a trusted, explicitly delegated assistant review from human ratings and model checks. Bind manual approval to its exact review provenance; preserve source freshness, final safety, uncertainty and receipt checks, with automatic scheduling still unavailable.
 
 ## [0.9.109.8] - 2026-10-16
