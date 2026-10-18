@@ -3,6 +3,8 @@
 - Label saved source results as historical in Sources and Health. Show dated
   collection/success evidence and unknown current availability without fetching
   sources, changing existing classifications or resuming collection.
+- Rebalance two measured heavy PostgreSQL test modules within the existing eight
+  shards, preserving all cases, module fixtures and the unchanged job deadline.
 
 ## 0.9.109.12
 
