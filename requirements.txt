@@ -1,5 +1,6 @@
-tweepy>=4.14,<5
-atproto>=0.0.61
+# Match the exact SDK profile enforced by delivery_transport.py.
+tweepy==4.17.0
+atproto==0.0.72
 # Core provider contracts are pinned to tested versions. Upgrade deliberately
 # with the actual-SDK offline wire tests; do not float across major releases.
 google-genai==2.25.0

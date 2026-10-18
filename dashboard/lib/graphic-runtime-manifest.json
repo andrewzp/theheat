@@ -1,6 +1,6 @@
 {
   "identity": {
-    "archive_sha256": "df3b45cec04e12b3ae2d70592fd6db6d2d53916f3e62afeab887e5e865fcc7eb",
+    "archive_sha256": "077c23912dd834ef1381f42b9bd64794adc00991f04584baa15fa07705d1ac44",
     "deployment_files": {
       "api/graphic_preview.py": "abbde75deff02ba22b67df70f7783d33d8150bd119a5514f8007feb43191e0c9",
       "pyproject.toml": "6d161405a3084285699805cd15f4c0584aab66806b7f3414a5de8e6eef61290b",
@@ -44,7 +44,7 @@
       "src/editorial/candidates.py": "80d50c488f44fd879c137751701a306cfae78eb376c3da33b9b7f3150cf9270d",
       "src/editorial/marine_evidence.py": "7183f93f1068d75856063cf061a1dea8751bd4dd98cc1f1f34488bcf39296f5c",
       "src/editorial/publication.py": "7fa23a8f51530dc7f128beacc23689f0df7a8c95b6888beb39afca4212f1a5fe",
-      "src/editorial/revisions.py": "c4d6ebed696a1174b0f961eb8e69971b2b5adbaccabab5628d72ed61f662318d",
+      "src/editorial/revisions.py": "ff8e3f276edd8dcda4103c4e8352b964d6155a15ff69244f040c54b31b90641f",
       "src/editorial/scoring/__init__.py": "f969fa55020ff1a436f9bce87701b43f574a98f340f1d5345fd74a5410db0de4",
       "src/editorial/scoring/_shared.py": "ecfbe383674644f82223150fc3beb9761b0ec3942f31b93d245514721fee16f0",
       "src/editorial/scoring/air_quality.py": "973727e2037d76129d68283a0889e23fafc8034b993315fd35af3c6c894dd30b",
@@ -81,12 +81,12 @@
       "src/two_bot/types.py": "36ed2e6475a655f4112012486795702159ed546c3040e8ef1874b7a0b02a9035"
     },
     "format": "saved-source-svg-preview-v2",
-    "policy_source_sha256": "5ccc92a4e01a61bc97ab22a366ddd30a69d14d21e9d0225059d92174254db4af",
+    "policy_source_sha256": "f666a0838526edeb9f9191c5bffccaf250c5152d9ee709f8a0c4a3ae674154d1",
     "resource_sources": {
       "src/data/registry/country_codes.json": "data/country_codes.json",
       "src/data/registry/place_registry.json": "data/place_registry.json"
     },
     "schema_version": 1
   },
-  "runtime_sha256": "554df9b892c8a437b01739d7db938a0fc5d39909d568dfa82def2b25a38368d3"
+  "runtime_sha256": "0b66c3af384586d75cd543be18fa11864a853cdb96c00a1e6a48edc954af38cb"
 }

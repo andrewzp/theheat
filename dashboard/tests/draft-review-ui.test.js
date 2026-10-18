@@ -1,6 +1,6 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import { draftReviewControls, draftTextLength, revisionKey, reviewQueueOrder } from "../lib/draft-review-ui.js"
+import { draftReviewControls, draftTextLength, revisionKey, reviewQueueOrder, manualReviewLabel } from "../lib/draft-review-ui.js"
 import { nwsDraft } from "./fixtures/nws-warning-evidence.js"
 
 test("revised, conflicted and unresolved drafts cannot be approved or scheduled", () => {
@@ -73,4 +73,14 @@ test("client refresh cannot put a newer held warning above usable copy or mutate
   assert.deepEqual(reviewQueueOrder(queue, { now }).map(d => d.id), ["other", "fresh", "held"])
   assert.deepEqual(queue, before)
   assert.deepEqual(reviewQueueOrder(queue, { now, localPreview: true }).map(d => d.id), ["held", "other", "fresh"])
+})
+
+
+test("delegated review is attributed to the assistant and cannot schedule", () => {
+  const draft = { status: "pending", review_status: "passed", review_kind: "delegated", automatic_publication: { enabled: true }, approval_policy: { can_auto_approve: true } }
+  assert.equal(manualReviewLabel(draft), "assistant reviewed")
+  assert.equal(manualReviewLabel({ review_kind: "human" }), "human reviewed")
+  assert.equal(manualReviewLabel({ review_kind: "model" }), null)
+  assert.equal(draftReviewControls(draft).canApprove, true)
+  assert.equal(draftReviewControls(draft).canSchedule, false)
 })

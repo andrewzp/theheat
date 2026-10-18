@@ -1,0 +1,109 @@
+[
+  {
+    "name": "exact_provenance",
+    "value": {
+      "scope": "one_manual_post",
+      "reviewer": "codex",
+      "authorization_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "review_receipt_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    "valid": true
+  },
+  {
+    "name": "scope_automatic",
+    "value": {
+      "scope": "automatic",
+      "reviewer": "codex",
+      "authorization_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "review_receipt_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    "valid": false
+  },
+  {
+    "name": "reviewer_human",
+    "value": {
+      "scope": "one_manual_post",
+      "reviewer": "human",
+      "authorization_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "review_receipt_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    "valid": false
+  },
+  {
+    "name": "authorization_sha256_",
+    "value": {
+      "scope": "one_manual_post",
+      "reviewer": "codex",
+      "authorization_sha256": "",
+      "review_receipt_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    "valid": false
+  },
+  {
+    "name": "authorization_sha256_1",
+    "value": {
+      "scope": "one_manual_post",
+      "reviewer": "codex",
+      "authorization_sha256": 1,
+      "review_receipt_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    "valid": false
+  },
+  {
+    "name": "review_receipt_sha256_BBBBBBBBBB",
+    "value": {
+      "scope": "one_manual_post",
+      "reviewer": "codex",
+      "authorization_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "review_receipt_sha256": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
+    },
+    "valid": false
+  },
+  {
+    "name": "extra_True",
+    "value": {
+      "scope": "one_manual_post",
+      "reviewer": "codex",
+      "authorization_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "review_receipt_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "extra": true
+    },
+    "valid": false
+  },
+  {
+    "name": "missing_scope",
+    "value": {
+      "reviewer": "codex",
+      "authorization_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "review_receipt_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    "valid": false
+  },
+  {
+    "name": "missing_reviewer",
+    "value": {
+      "scope": "one_manual_post",
+      "authorization_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "review_receipt_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    "valid": false
+  },
+  {
+    "name": "missing_authorization_sha256",
+    "value": {
+      "scope": "one_manual_post",
+      "reviewer": "codex",
+      "review_receipt_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    "valid": false
+  },
+  {
+    "name": "missing_review_receipt_sha256",
+    "value": {
+      "scope": "one_manual_post",
+      "reviewer": "codex",
+      "authorization_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "valid": false
+  }
+]

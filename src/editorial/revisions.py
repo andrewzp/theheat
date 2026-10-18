@@ -167,6 +167,17 @@ def _policy_matches(binding, policy):
         return False
 
 
+def _valid_delegation(value) -> bool:
+    # Provenance references, not signatures. The trusted caller verifies actual
+    # user authorization and retains the referenced evidence before recording.
+    return (isinstance(value, dict)
+            and set(value) == {"scope", "reviewer", "authorization_sha256", "review_receipt_sha256"}
+            and value["scope"] == "one_manual_post" and value["reviewer"] == "codex"
+            and all(isinstance(value[k], str) and len(value[k]) == 64
+                    and all(c in "0123456789abcdef" for c in value[k])
+                    for k in ("authorization_sha256", "review_receipt_sha256")))
+
+
 def review_is_current(draft: dict, *, policy=_CURRENT_POLICY) -> bool:
     # Text-only reviews cannot authorize an image or silently drop it at send.
     if "media_attachment" in draft:
@@ -178,6 +189,8 @@ def review_is_current(draft: dict, *, policy=_CURRENT_POLICY) -> bool:
         return False
     if binding.get("kind") == "human":
         return True
+    if binding.get("kind") == "delegated":
+        return _valid_delegation(binding.get("delegation"))
     if binding.get("kind") != "model" or not _checks_pass(_two_bot(draft)):
         return False
     try:
@@ -199,6 +212,13 @@ def approval_is_current(draft: dict, mode: str | None = None, *, policy=_CURRENT
         if type(binding.get("decision_revision")) is not int or binding["decision_revision"] != decision_revision(draft):
             return False
     except ValueError:
+        return False
+    try:
+        if (draft["review_binding"].get("kind") == "delegated" or "review_binding_sha256" in binding) and (
+            binding.get("review_binding_sha256") != fingerprint(draft["review_binding"])
+        ):
+            return False
+    except (ValueError, TypeError, UnicodeError, OverflowError):
         return False
     if binding.get("publish_intent_id") != draft.get("publish_intent_id"):
         return False
@@ -310,6 +330,26 @@ def record_human_review(draft: dict, *, at: str | None = None, policy=_CURRENT_P
     return draft
 
 
+def record_delegated_review(draft: dict, *, authorization_sha256: str,
+                            review_receipt_sha256: str, at: str | None = None,
+                            policy=_CURRENT_POLICY) -> dict:
+    """Trusted operator only: explicit user delegation, never a human rating.
+
+    The caller retains and verifies both references. This does not authenticate
+    a caller, validate factual claims, authorize automatic publishing or send.
+    """
+    delegation = {"scope": "one_manual_post", "reviewer": "codex",
+                  "authorization_sha256": authorization_sha256,
+                  "review_receipt_sha256": review_receipt_sha256}
+    if not _valid_delegation(delegation):
+        raise ValueError("Explicit delegated review provenance is required")
+    # Reuse identical text/media/conflict/policy validation and revocation.
+    # Only the completed delegated record is returned or persisted.
+    record_human_review(draft, at=at, policy=policy)
+    draft["review_binding"].update(kind="delegated", delegation=delegation)
+    return draft
+
+
 def authorize_draft(draft: dict, mode: str, intent_id: str | None = None, *, publication_epoch: str | None = None) -> dict:
     if not review_is_current(draft):
         raise ValueError("This revision needs revalidation")
@@ -348,6 +388,8 @@ def bind_reviewed_revision(draft: dict, mode: str, *, at: str,
         "mode": mode, "authorized_at": at,
         "editorial_policy": deepcopy(policy), "policy_sha256": fingerprint(policy),
     }
+    if draft["review_binding"].get("kind") == "delegated":
+        draft["approval_binding"]["review_binding_sha256"] = fingerprint(draft["review_binding"])
     if mode == "auto":
         draft["approval_binding"]["publication_epoch"] = publication_epoch
     if intent_id:

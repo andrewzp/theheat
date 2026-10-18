@@ -6,7 +6,7 @@ import { NwsWarningEvidence } from "./NwsWarningEvidence.js"
 import { GraphicPreview } from "./GraphicPreview.js"
 import { EditorMedia } from "./EditorMedia.js"
 import { formatDuration, timeAgo } from "../../lib/format.js"
-import { draftReviewControls, draftTextLength, revisionKey } from "../../lib/draft-review-ui.js"
+import { draftReviewControls, draftTextLength, manualReviewLabel, revisionKey } from "../../lib/draft-review-ui.js"
 import {
   ScoreMeter,
   clipText,
@@ -126,7 +126,7 @@ export function DraftWorkbench({
                 <div className="queue-text">{clipText(draft.text, 118)}</div>
                 <div className="queue-meta">
                   <span>{timeAgo(draft.created_at)}</span>
-                  <span>{draft.publish_blocked ? "publication needs reconciliation" : draftReviewControls(draft).sourceHold ? "source update needed" : draft.review_status === "media_review_required" ? (hasLocalMediaPanel(draft) ? "Text and graphic status" : "graphic review needed") : draft.review_status === "policy_unverified" ? "editorial policy unverified" : draft.review_status !== "passed" ? "review needed" : draft.status === "approved" ? (draft.local_preview ? "local intent parked" : "awaiting publication") : draft.review_kind === "human" ? "human reviewed" : policySummary(draft)}</span>
+                  <span>{draft.publish_blocked ? "publication needs reconciliation" : draftReviewControls(draft).sourceHold ? "source update needed" : draft.review_status === "media_review_required" ? (hasLocalMediaPanel(draft) ? "Text and graphic status" : "graphic review needed") : draft.review_status === "policy_unverified" ? "editorial policy unverified" : draft.review_status !== "passed" ? "review needed" : draft.status === "approved" ? (draft.local_preview ? "local intent parked" : "awaiting publication") : manualReviewLabel(draft) || policySummary(draft)}</span>
                 </div>
               </button>
             ))}
@@ -146,7 +146,7 @@ export function DraftWorkbench({
 
                 <div className="draft-status-row">
                   <span className="workbench-pill">
-                    {selectedDraft.publish_blocked ? "publication needs reconciliation" : controls.sourceHold ? "source update needed" : selectedDraft.review_status === "media_review_required" ? (hasLocalMediaPanel(selectedDraft) ? "Text and graphic status" : "graphic review needed") : selectedDraft.review_status === "policy_unverified" ? "editorial policy unverified" : controls.conflict ? "conflicting versions" : controls.needsReview ? "review needed" : selectedDraft.status === "approved" ? (selectedDraft.local_preview ? "local intent parked" : "awaiting publication") : selectedDraft.review_kind === "human" ? "human reviewed" : "model checks current"}
+                    {selectedDraft.publish_blocked ? "publication needs reconciliation" : controls.sourceHold ? "source update needed" : selectedDraft.review_status === "media_review_required" ? (hasLocalMediaPanel(selectedDraft) ? "Text and graphic status" : "graphic review needed") : selectedDraft.review_status === "policy_unverified" ? "editorial policy unverified" : controls.conflict ? "conflicting versions" : controls.needsReview ? "review needed" : selectedDraft.status === "approved" ? (selectedDraft.local_preview ? "local intent parked" : "awaiting publication") : manualReviewLabel(selectedDraft) || "model checks current"}
                   </span>
                   <span className="workbench-pill">
                     signal {selectedDraft.score?.total ?? "—"}
@@ -344,6 +344,8 @@ export function DraftWorkbench({
                         ? selectedDraft.editorial_policy?.reason
                         : controls.needsReview
                         ? "This version needs review before approval."
+                        : selectedDraft.review_kind === "delegated"
+                        ? "Assistant reviewed under your explicit authorization. Manual posting only; this is not a human rating or current model checks."
                         : selectedDraft.review_kind === "human"
                         ? (selectedDraft.local_preview ? "Human review permits local approval. Nothing will be published." : "Human review permits manual posting. Automatic scheduling requires current model checks.")
                         : selectedDraft.approval_policy?.mode === "armed_auto"
@@ -496,7 +498,7 @@ export function DraftWorkbench({
                         </button>
                       ) : !controls.canSchedule ? (
                         <button type="button" className="btn sm" disabled>
-                          {selectedDraft.local_preview ? "Publication unavailable" : selectedDraft.review_kind === "human" ? "Manual posting only" : "Auto unavailable"}
+                          {selectedDraft.local_preview ? "Publication unavailable" : manualReviewLabel(selectedDraft) ? "Manual posting only" : "Auto unavailable"}
                         </button>
                       ) : (
                         <button

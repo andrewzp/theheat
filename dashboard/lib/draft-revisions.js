@@ -94,12 +94,21 @@ function proofMatches(value, binding) {
   return digest !== null && digest === binding.required_checks_sha256
 }
 
+function validDelegation(value) {
+  const keys = ["scope", "reviewer", "authorization_sha256", "review_receipt_sha256"]
+  return value && typeof value === "object" && !Array.isArray(value)
+    && Object.keys(value).length === keys.length && keys.every(k => Object.hasOwn(value, k))
+    && value.scope === "one_manual_post" && value.reviewer === "codex"
+    && [value.authorization_sha256, value.review_receipt_sha256].every(v => typeof v === "string" && /^[a-f0-9]{64}$/.test(v))
+}
+
 export function reviewIsCurrent(draft, policy = null) {
   if (Object.hasOwn(draft, "media_attachment")) return false
   const binding = draft.review_binding
   if (draft.revision_conflicts?.length || !bindingMatches(draft, binding)) return false
   if (!policyMatches(binding, policy)) return false
   if (binding.kind === "human") return true
+  if (binding.kind === "delegated") return validDelegation(binding.delegation)
   if (binding.kind !== "model" || !checksPass(twoBot(draft))) return false
   try { return proofMatches(twoBot(draft), binding) && binding.checks_sha256 === fingerprint(checks(twoBot(draft))) } catch { return false }
 }
@@ -109,6 +118,7 @@ export function approvalIsCurrent(draft, mode = null, policy = null) {
   if (!reviewIsCurrent(draft, policy) || !bindingMatches(draft, binding) || !policyMatches(binding, policy)) return false
   if (!["manual", "auto"].includes(binding.mode) || (mode && binding.mode !== mode)) return false
   try { if (binding.decision_revision !== decisionRevision(draft)) return false } catch { return false }
+  try { if ((draft.review_binding.kind === "delegated" || Object.hasOwn(binding, "review_binding_sha256")) && binding.review_binding_sha256 !== fingerprint(draft.review_binding)) return false } catch { return false }
   if ((binding.publish_intent_id ?? null) !== (draft.publish_intent_id ?? null)) return false
   return binding.mode !== "auto" || draft.review_binding.kind === "model"
 }
@@ -173,6 +183,7 @@ export function authorizeDraft(draft, mode, intentId = null, publicationEpoch = 
   }
   advanceDecision(draft)
   draft.approval_binding = { ...draftIdentity(draft), decision_revision: draft.decision_revision, mode, authorized_at: new Date().toISOString(), editorial_policy: structuredClone(policy), policy_sha256: fingerprint(policy) }
+  if (draft.review_binding.kind === "delegated") draft.approval_binding.review_binding_sha256 = fingerprint(draft.review_binding)
   if (mode === "auto") draft.approval_binding.publication_epoch = publicationEpoch
   if (intentId) {
     draft.approval_binding.publish_intent_id = intentId
