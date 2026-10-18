@@ -2,6 +2,7 @@
 import CoverageEvidence from "./components/CoverageEvidence.js"
 import ReportsForReview from "./components/ReportsForReview.js"
 import SourcedGeneration from "./components/SourcedGeneration.js"
+import PostFeedback from "./components/PostFeedback.js"
 
 import { useEffect, useState, useCallback, useRef } from "react"
 import { AutomationStatusStrip } from "./components/AutomationStrip.js"
@@ -671,6 +672,8 @@ export default function Dashboard() {
                 </div>
               )}
             </div>
+
+            <PostFeedback enabled={!data?.local_preview && data?.stateBackend === "gist"} />
 
             {/* Generate Drafts */}
             <div className="card full" style={{ marginBottom: 16 }}>

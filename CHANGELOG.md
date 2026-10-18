@@ -1,3 +1,9 @@
+## 0.9.109.11
+
+- Add explicit editorial feedback on exact receipt-confirmed X posts, separate
+  from factual review, engagement and publishing approval. Saves use bounded
+  auxiliary Gist files and confirm uncertain requests without automatic retries.
+
 ## [0.9.109.10] - 2026-10-18
 
 - Permit an explicitly curated, manually reviewed cyclone-warning cancellation statement without adding advisory products to automated discovery. Preserve exact current source, final safety and delivery checks.

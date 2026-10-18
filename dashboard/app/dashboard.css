@@ -924,3 +924,28 @@ h1 span { color: #666; font-weight: 400; font-size: 14px; margin-left: 8px; }
 .local-cost-requests li { border-top: 1px solid var(--border, #d0d0d0); padding: .75rem 0; min-width: 0; overflow-wrap: anywhere; }
 .local-cost-requests summary { cursor: pointer; line-height: 1.5; }
 .local-cost-requests summary:focus-visible { outline: 2px solid currentColor; outline-offset: 4px; }
+
+.post-feedback { margin-bottom: 16px; }
+.post-feedback label { display: flex; flex-direction: column; gap: 8px; }
+.post-feedback select, .post-feedback textarea {
+  width: 100%; min-height: 44px; padding: 10px; color: #eee; background: #171717;
+  border: 1px solid #666; border-radius: 6px; font: inherit;
+}
+.post-feedback select:focus-visible, .post-feedback textarea:focus-visible,
+.post-feedback input:focus-visible, .post-feedback button:focus-visible { outline: 2px solid #ff8c42; outline-offset: 3px; }
+.post-feedback-text { margin: 18px 0 8px; padding-left: 14px; border-left: 3px solid #ff5c00; font-size: 18px; line-height: 1.6; overflow-wrap: anywhere; }
+.post-feedback fieldset { border: 0; padding: 0; margin: 18px 0 0; min-width: 0; }
+.post-feedback legend { margin-bottom: 14px; }
+.post-feedback-scores { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+.post-feedback-scores .runtime-note { margin: 0; }
+.post-feedback-note-label { margin: 18px 0; }
+.post-feedback .post-feedback-confirm { flex-direction: row; align-items: center; margin: 18px 0; }
+.post-feedback-confirm input { width: 22px; height: 22px; flex-shrink: 0; }
+.post-feedback-pending { margin: 16px 0; padding: 12px; border: 1px solid #9a713f; }
+.post-feedback-pending code, .post-feedback-note { overflow-wrap: anywhere; }
+.post-feedback-pending button { display: block; margin-top: 12px; }
+.post-feedback form + .btn { margin-top: 14px; }
+@media (max-width: 640px) { .post-feedback-scores { grid-template-columns: 1fr; } }
+.post-feedback a { color: #ff8c42; }
+.post-feedback a:focus-visible { outline: 2px solid #ff8c42; outline-offset: 3px; }
+.post-feedback button { min-height: 44px; }
