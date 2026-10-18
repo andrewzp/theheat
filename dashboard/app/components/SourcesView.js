@@ -1,6 +1,7 @@
 "use client"
 
 import { formatDuration, timeAgo } from "../../lib/format.js"
+import { SourceHistoryDates, SourceHistorySnapshot } from "./SourceHistoryTime.js"
 import {
   sourceDiagnosticClass,
   sourceDiagnosticLabel,
@@ -47,8 +48,8 @@ export function SourcesView({ sources, stats }) {
   if (!sources || sources.length === 0) {
     return (
       <div className="card full">
-        <h2>Source Health</h2>
-        <p style={{ color: "#888" }}>No run history yet.</p>
+        <h2>Saved source runs</h2>
+        <p className="source-history-note">No saved runs are available. Current source availability is unverified.</p>
       </div>
     )
   }
@@ -56,22 +57,27 @@ export function SourcesView({ sources, stats }) {
     <div className="card full">
       <div className="section-head">
         <div>
-          <h2>Source Health</h2>
-          <p style={{ color: "#888", fontSize: 12 }}>
-            Source availability over the last {stats?.runs_analyzed ?? 0} runs; this is not event recall.
+          <h2>Saved source runs</h2>
+          <p className="source-history-note">
+            Past collection results, not a live source check. Current availability is unverified.
+            A successful run does not establish current data or event coverage.
+          </p>
+          <SourceHistorySnapshot asOf={stats?.as_of} />
+          <p className="source-history-note">
+            Up to {stats?.runs_analyzed ?? 0} retained runs per source; dates describe collection, not measurement.
             {stats?.unhealthy_count > 0 && (
               <span style={{ color: "#f87171", marginLeft: 8 }}>
-                {stats.unhealthy_count} unhealthy
+                {stats.unhealthy_count} recorded unhealthy
               </span>
             )}
             {stats?.degraded_count > 0 && (
               <span style={{ color: "#fbbf24", marginLeft: 8 }}>
-                {stats.degraded_count} degraded
+                {stats.degraded_count} recorded degraded
               </span>
             )}
             {stats?.external_count > 0 && (
               <span style={{ color: "#fb923c", marginLeft: 8 }}>
-                {stats.external_count} external (NASA/gov)
+                {stats.external_count} recorded external issues
               </span>
             )}
           </p>
@@ -80,40 +86,35 @@ export function SourcesView({ sources, stats }) {
       <div className="source-health-table" style={{ marginTop: 16 }}>
         <div className="source-row source-header">
           <span>Source</span>
-          <span>Health</span>
-          <span>Success rate</span>
+          <span>Recorded status</span>
+          <span>Recorded success</span>
           <span>Observed</span>
           <span>Drafted</span>
           <span>Latency</span>
-          <span>Last run</span>
+          <span>Recorded timing</span>
         </div>
         {sources.map((s) => (
           <div key={s.source} className="source-row">
-            <span className="source-name">{s.source}</span>
-            <span className={`badge source-${s.health}`}>
-              {s.health}
+            <span className="source-name" data-label="Source">{s.source}</span>
+            <span data-label="Recorded status" className={`badge source-${s.health === "healthy" || s.health === "idle" ? "recorded" : s.health}`}>
+              recorded {s.health}
               {s.served_via && (
                 <span style={{ marginLeft: 6, fontWeight: 400, opacity: 0.85 }}>
                   · served via {s.served_via}
                 </span>
               )}
             </span>
-            <span className="source-rate">
+            <span className="source-rate" data-label="Recorded success">
               {s.success_rate != null ? `${Math.round(s.success_rate * 100)}%` : "—"}
               <span style={{ color: "#555", marginLeft: 8, fontSize: 11 }}>
                 ({s.successes}/{s.active ?? s.runs}
                 {s.skipped ? `, ${s.skipped} skipped` : ""})
               </span>
             </span>
-            <span className="source-num">{s.total_observed}</span>
-            <span className="source-num">{s.total_drafted}</span>
-            <span className="source-num">{s.avg_duration_ms != null ? formatDuration(s.avg_duration_ms) : "—"}</span>
-            <span className="source-time">
-              {s.last_run_at ? timeAgo(s.last_run_at) : "—"}
-              {s.last_run_status === "failed" && (
-                <span style={{ color: "#f87171", marginLeft: 4 }}>(failed)</span>
-              )}
-            </span>
+            <span className="source-num" data-label="Observed">{s.total_observed}</span>
+            <span className="source-num" data-label="Drafted">{s.total_drafted}</span>
+            <span className="source-num" data-label="Latency">{s.avg_duration_ms != null ? formatDuration(s.avg_duration_ms) : "—"}</span>
+            <div className="source-time"><SourceHistoryDates timing={s.history_time} /></div>
             {s.last_error && !s.served_via && (
               <div
                 className={`source-diagnostic ${sourceDiagnosticClass(s.health)}`}

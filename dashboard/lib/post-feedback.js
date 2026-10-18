@@ -53,13 +53,19 @@ export function feedbackInput(value) {
 
 function filename(id) { return `${PREFIX}${id}.json` }
 function recordInput(record) { return Object.fromEntries(INPUT_KEYS.map(k => [k, record[k]])) }
+export function feedbackRecord(value) {
+  const record = structuredClone(value)
+  try { feedbackInput(recordInput(record)) } catch { fail("feedback_store_unavailable") }
+  if (!exact(record, [...INPUT_KEYS, "schema_version", "kind", "received_at"]) || record.schema_version !== 1 ||
+      record.kind !== "dashboard_editorial_opinion" ||
+      typeof record.received_at !== "string" || !Number.isFinite(Date.parse(record.received_at))) fail("feedback_store_unavailable")
+  return record
+}
 function decodeRecord(file, name) {
   if (!file || file.truncated || typeof file.content !== "string" || Buffer.byteLength(file.content) > 8192) fail("feedback_store_unavailable")
   let record
-  try { record = JSON.parse(file.content); feedbackInput(recordInput(record)) } catch { fail("feedback_store_unavailable") }
-  if (!exact(record, [...INPUT_KEYS, "schema_version", "kind", "received_at"]) || record.schema_version !== 1 ||
-      record.kind !== "dashboard_editorial_opinion" || name !== filename(record.request_id) ||
-      typeof record.received_at !== "string" || !Number.isFinite(Date.parse(record.received_at))) fail("feedback_store_unavailable")
+  try { record = feedbackRecord(JSON.parse(file.content)) } catch { fail("feedback_store_unavailable") }
+  if (name !== filename(record.request_id)) fail("feedback_store_unavailable")
   return record
 }
 

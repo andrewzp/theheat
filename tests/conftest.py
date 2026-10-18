@@ -50,12 +50,14 @@ def _ci_postgres_shard(path):
     # Anchor to this repository, not the working directory or randomized hash().
     # Every parameter and test in a module shares its module-scoped fixtures.
     relative = path.resolve().relative_to(Path(__file__).resolve().parents[1]).as_posix()
-    # Keep heavy modules whole while balancing measured CI work. Shard7 hit
-    # the unchanged 35-minute job limit; all other hash assignments stay stable.
+    # Keep heavy modules whole while balancing measured CI work. Shards7 and0
+    # hit the unchanged 35-minute job limit; other hash assignments stay stable.
     assigned = {
         "tests/test_postgres_published_media.py": "2",
         "tests/test_postgres_cost_projection.py": "5",
         "tests/test_postgres_important_native.py": "1",
+        "tests/test_postgres_ghcn_generation.py": "5",
+        "tests/test_postgres_platform_description.py": "6",
     }
     if relative in assigned:
         return assigned[relative]

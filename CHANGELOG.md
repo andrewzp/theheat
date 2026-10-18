@@ -1,3 +1,17 @@
+## 0.9.109.13
+
+- Label saved source results as historical in Sources and Health. Show dated
+  collection/success evidence and unknown current availability without fetching
+  sources, changing existing classifications or resuming collection.
+- Rebalance two measured heavy PostgreSQL test modules within the existing eight
+  shards, preserving all cases, module fixtures and the unchanged job deadline.
+
+## 0.9.109.12
+
+- Add a reproducible local weekly outcome review with exact receipt/opinion joins,
+  explicit missing evidence, separate monthly cost context and no automatic
+  promotion or publishing. Preserve the existing feedback schema and API behavior.
+
 ## 0.9.109.11
 
 - Add explicit editorial feedback on exact receipt-confirmed X posts, separate

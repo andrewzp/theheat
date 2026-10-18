@@ -178,8 +178,19 @@ test("health page renders empty state when no sources are available", () => {
 
   assert.match(
     markup,
-    /Source health data not yet available\. The next alerts cron will populate this view\./
+    /No saved source runs are available\. Current availability is unverified; collection may be paused\./
   )
+})
+
+test("embedded and standalone views explicitly label saved status and unknown live availability", () => {
+  for (const embedded of [true, false]) {
+    const markup = render({ embedded })
+    assert.match(markup, /Current availability is unverified/)
+    assert.match(markup, /recorded healthy/)
+    assert.match(markup, /Last recorded success/)
+    assert.match(markup, /Snapshot assessed at an unknown time/)
+    assert.match(markup, /Some run times or statuses are unavailable/)
+  }
 })
 
 test("health page stats card renders the four health counts", () => {
