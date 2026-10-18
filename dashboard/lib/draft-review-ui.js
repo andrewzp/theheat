@@ -36,3 +36,9 @@ export function draftReviewControls(draft, now = Date.now()) {
     conflict,
   }
 }
+
+// Attribution is separate from validity; callers show this only for passed review.
+export function manualReviewLabel(draft) {
+  return draft?.review_kind === "delegated" ? "assistant reviewed"
+    : draft?.review_kind === "human" ? "human reviewed" : null
+}

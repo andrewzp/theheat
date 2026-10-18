@@ -498,3 +498,27 @@ def test_generic_attachment_cannot_be_silently_sent_as_text_only(external, attac
     assert posting.post_approved(draft, {"drafts": [draft], "publish_ledger": {}}) == "failed"
     storage.write_state.assert_not_called()
     send.assert_not_called()
+
+
+@pytest.mark.parametrize("safety_pass", [False, True])
+def test_delegated_manual_review_keeps_required_final_safety_and_x_receipt(external, monkeypatch, safety_pass):
+    from src.editorial.revisions import record_delegated_review
+    draft = _draft()
+    record_delegated_review(draft, authorization_sha256="a" * 64, review_receipt_sha256="b" * 64)
+    authorize_draft(draft, "manual", "delegated-intent")
+    draft["status"] = "approved"
+    monkeypatch.setenv("DRAFT_ID", draft["id"])
+    monkeypatch.setenv("TWEET_TEXT", draft["text"])
+    monkeypatch.setenv("PUBLISH_INTENT_ID", "delegated-intent")
+    posting.run_safety_pipeline.return_value = (safety_pass, None if safety_pass else "synthetic safety hold")
+    state = _state(draft)
+    posting.run_manual_tweet(state)
+    posting.run_safety_pipeline.assert_called_once_with(draft["text"])
+    assert external[1].call_count == int(safety_pass)
+    posting.post_to_bluesky.assert_not_called()
+    if safety_pass:
+        assert draft["tweet_id"] == "tweet_current" and draft["status"] == "posted"
+        assert state["publish_ledger"][draft["event_id"]]["phase"] == "confirmed"
+    else:
+        assert draft["status"] == "pending" and not draft.get("approval_binding")
+        assert not state["publish_ledger"]

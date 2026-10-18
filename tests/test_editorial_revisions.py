@@ -240,3 +240,55 @@ def test_unrepresentable_content_transition_refuses_before_mutating_history(fiel
     with pytest.raises(ValueError):
         invalidate_text(draft, "A changed synthetic text.")
     assert draft == before
+
+
+@pytest.mark.parametrize("case", json.loads((Path(__file__).parent / "fixtures/delegated_review.json").read_text()), ids=lambda c: c["name"])
+def test_delegated_provenance_parity_and_manual_only(case):
+    from src.editorial.revisions import record_delegated_review
+    draft = {"id": "delegated", "status": "pending", "text": "Synthetic source-backed text."}
+    record_delegated_review(draft, authorization_sha256="a" * 64, review_receipt_sha256="b" * 64)
+    draft["review_binding"]["delegation"] = deepcopy(case["value"])
+    assert review_is_current(draft) is case["valid"]
+    assert draft["review_binding"]["kind"] == "delegated"
+    assert "two_bot" not in draft.get("review_context", {})
+    if case["valid"]:
+        with pytest.raises(ValueError, match="model review"):
+            authorize_draft(draft, "auto")
+        authorize_draft(draft, "manual", "delegated-one")
+        assert approval_is_current(draft, "manual")
+        assert draft["approval_binding"]["review_binding_sha256"] == fingerprint(draft["review_binding"])
+    else:
+        with pytest.raises(ValueError, match="revalidation"):
+            authorize_draft(draft, "manual")
+
+
+@pytest.mark.parametrize("change", ["authorization", "receipt", "text", "source", "policy", "kind", "human_kind", "malformed_review"])
+def test_delegated_approval_cannot_survive_changed_review_or_content(change):
+    from src.editorial.revisions import record_delegated_review
+    draft = {"status": "pending", "text": "Synthetic text", "review_context": {"source": "one"}}
+    record_delegated_review(draft, authorization_sha256="a" * 64, review_receipt_sha256="b" * 64)
+    authorize_draft(draft, "manual", "one")
+    if change in ("authorization", "receipt"):
+        key = "authorization_sha256" if change == "authorization" else "review_receipt_sha256"
+        draft["review_binding"]["delegation"][key] = "c" * 64
+    elif change == "text":
+        invalidate_text(draft, "Changed")
+    elif change == "source":
+        draft["review_context"]["source"] = "two"
+    elif change == "policy":
+        draft["review_binding"]["policy_sha256"] = "0" * 64
+    elif change == "malformed_review":
+        draft["review_binding"]["reviewed_at"] = float("nan")
+    else:
+        draft["review_binding"]["kind"] = "human" if change == "human_kind" else "unknown"
+    assert not approval_is_current(draft)
+
+
+def test_invalid_delegation_cannot_mutate_or_clear_existing_authority():
+    from src.editorial.revisions import record_delegated_review
+    draft = reviewed_draft()
+    authorize_draft(draft, "manual", "old")
+    before = deepcopy(draft)
+    with pytest.raises(ValueError, match="provenance"):
+        record_delegated_review(draft, authorization_sha256="", review_receipt_sha256="b" * 64)
+    assert draft == before

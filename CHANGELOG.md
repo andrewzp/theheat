@@ -1,3 +1,7 @@
+## [0.9.109.9] - 2026-10-18
+
+- Distinguish a trusted, explicitly delegated assistant review from human ratings and model checks. Bind manual approval to its exact review provenance; preserve source freshness, final safety, uncertainty and receipt checks, with automatic scheduling still unavailable.
+
 ## [0.9.109.8] - 2026-10-16
 
 - Flag expired, future or unreadable saved NWS warnings before review or approval, and place held warnings after other active drafts. Preserve original evidence and editing while refusing obsolete approval before a publishing job is queued; live source checks still run before posting.

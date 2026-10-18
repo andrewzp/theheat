@@ -174,3 +174,32 @@ for (const [field, value] of [["content_revision", Number.MAX_SAFE_INTEGER], ["d
     assert.deepEqual(draft, before)
   })
 }
+
+
+test("delegated provenance is exact, manual-only and matches Python fixtures", () => {
+  const cases = JSON.parse(readFileSync(new URL("../../tests/fixtures/delegated_review.json", import.meta.url), "utf8"))
+  for (const item of cases) {
+    const draft = { status: "pending", text: "Synthetic text" }
+    recordHumanReview(draft)
+    Object.assign(draft.review_binding, { kind: "delegated", delegation: structuredClone(item.value) })
+    assert.equal(reviewIsCurrent(draft), item.valid, item.name)
+    if (!item.valid) { assert.throws(() => authorizeDraft(draft, "manual"), /revalidation/); continue }
+    assert.throws(() => authorizeDraft(draft, "auto"), /model review/)
+    authorizeDraft(draft, "manual", "one")
+    assert.equal(approvalIsCurrent(draft, "manual"), true)
+    for (const key of ["authorization_sha256", "review_receipt_sha256"]) {
+      const changed = structuredClone(draft)
+      changed.review_binding.delegation[key] = "c".repeat(64)
+      assert.equal(approvalIsCurrent(changed), false)
+    }
+    const relabeled = structuredClone(draft)
+    relabeled.review_binding.kind = "human"
+    assert.equal(approvalIsCurrent(relabeled), false)
+    const malformed = structuredClone(draft)
+    malformed.review_binding.reviewed_at = NaN
+    assert.equal(approvalIsCurrent(malformed), false)
+    const edited = structuredClone(draft)
+    invalidateText(edited, "Changed")
+    assert.equal(approvalIsCurrent(edited), false)
+  }
+})

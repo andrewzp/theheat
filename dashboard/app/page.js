@@ -17,7 +17,7 @@ import { CostPanel } from "./components/CostPanel.js"
 import { COST_SCENARIO } from "../lib/usage-cost-contract.js"
 import { SuppressedView } from "./components/SuppressedView.js"
 import { hot10IsStale, hot10StaleDays, timeAgo, todayTweetCount } from "../lib/format.js"
-import { draftReviewControls, draftTextLength, revisionKey, reviewQueueOrder } from "../lib/draft-review-ui.js"
+import { draftReviewControls, draftTextLength, revisionKey, reviewQueueOrder, manualReviewLabel } from "../lib/draft-review-ui.js"
 import { createDraftCommand, createCandidateCommand, localCommandEndpoint } from "../lib/draft-command-request.js"
 import { recoveryKey, saveCommandReference, readCommandReference, clearCommandReference, withCommandReference, abandonmentBody } from "../lib/local-command-recovery.js"
 import "./dashboard.css"
@@ -621,7 +621,7 @@ export default function Dashboard() {
                         <span className="draft-type">{d.type}</span>
                         <span className="draft-time">{timeAgo(d.created_at)}</span>
                         <span className="workbench-pill">
-                          {d.publish_blocked ? "publication needs reconciliation" : controls.sourceHold ? "source update needed" : d.status === "approved" ? (d.local_preview ? "local intent parked" : "awaiting publication") : controls.needsReview ? "review needed" : d.review_kind === "human" ? "human reviewed" : "model checks current"}
+                          {d.publish_blocked ? "publication needs reconciliation" : controls.sourceHold ? "source update needed" : d.status === "approved" ? (d.local_preview ? "local intent parked" : "awaiting publication") : controls.needsReview ? "review needed" : manualReviewLabel(d) || "model checks current"}
                         </span>
                       </div>
                       <div className="draft-text">{d.text}</div>
