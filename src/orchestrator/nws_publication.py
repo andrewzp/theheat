@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 import json
+import re
 from typing import Any
 
 from src.data._http import fetch_with_retry
@@ -49,6 +50,22 @@ def _bundle(draft: dict) -> dict | None:
     return bundle
 
 
+def _manual_cyclone_cancellation(draft: dict, props: dict) -> bool:
+    """Curated follow-up only; this never adds a product to automatic discovery."""
+    description = props.get("description")
+    if not (props.get("event") == "Tropical Cyclone Local Statement"
+            and props.get("messageType") == "Alert" and isinstance(description, str)
+            and re.search(r"(?m)^\.\.\.(?:TYPHOON|HURRICANE) WARNING IS CANCELLED FOR [A-Z0-9][A-Z0-9 ,'-]{0,500}\.\.\.$", description)):
+        return False
+    review = draft.get("review_binding")
+    approval = draft.get("approval_binding")
+    return (draft.get("manual_override") is True and draft.get("approval_mode") == "manual"
+            and draft.get("approval_policy") == {"mode": "manual", "can_auto_approve": False}
+            and "auto_approve_at" not in draft
+            and (review is None or (isinstance(review, dict) and review.get("kind") in {"human", "delegated"}))
+            and (approval is None or (isinstance(approval, dict) and approval.get("mode") == "manual")))
+
+
 def _retained(draft: dict, now: datetime) -> dict | None:
     bundle = _bundle(draft)
     if bundle is None:
@@ -65,7 +82,7 @@ def _retained(draft: dict, now: datetime) -> dict | None:
         "source_url", "source_alert_id", "feature_sha256")}, "nws_source_provenance_changed")
     props = envelope["feature"]["properties"]
     _require(props.get("status") == "Actual" and props.get("category") == "Met"
-             and (_typhoon_warning(props) or rare_tornado(props) or (
+             and (_typhoon_warning(props) or rare_tornado(props) or _manual_cyclone_cancellation(draft, props) or (
                  props.get("event") in TRACKED_EVENTS and props.get("event") != "Typhoon Warning"
                  and props.get("messageType") == "Alert")), "nws_source_product_unsupported")
     sent = _utc(envelope["times"]["sent"]["utc"])
