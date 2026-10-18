@@ -377,3 +377,116 @@ def test_actual_streamed_http_path_uses_fixed_source_and_does_not_cache(monkeypa
     assert nws.current_nws_source(value, live=True) is None
     assert len(responses.calls) == 2
     assert all("status=actual" in row.request.url and "message_type=alert%2Cupdate" in row.request.url for row in responses.calls)
+
+
+def cancellation_feature():
+    source = feature()
+    source["properties"].update(event="Tropical Cyclone Local Statement",
+        description="...TYPHOON WARNING IS CANCELLED FOR INVENTED ISLAND...\n\nPassing showers may still produce sudden gale-force gusts.")
+    return source
+
+
+def cancellation_draft(*, delegated=False):
+    from src.editorial.revisions import record_delegated_review
+    value = draft(cancellation_feature())
+    value.update(text="Invented island's typhoon warning is cancelled, but sudden gale-force gusts remain possible.",
+                 manual_override=True, approval_mode="manual",
+                 approval_policy={"mode": "manual", "can_auto_approve": False})
+    if delegated:
+        record_delegated_review(value, authorization_sha256="a" * 64, review_receipt_sha256="b" * 64)
+    else:
+        record_human_review(value)
+    authorize_draft(value, "manual", "invented-intent")
+    value["status"] = "approved"
+    return value
+
+
+@pytest.mark.parametrize("delegated", [False, True])
+def test_manual_cyclone_cancellation_requires_current_source_final_safety_and_receipt(boundary, monkeypatch, delegated):
+    _, storage, send, safety, lookup = boundary
+    value = cancellation_draft(delegated=delegated)
+    retained = deepcopy(value["review_context"])
+    lookup.return_value = {"features": [cancellation_feature()]}
+    saved = state(value)
+    manual(monkeypatch, value, saved)
+    assert safety.call_count == 1 and lookup.call_count == 2
+    send.assert_called_once_with(value["text"], media_png=None, alt_text=None)
+    assert value["status"] == "posted" and value["tweet_id"] == "invented-post"
+    assert value["review_context"] == retained
+    assert storage.write_state.called
+
+
+@pytest.mark.parametrize("case", ["no_override", "truthy_override", "wrong_mode", "automatic_policy",
+    "extra_policy", "auto_deadline", "model_review", "unknown_review", "auto_approval",
+    "missing_marker", "different_product", "update", "forecast_status", "different_category"])
+def test_cyclone_followup_cannot_expand_automatic_or_generic_product_eligibility(boundary, monkeypatch, case):
+    _, storage, send, safety, lookup = boundary
+    value = cancellation_draft()
+    if case == "no_override":
+        value.pop("manual_override")
+    elif case == "truthy_override":
+        value["manual_override"] = 1
+    elif case == "wrong_mode":
+        value["approval_mode"] = "auto"
+    elif case == "automatic_policy":
+        value["approval_policy"]["can_auto_approve"] = True
+    elif case == "extra_policy":
+        value["approval_policy"]["extra"] = True
+    elif case == "auto_deadline":
+        value["auto_approve_at"] = None
+    elif case == "model_review":
+        value["review_binding"]["kind"] = "model"
+    elif case == "unknown_review":
+        value["review_binding"]["kind"] = "unknown"
+    elif case == "auto_approval":
+        value["approval_binding"]["mode"] = "auto"
+    else:
+        changed = cancellation_feature()
+        props = changed["properties"]
+        if case == "missing_marker":
+            props["description"] = "An ordinary cyclone forecast."
+        elif case == "different_product":
+            props["event"] = "Wind Advisory"
+        elif case == "update":
+            props["messageType"] = "Update"
+        elif case == "forecast_status":
+            props["status"] = "Test"
+        elif case == "different_category":
+            props["category"] = "Safety"
+        value = draft(changed)
+        value.update(manual_override=True, approval_mode="manual", approval_policy={"mode": "manual", "can_auto_approve": False})
+    assert nws.current_nws_source(value, live=True) == "nws_source_product_unsupported"
+    lookup.assert_not_called()
+    manual(monkeypatch, value, state(value))
+    safety.assert_not_called()
+    send.assert_not_called()
+    storage.write_state.assert_not_called()
+
+
+@pytest.mark.parametrize("case", ["changed", "missing", "superseded", "expired"])
+def test_manual_cancellation_followup_keeps_live_source_and_expiry_holds(boundary, monkeypatch, case):
+    clock, storage, send, safety, lookup = boundary
+    value = cancellation_draft(delegated=True)
+    source = cancellation_feature()
+    feed = {"features": [source]}
+    if case == "changed":
+        source["properties"]["description"] += " Updated instructions."
+    elif case == "missing":
+        feed["features"] = []
+    elif case == "superseded":
+        successor = deepcopy(source)
+        successor["properties"].update(id="invented-successor", messageType="Update", references=[{"identifier":"invented-warning"}])
+        feed["features"].append(successor)
+    else:
+        clock["now"] += timedelta(hours=7)
+    lookup.return_value = feed
+    manual(monkeypatch, value, state(value))
+    safety.assert_not_called()
+    send.assert_not_called()
+    storage.write_state.assert_not_called()
+    assert not value.get("approval_binding")
+
+
+def test_cancellation_product_is_not_automatically_tracked():
+    from src.data.nws_alerts import TRACKED_EVENTS
+    assert "Tropical Cyclone Local Statement" not in TRACKED_EVENTS
