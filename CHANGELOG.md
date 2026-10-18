@@ -1,3 +1,9 @@
+## 0.9.109.12
+
+- Add a reproducible local weekly outcome review with exact receipt/opinion joins,
+  explicit missing evidence, separate monthly cost context and no automatic
+  promotion or publishing. Preserve the existing feedback schema and API behavior.
+
 ## 0.9.109.11
 
 - Add explicit editorial feedback on exact receipt-confirmed X posts, separate
