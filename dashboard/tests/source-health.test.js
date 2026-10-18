@@ -88,6 +88,30 @@ function setupEnv() {
   process.env.GITHUB_TOKEN = "token_123"
 }
 
+test("source-health API labels retained status using one aware snapshot clock", async (t) => {
+  setupEnv()
+  const originalFetch = globalThis.fetch
+  t.mock.timers.enable({ apis: ["Date"], now: new Date("2026-10-18T12:00:00Z") })
+  globalThis.fetch = async () => gistResponse(RUN_HISTORY_STATE)
+  try {
+    const { GET } = await importFresh("app/api/source-health/route.js")
+    const response = await GET(new Request("http://localhost/api/source-health", {
+      headers: { authorization: basicAuth("reviewer", "secret-pass") },
+    }))
+    assert.equal(response.status, 200)
+    const payload = await response.json()
+    assert.equal(payload.stats.as_of, "2026-10-18T12:00:00.000Z")
+    assert.equal(payload.stats.current_availability, "unverified")
+    assert.ok(payload.sources.every(source => source.history_time.as_of === payload.stats.as_of))
+    assert.ok(payload.sources.every(source => source.history_time.current_availability === "unverified"))
+    assert.equal(payload.sources.find(source => source.source === "nws_alerts").health, "healthy")
+    assert.equal(payload.sources.find(source => source.source === "nws_alerts").history_time.last_successful_at, NOW)
+  } finally {
+    globalThis.fetch = originalFetch
+    t.mock.timers.reset()
+  }
+})
+
 test("source-health API aggregates per-source success/failure across run_history", async () => {
   setupEnv()
   const originalFetch = globalThis.fetch

@@ -34,6 +34,8 @@
 .source-health-table .source-name {
   color: #ccc;
   font-family: inherit;
+  overflow-wrap: anywhere;
+  min-width: 0;
 }
 .source-health-table .source-rate {
   color: #888;
@@ -43,7 +45,31 @@
   font-variant-numeric: tabular-nums;
 }
 .source-health-table .source-time {
-  color: #555;
+  color: #bbb;
+  display: grid;
+  gap: 10px;
+  overflow-wrap: anywhere;
+}
+.source-history-times { display: grid; gap: 10px; color: #bbb; font-size: 12px; overflow-wrap: anywhere; }
+.source-history-times > span { display: grid; gap: 3px; }
+.source-history-times strong { color: #ddd; font-size: 10px; font-weight: 500; }
+.source-history-times small { color: #aaa; line-height: 1.5; }
+.source-history-times .source-time-warning { color: #fbbf24; }
+.source-history-note { color: #aaa; font-size: 12px; line-height: 1.65; margin-top: 8px; }
+.source-health-table .badge.source-recorded {
+  background: #1a1a1a;
+  color: #ccc;
+  border: 1px solid #444;
+  white-space: normal;
+}
+@media (max-width: 700px) {
+  .source-health-table .source-row { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; padding: 18px 0; align-items: start; }
+  .source-health-table .source-row.source-header { display: none; }
+  .source-health-table .source-name, .source-health-table .source-time { grid-column: 1 / -1; }
+  .source-health-table [data-label]::before { content: attr(data-label); display: block; color: #aaa; font-size: 10px; margin-bottom: 5px; font-weight: 400; }
+  .source-health-table .badge { justify-self: start; white-space: normal; max-width: 100%; }
+  .source-history-times { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .source-history-times > small { grid-column: 1 / -1; }
 }
 .source-health-table .badge.source-healthy {
   background: #0a2a0a;

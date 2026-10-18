@@ -1,3 +1,9 @@
+## 0.9.109.13
+
+- Label saved source results as historical in Sources and Health. Show dated
+  collection/success evidence and unknown current availability without fetching
+  sources, changing existing classifications or resuming collection.
+
 ## 0.9.109.12
 
 - Add a reproducible local weekly outcome review with exact receipt/opinion joins,

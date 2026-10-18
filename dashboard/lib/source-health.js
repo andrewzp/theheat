@@ -1,3 +1,5 @@
+import { sourceHistoryTime } from "./source-history-time.js"
+
 const HEALTH_METRIC_TOTALS = [
   "total_duration_ms",
   "avg_duration_ms",
@@ -410,7 +412,7 @@ export function queueWatch(drafts, now = new Date()) {
   }]
 }
 
-export function buildSourceHealthPayload(state, { runsLimit = 20 } = {}) {
+export function buildSourceHealthPayload(state, { runsLimit = 20, asOf = new Date().toISOString() } = {}) {
   const durableHealth = state?.source_health && Object.keys(state.source_health).length > 0
   const history = durableHealth
     ? []
@@ -419,6 +421,24 @@ export function buildSourceHealthPayload(state, { runsLimit = 20 } = {}) {
   const rawSources = durableHealth
     ? aggregateFromSourceHealth(state.source_health)
     : aggregateFromRunHistory(history)
+  const timingRows = new Map()
+  if (durableHealth) {
+    for (const [source, health] of Object.entries(state.source_health)) {
+      timingRows.set(source, Array.isArray(health?.runs) ? health.runs.map(row => ({ at: row?.ts, status: row?.status })) : null)
+    }
+  } else {
+    for (const run of history) for (const row of Array.isArray(run?.sources) ? run.sources : []) {
+      if (!timingRows.has(row?.source)) timingRows.set(row?.source, [])
+      timingRows.get(row?.source).push({ at: run.started_at, status: row?.status })
+    }
+  }
+  const clock = sourceHistoryTime([], { asOf }).as_of
+  for (const source of rawSources) {
+    source.history_time = {
+      ...sourceHistoryTime(timingRows.get(source.source), { asOf: clock }),
+      timestamp_precision: durableHealth ? "source_run" : "collection_run_start",
+    }
+  }
   const sources = rawSources.sort((a, b) => {
     const cmp = (order[a.health] ?? 9) - (order[b.health] ?? 9)
     if (cmp !== 0) return cmp
@@ -428,6 +448,9 @@ export function buildSourceHealthPayload(state, { runsLimit = 20 } = {}) {
   return {
     sources,
     stats: {
+      as_of: clock,
+      current_availability: "unverified",
+      scope: "saved_source_runs_not_live_availability_or_event_recall",
       runs_analyzed: durableHealth
         ? Math.max(0, ...sources.map((s) => s.runs || 0))
         : history.length,
@@ -437,8 +460,8 @@ export function buildSourceHealthPayload(state, { runsLimit = 20 } = {}) {
       healthy_count: sources.filter((s) => s.health === "healthy").length,
       idle_count: sources.filter((s) => s.health === "idle").length,
     },
-    coverage: coverageWatch(state?.coverage_log, state?.run_history, new Date()),
-    writer: writerWatch(state?.suppressions, state?.run_history, new Date()),
-    queue: queueWatch(state?.drafts, new Date()),
+    coverage: coverageWatch(state?.coverage_log, state?.run_history, new Date(clock)),
+    writer: writerWatch(state?.suppressions, state?.run_history, new Date(clock)),
+    queue: queueWatch(state?.drafts, new Date(clock)),
   }
 }

@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useCallback, useEffect, useState } from "react"
+import { SourceHistoryDates, SourceHistorySnapshot } from "../components/SourceHistoryTime.js"
 
 const h = React.createElement
 const REFRESH_INTERVAL_MS = 30000
@@ -68,7 +69,7 @@ function StatCard({ label, value, tone }) {
 
 function HealthPill({ health }) {
   const safeHealth = health || "idle"
-  return h("span", { className: `health-pill ${healthClass(safeHealth)}` }, safeHealth)
+  return h("span", { className: `health-pill ${healthClass(safeHealth)}` }, `recorded ${safeHealth}`)
 }
 
 function CounterPill({ label, value, tone }) {
@@ -140,14 +141,7 @@ function SourceRow({ source, now }) {
         "div",
         { className: "source-title-block" },
         h("h2", { className: "source-title" }, source.source),
-        h(
-          "div",
-          { className: "source-subline" },
-          h("span", null, "last run "),
-          h("strong", null, source.last_run_at ? timeAgo(source.last_run_at, now) : "—"),
-          h("span", null, " / "),
-          h("strong", null, source.last_run_status || "—")
-        )
+        h(SourceHistoryDates, { timing: source.history_time })
       ),
       h(
         "div",
@@ -196,9 +190,12 @@ export function SourceHealthContent({
   // the header + the shared tab nav — so emitting them here is what dropped the
   // rest of the navigation when Health was a separate /health route.
   const bodyChildren = [
+    h("div", { className: "source-history-notice", key: "history-scope" },
+      h("p", { className: "source-history-note" }, "Saved collection results, not a live source check. Current availability is unverified. A successful run does not establish current data or event coverage."),
+      h(SourceHistorySnapshot, { asOf: stats?.as_of })),
     h(
       "section",
-      { className: "stats-grid", "aria-label": "Source health counts", key: "stats" },
+      { className: "stats-grid", "aria-label": "Saved source run counts", key: "stats" },
       h(StatCard, { label: "unhealthy", value: stats?.unhealthy_count ?? 0, tone: "unhealthy" }),
       h(StatCard, { label: "degraded", value: stats?.degraded_count ?? 0, tone: "degraded" }),
       h(StatCard, { label: "healthy", value: stats?.healthy_count ?? 0, tone: "healthy" }),
@@ -218,7 +215,7 @@ export function SourceHealthContent({
       : h(
           "div",
           { className: "empty-state", key: "empty" },
-          "Source health data not yet available. The next alerts cron will populate this view."
+          "No saved source runs are available. Current availability is unverified; collection may be paused."
         ),
   ]
 
@@ -461,7 +458,7 @@ const styles = `
 }
 .stat-card.unhealthy .stat-value { color: #f87171; }
 .stat-card.degraded .stat-value { color: #facc15; }
-.stat-card.healthy .stat-value { color: #4ade80; }
+.stat-card.healthy .stat-value { color: #ccc; }
 .stat-card.idle .stat-value { color: #888; }
 .status-banner {
   margin-bottom: 16px;
@@ -530,9 +527,9 @@ const styles = `
   text-transform: uppercase;
 }
 .health-pill.healthy {
-  background: #0a2a0a;
-  color: #4ade80;
-  border: 1px solid #1a4a1a;
+  background: #1a1a1a;
+  color: #ccc;
+  border: 1px solid #444;
 }
 .health-pill.degraded {
   background: #2a1a0a;
