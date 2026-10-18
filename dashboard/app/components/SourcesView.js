@@ -2,6 +2,7 @@
 
 import { formatDuration, timeAgo } from "../../lib/format.js"
 import { SourceHistoryDates, SourceHistorySnapshot } from "./SourceHistoryTime.js"
+import { SourceContractDetails } from "./SourceContractDetails.js"
 import {
   sourceDiagnosticClass,
   sourceDiagnosticLabel,
@@ -115,6 +116,7 @@ export function SourcesView({ sources, stats }) {
             <span className="source-num" data-label="Drafted">{s.total_drafted}</span>
             <span className="source-num" data-label="Latency">{s.avg_duration_ms != null ? formatDuration(s.avg_duration_ms) : "—"}</span>
             <div className="source-time"><SourceHistoryDates timing={s.history_time} /></div>
+            <SourceContractDetails contract={s.source_contract} />
             {s.last_error && !s.served_via && (
               <div
                 className={`source-diagnostic ${sourceDiagnosticClass(s.health)}`}

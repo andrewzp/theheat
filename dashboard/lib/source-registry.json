@@ -1,0 +1,644 @@
+{
+  "schema_version": 1,
+  "purpose": "wired_inventory_not_activation_or_claim_permission",
+  "claim_policy": "Existing per-story evidence and required checks remain mandatory.",
+  "unknown_limits": [
+    "Current access and availability",
+    "Provider quota and update guarantee",
+    "Reuse rights for a particular product",
+    "Scientific qualification of an individual story",
+    "Geographic completeness and missed events"
+  ],
+  "provider_quota": null,
+  "reuse_rights": null,
+  "current_availability": "unverified",
+  "coverage_denominator": null,
+  "claim_permission_granted": false,
+  "sources": [
+    {
+      "source_id": "open_meteo_extreme_signals",
+      "health_keys": [
+        "open_meteo_extreme_signals"
+      ],
+      "kind": "adapter",
+      "entry_point": "src/orchestrator/sources/open_meteo.py:run_extreme_signals",
+      "scope": "Configured cities and station candidates; not every place worldwide.",
+      "data_family": "mixed",
+      "provenance": "Open-Meteo forecasts/models and the separately gated GHCN station path.",
+      "collection_rule": "Each eligible alerts run; existing deduplication and story limits still apply.",
+      "time_rule": "Use the product's own date or valid period; collection time is not measurement time.",
+      "claim_limit": "Keep forecast, model and station evidence distinct; a station record needs its qualified history.",
+      "evidence_files": [
+        "src/orchestrator/sources/open_meteo.py",
+        "src/data/temperature_evidence.py",
+        "src/data/ghcn.py"
+      ]
+    },
+    {
+      "source_id": "firms",
+      "health_keys": [
+        "firms"
+      ],
+      "kind": "adapter",
+      "entry_point": "src/orchestrator/sources/firms.py:run_firms",
+      "scope": "Configured fire-cluster selection and available source legs.",
+      "data_family": "mixed",
+      "provenance": "FIRMS satellite detections; an alternate leg retains its own provenance.",
+      "collection_rule": "Each eligible alerts run; existing deduplication and story limits still apply.",
+      "time_rule": "Use the product's own date or valid period; collection time is not measurement time.",
+      "claim_limit": "A detection or alternate footprint is not burned area, a death toll or proof of fire cause.",
+      "evidence_files": [
+        "src/orchestrator/sources/firms.py",
+        "src/data/fire_source_contract.py",
+        "src/data/firms.py"
+      ]
+    },
+    {
+      "source_id": "drought",
+      "health_keys": [
+        "drought"
+      ],
+      "kind": "adapter",
+      "entry_point": "src/orchestrator/sources/drought.py:run_drought",
+      "scope": "US Drought Monitor areas selected by the collector.",
+      "data_family": "official_report",
+      "provenance": "US Drought Monitor analysis.",
+      "collection_rule": "Fridays on the collector's calendar; existing tier and deduplication guards apply.",
+      "time_rule": "Use the product's own date or valid period; collection time is not measurement time.",
+      "claim_limit": "A regional drought analysis is not a local rainfall observation.",
+      "evidence_files": [
+        "src/orchestrator/sources/drought.py",
+        "src/data/drought.py"
+      ]
+    },
+    {
+      "source_id": "fire_footprint",
+      "health_keys": [
+        "fire_footprint"
+      ],
+      "kind": "adapter",
+      "entry_point": "src/orchestrator/sources/nifc.py:run_fire_footprint",
+      "scope": "US fire complexes returned by the configured NIFC feed.",
+      "data_family": "official_report",
+      "provenance": "NIFC reported fire perimeters/complex areas.",
+      "collection_rule": "After a successful collection, at most once per collector calendar date.",
+      "time_rule": "Use the product's own date or valid period; collection time is not measurement time.",
+      "claim_limit": "Cumulative reported area is not a new daily burn total.",
+      "evidence_files": [
+        "src/orchestrator/sources/nifc.py",
+        "src/data/fire_footprint.py"
+      ]
+    },
+    {
+      "source_id": "co2",
+      "health_keys": [
+        "co2"
+      ],
+      "kind": "adapter",
+      "entry_point": "src/orchestrator/sources/co2.py:run_co2",
+      "scope": "NOAA GML series used for carbon-dioxide milestones.",
+      "data_family": "derived_index",
+      "provenance": "NOAA GML dated atmospheric CO2 series.",
+      "collection_rule": "Each eligible alerts run; existing deduplication and story limits still apply.",
+      "time_rule": "Use the product's own date or valid period; collection time is not measurement time.",
+      "claim_limit": "A series milestone is not a local extreme-weather incident.",
+      "evidence_files": [
+        "src/orchestrator/sources/co2.py",
+        "src/data/co2.py"
+      ]
+    },
+    {
+      "source_id": "ch4_milestone",
+      "health_keys": [
+        "ch4_milestone"
+      ],
+      "kind": "adapter",
+      "entry_point": "src/orchestrator/sources/methane.py:run_methane",
+      "scope": "NOAA GML series used for methane milestones.",
+      "data_family": "derived_index",
+      "provenance": "NOAA GML dated methane series.",
+      "collection_rule": "Each eligible alerts run; existing deduplication and story limits still apply.",
+      "time_rule": "Use the product's own date or valid period; collection time is not measurement time.",
+      "claim_limit": "A series milestone is not a local extreme-weather incident.",
+      "evidence_files": [
+        "src/orchestrator/sources/methane.py",
+        "src/data/methane.py"
+      ]
+    },
+    {
+      "source_id": "nws_alerts",
+      "health_keys": [
+        "nws_alerts"
+      ],
+      "kind": "adapter",
+      "entry_point": "src/orchestrator/sources/nws_alerts.py:run_nws_alerts",
+      "scope": "NWS warning areas returned by the active-alert feed.",
+      "data_family": "official_warning",
+      "provenance": "NWS issued alert products, including their issue, effective and expiry times.",
+      "collection_rule": "Each eligible alerts run; existing deduplication and story limits still apply.",
+      "time_rule": "Use the product's own date or valid period; collection time is not measurement time.",
+      "claim_limit": "A warning or forecast does not prove the forecast impact occurred.",
+      "evidence_files": [
+        "src/orchestrator/sources/nws_alerts.py",
+        "src/data/nws_alerts.py"
+      ]
+    },
+    {
+      "source_id": "nhc",
+      "health_keys": [
+        "nhc"
+      ],
+      "kind": "adapter",
+      "entry_point": "src/orchestrator/cyclones.py:_process_cyclone_source",
+      "scope": "NHC Atlantic and East Pacific active-storm products.",
+      "data_family": "official_warning",
+      "provenance": "NHC active-storm entries and their advisory products.",
+      "collection_rule": "Each eligible alerts run; existing deduplication and story limits still apply.",
+      "time_rule": "Use the product's own date or valid period; collection time is not measurement time.",
+      "claim_limit": "Keep advisory conditions and future forecast points distinct; do not infer landfall.",
+      "evidence_files": [
+        "src/orchestrator/cyclones.py",
+        "src/data/nhc.py"
+      ]
+    },
+    {
+      "source_id": "jtwc",
+      "health_keys": [
+        "jtwc"
+      ],
+      "kind": "adapter",
+      "entry_point": "src/orchestrator/cyclones.py:_process_cyclone_source",
+      "scope": "JTWC tropical warnings represented by the configured RSS products.",
+      "data_family": "official_warning",
+      "provenance": "JTWC enhanced or plain RSS; the serving leg remains explicit.",
+      "collection_rule": "Each eligible alerts run; existing deduplication and story limits still apply.",
+      "time_rule": "Use the product's own date or valid period; collection time is not measurement time.",
+      "claim_limit": "Keep advisory conditions and future forecast points distinct; do not infer landfall.",
+      "evidence_files": [
+        "src/orchestrator/cyclones.py",
+        "src/data/jtwc.py"
+      ]
+    },
+    {
+      "source_id": "gdacs",
+      "health_keys": [
+        "gdacs"
+      ],
+      "kind": "adapter",
+      "entry_point": "src/orchestrator/sources/gdacs.py:run_gdacs",
+      "scope": "Disaster alerts/reports returned by the configured GDACS routes.",
+      "data_family": "official_report",
+      "provenance": "GDACS dated disaster products and explicit route provenance.",
+      "collection_rule": "Each eligible alerts run; existing deduplication and story limits still apply.",
+      "time_rule": "Use the product's own date or valid period; collection time is not measurement time.",
+      "claim_limit": "One alert/report is not a complete incident census or a validated impact total.",
+      "evidence_files": [
+        "src/orchestrator/sources/gdacs.py",
+        "src/data/gdacs.py"
+      ]
+    },
+    {
+      "source_id": "usgs_quakes",
+      "health_keys": [
+        "usgs_quakes"
+      ],
+      "kind": "adapter",
+      "entry_point": "src/orchestrator/sources/usgs_quakes.py:run_usgs_quakes",
+      "scope": "Significant earthquakes returned by the USGS feed.",
+      "data_family": "official_report",
+      "provenance": "USGS event products.",
+      "collection_rule": "Each eligible alerts run; existing deduplication and story limits still apply.",
+      "time_rule": "Use the product's own date or valid period; collection time is not measurement time.",
+      "claim_limit": "Earthquake magnitude alone does not certify weather relevance or human impacts.",
+      "evidence_files": [
+        "src/orchestrator/sources/usgs_quakes.py",
+        "src/data/usgs_quakes.py"
+      ]
+    },
+    {
+      "source_id": "copernicus_ems",
+      "health_keys": [
+        "copernicus_ems"
+      ],
+      "kind": "adapter",
+      "entry_point": "src/orchestrator/sources/copernicus_ems.py:run_copernicus_ems",
+      "scope": "Flood mapping activations returned by the configured EMS routes.",
+      "data_family": "official_report",
+      "provenance": "Copernicus EMS Rapid Mapping activations and explicit alternate legs.",
+      "collection_rule": "Each eligible alerts run; existing deduplication and story limits still apply.",
+      "time_rule": "Use the product's own date or valid period; collection time is not measurement time.",
+      "claim_limit": "A mapping activation is not a measured flood footprint or certified impact total.",
+      "evidence_files": [
+        "src/orchestrator/sources/copernicus_ems.py",
+        "src/data/copernicus_ems.py"
+      ]
+    },
+    {
+      "source_id": "sea_ice",
+      "health_keys": [
+        "sea_ice_arctic",
+        "sea_ice_antarctic"
+      ],
+      "kind": "adapter",
+      "entry_point": "src/orchestrator/sources/sea_ice.py:run_sea_ice",
+      "scope": "Arctic and Antarctic sea-ice extent series.",
+      "data_family": "satellite_analysis",
+      "provenance": "NSIDC series and explicitly retained alternate/cache provenance.",
+      "collection_rule": "Mondays on the collector's calendar; existing caps still apply.",
+      "time_rule": "Use the product's own date or valid period; collection time is not measurement time.",
+      "claim_limit": "Series extent and source dates must remain distinct from local ice conditions.",
+      "evidence_files": [
+        "src/orchestrator/sources/sea_ice.py",
+        "src/data/sea_ice.py"
+      ]
+    },
+    {
+      "source_id": "enso",
+      "health_keys": [
+        "enso"
+      ],
+      "kind": "adapter",
+      "entry_point": "src/orchestrator/sources/enso.py:run_enso",
+      "scope": "NOAA CPC ENSO index series used by this collector.",
+      "data_family": "derived_index",
+      "provenance": "NOAA CPC dated index and transition products.",
+      "collection_rule": "First day of the month on the collector's calendar.",
+      "time_rule": "Use the product's own date or valid period; collection time is not measurement time.",
+      "claim_limit": "An ENSO state is not a prediction of a specific local disaster.",
+      "evidence_files": [
+        "src/orchestrator/sources/enso.py",
+        "src/data/enso.py"
+      ]
+    },
+    {
+      "source_id": "climate_indices",
+      "health_keys": [
+        "nao",
+        "ao",
+        "pdo",
+        "nao_ao_alignment"
+      ],
+      "kind": "adapter",
+      "entry_point": "src/orchestrator/sources/climate_indices.py:run_climate_indices",
+      "scope": "NAO, AO, PDO and the derived NAO/AO alignment.",
+      "data_family": "derived_index",
+      "provenance": "NOAA index series; alignment is a derived combination.",
+      "collection_rule": "First day of the month on the collector's calendar; existing annual caps apply.",
+      "time_rule": "Use the product's own date or valid period; collection time is not measurement time.",
+      "claim_limit": "Do not turn an index or alignment into a supported local impact forecast.",
+      "evidence_files": [
+        "src/orchestrator/sources/climate_indices.py",
+        "src/data/climate_indices.py"
+      ]
+    },
+    {
+      "source_id": "ocean",
+      "health_keys": [
+        "ocean"
+      ],
+      "kind": "adapter",
+      "entry_point": "src/orchestrator/sources/marine.py:run_ocean",
+      "scope": "Configured marine sampling points; not all oceans or buoys.",
+      "data_family": "forecast_model",
+      "provenance": "Open-Meteo Marine model/forecast products.",
+      "collection_rule": "Each eligible alerts run; existing deduplication and story limits still apply.",
+      "time_rule": "Use the product's own date or valid period; collection time is not measurement time.",
+      "claim_limit": "A sampled model grid point is not a buoy observation.",
+      "evidence_files": [
+        "src/orchestrator/sources/marine.py",
+        "src/data/ocean.py"
+      ]
+    },
+    {
+      "source_id": "ocean_sst",
+      "health_keys": [
+        "ocean_sst"
+      ],
+      "kind": "adapter",
+      "entry_point": "src/orchestrator/sources/ocean_sst.py:run_ocean_sst",
+      "scope": "Global ocean SST summary series used by this collector.",
+      "data_family": "satellite_analysis",
+      "provenance": "NOAA OISST v2.1 series via ClimateReanalyzer and retained alternate provenance.",
+      "collection_rule": "Each eligible alerts run; existing deduplication and story limits still apply.",
+      "time_rule": "Use the product's own date or valid period; collection time is not measurement time.",
+      "claim_limit": "A global summary is not an individual coast's water temperature.",
+      "evidence_files": [
+        "src/orchestrator/sources/ocean_sst.py",
+        "src/data/ocean_sst.py"
+      ]
+    },
+    {
+      "source_id": "ocean_sst_anomaly",
+      "health_keys": [
+        "ocean_sst_anomaly"
+      ],
+      "kind": "adapter",
+      "entry_point": "src/orchestrator/sources/ocean_sst_anomaly.py:run_ocean_sst_anomaly",
+      "scope": "Configured regional SST-anomaly boxes and valid sampled cells.",
+      "data_family": "satellite_analysis",
+      "provenance": "NOAA Coral Reef Watch gridded anomaly products and native-product fallback.",
+      "collection_rule": "Each eligible alerts run; existing deduplication and story limits still apply.",
+      "time_rule": "Use the product's own date or valid period; collection time is not measurement time.",
+      "claim_limit": "Qualified regional cells are not a global event/opportunity denominator.",
+      "evidence_files": [
+        "src/orchestrator/sources/ocean_sst_anomaly.py",
+        "src/data/ocean_sst_anomaly.py",
+        "src/data/crw_contract.py"
+      ]
+    },
+    {
+      "source_id": "air_quality",
+      "health_keys": [
+        "air_quality"
+      ],
+      "kind": "adapter",
+      "entry_point": "src/orchestrator/sources/air_quality.py:run_air_quality",
+      "scope": "Configured cities with separately enabled PM2.5 and dust windows.",
+      "data_family": "mixed",
+      "provenance": "CAMS via Open-Meteo model estimates; optional OpenAQ station corroboration.",
+      "collection_rule": "Each eligible alerts run; PM2.5/dust flags and optional station access apply.",
+      "time_rule": "Use the product's own date or valid period; collection time is not measurement time.",
+      "claim_limit": "A model estimate is not a station observation; dust does not prove wildfire smoke or cause.",
+      "evidence_files": [
+        "src/orchestrator/sources/air_quality.py",
+        "src/data/air_quality_contract.py",
+        "src/data/air_quality_availability.py"
+      ]
+    },
+    {
+      "source_id": "coral_dhw",
+      "health_keys": [
+        "coral_dhw"
+      ],
+      "kind": "adapter",
+      "entry_point": "src/orchestrator/sources/coral_dhw.py:run_coral_dhw",
+      "scope": "Configured coral-reef sites/regions in the CRW collector.",
+      "data_family": "satellite_analysis",
+      "provenance": "NOAA Coral Reef Watch heat-stress products and retained source leg.",
+      "collection_rule": "Each eligible alerts run; existing deduplication and story limits still apply.",
+      "time_rule": "Use the product's own date or valid period; collection time is not measurement time.",
+      "claim_limit": "Heat stress is not observed bleaching, reef death or a measured local impact.",
+      "evidence_files": [
+        "src/orchestrator/sources/coral_dhw.py",
+        "src/data/coral_source_contract.py",
+        "src/data/coral_dhw.py"
+      ]
+    },
+    {
+      "source_id": "water_levels",
+      "health_keys": [
+        "water_levels"
+      ],
+      "kind": "adapter",
+      "entry_point": "src/orchestrator/sources/co_ops.py:run_water_levels",
+      "scope": "Configured NOAA coastal-water-level stations.",
+      "data_family": "station_points",
+      "provenance": "NOAA CO-OPS station readings and their station/datum context.",
+      "collection_rule": "Each eligible alerts run; existing deduplication and story limits still apply.",
+      "time_rule": "Use the product's own date or valid period; collection time is not measurement time.",
+      "claim_limit": "A station water level is not a supported regional inundation or damage claim.",
+      "evidence_files": [
+        "src/orchestrator/sources/co_ops.py",
+        "src/data/water_levels.py"
+      ]
+    },
+    {
+      "source_id": "river_gauges",
+      "health_keys": [
+        "river_gauges"
+      ],
+      "kind": "adapter",
+      "entry_point": "src/orchestrator/sources/river_gauges.py:run_river_gauges",
+      "scope": "Configured US river stations and explicitly mapped alternate points.",
+      "data_family": "mixed",
+      "provenance": "USGS gauge height plus NOAA NWPS thresholds; Open-Meteo/GloFAS model alternate.",
+      "collection_rule": "Each eligible alerts run; existing deduplication and story limits still apply.",
+      "time_rule": "Use the product's own date or valid period; collection time is not measurement time.",
+      "claim_limit": "Model discharge is not an observed gauge height; retain the serving leg and units.",
+      "evidence_files": [
+        "src/orchestrator/sources/river_gauges.py",
+        "src/data/river_gauges.py"
+      ]
+    },
+    {
+      "source_id": "ice_mass",
+      "health_keys": [
+        "ice_mass_greenland",
+        "ice_mass_antarctica"
+      ],
+      "kind": "adapter",
+      "entry_point": "src/orchestrator/sources/ice_mass.py:run_ice_mass",
+      "scope": "Greenland and Antarctica ice-mass series.",
+      "data_family": "satellite_analysis",
+      "provenance": "NASA GRACE-FO / JPL PODAAC regional series and retained cache provenance.",
+      "collection_rule": "Mondays on the collector's calendar; existing annual caps apply.",
+      "time_rule": "Use the product's own date or valid period; collection time is not measurement time.",
+      "claim_limit": "A dated regional series change is not today's local melt measurement.",
+      "evidence_files": [
+        "src/orchestrator/sources/ice_mass.py",
+        "src/data/ice_mass.py"
+      ]
+    },
+    {
+      "source_id": "gpm_imerg",
+      "health_keys": [
+        "gpm_imerg"
+      ],
+      "kind": "adapter",
+      "entry_point": "src/orchestrator/sources/gpm_imerg.py:run_gpm_imerg",
+      "scope": "Bounded configured-city selection and rotating rainfall scan.",
+      "data_family": "mixed",
+      "provenance": "GPM IMERG Late daily product; Final archive reference; model alternate remains labeled.",
+      "collection_rule": "Each eligible alerts run; existing deduplication and story limits still apply.",
+      "time_rule": "Use the product's own date or valid period; collection time is not measurement time.",
+      "claim_limit": "A grid product/model is not a gauge record; product-window and gauge reconciliation remain required.",
+      "evidence_files": [
+        "src/orchestrator/sources/gpm_imerg.py",
+        "src/data/gpm_imerg.py"
+      ]
+    },
+    {
+      "source_id": "nsidc_snow",
+      "health_keys": [
+        "nsidc_snow"
+      ],
+      "kind": "adapter",
+      "entry_point": "src/orchestrator/sources/nsidc_snow.py:run_nsidc_snow",
+      "scope": "Provider-returned Snow Today SWE points; completeness is unverified.",
+      "data_family": "station_points",
+      "provenance": "NSIDC Snow Today dated snow-water-equivalent point product.",
+      "collection_rule": "Each eligible alerts run; existing deduplication and story limits still apply.",
+      "time_rule": "Use the product's own date or valid period; collection time is not measurement time.",
+      "claim_limit": "Snow water equivalent is not snowfall depth; record claims require qualified history.",
+      "evidence_files": [
+        "src/orchestrator/sources/nsidc_snow.py",
+        "src/data/nsidc_snow.py"
+      ]
+    },
+    {
+      "source_id": "ozone_hole",
+      "health_keys": [
+        "ozone_hole"
+      ],
+      "kind": "adapter",
+      "entry_point": "src/orchestrator/sources/ozone_hole.py:run_ozone_hole",
+      "scope": "Antarctic ozone-hole series used by this collector.",
+      "data_family": "satellite_analysis",
+      "provenance": "NASA Ozone Watch dated area series.",
+      "collection_rule": "August–November on the collector's calendar; existing annual cap applies.",
+      "time_rule": "Use the product's own date or valid period; collection time is not measurement time.",
+      "claim_limit": "A seasonal area peak is not local UV exposure or a health impact measurement.",
+      "evidence_files": [
+        "src/orchestrator/sources/ozone_hole.py",
+        "src/data/ozone_hole.py"
+      ]
+    },
+    {
+      "source_id": "reanalysis_anomaly",
+      "health_keys": [
+        "reanalysis_anomaly"
+      ],
+      "kind": "adapter",
+      "entry_point": "src/orchestrator/sources/reanalysis_anomaly.py:run_reanalysis_anomaly",
+      "scope": "Configured sampled-city regions and retained daily climatology.",
+      "data_family": "forecast_model",
+      "provenance": "ERA5 reanalysis via Open-Meteo archive, compared with the configured climatology.",
+      "collection_rule": "Only when the existing opt-in flag and required climatology allow collection.",
+      "time_rule": "Use the product's own date or valid period; collection time is not measurement time.",
+      "claim_limit": "Reanalysis is not station observation; samples do not establish a whole-region record.",
+      "evidence_files": [
+        "src/orchestrator/sources/reanalysis_anomaly.py",
+        "src/data/reanalysis_anomaly.py"
+      ]
+    },
+    {
+      "source_id": "newsworthiness",
+      "health_keys": [
+        "newsworthiness"
+      ],
+      "kind": "discovery",
+      "entry_point": "src/orchestrator/sources/newsworthiness.py:run_newsworthiness",
+      "scope": "Retrieved cited events selected by this discovery lane.",
+      "data_family": "discovery",
+      "provenance": "NIFC feed and the existing grounded-search verification path.",
+      "collection_rule": "Only when the existing newsworthiness opt-in flag allows collection.",
+      "time_rule": "Use the product's own date or valid period; collection time is not measurement time.",
+      "claim_limit": "Discovery results are not scientifically qualified candidates or a global event census.",
+      "evidence_files": [
+        "src/orchestrator/sources/newsworthiness.py",
+        "src/data/newsworthiness.py"
+      ]
+    },
+    {
+      "source_id": "synthesis_fire_drought_heat",
+      "health_keys": [
+        "synthesis_fire_drought_heat"
+      ],
+      "kind": "derived",
+      "entry_point": "src/orchestrator/sources/synthesis.py:run_synthesis",
+      "scope": "Overlaps among retained fire/drought/heat and marine components.",
+      "data_family": "mixed",
+      "provenance": "Derived combinations of the original component sources, not an independent feed.",
+      "collection_rule": "Each eligible alerts run; existing deduplication and story limits still apply.",
+      "time_rule": "Use the product's own date or valid period; collection time is not measurement time.",
+      "claim_limit": "Co-occurrence does not establish causation; all component provenance and time bounds still apply.",
+      "evidence_files": [
+        "src/orchestrator/sources/synthesis.py"
+      ]
+    },
+    {
+      "source_id": "leaderboard",
+      "health_keys": [
+        "leaderboard"
+      ],
+      "kind": "derived",
+      "entry_point": "src/orchestrator/hot10.py:run_leaderboard",
+      "scope": "Configured city sample ranked against its attributable normals.",
+      "data_family": "mixed",
+      "provenance": "Open-Meteo temperatures and the collector's retained normals.",
+      "collection_rule": "Requested leaderboard runs; existing score/deduplication gates apply.",
+      "time_rule": "Use the product's own date or valid period; collection time is not measurement time.",
+      "claim_limit": "A sample ranking is not the hottest places on Earth or a station-record table.",
+      "evidence_files": [
+        "src/orchestrator/hot10.py",
+        "src/data/open_meteo.py"
+      ]
+    }
+  ],
+  "telemetry_keys": [
+    "load_cities",
+    "budget",
+    "twitter_metrics",
+    "manual_publish",
+    "auto_publish_due"
+  ],
+  "referenced_code_sha256": {
+    "src/data/air_quality_availability.py": "fe4ec7eba42a0b41d296407c54d168e73b76def9f58739a48ecda94a9f6eb536",
+    "src/data/air_quality_contract.py": "53763e992c8de6988380fed484f416c91aed7ce4b830cc36623cdd9a8baf0f93",
+    "src/data/climate_indices.py": "ee020029a91261d26ece8dd5ed27859b963e8cc8321d27c51afdce6ce3dc74d7",
+    "src/data/co2.py": "63d9578eb77bcc56b438ef85ee56fc7a1695982a46f2b3133e04b65adefa3d5f",
+    "src/data/copernicus_ems.py": "9e2c512e7ccb022a44190c6ea17ab10f18fa6232c7dcd2de51d1bc91fedcde95",
+    "src/data/coral_dhw.py": "8e943e926ef7f83376ac4e995de35ac603ffc0c1f2cc686495152c23c220e7f4",
+    "src/data/coral_source_contract.py": "1809eeeb915f6dcf09bed99f67da998338360eafb11c976805679a1a87c5f310",
+    "src/data/crw_contract.py": "b2c97d2d199c3bd839c9e46cbd7d95a3dfa32f1cbbcd7ffd62a0dde1b0401ae7",
+    "src/data/drought.py": "f04b304f46a7bb0f2806242b1e640c7aad943656b39eb94fa545745dd34652ff",
+    "src/data/enso.py": "a6819a5cc1d728b837c52f71ab7da58cbe0eb75d5f2284084bbab737414ed6b4",
+    "src/data/fire_footprint.py": "3e06a3ef98e65369da1963f787f698f2306e5a236e3b31204fd704d0ffd5137a",
+    "src/data/fire_source_contract.py": "851fcf3800b742f89f0780b8c8348bd9aa701b1cc93771fd5433cd6fee3c3d72",
+    "src/data/firms.py": "3803f4078e9cbafaa146395a5c54b617eb78ed50e75dff594c8af9b3c490ada0",
+    "src/data/gdacs.py": "8229c6d82fe002ded5fa8dbb1e76ed09e5072e694d1568760241e07ccebb785d",
+    "src/data/ghcn.py": "59c455a56f8aa963e27aeae1198997f7a0779a9b2f9080edab2d2c0842fc012b",
+    "src/data/gpm_imerg.py": "174500bfcfac0eda03cee9c7be9ac57054db673fc6af9bd326ced874418a828a",
+    "src/data/ice_mass.py": "6352519b96130b565a9507f558a289126b1e9524cc79437239c55c5f4f2dd737",
+    "src/data/jtwc.py": "1ad213e88299c9333c149cde0dbfd28d689e31b89e1c51440995536c64776e56",
+    "src/data/methane.py": "061c60608f1d7c016b5afcce91c4d178d98e9f26ea1fdffb600e5f9cc6161355",
+    "src/data/newsworthiness.py": "f0fe5ec8b8a8818da7481f2ee6d2b6452a50008b2c328e609060b1cdc3ebc8ca",
+    "src/data/nhc.py": "2cfa04ab49bd13c1231e298fa2d0e08fd833e649b93f265199ffe5a4071a7ab1",
+    "src/data/nsidc_snow.py": "ab75c73ec88130ae5805b1c5cf33a9b3912922c74da72b281b34d9cb9c7ae535",
+    "src/data/nws_alerts.py": "3fef0d4cfdab5b2938ae3dd1afd9ae9bd9837317f947f90e35776c9ec672a46f",
+    "src/data/ocean.py": "46987453207a69d4b6772d46de0c61235d4825eaa85b544ca5b61d340c669891",
+    "src/data/ocean_sst.py": "7d62eefb7a6c657f014c756a62adb53d2e231e4d113bf2cb210cb213bf3fbeda",
+    "src/data/ocean_sst_anomaly.py": "837c013cfc1f50981c42b2929f08c0f86a73475d0dfe26694ad2056cc0f94401",
+    "src/data/open_meteo.py": "58fa0a9135a526370e2daa3a832b290203615187d165b47d95ac05025523d508",
+    "src/data/ozone_hole.py": "83d3acbbb19398bad2c4a1930d7ebc6b3968d1938847c57385ffe11c1fb05d67",
+    "src/data/reanalysis_anomaly.py": "396755069ccecfe73a17f3dd7a51d1b1a1d7e5ab6172d3826b440af14426b1fa",
+    "src/data/river_gauges.py": "7f7f5bfa89c84d95f6d8b872476a9512116047e86a62e4d4db0412c87ee7ee14",
+    "src/data/sea_ice.py": "373dc72240b8ee7439995cf194b9b190b9a1940df393723119849cdeeff455f8",
+    "src/data/source_registry.py": "6d8c7d45dbf3aee285405f9a70db2a24d2c2806d78e56d19391db9c1120404a5",
+    "src/data/temperature_evidence.py": "f656cee4dd86e6f6762932e98ea189e39e5965852c5d3e06299d8ffff3173046",
+    "src/data/usgs_quakes.py": "d074863aba46097e0aa31a0c16c48158a2769c1403cac51e1e2054b2deb96650",
+    "src/data/water_levels.py": "2b77738fe2e5f4a246b29691879726873a48622ee26e6ffcd35713f07c505ab3",
+    "src/orchestrator/cyclones.py": "389c6441db0839763b6a9cd42146f75e3ab14d1179125d60a9c368eb1e03697d",
+    "src/orchestrator/hot10.py": "6a6f77bf54e7fa0907d21454c460c0ea991f2dd32edf4d251be10989007bb9a1",
+    "src/orchestrator/run_alerts.py": "147fc41c4e87718d0e5601b291097739b829ab12be77d9577f96a4a6c05d4170",
+    "src/orchestrator/sources/air_quality.py": "254d2a44d4bf534b19cf18ae49574ebc3616895e5fe6ef2399f1d46bc26f5d50",
+    "src/orchestrator/sources/climate_indices.py": "e46485639d62d426b5d55b6f02191a47b0434bb31eb23e8f4a6bece33e980208",
+    "src/orchestrator/sources/co2.py": "2ed59676536ab5ff9fc45d3116c91ffad10986a5a4380687a7191f2bd518d4a6",
+    "src/orchestrator/sources/co_ops.py": "df610d37df6ff4571024ab71fac1c22926991b565e0df3bbfe7bd7ba5df7307d",
+    "src/orchestrator/sources/copernicus_ems.py": "3285f39b3f6b26bed387b65eb8f5fb934d073e590c6fd35c0e6d181bff6ae306",
+    "src/orchestrator/sources/coral_dhw.py": "6596f95e1ba183c4833d365c9d1d1b009e299e28e555295351fb061899d37e2f",
+    "src/orchestrator/sources/drought.py": "224de9bf05297e87e28240ea48ba701c88b97117503e309b2c42cadc66a431a0",
+    "src/orchestrator/sources/enso.py": "33d53f7ef105d9b9fa48fb27eb0b859306e97f04ca301bc566120b7d83cc70ee",
+    "src/orchestrator/sources/firms.py": "0068f17273408dc8c2110fe6854c9f31412512b15302c9843360994fcdd44847",
+    "src/orchestrator/sources/gdacs.py": "2911c9a801f35740cbac22a544c68ed140274c4990f2dbfcd08059810fe53d70",
+    "src/orchestrator/sources/gpm_imerg.py": "15ae35e8aa79252f42650267dad6b7e0cc60bfd742beb8cb1809a208b267b31b",
+    "src/orchestrator/sources/ice_mass.py": "95f7de55872f48814f0397b7730b41cb91d019a1333f466f12014039ae2edd7b",
+    "src/orchestrator/sources/marine.py": "341775be8e06a3304f3f05078d55d82c52e43fc64ef9c4b8f1b934c5fe693aa3",
+    "src/orchestrator/sources/methane.py": "93647684e6a3c47e429cd9457d9fe806bfa9414bd4d6f3acfd095ded587396e6",
+    "src/orchestrator/sources/newsworthiness.py": "f02a894bfed36b91437f693f1c31f1810854c39761ebc9234746ead49b04c2d0",
+    "src/orchestrator/sources/nifc.py": "99801aa500b84c0fa2f587c4fa0fda4ffd2d5b53fa4a1f0703b03e645a66e026",
+    "src/orchestrator/sources/nsidc_snow.py": "ddd091dae3900c5bce378010aab09709186c0c6774813bf2766026d269119a5d",
+    "src/orchestrator/sources/nws_alerts.py": "3665bc870e5df69c9c38183134157bcfd8f822b76c46606d8f31ce0fd75354f3",
+    "src/orchestrator/sources/ocean_sst.py": "2d7f803dfe21695b1595053ef9b7f9d17c37f5b4563bfda6dcd5fcfc52cc0a39",
+    "src/orchestrator/sources/ocean_sst_anomaly.py": "ec85134ee7af9ecd60b8b1c1287fdce0585e5b1c1b8875a2f0c019499da74b69",
+    "src/orchestrator/sources/open_meteo.py": "e3f535af7394f45c9d2e8abd7b1c31d4c01f0d510f325e37bbe14ebc915e2fc3",
+    "src/orchestrator/sources/ozone_hole.py": "04e8f94c2d73330ab7693ae5ff240693262468e7764076148c58841acfc7e77f",
+    "src/orchestrator/sources/reanalysis_anomaly.py": "4d69825455870e1adeddbd106d3cccb5875cbd0ea36305bd9a01ae7d1518dde8",
+    "src/orchestrator/sources/river_gauges.py": "09d881a1a07ba215796be928f153aeefd4b55c8851919b6422ed912780db84a1",
+    "src/orchestrator/sources/sea_ice.py": "5160beb235d00b6dcc91653bd41712c165d6c713ea9b76af08e3ca13ac2057dd",
+    "src/orchestrator/sources/synthesis.py": "e1e101948dde8a2ac07be65d78e37ed0cd8e080c43523ea0ded1b1071cd31522",
+    "src/orchestrator/sources/usgs_quakes.py": "8ce82d003a52235fb92750c9f1e5450a672ff942ab71268a78d77f2ac8aa5c05"
+  },
+  "evidence_scope": "Referenced local code inventory; not live/provider/transitive-source qualification.",
+  "registry_sha256": "76dcd0a81c39919788d8de712cd84d68a4f868045af652c94fb52c0b90d61bde"
+}

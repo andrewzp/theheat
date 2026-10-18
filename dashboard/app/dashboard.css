@@ -56,6 +56,14 @@
 .source-history-times small { color: #aaa; line-height: 1.5; }
 .source-history-times .source-time-warning { color: #fbbf24; }
 .source-history-note { color: #aaa; font-size: 12px; line-height: 1.65; margin-top: 8px; }
+.source-health-table .source-contract { grid-column: 1 / -1; min-width: 0; color: #bbb; line-height: 1.65; overflow-wrap: anywhere; }
+.source-contract summary { cursor: pointer; color: #ccc; padding: 8px 0; width: fit-content; }
+.source-contract summary:focus-visible { outline: 2px solid #ff6500; outline-offset: 3px; border-radius: 2px; }
+.source-contract dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 24px; margin: 8px 0 12px; }
+.source-contract dt { color: #eee; font-size: 11px; }
+.source-contract dd { margin: 3px 0 0; }
+.source-contract p { margin: 8px 0; }
+.source-contract-unknown { color: #aaa; }
 .source-health-table .badge.source-recorded {
   background: #1a1a1a;
   color: #ccc;
@@ -70,6 +78,7 @@
   .source-health-table .badge { justify-self: start; white-space: normal; max-width: 100%; }
   .source-history-times { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .source-history-times > small { grid-column: 1 / -1; }
+  .source-contract dl { grid-template-columns: minmax(0, 1fr); }
 }
 .source-health-table .badge.source-healthy {
   background: #0a2a0a;

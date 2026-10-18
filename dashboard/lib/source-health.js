@@ -1,5 +1,7 @@
 import { sourceHistoryTime } from "./source-history-time.js"
 
+import { sourceContract, sourceInventory } from "./source-registry.js"
+
 const HEALTH_METRIC_TOTALS = [
   "total_duration_ms",
   "avg_duration_ms",
@@ -434,6 +436,7 @@ export function buildSourceHealthPayload(state, { runsLimit = 20, asOf = new Dat
   }
   const clock = sourceHistoryTime([], { asOf }).as_of
   for (const source of rawSources) {
+    source.source_contract = sourceContract(source.source)
     source.history_time = {
       ...sourceHistoryTime(timingRows.get(source.source), { asOf: clock }),
       timestamp_precision: durableHealth ? "source_run" : "collection_run_start",
@@ -447,6 +450,7 @@ export function buildSourceHealthPayload(state, { runsLimit = 20, asOf = new Dat
 
   return {
     sources,
+    source_inventory: sourceInventory(sources.map(source => source.source)),
     stats: {
       as_of: clock,
       current_availability: "unverified",
