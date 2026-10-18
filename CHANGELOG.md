@@ -1,3 +1,10 @@
+## 0.9.109.14
+
+- Add a code-supported source inventory and optional Sources details for geographic
+  scope, product type, provenance, collector timing and story limits. Keep unknown
+  access, rights, quota, scientific qualification and event coverage explicit;
+  preserve source execution, historical status, checks and publication controls.
+
 ## 0.9.109.13
 
 - Label saved source results as historical in Sources and Health. Show dated
