@@ -6,10 +6,14 @@ import { renderToStaticMarkup } from "react-dom/server"
 import { GraphicPreview, GraphicPreviewFigure } from "../app/components/GraphicPreview.js"
 import { fingerprint } from "../lib/draft-revisions.js"
 import manifest from "../lib/graphic-runtime-manifest.json" with { type: "json" }
-import { createGraphicPreviewController, graphicRequest, graphicRequestKey, validateGraphicResponse } from "../lib/graphic-preview.js"
+import { createGraphicPreviewController, firePreviewSourceStatus, graphicRequest, graphicRequestKey, validateGraphicResponse } from "../lib/graphic-preview.js"
 
 const hash = text => createHash("sha256").update(text).digest("hex")
-const draft = () => ({ id: "invented", type: "fire", status: "pending", revision_identity: {
+// Minimal display fixture, not a qualified measurement or a Python adapter pass.
+const draft = () => ({ id: "invented", type: "fire", status: "pending", review_context: { two_bot: { bundle: {
+  signal_kind: "fire", raw_signal_dump: { source_product: "MODIS_NRT", acquisition_provenance: { source_product: "MODIS_NRT" } },
+  related_signals: [],
+} } }, revision_identity: {
   content_revision: 0, decision_revision: 0, text_sha256: "a".repeat(64), evidence_sha256: "b".repeat(64),
 } })
 const request = () => graphicRequest(draft(), manifest)
@@ -58,6 +62,43 @@ test("actual component keeps preview separate from approval and hides it during 
   assert.doesNotMatch(render({ draft: draft(), editing: true }), /<button|<img/)
   assert.doesNotMatch(render({ draft: draft(), updating: true }), /<button|<img/)
   assert.equal(render({ draft: { ...draft(), type: "rainfall" } }), "")
+})
+
+test("unsupported or incomplete selected fire sources cannot offer a MODIS preview", () => {
+  const render = value => renderToStaticMarkup(React.createElement(GraphicPreview, { draft: value }))
+  const cases = [
+    ["missing", value => { delete value.review_context }],
+    ["missing", value => { delete value.review_context.two_bot.bundle.raw_signal_dump.acquisition_provenance }],
+    ["missing", value => { delete value.review_context.two_bot.bundle.raw_signal_dump.source_product }],
+    ["unsupported", value => { const raw = value.review_context.two_bot.bundle.raw_signal_dump; raw.source_product = raw.acquisition_provenance.source_product = "VIIRS_NOAA21_NRT" }],
+    ["unsupported", value => { value.review_context.two_bot.bundle.raw_signal_dump.acquisition_provenance.source_product = "VIIRS_SNPP_NRT" }],
+    ["unsupported", value => { value.review_context.two_bot.bundle.raw_signal_dump.source_product = "VIIRS_NOAA20_NRT" }],
+    ["unsupported", value => { value.review_context.two_bot.bundle.signal_kind = "fire_footprint" }],
+    ["unsupported", value => { value.review_context.two_bot.bundle.related_signals = [{ signal_kind: "fire", acquisition_evidence: { source_product: "VIIRS_SNPP_NRT" } }] }],
+    ["missing", value => { value.review_context.two_bot.bundle.related_signals = [{ signal_kind: "fire" }] }],
+    ["unsupported", value => { value.review_context.two_bot.bundle.related_signals = null }],
+    ["unsupported", value => { value.review_context.two_bot.bundle.related_signals = Array.from({ length: 4 }, () => ({ signal_kind: "fire", acquisition_evidence: { source_product: "MODIS_NRT" } })) }],
+  ]
+  for (const [status, change] of cases) {
+    const value = draft(); change(value)
+    const before = structuredClone(value), html = render(value)
+    assert.equal(firePreviewSourceStatus(value), status)
+    assert.match(html, status === "missing" ? /receipts are missing or incomplete/ : /saved source set is unsupported/)
+    assert.doesNotMatch(html, /<button|<img|Preview the saved MODIS detections/)
+    assert.deepEqual(value, before)
+    // This presentation hold never rewrites the server-bound request or approval.
+    assert.deepEqual(graphicRequest(value, manifest), request())
+  }
+})
+
+test("all selected MODIS product labels retain only the request affordance, never qualification", () => {
+  const value = draft()
+  value.review_context.two_bot.bundle.related_signals = Array.from({ length: 3 }, () => ({ signal_kind: "fire", acquisition_evidence: { source_product: "MODIS_NRT" } }))
+  const html = renderToStaticMarkup(React.createElement(GraphicPreview, { draft: value }))
+  assert.equal(firePreviewSourceStatus(value), "modis")
+  assert.match(html, /Preview graphic/)
+  assert.match(html, /checks can still withhold the graphic/)
+  assert.doesNotMatch(html, /source verified|source qualified|<img|<input/)
 })
 
 test("response requires exact revision, bytes, renderer and absence of publication authority", async () => {
