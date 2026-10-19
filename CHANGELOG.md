@@ -1,3 +1,9 @@
+## 0.9.109.16
+
+- Explain when saved fire sources cannot support the MODIS graphic preview,
+  including VIIRS, missing receipts and mixed selected products. Keep unsupported
+  previews unavailable and preserve all source checks and publication controls.
+
 ## 0.9.109.15
 
 - Identify failed editorial-feedback storage reads in server logs using fixed

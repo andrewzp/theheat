@@ -45,6 +45,25 @@ export function graphicRequest(draft, manifest) {
 
 export const graphicRequestKey = request => request ? canonical(request) : "unavailable"
 
+// A display affordance only. Matching product labels never qualifies source
+// receipts; the existing Python adapter checks every selected measurement.
+export function firePreviewSourceStatus(draft) {
+  const bundle = draft?.review_context?.two_bot?.bundle
+  const raw = bundle?.raw_signal_dump
+  const primary = raw?.acquisition_provenance
+  if (!raw || !primary || typeof raw.source_product !== "string"
+      || typeof primary.source_product !== "string") return "missing"
+  if (bundle.signal_kind !== "fire" || raw.source_product !== "MODIS_NRT"
+      || primary.source_product !== "MODIS_NRT") return "unsupported"
+  const related = bundle.related_signals === undefined ? [] : bundle.related_signals
+  if (!Array.isArray(related) || related.length > 3) return "unsupported"
+  for (const signal of related) {
+    if (!signal?.acquisition_evidence || typeof signal.acquisition_evidence.source_product !== "string") return "missing"
+    if (signal.signal_kind !== "fire" || signal.acquisition_evidence.source_product !== "MODIS_NRT") return "unsupported"
+  }
+  return "modis"
+}
+
 const templates = {
   modis_thermal_detection_map: { version: "p31-modis-locator-2-social", source: "NASA FIRMS · MODIS",
     adapter: "src/media/fire_map_graphic_adapter.py", context: "modis_acquisition" },
