@@ -1,6 +1,6 @@
 import { requireDashboardAuth } from "../../../lib/auth.js"
 import { previewConfigured } from "../../../lib/local-preview-boundary.js"
-import { FeedbackError, readPostFeedback, savePostFeedback } from "../../../lib/post-feedback.js"
+import { FeedbackError, feedbackDiagnostic, readPostFeedback, savePostFeedback } from "../../../lib/post-feedback.js"
 
 export const runtime = "nodejs"
 const headers = { "Cache-Control":"private, no-store" }
@@ -9,6 +9,11 @@ function unavailable() {
   return previewConfigured() || process.env.THEHEAT_DB_PATH || (process.env.THEHEAT_STATE_BACKEND && process.env.THEHEAT_STATE_BACKEND !== "gist")
 }
 function errorResponse(error) {
+  const diagnostic = feedbackDiagnostic(error)
+  if (diagnostic) {
+    try { console.warn(JSON.stringify({event:"theheat_feedback_store_unavailable", ...diagnostic})) }
+    catch { /* A logger failure must not replace the original response or retry storage. */ }
+  }
   return response({ code:error instanceof FeedbackError ? error.code : "feedback_store_unavailable" }, error instanceof FeedbackError ? error.status : 503)
 }
 async function input(request) {

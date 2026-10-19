@@ -11,9 +11,25 @@ const TARGET_KEYS = ["draft_id", "tweet_id", "posted_at", "text", "content_revis
 const INPUT_KEYS = ["request_id", "target", "punch", "clarity", "economy", "note", "own_rating"]
 
 export class FeedbackError extends Error {
-  constructor(code, status = 503) { super(code); this.code = code; this.status = status }
+  constructor(code, status = 503, diagnostic = null) {
+    super(code); this.code = code; this.status = status
+    Object.defineProperty(this, "diagnostic", {value:diagnostic})
+  }
 }
-const fail = (code, status) => { throw new FeedbackError(code, status) }
+const fail = (code, status, diagnostic) => { throw new FeedbackError(code, status, diagnostic) }
+const STAGES = new Set(["configuration", "feedback_archive", "feedback_records", "production_state_metadata", "production_state_raw", "production_state_document"])
+const REASONS = new Set(["missing_or_invalid", "request_failed", "http_error", "response_unreadable", "invalid_json", "invalid_document", "not_private", "missing_state_file", "invalid_raw_origin"])
+const storeFailure = (stage, reason, http_status = null) => fail("feedback_store_unavailable", 503, {stage, reason, http_status})
+
+// Server logs get only this fixed vocabulary, never provider messages, URLs,
+// credentials, receipt/text data or an arbitrary Error object's properties.
+export function feedbackDiagnostic(error) {
+  if (!(error instanceof FeedbackError) || error.code !== "feedback_store_unavailable") return null
+  const value = error.diagnostic
+  if (!exact(value, ["stage", "reason", "http_status"]) || !STAGES.has(value.stage) || !REASONS.has(value.reason) ||
+      (value.http_status !== null && (!Number.isInteger(value.http_status) || value.http_status < 100 || value.http_status > 599))) return null
+  return {stage:value.stage, reason:value.reason, http_status:value.http_status}
+}
 
 export function feedbackTarget(draft, state) {
   try {
@@ -71,18 +87,19 @@ function decodeRecord(file, name) {
 
 async function github(path, options = {}, storage = "feedback") {
   const token = process.env.GITHUB_TOKEN, gistId = storage === "state" ? process.env.GIST_ID : process.env.THEHEAT_FEEDBACK_GIST_ID
-  if (!token || !/^[a-zA-Z0-9_]+$/.test(gistId || "")) fail("feedback_store_unavailable")
+  const stage = storage === "state" ? "production_state_metadata" : "feedback_archive"
+  if (!token || !/^[a-zA-Z0-9_]+$/.test(gistId || "")) storeFailure("configuration", "missing_or_invalid")
   try {
     return await fetch(`https://api.github.com/gists/${gistId}${path}`, {
       ...options, headers:{ Accept:"application/vnd.github+json", Authorization:`token ${token}`,
         ...(options.body ? { "Content-Type":"application/json" } : {}) },
       cache:"no-store", redirect:"error", signal:AbortSignal.timeout(8000),
     })
-  } catch { fail("feedback_store_unavailable") }
+  } catch { storeFailure(stage, "request_failed") }
 }
 
-async function boundedText(response, limit) {
-  if (!response.body) fail("feedback_store_unavailable")
+async function boundedText(response, limit, stage) {
+  if (!response.body) storeFailure(stage, "response_unreadable")
   const reader = response.body.getReader(), chunks = []
   let size = 0, timer
   const deadline = new Promise((_, reject) => {timer = setTimeout(() => reject(new FeedbackError("feedback_store_unavailable")), 8000)})
@@ -95,45 +112,51 @@ async function boundedText(response, limit) {
       chunks.push(Buffer.from(value))
     }
     return new TextDecoder("utf-8", {fatal:true}).decode(Buffer.concat(chunks))
-  } catch { fail("feedback_store_unavailable") }
+  } catch { storeFailure(stage, "response_unreadable") }
   finally {clearTimeout(timer); void reader.cancel().catch(() => {})}
 }
 
 async function load(requestId = null) {
   const response = await github("")
-  if (!response.ok) fail("feedback_store_unavailable")
+  if (!response.ok) storeFailure("feedback_archive", "http_error", response.status)
   let gist
-  try { gist = JSON.parse(await boundedText(response, 16 * 1024 * 1024)) } catch { fail("feedback_store_unavailable") }
+  try { gist = JSON.parse(await boundedText(response, 16 * 1024 * 1024, "feedback_archive")) }
+  catch (error) { if (error instanceof FeedbackError) throw error; storeFailure("feedback_archive", "invalid_json") }
   // Opinions belong only in the separately configured secret feedback Gist. Never
   // follow raw feedback URLs or expose the provider's response/error body.
-  if (gist.public !== false || !object(gist.files)) fail("feedback_store_unavailable")
+  if (!object(gist) || !object(gist.files)) storeFailure("feedback_archive", "invalid_document")
+  if (gist.public !== false) storeFailure("feedback_archive", "not_private")
   const names = Object.keys(gist.files).filter(name => name.startsWith(PREFIX))
   // The write threshold is admission, not a transactional ceiling. Concurrent
   // writers can cross it; keep those receipts readable. Beyond the full archive
   // read bound, an exact request ID still has a bounded recovery path.
   if (names.length > READ_LIMIT && !requestId) fail("feedback_capacity")
   const selected = names.length > READ_LIMIT ? names.filter(name => name === filename(requestId)) : names
-  const records = selected.map(name => decodeRecord(gist.files[name], name))
+  let records
+  try { records = selected.map(name => decodeRecord(gist.files[name], name)) }
+  catch { storeFailure("feedback_records", "invalid_document") }
   const stateResponse = await github("", {}, "state")
-  if (!stateResponse.ok) fail("feedback_store_unavailable")
+  if (!stateResponse.ok) storeFailure("production_state_metadata", "http_error", stateResponse.status)
   let stateGist
-  try {stateGist = JSON.parse(await boundedText(stateResponse, 16 * 1024 * 1024))} catch {fail("feedback_store_unavailable")}
+  try {stateGist = JSON.parse(await boundedText(stateResponse, 16 * 1024 * 1024, "production_state_metadata"))}
+  catch (error) { if (error instanceof FeedbackError) throw error; storeFailure("production_state_metadata", "invalid_json") }
+  if (!object(stateGist) || !object(stateGist.files)) storeFailure("production_state_metadata", "invalid_document")
   const file = stateGist.files?.["state.json"]
-  if (!file) fail("feedback_store_unavailable")
+  if (!file) storeFailure("production_state_metadata", "missing_state_file")
   let content = file.content
   if (file.truncated) {
     // Same fixed GitHub origin as the existing state reader, never arbitrary URLs.
     let raw
-    try { raw = new URL(file.raw_url) } catch { fail("feedback_store_unavailable") }
-    if (raw.protocol !== "https:" || raw.hostname !== "gist.githubusercontent.com" || raw.username || raw.password || raw.port) fail("feedback_store_unavailable")
+    try { raw = new URL(file.raw_url) } catch { storeFailure("production_state_raw", "invalid_raw_origin") }
+    if (raw.protocol !== "https:" || raw.hostname !== "gist.githubusercontent.com" || raw.username || raw.password || raw.port) storeFailure("production_state_raw", "invalid_raw_origin")
     let response
-    try { response = await fetch(raw.href, {cache:"no-store", redirect:"error", signal:AbortSignal.timeout(8000)}) } catch { fail("feedback_store_unavailable") }
-    if (!response.ok) fail("feedback_store_unavailable")
-    content = await boundedText(response, 8 * 1024 * 1024)
+    try { response = await fetch(raw.href, {cache:"no-store", redirect:"error", signal:AbortSignal.timeout(8000)}) } catch { storeFailure("production_state_raw", "request_failed") }
+    if (!response.ok) storeFailure("production_state_raw", "http_error", response.status)
+    content = await boundedText(response, 8 * 1024 * 1024, "production_state_raw")
   }
   let state
-  try { state = parseGistDocument(content).value } catch { fail("feedback_store_unavailable") }
-  if (!object(state) || !Array.isArray(state.drafts)) fail("feedback_store_unavailable")
+  try { state = parseGistDocument(content).value } catch { storeFailure("production_state_document", "invalid_document") }
+  if (!object(state) || !Array.isArray(state.drafts)) storeFailure("production_state_document", "invalid_document")
   return { state, records, recordCount:names.length }
 }
 

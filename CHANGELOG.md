@@ -1,3 +1,10 @@
+## 0.9.109.15
+
+- Identify failed editorial-feedback storage reads in server logs using fixed
+  stage/reason labels and HTTP statuses. Keep credentials, provider bodies and
+  editorial content out of logs; preserve generic client errors and all existing
+  receipt, privacy, timeout and write-recovery boundaries.
+
 ## 0.9.109.14
 
 - Add a code-supported source inventory and optional Sources details for geographic
