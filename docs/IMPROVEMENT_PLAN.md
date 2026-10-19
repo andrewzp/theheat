@@ -2,6 +2,11 @@
 
 Living plan for closing the gap between the bot's current voice quality and the **resumption bar** (majority A-grade rate per cycle). Refined daily by the autonomous grading agent (cron `0 15 * * *`), reviewed and implemented by the human operator.
 
+> **Oct 19: 2 fresh drafts (+13 Oct 8/10-graded carry-overs, 15 pending), 0% A-rate (0/2).** Guam
+> `severe_weather` D ×2 (verbatim): NWS alert paraphrase, no data, urgent register, stale "tonight".
+> New proposal **P_alert**. No other proposal evidence changes. All 15 now >48h; bulk-reject
+> skipped (`GH_TOKEN` invalid). Operator: reject via dashboard.
+>
 > **Oct 13: 0 fresh drafts — queue identical to Oct 10/11's 15 graded drafts; no re-grade, no proposal evidence changes.** All 15 now >48h; gist bulk-reject skipped (`GH_TOKEN` invalid). Operator: `main` docs stale since Jul 6.
 >
 > **Oct 11: 0 fresh drafts — queue is an exact match to Oct 10's 15 graded drafts; no re-grade.**
@@ -2385,6 +2390,15 @@ before implementing; if next cycle's drafts regain mechanisms, archive.
 > station readings") + "~152 ... about 10×" stack; [14] Cerrado: no mechanism, leads with the
 > smaller reading (519 vs 529 MW). Six cyclone drafts are status lines with no framing sentence.
 > **Cycles observed: 3 (Oct 1, Oct 8, Oct 10). Last seen: Oct 10.**
+
+### P_alert — severe_weather copy paraphrases the alert with no data
+
+**Observed:** 2026-10-19 — Guam ×2 (D, verbatim duplicates): "preparation window is closing: life-threatening winds could arrive tonight as Typhoon Champi approaches, the NWS warns." No number, no mechanic, urgent register (violates calm-distance), "tonight" stale within a day.
+**Cycles observed:** 1.
+**Last seen:** 2026-10-19.
+**Proposed fix:** writer-prompt language for severe_weather: lead with a measured quantity (forecast wind speed, rainfall, pressure), keep a calm register, don't restate the warning headline.
+**Expected impact:** moves severe_weather from D toward C/B.
+**Status:** active, watching for a 2nd cycle.
 
 ### P_url — Raw source URL appended inside tweet text (cyclone types)
 

@@ -11,6 +11,33 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-10-19 — Daily corpus grading (2 fresh drafts; 13 carry-overs from Oct 8/Oct 10, previously graded)
+
+**Context:** Gist read via git-clone (success). Queue: 15 pending. 13 are the Oct 8/Oct 10-graded
+set (unchanged, not re-graded). **2 fresh**, both `severe_weather`, identical text: [14] created
+Oct 16T21:14Z, [15] created Oct 17T05:33Z (`+00:00` timestamp format unlike the other drafts —
+likely a different creation path). (A first-pass grade from stale `main` docs was discarded on
+discovering this branch already held the 13 carry-over grades.)
+
+**Grade distribution (2 fresh):** 0 A / 0 B / 0 C / 2 D → **A-rate 0% (0/2)**. Gap 50 pp. Fifth
+consecutive measured 0% cycle.
+
+**[14]/[15] Guam severe_weather (D, ×2 verbatim):** "Guam's preparation window is closing:
+life-threatening winds could arrive tonight as Typhoon Champi approaches, the NWS warns." No
+number, no data, a paraphrase of the NWS alert headline; urgent register violates the
+calm-distance spec (HUMOR_RESEARCH §8.4); "tonight" is stale (Oct 16/17). No named mechanic;
+nothing to Wodehouse-test because there is no voice, only relayed alarm. First `severe_weather`
+draft in the corpus to reach pending in this era (earlier mentions were evidence-contract kills).
+
+**Staleness as of ~Oct 19 15:10 UTC:** all 15 now >48h (newest [15] ~57.6h). The two Guam drafts
+carry a "tonight" alert for a storm that has passed — strict reject candidates; with the 13
+carry-overs (already flagged Oct 11/13), the whole queue is stale. Bulk-reject skipped: `GH_TOKEN`
+invalid (`gh auth status`). Operator should reject via dashboard.
+
+**Patterns:** new proposal **P_alert** (severe_weather alert paraphrase with no data, urgent
+register). Duplicate generation again (verbatim pair) — logged as a note. No other proposal
+evidence changes (P_close/P_tier/P_url/A10 as of Oct 10).
+
 ## 2026-10-13 — Daily corpus grading (0 fresh drafts; 15 carry-overs from Oct 8/Oct 10, previously graded)
 
 **Context:** Gist read via git-clone (success). Queue: 15 pending — exact match to the Oct 10/11 set
