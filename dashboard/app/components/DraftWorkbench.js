@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { ForecastEvidence } from "./ForecastEvidence.js"
 import { NwsWarningEvidence } from "./NwsWarningEvidence.js"
+import { ClaimEvidence } from "./ClaimEvidence.js"
 import { GraphicPreview } from "./GraphicPreview.js"
 import { EditorMedia } from "./EditorMedia.js"
 import { formatDuration, timeAgo } from "../../lib/format.js"
@@ -215,6 +216,7 @@ export function DraftWorkbench({
                   </div>
                 )}
 
+                <ClaimEvidence key={`claims:${reviewKey}:${editingId === selectedDraft.id}`} draft={selectedDraft} editing={editingId === selectedDraft.id} sourceHold={controls.sourceHold} />
                 <ForecastEvidence key={reviewKey} draft={selectedDraft} />
                 <NwsWarningEvidence key={"nws:" + reviewKey} draft={selectedDraft} />
                 {selectedDraft.local_preview
