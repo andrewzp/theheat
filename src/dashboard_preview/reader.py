@@ -8,7 +8,7 @@ from urllib.parse import urlsplit
 
 import requests
 
-from src.dashboard_preview.errors import PreviewError, log_unavailable
+from src.dashboard_preview.errors import PreviewError, failure_code, log_unavailable
 
 STATE_LIMIT = 8 * 1024 * 1024
 API_LIMIT = 12 * 1024 * 1024
@@ -64,26 +64,34 @@ def strict_json(raw, limit, *, code="preview_unavailable"):
 
 
 def _body(session, url, headers, limit, budget, *, diagnostic_stage="state_metadata_http"):
-    remaining = budget.remaining()
-    with session.get(url, headers=headers, stream=True, allow_redirects=False,
-                     timeout=(min(2, remaining), min(3, remaining))) as response:
-        if response.status_code != 200:
-            log_unavailable(diagnostic_stage, http_status=response.status_code)
-            raise PreviewError("preview_unavailable")
-        # read1 yields available data rather than waiting to fill a 64KiB chunk.
-        # The application checks its budget between reads; Vercel also bounds the
-        # complete function to 30s, including DNS/header or native-library stalls.
-        response.raw.decode_content = True
-        output = bytearray()
-        while True:
-            budget.remaining()
-            part = response.raw.read1(min(65536, limit + 1 - len(output)))
-            budget.remaining()
-            if not part:
-                return bytes(output)
-            output.extend(part)
-            if len(output) > limit:
+    # Derive stages from fixed branches, never a URL, header or caller string.
+    raw = diagnostic_stage == "state_raw_http"
+    stage = "state_raw_send" if raw else "state_metadata_send"
+    try:
+        remaining = budget.remaining()
+        with session.get(url, headers=headers, stream=True, allow_redirects=False,
+                         timeout=(min(2, remaining), min(3, remaining))) as response:
+            stage = "state_raw_body" if raw else "state_metadata_body"
+            if response.status_code != 200:
+                log_unavailable(diagnostic_stage, http_status=response.status_code)
                 raise PreviewError("preview_unavailable")
+            # read1 yields available data rather than waiting to fill a 64KiB chunk.
+            # The application checks its budget between reads; Vercel also bounds the
+            # complete function to 30s, including DNS/header or native-library stalls.
+            response.raw.decode_content = True
+            output = bytearray()
+            while True:
+                budget.remaining()
+                part = response.raw.read1(min(65536, limit + 1 - len(output)))
+                budget.remaining()
+                if not part:
+                    return bytes(output)
+                output.extend(part)
+                if len(output) > limit:
+                    raise PreviewError("preview_unavailable")
+    except Exception as exc:
+        log_unavailable(stage, error_code=failure_code(exc))
+        raise
 
 
 def read_gist(env, budget):
@@ -99,7 +107,9 @@ def read_gist(env, budget):
             session.trust_env = False
             headers = {"Accept": "application/vnd.github+json", "Authorization": f"token {token}",
                        "Cache-Control": "no-cache"}
-            gist = strict_json(_body(session, f"https://api.github.com/gists/{gist_id}", headers, API_LIMIT, budget), API_LIMIT)
+            metadata = _body(session, f"https://api.github.com/gists/{gist_id}", headers, API_LIMIT, budget)
+            stage = "state_metadata_json"
+            gist = strict_json(metadata, API_LIMIT)
             stage = "state_metadata_shape"
             if gist.get("id") != gist_id:
                 raise PreviewError("preview_unavailable")
@@ -123,9 +133,9 @@ def read_gist(env, budget):
             state = strict_json(body, STATE_LIMIT)
             budget.remaining()
             return state
-    except PreviewError:
-        log_unavailable(stage)
+    except PreviewError as exc:
+        log_unavailable(stage, error_code=failure_code(exc))
         raise
     except Exception as exc:
-        log_unavailable(stage)
+        log_unavailable(stage, error_code=failure_code(exc))
         raise PreviewError("preview_unavailable") from exc

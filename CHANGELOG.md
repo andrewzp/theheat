@@ -1,3 +1,10 @@
+## 0.9.109.20
+
+- Distinguish saved-source preview request setup, body reads and JSON decoding
+  with fixed internal failure codes. Keep credentials and exception details out
+  of logs, and preserve existing public replies, read limits and no-retry behavior.
+  Offline real-transport tests do not establish hosted preview recovery.
+
 ## 0.9.109.19
 
 - Identify unavailable saved-source previews with fixed internal startup, request

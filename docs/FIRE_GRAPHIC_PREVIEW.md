@@ -100,6 +100,10 @@ no attachment, review, check pass or publication authority.
 
 Unavailable previews emit fixed internal startup, authorization, request and
 state-read stage names; an upstream failure may include its bounded HTTP status.
+The reader distinguishes request setup/send, response-body reading and metadata
+JSON decoding. Fixed error codes identify explicitly known exception classes;
+unknown classes and subclasses stay unknown. A wrapped validation failure inspects
+only its immediate cause's exact class, never its message or a cause chain.
 These records contain no credentials, draft or source text, request details,
 URLs, exception messages or tracebacks. Logging failure leaves the same private
 response and fail-closed behavior. Diagnostics do not grant source qualification
