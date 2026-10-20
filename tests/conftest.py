@@ -74,7 +74,7 @@ def pytest_collection_modifyitems(config, items):
     for item in items:
         filename = item.path.name
         group = (
-            "media" if filename.startswith("test_postgres_media")
+            "media" if filename.startswith("test_postgres_media") or filename == "test_viirs_native_package.py"
             else "postgres" if filename.startswith("test_postgres_")
             else "core"
         )
