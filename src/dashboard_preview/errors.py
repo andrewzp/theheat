@@ -12,6 +12,7 @@ _DIAGNOSTIC_STAGES = frozenset({
     "state_raw_read", "state_json", "state_metadata_http", "state_raw_http",
     "state_metadata_send", "state_metadata_body", "state_metadata_json",
     "state_raw_send", "state_raw_body",
+    "state_metadata_stream", "state_raw_stream",
 })
 
 _ERROR_TYPES = {
@@ -42,6 +43,16 @@ _ERROR_TYPES = {
     TimeoutError: "timeout", ConnectionError: "connection", OSError: "os",
 }.items()
 _ERROR_CODES = frozenset((*(code for _, code in _ERROR_TYPES), "preview_error", "unknown"))
+_READER_STAGES = frozenset(stage for stage in _DIAGNOSTIC_STAGES if stage.startswith("state_"))
+
+
+def reader_failure_stage(exc):
+    """Only our exact exception can carry an allowlisted internal reader stage."""
+    if type(exc) is PreviewError:
+        stage = exc._reader_stage
+        if type(stage) is str and stage in _READER_STAGES:
+            return stage
+    return "state_read"
 
 
 def failure_code(exc):
@@ -86,6 +97,7 @@ ERRORS = {
 class PreviewError(Exception):
     def __init__(self, code):
         self.code = code
+        self._reader_stage: str | None = None
         self.status, message = ERRORS[code]
         super().__init__(message)
 

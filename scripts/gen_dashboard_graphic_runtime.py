@@ -17,6 +17,7 @@ SOURCES = (
     'src/dashboard_preview/http.py',
     'src/dashboard_preview/preview.py',
     'src/dashboard_preview/reader.py',
+    'src/dashboard_preview/reader_status.py',
     'src/data/__init__.py',
     'src/data/_freshness.py',
     'src/data/_http.py',
@@ -86,7 +87,7 @@ RESOURCES = (
     ("src/data/registry/place_registry.json", "data/place_registry.json"),
     ("src/data/registry/country_codes.json", "data/country_codes.json"),
 )
-DEPLOYMENT_FILES = ("api/graphic_preview.py", "pyproject.toml", "uv.lock")
+DEPLOYMENT_FILES = ("api/graphic_preview.py", "api/graphic_reader_status.py", "pyproject.toml", "uv.lock")
 
 
 BASEMAP_PINS = {

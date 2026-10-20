@@ -79,10 +79,15 @@ def _body(session, url, headers, limit, budget, *, diagnostic_stage="state_metad
             # The application checks its budget between reads; Vercel also bounds the
             # complete function to 30s, including DNS/header or native-library stalls.
             response.raw.decode_content = True
+            stage = "state_raw_stream" if raw else "state_metadata_stream"
+            read = response.raw.read1
+            if not callable(read):
+                raise PreviewError("preview_unavailable")
+            stage = "state_raw_body" if raw else "state_metadata_body"
             output = bytearray()
             while True:
                 budget.remaining()
-                part = response.raw.read1(min(65536, limit + 1 - len(output)))
+                part = read(min(65536, limit + 1 - len(output)))
                 budget.remaining()
                 if not part:
                     return bytes(output)
@@ -91,7 +96,12 @@ def _body(session, url, headers, limit, budget, *, diagnostic_stage="state_metad
                     raise PreviewError("preview_unavailable")
     except Exception as exc:
         log_unavailable(stage, error_code=failure_code(exc))
-        raise
+        if type(exc) is PreviewError:
+            exc._reader_stage = stage
+            raise
+        unavailable = PreviewError("preview_unavailable")
+        unavailable._reader_stage = stage
+        raise unavailable from exc
 
 
 def read_gist(env, budget):
@@ -100,7 +110,9 @@ def read_gist(env, budget):
     gist_id, token = env.get("GIST_ID", ""), env.get("GITHUB_TOKEN", "")
     if backend != "gist" or not re.fullmatch(r"[0-9a-f]{20,64}", gist_id) or not token:
         log_unavailable("state_configuration")
-        raise PreviewError("preview_unavailable")
+        unavailable = PreviewError("preview_unavailable")
+        unavailable._reader_stage = "state_configuration"
+        raise unavailable
     stage = "state_metadata_read"
     try:
         with requests.Session() as session:
@@ -134,8 +146,12 @@ def read_gist(env, budget):
             budget.remaining()
             return state
     except PreviewError as exc:
+        if type(exc) is PreviewError and exc._reader_stage is None:
+            exc._reader_stage = stage
         log_unavailable(stage, error_code=failure_code(exc))
         raise
     except Exception as exc:
         log_unavailable(stage, error_code=failure_code(exc))
-        raise PreviewError("preview_unavailable") from exc
+        unavailable = PreviewError("preview_unavailable")
+        unavailable._reader_stage = stage
+        raise unavailable from exc

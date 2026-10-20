@@ -15,6 +15,8 @@ _BUSY = Lock()
 
 def handler_type(*, policy_sha, runtime_sha):
     class GraphicHandler(BaseHTTPRequestHandler):
+        _allowed_method = "POST"
+
         def __init__(self, *args, **kwargs):
             # Vercel's IPC wrapper prepends a base class with its own logger.
             # Bind on the instance so that wrapper cannot restore request logs.
@@ -56,7 +58,7 @@ def handler_type(*, policy_sha, runtime_sha):
             if authenticate:
                 self.send_header("WWW-Authenticate", 'Basic realm="theheat dashboard"')
             if status == 405:
-                self.send_header("Allow", "POST")
+                self.send_header("Allow", self._allowed_method)
             self.end_headers()
             self.close_connection = True
             if self.command != "HEAD":

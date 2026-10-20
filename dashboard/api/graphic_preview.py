@@ -20,7 +20,7 @@ def _bootstrap_event(stage):
         pass
 
 
-def load_handler():
+def load_handler(*, reader_status=False):
     stage = "bootstrap_package"
     try:
         root = Path(__file__).resolve().parents[1]
@@ -34,7 +34,7 @@ def load_handler():
         actual = sha256(json.dumps(identity, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
         if actual != manifest["runtime_sha256"] or sha256(archive.read_bytes()).hexdigest() != identity["archive_sha256"]:
             raise ValueError("Invalid graphic runtime")
-        for name in ("api/graphic_preview.py", "pyproject.toml", "uv.lock"):
+        for name in ("api/graphic_preview.py", "api/graphic_reader_status.py", "pyproject.toml", "uv.lock"):
             if sha256((root / name).read_bytes()).hexdigest() != identity["deployment_files"][name]:
                 raise ValueError("Invalid graphic runtime")
         # No extraction, downloads, environment-selected module or fallback source tree.
@@ -53,7 +53,10 @@ def load_handler():
         ZoneInfo("Asia/Kathmandu")  # Missing/corrupt package data must fail closed.
         stage = "bootstrap_import"
         sys.path.insert(0, str(archive))
-        from src.dashboard_preview.http import handler_type
+        if reader_status:
+            from src.dashboard_preview.reader_status import handler_type
+        else:
+            from src.dashboard_preview.http import handler_type
         result = handler_type(policy_sha=identity["policy_source_sha256"], runtime_sha=actual)
         _bootstrap_event("bootstrap_ready")
         return result
@@ -94,7 +97,9 @@ class UnavailableHandler(BaseHTTPRequestHandler):
 
 
 try:
-    PreviewHandler = load_handler()
+    # Only the fixed sibling entry supplies this literal in runpy's initial
+    # globals. No URL, header, body or environment variable selects a handler.
+    PreviewHandler = load_handler(reader_status=globals().get("_READER_STATUS_ENTRY") is True)
 except Exception:
     PreviewHandler = UnavailableHandler
 

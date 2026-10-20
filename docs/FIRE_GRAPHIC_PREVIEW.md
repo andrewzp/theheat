@@ -108,3 +108,33 @@ These records contain no credentials, draft or source text, request details,
 URLs, exception messages or tracebacks. Logging failure leaves the same private
 response and fail-closed behavior. Diagnostics do not grant source qualification
 or establish that a graphic rendered successfully.
+
+## Protected reader status
+
+`GET /api/graphic_reader_status` (also the native `.py` path) checks the graphics
+function's state reader without selecting a saved draft or rendering. It uses
+the same independent Basic or exact generated-host protection, strict target and
+origin checks, verified archive and locked deployment files as the preview.
+Other methods, query parameters, encoded bodies and nonempty request bodies are
+refused. The response is private and uncached; this endpoint does not poll itself.
+
+A successful reply reports `state_reader: available` while rendering and source
+qualification remain `not_evaluated`, with `publication_approved: false`. It means
+the bounded reader obtained strict JSON, not that the application state, weather
+claims, source freshness or a graphic has been qualified. It neither edits state
+nor grants review/approval and makes no source-acquisition or model calls.
+
+An authenticated reader failure returns only fixed stage and class codes. Exact
+known exceptions may carry an allowlisted internal stage; subclasses and hostile
+attributes cannot supply diagnostics. The stream-method stage identifies access
+to the required `read1` capability; there is no alternate reader or retry when it
+is missing. No credential, URL, state content, count, exception name, message or
+traceback is returned. Authentication and bootstrap failures keep generic replies.
+Logging failure cannot change these rules. Normal preview replies stay unchanged.
+
+Each invocation uses one reader call: at most one GitHub metadata request and one
+validated versioned raw-state request when needed, within the existing 25-second
+application budget and 30-second platform duration. A separate fixed entry selects
+this handler through the shared bootstrap; URL/body/environment input cannot select
+a mode. Both entry files are integrity-bound before archive imports. Availability
+and a code deployment remain distinct from end-to-end hosted graphic acceptance.

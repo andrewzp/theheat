@@ -24,7 +24,7 @@ def header(headers, name):
     return values[0] if values else ""
 
 
-def authorize(target, headers, env):
+def authorize(target, headers, env, *, paths=PATHS):
     host = header(headers, "Host").lower()
     if not HOST.fullmatch(host):
         raise PreviewError("authentication_required")
@@ -55,7 +55,7 @@ def authorize(target, headers, env):
         scheme = "https" if deployed else "http"
         if not deployed and not LOCAL.fullmatch(host):
             raise PreviewError("preview_unavailable")
-        if (len(target) > 512 or target.startswith("//") or parsed.path not in PATHS
+        if (len(target) > 512 or target.startswith("//") or parsed.path not in paths
                 or parsed.query or parsed.fragment or parsed.username or parsed.password
                 or (parsed.netloc and (parsed.netloc.lower() != host or parsed.scheme != scheme))
                 or (parsed.scheme and not parsed.netloc)):
