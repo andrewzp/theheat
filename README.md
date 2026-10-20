@@ -57,8 +57,9 @@ make Gist writes transactional.
 ## Publication containment
 
 Automatic publication defaults paused through `THEHEAT_AUTOMATIC_PUBLICATION_ENABLED=0`.
-The older autoship flag alone does not pause every automatic lane. Source collection,
-drafting and review continue; raw ad-hoc text cannot publish. Release authorization
+The older autoship flag alone does not pause every automatic lane. Collection and
+draft generation have a separate pause, `THEHEAT_PRODUCTION_PAUSED=1`; reviewing
+retained drafts remains available. Raw ad-hoc text cannot publish. Release authorization
 uses a new epoch, exact current approval and a verified persisted pause before
 re-enabling. See [the P00b configuration and release protocol](docs/handoffs/2026-09-09-p00b-publication-containment.md).
 Gist mutations are still non-atomic; [P00c](docs/plans/2026-09-09-p00c-single-mutation-authority.md)
@@ -80,6 +81,23 @@ each deployment, verify that anonymous requests to the aliases redirect and that
 the generated address requires sign-in. Existing alias bookmarks still work;
 the resulting dashboard address changes with each deployment. See
 [Vercel's protection scopes](https://vercel.com/docs/deployment-protection).
+
+Collection controls require a recent successful dashboard and automation read,
+with both collection and dashboard generation explicitly unpaused. A refresh,
+failed or expired observation, local preview or a pause keeps the controls disabled.
+This is a client request fence; the server independently checks every request.
+
+For a manual CLI deployment, pass the verified merged commit as a non-secret,
+per-deployment value from the linked `dashboard/` directory:
+
+```sh
+vercel --prod --yes --env THEHEAT_DASHBOARD_GIT_SHA=EXACT_MERGED_SHA
+```
+
+Verify this declaration against the deployment's actual Git metadata after release.
+It supplies the dashboard's own revision when the platform Git variable is absent;
+it never borrows a bot report's revision. Missing, malformed or conflicting metadata
+remains unknown. This value changes no authentication or publication setting.
 
 ## Project Map
 
