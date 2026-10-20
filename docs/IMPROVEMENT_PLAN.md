@@ -2,6 +2,19 @@
 
 Living plan for closing the gap between the bot's current voice quality and the **resumption bar** (majority A-grade rate per cycle). Refined daily by the autonomous grading agent (cron `0 15 * * *`), reviewed and implemented by the human operator.
 
+> **Oct 6: first graded cycle since Jul 6 (docs on `main` were frozen ~3 months). 7 pending, all
+> 5–6 days old, 0% A-rate (0/7); gap 50 pp.** Best draft B- (Riyadh dust). **P_dust's WHO-anchor
+> gap is closed** (anchor stated 4/4 vs 0/11 before) — but the fix yielded a *stat-stack template*
+> (number — WHO× — second number — source parenthetical) that still ends on data with no
+> mechanism or close; remainder of the dust problem folds into **P_close** (17th cycle, 0
+> positive / 6 failing — first cycle with no positive instance). **P_tier 8th cycle**: Cerrado
+> fire's "very-high intensity" (the same fire-tier label already shipped in the Jul 14 posted
+> Ontario tweet). **New P_cyclone**: `cyclone_tier_crossing` (first corpus instances, Hurricane
+> Rachel Cat 2 + Cat 3) is bulletin copy with no voice, the Cat 3 draft ends in a truncated
+> "MIATCPEP3…" URL, and the Cat 2 draft is superseded by Cat 3. P9/P_compound/P5 not tested
+> (no precip or record-type drafts). Operational: Riyadh/Mecca dust drafts duplicate one event
+> (diversity-gate keying worth checking). Staleness bulk-reject skipped (`gh` auth failed).
+>
 > **Jul 6: 0 fresh drafts — queue is an exact match to Jul 5's 15 graded drafts (same
 > `draft_id`s, scores, text); no re-grading performed, all grades stand at Jul 5's levels.**
 > No active-proposal evidence updates: P_close (16 cycles), P_tier (7 cycles/10 instances),
@@ -185,16 +198,17 @@ Living plan for closing the gap between the bot's current voice quality and the 
 |---|---|
 | Bot commit | `0.9.81.0`+ per BRIEFING.md 2026-06-28 (reganom recency window + honesty-gating, PR #347; world-half eval-gating fix, PR #345; reganom writer-voice upgrade, PR #349. Prior: 0.9.67.0, R-02 NOAA HMS independent fire witness; 30-item audit backlog complete [S-01..S-35]; source-redundancy lane R-00..R-09; bot active since 2026-06-01) |
 | Voice engine version | **two-bot + Attenborough/Economist voice + all-sources triage + evidence contract + diversity gate + automation dashboard** (Sonnet 4.6 writer prompt-cached + Gemini 2.5 Flash fact-checker [skips unknown kinds] + Gemini 2.5 Pro critic [assesses relative to available data]; all 23 sources on triage path via PR #150; evidence contract gates writer via 0.9.0.0; pending-type cap default 3 + per-type TTL sweep [fast 7d, coral/DHW 21d] via 0.9.6.0/0.9.16.0; `THEHEAT_TRIAGE_ENABLED=1` in CI; `THEHEAT_WRITER_SAMPLES=1` + `THEHEAT_CRITIC_REVISE_ENABLED=0` since 2026-07-14 (economics P0 paired flip; was 2/1 from 2026-06-13); reganom (`reanalysis_anomaly`) enabled `manual_only` since 2026-06-27 with 2-day recency + honesty-gating [PR #347]; routine beacon writes the `ROUTINE_BEACON` repo variable via `gh variable set` each cycle) |
-| Last cycle A-rate | **— (0 fresh drafts, Jul 6).** Most recent measured: **20% (1/5 fresh, Jul 5)** — eastern Siberia fire A- (4th confirmation of the permafrost-carbon fire mechanic), 1 B+, 1 B, 1 B-, 1 C+. Prior: 20% (2/10, Jul 4); 33% (1/3, Jul 3); 0% (0/3, Jul 2); 0% (0/4, Jul 1); 22% (2/9 non-stale, Jun 30); 80% Jun 29 [BAR CLEARED]. |
-| Resumption bar | majority A (>50%) sustained — **cleared Jun 29 (80%, n=5); Jun 30 returned 22%; Jul 1 0% (n=4); Jul 2 0% (n=3); Jul 3 33% (n=3); Jul 4 20% (n=10); Jul 5 20% (n=5); Jul 6 no fresh drafts to measure**. |
-| Gap | **30 pp below bar** (50% − 20%, most recent measured cycle Jul 5, n=5). No fresh measurement Jul 6. Seven cycles since the Jun 29 peak have ranged 0–33% depending on signal mix. P_tier and P_close remain the two most active-capping levers, both unchanged since Jul 5 (no fresh evidence Jul 6). |
-| Posting | paused; operator decision pending — Jun 29 cleared bar (80%), Jun 30–Jul 5 all below, Jul 6 no fresh drafts. **Queue unchanged at 15 pending as of Jul 6** (exact match to Jul 5's graded batch) — zero new drafts entered between the Jul 5 and Jul 6 pulls. |
+| Last cycle A-rate | **0% (0/7, Oct 6)** — first graded cycle since Jul 6. 1 B- (Riyadh dust), 4 C+/C dust/AQ/cyclone, 1 C Cerrado fire; 0 A. Prior measured: 20% (1/5, Jul 5); 20% (2/10, Jul 4); 80% Jun 29 [BAR CLEARED]. |
+| Resumption bar | majority A (>50%) sustained — cleared Jun 29 (80%, n=5) once; every measured cycle since (Jun 30–Jul 5, Oct 6) below. **Not sustained.** |
+| Gap | **50 pp below bar** (50% − 0%, Oct 6, n=7). P_close (0 positive/6 failing this cycle) and the new stat-stack dust template are the active caps; P_dust's WHO-anchor gap is closed. |
+| Posting | **live** — state shows 38 `posted` drafts (Jul 14–23 samples via `manual` and `auto` approval modes); cyclone/human-impact types are `manual_only`. The earlier "paused pending majority-A" framing no longer describes the bot; operator decision, not grader. |
 | Coverage | **638 cities × 180 countries** (was 613 × 179; +25 via PR #81) |
-| Queue status | **15 pending as of Jul 6 grading, unchanged from Jul 5** (10 carry-overs from Jul 4: 2 A- [Typhoon Bavi, Loxahatchee FL], 2 B+ [Island Pond VT, Antwerpen], 6 B [Barrow, Astana, Basrah, Al Başrah al Qadīmah, Rocky Mountains CO fire, Urumqi Jul 4 reading]; 5 from Jul 5: 1 A- eastern Siberia fire, 1 B+ Johannesburg air_quality_hazard, 1 B Doha absolute_extreme, 1 B- Urumqi Jul 5 reading, 1 C+ Phalodi dust_event). **2 of the 15 ([4] Basrah, [6] Al Başrah al Qadīmah) are now strict staleness bulk-reject candidates** (>48h old, forecast date July 4 elapsed) — flagged for operator, write unavailable this session. Bot at 0.9.81.0+ (no newer BRIEFING.md handoff confirmed this cycle); reganom enabled post-PR #347 with writer-voice upgrade (PR #349); `THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live. |
+| Queue status | **7 pending as of Oct 6, all 5–6 days old** (Riyadh dust B-, Mecca dust C+, Riyadh AQ C+, Taiz dust C+, Cerrado fire C, Rachel Cat 2 C, Rachel Cat 3 C+). All past the 48h line; Rachel Cat 2 is superseded by Cat 3. Bulk-reject write skipped (gh auth failed) — operator should clear via dashboard. 2 `approved`, 38 `posted` in state. |
 
 ## Active proposals
 
-Ordered by leverage. Priority as of Jul 6 (unchanged from Jul 5 — zero fresh drafts means no
+Ordered by leverage. **Oct 6 order: P_close > P_tier > P_cyclone (new) > P_dust (anchor closed; downgraded) > P9 > P_compound > P5.**
+Priority as of Jul 6 (unchanged from Jul 5 — zero fresh drafts means no
 new evidence to reorder against): **P_close** (16 cycles, last evidence Jul 5: 2 positive/3
 failing) > **P_tier** (7 cycles/10 instances across 4 signal types, 1st cross-location
 confirmation via Doha, Jul 5) > **P_dust** (9 cycles, last evidence Jul 5, 11 of 11
@@ -534,7 +548,7 @@ FAILING, same subtype as every prior dust_event close). Urumqi dust_event, 3rd i
 ("the topography traps it" = resolution-form, FAILING, near-verbatim repeat of its own prior
 two closes). P_close now confirmed across 14 signal types (unchanged — no new type this
 cycle).
-**Last seen:** Jul 5 (2 positive, 3 failing).
+**Last seen:** Oct 6 (0 positive, 6 failing — Riyadh dust "A concurrent PM2.5 signal…", Mecca "Two major Saudi cities, one dust event." [period-and-restate, no consequence], Cerrado (reports nearby fires were *larger*), Riyadh AQ, Taiz — all end on a data point; the 2 cyclone drafts are bulletin form, n/a). 17th cycle. Jul 5: 2 positive, 3 failing.
 
 **Proposed fix (PROMPT LANGUAGE — surgical):** Add to `src/two_bot/prompts/writer_prompt.py`
 in the system-clause / second-sentence guidance section (near the "delete the system clause"
@@ -626,8 +640,8 @@ without it. The split between these two adjacent PM-signal types is the cleanest
 the corpus that the gap is specific to `dust_event`'s bundle construction, not a categorical
 "the writer doesn't reach for WHO multiples" problem — it demonstrably does, for a sibling
 signal type, unprompted.
-**Last seen:** Jul 5 (9 cycles: Jun 13/17/25/28/30 ×2/Jul 1/Jul 4/Jul 5; template convergence
-11 of 11).
+**Last seen:** Oct 6 — **anchor gap CLOSED**: Riyadh dust 26× WHO, Mecca 4×, Riyadh AQ 14×, Taiz 5.9× all state the multiple unprompted (was 0 of 11). New residue: stat-stack template (number — WHO× — second sibling number — source parenthetical), approximations ("~266" beside "about 5.9×"), 45 km resolution noise in body. Remaining work is P_close's (consequence/mechanism close); downgraded in priority; archive after 3 consecutive cycles without a no-anchor dust draft (Oct 6 = cycle 1).
+(Prior: Jul 5, 9 cycles: Jun 13/17/25/28/30 ×2/Jul 1/Jul 4/Jul 5; template convergence 11 of 11.)
 
 **Status:** Drafted. **9 cycles confirmed** (Jun 13/17/25/28/30 ×2/Jul 1/Jul 4/Jul 5); template
 convergence 11 of 11 `dust_event` drafts. The `air_quality_hazard` sibling type doing this
@@ -704,7 +718,7 @@ ingestion or a regional quirk. Doha's close is also the best `absolute_extreme` 
 instance in the corpus ("closing off the evaporative cooling that makes extreme dry heat
 survivable") and it still caps at B — reconfirms P_tier overrides close quality entirely,
 unlike P_close or P_compound which are soft caps.
-**Last seen:** Jul 5 (7 cycles / 10 instances / 4 signal types; 1st cross-location
+**Last seen:** Oct 6 (8 cycles / 11 instances / 5 signal types — +1: Cerrado fire "very-high intensity", fire-tier bucket label leaking; also "satellite-confirmed at 100% confidence" is a pipeline field; same phrase posted Jul 14 in Ontario tweet). Prior: Jul 5 (7 cycles / 10 instances / 4 signal types; 1st cross-location
 confirmation within `absolute_extreme`; 1 clean counter-instance remains, from Jul 4's
 Typhoon Bavi).
 
@@ -917,6 +931,38 @@ monthly_high, country_record signal types where both archive depth and margin ar
 **Status:** Drafted. Awaiting human implementation. 5 cycles (Jun 28, Jun 29, Jun 30, Jul 2, Jul 4).
 
 ~~### P_precip_floor — Precipitation quality floor~~ → **[Archived 2026-07-02 — see Resolved section]**
+
+### P_cyclone — `cyclone_tier_crossing` copy is bulletin text with no voice, stakes or context
+
+**Observed:** 2026-10-06 — first two `cyclone_tier_crossing` drafts in corpus, both Hurricane Rachel
+(East Pacific, same storm 10h apart): [6] Cat 2, C: "has strengthened to Category 2 in the East
+Pacific, packing 85-kt winds and a 972 mb central pressure as of the Oct. 1 NHC advisory." [7] Cat
+3, C+: "…reaching 105 kt (121 mph) with a central pressure of 950 mb, per NHC advisory 019.
+nhc.noaa.gov/text/MIATCPEP3…". Arithmetic is correct (85 kt = Cat 2; 105 kt = 121 mph). Failures:
+(a) no stakes — the bundle has lat/lon (19.4N, 109.5W) and the Cat 2→3 crossing is the "major
+hurricane" threshold, which neither draft says; (b) unglossed units (kt, mb) with no reader-side
+anchor; (c) [7] ends in a literal-ellipsis truncated URL; (d) the Cat 2 draft is superseded by the
+Cat 3 draft within hours but both sit pending; (e) "packing" is the lone voice word and a cliché.
+Pure data delivery is valid in this voice — but only when the data lands without help, and "Category
+3" without "major" doesn't.
+
+**Cycles observed:** 1 (Oct 6; 2 instances).
+**Last seen:** Oct 6.
+
+**Proposed fix (PROMPT LANGUAGE — surgical, no new data source):** in the cyclone addendum of
+`src/two_bot/prompts/writer_prompt.py`, (1) state that Category 3+ is the "major hurricane"
+threshold and the only category worth naming as such; (2) lead with the pressure drop or rate when
+available (bundle `cyclone_wind_history`) rather than a static wind figure; (3) forbid appending a
+URL in the text body when a source link is carried in the evidence contract (PR #589 may already
+cover this — verify against the Oct 1 draft, which predates or escapes it); (4) when a higher tier
+draft for the same `storm_id` exists, supersede the lower-tier pending draft (a cleanup rule, not a
+voice rule — flag to operator rather than implement via prompt).
+
+**Expected impact:** cyclone crossings move from C to B+ via the "major hurricane" fact alone;
+A-range requires a consequence close (links to P_close).
+
+**Status:** Drafted. Needs a 2nd cycle with a `cyclone_tier_crossing` draft to confirm the pattern
+is type-level rather than storm-level. Posting policy for the type is `manual_only`.
 
 ### ~~P6~~ — Fire template convergence — **SHIPPED 2026-05-12 (PR #85)**
 
