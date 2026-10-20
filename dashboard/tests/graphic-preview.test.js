@@ -70,7 +70,13 @@ test("unsupported or incomplete selected fire sources cannot offer a MODIS previ
     ["missing", value => { delete value.review_context }],
     ["missing", value => { delete value.review_context.two_bot.bundle.raw_signal_dump.acquisition_provenance }],
     ["missing", value => { delete value.review_context.two_bot.bundle.raw_signal_dump.source_product }],
-    ["unsupported", value => { const raw = value.review_context.two_bot.bundle.raw_signal_dump; raw.source_product = raw.acquisition_provenance.source_product = "VIIRS_NOAA21_NRT" }],
+    // One supported VIIRS product per set: any mix with another product stays held.
+    ["unsupported", value => { const bundle = value.review_context.two_bot.bundle, raw = bundle.raw_signal_dump; raw.source_product = raw.acquisition_provenance.source_product = "VIIRS_NOAA21_NRT"; bundle.related_signals = [{ signal_kind: "fire", acquisition_evidence: { source_product: "MODIS_NRT" } }] }],
+    ["unsupported", value => { const bundle = value.review_context.two_bot.bundle, raw = bundle.raw_signal_dump; raw.source_product = raw.acquisition_provenance.source_product = "VIIRS_NOAA20_NRT"; bundle.related_signals = [{ signal_kind: "fire", acquisition_evidence: { source_product: "VIIRS_NOAA21_NRT" } }] }],
+    ["unsupported", value => { const bundle = value.review_context.two_bot.bundle, raw = bundle.raw_signal_dump; raw.source_product = raw.acquisition_provenance.source_product = "VIIRS_NOAA20_NRT"; bundle.related_signals = [{ signal_kind: "fire", acquisition_evidence: { source_product: "VIIRS_SNPP_NRT" } }] }],
+    ["unsupported", value => { const raw = value.review_context.two_bot.bundle.raw_signal_dump; raw.source_product = raw.acquisition_provenance.source_product = "VIIRS_SNPP_NRT" }],
+    ["unsupported", value => { const raw = value.review_context.two_bot.bundle.raw_signal_dump; raw.source_product = raw.acquisition_provenance.source_product = "noaa-hms-fire-points" }],
+    ["unsupported", value => { const raw = value.review_context.two_bot.bundle.raw_signal_dump; raw.source_product = raw.acquisition_provenance.source_product = "constructor" }],
     ["unsupported", value => { value.review_context.two_bot.bundle.raw_signal_dump.acquisition_provenance.source_product = "VIIRS_SNPP_NRT" }],
     ["unsupported", value => { value.review_context.two_bot.bundle.raw_signal_dump.source_product = "VIIRS_NOAA20_NRT" }],
     ["unsupported", value => { value.review_context.two_bot.bundle.signal_kind = "fire_footprint" }],
@@ -84,7 +90,7 @@ test("unsupported or incomplete selected fire sources cannot offer a MODIS previ
     const before = structuredClone(value), html = render(value)
     assert.equal(firePreviewSourceStatus(value), status)
     assert.match(html, status === "missing" ? /receipts are missing or incomplete/ : /saved source set is unsupported/)
-    assert.doesNotMatch(html, /<button|<img|Preview the saved MODIS detections/)
+    assert.doesNotMatch(html, /<button|<img|Preview the saved/)
     assert.deepEqual(value, before)
     // This presentation hold never rewrites the server-bound request or approval.
     assert.deepEqual(graphicRequest(value, manifest), request())
@@ -224,4 +230,54 @@ test("current fire preview rejects the superseded locator presentation", async (
   value.binding.template_version = "p31-modis-locator-1"
   value.cache_key = fingerprint(value.binding)
   await assert.rejects(validateGraphicResponse(value, request(), manifest))
+})
+
+
+test("one supported VIIRS product offers only the request affordance, never qualification", () => {
+  for (const product of ["VIIRS_NOAA20_NRT", "VIIRS_NOAA21_NRT"]) {
+    const value = draft(), bundle = value.review_context.two_bot.bundle
+    bundle.raw_signal_dump.source_product = bundle.raw_signal_dump.acquisition_provenance.source_product = product
+    bundle.related_signals = Array.from({ length: 3 }, () => ({ signal_kind: "fire", acquisition_evidence: { source_product: product } }))
+    const before = structuredClone(value)
+    const html = renderToStaticMarkup(React.createElement(GraphicPreview, { draft: value }))
+    assert.equal(firePreviewSourceStatus(value), "viirs")
+    assert.match(html, /Preview the saved NOAA-20\/NOAA-21 VIIRS detections/)
+    assert.match(html, /Preview graphic/)
+    assert.match(html, /checks can still withhold the graphic/)
+    assert.doesNotMatch(html, /MODIS|source verified|source qualified|<img|<input/)
+    assert.deepEqual(value, before)
+    assert.deepEqual(graphicRequest(value, manifest), request())
+  }
+})
+
+// Browser contract fixture only: the actual Python VIIRS adapter qualifies every row.
+function viirsResponseValue() {
+  const value = responseValue(), files = manifest.identity.files
+  value.binding.template = "viirs_thermal_detection_map"
+  value.binding.template_version = "p31-viirs-locator-1"
+  value.binding.renderer.adapter_sha256 = files["src/media/viirs_map_graphic_adapter.py"]
+  value.source = "NASA FIRMS · VIIRS"
+  value.source_context = { kind: "viirs_acquisition", acquired_at: "2032-02-29T23:59:00Z" }
+  value.cache_key = fingerprint(value.binding)
+  return value
+}
+
+test("VIIRS template binds its own adapter, source label and context; no MODIS confusion", async () => {
+  const files = manifest.identity.files
+  assert.ok(/^[a-f0-9]{64}$/.test(files["src/media/viirs_map_graphic_adapter.py"]))
+  const good = viirsResponseValue()
+  assert.deepEqual(await validateGraphicResponse(good, request(), manifest), good)
+  for (const change of [value => { value.source = "NASA FIRMS · MODIS" },
+    value => { value.source_context.kind = "modis_acquisition" },
+    value => { value.source_context.acquired_at = "2032-02-29T23:59:30Z" },
+    value => { value.source_context.extra = "unrecognized" },
+    value => { value.binding.renderer.adapter_sha256 = files["src/media/fire_map_graphic_adapter.py"]; value.cache_key = fingerprint(value.binding) },
+    value => { value.binding.template_version = "p31-modis-locator-2-social"; value.cache_key = fingerprint(value.binding) },
+    value => { value.binding.template = "modis_thermal_detection_map"; value.cache_key = fingerprint(value.binding) }]) {
+    const bad = structuredClone(good); change(bad)
+    await assert.rejects(validateGraphicResponse(bad, request(), manifest))
+  }
+  const html = renderToStaticMarkup(React.createElement(GraphicPreviewFigure, { value: good, url: "blob:invented" }))
+  assert.match(html, /NASA FIRMS · VIIRS · 2032-02-29 23:59 UTC \(minute precision\)/)
+  assert.doesNotMatch(html, /MODIS|23:59:00/)
 })

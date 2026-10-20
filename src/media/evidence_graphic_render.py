@@ -17,8 +17,8 @@ import subprocess
 
 from src.editorial.revisions import fingerprint
 from src.media.evidence_graphic import (
-    HEIGHT, WIDTH, template_version, adapter_filename, VARIABLE_LABELS, build_alt_text, chart_title, date_only,
-    point_label, validate_graphic,
+    HEIGHT, MAP_TEMPLATES, WIDTH, template_version, adapter_filename, VARIABLE_LABELS, build_alt_text, chart_title,
+    date_only, point_label, validate_graphic,
 )
 
 BACKGROUND = "#0A0A0A"
@@ -213,10 +213,13 @@ def _drawing(template, evidence):
             y -= size + 12
         return y
 
-    if template != "modis_thermal_detection_map":
+    if template not in MAP_TEMPLATES:
         text(56, 1418, "THEHEAT", 48)
         text(1144, 1418, "SYNTHETIC DATA" if evidence["synthetic"] else "REVIEW PREVIEW", 40, "warm", "end")
-    if template == "modis_thermal_detection_map":
+    if template in MAP_TEMPLATES:
+        if evidence["instrument"] != {"modis_thermal_detection_map": "MODIS",
+                                      "viirs_thermal_detection_map": "VIIRS"}[template]:
+            raise ValueError("Map template and validated instrument disagree")
         _map_drawing(drawing, evidence, colors)
     elif template == "modis_thermal_detections":
         from src.media.fire_graphic_adapter import coordinate_label, frp_axis, frp_label
@@ -522,6 +525,19 @@ def map_text_layout(evidence):
 
     font = TTFont("TheHeatMapLayout", BytesIO(_resource(FONT_RESOURCE)))
     ascent, descent = font.face.ascent / 1000, font.face.descent / 1000
+    # The validated instrument selects the exact code-bound frame and rows; a
+    # MODIS map keeps its original row sequence and therefore identical bytes.
+    instrument = evidence["instrument"]
+    if instrument == "VIIRS":
+        from src.media.viirs_map_graphic_adapter import MAP_FRAME as frame, confidence_row
+        # NASA's own "NOAA-20 VIIRS" phrasing keeps MODIS's gutter beside the inset.
+        platform = f"{evidence['satellite']} VIIRS"
+        # Exact retained categories beside the A-D map labels; never a ranking number.
+        confidence_rows = ["Source detection confidence", confidence_row(evidence)]
+    elif instrument == "MODIS":
+        frame, platform, confidence_rows = adapter.MAP_FRAME, f"{evidence['satellite']} / MODIS", []
+    else:
+        raise ValueError("Unsupported map instrument")
     map_ = evidence["map"]
     west, south, east, north = map_["bounds"]
     left, bottom, width, height = map_["rectangle"]
@@ -552,10 +568,13 @@ def map_text_layout(evidence):
     add(1144, 1448, "SYNTHETIC DATA" if evidence["synthetic"] else "REVIEW PREVIEW", 40, "warm", "end")
     add(56, 1326, str(evidence["points"][0]["frp_source"]) + " MW", 96, "text", maxwidth=740)
     add(56, 1252, "Pixel A radiative power", 48, "text", maxwidth=740)
-    add(56, 1192, f"NASA FIRMS · {evidence['satellite']} / MODIS", maxwidth=740)
+    add(56, 1192, "NASA FIRMS · " + platform, maxwidth=740)
     add(56, 1140, evidence["acquired_at"][:16].replace("T", " ") + " UTC", maxwidth=740)
     add(56, 1088, "Coordinate close-up; coastline omitted" if map_["context_mode"] == "coordinate_closeup"
         else "Coarse locator; not distance or area", 40)
+    if confidence_rows:
+        add(56, 1036, confidence_rows[0], 40)
+        add(56, 984, confidence_rows[1], 40, "text")
     add(824, 1402, "World locator", 40, maxwidth=320)
     add(824, 1186, "Location only", 40, maxwidth=320)
     add(824, 1142, "Not fire area", 40, maxwidth=320)
@@ -591,7 +610,7 @@ def map_text_layout(evidence):
         lower = row(left, bottom - ascent * 44 - 12, captions[0])
         upper = row(left, bottom + height - descent * 44 + 12, captions[1])
         latitudes, latitude_mode = [lower, upper], "horizontal_letterbox"
-        frame_bottom, frame_top = adapter.MAP_FRAME[1], adapter.MAP_FRAME[1] + adapter.MAP_FRAME[3]
+        frame_bottom, frame_top = frame[1], frame[1] + frame[3]
         adapter.require(all(frame_bottom <= t["box"][1] and t["box"][3] <= frame_top for t in latitudes)
                         and usable_axes(latitudes), "graphic_map_labels_exceed_space")
     texts.extend(latitudes)

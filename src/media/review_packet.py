@@ -172,7 +172,7 @@ def _build(
         return published_packet(draft, identity, policy, spec, manifest, png_bytes)
     _require(
         set(spec) == {"template", "expected_evidence_sha256", "evidence"}
-        and spec["template"] in {"temperature_comparator", "crw_regional_anomaly", "pm25_forecast_day", "modis_thermal_detections", "modis_thermal_detection_map"},
+        and spec["template"] in {"temperature_comparator", "crw_regional_anomaly", "pm25_forecast_day", "modis_thermal_detections", "modis_thermal_detection_map", "viirs_thermal_detection_map"},
         "Only a qualified single-bundle graphic is supported",
     )
     _require(_sha(spec["expected_evidence_sha256"]), "Graphic evidence fingerprint is invalid")
@@ -192,6 +192,9 @@ def _build(
     if spec["template"] == "modis_thermal_detection_map":
         from src.media.fire_map_graphic_adapter import ADAPTER_VERSION as map_version
         adapter_versions = {map_version}
+    if spec["template"] == "viirs_thermal_detection_map":
+        from src.media.viirs_map_graphic_adapter import ADAPTER_VERSION as viirs_version
+        adapter_versions = {viirs_version}
     input_binding = evidence["input_binding"]
     _require(
         input_binding["adapter_version"] in adapter_versions and len(input_binding["bundles"]) == 1,

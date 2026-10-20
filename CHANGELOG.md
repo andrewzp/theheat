@@ -1,3 +1,10 @@
+## 0.9.109.18
+
+- Preview colored locator maps from saved NOAA-20/NOAA-21 VIIRS receipts, with
+  exact source confidence categories, pixel radiative power and acquisition time.
+  Keep unsupported or mixed sources held, preserve existing MODIS/PM2.5 previews,
+  and leave attachment, review and publication authority unchanged.
+
 ## 0.9.109.17
 
 - Show retained model claims and shared saved source facts in the draft desk.

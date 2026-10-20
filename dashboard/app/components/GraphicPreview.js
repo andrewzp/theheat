@@ -20,7 +20,9 @@ export function GraphicPreviewFigure({ value, url }) {
       h("details", null, h("summary", null, "Read the full graphic description"), h("p", null, value.alt_text))))
 }
 
-function SavedPreview({ request, forecast }) {
+const FIRE_LABELS = { modis: "MODIS", viirs: "NOAA-20/NOAA-21 VIIRS" }
+
+function SavedPreview({ request, forecast, fireSource }) {
   const [preview, setPreview] = useState({ status: "idle" })
   const controller = useRef(null)
   useEffect(() => {
@@ -30,7 +32,7 @@ function SavedPreview({ request, forecast }) {
   }, [])
   return h(React.Fragment, null,
     h("p", null, forecast ? "Build a chart from the saved PM2.5 model forecast. No new source fetch or AI generation."
-      : "Preview the saved MODIS detections. Source and display checks can still withhold the graphic. No new source fetch or AI generation."),
+      : `Preview the saved ${FIRE_LABELS[fireSource]} detections. Source and display checks can still withhold the graphic. No new source fetch or AI generation.`),
     h("button", { type: "button", className: "btn sm", disabled: preview.status === "loading",
       onClick: () => controller.current?.start(request) }, preview.status === "ready" ? "Rebuild preview" : "Preview graphic"),
     h("div", { role: "status", "aria-live": "polite" },
@@ -51,7 +53,7 @@ export function GraphicPreview({ draft, editing = false, updating = false }) {
       : editing ? h("p", null, "Save or cancel your text edit before building a preview.")
       : !request ? h("p", null, "Refresh the saved draft and resolve any conflicting versions before previewing.")
         : missingWindow ? h("p", null, "The hourly forecast was not saved with this draft. A graphic is unavailable.")
-          : fireSource === "missing" ? h("p", null, "Saved MODIS source receipts are missing or incomplete. No graphic preview is available for this draft.")
-          : fireSource === "unsupported" ? h("p", null, "This fire preview supports MODIS source receipts only. The saved source set is unsupported; no preview is available.")
-          : h(SavedPreview, { key: `${draft.type}:${draft.status}:${graphicRequestKey(request)}`, request, forecast }))
+          : fireSource === "missing" ? h("p", null, "Saved fire source receipts are missing or incomplete. No graphic preview is available for this draft.")
+          : fireSource === "unsupported" ? h("p", null, "This fire preview supports MODIS or NOAA-20/NOAA-21 VIIRS receipts from one product only. The saved source set is unsupported; no preview is available.")
+          : h(SavedPreview, { key: `${draft.type}:${draft.status}:${graphicRequestKey(request)}`, request, forecast, fireSource }))
 }

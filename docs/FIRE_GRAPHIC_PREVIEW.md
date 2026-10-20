@@ -62,3 +62,38 @@ the original HTTP response, certify every source claim, establish current source
 freshness or prove agreement between the tweet and graphic. Those are separate
 review and production integration requirements. Public tests use invented data;
 historical source packets and exact draft text stay private.
+
+## NOAA-20/NOAA-21 VIIRS locator map
+
+The saved-draft preview also offers a colored locator for one to four retained
+VIIRS pixels when every row is the same `VIIRS_NOAA20_NRT` or `VIIRS_NOAA21_NRT`
+product, platform and reported UTC minute. It is a separate explicit template
+(`viirs_thermal_detection_map`, template version `p31-viirs-locator-1`, adapter
+`p31-firms-viirs-map-1`); VIIRS evidence is never labeled MODIS or checked by the
+MODIS validator. Suomi NPP (whose delivery is retiring), NOAA HMS, any mix of
+products, platforms or minutes, missing or incomplete receipts and more than four
+rows stay held. Field meanings follow the
+[NASA Earthdata VIIRS I-band 375 m active fire reference](https://www.earthdata.nasa.gov/data/instruments/viirs/viirs-i-band-375-m-active-fire-data).
+
+The existing source validators run unchanged. Every receipt is bound in source
+order to an independently supplied hash; the full story and every related row
+are retained, never truncated. The locator reuses the MODIS map geometry, A-D
+labels, equal markers, land outlines and zero-based FRP color scale in a shorter
+frame, and binds the exact bytes of both shared modules in the evidence: a change
+to shared locator or axis code obsoletes earlier VIIRS evidence instead of being
+silently accepted.
+
+VIIRS confidence is the source's categorical low, nominal or high class. The
+graphic shows the exact retained category for each lettered pixel; the alt text
+also records the source spelling (`l`, `n`, `h`). Internal ranking numbers are
+never shown as percentages, probabilities, quality scores or severity. FRP is the
+source's pixel-integrated radiative power in MW (a hybrid 375 m/750 m retrieval),
+not temperature, burned area, physical-fire intensity, severity or impact, and
+values are never summed. Pixel centers of roughly 375 m nadir pixels are not
+flame locations or perimeters; scan/track dimensions are not retained. A shared
+source minute and platform do not establish simultaneity, one overpass or a
+common incident. Historical rendering is not current source qualification.
+
+The editor media command keeps its reviewed MODIS/PM2.5 scope: only the
+saved-draft preview route opts into VIIRS. The preview remains read-only, with
+no attachment, review, check pass or publication authority.

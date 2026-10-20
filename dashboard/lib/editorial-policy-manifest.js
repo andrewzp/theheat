@@ -84,7 +84,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/editorial/draft_admission.py": "1f60fce127c7caa8c1965ce5c7c7e89c7b291a56028604f0d315952c587555ec",
     "src/editorial/marine_evidence.py": "7183f93f1068d75856063cf061a1dea8751bd4dd98cc1f1f34488bcf39296f5c",
     "src/editorial/newsworthiness.py": "2df18f17c51f772b761609bf10dc1c5b7289d2b1f1e2ce6f3f9dd743dbe73236",
-    "src/editorial/policy.py": "b89cf5dd98c3b754a47901cb70a155b5ea991b9fba5e33959b300cd0b271810f",
+    "src/editorial/policy.py": "1752dbaf37b72adb3a08bba2d40839854b8df24b955f1b5974f621e45a74a8fa",
     "src/editorial/report_development.py": "e2ed39a9ff957683c8befff0f3b99533fdc9d90d84af88220ed13f2bf1489995",
     "src/editorial/revisions.py": "ff8e3f276edd8dcda4103c4e8352b964d6155a15ff69244f040c54b31b90641f",
     "src/editorial/synthesis.py": "c3230d7f91f287550e158548998ed5df778148592c2989cf7155cd2a3182498b",
@@ -93,9 +93,9 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/media/air_quality_graphic_adapter.py": "fb5a1e59526e64141f7aa745ac0f297b0edc159d2398f8e67d60c1ed18dd2aa7",
     "src/media/attachment.py": "119515f4136f9bfa35c9eb3dc2b6f4c9f5ba938cf70e9002d9ae7f9d7bdb8d12",
     "src/media/crw_graphic_adapter.py": "5503a2527f3bf32351685a5c2a54fc41a543dc387ae7005c101461237588f6e1",
-    "src/media/evidence_graphic.py": "7c266f6c7855bb47b3daa4a7e4a2640caba9c97262c8caa90ca596906e21c7f8",
+    "src/media/evidence_graphic.py": "d9e0e487dba14f93d59a3a6289ce48064cd35eb35ea36d5bfd94403858bd3afa",
     "src/media/fire_graphic_adapter.py": "343acd087bcbf3f566837bcf2a1799187002a734641c947b599d6f9f025e9833",
-    "src/media/fire_map_graphic_adapter.py": "6d14353badca1b5ef37ba752ec3e1efb3508114bc104ebc508b6ddd91d16678c",
+    "src/media/fire_map_graphic_adapter.py": "083b3ca9c1473bf1458aa9a9d4bc1052c7128f40341d8c2f1bf086cd7c1713e7",
     "src/media/joint_review.py": "c6d366bb4cac81d1a541e8cf285874fb0de0134e85e4273aaae042f6bacbe899",
     "src/media/maps/NOTICE.md": "f6ebf3caca500621c4b2c9f9fe9aad802099b82a4a1c21c479daf97d29aabac0",
     "src/media/maps/manifest.json": "1af072edc46ae3252bf6cf0edb43993986de262a2840b2cd4907eb4866f970e9",
@@ -103,7 +103,8 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/media/native_profile.py": "87c7480c10ffe945592f572ac869d2c36f40a95ae45da23c6f839775ee7cb009",
     "src/media/platform_description.py": "7dc2f5b30a6bcbcc129ae59b6d109044b5d7aea3bf4963943ee72695795f07a1",
     "src/media/published_radar.py": "2116cc29344d3097870ea6170d51b9fe781c5cacfcf1982159717e6eee76ac29",
-    "src/media/review_packet.py": "5dc2d8bff387948b8d49eefd518fe1dab912373122871849ac21e131c20541f5",
+    "src/media/review_packet.py": "027e6c1cdf5d94142784f4c64bd7dd21f73403defc59ba099eba913f94da5901",
+    "src/media/viirs_map_graphic_adapter.py": "657db3caef8503a4e0b9c9596bad8d28c029c3711e1d974f153fc1b60d3dd8d3",
     "src/orchestrator/common.py": "a2bc5b82c27955da11b1f2d5ac0591645cb781979e8c8d42f53f56fbca64ab19",
     "src/orchestrator/cyclone_episodes.py": "e0913dae539cb3fd256dd6c70fc4e01c7b53b141ec47fcc98febd53cf0ce3f4e",
     "src/orchestrator/cyclones.py": "389c6441db0839763b6a9cd42146f75e3ab14d1179125d60a9c368eb1e03697d",
@@ -194,5 +195,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "a0c3d5b94ca0f06dcb025e72db9cc292062356110a235e3a95431e2aed1ae28c"
   },
   "schema_version": 1,
-  "source_sha256": "faa3e8d0646a068b058ca0b939139f059925553e2cb5dc7b616229decb4f51aa"
+  "source_sha256": "acfbca8748e2a3906762f9cfdbc1bef6a9b354fd48ae72242e9a0a4d082aae8b"
 }
