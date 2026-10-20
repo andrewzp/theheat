@@ -97,3 +97,10 @@ common incident. Historical rendering is not current source qualification.
 The editor media command keeps its reviewed MODIS/PM2.5 scope: only the
 saved-draft preview route opts into VIIRS. The preview remains read-only, with
 no attachment, review, check pass or publication authority.
+
+Unavailable previews emit fixed internal startup, authorization, request and
+state-read stage names; an upstream failure may include its bounded HTTP status.
+These records contain no credentials, draft or source text, request details,
+URLs, exception messages or tracebacks. Logging failure leaves the same private
+response and fail-closed behavior. Diagnostics do not grant source qualification
+or establish that a graphic rendered successfully.

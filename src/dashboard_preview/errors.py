@@ -1,4 +1,26 @@
-"""Fixed public errors; never expose private input or provider exception text."""
+"""Fixed public errors and allowlisted diagnostics without private input."""
+
+import json
+import sys
+
+_DIAGNOSTIC_STAGES = frozenset({
+    "authorization", "request", "state_read", "render",
+    "state_configuration", "state_metadata_read", "state_metadata_shape",
+    "state_raw_read", "state_json", "state_metadata_http", "state_raw_http",
+})
+
+
+def log_unavailable(stage, *, http_status=None):
+    """Fixed internal failure records only; failed logging cannot change a reply."""
+    if type(stage) is not str or stage not in _DIAGNOSTIC_STAGES:
+        return
+    record: dict[str, str | int] = {"component": "graphic_preview", "stage": stage}
+    if type(http_status) is int and 100 <= http_status <= 599:
+        record["http_status"] = http_status
+    try:
+        sys.stderr.write(json.dumps(record, separators=(",", ":")) + "\n")
+    except Exception:
+        pass
 
 ERRORS = {
     "bad_request": (400, "Refresh this draft and try the preview again."),
