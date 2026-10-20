@@ -1,3 +1,10 @@
+## 0.9.109.21
+
+- Add a protected, read-only graphics state-reader status endpoint with fixed
+  failure stages and codes. Reuse the verified runtime and bounded Gist reader;
+  select no draft, render no image and make no model calls or state changes.
+  Reader availability does not certify a source or a successful graphic.
+
 ## 0.9.109.20
 
 - Distinguish saved-source preview request setup, body reads and JSON decoding

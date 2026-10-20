@@ -5,7 +5,12 @@
   "functions": {
     "api/graphic_preview.py": {
       "maxDuration": 30,
-      "includeFiles": "{graphic-runtime.zip,lib/graphic-runtime-manifest.json,pyproject.toml,uv.lock}",
+      "includeFiles": "{api/graphic_reader_status.py,graphic-runtime.zip,lib/graphic-runtime-manifest.json,pyproject.toml,uv.lock}",
+      "excludeFiles": "{node_modules/**,.next/**,tests/**,app/**,public/**,lib/*.js,.claude/**,.git/**,.vercel/**,.env*,middleware.js,next.config.mjs,package*.json}"
+    },
+    "api/graphic_reader_status.py": {
+      "maxDuration": 30,
+      "includeFiles": "{api/graphic_preview.py,graphic-runtime.zip,lib/graphic-runtime-manifest.json,pyproject.toml,uv.lock}",
       "excludeFiles": "{node_modules/**,.next/**,tests/**,app/**,public/**,lib/*.js,.claude/**,.git/**,.vercel/**,.env*,middleware.js,next.config.mjs,package*.json}"
     }
   }

@@ -1,19 +1,21 @@
 {
   "identity": {
-    "archive_sha256": "c6b50924d3bf7f07acfd97b8768db36a370043dcb82e62b34b5dbf901224eb4a",
+    "archive_sha256": "b5b5d3d867656ecbea175a0592d7e563194c18b586192173f902b36c91ceed85",
     "deployment_files": {
-      "api/graphic_preview.py": "730f2bf8f6dde33a15b9547a72dbf60b18f17525edbfdedaea9bc4926bb6ef94",
+      "api/graphic_preview.py": "f7521adcbd618f4b65b2a0de30ea62aaff4cdd36f2254e9af38bf68646d361ad",
+      "api/graphic_reader_status.py": "5e9685d699625a4eea9d5be884b6e266939a0ad344a2997351ba79bd114407ba",
       "pyproject.toml": "6d161405a3084285699805cd15f4c0584aab66806b7f3414a5de8e6eef61290b",
       "uv.lock": "de40d4b7513fe6e17daf3e68ec71105871f9dd387f110c2acdcd7a1dbd1b6717"
     },
     "files": {
       "src/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "src/dashboard_preview/__init__.py": "f3aba814268d4d4994c499bcb17b3c2aa8f788af61dd409e3d1b00aac9a96bba",
-      "src/dashboard_preview/auth.py": "dd10dcf251c94d36e9234ad01186b3e841378c92c827d6ef18ff164e13de0b99",
-      "src/dashboard_preview/errors.py": "e2e365f341a51d3826d0b64bd3f5e4636660a0d16e582d1c2f2e54ae888a8ae4",
-      "src/dashboard_preview/http.py": "cf0d4af5908ab31f1a8fe64efbd0e0b58d0944a8135dd13d938515c7b314268e",
+      "src/dashboard_preview/auth.py": "eafa95e1ed18c7e993fa13e016799d9e92f0ee843fe6d3f2843adf28579a8e21",
+      "src/dashboard_preview/errors.py": "2a6a5a87017b534f0b1b0ee9e317c7880cc10ef185734ad3a92827f7dd0152b7",
+      "src/dashboard_preview/http.py": "dbcbf1e3b4f4f3fa4a231c6e1f80946e321c098e51f12543fee889490f9011ad",
       "src/dashboard_preview/preview.py": "e796157497e5291018cbf36428a0ea772761a941e5f7e3a2f9a2e1bb182675d0",
-      "src/dashboard_preview/reader.py": "28bfc64eacf3ee980dae4910fe2024711602889d28763cfb81916998f775a95a",
+      "src/dashboard_preview/reader.py": "fd4ffe58ebd9210de625c6053822dfa7e82f4bf44d79b91e5b5eacb887280e29",
+      "src/dashboard_preview/reader_status.py": "1f3d9d42dabebe1218eacd7133bd2477f58c85b53a6e2a719658846fbc5e96bb",
       "src/data/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "src/data/_freshness.py": "21e6f9bed82e769ad82a8b798e31e0faeb2851c4849fdaf99d90852fd8fa2c79",
       "src/data/_http.py": "72a86da1df2b483842c2bdf8a82e6b0b87664a2d7ba0059590129e5a6e180eb9",
@@ -89,5 +91,5 @@
     },
     "schema_version": 1
   },
-  "runtime_sha256": "8dc6ccedb66ac9713e1e8dcadb2d35a77d111cef407c2916c49b2ba6a76f4fc3"
+  "runtime_sha256": "945c25520a6c58ee7f9d293f5e2ffe24b6cab5745fb6ad8b8ca64c5e560a8ed8"
 }
