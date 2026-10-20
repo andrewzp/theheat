@@ -16,7 +16,9 @@ from src.commands.preview_ingress import Operators, PreviewServer
 from src.commands.schema import utc_text
 from src.editorial.policy import current_editorial_policy
 from src.editorial.revisions import fingerprint
-from tests.test_postgres_editor_media import admitted as admitted, AT
+from tests.test_postgres_editor_media import (
+    admitted as admitted, offline_connections as offline_connections, AT,
+)
 from tests.native_profile_helpers import native_dependencies as native_dependencies
 from tests.test_postgres_projection import cluster as cluster, database as database
 from tests.test_postgres_command_authority import (
@@ -83,7 +85,7 @@ print(json.dumps(result))
 """
 
 
-@pytest.mark.parametrize("admitted", ["modis", "pm25"], indirect=True)
+@pytest.mark.parametrize("admitted", ["modis", "pm25", "viirs_n20"], indirect=True)
 def test_actual_private_http_native_review_check_park_recovery(
     admitted, core, monkeypatch, tmp_path
 ):
@@ -163,6 +165,70 @@ def test_actual_private_http_native_review_check_park_recovery(
             "fact_check",
             "critic",
         ]
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
+@pytest.mark.parametrize("admitted", ["viirs_snpp"], indirect=True)
+def test_actual_http_source_refusal_is_durable_and_does_not_block_edit(admitted, monkeypatch, tmp_path):
+    from datetime import timedelta
+    from uuid import uuid4
+
+    from src.commands.preview_media_worker import consume_media_once
+    from src.commands.reducer import _identity
+    from tests.test_postgres_preview_command_ingress import ORIGIN, http
+
+    case, store = admitted, admitted["store"]
+    for key in tuple(os.environ):
+        if key.startswith("PG") or any(word in key for word in ("TOKEN", "SECRET", "PASSWORD", "API_KEY")):
+            monkeypatch.delenv(key)
+    monkeypatch.delenv("NODE_ENV", raising=False)
+
+    class Clock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return AT
+
+    monkeypatch.setattr(preview_ingress, "datetime", Clock)
+    path = tmp_path / "refusal-operators.json"
+    path.write_text(json.dumps({"operators": [dict(username="editor", password="invented-editor",
+                                                 subject="invented-editor", role="editor")]}))
+    path.chmod(0o600)
+    operators = Operators(path)
+    server = PreviewServer(store, operators, port=0, origin=ORIGIN)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    before = store.read()
+    draft = next(d for d in before[1]["drafts"] if d["id"] == case["draft_id"])
+
+    def command(action, payload):
+        return dict(command_id=str(uuid4()), action=action, requested_at=utc_text(AT),
+                    expires_at=utc_text(AT + timedelta(minutes=5)), targets=[_identity(draft)], payload=payload)
+
+    try:
+        status, body, headers = http(server.server_port, f"/drafts/{case['draft_id']}/media")
+        assert status == 200 and body["status"] == "unavailable" and body["code"] == "graphic_source_unqualified"
+        assert headers["Cache-Control"] == "private, no-store"
+        prepare = command("prepare_media_revision", dict(
+            expected_policy_sha256=fingerprint(current_editorial_policy()),
+            expected_renderer_profile_sha256="f" * 64))
+        assert http(server.server_port, "/commands", method="POST", value=prepare)[0] == 202
+        refused = consume_media_once(store, operators.resolve, command_id=prepare["command_id"], now=AT)
+        assert refused["status"] == "rejected" and refused["code"] == "graphic_source_unqualified"
+        assert consume_media_once(store, operators.resolve, command_id=prepare["command_id"], now=AT) == refused
+        assert http(server.server_port, f"/commands/{prepare['command_id']}")[1]["result"] == refused
+        assert store.read() == before
+        edit = command("edit_revision", {"text": "An edited invented VIIRS source statement."})
+        assert http(server.server_port, "/commands", method="POST", value=edit)[0] == 202
+        result = store.consume(operators.resolve, command_id=edit["command_id"], now=AT)
+        assert result["status"] == "applied"  # Never command_pending behind the refused preparation.
+        assert http(server.server_port, f"/commands/{edit['command_id']}")[1]["result"] == result
+        after = store.read()[1]
+        assert {k: v for k, v in after.items() if k != "drafts"} == {
+            k: v for k, v in before[1].items() if k != "drafts"
+        }  # Preserve even absent optional publication fields, not just ledger counts.
     finally:
         server.shutdown()
         server.server_close()

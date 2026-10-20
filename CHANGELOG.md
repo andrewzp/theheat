@@ -1,3 +1,10 @@
+## 0.9.109.23
+
+- Connect qualified NOAA-20/NOAA-21 VIIRS maps to the local editor's existing
+  native package, joint review, fresh checks and parked-decision workflow.
+  Record unsupported-source refusals so they cannot wedge later edits; preserve
+  scientific holds and leave hosted attachment and publication unauthorized.
+
 ## 0.9.109.22
 
 - Normalize surrounding HTTP whitespace on the graphics reader's in-memory
