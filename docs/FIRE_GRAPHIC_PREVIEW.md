@@ -94,9 +94,17 @@ flame locations or perimeters; scan/track dimensions are not retained. A shared
 source minute and platform do not establish simultaneity, one overpass or a
 common incident. Historical rendering is not current source qualification.
 
-The editor media command keeps its reviewed MODIS/PM2.5 scope: only the
-saved-draft preview route opts into VIIRS. The preview remains read-only, with
-no attachment, review, check pass or publication authority.
+The saved-draft preview stays read-only, with no attachment, review, check pass
+or publication authority. Separately, the local PostgreSQL editor workflow now
+selects the same VIIRS template for a qualified single-product NOAA-20 or NOAA-21
+source and applies the same map display preflight to both fire map templates. It
+uses the existing native five-asset package, explicit joint review, fresh
+required checks and publisher-parked local decision; `publication_approved` and
+production attachment authorization stay false. A saved source the adapters
+cannot qualify (Suomi NPP, NOAA HMS, mixed products, platforms or minutes) is a
+recorded `graphic_source_unqualified` refusal rather than an unrecorded error;
+a story with a missing receipt cannot become a generation input. These local
+tests use invented data and are not hosted or scientific acceptance.
 
 Unavailable previews emit fixed internal startup, authorization, request and
 state-read stage names; an upstream failure may include its bounded HTTP status.
