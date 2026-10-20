@@ -67,9 +67,9 @@ def test_real_http_boundary_keeps_exact_private_response_and_releases_busy_lock(
 
 @pytest.mark.parametrize("case,expected,status", [
     ("configuration", ["state_configuration"], None),
-    ("metadata_http", ["state_metadata_http", "state_metadata_read"], 403),
-    ("raw_http", ["state_raw_http", "state_raw_read"], 404),
-    ("metadata_exception", ["state_metadata_read"], None),
+    ("metadata_http", ["state_metadata_http", "state_metadata_body", "state_metadata_read"], 403),
+    ("raw_http", ["state_raw_http", "state_raw_body", "state_raw_read"], 404),
+    ("metadata_exception", ["state_metadata_send", "state_metadata_read"], None),
     ("state_json", ["state_json"], None),
 ])
 def test_real_reader_distinguishes_fixed_failure_stages_without_retries_or_private_values(
@@ -95,7 +95,7 @@ def test_real_reader_distinguishes_fixed_failure_stages_without_retries_or_priva
     assert PRIVATE not in output.out + output.err
     records = [json.loads(line) for line in output.err.splitlines()]
     assert [r["stage"] for r in records] == expected
-    assert all(set(r) <= {"component", "stage", "http_status"} and r["component"] == "graphic_preview" for r in records)
+    assert all(set(r) <= {"component", "stage", "http_status", "error_code"} and r["component"] == "graphic_preview" for r in records)
     assert [r["http_status"] for r in records if "http_status" in r] == ([] if status is None else [status])
     assert len(session.calls) == (2 if case == "raw_http" else 1 if case in {"metadata_http", "state_json"} else 0)
 
