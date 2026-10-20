@@ -66,12 +66,12 @@ def unavailable(capsys, call):
     return rows
 
 
-@pytest.mark.parametrize("token", ["\n" + PRIVATE, PRIVATE + "\r\nX-Other: secret"], ids=["leading-newline", "header-injection"])
+@pytest.mark.parametrize("token", [PRIVATE + "\nvalue", PRIVATE + "\r\nX-Other: secret"], ids=["embedded-newline", "header-injection"])
 def test_real_header_preparation_refuses_before_transport_without_logging_value(monkeypatch, capsys, token):
     adapter = install(monkeypatch)
     rows = unavailable(capsys, lambda: read_gist({**ENV, "GITHUB_TOKEN": token}, Budget()))
     assert adapter.calls == []
-    assert rows[0] == {"component": "graphic_preview", "stage": "state_metadata_send", "error_code": "invalid_header"}
+    assert rows == [{"component": "graphic_preview", "stage": "state_configuration"}]
 
 
 def test_real_prepared_request_and_gzip_stream_preserve_two_read_credential_boundary(monkeypatch, capsys):

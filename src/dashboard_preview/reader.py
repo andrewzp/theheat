@@ -107,8 +107,12 @@ def _body(session, url, headers, limit, budget, *, diagnostic_stage="state_metad
 def read_gist(env, budget):
     backend = env.get("THEHEAT_STATE_BACKEND", "").strip().lower()
     backend = backend or ("sqlite" if env.get("THEHEAT_DB_PATH") else "gist")
-    gist_id, token = env.get("GIST_ID", ""), env.get("GITHUB_TOKEN", "")
-    if backend != "gist" or not re.fullmatch(r"[0-9a-f]{20,64}", gist_id) or not token:
+    gist_id, raw_token = env.get("GIST_ID", ""), env.get("GITHUB_TOKEN", "")
+    # A copied credential may include surrounding HTTP whitespace. Normalize only
+    # those edge bytes; never repair embedded whitespace/control bytes or quotes.
+    token = raw_token.strip(" \t\r\n") if type(raw_token) is str else ""
+    if (backend != "gist" or not re.fullmatch(r"[0-9a-f]{20,64}", gist_id)
+            or not re.fullmatch(r"[\x21-\x7e]+", token)):
         log_unavailable("state_configuration")
         unavailable = PreviewError("preview_unavailable")
         unavailable._reader_stage = "state_configuration"

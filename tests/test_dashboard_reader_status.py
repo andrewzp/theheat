@@ -135,8 +135,8 @@ def test_exact_protected_host_without_trusting_forwarded_headers(status_endpoint
 
 @pytest.mark.parametrize("kind", ["header", "body", "json", "unknown"])
 def test_real_transport_failures_return_only_fixed_authenticated_codes(status_endpoint, monkeypatch, capsys, kind):
-    expected = {"header": "invalid_header", "body": "content_decoding", "json": "json_decode", "unknown": "preview_error"}[kind]
-    expected_stage = {"header": "state_metadata_send", "body": "state_metadata_body",
+    expected = {"header": "preview_error", "body": "content_decoding", "json": "json_decode", "unknown": "preview_error"}[kind]
+    expected_stage = {"header": "state_configuration", "body": "state_metadata_body",
                       "json": "state_metadata_json", "unknown": "state_metadata_send"}[kind]
     replies = {"header": [], "body": [wire(PRIVATE.encode(), encoding="gzip")],
                "json": [wire(b'{"broken":')], "unknown": [RuntimeError(PRIVATE)]}[kind]

@@ -1,6 +1,6 @@
 {
   "identity": {
-    "archive_sha256": "b5b5d3d867656ecbea175a0592d7e563194c18b586192173f902b36c91ceed85",
+    "archive_sha256": "f4449f3a9b5bb0dd5456d5590ae52b46f6df0d57406ece849f741a30d17135a7",
     "deployment_files": {
       "api/graphic_preview.py": "f7521adcbd618f4b65b2a0de30ea62aaff4cdd36f2254e9af38bf68646d361ad",
       "api/graphic_reader_status.py": "5e9685d699625a4eea9d5be884b6e266939a0ad344a2997351ba79bd114407ba",
@@ -14,7 +14,7 @@
       "src/dashboard_preview/errors.py": "2a6a5a87017b534f0b1b0ee9e317c7880cc10ef185734ad3a92827f7dd0152b7",
       "src/dashboard_preview/http.py": "dbcbf1e3b4f4f3fa4a231c6e1f80946e321c098e51f12543fee889490f9011ad",
       "src/dashboard_preview/preview.py": "e796157497e5291018cbf36428a0ea772761a941e5f7e3a2f9a2e1bb182675d0",
-      "src/dashboard_preview/reader.py": "fd4ffe58ebd9210de625c6053822dfa7e82f4bf44d79b91e5b5eacb887280e29",
+      "src/dashboard_preview/reader.py": "6cd9c00c79810a3b1ed7a107dbce9b2687b5aaa9cd761c02dcfe8de8cd888d18",
       "src/dashboard_preview/reader_status.py": "1f3d9d42dabebe1218eacd7133bd2477f58c85b53a6e2a719658846fbc5e96bb",
       "src/data/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "src/data/_freshness.py": "21e6f9bed82e769ad82a8b798e31e0faeb2851c4849fdaf99d90852fd8fa2c79",
@@ -91,5 +91,5 @@
     },
     "schema_version": 1
   },
-  "runtime_sha256": "945c25520a6c58ee7f9d293f5e2ffe24b6cab5745fb6ad8b8ca64c5e560a8ed8"
+  "runtime_sha256": "a38795f98e5ca0a14431dded6ba7c4d25503bbb0cc1c4a72e9803e1108ba4a06"
 }

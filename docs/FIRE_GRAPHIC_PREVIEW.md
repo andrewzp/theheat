@@ -132,6 +132,13 @@ is missing. No credential, URL, state content, count, exception name, message or
 traceback is returned. Authentication and bootstrap failures keep generic replies.
 Logging failure cannot change these rules. Normal preview replies stay unchanged.
 
+The reader removes only surrounding space, tab, CR and LF from its in-memory
+GitHub token before preparing the metadata header. It does not rewrite stored
+configuration, unquote or decode a token, or send credentials to the raw-state
+host. Empty/non-string tokens and embedded whitespace, control, DEL or non-ASCII
+bytes fail at configuration before a session is created. Canonical token headers,
+upstream error handling and independent dashboard authentication stay unchanged.
+
 Each invocation uses one reader call: at most one GitHub metadata request and one
 validated versioned raw-state request when needed, within the existing 25-second
 application budget and 30-second platform duration. A separate fixed entry selects
