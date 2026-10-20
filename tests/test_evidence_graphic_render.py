@@ -25,6 +25,8 @@ from tests.test_crw_graphic_adapter import adapt as crw_spec
 from tests.test_fire_graphic_adapter import adapt as fire_spec
 from tests.test_fire_map_graphic_adapter import adapt as map_spec
 from tests.test_temperature_graphic_adapter import adapt as temperature_spec
+from tests.test_viirs_map_graphic_adapter import adapt as viirs_spec
+from tests.viirs_graphic_helpers import viirs_bundle
 
 ROOT = Path(__file__).resolve().parents[1]
 NS = "{http://www.w3.org/2000/svg}"
@@ -35,10 +37,11 @@ def specs():
     temperatures = graphic_bundles()
     return [temperature_spec(temperatures[-1:]),
             temperature_spec(temperatures, template="temperature_trajectory"),
-            crw_spec(*graphic_inputs()), aq_spec(aq_bundle()), fire_spec(fire_bundle()), map_spec(fire_bundle())]
+            crw_spec(*graphic_inputs()), aq_spec(aq_bundle()), fire_spec(fire_bundle()), map_spec(fire_bundle()),
+            viirs_spec(viirs_bundle())]
 
 
-@pytest.mark.parametrize("index", range(6))
+@pytest.mark.parametrize("index", range(7))
 def test_real_svg_preserves_full_qualifications_and_is_deterministic(specs, index):
     spec = specs[index]
     original = deepcopy(spec)
@@ -76,7 +79,7 @@ def test_svg_does_not_write_assets_or_invoke_pdf_or_subprocess(specs, monkeypatc
     monkeypatch.setattr(Path, "write_bytes", forbidden)
     monkeypatch.setattr(Path, "write_text", forbidden)
     monkeypatch.setattr(Path, "mkdir", forbidden)
-    result = renderer.render_svg(**specs[-1])
+    result = renderer.render_svg(**specs[5])
     assert result["svg"].startswith(b"<?xml") and not list(tmp_path.iterdir())
 
 
@@ -88,7 +91,7 @@ def test_invalid_evidence_fails_before_optional_dependency_import(specs, monkeyp
         return original_import(name, *args, **kwargs)
 
     monkeypatch.setattr(builtins, "__import__", guard)
-    spec = deepcopy(specs[-1])
+    spec = deepcopy(specs[5])
     spec["evidence"]["points"][0]["frp_source"] += 20
     with pytest.raises(ValueError):
         renderer.render_svg(**spec)
@@ -98,12 +101,12 @@ def test_invalid_evidence_fails_before_optional_dependency_import(specs, monkeyp
 
 
 def test_oversize_svg_is_refused_not_truncated(specs, monkeypatch):
-    normal = renderer.render_svg(**specs[-1])
+    normal = renderer.render_svg(**specs[5])
     monkeypatch.setattr(renderer, "MAX_SVG_BYTES", len(normal["svg"]) - 1)
     with pytest.raises(ValueError, match="SVG byte limit"):
-        renderer.render_svg(**specs[-1])
+        renderer.render_svg(**specs[5])
     monkeypatch.setattr(renderer, "MAX_SVG_BYTES", len(normal["svg"]))
-    assert renderer.render_svg(**specs[-1]) == normal
+    assert renderer.render_svg(**specs[5]) == normal
 
 
 def test_source_like_markup_is_text_not_executable_xml():
@@ -126,7 +129,8 @@ def test_long_word_or_unrenderable_axis_never_silently_clips():
         renderer.render_svg(**fire_spec(fire_bundle([1.7e308])))
 
 
-@pytest.mark.parametrize("index,adapter", [(4, "fire_graphic_adapter.py"), (5, "fire_map_graphic_adapter.py")])
+@pytest.mark.parametrize("index,adapter", [(4, "fire_graphic_adapter.py"), (5, "fire_map_graphic_adapter.py"),
+                                           (6, "viirs_map_graphic_adapter.py")])
 @pytest.mark.parametrize("resource", ["evidence_graphic_render.py", "evidence_graphic.py", "adapter", renderer.FONT_RESOURCE])
 def test_packaged_resource_changes_invalidate_render_identity(specs, monkeypatch, index, adapter, resource):
     name = adapter if resource == "adapter" else resource
@@ -144,7 +148,7 @@ def test_concurrent_rendering_does_not_mix_charts_or_font_state(specs):
     assert actual == expected * 2
 
 
-@pytest.mark.parametrize("index", [4, 5])
+@pytest.mark.parametrize("index", [4, 5, 6])
 def test_zip_loaded_renderer_matches_filesystem_without_extraction(specs, tmp_path, index):
     # This is a test-only package of public source, not the production allowlist.
     archive = tmp_path / "runtime.zip"
@@ -189,3 +193,15 @@ def test_current_map_uses_shared_measured_layout_and_keeps_current_font_bounds()
         x0, y0, x1, y1 = row["box"]
         assert retained["box"][0] <= x0 < x1 <= retained["box"][2]
         assert retained["box"][1] <= y0 < y1 <= retained["box"][3]
+
+
+def test_viirs_map_uses_the_same_measured_layout_for_readiness_and_drawing():
+    spec = viirs_spec(viirs_bundle([125.75, 500.1234, 750.25, 0], categories=("high", "nominal", "low", "high"),
+                                   coordinates=[(35, -110), (35, -109.989), (35.009, -110), (35.009, -109.989)]))
+    layout = renderer.map_text_layout(spec["evidence"])
+    root = ET.fromstring(renderer.render_svg(**spec)["svg"])
+    assert [row["text"] for row in layout["texts"]] == ["".join(node.itertext()) for node in root.findall(".//" + NS + "text")]
+    texts = [row["text"] for row in layout["texts"]]
+    assert texts.index("Source detection confidence") + 1 == texts.index("A high · B nominal · C low · D high")
+    assert "NASA FIRMS · NOAA-20 VIIRS" in texts and not any("MODIS" in text for text in texts)
+    assert all(row["size"] == 56 for row in layout["point_labels"])

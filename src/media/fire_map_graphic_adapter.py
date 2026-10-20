@@ -186,7 +186,9 @@ def label_positions(markers, rectangle):
     raise MapQualificationError("graphic_map_labels_exceed_space")
 
 
-def geometry(points):
+def geometry(points, frame=MAP_FRAME):
+    """Shared bounded locator. Every consumer binds this module's exact bytes;
+    a template with more header rows passes its own smaller frame."""
     require(
         1 <= len(points) <= 4 and all(abs(p["lat"]) <= 75 for p in points),
         "graphic_map_outside_locator_bounds",
@@ -213,7 +215,7 @@ def geometry(points):
         width <= 120 and height <= 60 and south >= -80 and north <= 80,
         "graphic_map_outside_locator_bounds",
     )
-    frame_x, frame_y, frame_width, frame_height = MAP_FRAME
+    frame_x, frame_y, frame_width, frame_height = frame
     scale = min(frame_width / width, frame_height / height)
     rect = [
         frame_x + (frame_width - width * scale) / 2,

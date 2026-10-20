@@ -7,10 +7,10 @@ import pytest
 from src.dashboard_preview.errors import PreviewError
 from src.dashboard_preview.preview import build_preview
 from src.dashboard_preview.reader import Budget
-from tests.dashboard_graphic_helpers import POLICY, RUNTIME, saved_preview, saved_pm25_preview
+from tests.dashboard_graphic_helpers import POLICY, RUNTIME, saved_preview, saved_pm25_preview, saved_viirs_preview
 
 
-@pytest.mark.parametrize("fixture", [saved_preview, saved_pm25_preview], ids=["modis", "pm25"])
+@pytest.mark.parametrize("fixture", [saved_preview, saved_pm25_preview, saved_viirs_preview], ids=["modis", "pm25", "viirs"])
 def test_actual_python_binding_is_accepted_by_browser_contract(tmp_path, fixture):
     """Catch cross-language identity drift that an invented JSON response misses."""
     from pathlib import Path
@@ -62,7 +62,7 @@ def test_real_graphic_preserves_complete_state_and_binds_exact_saved_revision():
     assert "raw_signal_dump" not in result and "drafts" not in result
 
 
-@pytest.mark.parametrize("fixture", [saved_preview, saved_pm25_preview], ids=["modis", "pm25"])
+@pytest.mark.parametrize("fixture", [saved_preview, saved_pm25_preview, saved_viirs_preview], ids=["modis", "pm25", "viirs"])
 @pytest.mark.parametrize("field", ["text", "decision_revision", "status", "revision_conflicts"])
 def test_change_during_render_discards_asset(field, fixture):
     state, request = fixture()
@@ -126,7 +126,7 @@ def test_boolean_revision_is_not_an_integer():
         preview(state, request, read_state=lambda: pytest.fail("unexpected read"))
 
 
-@pytest.mark.parametrize("fixture", [saved_preview, saved_pm25_preview], ids=["modis", "pm25"])
+@pytest.mark.parametrize("fixture", [saved_preview, saved_pm25_preview, saved_viirs_preview], ids=["modis", "pm25", "viirs"])
 def test_source_numeric_type_drift_after_render_refuses_unchanged_editorial_revision(fixture):
     from src.editorial.revisions import draft_identity
 
@@ -137,6 +137,10 @@ def test_source_numeric_type_drift_after_render_refuses_unchanged_editorial_revi
         values = raw["forecast_window"]["series"]["dust"]["values"]
         assert type(values[0]) is float and values[0].is_integer()
         values[0] = int(values[0])
+    elif raw["confidence_kind"] == "categorical":
+        # VIIRS confidence is a category string; drift a whole-number coordinate instead.
+        assert type(raw["lat"]) is float and raw["lat"].is_integer()
+        raw["lat"] = int(raw["lat"])
     else:
         assert type(raw["confidence"]) is float and raw["confidence"].is_integer()
         raw["confidence"] = int(raw["confidence"])
@@ -147,7 +151,7 @@ def test_source_numeric_type_drift_after_render_refuses_unchanged_editorial_revi
     assert error.value.code == "stale_preview"
 
 
-@pytest.mark.parametrize("fixture", [saved_preview, saved_pm25_preview], ids=["modis", "pm25"])
+@pytest.mark.parametrize("fixture", [saved_preview, saved_pm25_preview, saved_viirs_preview], ids=["modis", "pm25", "viirs"])
 def test_source_object_key_order_is_not_source_drift(fixture):
     state, request = fixture()
 

@@ -28,3 +28,18 @@ def saved_pm25_preview():
     request["draft_id"] = draft["id"]
     request["expected_revision"] = {**draft_identity(draft), "decision_revision": decision_revision(draft)}
     return state, request
+
+
+def saved_viirs_preview():
+    """Four invented NOAA-20 detections in source order, with all three categories."""
+    from tests.viirs_graphic_helpers import viirs_bundle
+
+    state, request = saved_preview()
+    draft = state["drafts"][0]
+    draft.update(id="invented-viirs", text="Invented VIIRS thermal detections for a graphic test.")
+    draft["review_context"]["two_bot"]["bundle"] = viirs_bundle(
+        [125.75, 500.1234, 750.25, 250], categories=("high", "nominal", "low", "high"),
+        coordinates=[(35, -110), (35, -109.989), (35.009, -110), (35.009, -109.989)]).to_dict()
+    request["draft_id"] = draft["id"]
+    request["expected_revision"] = {**draft_identity(draft), "decision_revision": decision_revision(draft)}
+    return state, request

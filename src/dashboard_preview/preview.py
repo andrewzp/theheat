@@ -10,6 +10,7 @@ from src.media.air_quality_graphic_adapter import pm25_graphic_spec
 from src.media.fire_map_graphic_adapter import fire_map_graphic_spec
 from src.media.evidence_graphic_render import render_svg
 from src.media.temperature_graphic_adapter import _StoredBundle
+from src.media.viirs_map_graphic_adapter import PLATFORMS as VIIRS_PRODUCTS, viirs_map_graphic_spec
 
 MAX_RESPONSE = 1024 * 1024
 SHA = re.compile(r"[a-f0-9]{64}")
@@ -65,14 +66,24 @@ def _retained_bundle_json(bundle, *, code="graphic_unavailable"):
     return encoded
 
 
-def qualified_spec(bundle, *, synthetic=False):
-    """Shared Python qualification; callers own authentication/currentness."""
+def qualified_spec(bundle, *, synthetic=False, include_viirs=False):
+    """Shared Python qualification; callers own authentication/currentness.
+
+    VIIRS is opt-in. Only the saved-draft preview route enables it; other callers
+    keep their reviewed MODIS/PM2.5 scope until they adopt the VIIRS template and
+    its display-limit preflight explicitly. Dispatch reads the retained primary
+    product; the selected adapter then validates every row, so a mixed set holds.
+    """
     _retained_bundle_json(bundle)
     if bundle["signal_kind"] == "fire":
         receipts = [bundle["raw_signal_dump"]["acquisition_provenance"],
                     *[r["acquisition_evidence"] for r in bundle.get("related_signals", [])]]
-        spec = fire_map_graphic_spec(_StoredBundle(bundle), expected_bundle_sha256=fingerprint(bundle),
-                                expected_receipt_sha256=[fingerprint(r) for r in receipts], synthetic=synthetic)
+        options = dict(expected_bundle_sha256=fingerprint(bundle),
+                       expected_receipt_sha256=[fingerprint(r) for r in receipts], synthetic=synthetic)
+        if include_viirs and receipts[0]["source_product"] in VIIRS_PRODUCTS:
+            spec = viirs_map_graphic_spec(_StoredBundle(bundle), **options)
+            return spec, "NASA FIRMS · VIIRS", {"kind": "viirs_acquisition", "acquired_at": spec["evidence"]["acquired_at"]}
+        spec = fire_map_graphic_spec(_StoredBundle(bundle), **options)
         return spec, "NASA FIRMS · MODIS", {"kind": "modis_acquisition", "acquired_at": spec["evidence"]["acquired_at"]}
     if bundle["signal_kind"] == "air_quality_hazard":
         spec = pm25_graphic_spec(_StoredBundle(bundle), expected_bundle_sha256=fingerprint(bundle),
@@ -94,7 +105,7 @@ def build_preview(request, *, policy_sha, runtime_sha, read_state, budget, synth
         bundle = deepcopy(draft["review_context"]["two_bot"]["bundle"])
         # Bound the full retained story before canonical hashing and validation.
         retained_bundle = _retained_bundle_json(bundle)
-        spec, source, context = qualified_spec(bundle, synthetic=synthetic)
+        spec, source, context = qualified_spec(bundle, synthetic=synthetic, include_viirs=True)
         budget.remaining()
         rendered = render_svg(**spec)
         budget.remaining()

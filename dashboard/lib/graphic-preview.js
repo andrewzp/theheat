@@ -45,28 +45,34 @@ export function graphicRequest(draft, manifest) {
 
 export const graphicRequestKey = request => request ? canonical(request) : "unavailable"
 
+// Products with a reviewed preview template. Suomi NPP, HMS and any mix stay held.
+const FIRE_PREVIEW_PRODUCTS = { MODIS_NRT: "modis", VIIRS_NOAA20_NRT: "viirs", VIIRS_NOAA21_NRT: "viirs" }
+
 // A display affordance only. Matching product labels never qualifies source
-// receipts; the existing Python adapter checks every selected measurement.
+// receipts; the Python adapter for that one product checks every selected row.
 export function firePreviewSourceStatus(draft) {
   const bundle = draft?.review_context?.two_bot?.bundle
   const raw = bundle?.raw_signal_dump
   const primary = raw?.acquisition_provenance
   if (!raw || !primary || typeof raw.source_product !== "string"
       || typeof primary.source_product !== "string") return "missing"
-  if (bundle.signal_kind !== "fire" || raw.source_product !== "MODIS_NRT"
-      || primary.source_product !== "MODIS_NRT") return "unsupported"
+  const product = primary.source_product
+  if (bundle.signal_kind !== "fire" || !Object.hasOwn(FIRE_PREVIEW_PRODUCTS, product)
+      || raw.source_product !== product) return "unsupported"
   const related = bundle.related_signals === undefined ? [] : bundle.related_signals
   if (!Array.isArray(related) || related.length > 3) return "unsupported"
   for (const signal of related) {
     if (!signal?.acquisition_evidence || typeof signal.acquisition_evidence.source_product !== "string") return "missing"
-    if (signal.signal_kind !== "fire" || signal.acquisition_evidence.source_product !== "MODIS_NRT") return "unsupported"
+    if (signal.signal_kind !== "fire" || signal.acquisition_evidence.source_product !== product) return "unsupported"
   }
-  return "modis"
+  return FIRE_PREVIEW_PRODUCTS[product]
 }
 
 const templates = {
   modis_thermal_detection_map: { version: "p31-modis-locator-2-social", source: "NASA FIRMS · MODIS",
     adapter: "src/media/fire_map_graphic_adapter.py", context: "modis_acquisition" },
+  viirs_thermal_detection_map: { version: "p31-viirs-locator-1", source: "NASA FIRMS · VIIRS",
+    adapter: "src/media/viirs_map_graphic_adapter.py", context: "viirs_acquisition" },
   pm25_forecast_day: { version: "p31-pm25-forecast-1", source: "CAMS via Open-Meteo",
     adapter: "src/media/air_quality_graphic_adapter.py", context: "pm25_forecast_day" },
 }
@@ -86,7 +92,8 @@ function utcTimestamp(value) {
 function sourceContext(value, template) {
   const context = value.source_context
   if (context?.kind !== template.context) return false
-  if (template.context === "modis_acquisition") return exactKeys(context, ["kind", "acquired_at"])
+  if (template.context === "modis_acquisition" || template.context === "viirs_acquisition")
+    return exactKeys(context, ["kind", "acquired_at"])
     && utcTimestamp(context.acquired_at) && context.acquired_at.slice(17, 19) === "00"
   return exactKeys(context, ["kind", "valid_date", "timezone", "valid_start", "valid_end", "requested_at", "retrieved_at"])
     && calendarDate(context.valid_date) && typeof context.timezone === "string" && context.timezone.length <= 128

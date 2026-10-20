@@ -6,6 +6,7 @@ from datetime import UTC, date, datetime
 import hashlib
 import json
 import shutil
+from threading import Lock
 from unittest.mock import Mock
 
 import pytest
@@ -627,13 +628,23 @@ def install_collection_wire(monkeypatch, *, overrides=None, metadata=None, nativ
 @pytest.mark.parametrize("value,expected_candidates", [(1.0, 0), (2.1, 1), (3.6, 1)])
 def test_collection_counts_quiet_samples_and_synthesis_floor(monkeypatch, clock, value, expected_candidates):
     calls = install_collection_wire(monkeypatch, overrides={REGION.slug: csv_body(REGION, value=value)})
-    decode = Mock(wraps=contract.decode_csv)
+    # Mock.call_count uses an unprotected += across concurrent region workers.
+    # Count entries under a lock while leaving the real decoder concurrent.
+    decode_count = 0
+    decode_lock = Lock()
+    original_decode = contract.decode_csv
+
+    def decode(*args, **kwargs):
+        nonlocal decode_count
+        with decode_lock:
+            decode_count += 1
+        return original_decode(*args, **kwargs)
     monkeypatch.setattr(contract, "decode_csv", decode)
     report = source.collect_all_regions()
     assert report.status == "success" and report.observed == 13
     assert len(report.readings) == expected_candidates
     assert report.recovered == report.fallback_attempted == 0
-    assert len(calls) == 14 and decode.call_count == 13
+    assert len(calls) == 14 and decode_count == 13
     assert all(kwargs["attempts"] == 1 for _, kwargs in calls)
     for row in report.regions:
         assert row.primary is row.final and row.final.qualified

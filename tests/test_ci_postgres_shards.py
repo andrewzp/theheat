@@ -60,6 +60,17 @@ def test_eight_file_shards_partition_all_modules_and_parameters_without_changing
     assert [_ci_postgres_shard(path) for path in files] == original
 
 
+def test_viirs_native_package_runs_only_in_required_media_lane_with_complete_union():
+    names = ("test_viirs_native_package.py", "test_viirs_saved_preview.py", "test_postgres_authority.py")
+    items = [SimpleNamespace(path=ROOT / "tests" / name, nodeid=f"{name}::invented[{i}]")
+             for name in names for i in (0, 1)]
+    groups = {partition: select(items, partition) for partition in ("core", "postgres", "media")}
+    assert {item.path.name for item in groups["media"]} == {"test_viirs_native_package.py"}
+    assert {item.path.name for item in groups["core"]} == {"test_viirs_saved_preview.py"}
+    assert {item.path.name for item in groups["postgres"]} == {"test_postgres_authority.py"}
+    assert sorted(id(item) for group in groups.values() for item in group) == sorted(id(item) for item in items)
+
+
 @pytest.mark.parametrize("partition,shard", [("all","0"), ("core","1"), ("media","3"),
                                             ("postgres","8"), ("postgres","-1"), ("postgres","invalid")])
 def test_invalid_shard_requests_fail_before_collection(partition, shard):

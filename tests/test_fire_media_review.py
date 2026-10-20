@@ -1,4 +1,4 @@
-"""MODIS thermal detections through existing private media/revision boundaries; no actual approval."""
+"""MODIS and VIIRS thermal detections through existing private media/revision boundaries; no actual approval."""
 
 from copy import deepcopy
 import json
@@ -13,21 +13,23 @@ from src.media.review_package import prepare_media_review
 from tests.fire_graphic_helpers import graphic_bundle
 from tests.test_fire_graphic_adapter import adapt
 from tests.test_fire_map_graphic_adapter import adapt as map_adapt
+from tests.test_viirs_map_graphic_adapter import adapt as viirs_adapt
+from tests.viirs_graphic_helpers import viirs_bundle
 from tests.test_joint_media_review import make, status
 from tests.test_media_review_packet import manifest_for, structural_png
 from tests.test_media_review_package import local as local
 
 
-@pytest.fixture(scope="module", params=[adapt, map_adapt], ids=["historical-bar", "current-map"])
+@pytest.fixture(scope="module", params=[adapt, map_adapt, viirs_adapt], ids=["historical-bar", "current-map", "viirs-map"])
 def seed(request):
-    bundle = graphic_bundle()
+    bundle = viirs_bundle() if request.param is viirs_adapt else graphic_bundle()
     spec = request.param(bundle)
     png = structural_png()
     draft = {
         "id": "synthetic-thermal",
         "event_id": bundle.event_id,
         "type": bundle.signal_kind,
-        "text": "Invented MODIS thermal detections for a private graphic fixture.",
+        "text": f"Invented {'VIIRS' if request.param is viirs_adapt else 'MODIS'} thermal detections for a private graphic fixture.",
         "content_revision": 1,
         "decision_revision": 1,
         "status": "pending",
@@ -50,7 +52,8 @@ def test_complete_package_reuses_exact_assets_without_approving(local):
     assert prepare_media_review(**local) == {**result, "reused": True}
     packet = json.loads((Path(result["output"]) / "packet.json").read_text())
     spec = json.loads(Path(local["spec_path"]).read_text())
-    expected = "p31-modis-locator-2-social" if spec["template"] == "modis_thermal_detection_map" else "p31-modis-thermal-1"
+    expected = {"modis_thermal_detection_map": "p31-modis-locator-2-social", "modis_thermal_detections": "p31-modis-thermal-1",
+                "viirs_thermal_detection_map": "p31-viirs-locator-1"}[spec["template"]]
     assert packet["graphic_binding"]["template_version"] == expected
 
 

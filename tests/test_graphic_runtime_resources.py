@@ -223,3 +223,49 @@ except MapQualificationError as e:print(json.dumps({"code":e.code}))
 else:raise AssertionError("tampered map resource accepted")
 ''', path)
     assert result["code"] == "graphic_map_basemap_unavailable"
+
+
+def test_viirs_map_renders_from_exact_archive_and_refuses_tampered_shared_locator(tmp_path):
+    from tests.viirs_graphic_helpers import viirs_bundle
+    source = tmp_path / "bundle.json"
+    source.write_text(json.dumps(viirs_bundle().to_dict()))
+    code = '''
+sys.path.insert(0, sys.argv[1])
+from pathlib import Path
+from src.dashboard_preview.preview import qualified_spec
+from src.media.evidence_graphic import validate_graphic
+from src.media.evidence_graphic_render import render_svg
+bundle = json.loads(Path(sys.argv[2]).read_text())
+spec,source,context=qualified_spec(bundle,synthetic=True,include_viirs=True)
+image=render_svg(**spec)
+print(json.dumps(dict(template=spec["template"],source=source,kind=context["kind"],length=len(image["svg"]),
+                      evidence=spec["expected_evidence_sha256"],spec=spec)))
+'''
+    clean = fresh(code, archive(tmp_path), source)
+    assert (clean["template"], clean["source"], clean["kind"]) == (
+        "viirs_thermal_detection_map", "NASA FIRMS · VIIRS", "viirs_acquisition")
+    assert 0 < clean["length"] <= 1_000_000
+    # Change only the shared locator module inside a copy of the archive: the
+    # already-qualified evidence no longer reconstructs and a fresh spec differs.
+    content, _ = package.generate()
+    damaged = tmp_path / "damaged-locator.zip"
+    with zipfile.ZipFile(BytesIO(content)) as original, zipfile.ZipFile(damaged, "w") as target:
+        for name in original.namelist():
+            data = original.read(name)
+            if name == "src/media/fire_map_graphic_adapter.py":
+                data += b"\n# changed shared locator bytes\n"
+            target.writestr(name, data)
+    (tmp_path / "spec.json").write_text(json.dumps(clean["spec"]))
+    result = fresh('''
+sys.path.insert(0, sys.argv[1])
+from pathlib import Path
+from src.media.evidence_graphic import validate_graphic
+spec = json.loads(Path(sys.argv[2]).read_text())
+try:
+    validate_graphic(**spec)
+except ValueError as exc:
+    print(json.dumps({"refused": True}))
+else:
+    raise AssertionError("evidence bound to old shared locator bytes accepted")
+''', damaged, tmp_path / "spec.json")
+    assert result == {"refused": True}
