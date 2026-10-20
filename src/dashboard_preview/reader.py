@@ -8,7 +8,7 @@ from urllib.parse import urlsplit
 
 import requests
 
-from src.dashboard_preview.errors import PreviewError
+from src.dashboard_preview.errors import PreviewError, log_unavailable
 
 STATE_LIMIT = 8 * 1024 * 1024
 API_LIMIT = 12 * 1024 * 1024
@@ -63,11 +63,12 @@ def strict_json(raw, limit, *, code="preview_unavailable"):
         raise PreviewError(code) from exc
 
 
-def _body(session, url, headers, limit, budget):
+def _body(session, url, headers, limit, budget, *, diagnostic_stage="state_metadata_http"):
     remaining = budget.remaining()
     with session.get(url, headers=headers, stream=True, allow_redirects=False,
                      timeout=(min(2, remaining), min(3, remaining))) as response:
         if response.status_code != 200:
+            log_unavailable(diagnostic_stage, http_status=response.status_code)
             raise PreviewError("preview_unavailable")
         # read1 yields available data rather than waiting to fill a 64KiB chunk.
         # The application checks its budget between reads; Vercel also bounds the
@@ -90,13 +91,16 @@ def read_gist(env, budget):
     backend = backend or ("sqlite" if env.get("THEHEAT_DB_PATH") else "gist")
     gist_id, token = env.get("GIST_ID", ""), env.get("GITHUB_TOKEN", "")
     if backend != "gist" or not re.fullmatch(r"[0-9a-f]{20,64}", gist_id) or not token:
+        log_unavailable("state_configuration")
         raise PreviewError("preview_unavailable")
+    stage = "state_metadata_read"
     try:
         with requests.Session() as session:
             session.trust_env = False
             headers = {"Accept": "application/vnd.github+json", "Authorization": f"token {token}",
                        "Cache-Control": "no-cache"}
             gist = strict_json(_body(session, f"https://api.github.com/gists/{gist_id}", headers, API_LIMIT, budget), API_LIMIT)
+            stage = "state_metadata_shape"
             if gist.get("id") != gist_id:
                 raise PreviewError("preview_unavailable")
             file = gist["files"]["state.json"]
@@ -110,13 +114,18 @@ def read_gist(env, budget):
                         or not re.fullmatch(path, parsed.path) or parsed.query or parsed.fragment):
                     raise PreviewError("preview_unavailable")
                 # Raw secret-Gist URLs need no token; credentials stay at api.github.com.
-                body = _body(session, url, {"Cache-Control": "no-cache"}, STATE_LIMIT, budget)
+                stage = "state_raw_read"
+                body = _body(session, url, {"Cache-Control": "no-cache"}, STATE_LIMIT, budget,
+                             diagnostic_stage="state_raw_http")
             else:
                 body = file["content"].encode("utf-8")
+            stage = "state_json"
             state = strict_json(body, STATE_LIMIT)
             budget.remaining()
             return state
     except PreviewError:
+        log_unavailable(stage)
         raise
     except Exception as exc:
+        log_unavailable(stage)
         raise PreviewError("preview_unavailable") from exc

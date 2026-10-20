@@ -1,4 +1,4 @@
-"""Native HTTP entry point; read-only, authenticated, private responses and no logs."""
+"""Authenticated read-only HTTP with fixed-stage diagnostics, never request logs."""
 
 from http.server import BaseHTTPRequestHandler
 import json
@@ -6,7 +6,7 @@ import os
 from threading import Lock
 
 from src.dashboard_preview.auth import authorize, header
-from src.dashboard_preview.errors import PreviewError
+from src.dashboard_preview.errors import PreviewError, log_unavailable
 from src.dashboard_preview.preview import build_preview
 from src.dashboard_preview.reader import Budget, read_gist, strict_json
 
@@ -64,8 +64,10 @@ def handler_type(*, policy_sha, runtime_sha):
 
         def _handle(self):
             acquired = False
+            stage = "authorization"
             try:
                 authorize(self.path, self.headers, os.environ)
+                stage = "request"
                 if self.command != "POST":
                     raise PreviewError("method_not_allowed")
                 acquired = _BUSY.acquire(blocking=False)
@@ -84,14 +86,26 @@ def handler_type(*, policy_sha, runtime_sha):
                 if len(raw) != int(length):
                     raise PreviewError("bad_request")
                 request = strict_json(raw, 4096, code="bad_request")
+
+                def current_state():
+                    nonlocal stage
+                    stage = "state_read"
+                    state = read_gist(os.environ, budget)
+                    stage = "render"
+                    return state
+
+                stage = "render"
                 body = build_preview(request, policy_sha=policy_sha, runtime_sha=runtime_sha,
-                                     read_state=lambda: read_gist(os.environ, budget), budget=budget,
+                                     read_state=current_state, budget=budget,
                                      synthetic=False)
                 self._reply(200, body)
             except PreviewError as exc:
+                if exc.status == 503:
+                    log_unavailable(stage)
                 self._reply(exc.status, json.dumps(exc.payload(), ensure_ascii=False).encode("utf-8"),
                             authenticate=exc.status == 401)
             except Exception:
+                log_unavailable(stage)
                 unavailable = PreviewError("preview_unavailable")
                 self._reply(unavailable.status, json.dumps(unavailable.payload()).encode("utf-8"))
             finally:

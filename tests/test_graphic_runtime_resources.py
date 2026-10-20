@@ -49,6 +49,47 @@ def app(tmp_path):
     return tmp_path / "api/graphic_preview.py"
 
 
+@pytest.mark.parametrize("failure,stage", [
+    ("none", "bootstrap_ready"), ("missing", "bootstrap_package"),
+    ("tampered", "bootstrap_integrity"), ("loaded-src", "bootstrap_isolation"),
+    ("timezone", "bootstrap_timezone"), ("import", "bootstrap_import"),
+])
+@pytest.mark.parametrize("broken_logging", [False, True])
+def test_actual_bootstrap_fixed_stage_diagnostics_cannot_leak_or_change_fail_closed_behavior(
+        tmp_path, failure, stage, broken_logging):
+    result = fresh('''
+import contextlib, importlib.abc, io, runpy, types
+from pathlib import Path
+private = "DO-NOT-LOG-private-exception-data"
+failure, broken = sys.argv[2], sys.argv[3] == "True"
+root = Path(sys.argv[1]).parents[1]
+if failure == "missing":
+    (root / "lib/graphic-runtime-manifest.json").unlink()
+elif failure == "tampered":
+    with (root / "graphic-runtime.zip").open("ab") as output: output.write(b"tampered")
+elif failure == "loaded-src":
+    sys.modules["src"] = types.SimpleNamespace(private=private)
+elif failure == "timezone":
+    sys.modules["tzdata"] = types.SimpleNamespace(__version__=private)
+elif failure == "import":
+    class Block(importlib.abc.MetaPathFinder):
+        def find_spec(self, fullname, path=None, target=None):
+            if fullname == "src.dashboard_preview.http": raise ImportError(private)
+    sys.meta_path.insert(0, Block())
+class Broken(io.StringIO):
+    def write(self, value): raise OSError(private)
+output = Broken() if broken else io.StringIO()
+with contextlib.redirect_stderr(output):
+    loaded = runpy.run_path(sys.argv[1])
+print(json.dumps({"unavailable": loaded["PreviewHandler"] is loaded["UnavailableHandler"],
+                  "events": output.getvalue(), "private_leaked": private in output.getvalue()}))
+''', app(tmp_path), failure, broken_logging)
+    assert result["unavailable"] is (failure != "none")
+    assert not result["private_leaked"]
+    assert result["events"] == ("" if broken_logging else json.dumps(
+        {"component": "graphic_preview", "stage": stage}, separators=(",", ":")) + "\n")
+
+
 def test_archive_and_checkout_keep_known_alias_and_unregistered_place_identities(tmp_path):
     rows = places.registry()
     row = next(row for row in rows if row["aliases"])

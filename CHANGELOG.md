@@ -1,3 +1,10 @@
+## 0.9.109.19
+
+- Identify unavailable saved-source previews with fixed internal startup, request
+  and state-read stages. Never log credentials, source text, request details or
+  exception messages; preserve public errors, source checks and read-only behavior.
+  This adds failure diagnosis, not proof of a successful hosted preview.
+
 ## 0.9.109.18
 
 - Preview colored locator maps from saved NOAA-20/NOAA-21 VIIRS receipts, with

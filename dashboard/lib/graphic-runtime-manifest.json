@@ -1,8 +1,8 @@
 {
   "identity": {
-    "archive_sha256": "6523d9af1ebb85e8468e71c89dfac012c98a9a324fa6321f3ced102d8f4fce6b",
+    "archive_sha256": "eb201e579846bb85bdb652cd6cc71d32e4b72a61d4cd29e3b41886bccd632c26",
     "deployment_files": {
-      "api/graphic_preview.py": "abbde75deff02ba22b67df70f7783d33d8150bd119a5514f8007feb43191e0c9",
+      "api/graphic_preview.py": "730f2bf8f6dde33a15b9547a72dbf60b18f17525edbfdedaea9bc4926bb6ef94",
       "pyproject.toml": "6d161405a3084285699805cd15f4c0584aab66806b7f3414a5de8e6eef61290b",
       "uv.lock": "de40d4b7513fe6e17daf3e68ec71105871f9dd387f110c2acdcd7a1dbd1b6717"
     },
@@ -10,10 +10,10 @@
       "src/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "src/dashboard_preview/__init__.py": "f3aba814268d4d4994c499bcb17b3c2aa8f788af61dd409e3d1b00aac9a96bba",
       "src/dashboard_preview/auth.py": "dd10dcf251c94d36e9234ad01186b3e841378c92c827d6ef18ff164e13de0b99",
-      "src/dashboard_preview/errors.py": "c2a4c012149b98948da00e157bb3a23a8a807fc0bc95d8088537dd788e687dcd",
-      "src/dashboard_preview/http.py": "69e14e4a1d9d8e9c1cf41b09a9a4b8367aa330e751f5f2ee27ed978675cbe1d4",
+      "src/dashboard_preview/errors.py": "b505c28347b62c723b56b2dc54d26a484c99ae7ec8f8af6f86fc701e0ba3f3b6",
+      "src/dashboard_preview/http.py": "cf0d4af5908ab31f1a8fe64efbd0e0b58d0944a8135dd13d938515c7b314268e",
       "src/dashboard_preview/preview.py": "e796157497e5291018cbf36428a0ea772761a941e5f7e3a2f9a2e1bb182675d0",
-      "src/dashboard_preview/reader.py": "cd4e1cb8937adac0c9acfeb90be51b239144b45043c1f0a90e3961938b9c4373",
+      "src/dashboard_preview/reader.py": "9d5c929a722d1754d09dedf6bbabd71554e64e391c71b734ba22dcbd739a0974",
       "src/data/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "src/data/_freshness.py": "21e6f9bed82e769ad82a8b798e31e0faeb2851c4849fdaf99d90852fd8fa2c79",
       "src/data/_http.py": "72a86da1df2b483842c2bdf8a82e6b0b87664a2d7ba0059590129e5a6e180eb9",
@@ -89,5 +89,5 @@
     },
     "schema_version": 1
   },
-  "runtime_sha256": "05a8d778835d875cb4dd05ea054913b7d02d4499047ba270988bdaba8b1c85d4"
+  "runtime_sha256": "382f82027658fc62d380bf1ccaf458ccc52f63c53d62c4522b0c25537a9a0186"
 }
