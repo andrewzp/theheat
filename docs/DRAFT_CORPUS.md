@@ -11,6 +11,20 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-10-20 — Daily corpus grading (0 fresh drafts; 15 carry-overs from Oct 8/10/19, previously graded)
+
+**Context:** Gist read via git-clone (success). Queue: 15 pending — exact match to Oct 19's set
+(newest draft: Guam [15], created Oct 17T05:33Z); zero drafts entered since. No re-grading; all
+grades stand. (Step 0 `main` still ends Jul 6; this rolling branch carries the current record —
+`git rebase origin/main` conflicts on the initial commit, so the branch was left as-is.)
+
+**Staleness as of ~Oct 20 15:10 UTC:** all 15 are >48h (newest ~81h). Both Guam drafts carry a
+"tonight" alert for a passed storm; the other 13 are the time-baked/superseded dust, PM2.5 and NHC
+advisory drafts flagged Oct 11/13. Bulk-reject skipped: `GH_TOKEN` invalid (`gh auth status`).
+Operator should reject the whole queue via dashboard.
+
+**A-rate:** — (no fresh drafts). Last measured: 0% (0/2, Oct 19). No proposal evidence changes.
+
 ## 2026-10-19 — Daily corpus grading (2 fresh drafts; 13 carry-overs from Oct 8/Oct 10, previously graded)
 
 **Context:** Gist read via git-clone (success). Queue: 15 pending. 13 are the Oct 8/Oct 10-graded
