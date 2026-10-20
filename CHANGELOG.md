@@ -1,3 +1,10 @@
+## 0.9.109.22
+
+- Normalize surrounding HTTP whitespace on the graphics reader's in-memory
+  GitHub credential. Reject embedded whitespace, controls and non-ASCII input
+  before opening a session; preserve stored credentials, read limits and errors.
+  Invented-data regression coverage does not establish hosted graphic recovery.
+
 ## 0.9.109.21
 
 - Add a protected, read-only graphics state-reader status endpoint with fixed
