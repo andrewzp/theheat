@@ -34,6 +34,38 @@ from tests.native_profile_helpers import native_dependencies as native_dependenc
 AT = candidate.AT
 
 
+def _viirs(**options):
+    from tests.viirs_graphic_helpers import viirs_bundle
+    return lambda: viirs_bundle(**options)
+
+
+def _hms():
+    from src.data.fire_source_contract import HMS_PRODUCT
+    from src.two_bot.intern.fire import build_fire_bundle
+    from tests.fire_source_fixtures import fire_event
+    from tests.viirs_graphic_helpers import WHEN
+    return build_fire_bundle(fire_event(product=HMS_PRODUCT, when=WHEN, region="Invented region", country="US"))
+
+
+def _mixed_minute():
+    from tests.viirs_graphic_helpers import WHEN, viirs_bundle
+    return viirs_bundle([10, 20], when=[WHEN, WHEN - timedelta(minutes=1)])
+
+
+# Indirect `admitted` parameters for invented FIRMS/HMS fire sources (see the fixture).
+FIRE_SOURCES = {
+    "viirs_n20": _viirs(product="VIIRS_NOAA20_NRT"),
+    "viirs_n21": _viirs(product="VIIRS_NOAA21_NRT"),
+    "viirs_long_frp": _viirs(values=[1.2345678901234567e100], categories=("high",)),
+    "viirs_snpp": _viirs(product="VIIRS_SNPP_NRT"),
+    "viirs_mixed_product": _viirs(values=[10, 20], products=["VIIRS_NOAA20_NRT", "VIIRS_NOAA21_NRT"]),
+    "viirs_mixed_instrument": _viirs(values=[10, 20], products=["VIIRS_NOAA20_NRT", "MODIS_NRT"],
+                                     categories=("high", "high")),
+    "viirs_mixed_minute": _mixed_minute,
+    "hms": _hms,
+}
+
+
 @pytest.fixture(autouse=True)
 def offline_connections(monkeypatch):
     original = socket.socket.connect
@@ -68,6 +100,17 @@ def admitted(request, store, core, tmp_path, monkeypatch, native_dependencies):
 
         text = ("MODIS detected a thermal signal in this invented region." if request.param == "modis_long_frp"
                 else "MODIS detected a 500 MW thermal signal in an invented region.")
+        source_key = "firms"
+    elif request.param in FIRE_SOURCES:
+        # Invented FIRMS rows only. Supported NOAA-20/NOAA-21 stories and the
+        # source shapes the VIIRS adapter must refuse are admitted by the same
+        # real generation/check engine; nothing is seeded as a final draft.
+        def graphic_bundle():
+            return FIRE_SOURCES[request.param]()
+
+        text = ("VIIRS detected a 500 MW thermal signal in an invented region."
+                if request.param in {"viirs_n20", "viirs_n21"}
+                else "Satellites detected a thermal signal in this invented region.")
         source_key = "firms"
     else:
         from src.data.air_quality import _parse_single_location, detect_pm25_hazard
@@ -168,7 +211,7 @@ def view(case, *, now=AT, resolve=candidate.resolve, png=None):
         )
 
 
-def action(case, name, payload, *, actor=candidate.EDITOR, at=AT, target=None):
+def action(case, name, payload, *, actor=candidate.EDITOR, at=AT, target=None, resolve=candidate.resolve):
     store = case["store"]
     draft = next(d for d in store.read()[1]["drafts"] if d["id"] == case["draft_id"])
     command = Command.from_request(
@@ -186,9 +229,9 @@ def action(case, name, payload, *, actor=candidate.EDITOR, at=AT, target=None):
     )
     store.accept(command, actor, now=at)
     if name == "prepare_media_revision":
-        result = consume_media_once(store, candidate.resolve, command_id=command.command_id, now=at)
+        result = consume_media_once(store, resolve, command_id=command.command_id, now=at)
     else:
-        result = store.consume(candidate.resolve, command_id=command.command_id, now=at)
+        result = store.consume(resolve, command_id=command.command_id, now=at)
     return command, result
 
 
@@ -208,7 +251,9 @@ def prepare_and_attach(case):
     prepared = view(case)
     assert prepared["status"] == "prepared", prepared
     if case["bundle"].signal_kind == "fire":
-        assert prepared["packet"]["graphic_binding"]["template"] == "modis_thermal_detection_map"
+        expected = ("viirs_thermal_detection_map" if case["bundle"].raw_signal_dump["source_product"].startswith("VIIRS")
+                    else "modis_thermal_detection_map")
+        assert prepared["packet"]["graphic_binding"]["template"] == expected
     png = view(case, png=prepared["preparation"]["proposal_sha256"])
     assert png.startswith(b"\x89PNG\r\n\x1a\n") and len(png) > 1000
     _, attached = action(
@@ -226,6 +271,7 @@ def prepare_and_attach(case):
         ),
     )
     assert attached["status"] == "applied", attached
+    case["attached"] = attached
     return prepared, png
 
 
@@ -564,15 +610,12 @@ def all_application_rows(params):
     }
 
 
-@pytest.mark.parametrize("admitted", ["modis"], indirect=True)
-def test_complete_native_check_park_dump_restore_and_resumption(
-    admitted, monkeypatch, core, cluster
-):
+def park_dump_restore_journey(case, monkeypatch, core, cluster):
+    """Shared complete journey: native attach, fresh checks, park, dump/restore."""
     import psycopg
     from src.commands.postgres_authority import PostgresCommandAuthority
     from tests.test_postgres_command_authority import options
 
-    case = admitted
     prepared, png = prepare_and_attach(case)
     complete_revision(case, monkeypatch)
     current = view(case)
@@ -645,6 +688,14 @@ def test_complete_native_check_park_dump_restore_and_resumption(
             params,
             psycopg.sql.SQL("DROP DATABASE {} WITH (FORCE)").format(psycopg.sql.Identifier(name)),
         )
+    return dict(prepared=prepared, png=png, park_command=cmd, park=park, projected=projected)
+
+
+@pytest.mark.parametrize("admitted", ["modis"], indirect=True)
+def test_complete_native_check_park_dump_restore_and_resumption(
+    admitted, monkeypatch, core, cluster
+):
+    park_dump_restore_journey(admitted, monkeypatch, core, cluster)
 
 
 @pytest.mark.parametrize("admitted", ["modis"], indirect=True)

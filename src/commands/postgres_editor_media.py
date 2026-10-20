@@ -91,7 +91,9 @@ def inputs(authority, c, draft, policy, now):
                for row in current) == 1, "media_source_revision_ambiguous")
     refuse(now < min(utc_datetime(origin["source_useful_until"]), utc_datetime(origin["provenance_useful_until"])),
            "media_source_expired")
+    from src.dashboard_preview.errors import PreviewError
     from src.dashboard_preview.preview import qualified_spec
+    from src.media.evidence_graphic import MAP_TEMPLATES
     from src.media.fire_map_graphic_adapter import MapQualificationError
     try:
         if captured["bundle"].get("signal_kind") == "severe_weather":
@@ -99,8 +101,19 @@ def inputs(authority, c, draft, policy, now):
             spec = radar_current(authority, c, origin["brief_id"], captured["bundle"], ref, now)
             label, context = "Published NWS radar · human label review required", spec["evidence"]["scope"]
         else:
-            spec, label, context = qualified_spec(captured["bundle"], synthetic=True)
-        if spec["template"] == "modis_thermal_detection_map":
+            try:
+                spec, label, context = qualified_spec(captured["bundle"], synthetic=True, include_viirs=True)
+            except MapQualificationError:
+                raise
+            except (PreviewError, ValueError, KeyError, TypeError, AttributeError, UnicodeError, RecursionError,
+                    OverflowError):
+                # The source adapters refuse unsupported products, mixed sets and
+                # unbound receipts deterministically. The authority re-raises
+                # ValueError for editor actions, so an unconverted refusal would
+                # leave a prepare intent pending ahead of every later command.
+                raise CommandError("graphic_source_unqualified",
+                                   "This saved source does not qualify for a graphic") from None
+        if spec["template"] in MAP_TEMPLATES:
             from src.media.evidence_graphic_render import map_text_layout
             map_text_layout(spec["evidence"])
     except MapQualificationError as exc:
