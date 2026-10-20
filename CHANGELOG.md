@@ -1,3 +1,10 @@
+## 0.9.109.17
+
+- Show retained model claims and shared saved source facts in the draft desk.
+  Distinguish historical analysis from current checks and individual citations;
+  hide obsolete analysis during edits or version mismatches. Preserve existing
+  review, source, approval and publication controls.
+
 ## 0.9.109.16
 
 - Explain when saved fire sources cannot support the MODIS graphic preview,

@@ -6,13 +6,14 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "dashboard/app/api/config/route.js": "81d1f67bd7c58ead93c0fbee5498cb135a61afdacee01a50daf87711d6aed408",
     "dashboard/app/api/dashboard/route.js": "6eb99961ce9321f9e01085524bb6a37e604754c5874decce33e3f777ff5f1ada",
     "dashboard/app/api/drafts/route.js": "7b2c04bcea2d20fe2d095b66f9031a0b21eba8bc1b9757808c591bcf25a66860",
-    "dashboard/lib/draft-revisions.js": "398601a95adea4a283b2c97aa29fb6b02a00b6ea39c6b7023d48c3ab7d697404",
+    "dashboard/lib/draft-revisions.js": "cdb544bff98f42075fbbda7392f7b9fe9cb1ebe6aa09de55b8ee17e0d09c3d76",
     "dashboard/lib/editorial-policy.js": "1d4218b5f270c838cd503bd5fb1fd5385add684e8f37e2c4adf28bfbb0c5d2bc",
     "dashboard/lib/nws-source-timing.js": "3a7b4be177cc5d28be7a8150d7c6937b7c15f113c5475134254dba233df47975",
     "dashboard/lib/nws-warning-evidence.js": "eb98b1dec65d7cac93ea4e8a8b85045324a1aef52ada2834de924ae03a59b3e6",
     "dashboard/lib/publication-control.js": "3bb989dac6b3fa8335afc5df58d82b51e192018a8d72fb76e0f589eedfec1b4b",
     "dashboard/lib/runtime-inventory.js": "d5d8c95d3b0187e23d99a649d2108e210267aefb76403162fdf5531acfe715dc",
     "dashboard/lib/runtime-report.js": "bd1b84fa6f874ae831f348554fc54cc4af9aee396aebc8d85fd0cbc83e89b9d9",
+    "dashboard/lib/saved-claim-evidence.js": "86490422c29b9061a5f61004bb006651b5eb33cd6164248c3bcc9d884a13e15a",
     "dashboard/lib/state-store.js": "bb3f88153757d1cff929b827214a22af0914bec90e8fcdae690a269bfa5178e8",
     "data/country_codes.json": "563fd9c963633bb169c88bac593ec0ccb4694e31ae0613e37d31d1c07e276a9d",
     "data/place_registry.json": "e9678ac76bfd68d03032a80858a7cb6eed6353508bbcc2cafbdf3186a38cda64",
@@ -83,7 +84,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/editorial/draft_admission.py": "1f60fce127c7caa8c1965ce5c7c7e89c7b291a56028604f0d315952c587555ec",
     "src/editorial/marine_evidence.py": "7183f93f1068d75856063cf061a1dea8751bd4dd98cc1f1f34488bcf39296f5c",
     "src/editorial/newsworthiness.py": "2df18f17c51f772b761609bf10dc1c5b7289d2b1f1e2ce6f3f9dd743dbe73236",
-    "src/editorial/policy.py": "baa81f7f4b1cb945da3fb24f099aab08b6468c992aa05502d546552bbaf89801",
+    "src/editorial/policy.py": "b89cf5dd98c3b754a47901cb70a155b5ea991b9fba5e33959b300cd0b271810f",
     "src/editorial/report_development.py": "e2ed39a9ff957683c8befff0f3b99533fdc9d90d84af88220ed13f2bf1489995",
     "src/editorial/revisions.py": "ff8e3f276edd8dcda4103c4e8352b964d6155a15ff69244f040c54b31b90641f",
     "src/editorial/synthesis.py": "c3230d7f91f287550e158548998ed5df778148592c2989cf7155cd2a3182498b",
@@ -193,5 +194,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "a0c3d5b94ca0f06dcb025e72db9cc292062356110a235e3a95431e2aed1ae28c"
   },
   "schema_version": 1,
-  "source_sha256": "b970a6c26c043c08249b172bb10b96e4a4587aa79863513856998027a9018619"
+  "source_sha256": "faa3e8d0646a068b058ca0b939139f059925553e2cb5dc7b616229decb4f51aa"
 }

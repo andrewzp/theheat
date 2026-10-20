@@ -770,6 +770,17 @@ h1 span { color: #666; font-weight: 400; font-size: 14px; margin-left: 8px; }
   outline: 2px solid #ffb380; outline-offset: 3px; border-radius: 2px;
 }
 .forecast-evidence a { color: #ffb380; text-decoration: underline; text-underline-offset: 3px; }
+.claim-evidence .btn { justify-self: start; min-height: 44px; white-space: normal; text-align: left; }
+.claim-evidence button:focus-visible {
+  outline: 2px solid #ffb380; outline-offset: 3px; border-radius: 2px;
+}
+.claim-list { padding-left: 24px; display: grid; gap: 16px; }
+.claim-list li { padding-left: 4px; }
+.claim-list p { margin: 4px 0 0; }
+.claim-source { border-top: 1px solid #383838; }
+.claim-facts { margin: 12px 0 0; display: grid; gap: 12px; }
+.claim-facts dt { color: #aaa; }
+.claim-facts dd { margin: 0; color: #eee; white-space: pre-wrap; }
 .forecast-details { border-top: 1px solid #383838; }
 .nws-warning-text { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.6; }
 .nws-warning-evidence .forecast-fields dd { overflow-wrap: anywhere; }

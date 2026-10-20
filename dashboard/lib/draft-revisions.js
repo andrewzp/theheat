@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto"
 import { validEditorialPolicy } from "./editorial-policy.js"
 import { configuredAutomaticPolicy } from "./publication-control.js"
+import { projectSavedClaimEvidence } from "./saved-claim-evidence.js"
 
 // Paired with src/editorial/revisions.py. This is a decision binding, not a lock.
 function validUnicode(text) {
@@ -226,5 +227,19 @@ export function invalidateText(draft, newText) {
 
 export function projectDraft(draft, policy = null) {
   const current = reviewIsCurrent(draft, policy)
-  return { ...draft, revision_identity: { ...draftIdentity(draft), decision_revision: decisionRevision(draft) }, review_status: draft.revision_conflicts?.length ? "conflict" : Object.hasOwn(draft, "media_attachment") ? "media_review_required" : !validEditorialPolicy(policy) ? "policy_unverified" : current ? "passed" : "needs_revalidation", review_kind: current ? draft.review_binding.kind : null }
+  const identity = { ...draftIdentity(draft), decision_revision: decisionRevision(draft) }
+  const value = twoBot(draft), binding = draft.review_binding
+  let analysisMatches = false
+  try {
+    // Content binding can survive a policy change. This is historical model
+    // analysis for the saved input, never a current check or permission to post.
+    analysisMatches = !draft.revision_conflicts?.length && binding?.kind === "model"
+      && bindingMatches(draft, binding) && proofMatches(value, binding)
+      && value.reviewed_text_sha256 === identity.text_sha256
+      && value.reviewed_bundle_sha256 === fingerprint(value.bundle)
+      && binding.checks_sha256 === fingerprint(checks(value))
+  } catch { /* An unverifiable historical analysis stays hidden. */ }
+  return { ...draft, revision_identity: identity,
+    claim_evidence: projectSavedClaimEvidence(draft, { identity, analysisMatches }),
+    review_status: draft.revision_conflicts?.length ? "conflict" : Object.hasOwn(draft, "media_attachment") ? "media_review_required" : !validEditorialPolicy(policy) ? "policy_unverified" : current ? "passed" : "needs_revalidation", review_kind: current ? draft.review_binding.kind : null }
 }

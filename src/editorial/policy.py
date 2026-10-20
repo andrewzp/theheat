@@ -52,6 +52,7 @@ POLICY_FILES = (
     "src/config.py", "src/editorial/policy.py", "src/editorial/revisions.py",
     "src/orchestrator/posting.py", "src/orchestrator/nws_publication.py", "src/media/attachment.py", "src/media/review_packet.py",
     "dashboard/lib/editorial-policy.js", "dashboard/lib/draft-revisions.js",
+    "dashboard/lib/saved-claim-evidence.js",
     "src/two_bot/writer.py", "src/two_bot/critic.py", "src/two_bot/fact_check.py",
     "src/two_bot/trial_budget.py",
     "src/two_bot/pipeline.py", "src/two_bot/provider_preflight.py", "src/two_bot/memory.py", "src/two_bot/types.py",
