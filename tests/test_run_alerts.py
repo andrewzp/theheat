@@ -166,3 +166,31 @@ def test_source_run_gets_drafted_credit_after_drain(monkeypatch):
 
     assert drafted == 1
     assert current_run["sources"][0]["drafted"] == 1
+
+
+def test_nws_error_object_records_failure_without_drafting(monkeypatch):
+    from unittest.mock import Mock
+    from src.data import nws_alerts
+    from src.orchestrator.sources import nws_alerts as runner
+
+    response = Mock()
+    response.json.return_value = {"status": 503, "detail": "invented private source detail"}
+    get = Mock(return_value=response)
+    monkeypatch.setattr(nws_alerts, "fetch_with_retry", get)
+
+    def no_candidate(*args, **kwargs):
+        raise AssertionError("Malformed collection must never reach scoring or drafting")
+
+    monkeypatch.setattr(runner, "score_severe_weather", no_candidate)
+    monkeypatch.setattr(runner, "_enqueue_story_candidate", no_candidate)
+    bot_state = _fresh_state()
+    drafts, ledger = deepcopy(bot_state["drafts"]), deepcopy(bot_state["publish_ledger"])
+    current_run = {"sources": []}
+    runner.run_nws_alerts(bot_state, current_run)
+    source = current_run["sources"][-1]
+    assert source["source"] == "nws_alerts" and source["status"] == "failed"
+    assert source["observed"] == source["writer_attempted"] == source["drafted"] == 0
+    assert "Invalid NWS alert feature collection" in source["error"]
+    assert "invented private source detail" not in source["error"]
+    assert bot_state["drafts"] == drafts and bot_state["publish_ledger"] == ledger
+    assert get.call_count == 1

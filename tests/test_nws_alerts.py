@@ -330,3 +330,55 @@ def test_conflicting_typhoon_update_holds_other_unlinked_products_in_affected_ar
         features.reverse()
     responses.add(responses.GET, "https://api.weather.gov/alerts/active", json={"features": features})
     assert fetch_alerts(strict=True) == []
+
+
+@pytest.mark.parametrize("payload", [
+    None, [], "invented malformed root", 0, True, {},
+    {"status": 503, "detail": "invented private provider error"},
+    {"features": None}, {"features": {}}, {"features": "invalid"},
+    {"features": [None]}, {"features": [[]]}, {"features": [0]},
+    {"features": [{}]}, {"features": [{"properties": None}]},
+    {"features": [{"properties": []}]}, {"features": [{"properties": "invalid"}]},
+])
+@pytest.mark.parametrize("strict", [True, False])
+@responses.activate
+def test_invalid_collection_is_failed_not_healthy_empty(payload, strict, monkeypatch):
+    from src.data.source_status import SourceFetchError
+
+    def not_reached(*args, **kwargs):
+        raise AssertionError("Invalid envelopes must stop before evidence or freshness")
+
+    monkeypatch.setattr("src.media.published_radar.source_envelope", not_reached)
+    monkeypatch.setattr("src.data.nws_alerts.newest_freshness_date", not_reached)
+    # An explicit JSON null needs body rather than responses' json=None default.
+    import json
+    responses.add(responses.GET, "https://api.weather.gov/alerts/active",
+                  body=json.dumps(payload), content_type="application/json", status=200)
+    original = deepcopy(payload)
+    if strict:
+        with pytest.raises(SourceFetchError, match=r"^NWS alerts fetch failed: Invalid NWS alert feature (collection|properties)$") as failed:
+            fetch_alerts(strict=True)
+        assert "invented private provider error" not in str(failed.value)
+    else:
+        assert fetch_alerts() == []
+    assert payload == original and len(responses.calls) == 1
+
+
+@responses.activate
+def test_explicit_empty_collection_remains_successful_without_retry():
+    responses.add(responses.GET, "https://api.weather.gov/alerts/active", json={"features": []})
+    assert fetch_alerts(strict=True) == []
+    assert len(responses.calls) == 1
+
+
+@pytest.mark.parametrize("malformed", [None, {}, {"properties": None}])
+@responses.activate
+def test_invalid_peer_envelope_cannot_silently_resurrect_cap_predecessor(malformed):
+    from src.data.source_status import SourceFetchError
+
+    predecessor = _typhoon_feature(identity="invented-prior-warning")
+    responses.add(responses.GET, "https://api.weather.gov/alerts/active",
+                  json={"features": [predecessor, malformed]})
+    with pytest.raises(SourceFetchError, match="Invalid NWS alert feature properties"):
+        fetch_alerts(strict=True)
+    assert len(responses.calls) == 1
