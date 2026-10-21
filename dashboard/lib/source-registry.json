@@ -595,7 +595,7 @@
     "src/data/newsworthiness.py": "f0fe5ec8b8a8818da7481f2ee6d2b6452a50008b2c328e609060b1cdc3ebc8ca",
     "src/data/nhc.py": "2cfa04ab49bd13c1231e298fa2d0e08fd833e649b93f265199ffe5a4071a7ab1",
     "src/data/nsidc_snow.py": "ab75c73ec88130ae5805b1c5cf33a9b3912922c74da72b281b34d9cb9c7ae535",
-    "src/data/nws_alerts.py": "3fef0d4cfdab5b2938ae3dd1afd9ae9bd9837317f947f90e35776c9ec672a46f",
+    "src/data/nws_alerts.py": "f96c74c51bedaefc6e667c5d93e00d3ff08de8dcf1f3ecdb16dacad68a4bf402",
     "src/data/ocean.py": "46987453207a69d4b6772d46de0c61235d4825eaa85b544ca5b61d340c669891",
     "src/data/ocean_sst.py": "7d62eefb7a6c657f014c756a62adb53d2e231e4d113bf2cb210cb213bf3fbeda",
     "src/data/ocean_sst_anomaly.py": "837c013cfc1f50981c42b2929f08c0f86a73475d0dfe26694ad2056cc0f94401",
@@ -640,5 +640,5 @@
     "src/orchestrator/sources/usgs_quakes.py": "8ce82d003a52235fb92750c9f1e5450a672ff942ab71268a78d77f2ac8aa5c05"
   },
   "evidence_scope": "Referenced local code inventory; not live/provider/transitive-source qualification.",
-  "registry_sha256": "76dcd0a81c39919788d8de712cd84d68a4f868045af652c94fb52c0b90d61bde"
+  "registry_sha256": "bb3883b248c5858e93230f9f8c018960c24de6e7395a57116b758ce68bf15de3"
 }
