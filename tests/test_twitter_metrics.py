@@ -12,7 +12,8 @@ def test_fetch_metrics_batches_by_100(monkeypatch):
     calls = []
     mock_client = MagicMock()
 
-    def fake_get_tweets(*, ids, tweet_fields):
+    def fake_get_tweets(*, ids, tweet_fields, user_auth):
+        assert user_auth is True
         calls.append((list(ids), list(tweet_fields)))
         return SimpleNamespace(
             data=[
