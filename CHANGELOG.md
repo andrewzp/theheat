@@ -1,3 +1,10 @@
+## 0.9.109.29
+
+- Enable qualified observed station comparisons at the local editor boundary,
+  with bounded native rendering and typed source refusals. Saved-draft temperature
+  attachment still requires a compact-source resolution connection; this release
+  does not establish that workflow or authorize hosted media or publishing.
+
 ## 0.9.109.28
 
 - Check generated source-inventory consistency before the long core CI suite,

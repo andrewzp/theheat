@@ -127,7 +127,7 @@ def test_temperature_two_read_fence_discards_changed_source_or_draft(retained, c
     assert error.value.code in {"stale_preview", "draft_unavailable"}
 
 
-def test_temperature_opt_in_does_not_expand_experimental_editor(retained):
+def test_temperature_requires_its_own_explicit_opt_in(retained):
     state, _ = retained
     with pytest.raises(PreviewError) as error:
         qualified_spec(state["drafts"][0]["review_context"]["two_bot"]["bundle"], synthetic=True, include_viirs=True)
