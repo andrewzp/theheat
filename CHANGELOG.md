@@ -1,3 +1,10 @@
+## 0.9.109.26
+
+- Use the configured OAuth user credentials for optional X engagement lookups
+  instead of an absent bearer token. Bound connection/read inactivity, refuse
+  redirects and close sessions on failure. Preserve daily limits and unavailable
+  metrics; this does not establish live API access or change polling settings.
+
 ## 0.9.109.25
 
 - Preview qualified observed GHCN station readings against their available
