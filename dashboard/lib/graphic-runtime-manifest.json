@@ -1,6 +1,6 @@
 {
   "identity": {
-    "archive_sha256": "1feee5367197f5b138310428275fc9b930984021ffec98808676728db037ce8a",
+    "archive_sha256": "972dfe5c1e59e3dc47fd62af9d4ace1c9a380ab5c824a5414dd7a032f67ed0ab",
     "deployment_files": {
       "api/graphic_preview.py": "f7521adcbd618f4b65b2a0de30ea62aaff4cdd36f2254e9af38bf68646d361ad",
       "api/graphic_reader_status.py": "5e9685d699625a4eea9d5be884b6e266939a0ad344a2997351ba79bd114407ba",
@@ -13,7 +13,7 @@
       "src/dashboard_preview/auth.py": "eafa95e1ed18c7e993fa13e016799d9e92f0ee843fe6d3f2843adf28579a8e21",
       "src/dashboard_preview/errors.py": "2a6a5a87017b534f0b1b0ee9e317c7880cc10ef185734ad3a92827f7dd0152b7",
       "src/dashboard_preview/http.py": "dbcbf1e3b4f4f3fa4a231c6e1f80946e321c098e51f12543fee889490f9011ad",
-      "src/dashboard_preview/preview.py": "3230a408fe2776a7ec8b5cfb15164f8c5c97538a12c9cab72734481e48275d24",
+      "src/dashboard_preview/preview.py": "81c476d83dd3e3fa715622f1cc311e7a4b53c41fd6e06b8e76e9103b9a0c90fb",
       "src/dashboard_preview/reader.py": "6cd9c00c79810a3b1ed7a107dbce9b2687b5aaa9cd761c02dcfe8de8cd888d18",
       "src/dashboard_preview/reader_status.py": "1f3d9d42dabebe1218eacd7133bd2477f58c85b53a6e2a719658846fbc5e96bb",
       "src/data/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
@@ -84,12 +84,12 @@
       "src/two_bot/types.py": "36ed2e6475a655f4112012486795702159ed546c3040e8ef1874b7a0b02a9035"
     },
     "format": "saved-source-svg-preview-v2",
-    "policy_source_sha256": "f4bec7aa977a3cb9b1745d25671d41886d3701c13eac85d6bd0fbcb7140c4e57",
+    "policy_source_sha256": "b22316ffc518da0f461eeecc6d11ff0d6a4deb6ddf9908f89fb5ba8a16f2b3d9",
     "resource_sources": {
       "src/data/registry/country_codes.json": "data/country_codes.json",
       "src/data/registry/place_registry.json": "data/place_registry.json"
     },
     "schema_version": 1
   },
-  "runtime_sha256": "8bd1d78f0ad741928179ce3705ccfb48c8c77d6216959f6e6787432fa9eb3dfc"
+  "runtime_sha256": "689a1623f1a061df2ab234de6fc0df0ba8c078c6abe74f26401106cd1eeddbd2"
 }

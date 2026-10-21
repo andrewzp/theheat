@@ -71,10 +71,10 @@ def _retained_bundle_json(bundle, *, code="graphic_unavailable"):
 def qualified_spec(bundle, *, synthetic=False, include_viirs=False, include_temperature=False):
     """Shared Python qualification; callers own authentication/currentness.
 
-    VIIRS is opt-in. Only the saved-draft preview route enables it; other callers
-    keep their reviewed scope until they adopt additional templates explicitly.
-    Temperature comparisons are separately opt-in; the experimental editor has
-    not adopted them. Dispatch reads the retained primary
+    VIIRS and temperature comparisons are separately opt-in. The saved-draft
+    preview and local editor enable them explicitly while retaining their own
+    source-retention, authentication and currentness gates. Dispatch reads the retained
+    primary
     product; the selected adapter then validates every row, so a mixed set holds.
     """
     _retained_bundle_json(bundle)
