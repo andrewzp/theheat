@@ -68,7 +68,29 @@ export function firePreviewSourceStatus(draft) {
   return FIRE_PREVIEW_PRODUCTS[product]
 }
 
+const temperatureKinds = {
+  all_time_high: "open_meteo_archive_high", all_time_low: "open_meteo_archive_low",
+  monthly_high: "monthly_high", monthly_low: "monthly_low",
+  record: "calendar_record", record_low: "calendar_record_low",
+}
+
+export function isTemperaturePreviewType(type) {
+  return Object.hasOwn(temperatureKinds, type)
+}
+
+// Affordance only. The Python adapter independently qualifies every warrant.
+export function temperaturePreviewSourceStatus(draft) {
+  const bundle = draft?.review_context?.two_bot?.bundle
+  const evidence = bundle?.raw_signal_dump?.evidence
+  if (!bundle || !evidence) return "missing"
+  return isTemperaturePreviewType(draft.type) && bundle.signal_kind === temperatureKinds[draft.type]
+    && evidence.source_product === "noaa-ghcn-daily-v2" && evidence.evidence_type === "observed"
+    ? "ghcn" : "unsupported"
+}
+
 const templates = {
+  temperature_comparator: { version: "p31-preview-3-mobile", source: "NOAA GHCN-Daily · station observations",
+    adapter: "src/media/temperature_graphic_adapter.py", context: "ghcn_station_day" },
   modis_thermal_detection_map: { version: "p31-modis-locator-2-social", source: "NASA FIRMS · MODIS",
     adapter: "src/media/fire_map_graphic_adapter.py", context: "modis_acquisition" },
   viirs_thermal_detection_map: { version: "p31-viirs-locator-1", source: "NASA FIRMS · VIIRS",
@@ -95,6 +117,11 @@ function sourceContext(value, template) {
   if (template.context === "modis_acquisition" || template.context === "viirs_acquisition")
     return exactKeys(context, ["kind", "acquired_at"])
     && utcTimestamp(context.acquired_at) && context.acquired_at.slice(17, 19) === "00"
+  if (template.context === "ghcn_station_day")
+    return exactKeys(context, ["kind", "station_id", "valid_date", "retrieved_at", "reporting_interval_known", "timezone"])
+      && typeof context.station_id === "string" && /^[A-Z0-9]{11}$/.test(context.station_id)
+      && calendarDate(context.valid_date) && utcTimestamp(context.retrieved_at)
+      && context.reporting_interval_known === false && context.timezone === null
   return exactKeys(context, ["kind", "valid_date", "timezone", "valid_start", "valid_end", "requested_at", "retrieved_at"])
     && calendarDate(context.valid_date) && typeof context.timezone === "string" && context.timezone.length <= 128
     && /^[A-Za-z][A-Za-z0-9_+-]*(?:\/[A-Za-z0-9_+-]+)*$/.test(context.timezone)

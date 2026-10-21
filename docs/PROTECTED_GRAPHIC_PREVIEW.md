@@ -1,8 +1,8 @@
 # Saved-source graphic preview
 
-The private draft workbench offers an explicit **Preview graphic** action for fire
-and PM2.5 forecast drafts. It builds one SVG from the complete saved MODIS or
-unextended single-source PM2.5 bundle. It does not
+The private draft workbench offers an explicit **Preview graphic** action for fire,
+PM2.5 forecast and qualified GHCN station-temperature drafts. It builds one SVG
+from the complete retained source bundle. It does not
 fetch new weather, call a model, write state, attach media or approve publication.
 Other hazards and incomplete or unsupported source evidence produce no graphic.
 
@@ -72,6 +72,26 @@ thresholds. Related, extended, station-corroborated, dust, incomplete and legacy
 packets are refused without removing evidence or repairing values. The full text
 description preserves hourly values, grid/time bounds and retained-record limits.
 No image establishes independent acquisition authenticity or source currentness.
+
+## Observed station-temperature comparison
+
+The GHCN preview uses the existing temperature adapter unchanged. It compares one
+observed daily station maximum or minimum with the qualified available accepted
+archive, month or calendar-date samples. Forecast, reanalysis, gridded, legacy and
+unqualified archives have no substitute. Source revision, station, units, dates,
+QC, coverage and the pre-observation comparator cutoff are rechecked before
+rendering. Missing and rejected source cells remain exclusions. The comparison
+does not certify an official record or a citywide reading.
+
+The caption preserves the station ID and source-calendar date, labels the value
+observed, and states that the reporting interval and timezone are unknown. The
+archive retrieval timestamp is shown separately; it does not establish a UTC
+observation day or publication-time QC. The full image description preserves the
+source and comparator limitations. Existing text/evidence/policy/runtime identity
+and the two-read change fence still apply. Temperature is enabled only for this
+read-only SVG preview; the experimental native editor/attachment path has not
+adopted it. No new provider call, automatic render, review or posting authority is
+created.
 
 ## Reproducible package and checks
 

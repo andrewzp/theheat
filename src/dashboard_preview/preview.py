@@ -3,14 +3,16 @@
 from copy import deepcopy
 import json
 import re
+from typing import cast
 
 from src.dashboard_preview.errors import PreviewError
 from src.editorial.revisions import decision_revision, draft_identity, fingerprint, has_unresolved_publish
 from src.media.air_quality_graphic_adapter import pm25_graphic_spec
 from src.media.fire_map_graphic_adapter import fire_map_graphic_spec
 from src.media.evidence_graphic_render import render_svg
-from src.media.temperature_graphic_adapter import _StoredBundle
+from src.media.temperature_graphic_adapter import _StoredBundle, temperature_graphic_spec
 from src.media.viirs_map_graphic_adapter import PLATFORMS as VIIRS_PRODUCTS, viirs_map_graphic_spec
+from src.two_bot.types import StoryBundle
 
 MAX_RESPONSE = 1024 * 1024
 SHA = re.compile(r"[a-f0-9]{64}")
@@ -66,12 +68,13 @@ def _retained_bundle_json(bundle, *, code="graphic_unavailable"):
     return encoded
 
 
-def qualified_spec(bundle, *, synthetic=False, include_viirs=False):
+def qualified_spec(bundle, *, synthetic=False, include_viirs=False, include_temperature=False):
     """Shared Python qualification; callers own authentication/currentness.
 
     VIIRS is opt-in. Only the saved-draft preview route enables it; other callers
-    keep their reviewed MODIS/PM2.5 scope until they adopt the VIIRS template and
-    its display-limit preflight explicitly. Dispatch reads the retained primary
+    keep their reviewed scope until they adopt additional templates explicitly.
+    Temperature comparisons are separately opt-in; the experimental editor has
+    not adopted them. Dispatch reads the retained primary
     product; the selected adapter then validates every row, so a mixed set holds.
     """
     _retained_bundle_json(bundle)
@@ -93,6 +96,18 @@ def qualified_spec(bundle, *, synthetic=False, include_viirs=False):
         return spec, "CAMS via Open-Meteo", {"kind": "pm25_forecast_day",
             **{key: evidence[key] for key in ("valid_date", "timezone", "valid_start", "valid_end")},
             **{key: window[key] for key in ("requested_at", "retrieved_at")}}
+    if include_temperature:
+        # The adapter already replays this retained read-only StoryBundle facade;
+        # it independently audits every field and warrant before projecting it.
+        stored = cast(StoryBundle, _StoredBundle(bundle))
+        spec = temperature_graphic_spec("temperature_comparator", [stored],
+            expected_bundle_sha256=[fingerprint(bundle)], synthetic=synthetic)
+        evidence = spec["evidence"]
+        return spec, "NOAA GHCN-Daily · station observations", {
+            "kind": "ghcn_station_day", "station_id": evidence["station_id"],
+            "valid_date": evidence["points"][0]["valid_date"],
+            "retrieved_at": evidence["evidence_as_of"],
+            "reporting_interval_known": False, "timezone": None}
     raise PreviewError("graphic_unavailable")
 
 
@@ -105,7 +120,8 @@ def build_preview(request, *, policy_sha, runtime_sha, read_state, budget, synth
         bundle = deepcopy(draft["review_context"]["two_bot"]["bundle"])
         # Bound the full retained story before canonical hashing and validation.
         retained_bundle = _retained_bundle_json(bundle)
-        spec, source, context = qualified_spec(bundle, synthetic=synthetic, include_viirs=True)
+        spec, source, context = qualified_spec(bundle, synthetic=synthetic, include_viirs=True,
+                                              include_temperature=True)
         budget.remaining()
         rendered = render_svg(**spec)
         budget.remaining()
