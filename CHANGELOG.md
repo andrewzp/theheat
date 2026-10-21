@@ -1,3 +1,9 @@
+## 0.9.109.27
+
+- Report malformed NWS alert collections as source failures instead of healthy
+  empty feeds. Validate feature envelopes before replacement analysis, preserving
+  genuine empty responses, warning eligibility and existing retry limits.
+
 ## 0.9.109.26
 
 - Use the configured OAuth user credentials for optional X engagement lookups

@@ -84,6 +84,15 @@ def fetch_alerts(*, strict: bool = False) -> list[SevereWeatherAlert]:
             backoff_base=1.0,
         )
         data = resp.json()
+        # A missing/malformed collection is not evidence of no active alerts.
+        # Validate every envelope before CAP replacement analysis: dropping an
+        # uncertain update could otherwise resurrect its predecessor.
+        if not isinstance(data, dict) or not isinstance(data.get("features"), list):
+            raise ValueError("Invalid NWS alert feature collection")
+        features = data["features"]
+        if any(not isinstance(feature, dict) or not isinstance(feature.get("properties"), dict)
+               for feature in features):
+            raise ValueError("Invalid NWS alert feature properties")
         from src.commands.schema import utc_text
         from src.media.published_radar import rare_tornado, source_envelope
         captured_at = utc_text(datetime.now(timezone.utc))
@@ -95,8 +104,8 @@ def fetch_alerts(*, strict: bool = False) -> list[SevereWeatherAlert]:
         typhoon_features: dict[str, dict] = {}
         typhoon_products = []
         conflicting_ids = set()
-        for feature in data.get("features", []):
-            props = feature.get("properties", {})
+        for feature in features:
+            props = feature["properties"]
             if _typhoon_warning(props):
                 typhoon_products.append(props)
                 identity = props["id"]
@@ -114,8 +123,8 @@ def fetch_alerts(*, strict: bool = False) -> list[SevereWeatherAlert]:
         typhoon_areas = Counter(p["areaDesc"]
                                for p in typhoons if p["id"] not in superseded)
 
-        for feature in data.get("features", []):
-            props = feature.get("properties", {})
+        for feature in features:
+            props = feature["properties"]
             payload_dates.append(
                 props.get("sent") or props.get("effective") or props.get("onset")
             )
