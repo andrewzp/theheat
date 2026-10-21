@@ -75,8 +75,13 @@ export function buildRuntimeConfig(state = {}, { now = Date.now(), runtimeReport
 }
 
 export function dashboardDeployment(env = process.env) {
+  const platform = sha(env.VERCEL_GIT_COMMIT_SHA)
+  const declared = sha(env.THEHEAT_DASHBOARD_GIT_SHA)
   return {
-    git_sha: sha(env.VERCEL_GIT_COMMIT_SHA),
+    // Manual deployments may omit the platform variable. A per-deployment,
+    // non-secret declaration is verified against Vercel metadata at release.
+    // Conflicting valid declarations remain unknown, never borrowed from a bot.
+    git_sha: platform && declared && platform !== declared ? null : platform || declared,
     environment: text(env.VERCEL_ENV) || "local / unknown",
   }
 }

@@ -66,10 +66,20 @@ from tests import test_postgres_sourced_generation as batch_source
 from tests import test_postgres_synchronous_generation as sync_source
 from tests import test_postgres_ghcn_generation as ghcn
 from tests.test_postgres_ghcn_generation import ghcn_case as ghcn_case, source_bytes as source_bytes
+from tests.workflow_clock import positive_workflow_clock as positive_workflow_clock
 from tests.test_postgres_sourced_generation import sourced as sourced
 from tests.test_postgres_synchronous_generation import urgent as urgent
 from tests.two_bot.test_batch_contract import inputs as inputs
 from tests.test_postgres_preview_command_ingress import http
+
+
+@pytest.fixture(autouse=True)
+def _stable_ghcn_positive_time(request):
+    # The reused GHCN fixture must share its clock before source_bytes is built.
+    # Other cost scenarios retain their existing clocks.
+    if "ghcn_case" in request.fixturenames:
+        request.getfixturevalue("positive_workflow_clock")
+    yield
 
 
 @pytest.fixture

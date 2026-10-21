@@ -11,7 +11,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "dashboard/lib/nws-source-timing.js": "3a7b4be177cc5d28be7a8150d7c6937b7c15f113c5475134254dba233df47975",
     "dashboard/lib/nws-warning-evidence.js": "eb98b1dec65d7cac93ea4e8a8b85045324a1aef52ada2834de924ae03a59b3e6",
     "dashboard/lib/publication-control.js": "3bb989dac6b3fa8335afc5df58d82b51e192018a8d72fb76e0f589eedfec1b4b",
-    "dashboard/lib/runtime-inventory.js": "d5d8c95d3b0187e23d99a649d2108e210267aefb76403162fdf5531acfe715dc",
+    "dashboard/lib/runtime-inventory.js": "b2ecad04e295be60f3f4756a690403225adecaa389968de060c94f8406ebb5a6",
     "dashboard/lib/runtime-report.js": "bd1b84fa6f874ae831f348554fc54cc4af9aee396aebc8d85fd0cbc83e89b9d9",
     "dashboard/lib/saved-claim-evidence.js": "86490422c29b9061a5f61004bb006651b5eb33cd6164248c3bcc9d884a13e15a",
     "dashboard/lib/state-store.js": "bb3f88153757d1cff929b827214a22af0914bec90e8fcdae690a269bfa5178e8",
@@ -195,5 +195,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "a0c3d5b94ca0f06dcb025e72db9cc292062356110a235e3a95431e2aed1ae28c"
   },
   "schema_version": 1,
-  "source_sha256": "839c674ce7bc0c67640c031c39856a8086508898ddd52a5c00734f79bd65a38f"
+  "source_sha256": "e56d3e3c82924b009744a71bfa1efea2ce5683f5c97c426195b7502294a505fd"
 }

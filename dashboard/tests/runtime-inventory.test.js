@@ -61,6 +61,16 @@ test("dashboard deployment identity stays separate from bot inventory", () => {
   assert.equal(dashboardDeployment({ VERCEL_GIT_COMMIT_SHA: "bad" }).git_sha, null)
 })
 
+test("manual deployment declaration is separate from bot state, validated and refuses conflicting metadata", () => {
+  const commit = "c".repeat(40)
+  assert.equal(dashboardDeployment({ THEHEAT_DASHBOARD_GIT_SHA: commit }).git_sha, commit)
+  assert.equal(dashboardDeployment({ THEHEAT_DASHBOARD_GIT_SHA: commit, VERCEL_GIT_COMMIT_SHA: commit }).git_sha, commit)
+  assert.equal(dashboardDeployment({ THEHEAT_DASHBOARD_GIT_SHA: commit, VERCEL_GIT_COMMIT_SHA: "d".repeat(40) }).git_sha, null)
+  for (const malformed of ["", "main", "z".repeat(40), " " + commit, commit + "\n"])
+    assert.equal(dashboardDeployment({ THEHEAT_DASHBOARD_GIT_SHA: malformed }).git_sha, null)
+  assert.equal(dashboardDeployment({ GITHUB_SHA: commit, bot_git_sha: commit }).git_sha, null)
+})
+
 test("cadence skips and absent source statuses are never successful attempts", () => {
   assert.deepEqual(summarizeSourceAttempts([{ status: "skipped" }, {}]), {
     succeeded: 0, skipped: 1, active: 0, unknown: 1, success_rate: null,

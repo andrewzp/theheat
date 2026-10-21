@@ -23,13 +23,19 @@ from tests.test_postgres_projection import cluster as cluster, database as datab
 from tests.test_postgres_preview_command_ingress import clean_environment, http
 from tests.test_postgres_sourced_generation import allowance_document
 from tests.test_spend_journal import LIMITS
+from tests.workflow_clock import positive_workflow_clock as positive_workflow_clock
+
+
+@pytest.fixture(autouse=True)
+def _stable_positive_time(positive_workflow_clock):
+    yield
 
 ROOT=Path(__file__).resolve().parents[1]
 CHILD=ROOT/"tests/fixtures/ghcn_generation_worker.py"
 
 
 @pytest.fixture
-def ghcn_case(database,source_bytes,tmp_path,monkeypatch):
+def ghcn_case(database,source_bytes,tmp_path,monkeypatch,positive_workflow_clock):
     monkeypatch.setattr(safety,"GEMINI_API_KEY","invented-offline-key")
     monkeypatch.setenv("THEHEAT_CRITIC_ENABLED","1")
     original_draft=source.draft
@@ -40,7 +46,7 @@ def ghcn_case(database,source_bytes,tmp_path,monkeypatch):
     case=next(generator)
     case["environment"]={**clean_environment(),"THEHEAT_CRITIC_ENABLED":"1","PYTHONDONTWRITEBYTECODE":"1"}
     def consume_source(identity):
-        child=subprocess.run([sys.executable,"-c",'from src.voice import safety; safety.GEMINI_API_KEY="invented-offline-key"; from src.commands.preview_worker import main; raise SystemExit(main())',*case["args"],"--command-id",identity],
+        child=subprocess.run([sys.executable,"-c",'import json,sys; from tests.workflow_clock import start_child_clock; fixture_clock=start_child_clock(json.loads(sys.argv.pop(1))); from src.voice import safety; safety.GEMINI_API_KEY="invented-offline-key"; from src.commands.preview_worker import main; raise SystemExit(main())',json.dumps(positive_workflow_clock),*case["args"],"--command-id",identity],
             env=case["environment"],capture_output=True,text=True,timeout=60)
         assert child.returncode==0,child.stdout+child.stderr
         return json.loads(child.stdout)["result"]
@@ -59,7 +65,8 @@ def ghcn_case(database,source_bytes,tmp_path,monkeypatch):
         operators=str(tmp_path/"operators.json"),generation=str(tmp_path/"generation.json"),run_id=run,
         selection=dict(station_id="USW00000000",signal_date=str(case["source"]["day"]),signal_field="all_time_high"),
         text="INVENTED STATION 0 reached 45.5°C, its highest reading in the 24-year station archive.",
-        policy_sha256=fingerprint(current_editorial_policy()),trace=str(tmp_path/"trace.jsonl"))
+        policy_sha256=fingerprint(current_editorial_policy()),trace=str(tmp_path/"trace.jsonl"),
+        test_clock=positive_workflow_clock)
     config_path=tmp_path/"worker.json"
     config_path.write_text(json.dumps(config))
     config_path.chmod(0o600)

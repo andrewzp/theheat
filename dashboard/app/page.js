@@ -6,6 +6,8 @@ import PostFeedback from "./components/PostFeedback.js"
 
 import { useEffect, useState, useCallback, useRef } from "react"
 import { AutomationStatusStrip } from "./components/AutomationStrip.js"
+import CollectionControls from "./components/CollectionControls.js"
+import { createCollectionControl } from "../lib/collection-control.js"
 import { CredentialsCard } from "./components/CredentialsCard.js"
 import { DraftWorkbench } from "./components/DraftWorkbench.js"
 import { Hot10Card, Hot10Leaderboard } from "./components/Hot10Card.js"
@@ -77,8 +79,13 @@ export default function Dashboard() {
   // fetch failure doesn't suppress automation refresh, and vice versa.
   const [automation, setAutomation] = useState(null)
   const [automationError, setAutomationError] = useState(null)
+  const collectionControl = useRef(null)
+  if (!collectionControl.current) collectionControl.current = createCollectionControl()
+  const [collectionObservation, setCollectionObservation] = useState(null)
 
   const fetchData = useCallback(async () => {
+    const collectionTicket = collectionControl.current.begin()
+    setCollectionObservation(null)
     setRefreshing(true)
     setRefreshError(null)
     let dashboardResult = { ok: false }
@@ -117,7 +124,8 @@ export default function Dashboard() {
       setSources(payload.sourceHealth?.sources || [])
       setSourcesStats(payload.sourceHealth?.stats || null)
       setLastUpdated(new Date().toISOString())
-      dashboardResult = { ok: true, local_preview: payload.local_preview === true, operator_subject: payload.operator_subject }
+      dashboardResult = { ok: true, local_preview: payload.local_preview === true, operator_subject: payload.operator_subject,
+        collectionReady: !payload.stateError && payload.stateBackend === "gist" && payload.local_preview !== true }
     } catch (e) {
       console.error(e)
       setRefreshError(e?.message || String(e))
@@ -127,8 +135,11 @@ export default function Dashboard() {
     }
 
     if (previewSeen.current) {
-      setAutomation(null)
-      setAutomationError(null)
+      if (collectionControl.current.complete(collectionTicket, { localPreview: true })) {
+        setCollectionObservation(collectionControl.current.observation())
+        setAutomation(null)
+        setAutomationError(null)
+      }
       return dashboardResult
     }
 
@@ -140,13 +151,22 @@ export default function Dashboard() {
       const automationRes = await fetch("/api/automation")
       if (automationRes.ok) {
         const automationPayload = await automationRes.json()
-        setAutomation(automationPayload)
-        setAutomationError(null)
+        if (collectionControl.current.complete(collectionTicket, { status: automationPayload, dashboardReady: dashboardResult.collectionReady })) {
+          setCollectionObservation(collectionControl.current.observation())
+          setAutomation(automationPayload)
+          setAutomationError(null)
+        }
       } else {
-        setAutomationError(`/api/automation ${automationRes.status}`)
+        if (collectionControl.current.complete(collectionTicket, { error: true })) {
+          setCollectionObservation(collectionControl.current.observation())
+          setAutomationError(`/api/automation ${automationRes.status}`)
+        }
       }
     } catch (err) {
-      setAutomationError(err?.message || String(err))
+      if (collectionControl.current.complete(collectionTicket, { error: true })) {
+        setCollectionObservation(collectionControl.current.observation())
+        setAutomationError(err?.message || String(err))
+      }
     }
     return dashboardResult
   }, [suppressionsSourceFilter])
@@ -201,22 +221,15 @@ export default function Dashboard() {
   }, [data?.local_preview, data?.operator_subject])
 
   async function trigger(mode) {
-    if (data?.local_preview) { setTriggerResult("Collection is unavailable in local preview."); return }
-    setTriggering(mode)
-    setTriggerResult(null)
     try {
-      const res = await fetch("/api/trigger", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mode }),
+      const result = await collectionControl.current.request(mode, {
+        onStart: () => { setTriggering(mode); setTriggerResult(null) },
+        onFinish: () => setTriggering(null),
       })
-      const result = await res.json()
       setTriggerResult(result.ok ? `Triggered ${mode}` : `Error: ${result.error}`)
-      setTimeout(fetchData, 5000)
+      if (result.attempted) setTimeout(fetchData, 5000)
     } catch (e) {
       setTriggerResult(`Error: ${e.message}`)
-    } finally {
-      setTriggering(null)
     }
   }
 
@@ -675,26 +688,7 @@ export default function Dashboard() {
 
             <PostFeedback enabled={!data?.local_preview && data?.stateBackend === "gist"} />
 
-            {/* Generate Drafts */}
-            <div className="card full" style={{ marginBottom: 16 }}>
-              <h2>Generate Drafts</h2>
-              <div className="trigger-bar">
-                <button
-                  className="btn primary"
-                  disabled={!!triggering}
-                  onClick={() => trigger("both")}
-                >
-                  {triggering === "both" ? "..." : "Run Both"}
-                </button>
-                <button className="btn" disabled={!!triggering} onClick={() => trigger("alerts")}>
-                  {triggering === "alerts" ? "..." : "Alerts Only"}
-                </button>
-                <button className="btn" disabled={!!triggering} onClick={() => trigger("leaderboard")}>
-                  {triggering === "leaderboard" ? "..." : "Leaderboard Only"}
-                </button>
-                {triggerResult && <span className="trigger-result">{triggerResult}</span>}
-              </div>
-            </div>
+            <CollectionControls observation={collectionObservation} triggering={triggering} result={triggerResult} onTrigger={trigger} />
 
             <SourcedGeneration key={data?.operator_subject || "unavailable"} onRefresh={fetchData} readOnly={data?.operator_role === "viewer"}
               pendingAction={!!pendingCommand} onRequest={data?.local_preview ? command => submitLocalCommand({ command, draftId:command.payload.brief_id, action:command.action }) : undefined} />

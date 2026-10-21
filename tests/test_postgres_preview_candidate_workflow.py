@@ -25,6 +25,13 @@ from tests.test_postgres_batch_results import worker_store as worker_store
 from tests.test_postgres_check_observations import base_store as base_store, store as store
 from tests.two_bot.test_batch_contract import inputs as inputs
 from tests.test_postgres_preview_command_ingress import clean_environment, operator_file
+from tests.workflow_clock import positive_workflow_clock as positive_workflow_clock
+
+
+@pytest.fixture(autouse=True)
+def _stable_positive_time(positive_workflow_clock):
+    """Keep positive stages away from UTC rollover; expiry tests stay explicit."""
+    yield
 
 ROOT = Path(__file__).resolve().parents[1]
 ORIGIN = "http://127.0.0.1:3036"
@@ -46,6 +53,8 @@ from src.two_bot import check_requests
 from tests import test_check_executor as fixtures
 from pytest import MonkeyPatch
 config=json.loads(Path(sys.argv[1]).read_text())
+from tests.workflow_clock import start_child_clock
+fixture_clock=start_child_clock(config["test_clock"])
 safe_environment()
 authority=PostgresCommandAuthority(**config["authority"])
 operators=Operators(config["operators"])
@@ -77,7 +86,7 @@ print(json.dumps(result))
 
 
 @pytest.fixture
-def candidate_preview(store, core, inputs, tmp_path, monkeypatch):
+def candidate_preview(store, core, inputs, tmp_path, monkeypatch, positive_workflow_clock):
     for key in tuple(os.environ):
         if key.startswith("PG") or any(word in key for word in ("TOKEN", "SECRET", "PASSWORD", "API_KEY")):
             monkeypatch.delenv(key)
@@ -113,7 +122,7 @@ def candidate_preview(store, core, inputs, tmp_path, monkeypatch):
     child.write_text(CHILD_CODE)
     config = dict(endpoint=f"http://127.0.0.1:{server.server_port}", origin=ORIGIN, root=str(ROOT), python=sys.executable,
         child=str(child), authority=options(core[3]), operators=str(operators), requests=str(tmp_path/"requests.txt"),
-        policy_sha256=fingerprint(current_editorial_policy()), refs=refs)
+        policy_sha256=fingerprint(current_editorial_policy()), refs=refs, test_clock=positive_workflow_clock)
     config_path = tmp_path/"candidate-http.json"
     config_path.write_text(json.dumps(config))
     config_path.chmod(0o600)

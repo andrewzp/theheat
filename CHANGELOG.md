@@ -1,3 +1,10 @@
+## 0.9.109.24
+
+- Keep collection controls disabled while paused, refreshing, unavailable or stale;
+  fence stale and concurrent clicks before dispatch without changing server guards.
+- Display a validated per-deployment dashboard revision for manual releases while
+  keeping bot identity separate and conflicting metadata unknown.
+
 ## 0.9.109.23
 
 - Connect qualified NOAA-20/NOAA-21 VIIRS maps to the local editor's existing
