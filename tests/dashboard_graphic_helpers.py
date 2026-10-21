@@ -43,3 +43,20 @@ def saved_viirs_preview():
     request["draft_id"] = draft["id"]
     request["expected_revision"] = {**draft_identity(draft), "decision_revision": decision_revision(draft)}
     return state, request
+
+
+def saved_temperature_preview(*, direction="high", tier="all_time"):
+    from tests.ghcn_graphic_helpers import graphic_bundles
+    from src.media.temperature_graphic_adapter import story_bundle_snapshot
+
+    bundle = graphic_bundles(direction=direction, tier=tier)[-1]
+    state, request = saved_preview()
+    draft = state["drafts"][0]
+    legacy_type = {"open_meteo_archive_high": "all_time_high", "open_meteo_archive_low": "all_time_low",
+                   "calendar_record": "record", "calendar_record_low": "record_low"}.get(bundle.signal_kind, bundle.signal_kind)
+    draft.update(id="invented-station", type=legacy_type,
+                 text="An invented station reading exceeds its available archive comparator.")
+    draft["review_context"]["two_bot"]["bundle"] = story_bundle_snapshot(bundle)
+    request["draft_id"] = draft["id"]
+    request["expected_revision"] = {**draft_identity(draft), "decision_revision": decision_revision(draft)}
+    return state, request

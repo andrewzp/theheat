@@ -1,3 +1,10 @@
+## 0.9.109.25
+
+- Preview qualified observed GHCN station readings against their available
+  accepted archive, month or calendar-date samples in the saved-source workbench.
+  Preserve station scope, source-calendar dates, unknown reporting intervals and
+  record/QC limits. Rendering adds no source fetch, model call or posting authority.
+
 ## 0.9.109.24
 
 - Keep collection controls disabled while paused, refreshing, unavailable or stale;
