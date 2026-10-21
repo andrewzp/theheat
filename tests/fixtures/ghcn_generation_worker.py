@@ -25,6 +25,8 @@ from tests.test_postgres_editor_media import fact_pass
 from src.voice import safety
 safety.GEMINI_API_KEY="invented-offline-key"
 cfg=json.loads(Path(sys.argv[1]).read_text())
+from tests.workflow_clock import start_child_clock
+fixture_clock=start_child_clock(cfg["test_clock"])
 safe_environment()
 authority=PostgresCommandAuthority(**cfg["authority"])
 b=cfg["baseline"]

@@ -23,6 +23,12 @@ from tests.test_postgres_check_observations import base_store as base_store, sto
 from tests.two_bot.test_batch_contract import inputs as inputs
 from tests.test_postgres_preview_command_ingress import clean_environment, operator_file
 from tests.test_postgres_sourced_generation import allowance_document
+from tests.workflow_clock import positive_workflow_clock as positive_workflow_clock
+
+
+@pytest.fixture(autouse=True)
+def _stable_positive_time(positive_workflow_clock):
+    yield
 
 ROOT = Path(__file__).resolve().parents[1]
 ORIGIN = "http://127.0.0.1:3038"
@@ -45,6 +51,8 @@ from tests import test_check_executor as checks
 from tests.test_postgres_sourced_generation import transport
 from pytest import MonkeyPatch
 cfg=json.loads(Path(sys.argv[1]).read_text())
+from tests.workflow_clock import start_child_clock
+fixture_clock=start_child_clock(cfg["test_clock"])
 safe_environment()
 authority=PostgresCommandAuthority(**cfg["authority"])
 authority.configure_sourced_generation(private_configuration(cfg["generation"]))
@@ -85,7 +93,7 @@ print(json.dumps(result))
 
 
 @pytest.fixture
-def sourced_preview(store, core, inputs, monkeypatch, tmp_path):
+def sourced_preview(store, core, inputs, monkeypatch, tmp_path, positive_workflow_clock):
     for key in tuple(os.environ):
         if key.startswith("PG") or any(word in key for word in ("TOKEN", "SECRET", "PASSWORD", "API_KEY")):
             monkeypatch.delenv(key)
@@ -110,7 +118,8 @@ def sourced_preview(store, core, inputs, monkeypatch, tmp_path):
     child.write_text(CHILD)
     config = dict(endpoint=f"http://127.0.0.1:{server.server_port}", origin=ORIGIN, root=str(ROOT), python=sys.executable,
         child=str(child), authority=options(core[3]), operators=str(operators), generation=str(generation),
-        requests=str(tmp_path/"requests.txt"), policy_sha256=fingerprint(current_editorial_policy()))
+        requests=str(tmp_path/"requests.txt"), policy_sha256=fingerprint(current_editorial_policy()),
+        test_clock=positive_workflow_clock)
     config_path = tmp_path/"http.json"
     config_path.write_text(json.dumps(config))
     config_path.chmod(0o600)

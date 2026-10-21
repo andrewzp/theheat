@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs"
 import { createServer } from "node:http"
 import { Readable } from "node:stream"
 import { runFixtureWorker } from "../test-support/fixture-worker.js"
+import { installWorkflowClock } from "../test-support/workflow-clock.js"
 import { acceptLocalCommand } from "../lib/draft-command-client.js"
 import { createDraftCommand } from "../lib/draft-command-request.js"
 
@@ -206,6 +207,7 @@ test("actual Next handlers request checks, admit a retained candidate, and inval
 }, async () => {
   const configFile = process.env.THEHEAT_CANDIDATE_TEST_CONFIG
   const config = JSON.parse(readFileSync(configFile, "utf8"))
+  const restoreClock = installWorkflowClock(config.test_clock)
   process.env.NODE_ENV = "test"
   process.env.DASHBOARD_AUTH_DISABLED = "1"
   process.env.THEHEAT_LOCAL_COMMAND_URL = config.endpoint
@@ -285,5 +287,6 @@ test("actual Next handlers request checks, admit a retained candidate, and inval
     globalThis.fetch = actualFetch
     await new Promise((resolve) => server.close(resolve))
     delete process.env.THEHEAT_LOCAL_COMMAND_URL
+    restoreClock()
   }
 })

@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs"
 import { createServer } from "node:http"
 import { Readable } from "node:stream"
 import { runFixtureWorker } from "../test-support/fixture-worker.js"
+import { installWorkflowClock } from "../test-support/workflow-clock.js"
 import { createElement } from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 import SourcedGeneration, { generationCommand, WriterUsage, GenerationRequest, sourceStatus } from "../app/components/SourcedGeneration.js"
@@ -25,6 +26,7 @@ test("source chooser labels and reference-only command use the actual component"
 test("actual source API -> separate batch/check workers -> admitted draft -> edit", { skip: !process.env.THEHEAT_GENERATION_TEST_CONFIG }, async () => {
   const configFile = process.env.THEHEAT_GENERATION_TEST_CONFIG
   const config = JSON.parse(readFileSync(configFile, "utf8"))
+  const restoreClock = installWorkflowClock(config.test_clock)
   const saved = { ...process.env }
   process.env.NODE_ENV = "test"
   process.env.DASHBOARD_AUTH_DISABLED = "1"
@@ -118,6 +120,7 @@ test("actual source API -> separate batch/check workers -> admitted draft -> edi
     globalThis.fetch = actualFetch
     for (const key of Object.keys(process.env)) if (!Object.hasOwn(saved, key)) delete process.env[key]
     Object.assign(process.env, saved)
+    restoreClock()
   }
 })
 
