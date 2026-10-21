@@ -291,3 +291,15 @@ def test_written_output_survives_abrupt_exit_with_workflow_setting(workflow, use
     # The buffered control loses its line on abrupt exit, rather than passing
     # because normal interpreter shutdown happened to flush it after the check.
     assert remaining == b""
+
+
+def test_source_inventory_gate_fails_before_full_suite_without_waiving_tests(workflow):
+    steps = workflow["jobs"]["test-partition"]["steps"]
+    inventory, = [s for s in steps if s.get("run") == "python scripts/gen_source_registry.py --check"]
+    assert inventory["if"] == "matrix.partition == 'core'"
+    assert set(inventory) == {"name", "if", "run"}  # No ignored failure or credential context.
+    policy = next(s for s in steps if s.get("run") == "python scripts/gen_editorial_policy.py --check")
+    runtime = next(s for s in steps if s.get("run") == "python scripts/gen_dashboard_graphic_runtime.py --check")
+    suite = next(s for s in steps if s.get("run", "").startswith("python -m pytest tests/ -v "))
+    assert steps.index(inventory) < steps.index(policy) < steps.index(runtime) < steps.index(suite)
+    assert "if" not in suite and "continue-on-error" not in suite

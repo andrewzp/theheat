@@ -1,3 +1,8 @@
+## 0.9.109.28
+
+- Check generated source-inventory consistency before the long core CI suite,
+  retaining the complete test matrix and all production pause/publishing gates.
+
 ## 0.9.109.27
 
 - Report malformed NWS alert collections as source failures instead of healthy
