@@ -8,7 +8,7 @@ from typing import Any
 
 from src.data._http import fetch_with_retry
 from src.data.nws_alerts import NWS_URL, TRACKED_EVENTS, _typhoon_warning
-from src.media.published_radar import encoded, interval, rare_tornado, source_envelope
+from src.media.published_radar import encoded, rare_tornado, source_envelope, warning_times
 
 MAX_FEED_BYTES = 32 * 1024 * 1024
 MAX_ISSUANCE_AGE = timedelta(hours=6)
@@ -87,8 +87,10 @@ def _retained(draft: dict, now: datetime) -> dict | None:
                  and props.get("messageType") == "Alert")), "nws_source_product_unsupported")
     sent = _utc(envelope["times"]["sent"]["utc"])
     effective = _utc(envelope["times"]["effective"]["utc"])
-    _, end = interval(envelope["times"])
-    _require(timedelta(0) <= now - sent <= MAX_ISSUANCE_AGE and effective <= now < _utc(end)
+    timing = warning_times(envelope["times"])
+    _require(timedelta(0) <= now - sent <= MAX_ISSUANCE_AGE
+             and effective <= now < _utc(timing["message_end_utc"])
+             and (timing["event_end_utc"] is None or now < _utc(timing["event_end_utc"]))
              and timedelta(0) <= now - _utc(envelope["captured_at"]) <= MAX_ISSUANCE_AGE,
              "nws_source_expired_or_future")
     return envelope

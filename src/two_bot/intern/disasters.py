@@ -49,7 +49,8 @@ def build_severe_weather_bundle(alert: SevereWeatherAlert) -> StoryBundle:
     discipline already in the prompt.
     """
 
-    from src.media.published_radar import RadarHold, interval
+    from src.media.published_radar import RadarHold, interval, warning_times
+    from src.commands.schema import utc_datetime
     raw = asdict(alert)
     when = ""
     extra = []
@@ -60,7 +61,22 @@ def build_severe_weather_bundle(alert: SevereWeatherAlert) -> StoryBundle:
             extra = [{"label": "warning_valid_start_utc", "value": when},
                      {"label": "warning_valid_end_utc", "value": end}]
         except (RadarHold, ValueError, KeyError, TypeError):
-            pass  # Missing source time remains an explicit evidence-gate hold.
+            # Early warnings can expire for replacement before forecast onset.
+            # Only this valid non-overlap gets a forecast clock; malformed or
+            # missing times still leave when empty for the evidence gate.
+            try:
+                timing = warning_times(envelope["times"])
+                if utc_datetime(timing["event_start_utc"]) >= utc_datetime(timing["message_end_utc"]):
+                    when = timing["event_start_utc"]
+                    extra = [{"label": "source_message_effective_utc", "value": timing["message_start_utc"]},
+                             {"label": "source_message_expires_utc", "value": timing["message_end_utc"]},
+                             {"label": "forecast_event_onset_utc", "value": when}]
+                    if timing["event_end_utc"] is not None:
+                        extra.append({"label": "forecast_event_end_utc", "value": timing["event_end_utc"]})
+                    extra.append({"label": "claim_limit", "value":
+                        "Forecast event times are not observed conditions. Message expiry is not the event's end."})
+            except (RadarHold, ValueError, KeyError, TypeError):
+                pass
         if envelope.get("source_alert_id") and envelope.get("feature_sha256"):
             raw["provenance"] = {k: envelope[k] for k in ("source_url", "source_alert_id", "feature_sha256")}
         extra.append({"label": "radar_evidence_status", "value": envelope.get("status", "held")})

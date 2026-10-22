@@ -1,3 +1,10 @@
+## 0.9.109.30
+
+- Retain source and forecast times for early NWS warnings whose message expires
+  before the event starts. Separate message currency from the forecast window in
+  sample selection and posting checks; preserve strict radar overlap, expiry,
+  source replacement and approval checks. No publishing activation or paid replay.
+
 ## 0.9.109.29
 
 - Enable qualified observed station comparisons at the local editor boundary,

@@ -114,6 +114,34 @@ def source_time(value):
         raise RadarHold("radar_source_time_invalid") from None
 
 
+def warning_times(times):
+    """Separate CAP message currency from the expected event's forecast window.
+
+    NWS may replace an early warning before the forecast event begins. Message
+    expiry is therefore not the event's end, nor a reason to erase its evidence.
+    Radar still requires the stricter overlapping interval below.
+    """
+    require(
+        times["sent"] is not None
+        and times["effective"] is not None
+        and times["expires"] is not None,
+        "radar_source_time_missing",
+    )
+    sent = utc_datetime(times["sent"]["utc"])
+    message_start = utc_datetime(times["effective"]["utc"])
+    message_end = utc_datetime(times["expires"]["utc"])
+    require(sent <= message_end and message_start < message_end, "radar_source_interval_invalid")
+    event_start = message_start
+    if times["onset"] is not None:
+        event_start = max(event_start, utc_datetime(times["onset"]["utc"]))
+    event_end = None if times["ends"] is None else utc_datetime(times["ends"]["utc"])
+    require(event_end is None or (sent <= event_end and event_start < event_end),
+            "radar_source_interval_invalid")
+    return dict(message_start_utc=utc_text(message_start), message_end_utc=utc_text(message_end),
+                event_start_utc=utc_text(event_start),
+                event_end_utc=None if event_end is None else utc_text(event_end))
+
+
 def interval(times):
     require(
         times["sent"] is not None
@@ -230,7 +258,7 @@ def source_envelope(feature, captured_at):
         for k in TIMES:
             if props.get(k) is not None:
                 times[k] = source_time(props[k])
-        interval(times)
+        warning_times(times)
         text(source_id)
         raw = encoded(feature)
         held.update(feature_sha256=digest(raw), feature_byte_count=len(raw))
@@ -255,6 +283,7 @@ def source_envelope(feature, captured_at):
         # Unsupported geography remains retained in a bounded complete envelope;
         # status is held so it cannot become a radar spec.
         try:
+            interval(times)
             polygon(feature.get("geometry"))
         except RadarHold as exc:
             complete["status"], complete["reasons"] = "held", [exc.code]
