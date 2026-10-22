@@ -10,6 +10,10 @@
 - Preserve free-standing negative temperatures in the event-name suffix style
   guard, while retaining event/date suffix refusals and every required factual,
   scientific and model check. No prompt, runtime model or publishing activation.
+- Display retained post-metric histories with publication-bound text, explicit
+  missing values, conflicting observations and platform-established post ages.
+  Page long histories without collecting new metrics or attributing historical
+  outcomes to today's draft text, topic or editor.
 
 ## 0.9.109.34
 
