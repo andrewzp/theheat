@@ -28,6 +28,7 @@ POLICY_FILES = (
     "src/commands/postgres_ghcn_source_results.py",
     "src/orchestrator/ghcn_source_result_client.py",
     "src/two_bot/ghcn_claim_view.py",
+    "src/two_bot/ghcn_claim_contract.py",
     "src/data/ghcn_db.py",
     "src/data/temperature_history.py",
     "scripts/threshold_artifacts.py",

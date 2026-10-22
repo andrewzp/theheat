@@ -1,3 +1,16 @@
+## 0.9.109.35
+
+- Connect compact saved station claims to locally resolved full temperature
+  evidence, native graphics, joint review, fresh checks and parked-state restore.
+  Keep full comparator tables out of model requests and recheck typed source
+  context at locked command boundaries. Hosted and live-platform gates remain.
+- Package the passive compact/full pairing contract without database or source
+  execution owners. Malformed imported reference dates receive durable refusal
+  and allow later valid edits; they never qualify as source evidence.
+- Preserve free-standing negative temperatures in the event-name suffix style
+  guard, while retaining event/date suffix refusals and every required factual,
+  scientific and model check. No prompt, runtime model or publishing activation.
+
 ## 0.9.109.34
 
 - Derive a versioned MODIS map description from every selected source row, with

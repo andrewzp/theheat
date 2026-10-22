@@ -1,6 +1,6 @@
 {
   "identity": {
-    "archive_sha256": "862453d2e3e8955dad4864192ba3609895fdf5ea055771f8150c9f62fa5aa0fb",
+    "archive_sha256": "ddfa3b771f297fb95479c87d7ab0853ead658a4f1270f0e1b1d2fbc1dee0ac24",
     "deployment_files": {
       "api/graphic_preview.py": "f7521adcbd618f4b65b2a0de30ea62aaff4cdd36f2254e9af38bf68646d361ad",
       "api/graphic_reader_status.py": "5e9685d699625a4eea9d5be884b6e266939a0ad344a2997351ba79bd114407ba",
@@ -72,11 +72,12 @@
       "src/media/maps/NOTICE.md": "f6ebf3caca500621c4b2c9f9fe9aad802099b82a4a1c21c479daf97d29aabac0",
       "src/media/maps/manifest.json": "1af072edc46ae3252bf6cf0edb43993986de262a2840b2cd4907eb4866f970e9",
       "src/media/maps/ne_110m_land_v4_1_0.json": "a37b057aca4fc9714a0c24b5d6bc9778bb5845894646e4052383ea63fa3cd50d",
-      "src/media/temperature_graphic_adapter.py": "3dee0f12a5e9fbdcd5b800e8ab8e96e17e81291729c50323c232f07452760255",
+      "src/media/temperature_graphic_adapter.py": "b21fae6e151f16465780e36bbb5ce186372482df382a8f569e0cd868db2c0513",
       "src/media/viirs_map_graphic_adapter.py": "657db3caef8503a4e0b9c9596bad8d28c029c3711e1d974f153fc1b60d3dd8d3",
       "src/state_schema.py": "dd250ab6ea263afadbbfff1d43d447a9bac1cec87897f994013c53b1e1e2cd76",
       "src/two_bot/__init__.py": "57333e1314a97e2fc83e03db569e03b0199c67ff52fad71770853226b9a68f00",
       "src/two_bot/evidence_contract.py": "506c86325dd4b589d5cd4f202461b65447f323218ccbaa8eacc0c92230e8f6a8",
+      "src/two_bot/ghcn_claim_contract.py": "749443ad87f4caac9726200dcc8f0e0aa3c662d5b5aee20f9b0f3dff8fa48bcc",
       "src/two_bot/intern/__init__.py": "2e34d6b9975fb831edbad10ed06d66aad2e8569a29cfd4cf17784177b91205e0",
       "src/two_bot/intern/air_quality.py": "f4fc20d4c197d4f604e1fa53e43ef02b658613940863eb5f4d41e0995d6c8ff0",
       "src/two_bot/json_utils.py": "c09fd98817c8e478a38cdeb1028769ec146ad0f94701235b7c1e12de7a46e7da",
@@ -84,12 +85,12 @@
       "src/two_bot/types.py": "36ed2e6475a655f4112012486795702159ed546c3040e8ef1874b7a0b02a9035"
     },
     "format": "saved-source-svg-preview-v2",
-    "policy_source_sha256": "af60511deed2780bd68080ad577f2edfb9a3845785225f5d996dfb12b969ce55",
+    "policy_source_sha256": "99b2fb5de5db6de106112dd8023b079a21520d69566f57f3607adb527a13bcbc",
     "resource_sources": {
       "src/data/registry/country_codes.json": "data/country_codes.json",
       "src/data/registry/place_registry.json": "data/place_registry.json"
     },
     "schema_version": 1
   },
-  "runtime_sha256": "8cf3a49b613cefc124b87b6f737d3fbb0055b24204b34869c71d5f6833275f74"
+  "runtime_sha256": "16228a93d7175f07478737c9d3b8b20736fff85fc67bcbb59299d665fa4321e8"
 }
