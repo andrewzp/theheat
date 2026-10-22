@@ -14,6 +14,36 @@ from tests.native_profile_helpers import native_dependencies as native_dependenc
 from tests.radar_editor_helpers import radar_case as radar_case
 
 
+def mandatory_long_modis_bundle():
+    from datetime import datetime
+    from tests.fire_graphic_helpers import graphic_bundle
+    from tests.test_fire_map_graphic_adapter import NEIGHBORS
+    from src.two_bot.intern.fire import build_fire_bundle
+    from src.two_bot.types import RelatedSignal
+    from tests.fire_source_fixtures import fire_event
+
+    bundle = graphic_bundle(
+        values=[125.75, 500.1234567890123, 750.25, 250], coordinates=NEIGHBORS,
+    )
+    other = build_fire_bundle(fire_event(
+        when=datetime.fromisoformat(bundle.when.replace("Z", "+00:00")),
+        lat=NEIGHBORS[1][0], lon=NEIGHBORS[1][1], frp=500.1234567890123,
+        confidence=92, product="MODIS_NRT",
+    ))
+    bundle.related_signals[0] = RelatedSignal(
+        event_id=other.event_id, signal_kind="fire", where=other.where,
+        when=other.when, headline_metric=other.headline_metric, country=other.country,
+        acquisition_evidence=other.raw_signal_dump["acquisition_provenance"],
+    )
+    return bundle
+
+
+@pytest.fixture(autouse=True)
+def register_mandatory_long_modis(monkeypatch):
+    # Register before admitted; monkeypatch restores the shared test extension.
+    monkeypatch.setitem(editor.FIRE_SOURCES, "modis_mandatory_long", mandatory_long_modis_bundle)
+
+
 def review_exact(case):
     from src.media.published_radar import EXTRA_CONFIRMATIONS
     current = editor.view(case)
@@ -30,6 +60,7 @@ def review_exact(case):
     return payload
 
 
+@pytest.mark.parametrize("admitted", ["modis_mandatory_long", "pm25"], indirect=True)
 def test_genuine_long_scientific_packages_refuse_atomically_before_any_transport(admitted, core, tmp_path, monkeypatch):
     from src.commands import postgres_media, postgres_delivery
     case = admitted
@@ -40,6 +71,12 @@ def test_genuine_long_scientific_packages_refuse_atomically_before_any_transport
         with case["store"].projections._connection() as c:
             original = postgres_media.read(c, prepared["preparation"]["proposal_sha256"], "local")
         assert len(original["assets"]["alt.txt"]) > 1000
+        if case["bundle"].signal_kind == "fire":
+            record = editor.view(case)["platform_description"]["record"]
+            assert record["schema_version"] == 2 and record["derivation"] == d.MODIS_DERIVATION
+            assert "/500.1234567890123/92.0/synthetic-v1" in record["wire_text"]
+            assert len(record["wire_text"]) > 1000
+            assert len(record["wire_text"].encode("utf-8")) > 1000
         assert editor.view(case)["platform_description"]["status"] == "platform_description_x_house_limit"
         review_exact(case)
         editor.complete_revision(case, monkeypatch)
