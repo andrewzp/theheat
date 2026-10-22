@@ -11,6 +11,15 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-10-22 — Daily corpus grading (0 fresh drafts; 15 carry-overs from Oct 8/10/19, previously graded)
+
+**Context:** Gist read via git-clone (success). Queue: 15 pending — exact match to Oct 19/20's set
+(newest draft: Guam [15], Oct 17T05:33Z); zero drafts entered since. No re-grading; all grades
+stand. (Step 0 `main` still ends Jul 6; this rolling branch carries the current record. A first
+pass this run graded from `main` before noticing the branch — discarded to avoid a duplicate
+re-grade.) All 15 are >48h (newest ~130h); bulk-reject skipped: `GH_TOKEN` invalid. Operator
+should reject the whole queue via dashboard. **A-rate:** — ; last measured 0% (0/2, Oct 19).
+
 ## 2026-10-20 — Daily corpus grading (0 fresh drafts; 15 carry-overs from Oct 8/10/19, previously graded)
 
 **Context:** Gist read via git-clone (success). Queue: 15 pending — exact match to Oct 19's set
