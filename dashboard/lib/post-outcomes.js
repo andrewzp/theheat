@@ -1,11 +1,62 @@
 /** Read-only retained observations. No collection, attribution or billing authority. */
-import { fingerprint, textHash } from "./draft-revisions.js"
+import { draftIdentity, fingerprint, textHash } from "./draft-revisions.js"
 
 export const OUTCOME_METRICS = ["likes", "retweets", "replies", "quotes", "impressions", "bookmarks"]
 const object = value => value !== null && typeof value === "object" && !Array.isArray(value)
 const sha = value => typeof value === "string" && /^[a-f0-9]{64}$/.test(value)
 const postId = value => typeof value === "string" && /^[0-9]{1,30}$/.test(value)
 const count = value => Number.isSafeInteger(value) && value >= 0 ? value : null
+const nonblank = value => typeof value === "string" && value.trim().length > 0
+const emptyContext = status => ({ status, type: null, source: null })
+
+function contextKey(eventId, identity) {
+  return fingerprint([eventId, identity.content_revision, identity.text_sha256, identity.evidence_sha256])
+}
+
+function retainedContexts(drafts) {
+  const contexts = new Map(), pending = Array.isArray(drafts) ? [...drafts] : [], seen = new Set()
+  while (pending.length) {
+    const snapshot = pending.pop()
+    if (!object(snapshot) || seen.has(snapshot)) continue
+    seen.add(snapshot)
+    if (Array.isArray(snapshot.revision_history)) pending.push(...snapshot.revision_history)
+    // Ordinary text-edit history omits id/event/type. Never complete that
+    // partial snapshot with today's draft fields, even when the text matches.
+    if (!["id", "event_id", "type", "text", "content_revision"].every(key => Object.hasOwn(snapshot, key)) ||
+        !nonblank(snapshot.id) || !nonblank(snapshot.event_id) || !nonblank(snapshot.type) ||
+        (Object.hasOwn(snapshot, "revision_conflicts") &&
+          (!Array.isArray(snapshot.revision_conflicts) || snapshot.revision_conflicts.length))) continue
+    try {
+      const identity = draftIdentity(snapshot), bundle = snapshot.review_context?.two_bot?.bundle
+      const source = object(bundle) && nonblank(bundle.event_id) && nonblank(bundle.signal_kind) && bundle.event_id === snapshot.event_id
+        ? { event_id: bundle.event_id, signal_kind: bundle.signal_kind, bundle_sha256: fingerprint(bundle) } : null
+      contexts.set(contextKey(snapshot.event_id, identity), { type: snapshot.type, source })
+    } catch { /* Malformed or incomplete evidence cannot establish context. */ }
+  }
+  return contexts
+}
+
+function publicationContext(rows, contexts, textConflict) {
+  const identities = new Set()
+  let unavailable = false
+  for (const { event_id, receipt } of rows || []) {
+    try {
+      if (!nonblank(event_id) || receipt.phase !== "confirmed" || !nonblank(receipt.intent_id) ||
+          !Number.isSafeInteger(receipt.content_revision) || receipt.content_revision < 1 ||
+          !sha(receipt.text_sha256) || !sha(receipt.evidence_sha256) ||
+          typeof receipt.text !== "string" || textHash(receipt.text) !== receipt.text_sha256 ||
+          (Object.hasOwn(receipt, "attempt_conflicts") && !Array.isArray(receipt.attempt_conflicts))) {
+        unavailable = true
+        continue
+      }
+      identities.add(contextKey(event_id, receipt))
+    } catch { unavailable = true }
+  }
+  if (textConflict || identities.size > 1) return emptyContext("conflict")
+  if (unavailable || identities.size !== 1) return emptyContext("unknown")
+  const context = contexts.get([...identities][0])
+  return context ? { status: "recorded", ...context, source: context.source && { ...context.source } } : emptyContext("unknown")
+}
 
 function instant(value, latest) {
   if (typeof value !== "string") return null
@@ -46,7 +97,7 @@ export function postOutcomes(rawState, { now = Date.now() } = {}) {
   const state = object(rawState) ? rawState : {}
   const clockMicroseconds = BigInt(Math.floor(clock * 1000))
   let inventoryKnown = Array.isArray(state.drafts) && state.drafts.every(object) && object(state.publish_ledger)
-  const posts = new Map()
+  const posts = new Map(), receipts = new Map(), contexts = retainedContexts(state.drafts)
   const ensure = id => {
     if (!posts.has(id)) posts.set(id, { hashes: new Set(), texts: new Map(), conflict: false })
     return posts.get(id)
@@ -55,18 +106,23 @@ export function postOutcomes(rawState, { now = Date.now() } = {}) {
     if (typeof value !== "string") return
     try { post.texts.set(textHash(value), value) } catch { /* Malformed text cannot establish a revision. */ }
   }
-  const pending = object(state.publish_ledger) ? Object.values(state.publish_ledger) : []
+  const pending = object(state.publish_ledger) ? Object.entries(state.publish_ledger).map(([event_id, receipt]) => ({ event_id, receipt })) : []
   for (const draft of Array.isArray(state.drafts) ? state.drafts : []) {
     if (!object(draft)) continue
     if (postId(draft.tweet_id) && draft.status === "posted") ensure(draft.tweet_id)
-    if (object(draft.published_revision)) pending.push(draft.published_revision)
+    if (object(draft.published_revision)) pending.push({ event_id: draft.event_id || draft.id, receipt: draft.published_revision })
   }
-  const seen = new Set()
+  const seen = new Map()
   while (pending.length) {
-    const receipt = pending.pop()
+    const { event_id, receipt } = pending.pop()
     if (!object(receipt)) { inventoryKnown = false; continue }
-    if (seen.has(receipt)) continue
-    seen.add(receipt)
+    if (!seen.has(receipt)) seen.set(receipt, new Set())
+    if (seen.get(receipt).has(event_id)) continue
+    seen.get(receipt).add(event_id)
+    if (postId(receipt.tweet_id)) {
+      if (!receipts.has(receipt.tweet_id)) receipts.set(receipt.tweet_id, [])
+      receipts.get(receipt.tweet_id).push({ event_id, receipt })
+    }
     if (postId(receipt.tweet_id) && receipt.phase !== "not_sent") {
       const post = ensure(receipt.tweet_id)
       if (sha(receipt.text_sha256)) post.hashes.add(receipt.text_sha256)
@@ -75,7 +131,7 @@ export function postOutcomes(rawState, { now = Date.now() } = {}) {
         try { if (textHash(receipt.text) !== receipt.text_sha256) post.conflict = true } catch { post.conflict = true }
       }
     }
-    if (Array.isArray(receipt.attempt_conflicts)) for (const child of receipt.attempt_conflicts) pending.push(child)
+    if (Array.isArray(receipt.attempt_conflicts)) for (const child of receipt.attempt_conflicts) pending.push({ event_id, receipt: child })
     else if (receipt.attempt_conflicts != null) inventoryKnown = false
   }
   const results = []
@@ -118,6 +174,7 @@ export function postOutcomes(rawState, { now = Date.now() } = {}) {
     const hash = !conflict && post.hashes.size === 1 ? [...post.hashes][0] : null
     results.push({ tweet_id, revision_status: conflict ? "conflict" : hash ? "recorded" : "unknown",
       published_text_sha256: hash, text: hash ? post.texts.get(hash) ?? null : null, observations,
+      publication_context: publicationContext(receipts.get(tweet_id), contexts, conflict),
       history_status: observations.length ? "retained" : row ? "unreadable_or_empty" : "not_retained" })
   }
   results.sort((a, b) => a.tweet_id.localeCompare(b.tweet_id))

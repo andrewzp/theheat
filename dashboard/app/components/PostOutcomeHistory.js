@@ -47,7 +47,17 @@ export default function PostOutcomeHistory({ outcomes }) {
           : selected.revision_status === "unknown" ? "Published revision is unknown. Today's draft text is not used."
             : selected.text === null ? "Published text fingerprint is retained; the matching text is unavailable." : "Text matches the retained published fingerprint."),
         selected.text !== null && h("blockquote", { style: { margin: "12px 0", lineHeight: 1.6, overflowWrap: "anywhere" } }, selected.text),
+        h("p", { className: "runtime-note" }, selected.publication_context?.status === "recorded"
+          ? `Recorded type: ${selected.publication_context.type.replaceAll("_", " ")}. ${selected.publication_context.source ? "Source evidence matches the published revision." : "Source evidence details are unknown."}`
+          : selected.publication_context?.status === "conflict" ? "Published type or source evidence conflicts; no context has been selected."
+            : "Published type and source evidence are unknown."),
         h("p", { className: "runtime-note" }, `${selected.observations.length} retained observations. Post age uses the platform's recorded creation time; receipt time is not a substitute.`)),
+      selected.publication_context?.status === "recorded" && selected.publication_context.source && h("details", { className: "runtime-details" },
+        h("summary", { style: { minHeight: 44 } }, "Source evidence details"),
+        h("dl", { style: { fontSize: 12, lineHeight: 1.6, overflowWrap: "anywhere" } },
+          h("dt", null, "Recorded signal"), h("dd", null, selected.publication_context.source.signal_kind.replaceAll("_", " ")),
+          h("dt", null, "Event reference"), h("dd", null, selected.publication_context.source.event_id),
+          h("dt", null, "Evidence fingerprint"), h("dd", null, selected.publication_context.source.bundle_sha256))),
       !selected.observations.length && h("p", { className: "runtime-note" }, selected.history_status === "unreadable_or_empty"
         ? "The retained metric row has no readable observations." : "No metric observations were retained for this post."),
       total > 100 && h("nav", { "aria-label": "Observation pages", style: { display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", margin: "12px 0" } },
