@@ -1,3 +1,10 @@
+## 0.9.109.32
+
+- Reconcile the original 45-package public acceptance page with released local
+  workflows and observed read-only controls. Preserve every original deliverable,
+  remaining gate and the distinction between code, deployment and product proof.
+  Documentation only; no dashboard, model, spending or publication change.
+
 ## 0.9.109.31
 
 - Add read-only portfolio planning over current retained NHC episodes, with eight
