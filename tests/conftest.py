@@ -59,6 +59,7 @@ def _ci_postgres_shard(path):
         "tests/test_postgres_ghcn_generation.py": "5",
         "tests/test_postgres_platform_description.py": "6",
         "tests/test_postgres_temperature_editor_media.py": "0",
+        "tests/test_postgres_temperature_delivery.py": "3",
     }
     if relative in assigned:
         return assigned[relative]

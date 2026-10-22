@@ -26,14 +26,14 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/commands/check_journal.py": "f15f914c762604525a5f4e1b0be47d0536be54ed82dfbf932940a3085a0c8a95",
     "src/commands/hosted_fixture.py": "a175cef7da90b4487d7be8d50599d9715da83c73dc2b19c83945eccb0ffd232f",
     "src/commands/media_journal.py": "286d22f43bf37fb0f4fdf640345c06fcf11def6bd6223dc199b5bcee338312f9",
-    "src/commands/postgres_authority.py": "2e370b486e155d086429a6599f4a1ae48827b766b481551acf96be63200a0f5e",
+    "src/commands/postgres_authority.py": "97d1930ab77d2a83624aaeb72e6744b84d635712c2aaaa87cc973d5d0bcfcfbf",
     "src/commands/postgres_batch_results.py": "3fc0201e0b2f8f1c9a2670d2d6e94f4bcf9d6e0738c8df8cda55e7469dd7a1a5",
     "src/commands/postgres_candidate_admission.py": "bcce0194bf7de42991209cef9309772a615fcd71459ca7b278a37367f3a4aa85",
     "src/commands/postgres_check_observations.py": "1bc106b92c74b66fa337e1fda3ac41269fa39fac977610a750e03fd27f34e2b2",
     "src/commands/postgres_checks.py": "fbadee0014f56d3d93b19668cbd8e7d9b8e024d011a79a34526719f3f305d557",
     "src/commands/postgres_cost_projection.py": "222222cb7f9d19244fc82bb033abd067b12fedaa6e54a40f5eacb2b0c06a58fe",
     "src/commands/postgres_coverage.py": "edc97725c30d16d980872962a6d7157068727b3de823bd56c4db33fa77a45e31",
-    "src/commands/postgres_delivery.py": "395fd763ac45fffd735d2724bb2e44af91577fe319185099a4089036889aa7f3",
+    "src/commands/postgres_delivery.py": "afc4744de02c64dc9fd9fc0c348adf1c725527f44c5fef158828f025e004494f",
     "src/commands/postgres_editor_media.py": "fe82c8e5d0fe2550b84e3e07ad9f03784d60f7ede0202ff53c6082df79cc7561",
     "src/commands/postgres_ghcn_source_results.py": "fc06f61b007c003e299f78dac9be51b03db74a1d65569a59e0c407eb243eab42",
     "src/commands/postgres_important_variants.py": "eca11e40c09b5dbaf3ab50c8b5fa215067538cf3c4a77e4a32477d8260896002",
@@ -46,7 +46,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/commands/postgres_sourced_generation.py": "b454cd46dd698aff47145b4c76178a2da2cb8f05c3b490b9b82e8f1d1ddf85e4",
     "src/commands/postgres_sync_checks.py": "f95ae66157aa16cddf7729edb4d600386c7a94a162f7061630614e5127d72b6c",
     "src/commands/postgres_synchronous_generation.py": "d74df2ee7a8bb4b3957fde36ff8e198e600e475d4aa594c3c401ec1f731f1ebf",
-    "src/commands/preview_delivery_worker.py": "647b901ae031a9f19ff924b8caf87f035172695e22c0319755fa40a45a7f64cd",
+    "src/commands/preview_delivery_worker.py": "d7d2da6aa6ccfd99a4bd5f067ea9d13a67284d72271e6289e7602957ac11be89",
     "src/commands/preview_ingress.py": "3220556113a26d25071016b9057f6c2b8d6ab0aa874c3c5feff323c7d91b94db",
     "src/commands/preview_media_worker.py": "a044117c5b07425b1ab8fc61ad8e12752b5ddb8fc20e735f753b080eeb9ee4df",
     "src/commands/reducer.py": "6c241112045dd4a9aa66dc81eaa36d7497d7a7c5c3f0d267e73b8c7097baaa8c",
@@ -160,7 +160,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/two_bot/evidence_contract.py": "506c86325dd4b589d5cd4f202461b65447f323218ccbaa8eacc0c92230e8f6a8",
     "src/two_bot/fact_check.py": "86327191596c9f2bd65945b4b8fadcd399980e593ca253c1bb30657fbaed82f8",
     "src/two_bot/ghcn_claim_contract.py": "749443ad87f4caac9726200dcc8f0e0aa3c662d5b5aee20f9b0f3dff8fa48bcc",
-    "src/two_bot/ghcn_claim_view.py": "b762aad7bc51a9e45e7b31f8d5da4cbcbff559ffaa63bf359c8d1dc961c28521",
+    "src/two_bot/ghcn_claim_view.py": "1d43c3a2d4d583463ae62ff22b9344f8971a88228383f091594b64d534c5ded9",
     "src/two_bot/important_variants.py": "ff19a0e192e677a3be4fc36b064b4010c77840be3f5e999fec614f6df40d55e3",
     "src/two_bot/intern/__init__.py": "2e34d6b9975fb831edbad10ed06d66aad2e8569a29cfd4cf17784177b91205e0",
     "src/two_bot/intern/_shared.py": "1296c3f3520ed3862d8d3c9d2d0437a21f1999efbaf9808fd829674f9a054a53",
@@ -197,5 +197,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "8c4887f395618e343dafd55f5843987dfa6a7a620713c7c34bab9f419e4434fe"
   },
   "schema_version": 1,
-  "source_sha256": "56c5bb9a375168103e4b4779213bb91f85474948a8419b428b00d8c3a7f09d46"
+  "source_sha256": "321dd5089c73d9112852e2b01e54ec2b6d3b957e9f893a246439c6aea28d5491"
 }

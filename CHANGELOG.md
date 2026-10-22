@@ -1,3 +1,13 @@
+## 0.9.109.36
+
+- Carry compact station claims through the experimental local media-delivery
+  worker with typed source checks at enrollment, acquisition and dispatch.
+  Recognize only the worker's exact, single-use committed attempt when checking
+  its own unknown-outcome barrier; all other unknown outcomes still block sends.
+- Preserve original source lifetimes, exact full descriptions, immutable request
+  identities and passive accounting through lost-response recovery and restore.
+  Local invented transport is separate from live platform delivery or activation.
+
 ## 0.9.109.35
 
 - Connect compact saved station claims to locally resolved full temperature
