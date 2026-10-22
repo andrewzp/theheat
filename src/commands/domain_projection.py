@@ -360,10 +360,14 @@ def _ghcn(record: Record, value: dict) -> list[DomainObject]:
                 fields = child["fields"]
                 baseline = fields["evidence"].get("baseline", {})
                 metric = fields.get("new_temp_c", fields.get("today_temp_c", fields.get("daily_max_tw_c")))
+                observation_field = "today_min_c" if signal.endswith("low") or signal == "anomaly_cold" else "today_max_c"
+                if signal == "absolute_extreme":
+                    require(type(fields.get("kind")) is str and fields["kind"] in {"hot", "cold"})
+                    observation_field = "today_min_c" if fields["kind"] == "cold" else "today_max_c"
                 objects.append(_object(record, locator + "/" + signal, ClaimRevision(claim_id=fields["event_id"],
                     claim_type=signal, assertion_class="threshold" if signal in {"absolute_extreme", "wet_bulb_extreme"} else "available_sample_comparator",
                     evidence_class="source_asserted_observed", scope=baseline.get("comparison_scope", "unspecified"),
-                    time=_calendar(row["signal_date"]), value=metric, unit=interval["unit"]), [("observation", _ref(record, locator + ("/today_min_c" if signal.endswith("low") or signal == "anomaly_cold" else "/today_max_c")))]))
+                    time=_calendar(row["signal_date"]), value=metric, unit=interval["unit"]), [("observation", _ref(record, locator + "/" + observation_field))]))
     for index, row in enumerate(value["country_records"]):
         objects.append(_object(record, f"/country_records/{index}", ClaimRevision(claim_id=row["event_id"],
             claim_type=row["kind"], assertion_class="available_sample_comparator", evidence_class="source_assertion", scope="country_record_assertion_not_certification",

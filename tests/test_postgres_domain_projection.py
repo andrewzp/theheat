@@ -4,6 +4,7 @@ Only task-owned Unix-socket databases and public fixtures. HTTP is replaced at
 the client transport boundary by the same real authority context function.
 """
 from copy import deepcopy
+from datetime import date
 import json
 from uuid import uuid4
 
@@ -19,7 +20,7 @@ from src.storage import ghcn_runtime_inputs
 from tests import test_postgres_physical_events as episodes
 from tests import test_postgres_report_development as reports
 from tests.test_postgres_command_authority import options
-from tests.test_postgres_projection import cluster as cluster, database as database, admin
+from tests.test_postgres_projection import cluster as cluster, database as database, repository as repository, admin
 from tests.test_ghcn_runtime_inputs import source_bytes as source_bytes
 from tests.test_domain_projection import cli, authority, story, database_dump
 
@@ -53,6 +54,71 @@ def write_packets(tmp_path, packets):
         path.write_text(json.dumps(packet))
         paths.append(path)
     return paths
+
+
+def absolute_extreme_owner_record(repo, maximum, minimum):
+    from src.data import open_meteo
+    day = date(2026, 10, 20)
+    event = open_meteo.detect_absolute_extreme(40.0, -111.0, maximum, minimum,
+        "Invented", "United States", signal_date=day, data_source="ghcn")
+    assert event is not None
+    evidence = dict(evidence_type="observed", source_product="noaa-ghcn-daily-v2", unit="C",
+        station_id="USW00000001", valid_date=day.isoformat(), reporting_interval_known=False,
+        valid_start=None, valid_end=None, timezone=None, baseline={})
+    event.evidence = deepcopy(evidence)
+    bundle = open_meteo.ExtremeSignalBundle(city=event.city, country=event.country,
+        absolute_extreme=event, today_max_c=maximum, today_min_c=minimum, signal_date=day,
+        station_id=evidence["station_id"], lat=40.0, lon=-111.0, evidence=evidence)
+    session = scientific_supply.ScientificSupplySession(repo, str(uuid4()), "capture", "2026-10-21T12:00:00Z", "a" * 40)
+    session.capture([bundle], [], dict(status="success", threshold_verification="unknown"))
+    receipt, value = repo.read(scientific_supply.NAMESPACE, session.snapshot_id)
+    return event, session, receipt, value
+
+
+@pytest.mark.parametrize("maximum,minimum,kind,variable,field", [
+    (55.0, 10.0, "hot", "TMAX", "today_max_c"),
+    (10.0, -50.0, "cold", "TMIN", "today_min_c"),
+    (None, -50.0, "cold", "TMIN", "today_min_c"),
+])
+def test_absolute_extreme_detector_owner_projection_exact_observation(repository, tmp_path, maximum, minimum, kind, variable, field):
+    repo = repository[1]
+    event, session, receipt, value = absolute_extreme_owner_record(repo, maximum, minimum)
+    assert event.kind == kind
+    local = authority(tmp_path, {})
+    owner_packet = domain.projection_packet(receipt, value, owner="src.storage.scientific_supply")
+    view = cli(local.path, write_packets(tmp_path, [owner_packet]))["typed_domain"]
+    claim = next(obj for obj in view["objects"] if obj["core"]["kind"] == "claim_revision")
+    relation = claim["relationships"][0]
+    target = next(obj for obj in view["objects"] if obj["reference"] == relation["target"])
+    assert relation["disposition"] == "present_in_inspection"
+    assert relation["target"]["locator"] == f"/bundles/0/{field}"
+    assert target["core"]["variable"] == variable
+    assert target["core"]["value"] == claim["core"]["value"] == event.today_temp_c
+    assert target["core"]["product"] == "noaa-ghcn-daily-v2" and target["core"]["unit"] == "C"
+    assert all(obj["qualification"] == "unverified" and not obj["publication_authorized"] for obj in view["objects"])
+    assert not view["source_truth_verified"] and not view["required_checks_completed"]
+    assert repo.read(scientific_supply.NAMESPACE, session.snapshot_id) == (receipt, value)
+
+
+@pytest.mark.parametrize("kind", ["unknown", "", True, None])
+def test_absolute_extreme_unknown_or_malformed_kind_is_opaque_without_fallback(repository, tmp_path, kind):
+    import base64
+    repo = repository[1]
+    _, session, receipt, value = absolute_extreme_owner_record(repo, 10.0, -50.0)
+    # Preserve the genuine owner read; the altered caller-selected artifact must
+    # remain opaque instead of acquiring a default TMAX or TMIN relationship.
+    altered = deepcopy(value)
+    altered["bundles"][0]["absolute_extreme"]["fields"]["kind"] = kind
+    raw = pg._canonical(altered)
+    owner_packet = domain.projection_packet(receipt, value, owner="src.storage.scientific_supply")
+    owner_packet.update(sha256=domain.digest(raw), payload_base64=base64.b64encode(raw).decode("ascii"))
+    local = authority(tmp_path, {})
+    view = cli(local.path, write_packets(tmp_path, [owner_packet]))["typed_domain"]
+    assert view["objects"] == []
+    assert view["unprojected"][0]["disposition"] == "opaque_unverified"
+    artifact = next(item for item in view["artifacts"] if item["reference"]["sha256"] == owner_packet["sha256"])
+    assert base64.b64decode(artifact["payload_base64"]) == raw
+    assert repo.read(scientific_supply.NAMESPACE, session.snapshot_id) == (receipt, value)
 
 
 def test_real_source_baseline_observation_event_claim_producers_restart_and_restore(database, source_bytes, tmp_path, monkeypatch, cluster):
