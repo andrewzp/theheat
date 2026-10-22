@@ -85,18 +85,22 @@ def binding() -> dict:
 
 
 def eligible(bundle: dict, now: datetime) -> bool:
-    from src.media.published_radar import interval, source_envelope
+    from src.media.published_radar import source_envelope, warning_times
     try:
         e = bundle["raw_signal_dump"]["source_evidence"]
         if e != source_envelope(e["feature"], e["captured_at"]):
             return False
         sent = datetime.fromisoformat(e["times"]["sent"]["utc"].replace("Z", "+00:00"))
-        _, end = interval(e["times"])
-        expires = datetime.fromisoformat(end.replace("Z", "+00:00"))
+        timing = warning_times(e["times"])
+        effective = datetime.fromisoformat(timing["message_start_utc"].replace("Z", "+00:00"))
+        expires = datetime.fromisoformat(timing["message_end_utc"].replace("Z", "+00:00"))
+        event_end = (None if timing["event_end_utc"] is None else
+                     datetime.fromisoformat(timing["event_end_utc"].replace("Z", "+00:00")))
         return (bundle["signal_kind"] == "severe_weather"
                 and bundle["event_id"] == "nws_" + e["source_alert_id"]
                 and e["source_url"] == "https://api.weather.gov/alerts/active"
-                and timedelta(0) <= now - sent <= timedelta(hours=6) and now < expires)
+                and timedelta(0) <= now - sent <= timedelta(hours=6) and effective <= now < expires
+                and (event_end is None or now < event_end))
     except (KeyError, TypeError, ValueError):
         return False
 
