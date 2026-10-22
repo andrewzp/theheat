@@ -183,7 +183,7 @@ def _qualified(bundle, expected_sha):
 
 def _claim_view(view_sha256, reference, snapshot):
     """Replay a saved compact claim view from the full evidence it names."""
-    from src.two_bot.ghcn_claim_view import project_tree, structural_view
+    from src.two_bot.ghcn_claim_contract import project_tree, structural_view
     selection = reference["selection"]
     _require(_sha(view_sha256) and reference["full_story"]["sha256"] == fingerprint(snapshot),
              "saved claim view names different full evidence")
@@ -298,7 +298,7 @@ def temperature_claim_graphic_spec(view: dict, full: StoryBundle, *, expected_fu
     if type(synthetic) is not bool:
         raise ValueError("Synthetic status must be declared explicitly")
     try:
-        from src.two_bot.ghcn_claim_view import structural_view
+        from src.two_bot.ghcn_claim_contract import structural_view
         reference = structural_view(view)
         row = _qualified(full, expected_full_sha256)
         claim = _claim_view(fingerprint(view), reference, row["snapshot"])
