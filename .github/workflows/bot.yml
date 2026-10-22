@@ -92,6 +92,8 @@ jobs:
             postgres-shard: '6'
           - partition: postgres
             postgres-shard: '7'
+          - partition: postgres
+            postgres-shard: '8'
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@v6

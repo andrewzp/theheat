@@ -9,6 +9,7 @@ from itertools import permutations
 import random
 import socket
 import subprocess
+import xml.etree.ElementTree as ET
 from unittest.mock import Mock
 
 import pytest
@@ -78,6 +79,44 @@ def intake_counts(row):
     assert row["observed"] == sum(counts[key] for key in INTAKE_COUNTS)  # Exactly one disposition each.
     assert row["promoted"] == counts["queue_new"]
     return counts
+
+
+@pytest.mark.parametrize("mode", MODES)
+@pytest.mark.parametrize("same_event", [False, True])
+@pytest.mark.parametrize("level", ["Green", "Red"])
+@pytest.mark.parametrize("field", ["severity", "alert_score", "population"])
+@pytest.mark.parametrize("value", ["NaN", "Infinity", "-Infinity"])
+def test_malformed_numeric_peer_never_discards_or_poison_valid_control(
+        monkeypatch, mode, same_event, level, field, value):
+    control = items("intake-control")[0]
+    bad = deepcopy(control)
+    ns = "{http://www.gdacs.org}"
+    if not same_event:
+        bad.find(ns + "eventid").text = "intake-malformed-number"
+    bad.find(ns + "episodeid").text = "malformed-peer-episode"
+    bad.find(ns + "alertlevel").text = level
+    bad.find(ns + "episodealertlevel").text = level
+    tag = {"severity": "severity", "alert_score": "alertscore", "population": "population"}[field]
+    node = bad.find(ns + tag)
+    if node is None:
+        node = ET.SubElement(bad, ns + tag)
+    if field == "alert_score":
+        node.text = value
+    else:
+        node.set("value", value)
+    outcome = journey(monkeypatch, [feed(bad, control)], mode)
+    assert outcome["calls"] == [gdacs.GDACS_GEORSS_URL]
+    assert outcome["queue"] == outcome["entries"] == ["intake-control"]
+    row = outcome["run"]["sources"][0]
+    assert row["status"] == "degraded" and row["observed"] == row["promoted"] == 1
+    diagnostics = row["details"]["feed_diagnostics"]
+    assert diagnostics["feed_items_total"] == 2 and diagnostics["feed_items_validated"] == 1
+    assert diagnostics["quarantined_items"] == 1 and diagnostics["status"] == "partial_feed"
+    assert diagnostics["rejected_by_field"]["numeric_" + field] == 1
+    assert diagnostics["rejected_selected_alerts"] == int(level == "Red")
+    assert diagnostics["current_selection"]["ambiguous_groups"] == 0
+    assert intake_counts(row)["queue_new"] == 1
+    assert_no_spend_or_saved_effect(outcome)
 
 
 @pytest.mark.parametrize("mode", MODES)

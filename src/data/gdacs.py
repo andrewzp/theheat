@@ -364,6 +364,19 @@ def _events_from_georss(
             "name": bool(name),
             "coordinates": _has_georss_coordinates(item),
         }
+        # Reconciliation inspects every recognized tier before filtering. A
+        # nonfinite number must quarantine its own row before construction,
+        # integer conversion, hashing or feed-publication evidence, so even a
+        # lower-tier malformed peer cannot discard another valid alert. Keep
+        # the settled missing/unparseable-value behavior and normal diagnostics.
+        numeric_values = {
+            "severity": _xml_attr_float(item, "gdacs:severity", "value"),
+            "alert_score": _safe_float(_xml_text(item, "gdacs:alertscore")),
+            "population": _xml_attr_float(item, "gdacs:population", "value"),
+        }
+        for numeric_field, value in numeric_values.items():
+            if not math.isfinite(value):
+                required["numeric_" + numeric_field] = False
         missing = [field for field, valid in required.items() if not valid]
         if missing:
             # Quarantine this item without allowing its fields or timestamp to
@@ -375,7 +388,7 @@ def _events_from_georss(
                 alert_level in severity_order and severity_order[alert_level] >= min_level
             )
             for field in missing:
-                rejected_by_field[field] += 1
+                rejected_by_field[field] = rejected_by_field.get(field, 0) + 1
             continue
         if updated is not None:
             publication_dates.append(updated)

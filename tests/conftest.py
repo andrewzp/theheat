@@ -41,7 +41,7 @@ def pytest_addoption(parser):
         help="Disjoint offline CI file partitions; ordinary local runs select all.",
     )
     parser.addoption(
-        "--ci-postgres-shard", choices=("all", "0", "1", "2", "3", "4", "5", "6", "7"), default="all",
+        "--ci-postgres-shard", choices=("all", "0", "1", "2", "3", "4", "5", "6", "7", "8"), default="all",
         help="Stable file shard within --ci-partition=postgres; all preserves the complete partition.",
     )
 
@@ -51,14 +51,15 @@ def _ci_postgres_shard(path):
     # Every parameter and test in a module shares its module-scoped fixtures.
     relative = path.resolve().relative_to(Path(__file__).resolve().parents[1]).as_posix()
     # Keep heavy modules whole while balancing measured CI work. Shards7 and0
-    # hit the unchanged 35-minute job limit; other hash assignments stay stable.
+    # hit the unchanged 35-minute job limit. Shard8 isolates the complete
+    # temperature-editor module; all other default assignments keep modulo8.
     assigned = {
         "tests/test_postgres_published_media.py": "2",
         "tests/test_postgres_cost_projection.py": "5",
         "tests/test_postgres_important_native.py": "1",
         "tests/test_postgres_ghcn_generation.py": "5",
         "tests/test_postgres_platform_description.py": "6",
-        "tests/test_postgres_temperature_editor_media.py": "0",
+        "tests/test_postgres_temperature_editor_media.py": "8",
         "tests/test_postgres_temperature_delivery.py": "3",
     }
     if relative in assigned:

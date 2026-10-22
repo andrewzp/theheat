@@ -1,5 +1,11 @@
-## 0.9.109.36
+## 0.9.109.35
 
+- Hold ambiguous GDACS current-episode selections before severity filtering;
+  stage qualified candidates in source-key order and reuse exact pending
+  repeats under the queue lock. Count actual admissions and report withholding.
+- Quarantine nonfinite GDACS severity, score or population values per item
+  before construction or publication checks, preserving valid unrelated alerts.
+  This does not qualify additional source coverage, impacts or provider truth.
 - Carry compact station claims through the experimental local media-delivery
   worker with typed source checks at enrollment, acquisition and dispatch.
   Recognize only the worker's exact, single-use committed attempt when checking
@@ -8,7 +14,6 @@
   identities and passive accounting through lost-response recovery and restore.
   Local invented transport is separate from live platform delivery or activation.
 
-## 0.9.109.35
 
 - Connect compact saved station claims to locally resolved full temperature
   evidence, native graphics, joint review, fresh checks and parked-state restore.

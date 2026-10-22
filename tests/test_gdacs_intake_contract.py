@@ -63,6 +63,16 @@ def assert_equations(diagnostics, selection):
     assert diagnostics["feed_items_total"] == diagnostics["feed_items_validated"] + diagnostics["quarantined_items"]
 
 
+def test_nonfinite_peer_cannot_supply_feed_publication_or_select_an_episode():
+    control = items("intake-control")[0]
+    control.find("pubDate").text = "2026-09-01T00:00:00Z"
+    bad = items("intake-control")[0]
+    ET.SubElement(bad, NS + "severity", {"value": "NaN"})
+    with pytest.raises(gdacs.GDACSPublicationError, match="stale data"):
+        gdacs._events_from_georss(feed(bad, control, published=None), min_level=2,
+                                 severity_order=LEVELS, diagnostics={}, now=NOW)
+
+
 def test_mixed_capture_reconciles_every_case_with_exact_counts():
     events, diagnostics, selection = capture(items())
     assert {e.source_event_id for e in events} == {"intake-duplicate", "intake-current-old", "intake-shared-1",

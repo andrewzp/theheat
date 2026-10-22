@@ -24,12 +24,12 @@ def select(items, partition, shard="all"):
     return kept
 
 
-def test_eight_file_shards_partition_all_modules_and_parameters_without_changing_legacy_groups(monkeypatch, tmp_path):
+def test_nine_file_shards_partition_all_modules_and_parameters_without_changing_legacy_groups(monkeypatch, tmp_path):
     files = sorted((ROOT / "tests").glob("test_postgres_*.py"))
     items = [SimpleNamespace(path=path, nodeid=f"{path.name}::invented[{parameter}]")
              for path in [ROOT / "tests/test_ci_postgres_shards.py", *files] for parameter in ("a", "b", "c")]
     postgres = select(items, "postgres")
-    shards = [select(items, "postgres", str(index)) for index in range(8)]
+    shards = [select(items, "postgres", str(index)) for index in range(9)]
     identities = [{id(item) for item in shard} for shard in shards]
     assert all(identities) and set.union(*identities) == {id(item) for item in postgres}
     for index, shard in enumerate(shards):
@@ -43,7 +43,7 @@ def test_eight_file_shards_partition_all_modules_and_parameters_without_changing
                 "tests/test_postgres_important_native.py": 1,
                 "tests/test_postgres_ghcn_generation.py": 5,
                 "tests/test_postgres_platform_description.py": 6,
-                "tests/test_postgres_temperature_editor_media.py": 0,
+                "tests/test_postgres_temperature_editor_media.py": 8,
                 "tests/test_postgres_temperature_delivery.py": 3,
             }
             if relative in assigned:
@@ -55,7 +55,7 @@ def test_eight_file_shards_partition_all_modules_and_parameters_without_changing
     assert any(item.path.name == "test_postgres_important_native.py" for item in shards[1])
     assert any(item.path.name == "test_postgres_ghcn_generation.py" for item in shards[5])
     assert any(item.path.name == "test_postgres_platform_description.py" for item in shards[6])
-    assert any(item.path.name == "test_postgres_temperature_editor_media.py" for item in shards[0])
+    assert {item.path.name for item in shards[8]} == {"test_postgres_temperature_editor_media.py"}
     assert any(item.path.name == "test_postgres_temperature_delivery.py" for item in shards[3])
     legacy = [select(items, partition) for partition in ("core", "postgres", "media")]
     assert sorted(id(item) for group in legacy for item in group) == sorted(id(item) for item in select(items, "all"))
@@ -76,7 +76,7 @@ def test_viirs_native_package_runs_only_in_required_media_lane_with_complete_uni
 
 
 @pytest.mark.parametrize("partition,shard", [("all","0"), ("core","1"), ("media","3"),
-                                            ("postgres","8"), ("postgres","-1"), ("postgres","invalid")])
+                                            ("postgres","9"), ("postgres","-1"), ("postgres","invalid")])
 def test_invalid_shard_requests_fail_before_collection(partition, shard):
     result = subprocess.run([sys.executable, "-m", "pytest", str(Path(__file__)), "--collect-only", "-q",
         "-p", "no:cacheprovider", f"--ci-partition={partition}", f"--ci-postgres-shard={shard}"],
@@ -84,3 +84,12 @@ def test_invalid_shard_requests_fail_before_collection(partition, shard):
     assert result.returncode == 4
     assert "--ci-postgres-shard" in result.stderr
     assert "tests collected" not in result.stdout
+
+
+def test_ninth_postgres_shard_is_accepted_by_actual_collection_cli():
+    result = subprocess.run([sys.executable, "-m", "pytest", str(Path(__file__)), "--collect-only", "-q",
+        "-p", "no:cacheprovider", "--ci-partition=postgres", "--ci-postgres-shard=8"],
+        cwd=ROOT, capture_output=True, text=True, timeout=15)
+    # This core test module is intentionally deselected; argument parsing succeeds.
+    assert result.returncode == 5
+    assert "--ci-postgres-shard" not in result.stderr
