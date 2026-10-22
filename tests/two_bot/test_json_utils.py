@@ -9,7 +9,11 @@ from __future__ import annotations
 import json
 import pytest
 
-from src.two_bot.json_utils import extract_json_payload, loads_model_json
+from src.two_bot.json_utils import (
+    ModelJSONIntegrityError,
+    extract_json_payload,
+    loads_model_json,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -108,21 +112,66 @@ class TestExtractJsonPayloadMultiSpan:
         result = loads_model_json(raw)
         assert result == {"ok": True}
 
-    def test_array_before_object_resolves_to_array(self):
-        """If an array precedes the object, the first parseable span wins.
-        Document the contract: expected='any' picks the first valid span
-        regardless of type (array or object).
-        """
+    def test_array_before_object_is_terminal(self):
+        """Both documents count, regardless of their top-level types."""
         raw = '[1,2,3] before {"v":1}'
-        # Whatever comes first and parses is returned — don't change existing behavior.
-        result = loads_model_json(raw)
-        assert result in ([1, 2, 3], {"v": 1})  # either is acceptable
+        with pytest.raises(ModelJSONIntegrityError):
+            loads_model_json(raw)
 
-    def test_object_expected_skips_array_span(self):
-        """expected='object' should skip arrays and return the first object."""
+    def test_object_expected_cannot_hide_another_array_document(self):
+        """The expected selector cannot choose between valid documents."""
         raw = '[1,2,3] {"v":1}'
-        result = loads_model_json(raw, expected="object")
-        assert result == {"v": 1}
+        with pytest.raises(ModelJSONIntegrityError):
+            loads_model_json(raw, expected="object")
+
+
+@pytest.mark.parametrize("expected", ["any", "object", "array"])
+@pytest.mark.parametrize("raw", [
+    '{"kill_reason":"missing evidence"} {"tweet":"usable"}',
+    '{"tweet":"usable"}\n{"kill_reason":"missing evidence"}',
+    '{"passed":true} {"passed":true}',
+    '[] []',
+    '{"items":[{"nested":true}]} []',
+    '[{"nested":true}] {"passed":true}',
+    '```json\n{"passed":true}\n```\nLater:\n```json\n{"passed":false}\n```',
+    'Reason: {not json} {"passed":true} prose {not json either} {"passed":false}',
+    '{"passed":true, /* compatible repair */} {"passed":false,}',
+], ids=["kill-first", "usable-first", "identical", "arrays", "object-array",
+        "array-object", "separate-fences", "malformed-between", "cleaned-results"])
+def test_separate_parseable_documents_are_terminal(raw, expected):
+    with pytest.raises(ModelJSONIntegrityError, match="Multiple"):
+        loads_model_json(raw, expected=expected)
+
+
+@pytest.mark.parametrize("raw,value", [
+    ('Intro: {"items":[{"nested":{"value":1}},[2,3]]} done.',
+     {"items": [{"nested": {"value": 1}}, [2, 3]]}),
+    ('[{"nested":{"value":1}},[2,3]]', [{"nested": {"value": 1}}, [2, 3]]),
+    ('Here is the result: {"value":"braces {} [] and \\\"quoted\\\""}',
+     {"value": 'braces {} [] and "quoted"'}),
+    ('"An example {\\"passed\\":false}" Result: {"passed":true}', {"passed": True}),
+    ('/* {"passed":false} [] */ {"passed":true} // {"passed":false}\n', {"passed": True}),
+    ('// {"passed":false} []\n{"passed":true} /* {} [] */', {"passed": True}),
+    ('{"passed": /* } ] { [ */ true, "items":[1, // } ]\n2,],}',
+     {"passed": True, "items": [1, 2]}),
+    ('Reason: {not json} ```json\n{"passed":true,}\n``` done', {"passed": True}),
+    ('Here\'s the result: {"passed":true}', {"passed": True}),
+], ids=["nested-object", "nested-array", "string-braces", "quoted-example",
+        "comments-around", "line-comment", "comments-inside", "malformed-wrapper", "apostrophe"])
+def test_one_result_remains_compatible_without_counting_nested_or_quoted_json(raw, value):
+    assert loads_model_json(raw) == value
+
+
+@pytest.mark.parametrize("invalid", [
+    '{"passed":true,"passed":false}', '{"value":NaN}', '{"value":Infinity}',
+    '{"value":-Infinity}', '{"value":1e999}',
+])
+@pytest.mark.parametrize("invalid_first", [True, False])
+def test_integrity_failure_remains_terminal_on_either_side_of_a_valid_result(invalid, invalid_first):
+    valid = '{"passed":true}'
+    raw = f"{invalid} {valid}" if invalid_first else f"{valid} {invalid}"
+    with pytest.raises(ModelJSONIntegrityError):
+        loads_model_json(raw)
 
 
 # ---------------------------------------------------------------------------

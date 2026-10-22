@@ -28,7 +28,7 @@ from datetime import UTC, datetime
 
 from src.config import CRITIC_MODEL
 from src.state_schema import BotState
-from src.two_bot.json_utils import json_default as _json_default, loads_model_json, model_response_diagnostic
+from src.two_bot.json_utils import json_default as _json_default, loads_model_json, model_response_diagnostic, ModelJSONIntegrityError
 from src.two_bot.prompts.critic_prompt import (
     CRITIC_SLATE_USER_PROMPT_TEMPLATE,
     CRITIC_SYSTEM_PROMPT,
@@ -145,6 +145,8 @@ def _parse_critic_result(
 
     try:
         parsed = loads_model_json(raw, expected="object")
+    except ModelJSONIntegrityError as exc:
+        raise ModelJSONIntegrityError(f"Critic returned invalid JSON ({model_response_diagnostic(raw)})") from exc
     except ValueError as exc:
         raise ValueError(f"Critic returned invalid JSON ({model_response_diagnostic(raw)})") from exc
     if not isinstance(parsed, dict):
@@ -361,6 +363,11 @@ def critic_review(
         )
         try:
             return _parse_critic_result(raw, allow_revise=allow_revise)
+        except ModelJSONIntegrityError as exc:
+            return CriticResult(
+                passed=False, kill_reason=f"Critic output integrity rejected: {exc}",
+                raw_response="(json-parse retry exhausted)",
+            )
         except ValueError as exc:
             last_parse_error = str(exc)
 
@@ -416,6 +423,11 @@ def critic_select_slate(
         )
         try:
             return _parse_critic_result(raw, slate_size=len(candidate_drafts))
+        except ModelJSONIntegrityError as exc:
+            return CriticResult(
+                passed=False, kill_reason=f"Critic output integrity rejected: {exc}",
+                raw_response="(json-parse retry exhausted)", verdict="KILL",
+            )
         except ValueError as exc:
             last_parse_error = str(exc)
 
