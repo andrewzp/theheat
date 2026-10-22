@@ -759,6 +759,11 @@ def test_pipeline_safety_rejects_writer_output(
     assert result is None
     assert result_out["kill_stage"] == "safety"
     assert "Severity" in result_out["kill_reason"]
+    packet = result_out["rejected_candidate"]
+    assert packet["schema_version"] == 2 and packet["scope"] == "selected_safety_rejection"
+    assert packet["text"] == mock_writer.return_value.tweet
+    assert packet["verdict"]["reason"] == mock_safety.return_value[1]
+    assert packet["verdict"]["response_status"] == "not_exposed"
     # Fact-check must NOT have been called — safety short-circuits to save cost.
     assert not mock_fact_check.called
     # Memory must not be written — only the happy path records.
@@ -855,6 +860,10 @@ def test_pipeline_critic_rejects_after_fact_check_pass(
     assert result is None
     assert result_out["kill_stage"] == "critic"
     assert "interesting_but_not_memorable" in result_out["kill_reason"]
+    packet = result_out["rejected_candidate"]
+    assert packet["schema_version"] == 2 and packet["scope"] == "selected_critic_rejection"
+    assert packet["text"] == mock_writer.return_value.tweet
+    assert packet["verdict"]["kill_reason"] == mock_critic.return_value.kill_reason
     # Critic ran AFTER fact-check — both should have been called.
     assert mock_fact_check.called
     assert mock_critic.called
