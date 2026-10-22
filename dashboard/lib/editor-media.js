@@ -25,7 +25,7 @@ export function platformDescriptionStatus(status) {
     platform_description_x_house_limit: "This description exceeds our 1,000-character or 1,000-byte limit for X.",
     platform_image_bluesky_limit: "This image exceeds Bluesky’s 2,000,000-byte limit.",
     platform_description_profile_changed: "The destination setup changed. Review the current description again.",
-    platform_description_unqualified: "This description does not preserve the full retained description.",
+    platform_description_unqualified: "This description has no qualified complete source projection.",
   }[status] || "The description or image could not be verified. Refresh before reviewing."
 }
 

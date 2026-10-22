@@ -15,7 +15,11 @@ export function DeliveryContentCard({ detail, imageUrl }) {
       width:detail.media.width, height:detail.media.height, style:{ maxWidth:"100%", height:"auto" } }),
       h("figcaption", null, `Earlier local approval recorded ${detail.approved_at}.`)),
     h("details", null, h("summary", { style:{ minHeight:44 } }, "Read the full earlier image description"),
-      h("p", { style:{ whiteSpace:"pre-wrap" } }, detail.media.alt_text)))
+      h("p", { style:{ whiteSpace:"pre-wrap" } }, detail.media.alt_text)),
+    detail.schema_version === 2 && h("section", { "aria-label":"Earlier reviewed platform description" },
+      h("h6", null, "Earlier reviewed platform description"),
+      h("p", { style:{ whiteSpace:"pre-wrap" } }, detail.platform_description.wire_text),
+      h("p", null, "This text was reviewed for the local delivery. The stage results show whether delivery was attempted or confirmed. The full retained description remains above.")))
 }
 
 export function DeliveryHistory({ view, draft, busy }) {

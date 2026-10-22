@@ -1,6 +1,6 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import { readFileSync } from "node:fs"
+import { readFileSync, writeFileSync } from "node:fs"
 import { createServer } from "node:http"
 import { runFixtureWorker } from "../test-support/fixture-worker.js"
 import { Readable } from "node:stream"
@@ -63,12 +63,35 @@ test("actual authenticated HTTP → native package → review → fresh checks �
     assert.equal(png.status,200);assert.ok(png.body.length>1000)
     assert.equal((await request(`/api/editor-media?draftId=draft-1&proposal=${current.preparation.proposal_sha256}`)).status,409)
     assert.equal((await request(mediaPath+"&proposal="+"f".repeat(64))).status,409)
+    const descriptionHash=current.platform_description.record.description_sha256
+    if(config.prepared_fixture)writeFileSync(config.prepared_fixture,JSON.stringify({prepared:current,png_base64:Buffer.from(png.body).toString("base64")}))
+    if(config.expect_modis_projection){
+      assert.equal(current.platform_description.record.schema_version,2)
+      assert.equal(current.platform_description.record.derivation,"modis_source_projection_v1")
+      assert.equal(current.platform_description.wire_text,current.platform_description.record.wire_text)
+      assert.ok(Buffer.byteLength(current.platform_description.wire_text)<=1000)
+      assert.ok(Buffer.byteLength(current.packet.media.alt_text+"\n")>1000)
+      assert.equal(current.platform_description.status,"fits_local_limits")
+    }
     const attachment=mediaCommand(current,"attach_media_revision",{decision:"accept",confirmations:Object.fromEntries(Object.keys(confirmationsFor(current.packet,current.platform_description)).map(k=>[k,true])),reason:"Reviewed actual invented source, PNG and alt together."},new Date(config.at))
     assert.equal(Object.keys(attachment.payload.review.confirmations).length,6)
     assert.equal(attachment.payload.review.expected_platform_description_sha256,current.platform_description.record.description_sha256)
+    if(config.expect_modis_projection){
+      const stale=structuredClone(attachment)
+      stale.command_id=crypto.randomUUID()
+      stale.payload.review.expected_platform_description_sha256="f".repeat(64)
+      assert.equal((await request("/api/drafts",stale)).status,202)
+      const held=await worker("consume",stale.command_id)
+      assert.equal(held.status,"rejected")
+      assert.deepEqual(await worker("consume",stale.command_id),held)
+      const still=(await request(mediaPath)).body
+      assert.equal(still.status,"prepared")
+      assert.equal(still.platform_description.record.description_sha256,descriptionHash)
+    }
     await submit(attachment)
     current=(await request(mediaPath)).body
     assert.equal(current.review_current,true)
+    if(config.expect_modis_projection)assert.equal(current.platform_description.record.description_sha256,descriptionHash)
     const checks=mediaCommand(current,"request_revision_checks",null,new Date(config.at))
     await submit(checks)
     assert.equal((await request(mediaPath)).body.checks_status,"pending")
@@ -78,11 +101,16 @@ test("actual authenticated HTTP → native package → review → fresh checks �
     }
     current=(await request(mediaPath)).body
     assert.equal(current.checks_status,"passed")
+    if(config.expect_modis_projection)assert.equal(current.platform_description.record.description_sha256,descriptionHash)
     const approve=mediaCommand(current,"approve_media_revision",null,new Date(config.at))
     assert.equal((await request("/api/drafts",approve)).status,403)
     const result=await submit(approve,"publisher")
     assert.ok(result.publish_intent_id)
     assert.equal((await request(mediaPath)).body.parked,true)
+    if(config.retain_parked){
+      assert.equal((await request(mediaPath)).body.platform_description.record.description_sha256,descriptionHash)
+      return
+    }
     const draft=(await request("/api/drafts")).body.drafts.find(d=>d.id===config.draft_id)
     assert.equal(draft.status,"pending")
     const edit=createDraftCommand(draft,"edit",{editedText:"An edited invented weather statement."},new Date(config.at))
