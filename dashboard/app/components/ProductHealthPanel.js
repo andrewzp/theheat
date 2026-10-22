@@ -1,4 +1,5 @@
 import React from "react"
+import PostOutcomeHistory from "./PostOutcomeHistory.js"
 
 const h = React.createElement
 function label(value) { return value ? String(value).replaceAll("_", " ") : "unknown" }
@@ -61,6 +62,7 @@ export function ProductHealthPanel({ health, config, deployment, stale = false }
           ? "No eligible retained posts. Collection access remains unverified."
           : `Retained metrics: ${label(metrics.status)}. Missing samples are not zero engagement.`),
         metrics.collector_unseen_receipt_count > 0 ? h("p", { className: "runtime-note" }, `${metrics.collector_unseen_receipt_count} retained receipts are outside the collector's current selection path.`) : null)),
+    h(PostOutcomeHistory, { outcomes: health.post_outcomes }),
     h("details", { className: "runtime-details" },
       h("summary", null, `Bot settings and evidence · ${label(config?.status)}`),
       h("p", { className: "runtime-note" }, config?.reason || "The bot has not recorded its runtime settings yet."),
