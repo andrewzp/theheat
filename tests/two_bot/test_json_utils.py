@@ -162,6 +162,35 @@ def test_one_result_remains_compatible_without_counting_nested_or_quoted_json(ra
     assert loads_model_json(raw) == value
 
 
+@pytest.mark.parametrize("url", [
+    "https://example.invalid/source", "http://example.invalid/source",
+    "https://example.invalid/path//part", "https://example.invalid/*path*/source",
+    "(https://example.invalid/source)", "<https://example.invalid/source>",
+    "source=https://example.invalid/source",
+    "https://[2001:db8::1]/path//part", "https://example.invalid/(part)//next",
+    "https://example.invalid/O'Reilly//part",
+], ids=["https", "http", "path-slashes", "path-star", "parentheses", "angle-brackets",
+        "assignment", "ipv6", "path-parentheses", "path-apostrophe"])
+@pytest.mark.parametrize("second_result", [False, True], ids=["preamble", "between-results"])
+def test_url_prose_preserves_one_result_and_cannot_hide_another_document(url, second_result):
+    if second_result:
+        raw = f'{{"passed":true}}\nSee {url} for context; revised result: {{"passed":false}}'
+        with pytest.raises(ModelJSONIntegrityError, match="Multiple"):
+            loads_model_json(raw, expected="object")
+    else:
+        assert loads_model_json(f'For {url} the result is {{"passed":true}}') == {"passed": True}
+
+
+@pytest.mark.parametrize("raw", [
+    'For https://example.invalid/source // {"passed":false}\n{"passed":true}',
+    '{"passed":true} /* See https://example.invalid/source {"passed":false} */',
+    '{"passed":// {"passed":false}\ntrue}',
+    '{"passed":/* https://example.invalid/source {"passed":false} */true}',
+], ids=["after-url", "block-around-url", "value-line-comment", "value-block-comment"])
+def test_true_comments_around_url_prose_and_inside_json_remain_compatible(raw):
+    assert loads_model_json(raw) == {"passed": True}
+
+
 @pytest.mark.parametrize("invalid", [
     '{"passed":true,"passed":false}', '{"value":NaN}', '{"value":Infinity}',
     '{"value":-Infinity}', '{"value":1e999}',

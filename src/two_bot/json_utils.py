@@ -38,6 +38,7 @@ def json_default(obj: Any):
 
 _FENCE_OPEN_RE = re.compile(r"^\s*```(?:json|JSON)?\s*\n?")
 _FENCE_CLOSE_RE = re.compile(r"\n?\s*```\s*$")
+_PROSE_URL_RE = re.compile(r"[A-Za-z][A-Za-z0-9+.-]*://")
 
 
 def strip_markdown_fences(raw: str) -> str:
@@ -154,7 +155,16 @@ def _quoted_string_end(text: str, start: int) -> int:
     return len(text)
 
 
-def _comment_end(text: str, start: int) -> int:
+def _comment_end(text: str, start: int, *, in_prose: bool = False) -> int:
+    if in_prose and (text.startswith("//", start) or text.startswith("/*", start)):
+        # A URL in model preamble is prose, including slash/star path segments.
+        # Inside JSON spans, retain the existing permissive comment grammar.
+        token_start = start
+        while (token_start > 0 and not text[token_start - 1].isspace()
+               and text[token_start - 1] not in '\"`<>{}'):
+            token_start -= 1
+        if _PROSE_URL_RE.search(text, token_start, start + 2):
+            return start
     if text.startswith("//", start):
         i = start + 2
         while i < len(text) and text[i] not in "\r\n":
@@ -205,7 +215,7 @@ def _iter_json_spans(text: str, expected: str = "any"):
         if ch == '"':
             i = _quoted_string_end(text, i)
             continue
-        comment_end = _comment_end(text, i)
+        comment_end = _comment_end(text, i, in_prose=True)
         if comment_end != i:
             i = comment_end
             continue

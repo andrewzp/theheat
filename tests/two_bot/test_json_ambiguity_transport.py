@@ -19,7 +19,7 @@ from src.two_bot.types import WriterResult
 from src.voice import safety
 from tests.test_negative_cache_boundaries import bundle, run_direct
 from tests.test_negative_cache import _score
-from tests.two_bot.conftest import _bundle, _state_with_memory
+from tests.two_bot.conftest import _bundle, _memory, _state_with_memory
 from tests.two_bot.test_candidate_derivation import packet
 
 
@@ -118,8 +118,9 @@ def test_ambiguous_writer_never_repairs_saves_or_qualifies_negative_cache(sdk_wi
 
 
 @pytest.mark.parametrize("raw", [ambiguous(FACT_PASS, FACT_FAIL), ambiguous(FACT_FAIL, FACT_PASS),
-    ambiguous(FACT_PASS, FACT_PASS), ambiguous([], FACT_PASS)],
-    ids=["pass-first", "fail-first", "identical-pass", "wrong-selector"])
+    ambiguous(FACT_PASS, FACT_PASS), ambiguous([], FACT_PASS),
+    json.dumps(FACT_PASS) + "\nSee https://example.invalid/source for context; revised result: " + json.dumps(FACT_FAIL)],
+    ids=["pass-first", "fail-first", "identical-pass", "wrong-selector", "url-hidden-second"])
 def test_fact_checker_ambiguity_fails_once_and_keeps_exact_raw_and_inputs(sdk_wires, raw):
     replies, anthropic_sends, sends = sdk_wires
     replies["google"] = raw
@@ -131,6 +132,27 @@ def test_fact_checker_ambiguity_fails_once_and_keeps_exact_raw_and_inputs(sdk_wi
     assert result.extracted_claims == [] and len(sends) == 1 and not anthropic_sends
     assert source.to_dict() == original_source and state == original_state
     assert "JSON-output retry" not in json.dumps(sends[0])
+
+
+def test_writer_url_preamble_remains_one_request_without_repair(sdk_wires):
+    replies, sends, google_sends = sdk_wires
+    replies["anthropic"] = "For https://example.invalid/source the result is " + json.dumps(VIABLE)
+    result = writer.write_tweet(_bundle(), _memory())
+    assert result.tweet == TEXT and result.kill_reason is None
+    assert len(sends) == 1 and not google_sends
+
+
+def test_critic_url_hidden_verdict_is_terminal_unavailable_without_repair(sdk_wires):
+    replies, anthropic_sends, sends = sdk_wires
+    replies["google"] = json.dumps(CRITIC_PASS) + (
+        "\nSee https://example.invalid/source for context; revised result: "
+    ) + json.dumps(CRITIC_KILL)
+    source = _bundle()
+    result = critic.critic_review(TEXT, source, _state_with_memory())
+    assert not result.passed and result.raw_response == "(json-parse retry exhausted)"
+    assert len(sends) == 1 and not anthropic_sends
+    captured = capture_critic_rejection(TEXT, source, capture_bundle(source), result, attempt=1)
+    assert captured["status"] == "unavailable" and captured["reason"] == "critic_check_unavailable"
 
 
 @pytest.mark.parametrize("slate", [False, True])
