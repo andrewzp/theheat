@@ -34,11 +34,11 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/commands/postgres_cost_projection.py": "222222cb7f9d19244fc82bb033abd067b12fedaa6e54a40f5eacb2b0c06a58fe",
     "src/commands/postgres_coverage.py": "edc97725c30d16d980872962a6d7157068727b3de823bd56c4db33fa77a45e31",
     "src/commands/postgres_delivery.py": "afc4744de02c64dc9fd9fc0c348adf1c725527f44c5fef158828f025e004494f",
-    "src/commands/postgres_editor_media.py": "fe82c8e5d0fe2550b84e3e07ad9f03784d60f7ede0202ff53c6082df79cc7561",
+    "src/commands/postgres_editor_media.py": "63796b9770db008e9b42aefd6c7a197d28b40621c01ddcaad8705d0e177541b7",
     "src/commands/postgres_ghcn_source_results.py": "fc06f61b007c003e299f78dac9be51b03db74a1d65569a59e0c407eb243eab42",
     "src/commands/postgres_important_variants.py": "eca11e40c09b5dbaf3ab50c8b5fa215067538cf3c4a77e4a32477d8260896002",
     "src/commands/postgres_media.py": "2c810a409b4fdbdb243e57e9acd652fe439d6c870f8874ab6decc7e9e20d37c6",
-    "src/commands/postgres_media_commands.py": "2f93987c257538542cbf70046b48e0703456d74de10867d819cf2fb3fc9b1744",
+    "src/commands/postgres_media_commands.py": "d9c3be787e147101a99623eb38e2b42dd1e81609e6740b38c03f815e643bb7cd",
     "src/commands/postgres_published_media.py": "bf34d53dd3b52cb00b81542d864787b056943e64ec5c1ccaa652876d5083143c",
     "src/commands/postgres_report_development.py": "4a93f353cd6560753d83afdf1ae4b9507b57318f3275351f2d9a5d8480230b68",
     "src/commands/postgres_revision_checks.py": "90508fe132757106356e6428b1b7e0fe63993fe22a9de815c7e57df8af1204be",
@@ -199,5 +199,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "8c4887f395618e343dafd55f5843987dfa6a7a620713c7c34bab9f419e4434fe"
   },
   "schema_version": 1,
-  "source_sha256": "ac1e38bf7c68416935d32721c812d12802c7f3ab6fbcc633615c0062d1cb634f"
+  "source_sha256": "3d49153e3422dfb2763be927f598b6f887bb777e6e64a8c14b388e8074efb807"
 }

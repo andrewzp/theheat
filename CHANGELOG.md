@@ -10,6 +10,10 @@
 
 ## 0.9.109.35
 
+- Reuse a freshly verified media package within its owning review operation,
+  preserving command guards, historical transition comparisons and current
+  source/permission checks. Avoid rebuilding the same package and description
+  repeatedly; keep all original check and transport deadlines.
 - Hold ambiguous GDACS current-episode selections before severity filtering;
   stage qualified candidates in source-key order and reuse exact pending
   repeats under the queue lock. Count actual admissions and report withholding.

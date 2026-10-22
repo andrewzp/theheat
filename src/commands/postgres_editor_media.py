@@ -219,7 +219,13 @@ def command_inputs(authority, c, state, command, actor, policy, now, *, ghcn=Non
 
 def package_current(authority, c, draft, proposal, value, policy):
     package = media.read(c, proposal, authority.environment)
+    return _package_current(authority, c, draft, proposal, value, package)
+
+
+def _package_current(authority, c, draft, proposal, value, package):
+    """Check current bindings against a package freshly verified on this read."""
     capture = package["capture"]
+    refuse(capture["proposal"]["proposal_sha256"] == proposal, "media_preparation_not_retained")
     refuse(capture["predecessor_state"]["drafts"][0]["id"] == draft["id"], "media_draft_mismatch")
     retained = generation.read(c, PREPARATION, proposal)
     refuse(retained["draft_id"] == draft["id"] and retained["proposal_sha256"] == proposal
@@ -242,14 +248,19 @@ def packet_for(draft, package, policy):
 
 
 def reviewed(authority, c, draft, value, policy, resolve_principal):
+    return _reviewed(authority, c, draft, value, policy, resolve_principal)[0]
+
+
+def _reviewed(authority, c, draft, value, policy, resolve_principal):
+    """Verify the exact pair once; retain its record for this same operation."""
     binding = draft.get("media_review_binding")
     refuse(type(binding) is dict and "media_attachment" in draft, "joint_media_review_required")
-    package = package_current(authority, c, draft, binding["proposal_sha256"], value, policy)
     intent = authority._intent(c, binding["command_id"])
     # One full retained-media verification: the explicit read below, not also inside _result.
     result = authority._result(c, binding["command_id"], media=False)
     refuse(intent is not None and result is not None, "joint_media_review_not_retained")
-    retained = media_commands.read(c, intent[0], result, authority.environment)
+    retained, package = media_commands.read_with_package(c, intent[0], result, authority.environment)
+    _package_current(authority, c, draft, binding["proposal_sha256"], value, package)
     record = retained["review"]
     refuse(retained["review"]["review_sha256"] == binding["review_sha256"]
            and record["packet"]["packet_sha256"] == binding["packet_sha256"], "joint_media_review_changed")
@@ -284,7 +295,7 @@ def reviewed(authority, c, draft, value, policy, resolve_principal):
         current_principal=reviewer, expected_draft_identity=draft_identity(draft), editorial_policy=policy,
         graphic_spec=stored["graphic_spec"], renderer_manifest=stored["renderer_manifest"], png_bytes=package["assets"]["preview.png"], **platform_inputs)
     refuse(status["current"] is True and status["accepted"] is True, "joint_media_review_obsolete")
-    return package
+    return package, record
 
 
 def boundary(authority, c, state, version, command, actor, policy, now, resolve_principal, prepared=None, ghcn=None):
@@ -544,12 +555,11 @@ def projection(authority, c, draft_id, *, state, version, policy, now, resolve_p
                 continue
         if "media_attachment" in draft:
             try:
-                reviewed_package = reviewed(authority, c, draft, value, policy, resolve_principal)
+                reviewed_package, reviewed_record = _reviewed(authority, c, draft, value, policy, resolve_principal)
                 view["review_current"] = True
                 view["expected_review_sha256"] = draft["media_review_binding"]["review_sha256"]
                 if draft["media_review_binding"].get("schema_version") == 2:
-                    review_command = authority._intent(c, draft["media_review_binding"]["command_id"])[0]
-                    retained_description = media_commands.read(c, review_command, authority._result(c, review_command.command_id), authority.environment)["review"]["platform_description"]
+                    retained_description = reviewed_record["platform_description"]
                     view["platform_description"].update(record=retained_description,
                         wire_text=retained_description.get("wire_text", reviewed_package["assets"]["alt.txt"].decode("utf-8")))
                 try:

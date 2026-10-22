@@ -73,8 +73,8 @@ class MediaTransition:
     review: dict | None = None
 
 
-def prepare(c, state, command, actor, *, now, editorial_policy, environment, platform_profiles=None, _description_derivation=None):
-    """Read verified storage separately from deterministic command validation."""
+def _prepare_guards(c, command, actor, *, now, editorial_policy, environment):
+    """Keep the same command guards for fresh execution and historical replay."""
     validate(c, environment)
     if actor.subject != command.actor_subject:
         raise CommandError("forbidden", "The current identity differs from the accepted command")
@@ -85,6 +85,11 @@ def prepare(c, state, command, actor, *, now, editorial_policy, environment, pla
         raise CommandError("invalid_time", "The media command is too far in the future")
     if fingerprint(editorial_policy) != command.payload["expected_policy_sha256"]:
         raise CommandError("editorial_policy_changed", "Editorial policy changed since media review")
+
+
+def prepare(c, state, command, actor, *, now, editorial_policy, environment, platform_profiles=None, _description_derivation=None):
+    """Read verified storage separately from deterministic command validation."""
+    _prepare_guards(c, command, actor, now=now, editorial_policy=editorial_policy, environment=environment)
     package = None
     if command.action in {"attach_media_revision", "review_media_revision"}:
         package = _package(c, command.payload["proposal_sha256"], environment)
@@ -216,6 +221,15 @@ def read(c, command: Command, result: dict, environment):
     Historical reviewer role is retained provenance, not current permission.
     This function does not call the authority's result reader recursively.
     """
+    return read_with_package(c, command, result, environment)[0]
+
+
+def read_with_package(c, command: Command, result: dict, environment):
+    """Return the verified review and its freshly verified package together.
+
+    No caller-supplied package or cache is accepted. Both are reconstructed on
+    this connection; callers can reuse them only in this owning transaction.
+    """
     validate(c, environment)
     try:
         return _read(c, command, result, environment)
@@ -240,10 +254,14 @@ def _read(c, command, result, environment):
     _, before = p.PostgresProjectionRepository._read(c, "command-core-v1", str(version - 1))
     _, after = p.PostgresProjectionRepository._read(c, "command-core-v1", str(version))
     policy = result["media"]["editorial_policy"] if command.action == "review_media_revision" else package["capture"]["inputs"]["editorial_policy"]
-    transition = prepare(c, before, command, actor, now=utc_datetime(result["completed_at"]),
-        editorial_policy=policy, environment=environment,
-        platform_profiles=record.get("platform_description", {}).get("profiles"),
-        _description_derivation=record.get("platform_description", {}).get("derivation"))
+    at = utc_datetime(result["completed_at"])
+    _prepare_guards(c, command, actor, now=at, editorial_policy=policy, environment=environment)
+    # _package above already verified these exact assets and the reconstructed
+    # proposal on this connection. Replaying the same transition needs no second
+    # package read. Every command guard and before/after equality remains below.
+    transition = _prepare(before, command, actor, at, policy, package,
+        record.get("platform_description", {}).get("profiles"),
+        record.get("platform_description", {}).get("derivation"))
     if record.get("schema_version") == 3:
         expected = p._canonical(record["platform_description"])
         p._require(media._raw(c, p._sha(expected), MAX_REVIEW_BYTES) == expected, "changed_platform_description_artifact")
@@ -253,6 +271,7 @@ def _read(c, command, result, environment):
                and list(transition.reduction.changed_ids) == result["changed_ids"]
                and p._canonical(list(transition.reduction.identities)) == p._canonical(result["identities"])
                and result["publish_intent_id"] is None, "changed_media_command_transition")
-    return dict(command_id=command.command_id, review=record, artifact_sha256=row[2],
+    retained = dict(command_id=command.command_id, review=record, artifact_sha256=row[2],
         proposal_sha256=row[0], currentness="not_evaluated", status="historical",
         publication_approved=False, production_attachment_authorized=False)
+    return retained, package

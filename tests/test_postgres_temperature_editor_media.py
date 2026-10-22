@@ -776,7 +776,8 @@ def test_compact_claim_native_review_checks_park_restore_and_invalidation(compac
     start = len(trace_rows(case))
     for stage in ("deterministic", "safety", "fact_check", "critic"):
         completed = ghcn_worker(case, stage, request["command_id"])
-        assert completed["outcome"] == "completed" and completed["checks"]["stages"][stage] == "passed", completed
+        assert completed["outcome"] == "completed" and completed["checks"]["stages"][stage] == "passed", (
+            stage, json.dumps(completed, sort_keys=True))
     rows = trace_rows(case, start)
     stages = [row for row in rows if row["kind"] == "revision_stage"]
     assert [row["stage"] for row in stages] == ["deterministic", "safety", "fact_check", "critic"]
