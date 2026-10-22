@@ -1,6 +1,6 @@
 {
   "identity": {
-    "archive_sha256": "972dfe5c1e59e3dc47fd62af9d4ace1c9a380ab5c824a5414dd7a032f67ed0ab",
+    "archive_sha256": "862453d2e3e8955dad4864192ba3609895fdf5ea055771f8150c9f62fa5aa0fb",
     "deployment_files": {
       "api/graphic_preview.py": "f7521adcbd618f4b65b2a0de30ea62aaff4cdd36f2254e9af38bf68646d361ad",
       "api/graphic_reader_status.py": "5e9685d699625a4eea9d5be884b6e266939a0ad344a2997351ba79bd114407ba",
@@ -79,17 +79,17 @@
       "src/two_bot/evidence_contract.py": "506c86325dd4b589d5cd4f202461b65447f323218ccbaa8eacc0c92230e8f6a8",
       "src/two_bot/intern/__init__.py": "2e34d6b9975fb831edbad10ed06d66aad2e8569a29cfd4cf17784177b91205e0",
       "src/two_bot/intern/air_quality.py": "f4fc20d4c197d4f604e1fa53e43ef02b658613940863eb5f4d41e0995d6c8ff0",
-      "src/two_bot/json_utils.py": "87bc4c7174797ed5cddf96d60af0e6e2237094859001cdeeb93eaf794497db03",
+      "src/two_bot/json_utils.py": "c09fd98817c8e478a38cdeb1028769ec146ad0f94701235b7c1e12de7a46e7da",
       "src/two_bot/strict_contract.py": "d4536268c08775cea808d3f2738226da9d33d7244a8c30988d5286d6dae83ca8",
       "src/two_bot/types.py": "36ed2e6475a655f4112012486795702159ed546c3040e8ef1874b7a0b02a9035"
     },
     "format": "saved-source-svg-preview-v2",
-    "policy_source_sha256": "2cba7cf8a5bb6f2492151b93125ac42fe905a12b83dc595b84bc3d677c75b742",
+    "policy_source_sha256": "af60511deed2780bd68080ad577f2edfb9a3845785225f5d996dfb12b969ce55",
     "resource_sources": {
       "src/data/registry/country_codes.json": "data/country_codes.json",
       "src/data/registry/place_registry.json": "data/place_registry.json"
     },
     "schema_version": 1
   },
-  "runtime_sha256": "478116d9f39b575a62763a103d21e7ddfc7051b51b371fca178e15295e41eb15"
+  "runtime_sha256": "8cf3a49b613cefc124b87b6f737d3fbb0055b24204b34869c71d5f6833275f74"
 }

@@ -1,3 +1,17 @@
+## 0.9.109.34
+
+- Derive a versioned MODIS map description from every selected source row, with
+  exact values and scientific cautions. Show the platform text beside the full
+  retained description; bind review, delivery and historical receipts to its
+  exact bytes. Overlong or unsupported descriptions stay held. Local invented
+  transport and recovery are tested; live platforms and publishing stay gated.
+- Reject multiple model JSON results across writer and required-check callers
+  without another repair request, saved draft or rejection-cache qualification.
+  Preserve unavailable checks, raw diagnostic limits and single-result parsing.
+- Refuse unsupported paid news calls before credentials or SDK construction
+  inside a finite sample trial. Preserve its terminal cause and allowance;
+  ordinary news behavior is unchanged. This is not an account-wide spending cap.
+
 ## 0.9.109.33
 
 - Define closed domain records and source-specific extensions over existing
