@@ -1,0 +1,901 @@
+{
+  "$defs": {
+    "BaselineRevision": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "baseline_revision",
+          "default": "baseline_revision",
+          "title": "Kind",
+          "type": "string"
+        },
+        "database_sha256": {
+          "title": "Database Sha256",
+          "type": "string"
+        },
+        "manifest_sha256": {
+          "title": "Manifest Sha256",
+          "type": "string"
+        },
+        "stations_sha256": {
+          "title": "Stations Sha256",
+          "type": "string"
+        },
+        "threshold_rows_sha256": {
+          "title": "Threshold Rows Sha256",
+          "type": "string"
+        },
+        "provenance_sha256": {
+          "title": "Provenance Sha256",
+          "type": "string"
+        },
+        "scope": {
+          "const": "retained_threshold_database_not_certified_record",
+          "title": "Scope",
+          "type": "string"
+        }
+      },
+      "required": [
+        "database_sha256",
+        "manifest_sha256",
+        "stations_sha256",
+        "threshold_rows_sha256",
+        "provenance_sha256",
+        "scope"
+      ],
+      "title": "BaselineRevision",
+      "type": "object"
+    },
+    "CheckExecution": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "check_execution",
+          "default": "check_execution",
+          "title": "Kind",
+          "type": "string"
+        },
+        "check_set_id": {
+          "title": "Check Set Id",
+          "type": "string"
+        },
+        "grant_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Grant Id"
+        },
+        "job_id": {
+          "title": "Job Id",
+          "type": "string"
+        },
+        "stage": {
+          "title": "Stage",
+          "type": "string"
+        },
+        "request_sha256": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Request Sha256"
+        },
+        "observation_sha256": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Observation Sha256"
+        },
+        "receipt_sha256": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Receipt Sha256"
+        },
+        "disposition": {
+          "enum": [
+            "pending",
+            "unresolved",
+            "passed",
+            "rejected",
+            "error",
+            "unavailable",
+            "stale"
+          ],
+          "title": "Disposition",
+          "type": "string"
+        }
+      },
+      "required": [
+        "check_set_id",
+        "grant_id",
+        "job_id",
+        "stage",
+        "request_sha256",
+        "observation_sha256",
+        "receipt_sha256",
+        "disposition"
+      ],
+      "title": "CheckExecution",
+      "type": "object"
+    },
+    "ClaimRevision": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "claim_revision",
+          "default": "claim_revision",
+          "title": "Kind",
+          "type": "string"
+        },
+        "claim_id": {
+          "title": "Claim Id",
+          "type": "string"
+        },
+        "claim_type": {
+          "title": "Claim Type",
+          "type": "string"
+        },
+        "assertion_class": {
+          "enum": [
+            "threshold",
+            "available_sample_comparator",
+            "reported_impact",
+            "forecast",
+            "warning",
+            "source_reported_observation",
+            "physical_episode_opportunity",
+            "source_assertion"
+          ],
+          "title": "Assertion Class",
+          "type": "string"
+        },
+        "evidence_class": {
+          "title": "Evidence Class",
+          "type": "string"
+        },
+        "scope": {
+          "title": "Scope",
+          "type": "string"
+        },
+        "time": {
+          "$ref": "#/$defs/TimeValue"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
+        },
+        "unit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Unit"
+        }
+      },
+      "required": [
+        "claim_id",
+        "claim_type",
+        "assertion_class",
+        "evidence_class",
+        "scope",
+        "time"
+      ],
+      "title": "ClaimRevision",
+      "type": "object"
+    },
+    "DraftRevision": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "draft_revision",
+          "default": "draft_revision",
+          "title": "Kind",
+          "type": "string"
+        },
+        "entity_id": {
+          "title": "Entity Id",
+          "type": "string"
+        },
+        "legacy_id": {
+          "title": "Legacy Id",
+          "type": "string"
+        },
+        "revision_id": {
+          "title": "Revision Id",
+          "type": "string"
+        },
+        "content_revision": {
+          "title": "Content Revision",
+          "type": "integer"
+        },
+        "text_sha256": {
+          "title": "Text Sha256",
+          "type": "string"
+        },
+        "evidence_sha256": {
+          "title": "Evidence Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "entity_id",
+        "legacy_id",
+        "revision_id",
+        "content_revision",
+        "text_sha256",
+        "evidence_sha256"
+      ],
+      "title": "DraftRevision",
+      "type": "object"
+    },
+    "Extension": {
+      "additionalProperties": false,
+      "properties": {
+        "namespace": {
+          "title": "Namespace",
+          "type": "string"
+        },
+        "schema_version": {
+          "title": "Schema Version",
+          "type": "integer"
+        },
+        "supported_projection": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Supported Projection"
+        },
+        "artifact": {
+          "$ref": "#/$defs/OwnerRef"
+        },
+        "disposition": {
+          "enum": [
+            "retained_source_specific",
+            "opaque_unverified"
+          ],
+          "title": "Disposition",
+          "type": "string"
+        }
+      },
+      "required": [
+        "namespace",
+        "schema_version",
+        "supported_projection",
+        "artifact",
+        "disposition"
+      ],
+      "title": "Extension",
+      "type": "object"
+    },
+    "Job": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "job",
+          "default": "job",
+          "title": "Kind",
+          "type": "string"
+        },
+        "job_id": {
+          "title": "Job Id",
+          "type": "string"
+        },
+        "plan_sha256": {
+          "title": "Plan Sha256",
+          "type": "string"
+        },
+        "intent_id": {
+          "title": "Intent Id",
+          "type": "string"
+        },
+        "registered_at": {
+          "$ref": "#/$defs/TimeValue"
+        },
+        "useful_until": {
+          "$ref": "#/$defs/TimeValue"
+        }
+      },
+      "required": [
+        "job_id",
+        "plan_sha256",
+        "intent_id",
+        "registered_at",
+        "useful_until"
+      ],
+      "title": "Job",
+      "type": "object"
+    },
+    "Observation": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "observation",
+          "default": "observation",
+          "title": "Kind",
+          "type": "string"
+        },
+        "subject_id": {
+          "title": "Subject Id",
+          "type": "string"
+        },
+        "variable": {
+          "title": "Variable",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Value"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        },
+        "product": {
+          "title": "Product",
+          "type": "string"
+        },
+        "evidence_class": {
+          "title": "Evidence Class",
+          "type": "string"
+        },
+        "time": {
+          "$ref": "#/$defs/TimeValue"
+        },
+        "interval": {
+          "$ref": "#/$defs/TimeValue"
+        },
+        "place_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Place Id"
+        }
+      },
+      "required": [
+        "subject_id",
+        "variable",
+        "value",
+        "unit",
+        "product",
+        "evidence_class",
+        "time",
+        "interval"
+      ],
+      "title": "Observation",
+      "type": "object"
+    },
+    "OwnerRef": {
+      "additionalProperties": false,
+      "properties": {
+        "owner": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Owner",
+          "type": "string"
+        },
+        "namespace": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Namespace",
+          "type": "string"
+        },
+        "record_id": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Record Id",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "locator": {
+          "default": "",
+          "maxLength": 2000,
+          "title": "Locator",
+          "type": "string"
+        }
+      },
+      "required": [
+        "owner",
+        "namespace",
+        "record_id",
+        "sha256"
+      ],
+      "title": "OwnerRef",
+      "type": "object"
+    },
+    "PhysicalEventRevision": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "physical_event_revision",
+          "default": "physical_event_revision",
+          "title": "Kind",
+          "type": "string"
+        },
+        "episode_id": {
+          "title": "Episode Id",
+          "type": "string"
+        },
+        "sequence": {
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "previous_sha256": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Previous Sha256"
+        },
+        "state": {
+          "enum": [
+            "confirmed_source_identity",
+            "held"
+          ],
+          "title": "State",
+          "type": "string"
+        },
+        "observed_at": {
+          "$ref": "#/$defs/TimeValue"
+        },
+        "policy": {
+          "title": "Policy",
+          "type": "string"
+        }
+      },
+      "required": [
+        "episode_id",
+        "sequence",
+        "previous_sha256",
+        "state",
+        "observed_at",
+        "policy"
+      ],
+      "title": "PhysicalEventRevision",
+      "type": "object"
+    },
+    "Place": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "place",
+          "default": "place",
+          "title": "Kind",
+          "type": "string"
+        },
+        "place_id": {
+          "title": "Place Id",
+          "type": "string"
+        },
+        "sampling_point_id": {
+          "title": "Sampling Point Id",
+          "type": "string"
+        },
+        "country_code": {
+          "title": "Country Code",
+          "type": "string"
+        },
+        "city": {
+          "title": "City",
+          "type": "string"
+        },
+        "lat": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Lat"
+        },
+        "lon": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Lon"
+        }
+      },
+      "required": [
+        "place_id",
+        "sampling_point_id",
+        "country_code",
+        "city",
+        "lat",
+        "lon"
+      ],
+      "title": "Place",
+      "type": "object"
+    },
+    "Relationship": {
+      "additionalProperties": false,
+      "properties": {
+        "role": {
+          "title": "Role",
+          "type": "string"
+        },
+        "target": {
+          "$ref": "#/$defs/OwnerRef"
+        },
+        "disposition": {
+          "enum": [
+            "present_in_inspection",
+            "missing",
+            "conflicting",
+            "opaque"
+          ],
+          "title": "Disposition",
+          "type": "string"
+        },
+        "content_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Content Sha256"
+        },
+        "source_identity_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Identity Sha256"
+        }
+      },
+      "required": [
+        "role",
+        "target",
+        "disposition"
+      ],
+      "title": "Relationship",
+      "type": "object"
+    },
+    "Review": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "review",
+          "default": "review",
+          "title": "Kind",
+          "type": "string"
+        },
+        "review_id": {
+          "title": "Review Id",
+          "type": "string"
+        },
+        "job_id": {
+          "title": "Job Id",
+          "type": "string"
+        },
+        "receipt_id": {
+          "title": "Receipt Id",
+          "type": "string"
+        },
+        "fence": {
+          "title": "Fence",
+          "type": "integer"
+        },
+        "recorded_at": {
+          "$ref": "#/$defs/TimeValue"
+        },
+        "review_class": {
+          "const": "retained_machine_result_review",
+          "title": "Review Class",
+          "type": "string"
+        }
+      },
+      "required": [
+        "review_id",
+        "job_id",
+        "receipt_id",
+        "fence",
+        "recorded_at",
+        "review_class"
+      ],
+      "title": "Review",
+      "type": "object"
+    },
+    "SourceRun": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "source_run",
+          "default": "source_run",
+          "title": "Kind",
+          "type": "string"
+        },
+        "source": {
+          "title": "Source",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "captured_at": {
+          "$ref": "#/$defs/TimeValue"
+        },
+        "outcome": {
+          "enum": [
+            "success",
+            "degraded",
+            "failed"
+          ],
+          "title": "Outcome",
+          "type": "string"
+        },
+        "product": {
+          "title": "Product",
+          "type": "string"
+        },
+        "evidence_class": {
+          "title": "Evidence Class",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source",
+        "run_id",
+        "captured_at",
+        "outcome",
+        "product",
+        "evidence_class"
+      ],
+      "title": "SourceRun",
+      "type": "object"
+    },
+    "TimeValue": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "instant",
+            "source_calendar_date",
+            "interval",
+            "unknown"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "original": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Original"
+        },
+        "start": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Start"
+        },
+        "end": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "End"
+        },
+        "timezone": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timezone"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "TimeValue",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "reference": {
+      "$ref": "#/$defs/OwnerRef"
+    },
+    "core": {
+      "discriminator": {
+        "mapping": {
+          "baseline_revision": "#/$defs/BaselineRevision",
+          "check_execution": "#/$defs/CheckExecution",
+          "claim_revision": "#/$defs/ClaimRevision",
+          "draft_revision": "#/$defs/DraftRevision",
+          "job": "#/$defs/Job",
+          "observation": "#/$defs/Observation",
+          "physical_event_revision": "#/$defs/PhysicalEventRevision",
+          "place": "#/$defs/Place",
+          "review": "#/$defs/Review",
+          "source_run": "#/$defs/SourceRun"
+        },
+        "propertyName": "kind"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/Place"
+        },
+        {
+          "$ref": "#/$defs/SourceRun"
+        },
+        {
+          "$ref": "#/$defs/Observation"
+        },
+        {
+          "$ref": "#/$defs/BaselineRevision"
+        },
+        {
+          "$ref": "#/$defs/PhysicalEventRevision"
+        },
+        {
+          "$ref": "#/$defs/ClaimRevision"
+        },
+        {
+          "$ref": "#/$defs/DraftRevision"
+        },
+        {
+          "$ref": "#/$defs/Review"
+        },
+        {
+          "$ref": "#/$defs/CheckExecution"
+        },
+        {
+          "$ref": "#/$defs/Job"
+        }
+      ],
+      "title": "Core"
+    },
+    "extensions": {
+      "items": {
+        "$ref": "#/$defs/Extension"
+      },
+      "title": "Extensions",
+      "type": "array"
+    },
+    "relationships": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Relationship"
+      },
+      "title": "Relationships",
+      "type": "array"
+    },
+    "qualification": {
+      "const": "unverified",
+      "default": "unverified",
+      "title": "Qualification",
+      "type": "string"
+    },
+    "publication_authorized": {
+      "const": false,
+      "default": false,
+      "title": "Publication Authorized",
+      "type": "boolean"
+    },
+    "disposition": {
+      "default": "projected_unverified",
+      "enum": [
+        "projected_unverified",
+        "conflicting_identity"
+      ],
+      "title": "Disposition",
+      "type": "string"
+    }
+  },
+  "required": [
+    "reference",
+    "core",
+    "extensions"
+  ],
+  "title": "DomainObject",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

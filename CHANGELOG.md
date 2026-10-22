@@ -1,3 +1,12 @@
+## 0.9.109.33
+
+- Define closed domain records and source-specific extensions over existing
+  artifact owners, connected to read-only inspection with exact bytes and explicit
+  missing/conflicting relationships. No backend, migration or execution authority.
+- Retain bounded selected safety and critic rejection context without another
+  model call. Preserve unavailable outcomes, revision/source bindings, existing
+  factual packets and retention; API authentication does not make Gist private.
+
 ## 0.9.109.32
 
 - Reconcile the original 45-package public acceptance page with released local

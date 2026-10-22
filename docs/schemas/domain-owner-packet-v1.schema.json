@@ -1,0 +1,49 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "owner": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Owner",
+      "type": "string"
+    },
+    "namespace": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Namespace",
+      "type": "string"
+    },
+    "record_id": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Record Id",
+      "type": "string"
+    },
+    "sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Sha256",
+      "type": "string"
+    },
+    "payload_base64": {
+      "maxLength": 22369624,
+      "title": "Payload Base64",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "owner",
+    "namespace",
+    "record_id",
+    "sha256",
+    "payload_base64"
+  ],
+  "title": "OwnerPacket",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}
