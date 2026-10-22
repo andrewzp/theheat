@@ -197,7 +197,18 @@ Only include entries where you found an explicit figure with a source. An empty
 list is a correct answer."""
 
 
+def _refuse_finite_trial_news() -> None:
+    """News and grounding charges are outside the finite trial's allowance."""
+    from src.two_bot.trial_budget import current_trial
+
+    budget = current_trial()
+    if budget is not None:
+        # Preserve an earlier terminal cause when an outer news handler retries.
+        budget.stop(budget.stopped or "trial_unassigned_stage")
+
+
 def _call_grounded_search(now: datetime) -> str:
+    _refuse_finite_trial_news()
     api_key = os.environ.get("GEMINI_API_KEY", "")
     if not api_key:
         raise RuntimeError("GEMINI_API_KEY is required for grounded news search")
@@ -364,6 +375,7 @@ def _verify_grounded(events: list[dict], result: NewsRetrievalResult) -> list[di
 
 
 def _call_verify_flash(claim: str, value: Any, page_text: str) -> str:
+    _refuse_finite_trial_news()
     api_key = os.environ.get("GEMINI_API_KEY", "")
     if not api_key:
         raise RuntimeError("GEMINI_API_KEY is required for claim verification")

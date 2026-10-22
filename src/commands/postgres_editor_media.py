@@ -463,20 +463,25 @@ def projection(authority, c, draft_id, *, state, version, policy, now, resolve_p
                 fit = "fits_local_limits"
                 try:
                     descriptions.preflight(description, raw_alt=package["assets"]["alt.txt"], png=package["assets"]["preview.png"],
-                        expected_profiles=description_profiles(authority))
+                        expected_profiles=description_profiles(authority), graphic_spec=package["capture"]["inputs"]["graphic_spec"])
                 except descriptions.DescriptionError as exc:
                     fit = exc.code
                 view["platform_description"] = dict(record=description,
-                    wire_text=package["assets"]["alt.txt"].decode("utf-8"), status=fit,
+                    wire_text=description.get("wire_text", package["assets"]["alt.txt"].decode("utf-8")), status=fit,
                     qualification="offline_fixture_only" if description["profiles"]["profile"] == descriptions.FIXTURE_PROFILE else "unqualified")
                 break
             except (CommandError, ValueError):
                 continue
         if "media_attachment" in draft:
             try:
-                reviewed(authority, c, draft, value, policy, resolve_principal)
+                reviewed_package = reviewed(authority, c, draft, value, policy, resolve_principal)
                 view["review_current"] = True
                 view["expected_review_sha256"] = draft["media_review_binding"]["review_sha256"]
+                if draft["media_review_binding"].get("schema_version") == 2:
+                    review_command = authority._intent(c, draft["media_review_binding"]["command_id"])[0]
+                    retained_description = media_commands.read(c, review_command, authority._result(c, review_command.command_id), authority.environment)["review"]["platform_description"]
+                    view["platform_description"].update(record=retained_description,
+                        wire_text=retained_description.get("wire_text", reviewed_package["assets"]["alt.txt"].decode("utf-8")))
                 try:
                     view["parked"] = parked(authority, c, draft, state, version, value, policy, now, resolve_principal)
                     if view["parked"]:

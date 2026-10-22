@@ -203,3 +203,19 @@ test("failed media body cleanup preserves the primary error without an unhandled
   assert.ifError(result.error)
   assert.equal(result.status,0,result.stderr || result.stdout)
 })
+
+
+test("source MODIS wire is distinct from full retained detail and requires faithful confirmation", () => {
+  const current=view()
+  current.packet.media.alt_text="Complete retained source and map detail, unchanged."
+  current.platform_description={record:{schema_version:2,derivation:"modis_source_projection_v1",description_sha256:"b".repeat(64)},wire_text:"Exact source-backed MODIS wire text.",status:"fits_local_limits"}
+  const html=renderToStaticMarkup(React.createElement(EditorMediaPanel,{view:current,role:"publisher",imageUrl:"blob:invented",confirmations:{},reason:"",setConfirmations(){},setReason(){},submit(){},refresh(){}}))
+  assert.match(html,/Exact source-backed MODIS wire text/)
+  assert.match(html,/Complete retained source and map detail, unchanged/)
+  assert.match(html,/every selected row and its scientific qualifications/)
+  assert.match(html,/additional source and map detail/)
+  assert.doesNotMatch(html,/full retained description is reused exactly/)
+  assert.equal((html.match(/type="checkbox"/g)||[]).length,6)
+  assert.match(html,/disabled=""[^>]*>Attach reviewed graphic/)
+  assert.match(html,/faithfully describes this graphic and preserves its required qualifications/)
+})

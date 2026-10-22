@@ -26,11 +26,12 @@ export function deliveryHistoryKey(draft) {
 }
 
 export async function validateDeliveryContent(value, draft, intent) {
+  const projected=value?.schema_version === 2
   if (!keys(value, ["schema_version", "draft_id", "target", "scope", "publication_approved", "intent_id", "command_id",
-    "approved_at", "approved_target", "text", "proposal_sha256", "packet_sha256", "preparation_packet_sha256", "synthetic", "media", "operator_subject"]) ||
+    "approved_at", "approved_target", "text", "proposal_sha256", "packet_sha256", "preparation_packet_sha256", "synthetic", "media", "operator_subject", ...(projected?["platform_description"]:[])]) ||
     !deliveryHistoryKey(draft) || value.operator_subject !== draft.operator_subject || !sameMediaTarget(value, draft) ||
     !identity(value.target) || !identity(value.approved_target) || value.approved_target.draft_id !== draft.id ||
-    value.schema_version !== 1 || value.scope !== "local_http_fixture_v1" || value.intent_id !== intent || !uuid(intent) ||
+    ![1,2].includes(value.schema_version) || value.scope !== "local_http_fixture_v1" || value.intent_id !== intent || !uuid(intent) ||
     !uuid(value.command_id) || typeof value.approved_at !== "string" || !Number.isFinite(Date.parse(value.approved_at)) ||
     ![value.proposal_sha256, value.packet_sha256, value.preparation_packet_sha256].every(sha) || typeof value.synthetic !== "boolean") unavailable()
   const media = value.media
@@ -41,6 +42,14 @@ export async function validateDeliveryContent(value, draft, intent) {
   const text = utf8(value.text), alt = utf8(media.alt_text)
   if (alt.length > 1_000_000 || await digest(text) !== value.approved_target.text_sha256 ||
       await digest(alt) !== media.alt_text_sha256) unavailable()
+  if(projected){
+    const description=value.platform_description
+    if(!keys(description,["description_sha256","derivation","wire_text","wire_sha256","raw_alt_sha256","status"]) ||
+      !sha(description.description_sha256) || !sha(description.wire_sha256) || description.raw_alt_sha256!==media.alt_text_sha256 ||
+      description.derivation!=="modis_source_projection_v1" || description.status!=="reviewed_for_local_delivery") unavailable()
+    const wire=utf8(description.wire_text)
+    if(!wire.length || wire.length>1_000_000 || await digest(wire)!==description.wire_sha256) unavailable()
+  }
   return value
 }
 

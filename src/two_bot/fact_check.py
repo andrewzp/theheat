@@ -17,7 +17,7 @@ from src.two_bot.trial_budget import google_trial_options, provider_call
 from src.two_bot.scientific_claims import scientific_claim_failures
 from src.two_bot.strict_contract import CLAIM_KINDS, bundle_schema_issues, material_span_failures, review_snapshot
 from src.two_bot.types import ExtractedClaim, FactCheckResult, StoryBundle
-from src.two_bot.json_utils import json_default as _json_default, loads_model_json, model_response_diagnostic, ModelOutputContractError
+from src.two_bot.json_utils import json_default as _json_default, loads_model_json, model_response_diagnostic, ModelJSONIntegrityError, ModelOutputContractError
 
 FACT_CHECKER_MODEL = os.environ.get("THEHEAT_FACT_CHECK_MODEL", CHEAP_MODEL)
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
@@ -102,6 +102,8 @@ def _parse_fact_check_json(
 ) -> tuple[bool, list[str], list[ExtractedClaim]]:
     try:
         parsed = loads_model_json(raw, expected="object")
+    except ModelJSONIntegrityError as exc:
+        raise ModelJSONIntegrityError(f"Fact-checker returned invalid JSON ({model_response_diagnostic(raw)})") from exc
     except ValueError as exc:
         raise ValueError(f"Fact-checker returned invalid JSON ({model_response_diagnostic(raw)})") from exc
     if not isinstance(parsed, dict):
@@ -290,7 +292,7 @@ def fact_check(
             # A prior extractor is context, not permission for this checker to
             # omit its inventory. Each completed factual check owns its claims.
             return interpret_response(tweet, raw, state, bundle=bundle)
-        except ModelOutputContractError as exc:
+        except (ModelJSONIntegrityError, ModelOutputContractError) as exc:
             return FactCheckResult(
                 passed=False, failures=[f"Fact-check output contract rejected: {exc}"],
                 raw_response=raw, extracted_claims=extracted,

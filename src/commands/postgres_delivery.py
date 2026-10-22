@@ -142,7 +142,7 @@ def description_preflight(authority, c, draft, package):
            "platform_description_changed")
     try:
         descriptions.preflight(record, raw_alt=package["assets"]["alt.txt"], png=package["assets"]["preview.png"],
-            expected_profiles=description_profiles(authority))
+            expected_profiles=description_profiles(authority), graphic_spec=package["capture"]["inputs"]["graphic_spec"])
     except descriptions.DescriptionError as exc:
         raise CommandError(exc.code, "The complete selected delivery set is withheld") from None
     return record
@@ -336,9 +336,13 @@ def acquire(authority, c, value, platform, stage, owner, resolve_principal, now)
         c.execute(f"INSERT INTO {SCHEMA}.leases VALUES(%s,%s,%s,%s,%s,%s)",
                   (work(value, platform), stage, fence, owner, utc_text(now), expires))
     refuse((min(utc_datetime(expires), deadline) - now).total_seconds() >= MIN_WINDOW_SECONDS, "delivery_window_insufficient")
+    raw_alt = package["assets"]["alt.txt"]
+    spec = package["capture"]["inputs"]["graphic_spec"]
+    wire = descriptions.validate(value["platform_description"], raw_alt=raw_alt,
+        png=package["assets"]["preview.png"], graphic_spec=spec)
     return dict(dispatch_granted=False, lease=dict(owner=owner, fence=fence, expires_at=expires),
                 prior={key:row["result"] for key,row in prior.items()},
-                png=package["assets"]["preview.png"], alt=package["assets"]["alt.txt"].decode("utf-8"))
+                png=package["assets"]["preview.png"], alt=wire, raw_alt=raw_alt, graphic_spec=spec)
 
 
 def begin(authority, c, value, platform, stage, lease, request, body, resolve_principal, now):
@@ -497,5 +501,26 @@ def _historical_content(authority, c, draft_id, intent_id, state):
         media=dict(mime_type="image/png", png_sha256=value["png_sha256"], byte_count=len(png),
             width=packet["media"]["width"], height=packet["media"]["height"],
             alt_text=alt.decode("utf-8"), alt_text_sha256=value["alt_sha256"]))
+    description = value.get("platform_description", {})
+    if value.get("schema_version") == 2 and description.get("schema_version") == 2:
+        # Passive historical identity joins only. No current source availability,
+        # profile qualification, fit gate or native work can hide earlier bytes.
+        media_binding = binding["media"]
+        review_command, _ = authority._intent(c, media_binding["command_id"])
+        reviewed_description = media_commands_review(authority, c, review_command)["review"]["platform_description"]
+        refuse(description == reviewed_description
+            and description["description_sha256"] == media_binding["platform_description_sha256"]
+            and description["proposal_sha256"] == value["proposal_sha256"]
+            and description["packet_sha256"] == media_binding["packet_sha256"]
+            and description["raw_alt_sha256"] == value["alt_sha256"]
+            and description["semantic_alt_sha256"] == p._sha(alt[:-1])
+            and description["graphic_spec_sha256"] == fingerprint(package["capture"]["inputs"]["graphic_spec"])
+            and description["png"]["png_sha256"] == value["png_sha256"]
+            and descriptions.text_identity(description["wire_text"]) == description["wire"],
+            "platform_description_changed")
+        detail.update(schema_version=2, platform_description=dict(
+            description_sha256=description["description_sha256"], derivation=description["derivation"],
+            wire_text=description["wire_text"], wire_sha256=description["wire"]["sha256"],
+            raw_alt_sha256=value["alt_sha256"], status="reviewed_for_local_delivery"))
     refuse(len(p._canonical(detail)) <= 8 * 1024 * 1024, "delivery_content_too_large")
     return detail

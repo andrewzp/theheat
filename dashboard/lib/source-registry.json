@@ -592,7 +592,7 @@
     "src/data/ice_mass.py": "6352519b96130b565a9507f558a289126b1e9524cc79437239c55c5f4f2dd737",
     "src/data/jtwc.py": "1ad213e88299c9333c149cde0dbfd28d689e31b89e1c51440995536c64776e56",
     "src/data/methane.py": "061c60608f1d7c016b5afcce91c4d178d98e9f26ea1fdffb600e5f9cc6161355",
-    "src/data/newsworthiness.py": "f0fe5ec8b8a8818da7481f2ee6d2b6452a50008b2c328e609060b1cdc3ebc8ca",
+    "src/data/newsworthiness.py": "8f433217218fb8cd7855eba39722e87c81b9c7f0ecc8ee8f97127c0812d98ce3",
     "src/data/nhc.py": "2cfa04ab49bd13c1231e298fa2d0e08fd833e649b93f265199ffe5a4071a7ab1",
     "src/data/nsidc_snow.py": "ab75c73ec88130ae5805b1c5cf33a9b3912922c74da72b281b34d9cb9c7ae535",
     "src/data/nws_alerts.py": "f96c74c51bedaefc6e667c5d93e00d3ff08de8dcf1f3ecdb16dacad68a4bf402",
@@ -640,5 +640,5 @@
     "src/orchestrator/sources/usgs_quakes.py": "8ce82d003a52235fb92750c9f1e5450a672ff942ab71268a78d77f2ac8aa5c05"
   },
   "evidence_scope": "Referenced local code inventory; not live/provider/transitive-source qualification.",
-  "registry_sha256": "bb3883b248c5858e93230f9f8c018960c24de6e7395a57116b758ce68bf15de3"
+  "registry_sha256": "bc1d2f498fbe72202063f1be1acfd82f891fdd275832586af304321e8143147d"
 }

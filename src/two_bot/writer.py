@@ -19,6 +19,7 @@ from src.two_bot.json_utils import (
     json_default as _json_default,
     loads_model_json,
     model_response_diagnostic,
+    ModelJSONIntegrityError,
     ModelOutputContractError,
     strip_markdown_fences as _strip_markdown_fences,  # noqa: F401 — re-exported for tests
 )
@@ -185,6 +186,8 @@ def anthropic_writer_request(user_prompt: str) -> dict:
 def _parse_writer_json(raw: str) -> WriterResult:
     try:
         parsed = loads_model_json(raw, expected="object")
+    except ModelJSONIntegrityError as exc:
+        raise ModelJSONIntegrityError(f"Writer returned invalid JSON ({model_response_diagnostic(raw)})") from exc
     except ValueError as exc:
         raise ValueError(f"Writer returned invalid JSON ({model_response_diagnostic(raw)})") from exc
     if not isinstance(parsed, dict):
@@ -422,9 +425,9 @@ def write_tweet(
             try:
                 result = _parse_writer_json(raw)
                 break  # parse succeeded — exit inner loop
-            except ModelOutputContractError as exc:
-                # Valid JSON with a wrong shape/type is an unresolved output,
-                # not a reason to spend another schema-repair model call.
+            except (ModelJSONIntegrityError, ModelOutputContractError) as exc:
+                # Integrity/shape failures are unresolved output and cannot
+                # justify another schema-repair model call.
                 return WriterResult(
                     tweet=None, kill_reason=f"Writer output contract rejected: {exc}",
                     angle_chosen="", era_anchor_used=None, peer_comparison_used=None,

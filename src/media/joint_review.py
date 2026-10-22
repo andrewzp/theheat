@@ -149,6 +149,11 @@ def record_joint_media_review(
         )
         expected_checks = CONFIRMATIONS | EXTRA_CONFIRMATIONS if packet["schema_version"] == 2 else CONFIRMATIONS
         if description is not None:
+            from src.media.platform_description import build
+            rebuilt = build(draft, packet, description["proposal_sha256"],
+                (packet["media"]["alt_text"] + "\n").encode("utf-8"), current_inputs["png_bytes"],
+                description["profiles"], graphic_spec=current_inputs.get("graphic_spec"), derivation=description["derivation"])
+            _require(description == rebuilt, "Platform description differs from verified source inputs")
             _require(decision.get("expected_platform_description_sha256") == description["description_sha256"]
                 and description["packet_sha256"] == packet["packet_sha256"], "Platform description changed since review")
             expected_checks = expected_checks | {CONFIRMATION}

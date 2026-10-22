@@ -37,12 +37,15 @@ def verify_request(value, platform, stage, prepared, request, body):
     require(request == descriptor(platform, stage, request["content_type"], body), "delivery_request_descriptor_changed")
     content_type = request["content_type"]
     png = prepared["png"]
-    require(digest(png) == value["png_sha256"] and digest(prepared["alt"].encode()) == value["alt_sha256"],
+    projected = value.get("schema_version") == 2 and value.get("platform_description", {}).get("schema_version") == 2
+    raw_alt = prepared.get("raw_alt") if projected else prepared["alt"].encode("utf-8", errors="strict")
+    require(type(raw_alt) is bytes, "delivery_retained_asset_changed")
+    require(digest(png) == value["png_sha256"] and digest(raw_alt) == value["alt_sha256"],
             "delivery_retained_asset_changed")
     if value.get("schema_version") == 2:
         from src.media.platform_description import preflight, profiles
-        wire = preflight(value["platform_description"], raw_alt=prepared["alt"].encode("utf-8", errors="strict"),
-            png=png, expected_profiles=profiles(value["fixture"]))
+        wire = preflight(value["platform_description"], raw_alt=raw_alt,
+            png=png, expected_profiles=profiles(value["fixture"]), graphic_spec=prepared.get("graphic_spec"))
         require(wire == prepared["alt"], "delivery_request_content_changed")
     if (platform, stage) == ("x", "upload"):
         require(content_type.startswith("multipart/form-data; boundary="), "delivery_upload_type_invalid")
@@ -117,6 +120,13 @@ def _positive(value, saved, status, response):
     platform, stage = saved["platform"], saved["stage"]
     if platform == "x" and stage == "alt":
         require(response in (b"", b"{}"), "delivery_metadata_response_invalid")
+        description = value.get("platform_description", {})
+        if value.get("schema_version") == 2 and description.get("schema_version") == 2:
+            # A distinct result contract: old unversioned alt_sha256 still means
+            # exact raw alt; this version names both identities explicitly.
+            return dict(schema_version=2, media_id=saved["prior"]["upload"]["media_id"],
+                raw_alt_sha256=value["alt_sha256"], wire_alt_sha256=description["wire"]["sha256"],
+                platform_description_sha256=description["description_sha256"])
         return dict(media_id=saved["prior"]["upload"]["media_id"], alt_sha256=value["alt_sha256"])
     data = strict_json(response)
     require(type(data) is dict, "delivery_response_invalid")

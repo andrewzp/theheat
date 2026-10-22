@@ -214,3 +214,25 @@ test("actual authenticated history Next ingress PG detail and PNG stay read-only
     Object.assign(process.env,saved)
   }
 })
+
+test("versioned MODIS history keeps exact reviewed wire distinct from unchanged raw detail", async () => {
+  const {draft,detail}=fixture("Full retained historical description.\n")
+  detail.schema_version=2
+  detail.platform_description={description_sha256:"f".repeat(64),derivation:"modis_source_projection_v1",wire_text:"Exact earlier reviewed MODIS wire.",wire_sha256:sha("Exact earlier reviewed MODIS wire."),raw_alt_sha256:detail.media.alt_text_sha256,status:"reviewed_for_local_delivery"}
+  assert.equal(await validateDeliveryContent(detail,draft,intent),detail)
+  const html=renderToStaticMarkup(React.createElement(DeliveryContentCard,{detail,imageUrl:"blob:invented"}))
+  assert.match(html,/Earlier reviewed platform description/)
+  assert.match(html,/Exact earlier reviewed MODIS wire/)
+  assert.match(html,/Full retained historical description/)
+  assert.match(html,/stage results show whether delivery was attempted or confirmed/)
+  assert.doesNotMatch(html,/was sent|was published|<button|<input|<textarea/)
+  for(const change of [v=>{v.schema_version=3},v=>{delete v.platform_description},v=>{v.platform_description.extra=true},
+    v=>{v.platform_description.wire_text+="changed"},v=>{v.platform_description.wire_text="\ud800"},v=>{v.platform_description.raw_alt_sha256="a".repeat(64)},
+    v=>{v.platform_description.status="confirmed"},v=>{v.platform_description.derivation="operator_shortened"},v=>{v.platform_description.description_sha256="bad"}]){
+    const copy=structuredClone(detail);change(copy)
+    await assert.rejects(validateDeliveryContent(copy,draft,intent),/unavailable/)
+  }
+  const original=fixture()
+  original.detail.platform_description=detail.platform_description
+  await assert.rejects(validateDeliveryContent(original.detail,original.draft,intent),/unavailable/)
+})

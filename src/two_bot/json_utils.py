@@ -38,6 +38,7 @@ def json_default(obj: Any):
 
 _FENCE_OPEN_RE = re.compile(r"^\s*```(?:json|JSON)?\s*\n?")
 _FENCE_CLOSE_RE = re.compile(r"\n?\s*```\s*$")
+_PROSE_URL_RE = re.compile(r"[A-Za-z][A-Za-z0-9+.-]*://")
 
 
 def strip_markdown_fences(raw: str) -> str:
@@ -141,31 +142,55 @@ def _strip_trailing_commas(text: str) -> str:
     return "".join(out)
 
 
+def _quoted_string_end(text: str, start: int) -> int:
+    quote = text[start]
+    i = start + 1
+    while i < len(text):
+        if text[i] == "\\":
+            i += 2
+        elif text[i] == quote:
+            return i + 1
+        else:
+            i += 1
+    return len(text)
+
+
+def _comment_end(text: str, start: int, *, in_prose: bool = False) -> int:
+    if in_prose and (text.startswith("//", start) or text.startswith("/*", start)):
+        # A URL in model preamble is prose, including slash/star path segments.
+        # Inside JSON spans, retain the existing permissive comment grammar.
+        token_start = start
+        while (token_start > 0 and not text[token_start - 1].isspace()
+               and text[token_start - 1] not in '\"`<>{}'):
+            token_start -= 1
+        if _PROSE_URL_RE.search(text, token_start, start + 2):
+            return start
+    if text.startswith("//", start):
+        i = start + 2
+        while i < len(text) and text[i] not in "\r\n":
+            i += 1
+        return i
+    if text.startswith("/*", start):
+        end = text.find("*/", start + 2)
+        return len(text) if end == -1 else end + 2
+    return start
+
+
 def _matching_json_span(text: str, start: int) -> tuple[int, int] | None:
     open_char = text[start]
     if open_char not in "{[":
         return None
     close_for = {"{": "}", "[": "]"}
     stack = [close_for[open_char]]
-    in_string = False
-    quote = ""
-    escaped = False
     i = start + 1
     while i < len(text):
         ch = text[i]
-        if in_string:
-            if escaped:
-                escaped = False
-            elif ch == "\\":
-                escaped = True
-            elif ch == quote:
-                in_string = False
-            i += 1
-            continue
         if ch in {'"', "'"}:
-            in_string = True
-            quote = ch
-            i += 1
+            i = _quoted_string_end(text, i)
+            continue
+        comment_end = _comment_end(text, i)
+        if comment_end != i:
+            i = comment_end
             continue
         if ch in "{[":
             stack.append(close_for[ch])
@@ -178,7 +203,7 @@ def _matching_json_span(text: str, start: int) -> tuple[int, int] | None:
 
 
 def _iter_json_spans(text: str, expected: str = "any"):
-    """Yield (start, end) for each balanced {…} or […] span in *text*.
+    """Yield disjoint top-level spans, ignoring strings and comments.
 
     Spans are yielded in left-to-right order.  The caller decides whether
     the text slice actually parses as valid JSON.
@@ -187,10 +212,18 @@ def _iter_json_spans(text: str, expected: str = "any"):
     i = 0
     while i < len(text):
         ch = text[i]
-        if ch in starts:
+        if ch == '"':
+            i = _quoted_string_end(text, i)
+            continue
+        comment_end = _comment_end(text, i, in_prose=True)
+        if comment_end != i:
+            i = comment_end
+            continue
+        if ch in "{[":
             span = _matching_json_span(text, i)
             if span is not None:
-                yield span
+                if ch in starts:
+                    yield span
                 i = span[1]  # resume scanning after this span
                 continue
         i += 1
@@ -253,30 +286,42 @@ def _try_parse_span(span_text: str) -> Any:
 def loads_model_json(raw: str, *, expected: str = "any") -> Any:
     """Parse model JSON despite common fences, preambles, comments, and commas.
 
-    Tries each balanced span left-to-right; the first one that parses
-    (after optional comment/comma cleanup) is returned.  Raises on total
-    failure so callers always see an error instead of silent None.
+    Inspect every disjoint object/array before accepting one result. Multiple
+    parseable documents are terminal, including documents of an unexpected
+    type. Malformed preamble spans remain recoverable; integrity errors do not.
     """
     if not isinstance(raw, str):
         raise ValueError("Model response must be text")
     text = strip_markdown_fences(raw)
-    spans = list(_iter_json_spans(text, expected))
-
+    parsed = False
+    result: Any = None
+    selected = False
+    starts = "{[" if expected == "any" else ("{" if expected == "object" else "[")
     last_exc: Exception | None = None
-    for span in spans:
+    for span in _iter_json_spans(text):
         candidate = text[span[0]:span[1]]
         try:
-            return _try_parse_span(candidate)
+            value = _try_parse_span(candidate)
         except ModelJSONIntegrityError:
             raise
         except (json.JSONDecodeError, ValueError) as exc:
             last_exc = exc
             continue
+        if parsed:
+            raise ModelJSONIntegrityError("Multiple top-level model JSON documents")
+        parsed = True
+        result = value
+        selected = candidate[0] in starts
 
-    # No span parsed — try the whole (fence-stripped) text as last resort
-    # so that clean responses with no unusual preamble still work.
+    if parsed and selected:
+        return result
+
+    # Preserve whole-text fallback for clean responses, including scalar JSON
+    # and a sole document whose type differs from the expected span selector.
     try:
         return _try_parse_span(text)
+    except ModelJSONIntegrityError:
+        raise
     except (json.JSONDecodeError, ValueError) as exc:
         last_exc = exc
 

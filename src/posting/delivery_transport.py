@@ -177,8 +177,9 @@ def execute(value, platform, stage, prepared, *, begin, observe, check):
     clean_environment()
     from src.media.platform_description import preflight, profiles
     require(value.get("schema_version") == 2, "platform_description_required")
-    preflight(value["platform_description"], raw_alt=prepared["alt"].encode("utf-8", errors="strict"),
-        png=prepared["png"], expected_profiles=profiles(value["fixture"]))
+    wire = preflight(value["platform_description"], raw_alt=prepared.get("raw_alt", prepared["alt"].encode("utf-8", errors="strict")),
+        png=prepared["png"], expected_profiles=profiles(value["fixture"]), graphic_spec=prepared.get("graphic_spec"))
+    require(wire == prepared["alt"], "delivery_request_content_changed")
     require(version("tweepy") == "4.17.0" and version("atproto") == "0.0.72", "delivery_sdk_profile_changed")
     boundary = _Boundary(value, platform, stage, prepared, begin, observe, check)
     session: _RequestsSession | _HttpxClient | None = None
