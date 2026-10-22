@@ -83,9 +83,7 @@ def _selected_scope(scope, field, day, *, anomaly_mean=None, anomaly_variable=Fa
     return selected
 
 
-def project(full: StoryBundle, reference: dict, selection: dict) -> StoryBundle:
-    """Pure closed projection. No storage or scientific authority is minted here."""
-    data=json_tree(full.to_dict())
+def _narrowed(data, selection):
     evidence=data["raw_signal_dump"]["evidence"]
     require(type(evidence) is dict and set(evidence)==EVIDENCE_FIELDS, "ghcn_claim_evidence_schema")
     require(evidence["source_product"]=="noaa-ghcn-daily-v2" and evidence["evidence_type"]=="observed"
@@ -95,17 +93,37 @@ def project(full: StoryBundle, reference: dict, selection: dict) -> StoryBundle:
             "ghcn_claim_baseline_schema")
     require(type(baseline["variables"]) is dict and set(baseline["variables"])=={"temperature_2m_max","temperature_2m_min"}, "ghcn_claim_variables_schema")
     require(data["historical_context"].get("baseline")==baseline, "ghcn_claim_projection_changed")
-    compact=deepcopy(full)  # Never call the mutating constructor on stored facts.
     narrowed={key:deepcopy(value) for key,value in baseline.items() if key!="variables"}
     anomaly_variable={"anomaly_hot":"temperature_2m_max","anomaly_cold":"temperature_2m_min"}.get(selection["signal_field"])
     narrowed["variables"]={key:_selected_scope(value,selection["signal_field"],selection["signal_date"],
         anomaly_mean=data["raw_signal_dump"].get("historical_mean_c"),anomaly_variable=key==anomaly_variable)
         for key,value in baseline["variables"].items()}
     narrowed["representation"]="selected_claim_warrants_v1; complete tables retained by source reference"
+    return narrowed
+
+
+def project(full: StoryBundle, reference: dict, selection: dict) -> StoryBundle:
+    """Pure closed projection. No storage or scientific authority is minted here."""
+    narrowed=_narrowed(json_tree(full.to_dict()),selection)
+    compact=deepcopy(full)  # Never call the mutating constructor on stored facts.
     compact.raw_signal_dump["evidence"]["baseline"]=deepcopy(narrowed)
     compact.historical_context["baseline"]=deepcopy(narrowed)
     compact.raw_signal_dump["ghcn_claim_view"]=deepcopy(reference)
     return compact
+
+
+def project_tree(full: dict, reference: dict, selection: dict) -> dict:
+    """project() over retained JSON: replays a saved view from its full evidence.
+
+    A retained graphic binding holds JSON, not a StoryBundle; rebuilding one would
+    rerun its mutating evidence projection. Equal output is the pairing proof.
+    """
+    data=json_tree(full)
+    narrowed=_narrowed(data,selection)
+    data["raw_signal_dump"]["evidence"]["baseline"]=deepcopy(narrowed)
+    data["historical_context"]["baseline"]=deepcopy(narrowed)
+    data["raw_signal_dump"]["ghcn_claim_view"]=deepcopy(reference)
+    return data
 
 
 @dataclass(frozen=True)

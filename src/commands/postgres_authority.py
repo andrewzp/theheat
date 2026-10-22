@@ -670,7 +670,8 @@ class PostgresCommandAuthority:
         c.execute(f"INSERT INTO {SCHEMA}.events(command_id,event,recorded_at,data_bytes,digest) VALUES(%s,%s,%s,%s,%s)",
                   (command_id, event, at, encoded, p._sha(encoded)))
 
-    def _result(self, c, command_id: str) -> dict | None:
+    def _result(self, c, command_id: str, *, media: bool = True) -> dict | None:
+        """``media=False`` only for a caller that verifies the same retained media read itself."""
         row = c.execute(f"SELECT result_bytes,digest,state_version,namespace,snapshot_id FROM {SCHEMA}.results WHERE command_id=%s", (command_id,)).fetchone()
         if row is None:
             return None
@@ -688,7 +689,7 @@ class PostgresCommandAuthority:
         utc_datetime(result.get("completed_at"))
         self.projections._read(c, namespace, snapshot_id)
         self._verify_event(c, command_id, "completed", result["completed_at"], result)
-        if cmd.action in {"attach_media_revision", "review_media_revision"} and result["status"] == "applied":
+        if media and cmd.action in {"attach_media_revision", "review_media_revision"} and result["status"] == "applied":
             postgres_media_commands.read(c, cmd, result, self.environment)
         return result
 
@@ -867,7 +868,8 @@ class PostgresCommandAuthority:
                             from src.commands import postgres_editor_media as editor_domain
                             with c.transaction():
                                 reduction, result_key, references = editor_domain.boundary(self, c, state, version,
-                                    command, actor, editorial_policy, clock, resolve_principal, _prepared_media)
+                                    command, actor, editorial_policy, clock, resolve_principal, _prepared_media,
+                                    ghcn=generation_prepared)
                                 if command.action == "approve_media_revision" and hasattr(self, "delivery_configuration"):
                                     from src.commands import postgres_delivery as delivery
                                     proposed = next(d for d in reduction.state["drafts"] if d["id"] == command.targets[0].draft_id)
@@ -905,7 +907,8 @@ class PostgresCommandAuthority:
                             from src.commands.postgres_delivery import description_profiles
                             if hasattr(self, "editor_media_configuration") and command.action != "remove_media_revision":
                                 from src.commands import postgres_editor_media as editor_domain
-                                draft, current_media = editor_domain.command_inputs(self, c, state, command, actor, editorial_policy, clock)
+                                draft, current_media = editor_domain.command_inputs(self, c, state, command, actor, editorial_policy, clock,
+                                    ghcn=generation_prepared, version=version)
                                 if command.action in {"attach_media_revision", "review_media_revision"}:
                                     editor_domain.package_current(self, c, draft, command.payload["proposal_sha256"], current_media, editorial_policy)
                             media_transition = postgres_media_commands.prepare(c, state, command, actor,
@@ -1017,11 +1020,15 @@ class PostgresCommandAuthority:
 
     def editor_media_projection(self, draft_id, resolve_principal, *, now, png_proposal=None, original=False):
         from src.commands import postgres_editor_media as domain
+        # Historical bytes need no current source; a compact claim is rebuilt
+        # before the locked read, never inside it.
+        claim = domain.view_claim(self, draft_id) if png_proposal is None else None
         with self.projections._connection() as c:
             self._validate(c)
             version, state = self._state(c, lock=True)
             value = domain.projection(self, c, draft_id, state=state, version=version,
-                policy=current_editorial_policy(), now=_clock(now), resolve_principal=resolve_principal, png_proposal=png_proposal, original=original)
+                policy=current_editorial_policy(), now=_clock(now), resolve_principal=resolve_principal, png_proposal=png_proposal, original=original,
+                claim=claim)
             if png_proposal is None:
                 from src.commands import postgres_delivery as delivery
                 if delivery.upgraded(c):
@@ -1037,6 +1044,11 @@ class PostgresCommandAuthority:
             return execute_check_once(self, "", current_context={}, checker_state={}, owner="", clock=clock)
         command_id = _id(command_id)
         authority = self
+        # A compact saved claim follows the candidate-check pattern: resolve
+        # once before any connection, recheck it under every locked read.
+        from src.commands import postgres_sourced_generation as generation
+        prepared = generation.prepare_ghcn_command(authority, command_id, executed=True)
+        resolved = prepared.claim if prepared is not None else None
 
         def transaction(operation, payload=None, *, now=None, raw=None, request=None, receipt=None):
             at = utc_datetime(now if now is not None else clock())
@@ -1060,8 +1072,9 @@ class PostgresCommandAuthority:
                 locked_at = utc_datetime(clock())
                 domain.refuse(locked_at >= at, "revision_check_clock_regressed")
                 at = locked_at
+                claim = prepared.current(authority, c, state, version) if prepared is not None else None
                 _, identity, packet, _ = domain.runner_context(authority, c, command_id, resolve_principal,
-                    state, version, current_editorial_policy(), at)
+                    state, version, current_editorial_policy(), at, claim=claim)
                 owner = "revision-checks:" + packet["enrollment_id"]
 
                 def fresh(previous):
@@ -1108,6 +1121,7 @@ class PostgresCommandAuthority:
 
         identity, packet, state, owner = transaction("context")
         class ScopedAuthority:
+            resolved_check_context = resolved
             def acquire_check_lease(self, check_set_id, owner, ttl_seconds, *, now):
                 return transaction("lease", dict(check_set_id=check_set_id, owner=owner, ttl_seconds=ttl_seconds), now=now)
             def candidate_checks(self, action, payload, *, now, request=None, receipt=None):

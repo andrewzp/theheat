@@ -26,6 +26,7 @@ from src.media.joint_review import joint_media_review_status
 from src.media.review_packet import build_media_review_packet
 from src.media import platform_description as descriptions
 from src.storage import postgres_projection as p
+from src.two_bot.candidate_derivation import has_ghcn_reference
 
 PREPARATION = "editor-media-preparation-v1"
 SCOPE = "local_joint_media"
@@ -97,8 +98,65 @@ def qualified(bundle):
                            "This saved source does not qualify for a graphic") from None
 
 
-def inputs(authority, c, draft, policy, now):
-    """A saved source origin is immutable; its present allowlist is not."""
+def qualified_claim(view, source, claim, policy):
+    """One saved compact GHCN claim, drawn from its freshly resolved full evidence.
+
+    Only a ResolvedClaim that the caller resolved from operator-retained evidence
+    before this connection carries the comparator tables; the draft never does.
+    """
+    from src.media.temperature_graphic_adapter import temperature_claim_graphic_spec
+    from src.storage.cyclone_supply import CycloneSupplyError, digest
+    from src.two_bot.ghcn_claim_view import ResolvedClaim
+    refuse(type(claim) is ResolvedClaim, getattr(claim, "code", None) or "ghcn_baseline_unavailable")
+    try:
+        claim.verify_saved(view)
+    except CycloneSupplyError as exc:
+        raise CommandError(str(exc), "The saved GHCN claim differs from its retained evidence") from None
+    refuse(source["schema_version"] == 2 and source["source_key"] == "ghcn" and source["bundle"] == view
+           and source["source_revision"] == fingerprint(dict(reference=claim.reference, view_sha256=claim.view_sha256,
+                                                             policy_sha256=digest(policy))), "ghcn_claim_source_changed")
+    try:
+        spec = temperature_claim_graphic_spec(view, claim.full, expected_full_sha256=claim.full_sha256, synthetic=True)
+    except (ValueError, KeyError, TypeError, AttributeError, UnicodeError, RecursionError, OverflowError):
+        raise CommandError("graphic_source_unqualified", "This saved source does not qualify for a graphic") from None
+    evidence = spec["evidence"]
+    return spec, "NOAA GHCN-Daily · station observations", {
+        "kind": "ghcn_station_day", "station_id": evidence["station_id"], "valid_date": evidence["points"][0]["valid_date"],
+        "retrieved_at": evidence["evidence_as_of"], "reporting_interval_known": False, "timezone": None}
+
+
+def view_claim(authority, draft_id):
+    """Resolve a compact claim for the read-only view, before its connection.
+
+    This rebuilds the evidence without the dispatch replay or state checkpoint
+    that commands require, so it can serve a GET and grants no command authority.
+    """
+    if not hasattr(authority, "ghcn_baseline"):
+        return None
+    with authority.projections._connection() as c:
+        authority._validate(c)
+        _, state = authority._state(c)
+    drafts = [d for d in state["drafts"] if isinstance(d, dict) and d.get("id") == draft_id]
+    bundle = drafts[0].get("review_context", {}).get("two_bot", {}).get("bundle") if len(drafts) == 1 else None
+    if not has_ghcn_reference(bundle):
+        return None
+    from src.commands.postgres_sourced_generation import GhcnPreparationFailure
+    from src.storage.cyclone_supply import CycloneSupplyError
+    from src.two_bot.ghcn_claim_view import resolve, structural_view
+    try:
+        reference = structural_view(bundle)
+        return resolve(authority, reference["source_run_id"], reference["selection"])
+    except CycloneSupplyError as exc:
+        return GhcnPreparationFailure(str(exc))
+    except OSError:
+        return GhcnPreparationFailure("ghcn_baseline_unavailable")
+
+
+def inputs(authority, c, draft, policy, now, *, claim=None):
+    """A saved source origin is immutable; its present allowlist is not.
+
+    A compact GHCN draft also needs ``claim``, resolved before this connection.
+    """
     from src.two_bot.check_origin import SOURCE_NAMESPACE
     refuse(generation.exists(c, SOURCE_NAMESPACE, fingerprint({"draft_id":draft["id"]})), "saved_source_origin_unavailable")
     ref, origin, captured = revisions.source(c, draft)
@@ -117,6 +175,8 @@ def inputs(authority, c, draft, policy, now):
             from src.commands.postgres_published_media import current as radar_current
             spec = radar_current(authority, c, origin["brief_id"], captured["bundle"], ref, now)
             label, context = "Published NWS radar · human label review required", spec["evidence"]["scope"]
+        elif has_ghcn_reference(captured["bundle"]):
+            spec, label, context = qualified_claim(captured["bundle"], source, claim, policy)
         else:
             spec, label, context = qualified(captured["bundle"])
         if spec["template"] in MAP_TEMPLATES:
@@ -139,13 +199,18 @@ def resolve(resolve_principal, subject, *, publisher=False):
     return actor
 
 
-def command_inputs(authority, c, state, command, actor, policy, now):
+def command_inputs(authority, c, state, command, actor, policy, now, *, ghcn=None, version=None):
+    """``ghcn`` is a compact claim's context, resolved before this connection.
+
+    It is rechecked against the locked state only after identity, role and time.
+    """
     refuse(actor.subject == command.actor_subject, "forbidden")
     authorize(actor, command.action)
     refuse(now < utc_datetime(command.expires_at), "command_expired")
     refuse(utc_datetime(command.requested_at) <= now + timedelta(minutes=5), "invalid_time")
     draft = _target_drafts(state, command)[0]
-    value = inputs(authority, c, draft, policy, now)
+    claim = ghcn.current(authority, c, state, version) if ghcn is not None else None
+    value = inputs(authority, c, draft, policy, now, claim=claim)
     refuse(command.payload["expected_policy_sha256"] == value["policy_sha256"], "editorial_policy_changed")
     if "expected_renderer_profile_sha256" in command.payload:
         refuse(command.payload["expected_renderer_profile_sha256"] == value["profile_sha256"], "native_renderer_changed")
@@ -181,7 +246,8 @@ def reviewed(authority, c, draft, value, policy, resolve_principal):
     refuse(type(binding) is dict and "media_attachment" in draft, "joint_media_review_required")
     package = package_current(authority, c, draft, binding["proposal_sha256"], value, policy)
     intent = authority._intent(c, binding["command_id"])
-    result = authority._result(c, binding["command_id"])
+    # One full retained-media verification: the explicit read below, not also inside _result.
+    result = authority._result(c, binding["command_id"], media=False)
     refuse(intent is not None and result is not None, "joint_media_review_not_retained")
     retained = media_commands.read(c, intent[0], result, authority.environment)
     record = retained["review"]
@@ -221,9 +287,11 @@ def reviewed(authority, c, draft, value, policy, resolve_principal):
     return package
 
 
-def boundary(authority, c, state, version, command, actor, policy, now, resolve_principal, prepared=None):
+def boundary(authority, c, state, version, command, actor, policy, now, resolve_principal, prepared=None, ghcn=None):
     """Called in the command savepoint. All writes roll back with any refusal."""
-    draft, value = command_inputs(authority, c, state, command, actor, policy, now)
+    draft, value = command_inputs(authority, c, state, command, actor, policy, now, ghcn=ghcn, version=version)
+    # command_inputs just verified this same context against the locked state.
+    claim = ghcn.claim if ghcn is not None else None
     payload = command.payload
     unchanged = Reduction(state, (), ())
     if command.action == "prepare_media_revision":
@@ -263,7 +331,7 @@ def boundary(authority, c, state, version, command, actor, policy, now, resolve_
     refuse(command.action == "approve_media_revision", "editor_media_action_refused")
     original, identity, packet = requested(authority, c, draft, version, state, value, now)
     resolve(resolve_principal, original.actor_subject)
-    completion = completed(c, identity, packet, now, authority.environment)
+    completion = completed(c, identity, packet, now, authority.environment, resolved=claim)
     refuse(completion["completion_sha256"] == payload["expected_check_completion_sha256"], "check_completion_changed")
     proposed = deepcopy(draft)
     revoke_approval(proposed)
@@ -304,7 +372,7 @@ def requested(authority, c, draft, version, state, value, now):
     raise CommandError("revision_checks_required", "Run checks for the current text and graphic")
 
 
-def completed(c, identity, packet, now, environment):
+def completed(c, identity, packet, now, environment, *, resolved=None):
     owner, fence = "revision-checks:" + packet["enrollment_id"], None
     lease = c.execute("SELECT fence,owner FROM theheat_checks.draft_leases WHERE check_set_id=%s ORDER BY fence DESC LIMIT 1", (identity,)).fetchone()
     refuse(lease is not None and lease[1] == owner, "revision_check_lease_required")
@@ -316,13 +384,14 @@ def completed(c, identity, packet, now, environment):
         if str(exc) not in {"changed_revision_check_state", "revision_check_expired", "stale_revision_check_owner"}:
             raise
         raise CommandError(str(exc), "The retained check authority is stale; refresh the current revision") from None
-    proofs, _ = checks.verified_stage_receipts(c, identity, packet, owner=owner, fence=fence, environment=environment)
+    proofs, _ = checks.verified_stage_receipts(c, identity, packet, owner=owner, fence=fence, environment=environment,
+                                               resolved=resolved)
     body = dict(schema_version=1, origin_kind=packet["origin_kind"], enrollment_id=packet["enrollment_id"],
                 check_set_id=identity, packet_sha256=p._sha(p._canonical(packet)), stages=proofs)
     return {**body, "completion_sha256": fingerprint(body)}
 
 
-def runner_context(authority, c, command_id, resolve_principal, state, version, policy, now):
+def runner_context(authority, c, command_id, resolve_principal, state, version, policy, now, *, claim=None):
     intent = authority._intent(c, command_id)
     result = authority._result(c, command_id)
     refuse(intent is not None and intent[0].action == "request_revision_checks"
@@ -331,7 +400,7 @@ def runner_context(authority, c, command_id, resolve_principal, state, version, 
     actor = resolve(resolve_principal, command.actor_subject)
     # The accepted request's short lifetime bounds intake, not a retained grant.
     draft = _target_drafts(state, command)[0]
-    value = inputs(authority, c, draft, policy, now)
+    value = inputs(authority, c, draft, policy, now, claim=claim)
     reviewed(authority, c, draft, value, policy, resolve_principal)
     identity = result["revision_checks"]["check_set_id"]
     packet, _ = checks._packet(c, identity, authority.environment)
@@ -342,7 +411,7 @@ def runner_context(authority, c, command_id, resolve_principal, state, version, 
     return command, identity, packet, actor
 
 
-def parked(authority, c, draft, state, version, value, policy, now, resolve_principal):
+def parked(authority, c, draft, state, version, value, policy, now, resolve_principal, *, claim=None):
     binding = draft.get("approval_binding")
     if not isinstance(binding, dict) or binding.get("scope") != SCOPE:
         return False
@@ -374,7 +443,7 @@ def parked(authority, c, draft, state, version, value, policy, now, resolve_prin
     refuse(lease is not None and lease[1] == "revision-checks:" + packet["enrollment_id"]
            and utc_text(now) < lease[2], "parked_media_lease_expired")
     proofs, _ = checks.verified_stage_receipts(c, binding["completion"]["check_set_id"], packet,
-        owner=lease[1], fence=lease[0], environment=authority.environment)
+        owner=lease[1], fence=lease[0], environment=authority.environment, resolved=claim)
     proof = dict(schema_version=1, origin_kind=packet["origin_kind"], enrollment_id=packet["enrollment_id"],
                  check_set_id=binding["completion"]["check_set_id"], packet_sha256=p._sha(p._canonical(packet)), stages=proofs)
     refuse(p._canonical({**proof, "completion_sha256":fingerprint(proof)}) == p._canonical(binding["completion"]), "parked_media_proof_changed")
@@ -404,7 +473,8 @@ def retained_package(authority, c, draft_id, png_proposal, *, original=False):
         environment=authority.environment, original_bytes=original)
 
 
-def projection(authority, c, draft_id, *, state, version, policy, now, resolve_principal, png_proposal=None, original=False):
+def projection(authority, c, draft_id, *, state, version, policy, now, resolve_principal, png_proposal=None, original=False,
+               claim=None):
     matches = [d for d in state["drafts"] if isinstance(d, dict) and d.get("id") == draft_id]
     refuse(len(matches) == 1, "draft_not_found")
     draft = matches[0]
@@ -434,7 +504,7 @@ def projection(authority, c, draft_id, *, state, version, policy, now, resolve_p
         if len(refs) == 64:
             break
     try:
-        value = inputs(authority, c, draft, policy, now)
+        value = inputs(authority, c, draft, policy, now, claim=claim)
         if value["spec"]["template"] == "published_nws_radar":
             evidence = value["spec"]["evidence"]
             view["published"] = dict(station="KTLX", frame_minute_utc=evidence["input"]["metadata"]["frame_minute_utc"],
@@ -483,7 +553,8 @@ def projection(authority, c, draft_id, *, state, version, policy, now, resolve_p
                     view["platform_description"].update(record=retained_description,
                         wire_text=retained_description.get("wire_text", reviewed_package["assets"]["alt.txt"].decode("utf-8")))
                 try:
-                    view["parked"] = parked(authority, c, draft, state, version, value, policy, now, resolve_principal)
+                    view["parked"] = parked(authority, c, draft, state, version, value, policy, now, resolve_principal,
+                                            claim=claim)
                     if view["parked"]:
                         view["checks_status"] = "passed"
                         return view
@@ -495,7 +566,7 @@ def projection(authority, c, draft_id, *, state, version, policy, now, resolve_p
                 stages, _ = checks._stages(c, identity, packet, packet["captured_at"])
                 view["checks"] = stages
                 if all(s == "passed" for s in stages.values()):
-                    proof = completed(c, identity, packet, now, authority.environment)
+                    proof = completed(c, identity, packet, now, authority.environment, resolved=claim)
                     view.update(checks_status="passed", expected_check_completion_sha256=proof["completion_sha256"])
                 elif any(s not in {"pending", "passed"} for s in stages.values()):
                     view["checks_status"] = "needs_attention"

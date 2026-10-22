@@ -33,6 +33,9 @@ b=cfg["baseline"]
 authority.configure_ghcn_source_results(Baseline(Path(b["database"]),Path(b["manifest"]),b["database_sha256"],b["manifest_sha256"]))
 if Path(cfg["generation"]).exists():
     authority.configure_sourced_generation(private_configuration(cfg["generation"]))
+if cfg.get("native"):
+    # Local editor media for compact-claim journeys; the native child is unchanged.
+    authority.configure_editor_media(**cfg["native"])
 operators=Operators(cfg["operators"])
 assert fingerprint(current_editorial_policy())==cfg["policy_sha256"]
 original=socket.socket.connect
@@ -138,6 +141,12 @@ if fault=="final_footprint":
         temporary.replace(path)
         return result
     admission.verified_completion=replaced
+if fault=="native_failure":
+    # Explicit negative fixture: the fixed native child cannot start.
+    from src.commands import preview_media_worker
+    def failed_native(*args,**kwargs):
+        raise OSError("invented native renderer failure")
+    preview_media_worker.run_native=failed_native
 if fault=="passive_traps":
     from src.two_bot import ghcn_claim_view
     from src.commands import postgres_checks,postgres_candidate_admission,postgres_synchronous_generation
@@ -229,7 +238,41 @@ elif operation=="enroll":
         cfg["selection"]=dict(cfg["selection"],signal_field="monthly_high")
     result=authority.retain_ghcn_generation_input(cfg["run_id"],cfg["selection"],clock=clock)
 elif operation=="consume":
-    result=authority.consume(operators.resolve,command_id=identity)
+    from src.commands.schema import CommandError
+    try:
+        result=authority.consume(operators.resolve,command_id=identity)
+    except CommandError as exc:
+        if exc.code!="native_preparation_required":
+            raise
+        from src.commands.preview_media_worker import consume_media_once
+        result=consume_media_once(authority,operators.resolve,command_id=identity)
+elif operation in {"deterministic","safety","fact_check","critic"} and "revision_checks" in authority.result(identity):
+    # A saved draft revision's required check. The invented reservation only needs
+    # the request bytes; the authority's runner resolves and fences its own context.
+    check_set_id=authority.result(identity)["revision_checks"]["check_set_id"]
+    packet=authority.check_execution("read",dict(check_set_id=check_set_id),now=clock())["packet"]
+    reference=ghcn_claim_view.structural_view(packet["bundle"])
+    claim=ghcn_claim_view.resolve(authority,reference["source_run_id"],reference["selection"])
+    request=canonical_json(check_requests.prepare_request(packet,operation,resolved=claim)).encode()
+    reservation=None if operation=="deterministic" else dict(intent_id="ghcn-media-"+packet["enrollment_id"][:12]+"-"+operation,
+        job_id=spending_job(packet),request_sha256=hashlib.sha256(request).hexdigest(),provider="google",role=operation,
+        model=packet["policy"]["models"][operation],estimate_sha256="e"*64,reserve_micro_usd=5)
+    sent=[]
+    def response(request):
+        sent.append(request)
+        if fault=="postgrant_baseline":
+            path=Path(b["manifest"])
+            path.write_bytes(path.read_bytes()+b"\n")
+        raw=checks.envelope({"safety":"NO","fact_check":fact_pass(packet["final_text"]),"critic":checks.CRITIC_PASS}.get(operation,"NO"))
+        return httpx.Response(200,stream=httpx.ByteStream(raw),request=request)
+    result=authority.execute_revision_check_once(identity,operators.resolve,clock=clock,reservation=reservation,enabled=True,
+        transport_options={"api_key":"invented-offline-key","http_transport":httpx.MockTransport(response)})
+    for body in sent:
+        log(dict(kind="model_post",stage="revision_"+operation,bytes=len(body.content),sha256=hashlib.sha256(body.content).hexdigest(),
+            full_tables=b"calendar_samples" in body.content))
+    log(dict(kind="revision_stage",stage=operation,packet_sha256=fingerprint(packet),packet_bundle_sha256=fingerprint(packet["bundle"]),
+        view_sha256=claim.view_sha256,full_sha256=claim.full_sha256,request_bytes=len(request),
+        request_full_tables=b"calendar_samples" in request,result=result))
 elif operation=="projection":
     result=authority.candidate_projection(authority.generated_candidate_inputs(),now=datetime.now(UTC),resolve_principal=operators.resolve)
 elif operation in {"write","capture","interpret"}:
@@ -242,7 +285,7 @@ else:
     packet=authority.check_execution("read",dict(check_set_id=check_set_id),now=clock())["packet"]
     prepared=prepare_execution(authority,cfg["run_id"],cfg["selection"])
     request=canonical_json(check_requests.prepare_request(packet,operation,resolved=prepared.claim)).encode()
-    reservation=None if operation=="deterministic" else dict(intent_id="ghcn-fixture-"+operation,job_id=spending_job(packet),
+    reservation=None if operation=="deterministic" else dict(intent_id="ghcn-fixture-"+check_set_id[:12]+"-"+operation,job_id=spending_job(packet),
         request_sha256=hashlib.sha256(request).hexdigest(),provider="google",role=operation,model=packet["policy"]["models"][operation],
         estimate_sha256="e"*64,reserve_micro_usd=5)
     sent=[]

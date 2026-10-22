@@ -25,6 +25,12 @@ _KINDS = {
     "monthly_high": ("high", "monthly"), "monthly_low": ("low", "monthly"),
     "calendar_record": ("high", "calendar"), "calendar_record_low": ("low", "calendar"),
 }
+# A saved compact GHCN claim's selection field names the comparator it may draw.
+_CLAIM_FIELDS = {
+    "all_time_high": ("high", "all_time"), "all_time_low": ("low", "all_time"),
+    "monthly_high": ("high", "monthly"), "monthly_low": ("low", "monthly"),
+    "calendar_date_high": ("high", "calendar"), "calendar_date_low": ("low", "calendar"),
+}
 
 
 def story_bundle_snapshot(bundle: StoryBundle) -> dict:
@@ -175,7 +181,26 @@ def _qualified(bundle, expected_sha):
             "source_evidence_revision_id": evidence["revision_id"]}
 
 
-def _project(template, rows, synthetic):
+def _claim_view(view_sha256, reference, snapshot):
+    """Replay a saved compact claim view from the full evidence it names."""
+    from src.two_bot.ghcn_claim_view import project_tree, structural_view
+    selection = reference["selection"]
+    _require(_sha(view_sha256) and reference["full_story"]["sha256"] == fingerprint(snapshot),
+             "saved claim view names different full evidence")
+    _require(_KINDS.get(snapshot["signal_kind"]) == _CLAIM_FIELDS.get(selection["signal_field"]),
+             "saved claim selects a different comparator")
+    evidence = snapshot["raw_signal_dump"]["evidence"]
+    _require(reference["observation_revision"] == evidence["revision_id"]
+             and reference["baseline_revision"] == evidence["baseline"]["revision_id"]
+             and [row["raw_sha256"] for row in reference["original_archives"]] == [evidence["baseline"]["source_payload_sha256"]],
+             "saved claim reference disagrees with its full evidence")
+    view = project_tree(snapshot, reference, selection)
+    structural_view(view)
+    _require(fingerprint(view) == view_sha256, "saved claim view is not the projection of this full evidence")
+    return {"view_sha256": view_sha256, "reference": reference}
+
+
+def _project(template, rows, synthetic, claim=None):
     first = rows[0]
     _require(all((row["station_id"], row["variable"], row["location"]) == (first["station_id"], first["variable"], first["location"])
                  for row in rows), "trajectory station, variable or location changed")
@@ -201,7 +226,7 @@ def _project(template, rows, synthetic):
         "input_binding": {"adapter_version": ADAPTER_VERSION, "synthetic": synthetic, "bundles": [
             {"bundle_sha256": row["bundle_sha256"], "source_evidence_revision_id": row["source_evidence_revision_id"],
              "source_baseline_payload_sha256": row["baseline"]["source_baseline_payload_sha256"],
-             "bundle": row["snapshot"]} for row in rows]},
+             "bundle": row["snapshot"]} for row in rows], **({} if claim is None else {"claim_view": claim})},
     }
 
 
@@ -226,7 +251,12 @@ def validate_temperature_adapter_binding(template, evidence):
         _require(isinstance(inputs, list) and (len(inputs) == 1 if template == "temperature_comparator" else 2 <= len(inputs) <= 8),
                  "invalid retained input bundle count")
         rows = [_qualified(_StoredBundle(row["bundle"]), row["bundle_sha256"]) for row in inputs]
-        _require(fingerprint(_project(template, rows, evidence["synthetic"])) == fingerprint(evidence),
+        claim = binding.get("claim_view")
+        if claim is not None:
+            _require(template == "temperature_comparator" and type(claim) is dict
+                     and set(claim) == {"view_sha256", "reference"}, "malformed saved claim binding")
+            claim = _claim_view(claim["view_sha256"], claim["reference"], rows[0]["snapshot"])
+        _require(fingerprint(_project(template, rows, evidence["synthetic"], claim)) == fingerprint(evidence),
                  "graphic projection differs from its retained qualified StoryBundle inputs")
     except (KeyError, TypeError, AttributeError, OverflowError) as exc:
         raise ValueError("GHCN graphic withheld: malformed adapter input binding") from exc
@@ -253,5 +283,28 @@ def temperature_graphic_spec(template: str, bundles: list[StoryBundle], *, expec
         expected = fingerprint(evidence)
         return {"template": template, "expected_evidence_sha256": expected,
                 "evidence": validate_graphic(template, evidence, expected_evidence_sha256=expected)}
+    except (KeyError, TypeError, AttributeError, OverflowError) as exc:
+        raise ValueError("GHCN graphic withheld: malformed or legacy source warrant") from exc
+
+
+def temperature_claim_graphic_spec(view: dict, full: StoryBundle, *, expected_full_sha256: str, synthetic: bool) -> dict:
+    """Adapt one saved compact GHCN claim using its locally verified full evidence.
+
+    The caller resolves ``full`` from operator-retained evidence; this adapter does
+    not. The binding names the exact saved view, its source reference and the full
+    story, and every reuse replays the projection between them. The complete
+    comparator tables stay in the graphic input, never in the saved claim.
+    """
+    if type(synthetic) is not bool:
+        raise ValueError("Synthetic status must be declared explicitly")
+    try:
+        from src.two_bot.ghcn_claim_view import structural_view
+        reference = structural_view(view)
+        row = _qualified(full, expected_full_sha256)
+        claim = _claim_view(fingerprint(view), reference, row["snapshot"])
+        evidence = _project("temperature_comparator", [row], synthetic, claim)
+        expected = fingerprint(evidence)
+        return {"template": "temperature_comparator", "expected_evidence_sha256": expected,
+                "evidence": validate_graphic("temperature_comparator", evidence, expected_evidence_sha256=expected)}
     except (KeyError, TypeError, AttributeError, OverflowError) as exc:
         raise ValueError("GHCN graphic withheld: malformed or legacy source warrant") from exc
