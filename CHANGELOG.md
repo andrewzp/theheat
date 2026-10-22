@@ -1,3 +1,11 @@
+## 0.9.109.31
+
+- Add read-only portfolio planning over current retained NHC episodes, with eight
+  explicit editorial dimensions, late soft diversity, exceptional-event reasons
+  and a separate writing-attempt budget. Preserve evidence and hold unknown or
+  stale assessments. Automatic triage, paid work and publishing remain unchanged;
+  human calibration and broader hazard/production integration are still open.
+
 ## 0.9.109.30
 
 - Retain source and forecast times for early NWS warnings whose message expires
