@@ -1,3 +1,13 @@
+## 0.9.109.36
+
+- Show the recorded content type and retained source context for a post only
+  when a complete saved draft recomputes its confirmed publication identity.
+  Missing or conflicting evidence stays explicit; later draft edits cannot
+  supply historical context or establish an angle or human author.
+- Keep source details optional in retained post history, preserving published
+  text, metric missingness, platform-established ages and bounded pagination.
+  Opening the view does not collect metrics or change publication settings.
+
 ## 0.9.109.35
 
 - Hold ambiguous GDACS current-episode selections before severity filtering;
