@@ -437,9 +437,9 @@ def test_outbox_tail_expiry_rolls_back_park_result_and_outbox(
         original_enroll = postgres_delivery.enroll
         advanced = False
 
-        def enroll(authority, c, value, resolve_principal, now):
+        def enroll(authority, c, value, resolve_principal, now, *, ghcn=None):
             nonlocal advanced
-            original_enroll(authority, c, value, resolve_principal, now)
+            original_enroll(authority, c, value, resolve_principal, now, ghcn=ghcn)
             assert c.execute("SELECT count(*) FROM theheat_delivery.intents").fetchone()[0] == 1
             assert c.execute("SELECT count(*) FROM theheat_delivery.work_items").fetchone()[0] == 2
             assert authority._result(c, command.command_id)["status"] == "applied"
