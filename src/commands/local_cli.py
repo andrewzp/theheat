@@ -6,13 +6,15 @@ CLI is deliberately unavailable for production and has no publication adapter.
 from __future__ import annotations
 
 import argparse
+from contextlib import closing
 from datetime import UTC, datetime
 import json
 from pathlib import Path
 import sys
 import sqlite3
 
-from src.commands.domain_journal import DomainJournalError, parse_snapshot
+from src.commands.domain_journal import DomainJournalError, inspect as inspect_domain, parse_snapshot
+from src.commands.domain_projection import DomainProjectionError, read_packets
 from src.commands.schema import Command, CommandError, Principal, canonical_json
 from src.commands.sqlite_authority import SQLiteAuthority
 
@@ -47,6 +49,8 @@ def main(argv: list[str] | None = None) -> int:
     importer.add_argument("--import-id", required=True, help="Stable identity for idempotent replay of these exact bytes")
     domain = actions.add_parser("domain-status")
     domain.add_argument("--verify", action="store_true", help="Verify retained artifact hashes and foreign keys")
+    domain.add_argument("--projection-record", action="append", default=[], metavar="FILE",
+        help="Explicit bounded owner-artifact packet; proves integrity only, not ownership or truth")
     submit = actions.add_parser("submit")
     submit.add_argument("--request", required=True)
     submit.add_argument("--operators", required=True, help="Trusted local operator fixture, not a hosted identity provider")
@@ -65,7 +69,15 @@ def main(argv: list[str] | None = None) -> int:
         elif args.action == "import":
             output = store.import_snapshot(Path(args.state).read_bytes(), import_id=args.import_id)
         elif args.action == "domain-status":
-            output = store.domain_status(verify=args.verify)
+            if args.projection_record:
+                records = read_packets(args.projection_record)
+                with closing(store._connect()) as connection:
+                    connection.execute("PRAGMA query_only=ON")
+                    connection.execute("BEGIN")
+                    store._check_environment(connection)
+                    output = inspect_domain(connection, verify=args.verify, projection_records=records)
+            else:
+                output = store.domain_status(verify=args.verify)
         elif args.action == "submit":
             principal = _resolve(args.operators, args.subject)
             if principal is None:
@@ -92,7 +104,7 @@ def main(argv: list[str] | None = None) -> int:
                       "accepted": accepted, "completed": completed, "pending": accepted - completed}
         print(canonical_json(output))
         return 0
-    except (CommandError, DomainJournalError, sqlite3.DatabaseError, OSError, ValueError) as exc:
+    except (CommandError, DomainJournalError, DomainProjectionError, sqlite3.DatabaseError, OSError, ValueError) as exc:
         print(canonical_json({"error": getattr(exc, "code", "local_fixture_error"), "message": str(exc)}), file=sys.stderr)
         return 2
 
