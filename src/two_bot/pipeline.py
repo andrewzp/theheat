@@ -14,6 +14,10 @@ from src.data.firms import FireEvent
 from src.editorial.revisions import fingerprint, text_hash
 from src.state_schema import BotState
 from src.two_bot import critic, fact_check, memory, writer
+from src.two_bot.bundle_capture import BundleCapture
+from src.two_bot.rejected_candidate import (
+    capture_critic_rejection, capture_safety_rejection, capture_stage_input, stage_unavailable,
+)
 from src.two_bot.evidence_contract import audit_story_bundle, evidence_rejection_details
 from src.two_bot.intern import build_fire_bundle
 from src.two_bot.retry import BudgetExhaustedError
@@ -227,6 +231,7 @@ def _check_safety_honesty_fact(
     mark_stage: Callable[[str, str], None] | None = None,
     result_out: dict | None = None,
     candidate_attempt: int = 1,
+    generation_input: BundleCapture | None = None,
 ) -> FactCheckResult | None:
     forbidden_hit = _forbidden_claim_violation(tweet, bundle)
     if forbidden_hit is not None:
@@ -253,12 +258,18 @@ def _check_safety_honesty_fact(
     fact_origin = "local_precheck"
     fact_result = fact_check.local_rejection(tweet, [], bundle, state)
     if fact_result is None:
+        safety_input = (capture_stage_input(bundle, generation_input)
+                        if result_out is not None and generation_input is not None else None)
         safety_passed, safety_reason = run_safety_pipeline(tweet)
         if not safety_passed:
             print(
                 f"[two_bot.pipeline] Safety rejected {bundle.signal_kind} "
-                f"draft: {safety_reason}"
+                f"draft ({model_response_diagnostic(safety_reason)})"
             )
+            if result_out is not None and safety_input is not None:
+                result_out["rejected_candidate"] = capture_safety_rejection(
+                    tweet, bundle, safety_input, safety_passed, safety_reason, attempt=candidate_attempt,
+                )
             record_kill("safety", safety_reason or "unknown")
             return None
 
@@ -450,6 +461,7 @@ def generate_draft(
             record_kill=_record_kill,
             mark_stage=_mark_stage,
             result_out=result_out,
+            generation_input=checked_bundle,
         )
         if fact_result is None:
             return None
@@ -461,6 +473,9 @@ def generate_draft(
         if _critic_enabled() and slate_critic_result is None:
             shipped_recent = memory_slice.shipped_tweet_texts[:10]
             revise_enabled = _critic_revise_enabled()
+            critic_input = capture_stage_input(bundle, checked_bundle) if result_out is not None else None
+            critic_attempt = 1
+            critic_text = writer_result.tweet
             critic_result = critic.critic_review(
                 writer_result.tweet,
                 bundle,
@@ -470,6 +485,8 @@ def generate_draft(
             )
             if critic_result.verdict == "REVISE":
                 if not revise_enabled:
+                    if result_out is not None:
+                        result_out["rejected_candidate"] = stage_unavailable("critic", 1, "invalid_verdict")
                     _record_kill("critic", "critic returned REVISE while revise is disabled")
                     return None
                 assert critic_result.revise_instruction is not None
@@ -504,9 +521,13 @@ def generate_draft(
                     mark_stage=_mark_stage,
                     result_out=result_out,
                     candidate_attempt=2,
+                    generation_input=checked_bundle,
                 )
                 if fact_result is None:
                     return None
+                critic_input = capture_stage_input(bundle, checked_bundle) if result_out is not None else None
+                critic_attempt = 2
+                critic_text = revised_tweet
                 critic_result = critic.critic_review(
                     revised_tweet,
                     bundle,
@@ -517,8 +538,12 @@ def generate_draft(
             if not critic_result.passed:
                 print(
                     f"[two_bot.pipeline] Critic rejected {bundle.signal_kind} "
-                    f"draft: {critic_result.kill_reason}"
+                    f"draft ({model_response_diagnostic(critic_result.raw_response)})"
                 )
+                if result_out is not None and critic_input is not None:
+                    result_out["rejected_candidate"] = capture_critic_rejection(
+                        critic_text, bundle, critic_input, critic_result, attempt=critic_attempt,
+                    )
                 _mark_stage("critic", "kill")
                 _record_kill("critic", critic_result.kill_reason or "unknown")
                 return None

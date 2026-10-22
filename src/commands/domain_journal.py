@@ -7,15 +7,19 @@ stay unverified, and imports never alter the current authority projection.
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Sequence
 import hashlib
 import json
 import re
 import sqlite3
-from typing import Any
+from typing import Any, TYPE_CHECKING
 from uuid import NAMESPACE_URL, uuid5
 
 from src.commands.schema import canonical_json, utc_datetime
 from src.editorial.revisions import _evidence_payload, draft_identity
+
+if TYPE_CHECKING:
+    from src.commands.domain_projection import Record
 
 VERSION = 1
 MAX_ARTIFACT_BYTES = 16 * 1024 * 1024
@@ -432,7 +436,8 @@ def read_artifact(connection: sqlite3.Connection, sha: str) -> bytes:
     return row["payload"]
 
 
-def inspect(connection: sqlite3.Connection, *, verify: bool = False) -> dict:
+def inspect(connection: sqlite3.Connection, *, verify: bool = False, projection_records: Sequence[Record] = ()) -> dict:
+    from src.commands.domain_projection import inspect_journal
     namespace = validate_schema(connection)
     if verify:
         if connection.execute("PRAGMA foreign_key_check").fetchall():
@@ -448,4 +453,5 @@ def inspect(connection: sqlite3.Connection, *, verify: bool = False) -> dict:
         },
         "artifact_bytes_verified": verify,
         "production_authority": False,
+        "typed_domain": inspect_journal(connection, projection_records),
     }
