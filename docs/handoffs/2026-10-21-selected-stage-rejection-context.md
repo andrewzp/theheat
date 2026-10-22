@@ -1,11 +1,15 @@
 # Selected safety and critic rejection context
 
 New synchronous candidates rejected by the safety pipeline or final selected
-critic can retain a private `rejected_candidate` packet through the existing
+critic can retain a bounded `rejected_candidate` packet through the existing
 suppression store and authenticated API. These packets use schema version 2,
 with separate `selected_safety_rejection` and `selected_critic_rejection` scopes.
 Existing factual-rejection version 1 packets retain their original shape and
 meaning; legacy rows remain readable without backfilling missing evidence.
+
+Authentication protects this API endpoint. It does not make the underlying
+production Gist confidential: that store is public. Retained packets follow
+the existing storage visibility and must not be treated as private secrets.
 
 A retained packet records the exact selected text and hash, initial or revised
 attempt, complete detached source bundle and hash, stage and structured terminal
