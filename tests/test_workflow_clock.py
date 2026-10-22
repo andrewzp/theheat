@@ -57,3 +57,30 @@ def test_invented_positive_clock_aligns_real_children_and_keeps_elapsed_clocks(w
             assert actual_node["text"][:10] == wall[:10]
         assert datetime.now(UTC).hour == datetime.fromisoformat(wall.replace("Z", "+00:00")).hour
         assert all(getattr(time, name) is clock for name, clock in real_clocks.items())
+
+
+@pytest.mark.parametrize("wall", ["1900-01-01T00:00:00Z", "2099-01-01T00:00:00Z"])
+@pytest.mark.parametrize("short_timeout", [False, True], ids=["short_child", "short_timeout"])
+def test_subprocess_timeout_uses_real_elapsed_time_across_calendar_jump(monkeypatch, wall, short_timeout):
+    from freezegun import api
+    original = getattr(subprocess.Popen, "_communicate")
+    real_monotonic = time.monotonic
+    with ticking_workflow_clock(midday_metadata()):
+        calendar = api.freeze_factories[-1]
+        def jump_after_deadline(self, input, endtime, original_timeout):
+            # subprocess.run already captured its deadline. Only wall/calendar
+            # time jumps; the child's actual elapsed timeout must remain bounded.
+            calendar.move_to(wall)
+            return original(self, input, endtime, original_timeout)
+        monkeypatch.setattr(subprocess.Popen, "_communicate", jump_after_deadline)
+        started = api.real_monotonic()
+        child = [sys.executable, "-c", "import time; time.sleep(" + ("5" if short_timeout else ".03") + ")"]
+        if short_timeout:
+            with pytest.raises(subprocess.TimeoutExpired):
+                subprocess.run(child, capture_output=True, timeout=.1)
+        else:
+            assert subprocess.run(child, capture_output=True, timeout=1, check=True).returncode == 0
+        elapsed = api.real_monotonic() - started
+        assert (.07 <= elapsed < 2) if short_timeout else elapsed < 1
+        assert getattr(subprocess, "_time") is real_monotonic
+    assert getattr(subprocess, "_time") is real_monotonic
