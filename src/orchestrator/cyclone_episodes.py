@@ -65,6 +65,94 @@ def prepare_episode_requests(session, episode_id, revision_sha256, snapshot, *, 
     return results
 
 
+def plan_episode_portfolio(session, targets, snapshot, assessments, *, now, writing_attempts,
+                           planning_policy=None):
+    """Plan from freshly resolved retained episodes, without authorizing writing.
+
+    Assessments are explicit operator judgments bound to exact prepared evidence.
+    A caller's JSON cannot stand in for a repository head or a scientific gate.
+    """
+    from src.data.places import country_key
+    from src.editorial.policy import current_editorial_policy
+    from src.editorial.portfolio import (BINDING_KEYS, DIMENSIONS, MAX_CANDIDATES,
+        PlanningCandidate, plan_portfolio, require as planning_require, validate_binding)
+    from src.editorial.revisions import fingerprint
+
+    planning_require(type(session) is PhysicalEpisodeSession, "portfolio_episode_session_required")
+    environment(session.repository)
+    instant(now)
+    planning_require(type(targets) is list and len(targets) <= 16
+        and all(type(t) is dict and set(t) == {"episode_id", "revision_sha256"} for t in targets),
+        "portfolio_targets_invalid")
+    planning_require(type(snapshot) is dict, "portfolio_snapshot_invalid")
+    planning_require(type(assessments) is list and len(assessments) <= MAX_CANDIDATES,
+                     "portfolio_assessments_invalid")
+    # Capture all caller-owned inputs before any repository or prompt preparation.
+    targets, snapshot, assessments = deepcopy((targets, snapshot, assessments))
+    planning_require(all(type(t["episode_id"]) is str and type(t["revision_sha256"]) is str
+                         for t in targets), "portfolio_targets_invalid")
+    targets.sort(key=lambda target: target["episode_id"])
+    planning_require(len({t["episode_id"] for t in targets}) == len(targets),
+                     "portfolio_duplicate_episode")
+    policy = current_editorial_policy()
+    planning_require(policy is not None, "portfolio_editorial_policy_unavailable")
+    policy_sha = fingerprint(policy)
+    by_binding = {}
+    for assessment in assessments:
+        planning_require(type(assessment) is dict
+            and set(assessment) == {"binding", "dimensions", "exceptional_reason"},
+            "portfolio_assessment_invalid")
+        binding = validate_binding(assessment["binding"])
+        identity = fingerprint(binding)
+        planning_require(identity not in by_binding, "portfolio_duplicate_assessment")
+        by_binding[identity] = assessment
+    candidates: list[PlanningCandidate] = []
+    prepared: dict[str, dict] = {}
+    empty: list[dict] = []
+    for target in sorted(targets, key=lambda t: t["episode_id"]):
+        rows = prepare_episode_requests(session, target["episode_id"], target["revision_sha256"],
+                                        snapshot, now=now)
+        planning_require(len(candidates) + len(rows) <= MAX_CANDIDATES,
+                         "portfolio_candidate_bound")
+        if not rows:
+            empty.append(dict(target))
+        for row in rows:
+            episode = row["bundle"]["raw_signal_dump"]["physical_episode"]
+            binding = dict(event_group_id=episode["episode_id"],
+                event_revision_sha256=episode["revision_sha256"],
+                opportunity_id=row["opportunity_id"], bundle_sha256=row["bundle_sha256"],
+                policy_sha256=row["policy_sha256"])
+            planning_require(set(binding) == BINDING_KEYS and binding["policy_sha256"] == policy_sha,
+                             "portfolio_editorial_policy_changed")
+            identity = fingerprint(binding)
+            judgment = by_binding.pop(identity, None)
+            country = row["bundle"].get("country")
+            # This is source-scoped editorial geography, never observed impact.
+            regions = ((country_key(country),) if country else
+                       ("basin:" + episode["episode_id"].rsplit(":", 1)[1][:2],))
+            candidates.append(PlanningCandidate(binding, "cyclone", regions,
+                {key: None for key in DIMENSIONS} if judgment is None else judgment["dimensions"],
+                None if judgment is None else judgment["exceptional_reason"]))
+            prepared[identity] = row
+    planning_require(not by_binding, "portfolio_assessment_binding_mismatch")
+    portfolio = plan_portfolio(candidates, writing_attempts=writing_attempts, policy=planning_policy)
+    # Recheck every target, including empty/unselected ones. This report is not a
+    # lease, a database snapshot transaction, or a later provider/check grant.
+    for target in targets:
+        session.prepare_story_context(target["episode_id"], target["revision_sha256"])
+    planning_require(current_editorial_policy() == policy, "portfolio_editorial_policy_changed")
+    result = dict(portfolio=portfolio, targets=targets, as_of=now,
+        empty_episode_targets=empty,
+        selected_requests=[prepared[key] for key in portfolio["selected_candidate_ids"]],
+        editorial_policy_sha256=policy_sha, currentness="checked_at_preparation_only",
+        eligibility_scope="source_currentness_story_audit_and_operator_judgments_only",
+        fresh_dispatch_authority_required=True, operational_state_mutated=False,
+        provider_transport="not_attempted", callback_enrollment="not_supported",
+        publication_approved=False, production_authority=False)
+    result["preparation_sha256"] = fingerprint(result)
+    return result
+
+
 @dataclass(frozen=True)
 class CycloneEpisodeLane:
     supply: CycloneSupplySession

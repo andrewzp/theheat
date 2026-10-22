@@ -84,7 +84,8 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/editorial/draft_admission.py": "1f60fce127c7caa8c1965ce5c7c7e89c7b291a56028604f0d315952c587555ec",
     "src/editorial/marine_evidence.py": "7183f93f1068d75856063cf061a1dea8751bd4dd98cc1f1f34488bcf39296f5c",
     "src/editorial/newsworthiness.py": "2df18f17c51f772b761609bf10dc1c5b7289d2b1f1e2ce6f3f9dd743dbe73236",
-    "src/editorial/policy.py": "1752dbaf37b72adb3a08bba2d40839854b8df24b955f1b5974f621e45a74a8fa",
+    "src/editorial/policy.py": "cecff36b8e9d8dea03a9e799749afc6c700f59f56e88ce5cb2a0e26872e6a6b6",
+    "src/editorial/portfolio.py": "da6dd9a39fae1872c63fb2c54c1f973ce4417f5dc7204fb8e1e09d40fc440dc8",
     "src/editorial/report_development.py": "e2ed39a9ff957683c8befff0f3b99533fdc9d90d84af88220ed13f2bf1489995",
     "src/editorial/revisions.py": "ff8e3f276edd8dcda4103c4e8352b964d6155a15ff69244f040c54b31b90641f",
     "src/editorial/synthesis.py": "c3230d7f91f287550e158548998ed5df778148592c2989cf7155cd2a3182498b",
@@ -106,7 +107,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/media/review_packet.py": "027e6c1cdf5d94142784f4c64bd7dd21f73403defc59ba099eba913f94da5901",
     "src/media/viirs_map_graphic_adapter.py": "657db3caef8503a4e0b9c9596bad8d28c029c3711e1d974f153fc1b60d3dd8d3",
     "src/orchestrator/common.py": "a2bc5b82c27955da11b1f2d5ac0591645cb781979e8c8d42f53f56fbca64ab19",
-    "src/orchestrator/cyclone_episodes.py": "e0913dae539cb3fd256dd6c70fc4e01c7b53b141ec47fcc98febd53cf0ce3f4e",
+    "src/orchestrator/cyclone_episodes.py": "92a9fc41d5b1bdc67ed0e210243825d354c5f3579b1f0b885a12f0e78bbcdf0e",
     "src/orchestrator/cyclones.py": "389c6441db0839763b6a9cd42146f75e3ab14d1179125d60a9c368eb1e03697d",
     "src/orchestrator/dedup.py": "e3ad15f1eb544e0d130a29f41e8090fb8839805e57877cf0b45c74438ac8b791",
     "src/orchestrator/draft_save.py": "52edc55203eab0b391a22480f4c37241097f1a53979c7d4aba3e4cb7240e2638",
@@ -195,5 +196,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "a0c3d5b94ca0f06dcb025e72db9cc292062356110a235e3a95431e2aed1ae28c"
   },
   "schema_version": 1,
-  "source_sha256": "d2016a8bf39ef364a7804e17c8057db322c94d3b5693610ebdc7a6ed327ddd7f"
+  "source_sha256": "e04a651c38c7c41fba646d18786f3f94421640370ad92d761ba74def1a940d69"
 }
