@@ -135,10 +135,12 @@ class PostgresCommandAuthority:
 
     def delivery_projection(self, draft_id, resolve_principal, *, now):
         from src.commands import postgres_delivery as delivery
+        from src.commands.postgres_editor_media import view_claim
+        claim = view_claim(self, draft_id)
         with self.projections._connection() as c:
             self._validate(c)
             self._pointer(c, lock=True)
-            return delivery.projection(self, c, draft_id, resolve_principal, _clock(now))
+            return delivery.projection(self, c, draft_id, resolve_principal, _clock(now), claim=claim)
 
     def delivery_content(self, draft_id, intent_id):
         from src.commands import postgres_delivery as delivery
@@ -993,7 +995,11 @@ class PostgresCommandAuthority:
                               (command.command_id, encoded_result, p._sha(encoded_result), version, NAMESPACE, str(version)))
                     self._event(c, command.command_id, "completed", utc_text(clock), result)
                     if delivery_plan is not None and result["status"] == "applied":
-                        delivery.enroll(self, c, delivery_plan, resolve_principal, clock)
+                        # The predecessor was checked before reduction. Enrollment
+                        # needs the exact approval successor, not that stale state.
+                        delivery_context = generation_prepared.media_approval_successor(
+                            self, c, command, state, version - 1, resolve_principal) if generation_prepared is not None else None
+                        delivery.enroll(self, c, delivery_plan, resolve_principal, clock, ghcn=delivery_context)
                     if command.action in {"attach_media_revision", "review_media_revision"} and result["status"] == "applied":
                         self._result(c, command.command_id)
                     if media_final_window is not None:
@@ -1032,7 +1038,7 @@ class PostgresCommandAuthority:
             if png_proposal is None:
                 from src.commands import postgres_delivery as delivery
                 if delivery.upgraded(c):
-                    value["delivery"] = delivery.projection(self, c, draft_id, resolve_principal, _clock(now))
+                    value["delivery"] = delivery.projection(self, c, draft_id, resolve_principal, _clock(now), claim=claim)
             return value
 
     def execute_revision_check_once(self, command_id, resolve_principal, *, clock, reservation=None, enabled=False, transport_options=None):

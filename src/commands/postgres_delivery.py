@@ -6,7 +6,10 @@ its original checks. A missing response is uncertainty, never retry permission.
 """
 from __future__ import annotations
 
+from copy import deepcopy
 from datetime import timedelta
+import time
+import threading
 import re
 from uuid import UUID
 
@@ -277,7 +280,149 @@ def references(value):
                 intent_id=value["intent_id"], obligations={platform:work(value, platform) for platform in STAGES})
 
 
-def context(authority, c, value, resolve_principal, now):
+def prepare_context(authority, *, intent_id=None, draft_id=None):
+    """Resolve a compact source before the next delivery transaction, never in it."""
+    from src.commands.postgres_sourced_generation import prepare_ghcn_bundle
+    from src.two_bot.candidate_derivation import has_ghcn_reference
+    with authority.projections._connection() as c:
+        authority._validate(c)
+        if intent_id is not None:
+            draft_id = read(c, intent_id)["draft_id"]
+        _, state = authority._state(c)
+        drafts = [row for row in state["drafts"] if isinstance(row, dict) and row.get("id") == draft_id]
+        saved = drafts[0].get("review_context") if len(drafts) == 1 else None
+        two_bot = saved.get("two_bot") if isinstance(saved, dict) else None
+        bundle = two_bot.get("bundle") if isinstance(two_bot, dict) else None
+    return prepare_ghcn_bundle(authority, bundle) if has_ghcn_reference(bundle) else None
+
+
+
+def _attempt_transition(previous, current, value, binding, request, targets):
+    """The only allowed journal delta is this original unobserved barrier."""
+    refuse(not previous["protection_codes"], "delivery_attempt_predecessor_protected")
+    platform, stage = binding["platform"], binding["stage"]
+    refuse(platform in STAGES and stage in STAGES[platform]
+        and binding["intent_id"] == value["intent_id"]
+        and binding["configuration_sha256"] == value["configuration_sha256"], "delivery_attempt_changed")
+    seed = {key: item for key, item in binding.items() if key != "attempt_id"}
+    refuse(binding["attempt_id"] == fingerprint(seed)
+        and binding["request_sha256"] == p._sha(p._canonical(request)), "delivery_request_changed")
+    work_id = work(value, platform)
+    refuse(not any(row[1:3] == [work_id, stage] for row in previous["rows"]["attempts"]),
+        "delivery_attempt_already_present")
+    leases = [row for row in previous["rows"]["leases"] if row[:2] == [work_id, stage]]
+    latest = max(leases, key=lambda row: row[2]) if leases else None
+    refuse(latest is not None and latest[2:4] == [binding["fence"], binding["owner"]]
+        and latest[5] == binding["expires_at"]
+        and utc_datetime(latest[4]) <= utc_datetime(binding["recorded_at"]) < utc_datetime(latest[5]),
+        "delivery_stale_fence")
+    expected = deepcopy(previous)
+    refuse(expected["outcomes"][value["intent_id"]][platform][stage] == dict(status="pending", result=None),
+        "delivery_attempt_already_present")
+    binding_raw, request_raw = p._canonical(binding), p._canonical(request)
+    expected["rows"]["attempts"].append([binding["attempt_id"], work_id, stage, binding["fence"],
+        p._sha(binding_raw), binding["request_sha256"]])
+    expected["rows"]["attempts"].sort(key=lambda row: row[:2])
+    artifacts = dict(expected["artifacts"])
+    for raw_ in (binding_raw, request_raw):
+        sha = p._sha(raw_)
+        refuse(sha not in artifacts or artifacts[sha] == len(raw_), "delivery_request_changed")
+        artifacts[sha] = len(raw_)
+    expected["artifacts"] = [[sha, size] for sha, size in sorted(artifacts.items())]
+    expected["outcomes"][value["intent_id"]][platform][stage] = dict(status="unknown", result=None)
+    expected["protection_codes"] = [dict(draft_id=row["id"], event_id=row["event_id"],
+        code="delivery_prior_outcome_unknown") for row in targets
+        if row["id"] == value["draft_id"] or row["event_id"] == value["event_id"]]
+    refuse(expected == current, "delivery_attempt_successor_changed")
+    return expected
+
+
+class _OwnAttemptContext:
+    """One in-memory first-send proof; never serialized, reconstructed or renewed."""
+    def __init__(self, authority, prepared, value, binding, request):
+        from src.two_bot.ghcn_claim_view import ExecutionContext, ResolvedClaim
+        refuse(type(prepared) is ExecutionContext and prepared.authority is authority and type(prepared.claim) is ResolvedClaim,
+            "delivery_attempt_context_required")
+        self.authority, self.claim = authority, prepared.claim
+        self._base, self._footprint = deepcopy(prepared.checkpoint), prepared.footprint
+        self._valid_until = prepared.valid_until
+        self._value, self._binding, self._request = deepcopy(value), deepcopy(binding), deepcopy(request)
+        self._claim_identity = self._claim_sha()
+        self._expected: dict | None = None
+        self._use = threading.Lock()
+
+    def _claim_sha(self):
+        from src.two_bot.ghcn_claim_view import json_tree
+        refuse(fingerprint(json_tree(self.claim.full.to_dict())) == self.claim.full_sha256
+            and fingerprint(json_tree(self.claim.view.to_dict())) == self.claim.view_sha256,
+            "delivery_claim_changed")
+        return fingerprint(dict(reference=self.claim.reference, full=self.claim.full_sha256, view=self.claim.view_sha256))
+
+    def _source(self, authority, c, state, version):
+        from src.two_bot import ghcn_claim_view as ghcn
+        refuse(authority is self.authority and time.monotonic() <= self._valid_until,
+            "ghcn_preparation_expired")
+        refuse(self._claim_sha() == self._claim_identity, "delivery_claim_changed")
+        ref = self.claim.reference
+        material = ghcn._read_source(authority, c, ref["source_run_id"], ref["selection"])
+        refuse(dict(state_version=version, state_sha256=ghcn.digest(state),
+            source_sha256=ghcn._source_pins(material), policy_sha256=ghcn.digest(ghcn.current_editorial_policy()),
+            configuration=ghcn.inputs.configuration()) == {key: item for key, item in self._base.items() if key != "delivery"},
+            "ghcn_execution_context_changed")
+        refuse(ghcn.baseline_footprint(ghcn.domain.configured(authority)) == self._footprint, "ghcn_baseline_changed")
+        refuse(time.monotonic() <= self._valid_until, "ghcn_preparation_expired")
+        refuse(self.claim.full.event_id == self._value["event_id"], "delivery_claim_changed")
+        targets = ghcn.inputs.state_dependencies(state)["targets"]
+        targets += [dict(id="ghcn-event-query:" + self.claim.full.event_id, event_id=self.claim.full.event_id)]
+        return ghcn.domain.delivery_dependency(authority, c, targets), targets
+
+    def _barrier(self, c):
+        value, saved = read(c, self._value["intent_id"]), self._binding
+        refuse(value == self._value and attempt(c, value, saved["platform"], saved["stage"]) == saved,
+            "delivery_attempt_changed")
+        refuse(document(c, saved["request_sha256"]) == self._request, "delivery_request_changed")
+        body = raw(c, self._request["body_sha256"])
+        refuse(len(body) == self._request["byte_count"] and p._sha(body) == self._request["body_sha256"],
+            "delivery_request_changed")
+
+    def current(self, authority, c, state, version):
+        from src.storage.cyclone_supply import CycloneSupplyError
+        refuse(self._expected is not None and self._use.acquire(blocking=False), "delivery_attempt_context_consumed")
+        try:
+            current, _ = self._source(authority, c, state, version)
+            refuse(current == self._expected, "delivery_attempt_successor_changed")
+            self._barrier(c)
+            return self.claim
+        except CycloneSupplyError as exc:
+            raise CommandError(str(exc), "Current GHCN evidence changed") from None
+        except OSError:
+            raise CommandError("ghcn_baseline_unavailable", "Current GHCN baseline is unavailable") from None
+
+    def matches(self, value, saved):
+        return value == self._value and saved == self._binding
+
+
+def attempt_successor(authority, c, value, prepared, binding, request, body):
+    """Build only beside the exact begin write, before its owning COMMIT."""
+    proof = _OwnAttemptContext(authority, prepared, value, binding, request)
+    version, state = authority._state(c, lock=True)
+    current, targets = proof._source(authority, c, state, version)
+    proof._barrier(c)
+    refuse(request["body_sha256"] == p._sha(body) and request["byte_count"] == len(body), "delivery_request_changed")
+    proof._expected = _attempt_transition(proof._base["delivery"], current, value, binding, request, targets)
+    return proof
+
+
+def context(authority, c, value, resolve_principal, now, *, ghcn=None):
+    """An active send boundary requires its own current execution checkpoint."""
+    return _context(authority, c, value, resolve_principal, now,
+        lambda state, version: ghcn.current(authority, c, state, version) if ghcn is not None else None)
+
+
+def _context(authority, c, value, resolve_principal, now, resolve_claim):
+    # Revoke authority before consulting source/scientific execution evidence.
+    editor.resolve(resolve_principal, value["approval_binding"]["publisher_subject"], publisher=True)
+    editor.resolve(resolve_principal, value["approval_binding"]["requesting_actor"])
     config, digest = configuration(authority)
     refuse(config == value["fixture"] and digest == value["configuration_sha256"], "delivery_configuration_changed")
     version, state = authority._state(c, lock=True)
@@ -287,8 +432,10 @@ def context(authority, c, value, resolve_principal, now):
     refuse(p._canonical(draft.get("approval_binding")) == p._canonical(value["approval_binding"])
            and draft["text"] == value["text"] and draft["event_id"] == value["event_id"], "delivery_approval_changed")
     policy = current_editorial_policy()
-    inputs = editor.inputs(authority, c, draft, policy, now)
-    refuse(editor.parked(authority, c, draft, state, version, inputs, policy, now, resolve_principal), "delivery_parked_approval_required")
+    claim = resolve_claim(state, version)
+    inputs = editor.inputs(authority, c, draft, policy, now, claim=claim)
+    refuse(editor.parked(authority, c, draft, state, version, inputs, policy, now, resolve_principal,
+                         claim=claim), "delivery_parked_approval_required")
     package = editor.reviewed(authority, c, draft, inputs, policy, resolve_principal)
     refuse(value.get("schema_version") == 2, "platform_description_required")
     description = description_preflight(authority, c, draft, package)
@@ -301,10 +448,10 @@ def context(authority, c, value, resolve_principal, now):
     return package, deadline
 
 
-def enroll(authority, c, value, resolve_principal, now):
+def enroll(authority, c, value, resolve_principal, now, *, ghcn=None):
     # Command result and exact successor state are already queryable in this same
     # transaction; none is visible outside until the outer COMMIT succeeds.
-    context(authority, c, value, resolve_principal, now)
+    context(authority, c, value, resolve_principal, now, ghcn=ghcn)
     digest = record(c, value)
     c.execute(f"INSERT INTO {SCHEMA}.intents VALUES(%s,%s,%s,%s,%s,%s)",
               (value["intent_id"], value["command_id"], value["draft_id"], value["event_id"], value["proposal_sha256"], digest))
@@ -312,9 +459,9 @@ def enroll(authority, c, value, resolve_principal, now):
         c.execute(f"INSERT INTO {SCHEMA}.work_items VALUES(%s,%s,%s)", (work(value, platform), value["intent_id"], platform))
 
 
-def acquire(authority, c, value, platform, stage, owner, resolve_principal, now):
+def acquire(authority, c, value, platform, stage, owner, resolve_principal, now, *, ghcn=None):
     refuse(type(owner) is str and re.fullmatch(r"[a-zA-Z0-9_.:-]{1,128}", owner), "delivery_owner_required")
-    package, deadline = context(authority, c, value, resolve_principal, now)
+    package, deadline = context(authority, c, value, resolve_principal, now, ghcn=ghcn)
     refuse(stage in STAGES.get(platform, ()), "delivery_stage_unknown")
     previous = STAGES[platform][:STAGES[platform].index(stage)]
     prior = {key:outcome(c, attempt(c, value, platform, key)) for key in previous}
@@ -345,11 +492,11 @@ def acquire(authority, c, value, platform, stage, owner, resolve_principal, now)
                 png=package["assets"]["preview.png"], alt=wire, raw_alt=raw_alt, graphic_spec=spec)
 
 
-def begin(authority, c, value, platform, stage, lease, request, body, resolve_principal, now):
-    _, deadline = context(authority, c, value, resolve_principal, now)
+def begin(authority, c, value, platform, stage, lease, request, body, resolve_principal, now, *, ghcn=None):
+    _, deadline = context(authority, c, value, resolve_principal, now, ghcn=ghcn)
     # Re-derive all dependencies/current lease rather than trusting the prepared
     # worker's prior payload, even though intake is not a public HTTP endpoint.
-    prepared = acquire(authority, c, value, platform, stage, lease["owner"], resolve_principal, now)
+    prepared = acquire(authority, c, value, platform, stage, lease["owner"], resolve_principal, now, ghcn=ghcn)
     if "attempt" in prepared:
         return dict(dispatch_granted=False)
     refuse(prepared["lease"] == lease and (deadline-now).total_seconds() >= MIN_WINDOW_SECONDS,
@@ -385,14 +532,16 @@ def observe(c, value, saved, observation, response):
     return identity
 
 
-def before_call(authority, c, value, saved, resolve_principal, now):
+def before_call(authority, c, value, saved, resolve_principal, now, *, ghcn=None):
     """Last independent currentness check after the durable barrier.
 
     This cannot make a database decision atomic with an external request. The
     bounded transport preserves the original deadline across that final race.
     """
     refuse(attempt(c, value, saved["platform"], saved["stage"]) == saved, "delivery_attempt_changed")
-    _, deadline = context(authority, c, value, resolve_principal, now)
+    if type(ghcn) is _OwnAttemptContext:
+        refuse(ghcn.matches(value, saved), "delivery_attempt_changed")
+    _, deadline = context(authority, c, value, resolve_principal, now, ghcn=ghcn)
     lease = c.execute(f"SELECT fence,owner,expires_at FROM {SCHEMA}.leases WHERE work_id=%s AND stage=%s ORDER BY fence DESC LIMIT 1",
         (work(value, saved["platform"]), saved["stage"])).fetchone()
     refuse(lease == (saved["fence"], saved["owner"], saved["expires_at"]), "delivery_stale_fence")
@@ -415,7 +564,7 @@ def finish(c, value, saved):
     return outcome(c, saved)
 
 
-def projection(authority, c, draft_id, resolve_principal, now):
+def projection(authority, c, draft_id, resolve_principal, now, *, claim=None):
     validate(c, authority.environment)
     rows = c.execute(f"SELECT intent_id FROM {SCHEMA}.intents WHERE draft_id=%s ORDER BY intent_id LIMIT 65", (draft_id,)).fetchall()
     refuse(len(rows) <= 64, "delivery_draft_capacity")
@@ -424,7 +573,9 @@ def projection(authority, c, draft_id, resolve_principal, now):
         value = read(c, identity)
         current, reason = True, None
         try:
-            context(authority, c, value, resolve_principal, now)
+            # Passive GET resolution grants no dispatch checkpoint and performs
+            # no selection replay. Historical outcomes remain visible on outage.
+            _context(authority, c, value, resolve_principal, now, lambda state, version: claim)
         except CommandError as exc:
             current, reason = False, exc.code
         result.append(dict(intent_id=identity, current=current, reason=reason, stages={

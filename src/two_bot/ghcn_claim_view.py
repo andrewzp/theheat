@@ -6,7 +6,7 @@ Passive retained packets never mint spending, check or approval authority.
 from __future__ import annotations
 
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import json
 import time
 import stat
@@ -217,6 +217,48 @@ class ExecutionContext:
             raise CommandError(str(exc),"Current GHCN evidence changed; refresh the retained brief") from None
         except OSError:
             raise CommandError("ghcn_baseline_unavailable","Current GHCN baseline is unavailable") from None
+
+    def media_approval_successor(self, authority, c, command, previous_state, previous_version, resolve_principal):
+        """Rebind only the approval this context just checked, without a new lifetime.
+
+        Enrollment follows that command's own state write in the same lock. The
+        predecessor proof cannot authorize arbitrary later state or grants.
+        """
+        from src.editorial.revisions import revoke_approval
+        from src.commands.postgres_editor_media import resolve
+        version, state = authority._state(c, lock=True)
+        result = authority._result(c, command.command_id)
+        require(command.action == "approve_media_revision" and len(command.targets) == 1
+                and version == previous_version + 1 and result is not None
+                and result.get("status") == "applied" and result.get("state_version") == version
+                and result.get("command_id") == command.command_id and result.get("digest") == command.digest,
+                "ghcn_approval_successor_changed")
+        target = command.targets[0].draft_id
+        before = [row for row in previous_state["drafts"] if isinstance(row, dict) and row.get("id") == target]
+        after = [row for row in state["drafts"] if isinstance(row, dict) and row.get("id") == target]
+        require(len(before) == len(after) == 1, "ghcn_approval_successor_changed")
+        binding = after[0].get("approval_binding", {})
+        require(binding.get("command_id") == command.command_id
+                and binding.get("consumed_state_version") == previous_version
+                and binding.get("consumed_state_sha256") == digest(previous_state)
+                and binding.get("resulting_state_version") == version,
+                "ghcn_approval_successor_changed")
+        resolve(resolve_principal, command.actor_subject, publisher=True)
+        resolve(resolve_principal, binding["requesting_actor"])
+        self.current(authority, c, previous_state, previous_version)
+        proposed = revoke_approval(deepcopy(before[0]))
+        proposed.update(approval_binding=binding, status="pending",
+                        publish_intent_id=binding["publish_intent_id"], updated_at=command.requested_at)
+        expected = deepcopy(previous_state)
+        expected["drafts"] = [proposed if isinstance(row, dict) and row.get("id") == target else row
+                              for row in expected["drafts"]]
+        require(expected == state, "ghcn_approval_successor_changed")
+        ref = self.claim.reference
+        material = _read_source(authority, c, ref["source_run_id"], ref["selection"])
+        checkpoint = _checkpoint(authority, c, state, version, material, ref["selection"])
+        successor = replace(self, checkpoint=checkpoint)
+        successor.current(authority, c, state, version)
+        return successor
 
 
 def prepare_execution(authority,run_id,selection):
