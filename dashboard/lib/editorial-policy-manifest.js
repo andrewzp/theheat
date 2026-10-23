@@ -38,7 +38,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/commands/postgres_ghcn_source_results.py": "fc06f61b007c003e299f78dac9be51b03db74a1d65569a59e0c407eb243eab42",
     "src/commands/postgres_important_variants.py": "eca11e40c09b5dbaf3ab50c8b5fa215067538cf3c4a77e4a32477d8260896002",
     "src/commands/postgres_media.py": "2c810a409b4fdbdb243e57e9acd652fe439d6c870f8874ab6decc7e9e20d37c6",
-    "src/commands/postgres_media_commands.py": "d9c3be787e147101a99623eb38e2b42dd1e81609e6740b38c03f815e643bb7cd",
+    "src/commands/postgres_media_commands.py": "5f3608a787453a158e5c86fdc62db750c08e899be9d6cd2cd7e6e2a8d1958b24",
     "src/commands/postgres_published_media.py": "bf34d53dd3b52cb00b81542d864787b056943e64ec5c1ccaa652876d5083143c",
     "src/commands/postgres_report_development.py": "4a93f353cd6560753d83afdf1ae4b9507b57318f3275351f2d9a5d8480230b68",
     "src/commands/postgres_revision_checks.py": "90508fe132757106356e6428b1b7e0fe63993fe22a9de815c7e57df8af1204be",
@@ -98,7 +98,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/media/evidence_graphic.py": "d9e0e487dba14f93d59a3a6289ce48064cd35eb35ea36d5bfd94403858bd3afa",
     "src/media/fire_graphic_adapter.py": "343acd087bcbf3f566837bcf2a1799187002a734641c947b599d6f9f025e9833",
     "src/media/fire_map_graphic_adapter.py": "083b3ca9c1473bf1458aa9a9d4bc1052c7128f40341d8c2f1bf086cd7c1713e7",
-    "src/media/joint_review.py": "dbf73c2c1f169013e391d5523aee6eec1dfaf45a3528277c8d30c95490ea7646",
+    "src/media/joint_review.py": "9bdc53e80dd0111ca7766f8acb5b4b2e75a97e871d3552f1725d9dab46a878cf",
     "src/media/maps/NOTICE.md": "f6ebf3caca500621c4b2c9f9fe9aad802099b82a4a1c21c479daf97d29aabac0",
     "src/media/maps/manifest.json": "1af072edc46ae3252bf6cf0edb43993986de262a2840b2cd4907eb4866f970e9",
     "src/media/maps/ne_110m_land_v4_1_0.json": "a37b057aca4fc9714a0c24b5d6bc9778bb5845894646e4052383ea63fa3cd50d",
@@ -144,7 +144,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/storage/migrations/013_synchronous_checks.sql": "183c5b72dc9d932337eb451615e4c437da9186423a7ffdbd5da328327e606c2a",
     "src/storage/migrations/014_preview_delivery.sql": "eb4273b808de7b60c376b7249dfaca0f1be96c1b50c334d6bd8f245eceb92bfa",
     "src/storage/physical_events.py": "9706a04510f7699eccfc8b83a9ad310954e5bc4c97df23f4bf8787f5021be867",
-    "src/storage/postgres_projection.py": "f019e562059467581642b54908cc54ae6f77cf92e8c401fe77f1b34424d1c9e7",
+    "src/storage/postgres_projection.py": "13a50a9bf5e3049bd95587f90bb30f3ccd62ab4be9c079d4aece7d14c987cc5c",
     "src/storage/retained_reports.py": "21634f249fa8ccb07ecbaae34f44727bf5388bf5079bfb70c5191e946ef941ac",
     "src/storage/scientific_supply.py": "5c89128bcdc0f708477ff19579cb913f0b1081eee46ea170e3fc3979cce0896c",
     "src/two_bot/air_quality_claims.py": "b2d5232a2cd8678614ec9baeb3d20fc2e9097ed635244f2373891707c03711b8",
@@ -199,5 +199,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "8c4887f395618e343dafd55f5843987dfa6a7a620713c7c34bab9f419e4434fe"
   },
   "schema_version": 1,
-  "source_sha256": "6d3171c55b0956d7c4007b60ef0ad72febe4c02a0404141524be8309b53f5075"
+  "source_sha256": "ddb0c9ffe22d0933fd4efe670dea4280215c8d64a6e6b6c8700075733012b35a"
 }
