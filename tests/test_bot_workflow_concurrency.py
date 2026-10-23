@@ -91,7 +91,7 @@ def test_pr_and_display_branch_job_exclusions_remain_explicit(workflow):
 def test_required_offline_suite_and_own_production_smoke_gate_remain(workflow):
     test, run = workflow["jobs"]["test-partition"], workflow["jobs"]["run"]
     suite = next(step for step in test["steps"] if step.get("run", "").startswith("python -m pytest tests/ -v "))
-    assert suite["run"] == 'python -m pytest tests/ -v -m "not voice_replay" --ci-partition=${{ matrix.partition }} --ci-postgres-shard=${{ matrix.postgres-shard }} --durations=20 -o faulthandler_timeout=300'
+    assert suite["run"] == 'python -m pytest tests/ -v -m "not voice_replay" --ci-partition=${{ matrix.partition }} --ci-postgres-shard=${{ matrix.postgres-shard }} --ci-critical-first --maxfail=1 --durations=20 -o faulthandler_timeout=300'
     assert suite["env"]["THEHEAT_TEST_POSTGRES"] == "1"
     assert {step.get("name") for step in test["steps"]} >= {
         "SQLite backend smoke", "Test dashboard", "Build dashboard",
@@ -175,7 +175,8 @@ def test_actual_collection_hook_keeps_preview_ingress_in_postgres(partition):
     original = list(items)
     deselected = []
     config = SimpleNamespace(
-        getoption=lambda name: {"--ci-partition":partition, "--ci-postgres-shard":"all"}[name],
+        getoption=lambda name: {"--ci-partition":partition, "--ci-postgres-shard":"all",
+                                "--ci-critical-first":False}[name],
         hook=SimpleNamespace(pytest_deselected=lambda items: deselected.extend(items)),
     )
     pytest_collection_modifyitems(config, items)

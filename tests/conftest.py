@@ -1,8 +1,12 @@
 """Shared test fixtures, hermeticity gate, and the time-travel canary hook."""
 
 import os
+import json
+import math
+import re
 import socket
 import time
+from collections import deque
 from hashlib import sha256
 from pathlib import Path
 from copy import deepcopy
@@ -34,6 +38,16 @@ from src.state import DEFAULT_STATE
 
 _TIME_TRAVEL_ENV = "THEHEAT_TIME_TRAVEL_DAYS"
 
+# Exact observed failures first in their existing CI shards. Stable sorting
+# preserves every other item's order; ordinary local collection is unchanged.
+_CI_CRITICAL_NODEIDS = (
+    "tests/test_postgres_temperature_delivery.py::test_genuine_compact_temperature_delivery_recovery_history_and_cost[compact_case0]",
+    "tests/test_postgres_temperature_editor_media.py::test_compact_claim_native_review_checks_park_restore_and_invalidation[all_time_low]",
+    "tests/test_postgres_temperature_editor_media.py::test_actual_authenticated_http_compact_claim_editor_journey[calendar_date_low]",
+    "tests/test_postgres_temperature_editor_media.py::test_compact_claim_refusals_are_durable_typed_and_never_promote_after_drift[monthly_high]",
+    "tests/test_postgres_preview_important_variants.py::test_actual_next_commands_select_exact_retained_alternate",
+)
+
 
 def pytest_addoption(parser):
     parser.addoption(
@@ -43,6 +57,10 @@ def pytest_addoption(parser):
     parser.addoption(
         "--ci-postgres-shard", choices=("all", "0", "1", "2", "3", "4", "5", "6", "7", "8"), default="all",
         help="Stable file shard within --ci-partition=postgres; all preserves the complete partition.",
+    )
+    parser.addoption(
+        "--ci-critical-first", action="store_true", default=False,
+        help="Run exact PostgreSQL CI regression cases first without changing shard membership.",
     )
 
 
@@ -84,7 +102,65 @@ def pytest_collection_modifyitems(config, items):
         keep = group == partition and (group != "postgres" or shard == "all" or _ci_postgres_shard(item.path) == shard)
         (selected if keep else deselected).append(item)
     items[:] = selected
+    if partition == "postgres" and config.getoption("--ci-critical-first"):
+        priority = {nodeid: index for index, nodeid in enumerate(_CI_CRITICAL_NODEIDS)}
+        items.sort(key=lambda item: priority.get(item.nodeid, len(priority)))
     config.hook.pytest_deselected(items=deselected)
+
+
+def _last_check_windows(path):
+    """Only eight whitelisted fixture rows from at most 64 KiB of trace tail.
+
+    These are the worker's actual internal clock values, not CI wall timestamps.
+    Other trace rows can contain retained text and must never enter this report.
+    """
+    with Path(path).open("rb") as stream:
+        size = stream.seek(0, os.SEEK_END)
+        offset = max(0, size - 65_536)
+        stream.seek(offset)
+        raw = stream.read(65_536)
+    if offset:
+        raw = raw.partition(b"\n")[2]
+    rows: deque[dict] = deque(maxlen=8)
+    timestamp = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]{1,6})?Z")
+    fields = ("now", "lease_expires_at", "useful_until", "lease_remaining_seconds", "available", "operation", "fault")
+    for line in raw.splitlines():
+        try:
+            row = json.loads(line)
+            if (type(row) is not dict or row.get("kind") != "check_window"
+                    or not all(key in row for key in fields)
+                    or row["operation"] not in ("deterministic", "safety", "fact_check", "critic")
+                    or row["fault"] not in ("", "postgrant_baseline")
+                    or type(row["available"]) is not bool
+                    or type(row["lease_remaining_seconds"]) not in (int, float)
+                    or not math.isfinite(row["lease_remaining_seconds"])
+                    or not all(type(row[key]) is str and timestamp.fullmatch(row[key])
+                               for key in ("now", "lease_expires_at", "useful_until"))):
+                continue
+            rows.append({key: row[key] for key in fields})
+        except (ValueError, TypeError, OverflowError, RecursionError):
+            continue
+    return list(rows)
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    outcome = yield
+    report = outcome.get_result()
+    if (not report.failed or item.path.name not in {
+            "test_postgres_temperature_delivery.py", "test_postgres_temperature_editor_media.py"}):
+        return
+    # Only the invented fixture's own trace, never its configuration file.
+    try:
+        case = item.funcargs["compact_case"]
+        trace = Path(case["config"]["trace"])
+        if trace.parent.resolve() != item.funcargs["tmp_path"].resolve():
+            return
+        rows = _last_check_windows(trace)
+        text = json.dumps(rows, sort_keys=True, allow_nan=False) if rows else "No valid retained check_window rows available."
+    except (KeyError, TypeError, ValueError, OSError, AttributeError):
+        text = "Retained check_window diagnostics unavailable."
+    report.sections.append(("Last check windows (up to 8 rows / 64 KiB tail)", text))
 
 
 def pytest_itemcollected(item):

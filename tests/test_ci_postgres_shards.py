@@ -7,21 +7,58 @@ from types import SimpleNamespace
 
 import pytest
 
-from tests.conftest import _ci_postgres_shard, pytest_collection_modifyitems
+from tests.conftest import _CI_CRITICAL_NODEIDS, _ci_postgres_shard, pytest_collection_modifyitems
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def select(items, partition, shard="all"):
+def select(items, partition, shard="all", critical_first=False):
     kept, removed = list(items), []
     config = SimpleNamespace(
-        getoption=lambda name: {"--ci-partition":partition, "--ci-postgres-shard":shard}[name],
+        getoption=lambda name: {"--ci-partition":partition, "--ci-postgres-shard":shard,
+                                "--ci-critical-first": critical_first}[name],
         hook=SimpleNamespace(pytest_deselected=lambda items: removed.extend(items)),
     )
     pytest_collection_modifyitems(config, kept)
     assert {id(item) for item in kept}.isdisjoint(id(item) for item in removed)
     assert {id(item) for item in kept + removed} == {id(item) for item in items}
     return kept
+
+
+def test_critical_order_preserves_each_shard_membership_and_all_other_relative_order():
+    ordinary = [SimpleNamespace(path=ROOT / "tests/test_postgres_temperature_editor_media.py",
+                               nodeid="tests/test_postgres_temperature_editor_media.py::ordinary[" + p + "]")
+                for p in ("a", "b")]
+    critical = [SimpleNamespace(path=ROOT / nodeid.split("::")[0], nodeid=nodeid)
+                for nodeid in _CI_CRITICAL_NODEIDS]
+    six = SimpleNamespace(path=ordinary[0].path, nodeid="tests/test_postgres_temperature_editor_media.py::test_six_compact_claims_reach_actual_native_editor_preparation[six_variants]")
+    items = [ordinary[0], six, *reversed(critical), ordinary[1]]
+    for shard in ("all", *(str(i) for i in range(9))):
+        before = select(items, "postgres", shard)
+        after = select(items, "postgres", shard, critical_first=True)
+        assert sorted(map(id, after)) == sorted(map(id, before))
+        promoted = [nodeid for nodeid in _CI_CRITICAL_NODEIDS if any(item.nodeid == nodeid for item in before)]
+        assert [item.nodeid for item in after[:len(promoted)]] == promoted
+        assert [item for item in after if item.nodeid not in _CI_CRITICAL_NODEIDS] == [
+            item for item in before if item.nodeid not in _CI_CRITICAL_NODEIDS]
+    assert select(items, "postgres") == items
+    assert select(items, "all", critical_first=True) == items
+    for partition in ("core", "media"):
+        assert select(items, partition, critical_first=True) == select(items, partition)
+
+
+@pytest.mark.parametrize("passing", [False, True])
+def test_actual_pytest_maxfail_keeps_failures_nonzero_and_all_passing_tests(tmp_path, passing):
+    module = tmp_path / "test_feedback.py"
+    module.write_text("def test_first():\n    assert " + str(passing)
+                      + "\n\ndef test_second():\n    assert True\n")
+    result = subprocess.run([sys.executable, "-m", "pytest", str(module), "-q", "--maxfail=1",
+                             "-p", "no:cacheprovider"],
+                            cwd=tmp_path, capture_output=True, text=True, timeout=15)
+    assert result.returncode == (0 if passing else 1)
+    assert ("2 passed" if passing else "1 failed") in result.stdout
+    if not passing:
+        assert "stopping after 1 failures" in result.stdout and "1 passed" not in result.stdout
 
 
 def test_nine_file_shards_partition_all_modules_and_parameters_without_changing_legacy_groups(monkeypatch, tmp_path):
