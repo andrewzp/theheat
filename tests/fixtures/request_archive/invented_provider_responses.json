@@ -1,0 +1,15 @@
+{
+  "notice": "INVENTED offline test fixtures for the private request archive. Not provider output, not real weather, not historical copy, not a model or quality result.",
+  "accepted_tweet": "Mali thermal power is 361 MW.",
+  "accepted_claims": [{"text": "Mali", "kind": "named_entity"}, {"text": "361 MW", "kind": "number"}],
+  "revised_tweet": "Mali thermal signal is 361 MW.",
+  "revised_claims": [{"text": "Mali", "kind": "named_entity"}, {"text": "361 MW", "kind": "number"}],
+  "local_precheck_tweet": "Mali wildfire is 361 MW.",
+  "factual_failure": "invented_unsupported_claim: the fixture checker rejects this invented text",
+  "critic_kill_reason": "invented_fixture_kill: generic opener in this invented draft",
+  "critic_revise_instruction": "Invented fixture instruction: lead with the fire power.",
+  "malformed_writer_text": "this invented writer output is not json",
+  "anthropic_message_id": "msg_invented_fixture_0001",
+  "anthropic_request_id": "req_invented_fixture_0001",
+  "google_response_id": "invented-google-response-0001"
+}

@@ -1,0 +1,1 @@
+INVENTED stand-in for an original billing document. Not a real invoice, account or amount. Used only to prove explicit document hash binding in offline tests.
