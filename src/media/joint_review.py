@@ -14,7 +14,7 @@ import re
 from typing import Any
 
 from src.commands.schema import Principal, utc_datetime
-from src.editorial.revisions import fingerprint
+from src.editorial.revisions import draft_identity, fingerprint
 from src.media.review_packet import MediaReviewError, build_media_review_packet
 from src.media.published_radar import EXTRA_CONFIRMATIONS
 from src.media.platform_description import CONFIRMATION
@@ -128,6 +128,28 @@ def _body(packet: dict, payload: dict, principal: Principal, reviewed_at: str, p
     return body
 
 
+def _record_packet(draft, packet, decision, actor, reviewed_at, expected_packet_sha256,
+                   description, current_inputs):
+    """Shared checks after this module has built a fresh packet in this call."""
+    _require(
+        packet["packet_sha256"] == expected_packet_sha256,
+        "Preview changed since the requested review",
+    )
+    expected_checks = CONFIRMATIONS | EXTRA_CONFIRMATIONS if packet["schema_version"] == 2 else CONFIRMATIONS
+    if description is not None:
+        from src.media.platform_description import build
+        rebuilt = build(draft, packet, description["proposal_sha256"],
+            (packet["media"]["alt_text"] + "\n").encode("utf-8"), current_inputs["png_bytes"],
+            description["profiles"], graphic_spec=current_inputs.get("graphic_spec"), derivation=description["derivation"])
+        _require(description == rebuilt, "Platform description differs from verified source inputs")
+        _require(decision.get("expected_platform_description_sha256") == description["description_sha256"]
+            and description["packet_sha256"] == packet["packet_sha256"], "Platform description changed since review")
+        expected_checks = expected_checks | {CONFIRMATION}
+    _require(set(decision["confirmations"]) == expected_checks, "Joint confirmations differ from the media family")
+    body = _object(_body(packet, decision, actor, reviewed_at, description))
+    return {**body, "review_sha256": fingerprint(body)}
+
+
 def record_joint_media_review(
     draft: dict, *, payload: dict, principal: Principal, reviewed_at: str,
     expected_packet_sha256: str, **current_inputs: Any,
@@ -143,23 +165,35 @@ def record_joint_media_review(
         _require(_sha(expected_packet_sha256), "Expected packet fingerprint is invalid")
         description = current_inputs.pop("platform_description", None)
         packet = build_media_review_packet(draft, **current_inputs)
-        _require(
-            packet["packet_sha256"] == expected_packet_sha256,
-            "Preview changed since the requested review",
-        )
-        expected_checks = CONFIRMATIONS | EXTRA_CONFIRMATIONS if packet["schema_version"] == 2 else CONFIRMATIONS
-        if description is not None:
-            from src.media.platform_description import build
-            rebuilt = build(draft, packet, description["proposal_sha256"],
-                (packet["media"]["alt_text"] + "\n").encode("utf-8"), current_inputs["png_bytes"],
-                description["profiles"], graphic_spec=current_inputs.get("graphic_spec"), derivation=description["derivation"])
-            _require(description == rebuilt, "Platform description differs from verified source inputs")
-            _require(decision.get("expected_platform_description_sha256") == description["description_sha256"]
-                and description["packet_sha256"] == packet["packet_sha256"], "Platform description changed since review")
-            expected_checks = expected_checks | {CONFIRMATION}
-        _require(set(decision["confirmations"]) == expected_checks, "Joint confirmations differ from the media family")
-        body = _object(_body(packet, decision, actor, reviewed_at, description))
-        return {**body, "review_sha256": fingerprint(body)}
+        return _record_packet(draft, packet, decision, actor, reviewed_at, expected_packet_sha256,
+                              description, current_inputs)
+    except MediaReviewError:
+        raise
+    except (ValueError, TypeError, KeyError, AttributeError, OverflowError, RecursionError):
+        raise MediaReviewError("Malformed joint-review input") from None
+
+
+def _record_joint_media_review_with_description(
+    draft, *, payload, principal, reviewed_at, expected_packet_sha256,
+    editorial_policy, graphic_spec, renderer_manifest, png_bytes,
+    proposal_sha256, raw_alt, platform_profiles, derivation=None,
+):
+    """Build the exact attach description and review together; accept no packet.
+
+    Description validation precedes review validation just as in the two public
+    calls. The packet is local to this pure call; no retained proof is reused.
+    """
+    from src.media.platform_description import build
+    current_inputs = dict(expected_draft_identity=draft_identity(draft), editorial_policy=editorial_policy,
+                          graphic_spec=graphic_spec, renderer_manifest=renderer_manifest, png_bytes=png_bytes)
+    packet = build_media_review_packet(draft, **current_inputs)
+    description = build(draft, packet, proposal_sha256, raw_alt, png_bytes, platform_profiles,
+                        graphic_spec=graphic_spec, derivation=derivation)
+    try:
+        actor, decision = _principal(principal), _payload(payload)
+        _require(_sha(expected_packet_sha256), "Expected packet fingerprint is invalid")
+        return _record_packet(draft, packet, decision, actor, reviewed_at, expected_packet_sha256,
+                              description, current_inputs)
     except MediaReviewError:
         raise
     except (ValueError, TypeError, KeyError, AttributeError, OverflowError, RecursionError):

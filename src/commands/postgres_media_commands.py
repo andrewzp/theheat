@@ -14,7 +14,9 @@ from src.commands.reducer import Reduction, _identity, _target_drafts
 from src.commands.schema import Command, CommandError, Principal, authorize, utc_datetime
 from src.editorial.revisions import draft_identity, fingerprint, revoke_approval
 from src.media.attachment import build_media_attachment_proposal, build_media_removal_proposal
-from src.media.joint_review import MAX_REVIEW_BYTES, record_joint_media_review
+from src.media.joint_review import (
+    MAX_REVIEW_BYTES, record_joint_media_review, _record_joint_media_review_with_description,
+)
 from src.media import platform_description as descriptions
 from src.media.review_packet import build_media_review_packet
 from src.storage import postgres_projection as p
@@ -167,13 +169,20 @@ def _prepare(state, command, actor, now, policy, package, platform_profiles, des
         if proposal["changed"] is not True:
             raise CommandError("media_already_attached", "This exact graphic is already attached")
         if extended:
-            platform_inputs["platform_description"] = description_for(proposal["proposed_draft"], package, policy, platform_profiles, derivation=description_derivation)
-        review = record_joint_media_review(proposal["proposed_draft"], payload=payload["review"],
-            principal=actor, reviewed_at=command.requested_at,
-            expected_packet_sha256=payload["expected_packet_sha256"],
-            expected_draft_identity=draft_identity(proposal["proposed_draft"]), editorial_policy=policy,
-            graphic_spec=inputs["graphic_spec"], renderer_manifest=inputs["renderer_manifest"],
-            png_bytes=assets["preview.png"], **platform_inputs)
+            review = _record_joint_media_review_with_description(proposal["proposed_draft"],
+                payload=payload["review"], principal=actor, reviewed_at=command.requested_at,
+                expected_packet_sha256=payload["expected_packet_sha256"],
+                editorial_policy=policy,
+                graphic_spec=inputs["graphic_spec"], renderer_manifest=inputs["renderer_manifest"],
+                png_bytes=assets["preview.png"], proposal_sha256=capture["proposal"]["proposal_sha256"],
+                raw_alt=assets["alt.txt"], platform_profiles=platform_profiles, derivation=description_derivation)
+        else:
+            review = record_joint_media_review(proposal["proposed_draft"], payload=payload["review"],
+                principal=actor, reviewed_at=command.requested_at,
+                expected_packet_sha256=payload["expected_packet_sha256"],
+                expected_draft_identity=draft_identity(proposal["proposed_draft"]), editorial_policy=policy,
+                graphic_spec=inputs["graphic_spec"], renderer_manifest=inputs["renderer_manifest"],
+                png_bytes=assets["preview.png"], **platform_inputs)
         if review["decision"] != "accept":
             raise CommandError("media_acceptance_required", "The exact graphic requires joint acceptance")
     else:
