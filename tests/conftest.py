@@ -163,6 +163,13 @@ def pytest_runtest_makereport(item, call):
     report.sections.append(("Last check windows (up to 8 rows / 64 KiB tail)", text))
 
 
+@pytest.hookimpl(hookwrapper=True, specname="pytest_runtest_makereport")
+def pytest_delivery_refusal_report(item, call):
+    outcome = yield
+    from tests.t4_delivery_diagnostics import append_failure_section
+    append_failure_section(item, outcome.get_result())
+
+
 def pytest_itemcollected(item):
     """Reject payload-sized display IDs before CI logs or subprocess environments.
 

@@ -262,7 +262,11 @@ elif operation in {"delivery_run", "delivery_refusals", "delivery_high_control"}
         if cfg.get("t4_timing_diagnostics"):
             t4_timing.instrument(delivery, "attempt_successor", cfg["trace"], operation, "delivery:attempt_successor")
             t4_timing.instrument(delivery._OwnAttemptContext, "current", cfg["trace"], operation, "delivery:own_context")
-        result = t4.child_delivery_run(authority, operators, cfg, identity, parameters)
+        from src.posting import delivery_transport
+        from tests.t4_delivery_diagnostics import observe_callbacks
+        with observe_callbacks(delivery, delivery_transport) as diagnostic:
+            result = t4.child_delivery_run(authority, operators, cfg, identity, parameters)
+        diagnostic.emit(log, platform=parameters["platform"], stage=parameters["stage"], result=result)
         log(dict(kind="delivery_stage", platform=parameters["platform"], stage=parameters["stage"], result=result))
     elif operation == "delivery_refusals":
         case = dict(authority=authority, operators=operators, params=cfg["t4_owner"],
