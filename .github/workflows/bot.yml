@@ -180,15 +180,6 @@ jobs:
         env:
           THEHEAT_TEST_POSTGRES: "1"
           THEHEAT_POSTGRES_BINDIR: /usr/lib/postgresql/17/bin
-          # Diagnostic-only run: never enable profiling across all workers.
-          THEHEAT_T4_STAGE_PROFILE: ${{ matrix.partition == 'postgres' && matrix.postgres-shard == '3' && '1' || '0' }}
-          THEHEAT_T4_PROFILE_ROOT: ${{ runner.temp }}/temperature-stage-profile
-
-      - name: Print one saved-revision worker profile summary
-        if: always() && matrix.partition == 'postgres' && matrix.postgres-shard == '3'
-        env:
-          THEHEAT_T4_PROFILE_ROOT: ${{ runner.temp }}/temperature-stage-profile
-        run: python -m tests.t4_timing_helpers
 
       - name: SQLite backend smoke
         if: matrix.partition == 'core'

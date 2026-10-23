@@ -212,13 +212,7 @@ def test_only_database_partitions_install_binaries_with_bounded_steps(workflow):
     suite = next(step for step in steps if step.get("run", "").startswith("python -m pytest tests/ -v "))
     assert suite["env"] == {
         "THEHEAT_TEST_POSTGRES": "1", "THEHEAT_POSTGRES_BINDIR": "/usr/lib/postgresql/17/bin",
-        "THEHEAT_T4_STAGE_PROFILE": "${{ matrix.partition == 'postgres' && matrix.postgres-shard == '3' && '1' || '0' }}",
-        "THEHEAT_T4_PROFILE_ROOT": "${{ runner.temp }}/temperature-stage-profile",
     }
-    profile = next(step for step in steps if step.get("name") == "Print one saved-revision worker profile summary")
-    assert profile["if"] == "always() && matrix.partition == 'postgres' && matrix.postgres-shard == '3'"
-    assert profile["run"] == "python -m tests.t4_timing_helpers"
-    assert profile["env"] == {"THEHEAT_T4_PROFILE_ROOT": "${{ runner.temp }}/temperature-stage-profile"}
     assert "if" not in suite and "continue-on-error" not in suite
 
 

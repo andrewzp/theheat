@@ -282,12 +282,7 @@ def ready_delivery(case, tmp_path, *, mode="normal"):
         request = temperature.editor_command(case, draft_id, "request_revision_checks", temperature.checked_payload(current))
         assert temperature.submit_command(case, request)["status"] == "unchanged"
         for stage in ("deterministic", "safety", "fact_check", "critic"):
-            if stage == "deterministic" and os.environ.get("THEHEAT_T4_STAGE_PROFILE") == "1":
-                from tests.t4_timing_helpers import saved_revision_profile
-                with saved_revision_profile(case, tmp_path):
-                    checked = temperature.ghcn_worker(case, stage, request["command_id"])
-            else:
-                checked = temperature.ghcn_worker(case, stage, request["command_id"])
+            checked = temperature.ghcn_worker(case, stage, request["command_id"])
             assert checked["outcome"] == "completed" and checked["checks"]["stages"][stage] == "passed", json.dumps(checked, sort_keys=True)
         current = temperature.media_view(case, draft_id)
         approve = temperature.editor_command(case, draft_id, "approve_media_revision", temperature.checked_payload(
