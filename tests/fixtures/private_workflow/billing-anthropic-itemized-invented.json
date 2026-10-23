@@ -1,0 +1,18 @@
+{
+  "schema": "theheat.billing-evidence/v1",
+  "document": {"id": "INVENTED-anthropic-statement-0001", "sha256": "a33660b32b2f5aa88b87bf2ae0df16637a8592b77b245ffdfaf1c1386dcc39c6"},
+  "provider": "anthropic",
+  "scope": {"account": "acct-invented-0001", "project": "proj-invented-0001"},
+  "currency": "USD",
+  "period": {"start": "2026-01-01T00:00:00+00:00", "end": "2036-01-01T00:00:00+00:00"},
+  "coverage": {"assertion": "asserted_partial", "asserted_by": "operator"},
+  "statement": "itemized",
+  "items": [
+    {"item_id": "inv-item-accepted-writer", "kind": "charge", "amount": "0.004125", "quantity": "1100", "quantity_unit": "input_tokens", "model": "claude-sonnet-4-6", "provider_request_id": "req_invented_d2_accepted_writer"},
+    {"item_id": "inv-item-rejected-writer", "kind": "charge", "amount": "0.003900", "model": "claude-sonnet-4-6", "provider_response_id": "msg_invented_d2_rejected_writer"},
+    {"item_id": "inv-item-not-archived", "kind": "charge", "amount": "0.002", "provider_request_id": "req_invented_d2_not_archived"},
+    {"item_id": "inv-item-no-identifier", "kind": "charge", "amount": "0.0005"},
+    {"item_id": "inv-item-credit", "kind": "credit", "amount": "-0.001"},
+    {"item_id": "inv-item-tax", "kind": "tax", "amount": "0.0003"}
+  ]
+}

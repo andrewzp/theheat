@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'none'; font-src 'none'; connect-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex, nofollow">
+<title>Private copy review</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<a class="skip" href="#ballot">Skip to the ballot</a>
+<header class="masthead">
+  <h1>Private blind copy review</h1>
+  <p id="pack-line" class="mono"></p>
+  <p class="lede">Two versions of one weather sentence, written from the same checked evidence. Sides are shuffled: A and B are not models or methods. Judge only the wording.</p>
+</header>
+<main id="ballot" tabindex="-1">
+  <section class="panel" aria-labelledby="rubric-title">
+    <h2 id="rubric-title">How to score</h2>
+    <dl id="rubric" class="rubric"></dl>
+  </section>
+  <section class="panel" aria-labelledby="rater-title">
+    <h2 id="rater-title">You</h2>
+    <div class="field">
+      <label for="rater-id">Rater ID</label>
+      <input id="rater-id" name="rater-id" autocomplete="off" spellcheck="false" maxlength="128" aria-describedby="rater-id-help">
+      <p id="rater-id-help" class="help">Letters, digits, dot, dash, colon or underscore. It is your own label, not a login.</p>
+    </div>
+    <fieldset class="field">
+      <legend>What kind of ratings are these?</legend>
+      <label class="choice"><input type="radio" name="rater-kind" value="human_assertion"> My own judgment</label>
+      <label class="choice"><input type="radio" name="rater-kind" value="synthetic_fixture"> Synthetic test fixture</label>
+    </fieldset>
+    <label class="choice"><input type="checkbox" id="rater-assertion"> I confirm the kind above is true.</label>
+  </section>
+  <div id="pairs"></div>
+  <section class="panel" aria-labelledby="export-title">
+    <h2 id="export-title">Save your ballot</h2>
+    <p class="help">You may leave a pair unrated. A rated pair needs a preference; unless you abstain, it needs all six scores.</p>
+    <div id="errors" class="errors" role="alert" aria-live="assertive"></div>
+    <button id="export" type="button">Check and download ballot</button>
+    <p id="status" class="status" role="status" aria-live="polite"></p>
+  </section>
+</main>
+<script src="pack-data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

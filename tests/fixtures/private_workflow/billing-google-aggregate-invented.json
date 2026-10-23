@@ -1,0 +1,11 @@
+{
+  "schema": "theheat.billing-evidence/v1",
+  "document": {"id": "INVENTED-google-aggregate-0001"},
+  "provider": "google",
+  "scope": {"account": "acct-invented-google-0001"},
+  "currency": "USD",
+  "period": {"start": "2026-01-01T00:00:00+00:00", "end": "2036-01-01T00:00:00+00:00"},
+  "coverage": {"assertion": "asserted_complete_for_scope_and_period", "asserted_by": "operator"},
+  "statement": "aggregate",
+  "totals": {"charges": "0.013000", "credits": "-0.000500", "net": "0.012500"}
+}

@@ -1,3 +1,14 @@
+## 0.9.109.38
+
+- Add explicitly enabled private request evidence and offline replay, binding
+  source, candidate, SDK request/response and terminal observations without
+  changing normal model calls or publication controls.
+- Reconcile supplied billing evidence without double-counting duplicate exports,
+  conflating request/response identifiers or replacing unknown totals with zero.
+- Add a private blind copy-review form and connected diagnosis reports, preserving
+  manual-edit origins, synthetic ratings, uncertain outcomes and receipt lineage.
+- Keep capture off by default and private artifacts outside ordinary bot state.
+
 ## 0.9.109.36
 
 - Show publication type and independently complete retained source context only

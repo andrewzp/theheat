@@ -1,0 +1,7 @@
+{
+  "_notice": "INVENTED retained-state excerpt for offline tests only.",
+  "llm_usage": {
+    "2026-10-20": {"claude-sonnet-4-6": {"calls": 2, "usd": 0.0123, "priced_calls": 2, "unpriced_calls": 0, "missing_usage_calls": 0, "priced_usd": 0.0123, "input_tokens": 2200, "output_tokens": 180}}
+  },
+  "llm_usage_observations": {"schema_version": 1, "observations": [], "truncated": false, "invalid": false}
+}
