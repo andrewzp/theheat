@@ -1,38 +1,31 @@
-## 0.9.109.35
+## 0.9.109.36
 
-- Reuse a freshly verified media package within its owning review operation,
-  preserving command guards, historical transition comparisons and current
-  source/permission checks. Avoid rebuilding the same package and description
-  repeatedly; keep all original check and transport deadlines.
-- Hold ambiguous GDACS current-episode selections before severity filtering;
-  stage qualified candidates in source-key order and reuse exact pending
-  repeats under the queue lock. Count actual admissions and report withholding.
-- Quarantine nonfinite GDACS severity, score or population values per item
-  before construction or publication checks, preserving valid unrelated alerts.
-  This does not qualify additional source coverage, impacts or provider truth.
+- Connect compact station claims to locally resolved full temperature evidence,
+  native graphics, joint review, fresh checks and parked-state restore. Keep full
+  comparator tables out of model requests and retain locked source checks.
 - Carry compact station claims through the experimental local media-delivery
-  worker with typed source checks at enrollment, acquisition and dispatch.
-  Recognize only the worker's exact, single-use committed attempt when checking
-  its own unknown-outcome barrier; all other unknown outcomes still block sends.
-- Preserve original source lifetimes, exact full descriptions, immutable request
-  identities and passive accounting through lost-response recovery and restore.
-  Local invented transport is separate from live platform delivery or activation.
+  worker with typed enrollment, acquisition and dispatch checks. Recognize only
+  its exact committed attempt at the own-outcome barrier; other unknown sends
+  remain blocked. Hosted and live-platform acceptance remain separate.
+- Reuse freshly verified media data only within its owning operation. Derive the
+  extended attachment's description and packet together, preserving independent
+  public review checks, source refusals and historical identities.
+- Encode bounded detached projection containers through the native JSON encoder
+  when their complete conservative size bound fits. Preserve canonical bytes,
+  error codes, exact types and the original incremental fallback.
+- Preserve free-standing negative temperatures in the event suffix guard while
+  retaining event/date refusals and every required factual and scientific check.
+- Display receipt-bound retained post histories with explicit missing values,
+  conflicts and platform-established post ages, including paged long histories.
+- Run known critical CI cases first without omitting any case or changing its
+  shard, assertions or deadlines. Keep ticking test clocks aligned across the
+  important-alternate parent, child and HTTP fixture.
 
+## 0.9.109.35 — 2026-10-22
 
-- Connect compact saved station claims to locally resolved full temperature
-  evidence, native graphics, joint review, fresh checks and parked-state restore.
-  Keep full comparator tables out of model requests and recheck typed source
-  context at locked command boundaries. Hosted and live-platform gates remain.
-- Package the passive compact/full pairing contract without database or source
-  execution owners. Malformed imported reference dates receive durable refusal
-  and allow later valid edits; they never qualify as source evidence.
-- Preserve free-standing negative temperatures in the event-name suffix style
-  guard, while retaining event/date suffix refusals and every required factual,
-  scientific and model check. No prompt, runtime model or publishing activation.
-- Display retained post-metric histories with publication-bound text, explicit
-  missing values, conflicting observations and platform-established post ages.
-  Page long histories without collecting new metrics or attributing historical
-  outcomes to today's draft text, topic or editor.
+- Hold conflicting current GDACS episodes before severity filtering, retain stable source ordering and collapse exact duplicates.
+- Reuse a pending GDACS candidate only when capture, source key and projection match in the current state and process; report actual additions and degraded withheld events.
+- Quarantine nonfinite numeric rows without dropping valid peers and bind the selection helper and collector to the editorial policy.
 
 ## 0.9.109.34
 
