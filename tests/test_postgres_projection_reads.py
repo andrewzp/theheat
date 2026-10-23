@@ -49,7 +49,7 @@ class CountedRead:
 
 
 @pytest.mark.parametrize("shape", ["distinct", "shared", "empty", "maximum"])
-def test_actual_read_round_trips_and_exact_values(repository, record_property, shape):
+def test_actual_read_round_trips_and_exact_values(repository, record_property, shape, monkeypatch):
     _, repo, _ = repository
     if shape == "shared":
         state = {f"field-{n}": {"invented": [None, -0.0, 1.0, "é🌡"]} for n in range(18)}
@@ -57,10 +57,18 @@ def test_actual_read_round_trips_and_exact_values(repository, record_property, s
         count = {"distinct": 18, "empty": 0, "maximum": 512}[shape]
         state = {f"field-{n}": n for n in range(count)}
     original = repo.record("read-count", shape, state)
+    canonical = p._canonical
+    canonical_calls = []
+    def counted(value):
+        canonical_calls.append(value)
+        return canonical(value)
     with repo._connection() as connection:
         repo._validate(connection)
         observed = CountedRead(connection)
-        receipt, actual = repo._read(observed, "read-count", shape)
+        with monkeypatch.context() as patch:
+            patch.setattr(p, "_canonical", counted)
+            receipt, actual = repo._read(observed, "read-count", shape)
+    assert len(canonical_calls) == 2 * len(state) + 1
     assert receipt == original
     assert p._canonical(actual) == p._canonical(state)
     assert len(observed.queries) == len(observed.fetches) == (3 if state else 2)

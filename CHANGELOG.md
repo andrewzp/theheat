@@ -12,6 +12,9 @@
 - Encode bounded detached projection containers through the native JSON encoder
   when their conservative complete bound fits; preserve exact bytes, refusals
   and the incremental fallback.
+- Reuse canonical bytes already checked by each fresh projection-field decode.
+  Preserve corruption refusal order, independent field copies and every database
+  read while removing duplicate validation within that read.
 - Preserve standalone negative temperatures in the event suffix guard while
   retaining event/date refusals and required factual and scientific checks.
 - Run known critical CI cases first while keeping all cases, assertions and

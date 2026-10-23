@@ -169,14 +169,18 @@ def _pairs(pairs):
     return result
 
 
-def _decode(payload: bytes) -> Any:
+def _decode_with_canonical(payload: bytes) -> tuple[Any, bytes]:
+    """Return fresh parsed data and the bytes already checked on this decode."""
     _require(type(payload) is bytes and len(payload) <= MAX_BYTES, "invalid_payload_bytes")
     try:
         value = json.loads(payload.decode("utf-8"), object_pairs_hook=_pairs)
-        _canonical(value)
-        return value
+        return value, _canonical(value)
     except (ValueError, UnicodeError, RecursionError):
         raise ProjectionError("invalid_stored_json") from None
+
+
+def _decode(payload: bytes) -> Any:
+    return _decode_with_canonical(payload)[0]
 
 
 def _snapshot(value: Any) -> tuple[bytes, dict[bytes, bytes]]:
@@ -420,10 +424,10 @@ class PostgresProjectionRepository:
         restored = {}
         for name_bytes, artifact_sha, artifact_size in refs:
             payload = payloads[artifact_sha]
-            name = _decode(name_bytes)
-            _require(type(name) is str and name not in restored and _canonical(name) == name_bytes, "corrupt_projection_field")
-            value = _decode(payload)
-            _require(_canonical(value) == payload, "noncanonical_projection_artifact")
+            name, canonical_name = _decode_with_canonical(name_bytes)
+            _require(type(name) is str and name not in restored and canonical_name == name_bytes, "corrupt_projection_field")
+            value, canonical_value = _decode_with_canonical(payload)
+            _require(canonical_value == payload, "noncanonical_projection_artifact")
             restored[name] = value
         encoded = _canonical(restored)
         _require(len(encoded) == byte_count and _sha(encoded) == sha, "corrupt_projection_identity")
