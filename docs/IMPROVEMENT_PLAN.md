@@ -2,6 +2,8 @@
 
 Living plan for closing the gap between the bot's current voice quality and the **resumption bar** (majority A-grade rate per cycle). Refined daily by the autonomous grading agent (cron `0 15 * * *`), reviewed and implemented by the human operator.
 
+> **Oct 23: 0 fresh drafts — queue identical to Oct 19/20/22's 15 graded (static since Oct 17); no re-grade, no evidence changes.** All 15 stale (>6d); bulk-reject skipped (`GH_TOKEN` invalid).
+>
 > **Oct 22: 0 fresh drafts — queue identical to Oct 19/20's 15 graded; no re-grade, no evidence changes.** All 15 stale (>5d); bulk-reject skipped (`GH_TOKEN` invalid).
 >
 > **Oct 20: 0 fresh drafts — queue identical to Oct 19's 15 graded; no re-grade, no proposal evidence changes.** All 15 >48h; bulk-reject skipped (`GH_TOKEN` invalid). Last measured: 0% (0/2, Oct 19).
