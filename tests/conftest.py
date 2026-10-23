@@ -227,6 +227,9 @@ def _hermetic_connect(self, address, *args, **kwargs):
 
 
 def pytest_configure(config):
+    config.addinivalue_line(
+        "markers", "revision_check_protocol(version): explicit historical saved-revision protocol1 fixture",
+    )
     if config.getoption("--ci-postgres-shard") != "all" and config.getoption("--ci-partition") != "postgres":
         raise pytest.UsageError("A specific --ci-postgres-shard requires --ci-partition=postgres")
     config.addinivalue_line(

@@ -16,6 +16,7 @@ from src.commands import postgres_check_observations, postgres_checks, postgres_
 from src.commands.reducer import AutomaticPolicy, reduce_command
 from src.commands.schema import SOURCE_ACTIONS, COVERAGE_ACTIONS, REPORT_ACTIONS, GENERATION_ACTIONS, CANDIDATE_ACTIONS, MEDIA_ACTIONS, EDITOR_MEDIA_ACTIONS, Command, CommandError, Principal, authorize, canonical_json, utc_datetime, utc_text
 from src.editorial.policy import current_editorial_policy
+from src.editorial.revisions import fingerprint
 from src.storage import postgres_projection as p
 
 SCHEMA = "theheat_commands"
@@ -270,6 +271,14 @@ class PostgresCommandAuthority:
                 result = postgres_batch_worker.apply(c, "acquire", dict(job_id=packet["job_id"], owner=owner,
                     ttl_seconds=ttl_seconds), now=now, environment=self.environment)
         return result
+
+    def initialize_stage_revision_checks(self, *, now: datetime | None = None) -> None:
+        """Explicit owner-only catalog4; existing enrollments are never converted."""
+        from src.commands import postgres_stage_revision_checks as stages
+        with self.projections._connection(writing=True) as c:
+            self._validate(c, runtime=False)
+            self._pointer(c, lock=True)
+            stages.install(c, self.environment, now=utc_text(_clock(now)))
 
     def candidate_checks(self, action: str, payload: dict, *, now: str,
                          request: bytes | None = None, receipt: dict | None = None) -> dict:
@@ -983,9 +992,13 @@ class PostgresCommandAuthority:
                                 deadline = min(deadline, utc_datetime(packet["useful_until"]))
                                 check_date = packet["check_date"]
                                 if command.action == "approve_media_revision":
-                                    lease = c.execute("SELECT fence,owner,expires_at FROM theheat_checks.draft_leases WHERE check_set_id=%s ORDER BY fence DESC LIMIT 1", (refs["check_set_id"],)).fetchone()
-                                    editor_domain.refuse(lease is not None and lease[1] == "revision-checks:" + packet["enrollment_id"], "stale_revision_check_owner")
-                                    deadline = min(deadline, utc_datetime(lease[2]))
+                                    from src.commands import postgres_stage_revision_checks as stage_authority
+                                    if stage_authority.protocol(c, refs["check_set_id"]) == 2:
+                                        deadline = min(deadline, utc_datetime(stage_authority.final_deadline(c, refs["check_set_id"], packet)))
+                                    else:
+                                        lease = c.execute("SELECT fence,owner,expires_at FROM theheat_checks.draft_leases WHERE check_set_id=%s ORDER BY fence DESC LIMIT 1", (refs["check_set_id"],)).fetchone()
+                                        editor_domain.refuse(lease is not None and lease[1] == "revision-checks:" + packet["enrollment_id"], "stale_revision_check_owner")
+                                        deadline = min(deadline, utc_datetime(lease[2]))
                             media_final_window = deadline, check_date
                             clock = finished
                     result.update(command_id=command.command_id, digest=command.digest, state_version=version,
@@ -994,14 +1007,74 @@ class PostgresCommandAuthority:
                     c.execute(f"INSERT INTO {SCHEMA}.results VALUES(%s,%s,%s,%s,%s,%s)",
                               (command.command_id, encoded_result, p._sha(encoded_result), version, NAMESPACE, str(version)))
                     self._event(c, command.command_id, "completed", utc_text(clock), result)
+                    delivery_context = None
+                    enrollment_transition = None
                     if delivery_plan is not None and result["status"] == "applied":
                         # The predecessor was checked before reduction. Enrollment
                         # needs the exact approval successor, not that stale state.
                         delivery_context = generation_prepared.media_approval_successor(
                             self, c, command, state, version - 1, resolve_principal) if generation_prepared is not None else None
-                        delivery.enroll(self, c, delivery_plan, resolve_principal, clock, ghcn=delivery_context)
+                        enrollment_transition = delivery.enroll(self, c, delivery_plan, resolve_principal, clock, ghcn=delivery_context)
                     if command.action in {"attach_media_revision", "review_media_revision"} and result["status"] == "applied":
                         self._result(c, command.command_id)
+                    if command.action == "approve_media_revision" and result["status"] == "applied":
+                        from src.commands import postgres_stage_revision_checks as stage_authority
+                        refs = result["media_approval"]
+                        if stage_authority.protocol(c, refs["check_set_id"]) == 2:
+                            # ALL saved-revision families, AFTER result/event and
+                            # actual outbox writes. Refusal escapes the owning
+                            # transaction; no stale park/result/outbox survives.
+                            from src.commands import postgres_editor_media as editor_domain
+                            checked_at = _clock(now)
+                            editor_domain.refuse(checked_at >= clock, "media_completion_clock_regressed")
+                            final_version, final_state = self._state(c, lock=True)
+                            editor_domain.refuse(final_version == version == refs["resulting_state_version"]
+                                and changed is not None and p._canonical(final_state) == p._canonical(changed), "parked_media_state_changed")
+                            final_draft = next(d for d in final_state["drafts"] if d.get("id") == command.targets[0].draft_id)
+                            binding = final_draft["approval_binding"]
+                            editor_domain.refuse(binding["command_id"] == command.command_id
+                                and binding["consumed_state_version"] == refs["consumed_state_version"]
+                                and binding["completion"]["check_set_id"] == refs["check_set_id"]
+                                and binding["completion"]["completion_sha256"] == refs["completion_sha256"]
+                                == command.payload["expected_check_completion_sha256"], "check_completion_changed")
+                            editor_domain.resolve(resolve_principal, command.actor_subject, publisher=True)
+                            editor_domain.resolve(resolve_principal, binding["requesting_actor"])
+                            final_policy = current_editorial_policy()
+                            editor_domain.refuse(fingerprint(final_policy) == binding["policy_sha256"], "editorial_policy_changed")
+                            final_claim = None
+                            if generation_prepared is not None:
+                                if delivery_plan is not None:
+                                    if delivery_context is None or enrollment_transition is None:
+                                        raise CommandError("delivery_enrollment_context_required", "The exact owning enrollment context is unavailable")
+                                    final_context = delivery_context.media_enrollment_successor(self, c, enrollment_transition)
+                                else:
+                                    final_context = generation_prepared.media_approval_successor(
+                                        self, c, command, state, refs["consumed_state_version"], resolve_principal)
+                                final_claim = final_context.claim
+                            current_media = editor_domain.inputs(self, c, final_draft, final_policy, checked_at, claim=final_claim)
+                            _, final_review = editor_domain._reviewed(self, c, final_draft, current_media, final_policy, resolve_principal)
+                            packet, _ = postgres_checks._packet(c, refs["check_set_id"], self.environment)
+                            editor_domain.refuse(packet["state_version"] == binding["consumed_state_version"]
+                                and packet["state_sha256"] == binding["consumed_state_sha256"]
+                                and packet["source_origin"] == current_media["source_origin"]
+                                and packet["renderer_profile_sha256"] == current_media["profile_sha256"] == binding["renderer_profile_sha256"]
+                                and packet["current_context"]["policy_sha256"] == current_media["policy_sha256"] == binding["policy_sha256"],
+                                "parked_media_obsolete")
+                            deadline = min(utc_datetime(command.expires_at), utc_datetime(packet["useful_until"]),
+                                utc_datetime(stage_authority.final_deadline(c, refs["check_set_id"], packet)),
+                                utc_datetime(current_media["source"]["source_useful_until"]),
+                                utc_datetime(current_media["source"]["provenance_useful_until"]))
+                            # Only the closed published-radar family has an
+                            # additional graphic evidence.useful_until field.
+                            if packet["schema_version"] == 6:
+                                deadline = min(deadline, utc_datetime(current_media["spec"]["evidence"]["useful_until"]))
+                            editor_domain.resolve(resolve_principal, command.actor_subject, publisher=True)
+                            editor_domain.resolve(resolve_principal, binding["requesting_actor"])
+                            editor_domain.resolve(resolve_principal, final_review["reviewer"]["subject"])
+                            editor_domain.refuse(fingerprint(current_editorial_policy()) == binding["policy_sha256"], "editorial_policy_changed")
+                            ended = _clock(now)
+                            editor_domain.refuse(ended >= checked_at, "media_completion_clock_regressed")
+                            editor_domain.refuse(ended < deadline and utc_text(ended)[:10] == packet["check_date"], "media_completion_expired")
                     if media_final_window is not None:
                         # This fence follows terminal receipt and outbox work.
                         # It is a sampled bound, not atomic wall-clock COMMIT.
@@ -1043,6 +1116,7 @@ class PostgresCommandAuthority:
 
     def execute_revision_check_once(self, command_id, resolve_principal, *, clock, reservation=None, enabled=False, transport_options=None):
         from src.commands import postgres_editor_media as domain, postgres_revision_checks as revisions
+        from src.commands import postgres_stage_revision_checks as stage_authority
         from src.two_bot.check_executor import execute_check_once
         if type(enabled) is not bool:
             raise ValueError("check_execution_flag_requires_boolean")
@@ -1055,8 +1129,10 @@ class PostgresCommandAuthority:
         from src.commands import postgres_sourced_generation as generation
         prepared = generation.prepare_ghcn_command(authority, command_id, executed=True)
         resolved = prepared.claim if prepared is not None else None
+        expected_progression = None
 
         def transaction(operation, payload=None, *, now=None, raw=None, request=None, receipt=None):
+            nonlocal expected_progression
             at = utc_datetime(now if now is not None else clock())
             with authority.projections._connection(writing=operation in {"lease", "begin", "complete", "observe"}) as c:
                 authority._validate(c)
@@ -1091,9 +1167,60 @@ class PostgresCommandAuthority:
                     return sampled
 
                 if operation == "context":
+                    if stage_authority.protocol(c, identity) == 2:
+                        expected_progression = stage_authority.progression(c, identity, packet, authority.environment)
                     fresh(at)
                     return identity, packet, state, owner
                 domain.refuse(payload["check_set_id"] == identity, "check_request_mismatch")
+                if stage_authority.protocol(c, identity) == 2:
+                    at = fresh(at)
+                    scope = stage_authority._scope(c, identity, owner, clock, expected_progression)
+                    scope.resolved = resolved
+                    try:
+                        latest_cap = stage_authority.lease(c, identity)
+                        if latest_cap is not None and operation != "lease":
+                            domain.refuse(latest_cap["owner"] == owner and utc_text(at) < latest_cap["expires_at"], "stale_revision_check_owner")
+                            if operation in {"begin", "complete"}:
+                                domain.refuse(payload["fence"] == latest_cap["fence"], "stale_revision_check_owner")
+                        if operation == "lease":
+                            domain.refuse(payload["owner"] == owner, "check_owner_mismatch")
+                            value = stage_authority.acquire(c, identity, owner, payload["ttl_seconds"], now=utc_text(at),
+                                environment=authority.environment, scope=scope)
+                        elif operation in {"begin", "complete", "status"}:
+                            domain.refuse(payload["owner"] == owner, "check_owner_mismatch")
+                            value = stage_authority.apply(c, operation, payload, now=utc_text(at), request=request, receipt=receipt,
+                                environment=authority.environment, scope=scope)
+                        elif operation == "read":
+                            value = postgres_check_observations.apply(c, "read", payload, now=utc_text(at), environment=authority.environment)
+                        else:
+                            reader = postgres_check_observations.read_response if operation == "response" else postgres_check_observations.read_request
+                            value = reader(c, identity, payload["stage"], payload["grant_id"], environment=authority.environment)
+                        # Heavy prefix/request/receipt work can outlive current
+                        # source, permission or policy. Reauthorize under the
+                        # same lock AFTER that work; a clock check alone cannot
+                        # detect those changes. Passive observe returned above.
+                        final_version, final_state = authority._state(c, lock=True)
+                        final_claim = prepared.current(authority, c, final_state, final_version) if prepared is not None else None
+                        reauthorized_at = fresh(max(at, getattr(scope, "completed_at", at), getattr(scope, "issued_at", at)))
+                        _, final_identity, _, _ = domain.runner_context(authority, c, command_id, resolve_principal,
+                            final_state, final_version, current_editorial_policy(), reauthorized_at, claim=final_claim)
+                        domain.refuse(final_identity == identity and final_version == version, "check_request_mismatch")
+                        # AFTER every heavy proof/write, include the predecessor's
+                        # original expiry as well as the target's original cap.
+                        ended = fresh(reauthorized_at)
+                        domain.refuse(all(ended < utc_datetime(bound) for bound in scope.deadlines), "stale_revision_check_owner")
+                        if operation in {"lease", "begin", "complete"}:
+                            final_cap = stage_authority.lease(c, identity)
+                            expected_fence = value["lease"]["fence"] if operation == "lease" else payload["fence"]
+                            domain.refuse(final_cap is not None and final_cap["fence"] == expected_fence
+                                and final_cap["owner"] == owner and ended < utc_datetime(final_cap["expires_at"]), "stale_revision_check_owner")
+                            # The final sample follows even the last cap SQL read.
+                            after_cap = fresh(ended)
+                            domain.refuse(after_cap < utc_datetime(final_cap["expires_at"])
+                                and all(after_cap < utc_datetime(bound) for bound in scope.deadlines), "stale_revision_check_owner")
+                        return value
+                    finally:
+                        scope.close()
                 latest = c.execute("SELECT fence,owner,expires_at FROM theheat_checks.draft_leases WHERE check_set_id=%s ORDER BY fence DESC LIMIT 1", (identity,)).fetchone()
                 at = fresh(at)
                 if latest is not None and operation != "lease":

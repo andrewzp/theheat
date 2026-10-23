@@ -49,6 +49,7 @@ from tests.test_postgres_check_observations import base_store as base_store, sto
 from tests.two_bot.test_batch_contract import inputs as inputs
 from tests.native_profile_helpers import native_dependencies as native_dependencies
 from tests.workflow_clock import positive_workflow_clock as positive_workflow_clock
+from tests.stage_revision_check_helpers import install_revision_protocol
 
 ROOT = Path(__file__).resolve().parents[1]
 NS = "{http://www.w3.org/2000/svg}"
@@ -535,7 +536,7 @@ def compact_case(request, database, tmp_path, monkeypatch, positive_workflow_clo
                    "initialize_media_commands"):
         getattr(owner, method)()
     owner.initialize_synchronous_checks(now=now)
-    owner.initialize_revision_checks(now=now)
+    install_revision_protocol(owner, request, now=now)
     # Invented local allowance scaled for up to six admissions plus editor checks;
     # every model call still needs its own reservation and grant.
     case["authority"].spending("configure", dict(LIMITS, daily_micro_usd=400, monthly_micro_usd=600), now=utc_text(now))

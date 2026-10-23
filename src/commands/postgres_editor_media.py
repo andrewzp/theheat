@@ -391,6 +391,18 @@ def requested(authority, c, draft, version, state, value, now):
 
 
 def completed(c, identity, packet, now, environment, *, resolved=None):
+    from src.commands import postgres_stage_revision_checks as stages
+    if stages.protocol(c, identity) == 2:
+        cap = stages.lease(c, identity)
+        refuse(cap is not None, "revision_check_lease_required")
+        try:
+            checks._current(c, packet, dict(owner=cap["owner"], fence=cap["fence"], current_context=packet["current_context"],
+                checker_state_sha256=packet["checker_state_sha256"]), utc_text(now), environment)
+            return stages.completion(c, identity, packet, now, environment, resolved=resolved)
+        except checks.checks.CheckJournalError as exc:
+            if str(exc) not in {"changed_revision_check_state", "revision_check_expired", "stale_revision_check_owner"}:
+                raise
+            raise CommandError(str(exc), "The retained check authority is stale; refresh the current revision") from None
     owner, fence = "revision-checks:" + packet["enrollment_id"], None
     lease = c.execute("SELECT fence,owner FROM theheat_checks.draft_leases WHERE check_set_id=%s ORDER BY fence DESC LIMIT 1", (identity,)).fetchone()
     refuse(lease is not None and lease[1] == owner, "revision_check_lease_required")
@@ -456,6 +468,12 @@ def parked(authority, c, draft, state, version, value, policy, now, resolve_prin
            "parked_media_obsolete")
     # The consumed predecessor remains the check origin; subsequent authority
     # writes invalidate this parked decision, even when their prose is unchanged.
+    from src.commands import postgres_stage_revision_checks as stages
+    if stages.protocol(c, binding["completion"]["check_set_id"]) == 2:
+        refuse(utc_text(now) < stages.final_deadline(c, binding["completion"]["check_set_id"], packet), "parked_media_lease_expired")
+        proof = stages.completion(c, binding["completion"]["check_set_id"], packet, now, authority.environment, resolved=claim)
+        refuse(p._canonical(proof) == p._canonical(binding["completion"]), "parked_media_proof_changed")
+        return True
     lease = c.execute("SELECT fence,owner,expires_at FROM theheat_checks.draft_leases WHERE check_set_id=%s ORDER BY fence DESC LIMIT 1",
                       (binding["completion"]["check_set_id"],)).fetchone()
     refuse(lease is not None and lease[1] == "revision-checks:" + packet["enrollment_id"]

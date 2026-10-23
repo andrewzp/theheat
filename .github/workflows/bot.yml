@@ -161,6 +161,21 @@ jobs:
       - run: mypy src/
         if: matrix.partition == 'core'
 
+      - name: Type-check saved-revision authority boundaries
+        if: matrix.partition == 'core'
+        run: >-
+          mypy
+          src/commands/postgres_stage_revision_checks.py
+          src/commands/postgres_revision_checks.py
+          src/commands/postgres_sync_checks.py
+          src/commands/postgres_checks.py
+          src/commands/postgres_authority.py
+          src/commands/postgres_editor_media.py
+          src/commands/postgres_delivery.py
+          src/commands/postgres_cost_projection.py
+          src/editorial/policy.py
+          src/two_bot/ghcn_claim_view.py
+
       - name: Verify advisory source inventory
         if: matrix.partition == 'core'
         run: python scripts/gen_source_registry.py --check

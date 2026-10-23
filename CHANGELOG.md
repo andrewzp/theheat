@@ -1,5 +1,10 @@
 ## 0.9.109.37
 
+- Add an owner-installed check protocol for new saved revisions with one
+  immutable lease per stage and an exact chain of timely passing evidence.
+  Preserve legacy enrollments and original request, spending and no-resend rules.
+  Bind completion, parked approval and delivery to the original final-stage
+  deadline; reject generic mutations without current scoped authority.
 - Connect compact station claims to locally resolved full temperature evidence,
   native graphics, joint review, fresh checks and parked-state restore. Keep full
   comparator tables out of model requests and retain locked source checks.

@@ -43,8 +43,8 @@ def observation_metadata(c, environment, roles):
 
 
 def validate_catalog(c, original, environment, roles):
-    rows = c.execute("SELECT upgrade_version,receipt_bytes,byte_count,sha FROM theheat_checks.schema_upgrades ORDER BY upgrade_version LIMIT 3").fetchall()
-    checks._require(len(rows) in (1, 2), "revision_check_upgrade_receipt_required")
+    rows = c.execute("SELECT upgrade_version,receipt_bytes,byte_count,sha FROM theheat_checks.schema_upgrades ORDER BY upgrade_version LIMIT 4").fetchall()
+    checks._require(len(rows) in (1, 2, 3), "revision_check_upgrade_receipt_required")
     version, raw, size, digest = rows[0]
     checks._require(type(version) is int and version == 2 and type(raw) is bytes
                     and type(size) is int and 0 < size == len(raw) <= 16384 and p._sha(raw) == digest,
@@ -57,9 +57,12 @@ def validate_catalog(c, original, environment, roles):
                     "unsupported_revision_check_upgrade")
     observed = observation_metadata(c, environment, roles)
     catalog = p._catalog(c, "theheat_checks")
-    if len(rows) == 2:
+    if len(rows) == 3:
+        from src.commands.postgres_stage_revision_checks import validate_chain as stage_chain
+        catalog = stage_chain(c, rows, original, observed, environment, roles)
+    if len(rows) >= 2:
         from src.commands.postgres_sync_checks import validate_chain
-        catalog = validate_chain(c, rows, original, observed, environment, roles)
+        catalog = validate_chain(c, rows[:2], original, observed, environment, roles, catalog=catalog)
     checks._require(value["upgrade_migration_sha256"] == p._sha(MIGRATION.read_bytes())
                     and p._canonical(value["checks_metadata"]) == p._canonical(original)
                     and p._canonical(value["observations_metadata"]) == p._canonical(observed)
@@ -115,6 +118,9 @@ def packet(c, identity, row, raw):
 
 
 def historical_lease(c, identity, fence):
+    from src.commands import postgres_stage_revision_checks as stages
+    if stages.protocol(c, identity) == 2:
+        return stages.historical_lease(c, identity, fence)
     return c.execute("SELECT owner,recorded_at,expires_at FROM theheat_checks.draft_leases WHERE check_set_id=%s AND fence=%s",
                      (identity, fence)).fetchone()
 
@@ -124,6 +130,8 @@ def acquire(c, identity, owner, ttl_seconds, *, now, environment, origin_kind=or
     pg.validate(c, environment)
     checks._require(upgraded(c), "revision_check_migration_required")
     value, _ = pg._packet(c, identity, environment)
+    from src.commands import postgres_stage_revision_checks as stages
+    checks._require(stages.protocol(c, identity) == 1, "scoped_revision_context_required")
     checks._require(origin_kind in (origin.ORIGIN, "synchronous_writer_v1") and value.get("origin_kind") == origin_kind, "revision_check_origin_required")
     from src.commands.spend_journal import _id
     _id(owner)
@@ -245,8 +253,13 @@ def enroll(c, state, version, draft, *, now, policy, profile, environment):
     p.PostgresProjectionRepository._record(c, origin.NAMESPACE, packet["enrollment_id"], encoded, fields)
     digest = pg._artifact(c, "packet_artifacts", raw)
     identity = fingerprint(packet)
-    c.execute("INSERT INTO theheat_checks.sets(check_set_id,packet_sha256,recorded_at,origin_kind,draft_namespace,draft_enrollment_id) VALUES(%s,%s,%s,%s,%s,%s)",
-              (identity, digest, at, origin.ORIGIN, origin.NAMESPACE, packet["enrollment_id"]))
+    from src.commands import postgres_stage_revision_checks as stages
+    if stages.installed(c):
+        c.execute("INSERT INTO theheat_checks.sets(check_set_id,packet_sha256,recorded_at,origin_kind,draft_namespace,draft_enrollment_id,authority_protocol) VALUES(%s,%s,%s,%s,%s,%s,2)",
+                  (identity, digest, at, origin.ORIGIN, origin.NAMESPACE, packet["enrollment_id"]))
+    else:
+        c.execute("INSERT INTO theheat_checks.sets(check_set_id,packet_sha256,recorded_at,origin_kind,draft_namespace,draft_enrollment_id) VALUES(%s,%s,%s,%s,%s,%s)",
+                  (identity, digest, at, origin.ORIGIN, origin.NAMESPACE, packet["enrollment_id"]))
     return identity
 
 
@@ -262,6 +275,10 @@ def current(c, packet, payload, at, environment):
                     and p._canonical(payload["current_context"]) == p._canonical(packet["current_context"]), "changed_revision_check_state")
     checks._require(at[:10] == packet["check_date"] and at < spend._time(packet["useful_until"]), "revision_check_expired")
     identity = fingerprint(packet)
+    from src.commands import postgres_stage_revision_checks as stages
+    if stages.protocol(c, identity) == 2:
+        stages.current(c, identity, packet, payload, at)
+        return
     lease = c.execute("SELECT fence,owner,expires_at FROM theheat_checks.draft_leases WHERE check_set_id=%s ORDER BY fence DESC LIMIT 1", (identity,)).fetchone()
     checks._require(lease is not None and type(payload["fence"]) is int and lease[0] == payload["fence"]
                     and lease[1] == payload["owner"] and at < lease[2], "stale_revision_check_owner")

@@ -260,6 +260,24 @@ class ExecutionContext:
         successor.current(authority, c, state, version)
         return successor
 
+    def media_enrollment_successor(self, authority, c, transition):
+        """Admit only the exact owning outbox delta; retain every original bound.
+
+        The certificate is minted beside actual enrollment, bound to this exact
+        context/authority/connection and consumed once. Its expected footprint
+        never comes from a post-write observation. All other checkpoint fields
+        and the original scientific lifetime remain unchanged.
+        """
+        from src.commands.postgres_delivery import _OwnEnrollmentTransition
+        require(type(self) is ExecutionContext and type(transition) is _OwnEnrollmentTransition,
+                "delivery_enrollment_context_required")
+        expected = deepcopy(self.checkpoint)
+        expected["delivery"] = transition.consume(authority, c, self)
+        successor = replace(self, checkpoint=expected)
+        version, state = authority._state(c, lock=True)
+        successor.current(authority, c, state, version)
+        return successor
+
 
 def prepare_execution(authority,run_id,selection):
     """Read on the owned connection, replay on verified detached bytes outside it."""

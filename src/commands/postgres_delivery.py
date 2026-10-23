@@ -28,6 +28,7 @@ MIGRATION = p.MIGRATION.with_name("012_local_delivery.sql")
 PREVIEW_MIGRATION = p.MIGRATION.with_name("014_preview_delivery.sql")
 META = ("version", "migration_sha", "catalog_sha", "environment", "owner_role", "runtime_role")
 TABLES = ("metadata", "artifacts", "intents", "work_items", "leases", "attempts", "observations", "receipts")
+_ENROLLMENT_TOKEN = object()
 
 
 def refuse(condition, code):
@@ -419,6 +420,49 @@ def context(authority, c, value, resolve_principal, now, *, ghcn=None):
         lambda state, version: ghcn.current(authority, c, state, version) if ghcn is not None else None)
 
 
+def _enrollment_expected(previous, value):
+    """Literal own intent/two work rows/artifact delta, never observed rebasing."""
+    refuse(previous["catalog"] is not None and not previous["protection_codes"], "delivery_enrollment_predecessor_changed")
+    expected = deepcopy(previous)
+    identity = value["intent_id"]
+    refuse(identity not in expected["outcomes"] and not any(row[0] == identity for row in expected["rows"]["intents"]),
+           "delivery_enrollment_already_present")
+    encoded = p._canonical(value)
+    digest = p._sha(encoded)
+    expected["rows"]["intents"].append([identity, value["command_id"], value["draft_id"], value["event_id"], value["proposal_sha256"], digest])
+    expected["rows"]["intents"].sort(key=lambda row: row[:2])
+    for platform in STAGES:
+        work_id = work(value, platform)
+        refuse(not any(row[0] == work_id for row in expected["rows"]["work_items"]), "delivery_enrollment_already_present")
+        expected["rows"]["work_items"].append([work_id, identity, platform])
+    expected["rows"]["work_items"].sort(key=lambda row: row[:2])
+    artifacts = dict(expected["artifacts"])
+    refuse(digest not in artifacts or artifacts[digest] == len(encoded), "delivery_enrollment_changed")
+    artifacts[digest] = len(encoded)
+    expected["artifacts"] = [[sha, size] for sha, size in sorted(artifacts.items())]
+    expected["outcomes"][identity] = {platform: {stage: dict(status="pending", result=None) for stage in stages}
+                                      for platform, stages in STAGES.items()}
+    return expected
+
+
+class _OwnEnrollmentTransition:
+    """One exact owning transaction; no caller proof or new source lifetime."""
+    def __init__(self, token, authority, c, prepared, value):
+        from src.two_bot.ghcn_claim_view import ExecutionContext
+        refuse(token is _ENROLLMENT_TOKEN and type(prepared) is ExecutionContext
+               and prepared.authority is authority, "delivery_enrollment_context_required")
+        self._authority, self._connection, self._prepared = authority, c, prepared
+        self._value = deepcopy(value)
+        self._expected = _enrollment_expected(prepared.checkpoint["delivery"], value)
+        self._use = threading.Lock()
+
+    def consume(self, authority, c, prepared):
+        refuse(authority is self._authority and c is self._connection and prepared is self._prepared
+               and self._use.acquire(blocking=False), "delivery_enrollment_context_consumed")
+        refuse(p._canonical(read(c, self._value["intent_id"])) == p._canonical(self._value), "delivery_enrollment_changed")
+        return deepcopy(self._expected)
+
+
 def _context(authority, c, value, resolve_principal, now, resolve_claim):
     # Revoke authority before consulting source/scientific execution evidence.
     editor.resolve(resolve_principal, value["approval_binding"]["publisher_subject"], publisher=True)
@@ -443,7 +487,13 @@ def _context(authority, c, value, resolve_principal, now, resolve_claim):
     refuse(package["receipt"] == value["package"] and p._sha(package["assets"]["preview.png"]) == value["png_sha256"]
            and p._sha(package["assets"]["alt.txt"]) == value["alt_sha256"], "delivery_media_changed")
     check_id = value["approval_binding"]["completion"]["check_set_id"]
-    expires = c.execute("SELECT expires_at FROM theheat_checks.draft_leases WHERE check_set_id=%s ORDER BY fence DESC LIMIT 1", (check_id,)).fetchone()[0]
+    from src.commands import postgres_stage_revision_checks as stages
+    if stages.protocol(c, check_id) == 2:
+        from src.commands import postgres_checks
+        packet, _ = postgres_checks._packet(c, check_id, authority.environment)
+        expires = stages.final_deadline(c, check_id, packet)
+    else:
+        expires = c.execute("SELECT expires_at FROM theheat_checks.draft_leases WHERE check_set_id=%s ORDER BY fence DESC LIMIT 1", (check_id,)).fetchone()[0]
     deadline = min(utc_datetime(expires), utc_datetime(value["approval_binding"]["useful_until"]))
     return package, deadline
 
@@ -452,11 +502,18 @@ def enroll(authority, c, value, resolve_principal, now, *, ghcn=None):
     # Command result and exact successor state are already queryable in this same
     # transaction; none is visible outside until the outer COMMIT succeeds.
     context(authority, c, value, resolve_principal, now, ghcn=ghcn)
+    transition = None
+    if ghcn is not None and value["approval_binding"]["completion"].get("authority_protocol") == 2:
+        from src.commands import postgres_stage_revision_checks as stages
+        refuse(stages.protocol(c, value["approval_binding"]["completion"]["check_set_id"]) == 2,
+               "stage_protocol_required")
+        transition = _OwnEnrollmentTransition(_ENROLLMENT_TOKEN, authority, c, ghcn, value)
     digest = record(c, value)
     c.execute(f"INSERT INTO {SCHEMA}.intents VALUES(%s,%s,%s,%s,%s,%s)",
               (value["intent_id"], value["command_id"], value["draft_id"], value["event_id"], value["proposal_sha256"], digest))
     for platform in STAGES:
         c.execute(f"INSERT INTO {SCHEMA}.work_items VALUES(%s,%s,%s)", (work(value, platform), value["intent_id"], platform))
+    return transition
 
 
 def acquire(authority, c, value, platform, stage, owner, resolve_principal, now, *, ghcn=None):
