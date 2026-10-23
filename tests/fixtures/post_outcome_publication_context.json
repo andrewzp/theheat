@@ -1,0 +1,90 @@
+{
+  "drafts": [
+    {
+      "id": "invented-outcome-draft",
+      "event_id": "invented-outcome-event",
+      "type": "monthly_high",
+      "tweet_date": "2026-10-20",
+      "hot10_rows": null,
+      "text": "Invented fixture: a station recorded a monthly high.",
+      "content_revision": 1,
+      "review_context": {
+        "two_bot": {
+          "bundle": {
+            "event_id": "invented-outcome-event",
+            "signal_kind": "monthly_high",
+            "where": "INVENTED STATION",
+            "when": "2026-10-20",
+            "headline_metric": {},
+            "current_facts": [],
+            "historical_context": {},
+            "raw_signal_dump": {
+              "source_product": "public-invented-fixture",
+              "description": "DO_NOT_DISPLAY_FULL_SOURCE"
+            }
+          },
+          "angle_chosen": "unbound_writer_angle"
+        }
+      },
+      "manual_override": true,
+      "selected_candidate_rank": 2,
+      "status": "posted",
+      "publish_outcome": "confirmed",
+      "tweet_id": "123",
+      "posted_at": "2026-10-20T12:00:00Z"
+    }
+  ],
+  "publish_ledger": {
+    "invented-outcome-event": {
+      "content_revision": 1,
+      "text_sha256": "3407e64e4eff87dfdeefba918fccf0d937a42f520b365ae403a0f1709912a88b",
+      "evidence_sha256": "5b71f7ea27f6d6f6334ef7de0df2beb18e683065955988338a8500dac23fabea",
+      "text": "Invented fixture: a station recorded a monthly high.",
+      "intent_id": "invented-outcome-intent",
+      "tweet_id": "123",
+      "phase": "confirmed",
+      "at": "2026-10-20T12:00:00Z",
+      "confirmed_at": "2026-10-20T12:00:00Z"
+    }
+  },
+  "tweet_metrics": {
+    "123": {
+      "at": "2026-10-21T12:00:00Z",
+      "likes": 0,
+      "retweets": null,
+      "replies": null,
+      "quotes": null,
+      "impressions": 12,
+      "bookmarks": null,
+      "samples": {
+        "659754a7944a4d094327d3189fa2614d40465f8ae3a6b5cc913b35ccc7a68b86": {
+          "schema_version": 1,
+          "tweet_id": "123",
+          "sampled_at": "2026-10-21T12:00:00Z",
+          "source": "x_api.public_metrics",
+          "counts": {
+            "likes": 0,
+            "retweets": null,
+            "replies": null,
+            "quotes": null,
+            "impressions": 12,
+            "bookmarks": null
+          },
+          "posted_at": "2026-10-20T12:00:00Z",
+          "post_time_basis": "x_api.created_at",
+          "post_time_status": "recorded",
+          "post_age_seconds": 86400.0,
+          "receipt_at": "2026-10-20T12:00:00Z",
+          "receipt_time_basis": [
+            "publish_ledger.confirmed_at"
+          ],
+          "receipt_time_status": "proxy",
+          "receipt_age_seconds": 86400.0,
+          "published_text_sha256": "3407e64e4eff87dfdeefba918fccf0d937a42f520b365ae403a0f1709912a88b",
+          "published_revision_status": "recorded"
+        }
+      },
+      "latest_sample_conflict": false
+    }
+  }
+}
