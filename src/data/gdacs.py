@@ -17,7 +17,7 @@ import requests
 from src.data._freshness import assert_freshness, parse_freshness_date
 from src.data._http import fetch_with_retry
 from src.data._witness import tag_source_leg, with_witness
-from src.data import jtwc, nhc, usgs_quakes
+from src.data import gdacs_intake, jtwc, nhc, usgs_quakes
 from src.data.cyclones import CycloneAdvisory
 from src.data.source_status import SourceFetchError
 from src.data.usgs_quakes import SignificantEarthquakeEvent
@@ -237,6 +237,54 @@ def _has_georss_coordinates(item: ET.Element) -> bool:
         return False
 
 
+def _georss_event(item: ET.Element, *, event_type_code: str, alert_level: str, gdacs_id: str,
+                  country: str, from_date: str, modified: str, published: str, update_kind: str,
+                  updated: datetime, description: str, name: str, episode_level: str,
+                  episode_id: str) -> GlobalDisasterEvent:
+    severity_value = _xml_attr_float(item, "gdacs:severity", "value")
+    severity_unit = _xml_attr_text(item, "gdacs:severity", "unit")
+    alert_score = _safe_float(_xml_text(item, "gdacs:alertscore"))
+    population_affected = _xml_attr_int(item, "gdacs:population", "value")
+    event_type = EVENT_TYPES.get(event_type_code, event_type_code)
+    intensity_tier = _intensity_tier(event_type_code, severity_value)
+    event_id = f"gdacs_{event_type_code}_{gdacs_id}_{intensity_tier}"
+    return GlobalDisasterEvent(
+        disaster_type=event_type,
+        name=name,
+        country=country,
+        severity=episode_level,
+        description=description,
+        event_id=event_id,
+        alert_score=alert_score,
+        severity_value=severity_value,
+        severity_unit=severity_unit,
+        population_affected=population_affected,
+        source_leg=GDACS_GEORSS_LEG,
+        source_product="gdacs-georss",
+        source_url=GDACS_GEORSS_URL,
+        source_event_id=gdacs_id,
+        source_provenance={
+            "eventtype": event_type_code, "fromdate": from_date,
+            "overall_alert_level": alert_level, "episode_alert_level": episode_level,
+            "episode_id": episode_id, "is_current": True,
+            "overall_alert_score": _xml_text(item, "gdacs:alertscore"),
+            "episode_alert_score": _xml_text(item, "gdacs:episodealertscore"),
+            "severity_text": _xml_text(item, "gdacs:severity"),
+            "severity_temporal_scope": "unqualified_source_metric",
+            "todate": _xml_text(item, "gdacs:todate"),
+            "datemodified": modified, "published_at": published,
+            "source_update_kind": update_kind,
+            "source_updated_at": updated.isoformat().replace("+00:00", "Z"),
+            "report_link": _xml_text(item, "link"),
+            "source_country_known": bool(country),
+            "coordinates": _xml_text(item, "georss:point") or {
+                "latitude": _xml_text(item, "geo:Point/geo:lat"),
+                "longitude": _xml_text(item, "geo:Point/geo:long"),
+            },
+        },
+    )
+
+
 def _events_from_georss(
     text: str,
     *,
@@ -244,7 +292,13 @@ def _events_from_georss(
     severity_order: dict[str, int],
     diagnostics: dict | None = None,
     now: datetime | None = None,
+    selection: dict | None = None,
 ) -> tuple[list[GlobalDisasterEvent], date | None]:
+    """Qualify one complete returned capture before emitting any candidate.
+
+    ``diagnostics`` keeps its settled per-item keys; ``selection`` receives the
+    capture-wide current-selection reconciliation (see gdacs_intake).
+    """
     clock = _publication_clock() if now is None else now
     if not isinstance(clock, datetime) or clock.tzinfo is None or clock.utcoffset() is None:
         raise GDACSPublicationError("GDACS GeoRSS requires an aware source-check clock")
@@ -256,7 +310,7 @@ def _events_from_georss(
     items = channel.findall("item") if channel is not None else []
     if root.tag != "rss" or channel is None or not items or len(items) > MAX_GEORSS_ITEMS:
         raise SourceFetchError("GDACS GeoRSS schema drift: missing or invalid bounded RSS item collection")
-    events: list[GlobalDisasterEvent] = []
+    contenders: list[gdacs_intake.Contender] = []
     publication_dates: list[datetime] = []
     channel_publication = channel.find("pubDate")
     channel_time = None
@@ -310,6 +364,19 @@ def _events_from_georss(
             "name": bool(name),
             "coordinates": _has_georss_coordinates(item),
         }
+        # Reconciliation inspects every recognized tier before filtering. A
+        # nonfinite number must quarantine its own row before construction,
+        # integer conversion, hashing or feed-publication evidence, so even a
+        # lower-tier malformed peer cannot discard another valid alert. Keep
+        # the settled missing/unparseable-value behavior and normal diagnostics.
+        numeric_values = {
+            "severity": _xml_attr_float(item, "gdacs:severity", "value"),
+            "alert_score": _safe_float(_xml_text(item, "gdacs:alertscore")),
+            "population": _xml_attr_float(item, "gdacs:population", "value"),
+        }
+        for numeric_field, value in numeric_values.items():
+            if not math.isfinite(value):
+                required["numeric_" + numeric_field] = False
         missing = [field for field, valid in required.items() if not valid]
         if missing:
             # Quarantine this item without allowing its fields or timestamp to
@@ -321,7 +388,7 @@ def _events_from_georss(
                 alert_level in severity_order and severity_order[alert_level] >= min_level
             )
             for field in missing:
-                rejected_by_field[field] += 1
+                rejected_by_field[field] = rejected_by_field.get(field, 0) + 1
             continue
         if updated is not None:
             publication_dates.append(updated)
@@ -335,6 +402,21 @@ def _events_from_georss(
         overall_selected = severity_order[alert_level] >= min_level
         episode_selected = severity_order.get(episode_level, -1) >= min_level
         selected_before_freshness += int(overall_selected)
+        if updated is not None and update_issue is None and (clock.date() - updated.date()).days > MAX_PUBLICATION_AGE_DAYS:
+            update_issue = "stale"
+        # Every recognized episode tier joins current selection before the
+        # requested threshold, so a conflicting lower-tier episode cannot hide.
+        # Only fully qualified fresh rows count; peers cannot poison a group.
+        if (current == "true" and episode_level in severity_order and episode_id
+                and severity_order[episode_level] <= severity_order[alert_level] and update_issue is None):
+            assert updated is not None
+            contenders.append(gdacs_intake.Contender(
+                source_key=(event_type_code, gdacs_id), episode_id=episode_id,
+                meets_threshold=episode_selected, event=_georss_event(
+                    item, event_type_code=event_type_code, alert_level=alert_level, gdacs_id=gdacs_id,
+                    country=country, from_date=from_date, modified=modified, published=published,
+                    update_kind=update_kind, updated=updated, description=description, name=name,
+                    episode_level=episode_level, episode_id=episode_id)))
         # Also expose an elevated episode under a lower overall level as a
         # contradiction, rather than hiding it as a healthy absence of alerts.
         if not (overall_selected or episode_selected):
@@ -354,57 +436,13 @@ def _events_from_georss(
         if current_issue is not None:
             current_withheld[current_issue] += 1
             continue
-        if updated is not None and (clock.date() - updated.date()).days > MAX_PUBLICATION_AGE_DAYS:
-            update_issue = "stale"
         if update_issue is not None:
             withheld[update_issue] += 1
             continue
-        # No event-window or retrieval-time fallback can reach this boundary.
+        # No event-window or retrieval-time fallback can reach this boundary:
+        # a row passing every gate above is a threshold contender.
         assert updated is not None
-
-        severity_value = _xml_attr_float(item, "gdacs:severity", "value")
-        severity_unit = _xml_attr_text(item, "gdacs:severity", "unit")
-        alert_score = _safe_float(_xml_text(item, "gdacs:alertscore"))
-        population_affected = _xml_attr_int(item, "gdacs:population", "value")
-        event_type = EVENT_TYPES.get(event_type_code, event_type_code)
-        intensity_tier = _intensity_tier(event_type_code, severity_value)
-        event_id = f"gdacs_{event_type_code}_{gdacs_id}_{intensity_tier}"
-
-        events.append(GlobalDisasterEvent(
-            disaster_type=event_type,
-            name=name,
-            country=country,
-            severity=episode_level,
-            description=description,
-            event_id=event_id,
-            alert_score=alert_score,
-            severity_value=severity_value,
-            severity_unit=severity_unit,
-            population_affected=population_affected,
-            source_leg=GDACS_GEORSS_LEG,
-            source_product="gdacs-georss",
-            source_url=GDACS_GEORSS_URL,
-            source_event_id=gdacs_id,
-            source_provenance={
-                "eventtype": event_type_code, "fromdate": from_date,
-                "overall_alert_level": alert_level, "episode_alert_level": episode_level,
-                "episode_id": episode_id, "is_current": True,
-                "overall_alert_score": _xml_text(item, "gdacs:alertscore"),
-                "episode_alert_score": _xml_text(item, "gdacs:episodealertscore"),
-                "severity_text": _xml_text(item, "gdacs:severity"),
-                "severity_temporal_scope": "unqualified_source_metric",
-                "todate": _xml_text(item, "gdacs:todate"),
-                "datemodified": modified, "published_at": published,
-                "source_update_kind": update_kind,
-                "source_updated_at": updated.isoformat().replace("+00:00", "Z"),
-                "report_link": _xml_text(item, "link"),
-                "source_country_known": bool(country),
-                "coordinates": _xml_text(item, "georss:point") or {
-                    "latitude": _xml_text(item, "geo:Point/geo:lat"),
-                    "longitude": _xml_text(item, "geo:Point/geo:long"),
-                },
-            },
-        ))
+    events, reconciliation = gdacs_intake.reconcile(contenders)
     validated = len(items) - quarantined
     if not validated:
         reasons = ", ".join(f"{key}:{count}" for key, count in rejected_by_field.items() if count)
@@ -437,10 +475,13 @@ def _events_from_georss(
             publication_time=feed_time.isoformat().replace("+00:00", "Z"),
             publication_clock="channel_pubDate" if channel_time is not None else "item_update",
             status=("partial_feed" if quarantined else
+                    "ambiguous_current_selection" if reconciliation["withheld_ambiguous_alerts"] else
                     "withheld_current_alerts" if any(current_withheld.values()) else
                     "withheld_selected_alerts" if any(withheld.values()) else
                     "valid_alerts" if events else "valid_no_qualifying_alerts"),
         )
+    if selection is not None:
+        selection.update(reconciliation, capture_sha256=gdacs_intake.capture_sha256(text))
     return events, feed_time.date()
 
 
@@ -505,12 +546,15 @@ def _fetch_disasters_primary(
     """Serve the deliberate limited RSS product; never probe unqualified MAP."""
     severity_order = {"Green": 0, "Orange": 1, "Red": 2}
     min_level = severity_order.get(min_severity, 1)
-    diagnostics = {"configured_product": "gdacs-georss", "map_status": "withdrawn_unqualified"}
+    diagnostics: dict = {"configured_product": "gdacs-georss", "map_status": "withdrawn_unqualified"}
+    selection: dict = {}
     try:
         text = _read_georss_body()
         events, _ = _events_from_georss(
             text, min_level=min_level, severity_order=severity_order, diagnostics=diagnostics,
+            selection=selection,
         )
+        diagnostics["current_selection"] = selection
     except requests.RequestException:
         # Preserve structured status for with_witness's transport-only decision.
         # The public strict wrapper retains the existing SourceFetchError surface.

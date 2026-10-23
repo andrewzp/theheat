@@ -586,7 +586,7 @@
     "src/data/fire_footprint.py": "3e06a3ef98e65369da1963f787f698f2306e5a236e3b31204fd704d0ffd5137a",
     "src/data/fire_source_contract.py": "851fcf3800b742f89f0780b8c8348bd9aa701b1cc93771fd5433cd6fee3c3d72",
     "src/data/firms.py": "3803f4078e9cbafaa146395a5c54b617eb78ed50e75dff594c8af9b3c490ada0",
-    "src/data/gdacs.py": "8229c6d82fe002ded5fa8dbb1e76ed09e5072e694d1568760241e07ccebb785d",
+    "src/data/gdacs.py": "acd12ae1dd53550d5a377b8adc3f8f6179ae9b86239aa606717a0d07f0875457",
     "src/data/ghcn.py": "59c455a56f8aa963e27aeae1198997f7a0779a9b2f9080edab2d2c0842fc012b",
     "src/data/gpm_imerg.py": "174500bfcfac0eda03cee9c7be9ac57054db673fc6af9bd326ced874418a828a",
     "src/data/ice_mass.py": "6352519b96130b565a9507f558a289126b1e9524cc79437239c55c5f4f2dd737",
@@ -620,7 +620,7 @@
     "src/orchestrator/sources/drought.py": "224de9bf05297e87e28240ea48ba701c88b97117503e309b2c42cadc66a431a0",
     "src/orchestrator/sources/enso.py": "33d53f7ef105d9b9fa48fb27eb0b859306e97f04ca301bc566120b7d83cc70ee",
     "src/orchestrator/sources/firms.py": "0068f17273408dc8c2110fe6854c9f31412512b15302c9843360994fcdd44847",
-    "src/orchestrator/sources/gdacs.py": "2911c9a801f35740cbac22a544c68ed140274c4990f2dbfcd08059810fe53d70",
+    "src/orchestrator/sources/gdacs.py": "0f9c038097150456cc8ac5b78cf818c47a472481e6d05f7209228e6a5863b214",
     "src/orchestrator/sources/gpm_imerg.py": "15ae35e8aa79252f42650267dad6b7e0cc60bfd742beb8cb1809a208b267b31b",
     "src/orchestrator/sources/ice_mass.py": "95f7de55872f48814f0397b7730b41cb91d019a1333f466f12014039ae2edd7b",
     "src/orchestrator/sources/marine.py": "341775be8e06a3304f3f05078d55d82c52e43fc64ef9c4b8f1b934c5fe693aa3",
@@ -640,5 +640,5 @@
     "src/orchestrator/sources/usgs_quakes.py": "8ce82d003a52235fb92750c9f1e5450a672ff942ab71268a78d77f2ac8aa5c05"
   },
   "evidence_scope": "Referenced local code inventory; not live/provider/transitive-source qualification.",
-  "registry_sha256": "bc1d2f498fbe72202063f1be1acfd82f891fdd275832586af304321e8143147d"
+  "registry_sha256": "c8715651e017c5434558de43528edd7a56c94fb455ac2e0818475d33044e2729"
 }

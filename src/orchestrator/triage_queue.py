@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import threading
+import weakref
 from collections import Counter
 from collections.abc import Callable
 from typing import TYPE_CHECKING, cast
@@ -26,6 +27,11 @@ if TYPE_CHECKING:
     from src.two_bot.types import TriageCandidateBundle
 
 _TRIAGE_QUEUE_LOCK = threading.Lock()
+# GDACS-only exact-repeat admission: live queued candidate -> internal intake
+# identity (capture, exact source key, projection). Process-local and transient;
+# an entry dies with its candidate and never reaches a bundle, review context,
+# prompt or stored state. Guarded by _TRIAGE_QUEUE_LOCK.
+_GDACS_INTAKE: dict[int, tuple[str, str, str]] = {}
 
 
 def _triage_enabled() -> bool:
@@ -71,24 +77,33 @@ def _enqueue_story_candidate(
     draft_metadata: dict | None = None,
     on_draft_success: Callable[[], None] | None = None,
     annual_cap_check: Callable[[], bool] | None = None,
+    intake_identity: tuple[str, str, str] | None = None,
+    admission_out: dict | None = None,
 ) -> bool:
     """Audit and enqueue one writer candidate.
 
     This is the source-runner boundary. Sources collect facts, build a
     StoryBundle, and submit it here. Only the drain step may later call the
     writer pipeline for triage survivors.
+
+    GDACS alone passes ``intake_identity``: an exact repeat of a pending row
+    from the same returned capture is reused, not queued again. Returns True
+    only for a new queue row; ``admission_out`` records the disposition.
     """
     from src.two_bot.evidence_contract import audit_story_bundle, evidence_rejection_details
     from src.two_bot.types import TriageCandidateBundle
 
+    out = admission_out if admission_out is not None else {}
     from src.data.fire_identity import legacy_history_reason
     fire_hold = legacy_history_reason(bot_state, event_id)
     if fire_hold:
         print(f"[triage] Fire history hold: {fire_hold}")
+        out["disposition"] = "refused_history"
         return False
     audit = audit_story_bundle(bundle)
     error_codes = [issue.code for issue in audit.issues if issue.severity == "error"]
     if error_codes:
+        out["disposition"] = "refused_evidence"
         ctx = _current_suppression_ctx() or {}
         _record_downstream_suppression(
             bot_state=bot_state,
@@ -103,24 +118,26 @@ def _enqueue_story_candidate(
         )
         return False
 
-    _enqueue_candidate(
-        bot_state,
-        TriageCandidateBundle(
-            bundle=bundle,
-            score=score,
-            event_id=event_id,
-            source=source,
-            review_context=review_context,
-            city=city,
-            tweet_date=tweet_date,
-            cooldown_exempt=cooldown_exempt,
-            legacy_type=legacy_type,
-            created_at=_utc_now_iso(),
-            draft_metadata=draft_metadata,
-            on_draft_success=on_draft_success,
-            annual_cap_check=annual_cap_check,
-        ),
+    candidate = TriageCandidateBundle(
+        bundle=bundle,
+        score=score,
+        event_id=event_id,
+        source=source,
+        review_context=review_context,
+        city=city,
+        tweet_date=tweet_date,
+        cooldown_exempt=cooldown_exempt,
+        legacy_type=legacy_type,
+        created_at=_utc_now_iso(),
+        draft_metadata=draft_metadata,
+        on_draft_success=on_draft_success,
+        annual_cap_check=annual_cap_check,
     )
+    if intake_identity is None:
+        _enqueue_candidate(bot_state, candidate)
+    elif not _admit_gdacs_intake(bot_state, candidate, intake_identity, out):
+        return False
+    out["disposition"] = "new"
     # Rolling registry of everything the bot detected, for the news-gap watch
     # ("the world reported X — did our sensors even see it?"). Never raises.
     from src import state as _state
@@ -133,6 +150,29 @@ def _enqueue_story_candidate(
         city=city,
         where=str(getattr(bundle, "where", "") or ""),
     )
+    return True
+
+
+def _admit_gdacs_intake(bot_state: BotState, candidate: "TriageCandidateBundle",
+                        identity: tuple[str, str, str], out: dict) -> bool:
+    """Decide and append in one hold of the existing queue lock.
+
+    Only an identical (capture, source key, projection) still pending in this
+    state's queue is an exact repeat. A pending row for the same source key
+    from a different projection is counted, not merged: existing event rules
+    decide between them downstream.
+    """
+    with _TRIAGE_QUEUE_LOCK:
+        queue = cast(dict, bot_state).setdefault("_triage_queue", [])
+        pending = [_GDACS_INTAKE[id(row)] for row in queue if id(row) in _GDACS_INTAKE]
+        if identity in pending:
+            out["disposition"] = "reused"
+            return False
+        out["pending_disagreements"] = sum(
+            1 for other in pending if other[1] == identity[1] and other[2] != identity[2])
+        queue.append(candidate)
+        _GDACS_INTAKE[id(candidate)] = identity
+    weakref.finalize(candidate, _GDACS_INTAKE.pop, id(candidate), None)
     return True
 
 

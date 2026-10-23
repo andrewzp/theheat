@@ -1,3 +1,9 @@
+## 0.9.109.35 — 2026-10-22
+
+- Hold conflicting current GDACS episodes before severity filtering, retain stable source ordering and collapse exact duplicates.
+- Reuse a pending GDACS candidate only when capture, source key and projection match in the current state and process; report actual additions and degraded withheld events.
+- Quarantine nonfinite numeric rows without dropping valid peers and bind the selection helper and collector to the editorial policy.
+
 ## 0.9.109.34
 
 - Derive a versioned MODIS map description from every selected source row, with
