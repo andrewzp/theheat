@@ -74,13 +74,83 @@ def _check_structure(value: Any) -> None:
             _require(item is None or kind is bool, "unsupported_json_value")
 
 
+def _bounded_snapshot(value: Any) -> tuple[Any, int] | None:
+    """Detach containers only while a conservative UTF-8 JSON bound fits.
+
+    One code point needs at most six bytes (a JSON control escape). Count every
+    occurrence, including shared children. Immutable scalars can be shared; no
+    caller-owned container reaches the whole encoder. A loose overestimate
+    returns None to select the original bounded incremental path.
+    """
+    root: list[Any] = [None]
+    pending: list[tuple[Any, int, Any, Any]] = [(value, 0, root, 0)]
+    size = 0
+    count = 0
+    while pending:
+        item, depth, parent, key = pending.pop()
+        count += 1
+        _require(count <= MAX_NODES and depth <= MAX_DEPTH, "projection_structure_bound")
+        kind = type(item)
+        if kind is dict:
+            _require(len(item) <= MAX_NODES and count + len(pending) + len(item) <= MAX_NODES,
+                     "projection_structure_bound")
+            copied: Any = {}
+            parent[key] = copied
+            size += 2
+            for name, child in item.items():
+                _require(type(name) is str, "invalid_json_key")
+                size += 6 * len(name) + 3 + bool(copied)  # Quoted key, colon, comma.
+                if size > MAX_BYTES:
+                    return None
+                _require(count + len(pending) + 1 <= MAX_NODES, "projection_structure_bound")
+                copied[name] = None
+                pending.append((child, depth + 1, copied, name))
+        elif kind is list:
+            _require(len(item) <= MAX_NODES and count + len(pending) + len(item) <= MAX_NODES,
+                     "projection_structure_bound")
+            copied = []
+            parent[key] = copied
+            size += 2
+            for child in item:
+                size += bool(copied)
+                if size > MAX_BYTES:
+                    return None
+                _require(count + len(pending) + 1 <= MAX_NODES, "projection_structure_bound")
+                pending.append((child, depth + 1, copied, len(copied)))
+                copied.append(None)
+        elif kind is str:
+            _require(len(item) <= MAX_BYTES, "projection_byte_bound")
+            size += 6 * len(item) + 2
+            parent[key] = item
+        elif kind is int:
+            _require(abs(item) <= MAX_INTEGER, "unsafe_json_integer")
+            size += len(repr(item))
+            parent[key] = item
+        elif kind is float:
+            _require(math.isfinite(item), "nonfinite_json_number")
+            size += len(repr(item))
+            parent[key] = item
+        else:
+            _require(item is None or kind is bool, "unsupported_json_value")
+            size += 4 if item is None else 5  # null / true or false.
+            parent[key] = item
+        if size > MAX_BYTES:
+            return None
+    return root[0], size
+
+
 def _canonical(value: Any) -> bytes:
     """Finite JSON, exact Python numeric types, no coercion of unsupported data."""
     try:
         _check_structure(value)
+        encoder = json.JSONEncoder(sort_keys=True, ensure_ascii=False, allow_nan=False, separators=(",", ":"))
+        bounded = _bounded_snapshot(value)
+        if bounded is not None:
+            encoded = encoder.encode(bounded[0]).encode("utf-8")
+            _require(len(encoded) <= MAX_BYTES, "projection_byte_bound")
+            return encoded
         parts = []
         size = 0
-        encoder = json.JSONEncoder(sort_keys=True, ensure_ascii=False, allow_nan=False, separators=(",", ":"))
         for part in encoder.iterencode(value):
             encoded = part.encode("utf-8")
             size += len(encoded)
