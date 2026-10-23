@@ -88,11 +88,14 @@ def ghcn_case(database,source_bytes,tmp_path,monkeypatch,positive_workflow_clock
 
 def worker(case,operation,identity="",fault=""):
     arguments=[sys.executable]
+    stage_profile=case.pop("_t4_saved_revision_profile",None)
+    if stage_profile is not None:
+        arguments.extend(["-m","cProfile","-o",str(stage_profile)])
     evidence=os.environ.get("P25_I3_EVIDENCE_DIR")
     if evidence:
         directory=Path(evidence)
         directory.mkdir(parents=True,exist_ok=True)
-        if os.environ.get("P25_I3_PROFILE_WORKERS")=="1":
+        if stage_profile is None and os.environ.get("P25_I3_PROFILE_WORKERS")=="1":
             sequence=case.setdefault("worker_sequence",0)
             case["worker_sequence"]=sequence+1
             profile=directory/f"{sequence:03d}-{operation}-{fault or 'ordinary'}.prof"
