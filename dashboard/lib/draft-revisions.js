@@ -243,3 +243,210 @@ export function projectDraft(draft, policy = null) {
     claim_evidence: projectSavedClaimEvidence(draft, { identity, analysisMatches }),
     review_status: draft.revision_conflicts?.length ? "conflict" : Object.hasOwn(draft, "media_attachment") ? "media_review_required" : !validEditorialPolicy(policy) ? "policy_unverified" : current ? "passed" : "needs_revalidation", review_kind: current ? draft.review_binding.kind : null }
 }
+
+// Passive provenance never participates in draftIdentity or authorization.
+export function mergePassiveMaps(...maps) {
+  const rows = new Map()
+  for (const value of maps) {
+    if (!passiveObject(value)) {
+      const retained = unavailableRecord("container", value)
+      rows.set(retained.sha256, retained.payload)
+      continue
+    }
+    for (const [key, payload] of Object.entries(value)) {
+      if (storedUnavailable(key, payload)) rows.set(key, structuredClone(payload))
+      else {
+        const retained = passivePayload(payload)
+        rows.set(retained.sha256, retained.payload)
+      }
+    }
+  }
+  return Object.fromEntries([...rows].sort(([a], [b]) => a.localeCompare(b)))
+}
+export function normalizePassiveSnapshots(value) {
+  const out = structuredClone(value)
+  if (!out || typeof out !== "object" || Array.isArray(out)) return out
+  for (const key of ["writer_observations", "publication_observations"]) {
+    if (Object.hasOwn(out, key)) out[key] = mergePassiveMaps(out[key])
+  }
+  const two = out.review_context?.two_bot
+  if (two && typeof two === "object" && !Array.isArray(two) && Object.hasOwn(two, "accepted_writer_observation")) {
+    two.accepted_writer_observation = passivePayload(two.accepted_writer_observation).payload
+  }
+  for (const key of ["revision_history", "revision_conflicts", "attempt_conflicts"]) {
+    if (Array.isArray(out[key])) out[key] = out[key].map(normalizePassiveSnapshots)
+  }
+  if (Object.hasOwn(out, "published_revision")) out.published_revision = normalizePassiveSnapshots(out.published_revision)
+  return out
+}
+function passiveUnicodeCanonical(value) {
+  if (typeof value === "string") return ["string", value]
+  if (Array.isArray(value)) return ["array", value.map(passiveUnicodeCanonical)]
+  if (value && Object.getPrototypeOf(value) === Object.prototype) {
+    const compare = (a, b) => {
+      const left = Array.from(a, char => char.codePointAt(0)), right = Array.from(b, char => char.codePointAt(0))
+      for (let index = 0; index < Math.min(left.length, right.length); index++) {
+        if (left[index] !== right[index]) return left[index] - right[index]
+      }
+      return left.length - right.length
+    }
+    return ["object", Object.keys(value).sort(compare).map(key => [key, passiveUnicodeCanonical(value[key])])]
+  }
+  return canonical(value)
+}
+export function passiveComparisonValue(value) {
+  return JSON.stringify(passiveUnicodeCanonical(value)).replace(/[\u007f-\uffff]/g,
+    char => "\\u" + char.charCodeAt(0).toString(16).padStart(4, "0"))
+}
+const unavailablePrefix = "unavailable-v1:"
+const unavailableDomain = "theheat.passive.unavailable-record.v1\0"
+function unavailableRecord(category, value) {
+  const payload = { passive_unavailable_record: { schema_version: 1, category, raw_data: passiveComparisonValue(value) } }
+  const digest = createHash("sha256").update(unavailableDomain + passiveComparisonValue(payload), "ascii").digest("hex")
+  return { sha256: unavailablePrefix + digest, payload }
+}
+function decodePassiveData(value) {
+  if (!Array.isArray(value) || !value.length || typeof value[0] !== "string") throw new Error("Invalid passive data")
+  const [kind, item] = value
+  if (kind === "null" && value.length === 1) return null
+  if (value.length !== 2) throw new Error("Invalid passive data")
+  if (kind === "boolean" && typeof item === "boolean") return item
+  if (kind === "string" && typeof item === "string") return item
+  if (kind === "number" && typeof item === "string" && /^[a-f0-9]{16}$/.test(item)) {
+    const number = Buffer.from(item, "hex").readDoubleBE()
+    if (Number.isFinite(number)) return number
+  }
+  if (kind === "array" && Array.isArray(item)) return item.map(decodePassiveData)
+  if (kind === "object" && Array.isArray(item)) {
+    const entries = [], keys = new Set()
+    for (const pair of item) {
+      if (!Array.isArray(pair) || pair.length !== 2 || typeof pair[0] !== "string" || keys.has(pair[0])) throw new Error("Invalid passive data")
+      keys.add(pair[0]); entries.push([pair[0], decodePassiveData(pair[1])])
+    }
+    return Object.fromEntries(entries)
+  }
+  throw new Error("Invalid passive data")
+}
+function storedUnavailable(key, value) {
+  if (typeof key !== "string" || !key.startsWith(unavailablePrefix) || !passiveExact(value, ["passive_unavailable_record"])) return false
+  const record = value.passive_unavailable_record
+  if (!passiveExact(record, ["schema_version", "category", "raw_data"]) || record.schema_version !== 1
+    || !["unicode_payload", "container"].includes(record.category) || typeof record.raw_data !== "string" || /[^\x00-\x7f]/.test(record.raw_data)) return false
+  try {
+    const raw = decodePassiveData(JSON.parse(record.raw_data))
+    if (passiveComparisonValue(raw) !== record.raw_data) return false
+    if (record.category === "container") { if (passiveObject(raw)) return false }
+    else {
+      let invalidUnicode = false
+      try { fingerprint(raw) } catch { invalidUnicode = true }
+      if (!invalidUnicode) return false
+    }
+    const expected = unavailableRecord(record.category, raw)
+    return expected.sha256 === key && fingerprint(expected.payload) === fingerprint(value)
+  } catch { return false }
+}
+export function passivePayload(value) {
+  try { return { sha256: fingerprint(value), payload: structuredClone(value) } } catch {
+    return unavailableRecord("unicode_payload", value)
+  }
+}
+const passiveObject = value => value !== null && typeof value === "object" && !Array.isArray(value)
+const passiveSha = value => typeof value === "string" && /^[a-f0-9]{64}$/.test(value)
+const passiveExact = (value, keys) => passiveObject(value) && Object.keys(value).length === keys.length && keys.every(key => Object.hasOwn(value, key))
+function passiveIdentity(value) {
+  return passiveExact(value, ["content_revision", "text_sha256", "evidence_sha256"])
+    && Number.isSafeInteger(value.content_revision) && value.content_revision >= 1
+    && passiveSha(value.text_sha256) && passiveSha(value.evidence_sha256)
+}
+function passiveTime(value) {
+  if (typeof value !== "string") return null
+  const match = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,6}))?(Z|[+-](\d{2}):(\d{2}))$/.exec(value)
+  if (!match || Number(value.slice(0, 4)) < 1 || +match[2] > 23 || +match[3] > 59 || +match[4] > 59 || +(match[7] || 0) > 23 || +(match[8] || 0) > 59) return null
+  const day = new Date(`${match[1]}T00:00:00Z`)
+  if (!Number.isFinite(day.getTime()) || day.toISOString().slice(0, 10) !== match[1]) return null
+  const parsed = Date.parse(value.replace(/\.\d+(?=Z|[+-])/, ""))
+  return Number.isFinite(parsed) ? BigInt(parsed) * 1000n + BigInt((match[5] || "").padEnd(6, "0")) : null
+}
+export function acceptedWriterObservation(text, bundle, angle, eventId) {
+  return { schema_version: 1, basis: "accepted_writer_result", event_id: eventId,
+    angle_chosen: angle, text_sha256: textHash(text), bundle_sha256: fingerprint(bundle) }
+}
+export function validWriterObservation(value, { admitted = true } = {}) {
+  const keys = ["schema_version", "basis", "event_id", "angle_chosen", "text_sha256", "bundle_sha256", ...(admitted ? ["original_identity"] : [])]
+  return passiveExact(value, keys) && value.schema_version === 1 && value.basis === "accepted_writer_result"
+    && typeof value.event_id === "string" && value.event_id.trim().length > 0
+    && typeof value.angle_chosen === "string" && value.angle_chosen.length <= 80 && /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/.test(value.angle_chosen)
+    && passiveSha(value.text_sha256) && passiveSha(value.bundle_sha256)
+    && (!admitted || (passiveIdentity(value.original_identity) && value.original_identity.text_sha256 === value.text_sha256))
+}
+export function admitWriterObservation(draft) {
+  const value = twoBot(draft).accepted_writer_observation, bundle = twoBot(draft).bundle
+  if (!validWriterObservation(value, { admitted: false }) || !passiveObject(bundle)) return
+  const identity = draftIdentity(draft)
+  if (value.event_id !== draft.event_id || bundle.event_id !== value.event_id || value.text_sha256 !== identity.text_sha256 || value.bundle_sha256 !== fingerprint(bundle)) return
+  draft.writer_observations = mergePassiveMaps({ captured: { ...structuredClone(value), original_identity: identity } })
+}
+export function publicationObservation(draft, eventId, receipt) {
+  if (!Object.hasOwn(draft, "writer_observations")) return null
+  const writers = mergePassiveMaps(draft.writer_observations), bundle = twoBot(draft).bundle
+  const source = passiveObject(bundle) && bundle.event_id === eventId ? fingerprint(bundle) : null
+  const history = {}, retained = Array.isArray(draft.revision_history) ? draft.revision_history : []
+  let unavailable = Object.hasOwn(draft, "revision_history") && !Array.isArray(draft.revision_history)
+  for (const row of retained) {
+    try {
+      const at = passiveObject(row) ? passiveTime(row.invalidated_at) : null
+      const identity = Object.fromEntries(["content_revision", "text_sha256", "evidence_sha256"].map(key => [key, row?.[key]]))
+      if (!passiveObject(row) || !passiveIdentity(identity) || row.content_revision >= receipt.content_revision
+        || typeof row.text !== "string" || textHash(row.text) !== row.text_sha256 || at === null
+        || passiveTime(receipt.at) === null || at > passiveTime(receipt.at)) { unavailable = true; continue }
+      const compact = Object.fromEntries(["content_revision", "text_sha256", "invalidated_at"].map(key => [key, row[key]]))
+      history[fingerprint(compact)] = compact
+    } catch { unavailable = true }
+  }
+  const writer = Object.values(writers).length === 1 ? Object.values(writers)[0] : null
+  const valid = validWriterObservation(writer)
+  return { schema_version: 1, basis: "pretransport_snapshot", event_id: eventId, intent_id: receipt.intent_id ?? null,
+    at: receipt.at ?? null, identity: draftIdentity(draft), source_bundle_sha256: source,
+    source_relation: valid && source ? (writer.bundle_sha256 === source ? "matches" : "differs") : "unknown",
+    text_comparison: valid ? (writer.text_sha256 === textHash(draft.text) ? "matches" : "differs") : "unknown",
+    writer_observations: writers,
+    history_scope: "retained_incomplete", history_unavailable: unavailable, text_observations: mergePassiveMaps(history) }
+}
+export function publicationObservationStatus(value, eventId, receipt) {
+  try { return checkedPublicationObservationStatus(value, eventId, receipt) } catch { return "unknown" }
+}
+function checkedPublicationObservationStatus(value, eventId, receipt) {
+  const keys = ["schema_version", "basis", "event_id", "intent_id", "at", "identity", "source_bundle_sha256", "writer_observations", "history_scope", "history_unavailable", "text_observations", "source_relation", "text_comparison"]
+  if (!passiveExact(value, keys)) return "unknown"
+  const identity = Object.fromEntries(["content_revision", "text_sha256", "evidence_sha256"].map(key => [key, receipt[key] ?? null]))
+  if (value.schema_version !== 1 || value.basis !== "pretransport_snapshot" || value.event_id !== eventId
+    || typeof eventId !== "string" || !eventId.trim() || typeof value.intent_id !== "string" || !value.intent_id.trim()
+    || value.intent_id !== receipt.intent_id || value.at !== receipt.at || passiveTime(value.at) === null
+    || !passiveIdentity(value.identity) || fingerprint(value.identity) !== fingerprint(identity)
+    || typeof receipt.text !== "string" || textHash(receipt.text) !== value.identity.text_sha256
+    || value.history_scope !== "retained_incomplete" || typeof value.history_unavailable !== "boolean"
+    || !passiveObject(value.writer_observations) || !passiveObject(value.text_observations)) return "unknown"
+  const writers = Object.values(mergePassiveMaps(value.writer_observations))
+  if (writers.length > 1) return "conflict"
+  if (writers.length !== 1 || !validWriterObservation(writers[0]) || writers[0].event_id !== eventId
+    || writers[0].original_identity.content_revision > value.identity.content_revision
+    || writers[0].bundle_sha256 !== value.source_bundle_sha256 || value.source_relation !== "matches"
+    || value.text_comparison !== (writers[0].text_sha256 === value.identity.text_sha256 ? "matches" : "differs")
+    || (writers[0].original_identity.content_revision === value.identity.content_revision
+      && fingerprint(writers[0].original_identity) !== fingerprint(value.identity))) return "unknown"
+  const revisions = new Map()
+  for (const row of Object.values(value.text_observations)) {
+    if (!passiveExact(row, ["content_revision", "text_sha256", "invalidated_at"])
+      || !Number.isSafeInteger(row.content_revision) || row.content_revision < 1 || row.content_revision >= value.identity.content_revision
+      || !passiveSha(row.text_sha256) || passiveTime(row.invalidated_at) === null || passiveTime(row.invalidated_at) > passiveTime(value.at)) return "unknown"
+    if (!revisions.has(row.content_revision)) revisions.set(row.content_revision, new Set())
+    revisions.get(row.content_revision).add(row.text_sha256)
+  }
+  return [...revisions.values()].some(hashes => hashes.size > 1) ? "conflict" : "recorded"
+}
+export function qualifyingPublicationContext(receipt, eventId) {
+  if (receipt.phase !== "confirmed" || !receipt.tweet_id || !Object.hasOwn(receipt, "publication_observations")
+    || (Object.hasOwn(receipt, "attempt_conflicts") && (!Array.isArray(receipt.attempt_conflicts) || receipt.attempt_conflicts.some(row => !passiveObject(row))))) return null
+  const values = Object.entries(mergePassiveMaps(receipt.publication_observations))
+  return values.length === 1 && publicationObservationStatus(values[0][1], eventId, receipt) === "recorded" ? values[0][0] : null
+}

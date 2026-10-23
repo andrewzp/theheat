@@ -1,0 +1,176 @@
+{
+  "original": {
+    "id": "invented-contract",
+    "event_id": "invented-contract-event",
+    "type": "fire",
+    "text": "Invented writer text with café ☀.",
+    "content_revision": 1,
+    "review_context": {
+      "two_bot": {
+        "bundle": {
+          "event_id": "invented-contract-event",
+          "signal_kind": "fire",
+          "value": 1.25
+        },
+        "accepted_writer_observation": {
+          "schema_version": 1,
+          "basis": "accepted_writer_result",
+          "event_id": "invented-contract-event",
+          "angle_chosen": "plain_number",
+          "text_sha256": "0b96837a42427ea5c05a3160e54ada799c84a1c8e9c4b6c1f4f6288120588729",
+          "bundle_sha256": "98a52217683da5487012134d3a1c09d8653933bdfe7ab7ce7b7ca33436071742"
+        }
+      }
+    },
+    "writer_observations": {
+      "02a1f374b2add5384a65c2314ef52c4df153ef564845e437b9be26520afc0f25": {
+        "schema_version": 1,
+        "basis": "accepted_writer_result",
+        "event_id": "invented-contract-event",
+        "angle_chosen": "plain_number",
+        "text_sha256": "0b96837a42427ea5c05a3160e54ada799c84a1c8e9c4b6c1f4f6288120588729",
+        "bundle_sha256": "98a52217683da5487012134d3a1c09d8653933bdfe7ab7ce7b7ca33436071742",
+        "original_identity": {
+          "content_revision": 1,
+          "text_sha256": "0b96837a42427ea5c05a3160e54ada799c84a1c8e9c4b6c1f4f6288120588729",
+          "evidence_sha256": "19dd461ee935145d1b21e06e8f8f932003af78301131082f548fda98d0aa59f8"
+        }
+      }
+    }
+  },
+  "draft": {
+    "id": "invented-contract",
+    "event_id": "invented-contract-event",
+    "type": "fire",
+    "text": "Invented writer text with café ☀.",
+    "content_revision": 3,
+    "review_context": {
+      "two_bot": {
+        "bundle": {
+          "event_id": "invented-contract-event",
+          "signal_kind": "fire",
+          "value": 1.25
+        }
+      }
+    },
+    "writer_observations": {
+      "02a1f374b2add5384a65c2314ef52c4df153ef564845e437b9be26520afc0f25": {
+        "schema_version": 1,
+        "basis": "accepted_writer_result",
+        "event_id": "invented-contract-event",
+        "angle_chosen": "plain_number",
+        "text_sha256": "0b96837a42427ea5c05a3160e54ada799c84a1c8e9c4b6c1f4f6288120588729",
+        "bundle_sha256": "98a52217683da5487012134d3a1c09d8653933bdfe7ab7ce7b7ca33436071742",
+        "original_identity": {
+          "content_revision": 1,
+          "text_sha256": "0b96837a42427ea5c05a3160e54ada799c84a1c8e9c4b6c1f4f6288120588729",
+          "evidence_sha256": "19dd461ee935145d1b21e06e8f8f932003af78301131082f548fda98d0aa59f8"
+        }
+      }
+    },
+    "revision_history": [
+      {
+        "text": "Invented writer text with café ☀.",
+        "review_context": {
+          "two_bot": {
+            "bundle": {
+              "event_id": "invented-contract-event",
+              "signal_kind": "fire",
+              "value": 1.25
+            },
+            "accepted_writer_observation": {
+              "schema_version": 1,
+              "basis": "accepted_writer_result",
+              "event_id": "invented-contract-event",
+              "angle_chosen": "plain_number",
+              "text_sha256": "0b96837a42427ea5c05a3160e54ada799c84a1c8e9c4b6c1f4f6288120588729",
+              "bundle_sha256": "98a52217683da5487012134d3a1c09d8653933bdfe7ab7ce7b7ca33436071742"
+            }
+          }
+        },
+        "content_revision": 1,
+        "text_sha256": "0b96837a42427ea5c05a3160e54ada799c84a1c8e9c4b6c1f4f6288120588729",
+        "evidence_sha256": "19dd461ee935145d1b21e06e8f8f932003af78301131082f548fda98d0aa59f8",
+        "invalidated_at": "2026-10-22T12:00:00.000001Z"
+      },
+      {
+        "text": "Invented intervening text.",
+        "review_context": {
+          "two_bot": {
+            "bundle": {
+              "event_id": "invented-contract-event",
+              "signal_kind": "fire",
+              "value": 1.25
+            }
+          }
+        },
+        "decision_revision": 1,
+        "content_revision": 2,
+        "text_sha256": "28304e72e340890b71dae9056a18d26095be01acb5df931e17d995b4a08c9a7a",
+        "evidence_sha256": "19dd461ee935145d1b21e06e8f8f932003af78301131082f548fda98d0aa59f8",
+        "invalidated_at": "2026-10-22T12:01:00Z"
+      }
+    ],
+    "status": "pending",
+    "decision_revision": 2,
+    "approval_mode": "manual"
+  },
+  "receipt": {
+    "content_revision": 3,
+    "text_sha256": "0b96837a42427ea5c05a3160e54ada799c84a1c8e9c4b6c1f4f6288120588729",
+    "evidence_sha256": "19dd461ee935145d1b21e06e8f8f932003af78301131082f548fda98d0aa59f8",
+    "text": "Invented writer text with café ☀.",
+    "intent_id": "invented-contract-intent",
+    "at": "2026-10-22T12:02:00Z",
+    "confirmed_at": "2026-10-22T12:02:01Z",
+    "phase": "confirmed",
+    "tweet_id": "123",
+    "publication_observations": {
+      "add43c672b1efba448ff0717fb89000b2bd243290e7cffb65a9a54d2a1acf51f": {
+        "schema_version": 1,
+        "basis": "pretransport_snapshot",
+        "event_id": "invented-contract-event",
+        "intent_id": "invented-contract-intent",
+        "at": "2026-10-22T12:02:00Z",
+        "identity": {
+          "content_revision": 3,
+          "text_sha256": "0b96837a42427ea5c05a3160e54ada799c84a1c8e9c4b6c1f4f6288120588729",
+          "evidence_sha256": "19dd461ee935145d1b21e06e8f8f932003af78301131082f548fda98d0aa59f8"
+        },
+        "source_bundle_sha256": "98a52217683da5487012134d3a1c09d8653933bdfe7ab7ce7b7ca33436071742",
+        "source_relation": "matches",
+        "text_comparison": "matches",
+        "writer_observations": {
+          "02a1f374b2add5384a65c2314ef52c4df153ef564845e437b9be26520afc0f25": {
+            "schema_version": 1,
+            "basis": "accepted_writer_result",
+            "event_id": "invented-contract-event",
+            "angle_chosen": "plain_number",
+            "text_sha256": "0b96837a42427ea5c05a3160e54ada799c84a1c8e9c4b6c1f4f6288120588729",
+            "bundle_sha256": "98a52217683da5487012134d3a1c09d8653933bdfe7ab7ce7b7ca33436071742",
+            "original_identity": {
+              "content_revision": 1,
+              "text_sha256": "0b96837a42427ea5c05a3160e54ada799c84a1c8e9c4b6c1f4f6288120588729",
+              "evidence_sha256": "19dd461ee935145d1b21e06e8f8f932003af78301131082f548fda98d0aa59f8"
+            }
+          }
+        },
+        "history_scope": "retained_incomplete",
+        "history_unavailable": false,
+        "text_observations": {
+          "5b360aa936d07cc86e765c0870e5544a5fe56e78c6ad9e797f0b0fadb65e86b9": {
+            "content_revision": 2,
+            "text_sha256": "28304e72e340890b71dae9056a18d26095be01acb5df931e17d995b4a08c9a7a",
+            "invalidated_at": "2026-10-22T12:01:00Z"
+          },
+          "cad0acbe822183debaebf3734ac6a57b45083e42495f37767212c08ae96974a2": {
+            "content_revision": 1,
+            "text_sha256": "0b96837a42427ea5c05a3160e54ada799c84a1c8e9c4b6c1f4f6288120588729",
+            "invalidated_at": "2026-10-22T12:00:00.000001Z"
+          }
+        }
+      }
+    }
+  },
+  "context_sha256": "add43c672b1efba448ff0717fb89000b2bd243290e7cffb65a9a54d2a1acf51f"
+}

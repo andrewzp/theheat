@@ -1,6 +1,6 @@
 {
   "identity": {
-    "archive_sha256": "ddfa3b771f297fb95479c87d7ab0853ead658a4f1270f0e1b1d2fbc1dee0ac24",
+    "archive_sha256": "6934a19e030e8e8ce81b4d45e03439661fac6d43fabc2e6509f73c345b758572",
     "deployment_files": {
       "api/graphic_preview.py": "f7521adcbd618f4b65b2a0de30ea62aaff4cdd36f2254e9af38bf68646d361ad",
       "api/graphic_reader_status.py": "5e9685d699625a4eea9d5be884b6e266939a0ad344a2997351ba79bd114407ba",
@@ -46,7 +46,7 @@
       "src/editorial/candidates.py": "80d50c488f44fd879c137751701a306cfae78eb376c3da33b9b7f3150cf9270d",
       "src/editorial/marine_evidence.py": "7183f93f1068d75856063cf061a1dea8751bd4dd98cc1f1f34488bcf39296f5c",
       "src/editorial/publication.py": "7fa23a8f51530dc7f128beacc23689f0df7a8c95b6888beb39afca4212f1a5fe",
-      "src/editorial/revisions.py": "ff8e3f276edd8dcda4103c4e8352b964d6155a15ff69244f040c54b31b90641f",
+      "src/editorial/revisions.py": "e23df717f4d2515d76ed017388c0b1ee3d045ef895f1016ef2a2fdae1b09ead0",
       "src/editorial/scoring/__init__.py": "f969fa55020ff1a436f9bce87701b43f574a98f340f1d5345fd74a5410db0de4",
       "src/editorial/scoring/_shared.py": "ecfbe383674644f82223150fc3beb9761b0ec3942f31b93d245514721fee16f0",
       "src/editorial/scoring/air_quality.py": "973727e2037d76129d68283a0889e23fafc8034b993315fd35af3c6c894dd30b",
@@ -74,7 +74,7 @@
       "src/media/maps/ne_110m_land_v4_1_0.json": "a37b057aca4fc9714a0c24b5d6bc9778bb5845894646e4052383ea63fa3cd50d",
       "src/media/temperature_graphic_adapter.py": "b21fae6e151f16465780e36bbb5ce186372482df382a8f569e0cd868db2c0513",
       "src/media/viirs_map_graphic_adapter.py": "657db3caef8503a4e0b9c9596bad8d28c029c3711e1d974f153fc1b60d3dd8d3",
-      "src/state_schema.py": "dd250ab6ea263afadbbfff1d43d447a9bac1cec87897f994013c53b1e1e2cd76",
+      "src/state_schema.py": "96d0934e017ffd5e8493e20dd058e250ca000073a4b210a79598f22e9b57f63a",
       "src/two_bot/__init__.py": "57333e1314a97e2fc83e03db569e03b0199c67ff52fad71770853226b9a68f00",
       "src/two_bot/evidence_contract.py": "506c86325dd4b589d5cd4f202461b65447f323218ccbaa8eacc0c92230e8f6a8",
       "src/two_bot/ghcn_claim_contract.py": "749443ad87f4caac9726200dcc8f0e0aa3c662d5b5aee20f9b0f3dff8fa48bcc",
@@ -85,12 +85,12 @@
       "src/two_bot/types.py": "36ed2e6475a655f4112012486795702159ed546c3040e8ef1874b7a0b02a9035"
     },
     "format": "saved-source-svg-preview-v2",
-    "policy_source_sha256": "ddb0c9ffe22d0933fd4efe670dea4280215c8d64a6e6b6c8700075733012b35a",
+    "policy_source_sha256": "01ac5fb00e3d508288974dae8a000560dafee9bf98cb14a734021e26afe597bd",
     "resource_sources": {
       "src/data/registry/country_codes.json": "data/country_codes.json",
       "src/data/registry/place_registry.json": "data/place_registry.json"
     },
     "schema_version": 1
   },
-  "runtime_sha256": "8dd3847901abe291de22a5d811675f07984012754f42083f98a86aafbc786b71"
+  "runtime_sha256": "4298c6245a33c166a25fd1e25238c55c4ea90a8cbb2166f17f4f282cfc3afcbd"
 }

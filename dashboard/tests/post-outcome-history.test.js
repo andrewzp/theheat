@@ -1,5 +1,6 @@
 import test from "node:test"
 import assert from "node:assert/strict"
+import { readFileSync } from "node:fs"
 import React from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 import { ProductHealthPanel } from "../app/components/ProductHealthPanel.js"
@@ -15,7 +16,7 @@ const render = state => renderToStaticMarkup(React.createElement(PostOutcomeHist
 
 test("actual component labels retained zero/missingness/age, escapes text and offers no collection action", () => {
   const state = fixture(), before = structuredClone(state), html = render(state)
-  for (const copy of ["Retained post history", "does not collect metrics", "Unknown", "1d 0h after posting", "2026-01-02 00:00:00 UTC", "receipt time is not a substitute", "Topic, angle and human-edit attribution are not established"])
+  for (const copy of ["Retained post history", "does not collect metrics", "Unknown", "1d 0h after posting", "2026-01-02 00:00:00 UTC", "receipt time is not a substitute", "Counts can change and posts may be different ages", "These figures alone don’t show improvement", "Writer angles are self-reported; saved text changes don’t identify an editor"])
     assert.ok(html.includes(copy), copy)
   assert.match(html, /<dt>Likes<\/dt><dd>0<\/dd>/)
   assert.ok(html.includes("&lt;script&gt;")); assert.ok(!html.includes("<script>"))
@@ -74,4 +75,23 @@ test("real authenticated dashboard GET projects the actual state; unauthenticate
     assert.match(html, /Retained post history/); assert.match(html, /1d 0h after posting/)
     assert.deepEqual(state, before)
   } finally { globalThis.fetch = originalFetch; process.env = saved }
+})
+
+test("receipt-bound type is readable and source identities stay in optional details without raw evidence", () => {
+  const state = JSON.parse(readFileSync(new URL("../../tests/fixtures/post_outcome_publication_context.json", import.meta.url), "utf8"))
+  const before = structuredClone(state), html = render(state)
+  assert.match(html, /Recorded type: monthly high/)
+  assert.match(html, /Source evidence matches the published revision/)
+  assert.match(html, /<details class="runtime-details"><summary[^>]*>Source evidence details<\/summary>/)
+  assert.match(html, /Event reference/); assert.match(html, /invented-outcome-event/)
+  assert.doesNotMatch(html, /unbound_writer_angle|DO_NOT_DISPLAY_FULL_SOURCE|manual_override|selected_candidate_rank/)
+  assert.deepEqual(state, before)
+  delete state.drafts[0].id
+  assert.match(render(state), /Published type and source evidence are unknown/)
+  state.publish_ledger["invented-outcome-event"].attempt_conflicts = [{
+    ...state.publish_ledger["invented-outcome-event"], evidence_sha256: "f".repeat(64),
+  }]
+  const conflict = render(state)
+  assert.match(conflict, /Published type or source evidence conflicts/)
+  assert.doesNotMatch(conflict, /Source evidence details|Recorded type:/)
 })

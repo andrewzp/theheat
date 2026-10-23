@@ -6,7 +6,7 @@ import { mergeUsageLedgers } from "./usage-ledger.js"
 import { DatabaseSync } from "node:sqlite"
 import { parseGistDocument, stringifyGistDocument, assertGistEvidenceUnchanged, gistDraftNumericIdentity } from "./lossless-gist.js"
 import { STATE_DEFAULTS, METADATA_JSON_KEYS, DRAFT_RETENTION } from "./state-contract.js"
-import { decisionRevision, draftIdentity, fingerprint } from "./draft-revisions.js"
+import { decisionRevision, draftIdentity, fingerprint, mergePassiveMaps, passiveComparisonValue, normalizePassiveSnapshots } from "./draft-revisions.js"
 
 // Durable fields are generated from Python; this legacy dashboard-only queue
 // remains readable for older local fixtures, but the Python bot no longer uses it.
@@ -226,6 +226,9 @@ function mergeDraftPair(current, incoming) {
         && (recencyDelta > 0 || (recencyDelta === 0 && fingerprint(incomingIdentity) >= fingerprint(currentIdentity))))))
   const [winner, loser] = incomingWins ? [incoming, current] : [current, incoming]
   const out = structuredClone(winner)
+  if (Object.hasOwn(current, "writer_observations") || Object.hasOwn(incoming, "writer_observations")) {
+    out.writer_observations = mergePassiveMaps(...[current, incoming].filter(row => Object.hasOwn(row, "writer_observations")).map(row => row.writer_observations))
+  }
   const sameIdentity = fingerprint(currentIdentity) === fingerprint(incomingIdentity)
   const histories = [...(current.revision_history || []), ...(incoming.revision_history || [])]
   if (!sameIdentity || fingerprint(current.review_binding ?? null) !== fingerprint(incoming.review_binding ?? null)
@@ -277,7 +280,7 @@ function mergeDraftPair(current, incoming) {
 
 function attemptRows(row) {
   // Keep opaque malformed subtrees out of receipt/phase winner selection.
-  const clean = [], malformed = [], pending = [row]
+  const clean = [], malformed = [], pending = [normalizePassiveSnapshots(row)]
   const isObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value)
   while (pending.length) {
     const attempt = pending.pop()
@@ -298,6 +301,11 @@ function attemptRows(row) {
   return { clean, malformed }
 }
 
+function attemptDeliveryPayload(row) {
+  // Keep legacy keys/order byte-identical; passive maps never rank a send.
+  return Object.fromEntries(Object.entries(row).filter(([key]) => key !== "publication_observations"))
+}
+
 function attemptRank(row) {
   return row.tweet_id ? 4 : ({ confirmed: 4, not_sent: 3, unknown: 2, submitted: 1 }[row.phase] || 0)
 }
@@ -315,26 +323,37 @@ export function mergePublishLedger(base = {}, next = {}) {
       }
     }
     for (const row of clean) {
+      if (Object.hasOwn(row, "publication_observations")) row.publication_observations = mergePassiveMaps(row.publication_observations)
       const identity = Object.fromEntries(["intent_id", "at", "content_revision", "text_sha256", "evidence_sha256", "text"]
         .map((key) => [key, row[key] ?? null]))
       // A missing intent ID cannot prove that different phases are one call.
       const identified = typeof row.intent_id === "string" && row.intent_id.length > 0
-      const key = fingerprint(identified ? identity : { unidentified_attempt: row })
+      const key = fingerprint(identified ? identity : { unidentified_attempt: attemptDeliveryPayload(row) })
       const existing = attempts.get(key)
       if (!existing) attempts.set(key, structuredClone(row))
       else if (existing.tweet_id && row.tweet_id && existing.tweet_id !== row.tweet_id) {
-        attempts.set(fingerprint(row), structuredClone(row))
+        const alternateKey = fingerprint(attemptDeliveryPayload(row)), alternate = attempts.get(alternateKey)
+        const combined = structuredClone(row)
+        if (alternate && (Object.hasOwn(alternate, "publication_observations") || Object.hasOwn(row, "publication_observations"))) {
+          combined.publication_observations = mergePassiveMaps(...[alternate, row].filter(item => Object.hasOwn(item, "publication_observations")).map(item => item.publication_observations))
+        }
+        attempts.set(alternateKey, combined)
       } else {
         const [winner, loser] = attemptRank(row) >= attemptRank(existing) ? [row, existing] : [existing, row]
-        attempts.set(key, structuredClone({ ...loser, ...winner }))
+        const combined = structuredClone({ ...loser, ...winner })
+        if (Object.hasOwn(loser, "publication_observations") || Object.hasOwn(winner, "publication_observations")) {
+          combined.publication_observations = mergePassiveMaps(...[loser, winner].filter(row => Object.hasOwn(row, "publication_observations")).map(row => row.publication_observations))
+        }
+        attempts.set(key, combined)
       }
     }
     const rows = [...attempts.values()].sort((a, b) => Number(Boolean(a.tweet_id)) - Number(Boolean(b.tweet_id))
       || parseTimestamp(a.at) - parseTimestamp(b.at) || attemptRank(a) - attemptRank(b)
-      || (fingerprint(a) < fingerprint(b) ? -1 : fingerprint(a) > fingerprint(b) ? 1 : 0))
+      || (fingerprint(attemptDeliveryPayload(a)) < fingerprint(attemptDeliveryPayload(b)) ? -1 : fingerprint(attemptDeliveryPayload(a)) > fingerprint(attemptDeliveryPayload(b)) ? 1 : 0))
     // Preserve unreadable evidence without inventing a platform attempt.
     const primary = rows.pop() || { preserved_evidence_only: true }
     if (rows.length || malformed.length) primary.attempt_conflicts = uniqueSnapshots([...rows, ...malformed])
+      .sort((a, b) => fingerprint(attemptDeliveryPayload(a)).localeCompare(fingerprint(attemptDeliveryPayload(b))))
     merged[eventId] = primary
   }
   return merged
@@ -370,7 +389,7 @@ export function mergeDrafts(current = [], incoming = [], maxItems = DRAFT_RETENT
   const anonymous = []
 
   ;[...current, ...incoming].forEach((draft) => {
-    const copy = structuredClone(draft)
+    const copy = normalizePassiveSnapshots(draft)
     if (!copy.id) {
       anonymous.push(copy)
       return
@@ -589,12 +608,13 @@ async function writeGistState(state, document) {
 function mergeDraftIntoState(state, draft) {
   const merged = mergeState(state, { drafts: [draft] })
   const index = merged.drafts.findIndex((candidate) => candidate.id === draft.id)
-  const updated = structuredClone(draft)
+  const updated = normalizePassiveSnapshots(draft)
   // This path runs only after the exact observed row and ledger are checked.
   // Honor intentional status/approval revocation even within one millisecond;
   // generic snapshot rank must not undo an authorized cancel or rollback.
   if (index >= 0) {
     if (merged.drafts[index].revision_history?.length) updated.revision_history = merged.drafts[index].revision_history
+    if (Object.hasOwn(merged.drafts[index], "writer_observations")) updated.writer_observations = merged.drafts[index].writer_observations
     merged.drafts[index] = updated
   } else merged.drafts.push(updated)
   return merged
@@ -930,9 +950,26 @@ function checkExpectedRevision(draft, expectedRevision) {
     !== fingerprint({ decision_revision: 0, ...expectedRevision })) throw revisionConflict()
 }
 
+function passiveGuardPayload(value) {
+  const out = structuredClone(value)
+  if (!out || typeof out !== "object" || Array.isArray(out)) return out
+  for (const key of ["writer_observations", "publication_observations"]) {
+    if (Object.hasOwn(out, key)) out[key] = passiveComparisonValue(out[key])
+  }
+  const two = out.review_context?.two_bot
+  if (two && typeof two === "object" && !Array.isArray(two) && Object.hasOwn(two, "accepted_writer_observation")) {
+    two.accepted_writer_observation = passiveComparisonValue(two.accepted_writer_observation)
+  }
+  for (const key of ["revision_history", "revision_conflicts", "attempt_conflicts"]) {
+    if (Array.isArray(out[key])) out[key] = out[key].map(passiveGuardPayload)
+  }
+  if (Object.hasOwn(out, "published_revision")) out.published_revision = passiveGuardPayload(out.published_revision)
+  return out
+}
+
 function draftMutationSnapshot(draft, state) {
   const eventId = draft.event_id || draft.id
-  return fingerprint({ draft, publish_ledger: state.publish_ledger?.[eventId] ?? null })
+  return fingerprint({ draft: passiveGuardPayload(draft), publish_ledger: passiveGuardPayload(state.publish_ledger?.[eventId] ?? null) })
 }
 
 // Keep the first complete raw tree and defensive state clone out of the second

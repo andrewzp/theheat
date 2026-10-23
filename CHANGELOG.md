@@ -1,25 +1,33 @@
-## 0.9.109.36
+## 0.9.109.37
 
 - Connect compact station claims to locally resolved full temperature evidence,
   native graphics, joint review, fresh checks and parked-state restore. Keep full
   comparator tables out of model requests and retain locked source checks.
-- Carry compact station claims through the experimental local media-delivery
-  worker with typed enrollment, acquisition and dispatch checks. Recognize only
-  its exact committed attempt at the own-outcome barrier; other unknown sends
-  remain blocked. Hosted and live-platform acceptance remain separate.
-- Reuse freshly verified media data only within its owning operation. Derive the
-  extended attachment's description and packet together, preserving independent
-  public review checks, source refusals and historical identities.
+- Carry compact station claims through experimental local media delivery with
+  typed enrollment, acquisition and dispatch checks. Bind own-attempt recovery
+  to the exact committed request; unrelated unknown sends remain blocked.
+- Derive extended attachment description and packet together. Reuse one fresh
+  current-review calculation for identical inputs, with independent verification
+  for parked decision transitions and unchanged public review checks.
 - Encode bounded detached projection containers through the native JSON encoder
-  when their complete conservative size bound fits. Preserve canonical bytes,
-  error codes, exact types and the original incremental fallback.
-- Preserve free-standing negative temperatures in the event suffix guard while
-  retaining event/date refusals and every required factual and scientific check.
-- Display receipt-bound retained post histories with explicit missing values,
-  conflicts and platform-established post ages, including paged long histories.
-- Run known critical CI cases first without omitting any case or changing its
-  shard, assertions or deadlines. Keep ticking test clocks aligned across the
-  important-alternate parent, child and HTTP fixture.
+  when their conservative complete bound fits; preserve exact bytes, refusals
+  and the incremental fallback.
+- Preserve standalone negative temperatures in the event suffix guard while
+  retaining event/date refusals and required factual and scientific checks.
+- Run known critical CI cases first while keeping all cases, assertions and
+  deadlines, and align ticking parent, child and HTTP test clocks.
+
+## 0.9.109.36
+
+- Show publication type and independently complete retained source context only
+  when bound to an exact confirmed receipt. Keep legacy and missing context
+  explicit without deriving historical facts from today's draft.
+- Carry prospective writer angle and editorial revision context into exact
+  publication snapshots and nullable metric history. Preserve unavailable,
+  malformed and conflicting raw evidence through edits, reloads and merges.
+- Keep passive provenance outside publication authorization, physical attempt
+  identity and ranking. A recorded authenticated action does not establish the
+  human authorship of a rewrite.
 
 ## 0.9.109.35 — 2026-10-22
 

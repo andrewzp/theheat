@@ -26,7 +26,7 @@ from src.two_bot.json_utils import json_default
 from src.two_bot.usage_observations import merge_observations
 from src.editorial.publication import automatic_approval_allowed, merge_publication_control
 from src.data.temperature_history import merge_temperature_history
-from src.editorial.revisions import decision_revision, draft_identity, fingerprint
+from src.editorial.revisions import decision_revision, draft_identity, fingerprint, merge_passive_maps, passive_comparison_value, normalize_passive_snapshots
 
 GIST_ID = os.environ.get("GIST_ID", "")
 GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
@@ -385,6 +385,8 @@ def _merge_draft_pair(current: dict, incoming: dict) -> dict:
     incoming_key = (incoming_identity["content_revision"], decision_revision(incoming), *_draft_recency_key(incoming), fingerprint(incoming_identity))
     winner, loser = (incoming, current) if incoming_key >= current_key else (current, incoming)
     out = deepcopy(winner)
+    if "writer_observations" in current or "writer_observations" in incoming:
+        out["writer_observations"] = merge_passive_maps(*(row["writer_observations"] for row in (current, incoming) if "writer_observations" in row))
     same_identity = current_identity == incoming_identity
     histories = [*current.get("revision_history", []), *incoming.get("revision_history", [])]
     if not same_identity or current.get("review_binding") != incoming.get("review_binding") or current.get("approval_binding") != incoming.get("approval_binding"):
@@ -497,6 +499,7 @@ def _merge_drafts(current: list[dict], incoming: list[dict], max_items: int = MA
         # Identity uses the durable JSON representation (dates and other source
         # scalar values are serialized by the existing state writer contract).
         draft_copy = json.loads(json.dumps(draft, default=json_default))
+        draft_copy = normalize_passive_snapshots(draft_copy)
         draft_id = draft_copy.get("id")
         if not draft_id:
             anonymous.append(draft_copy)
@@ -842,7 +845,7 @@ def _attempt_rows(row: Any) -> tuple[list[dict], list[dict]]:
     participate in receipt/phase winner selection, which could erase uncertainty.
     """
     clean, malformed = [], []
-    pending = [row]
+    pending = [normalize_passive_snapshots(row)]
     while pending:
         attempt = pending.pop()
         if not isinstance(attempt, dict):
@@ -860,6 +863,11 @@ def _attempt_rows(row: Any) -> tuple[list[dict], list[dict]]:
             clean.append({key: deepcopy(value) for key, value in attempt.items() if key != "attempt_conflicts"})
         pending.extend(conflicts)
     return clean, malformed
+
+
+def _attempt_delivery_payload(row: dict) -> dict:
+    # Preserve every legacy tie-break/key byte, excluding only passive context.
+    return {key: value for key, value in row.items() if key != "publication_observations"}
 
 
 def _attempt_rank(row: dict) -> int:
@@ -882,25 +890,33 @@ def _merge_publish_ledger(base: Any, nxt: Any) -> dict:
                 clean.extend(rows)
                 malformed.extend(opaque)
         for row in clean:
+            if "publication_observations" in row:
+                row["publication_observations"] = merge_passive_maps(row["publication_observations"])
             identity = {key: row.get(key) for key in ("intent_id", "at", "content_revision", "text_sha256", "evidence_sha256", "text")}
             # Missing intent IDs cannot prove two phase observations refer to
             # the same platform call. Retain distinct legacy evidence instead.
             identified = isinstance(row.get("intent_id"), str) and bool(row["intent_id"])
-            key = fingerprint(identity if identified else {"unidentified_attempt": row})
+            key = fingerprint(identity if identified else {"unidentified_attempt": _attempt_delivery_payload(row)})
             existing = attempts.get(key)
             if existing is None:
                 attempts[key] = deepcopy(row)
             elif existing.get("tweet_id") and row.get("tweet_id") and existing["tweet_id"] != row["tweet_id"]:
-                attempts[fingerprint(row)] = deepcopy(row)
+                alternate_key = fingerprint(_attempt_delivery_payload(row))
+                alternate = attempts.get(alternate_key)
+                attempts[alternate_key] = deepcopy(row)
+                if alternate is not None and ("publication_observations" in alternate or "publication_observations" in row):
+                    attempts[alternate_key]["publication_observations"] = merge_passive_maps(*(item["publication_observations"] for item in (alternate, row) if "publication_observations" in item))
             else:
                 winner, loser = (row, existing) if _attempt_rank(row) >= _attempt_rank(existing) else (existing, row)
                 attempts[key] = {**deepcopy(loser), **deepcopy(winner)}
+                if "publication_observations" in loser or "publication_observations" in winner:
+                    attempts[key]["publication_observations"] = merge_passive_maps(*(item["publication_observations"] for item in (loser, winner) if "publication_observations" in item))
         rows = list(attempts.values())
-        rows.sort(key=lambda row: (bool(row.get("tweet_id")), _parse_state_timestamp(row.get("at")), _attempt_rank(row), fingerprint(row)))
+        rows.sort(key=lambda row: (bool(row.get("tweet_id")), _parse_state_timestamp(row.get("at")), _attempt_rank(row), fingerprint(_attempt_delivery_payload(row))))
         # This is a container for unreadable evidence, not a fabricated attempt.
         primary = rows.pop() if rows else {"preserved_evidence_only": True}
         if rows or malformed:
-            primary["attempt_conflicts"] = _unique_snapshots([*rows, *malformed])
+            primary["attempt_conflicts"] = sorted(_unique_snapshots([*rows, *malformed]), key=lambda row: fingerprint(_attempt_delivery_payload(row)))
         merged[event_id] = primary
     return merged
 
@@ -1577,6 +1593,31 @@ def _prepare_merged_write(
     return merged
 
 
+def _passive_guard_payload(value: Any) -> Any:
+    """Encode only prospective passive fields, retaining exact guard semantics.
+
+    All values at these namespaces are typed, including ordinary objects that
+    resemble an unavailable-data envelope. Presence/type/raw keys stay distinct.
+    Ordinary decision, source, content and attempt fields are never rewritten.
+    """
+    out = deepcopy(value)
+    if not isinstance(out, dict):
+        return out
+    for key in ("writer_observations", "publication_observations"):
+        if key in out:
+            out[key] = passive_comparison_value(out[key])
+    review = out.get("review_context")
+    two = review.get("two_bot") if isinstance(review, dict) else None
+    if isinstance(two, dict) and "accepted_writer_observation" in two:
+        two["accepted_writer_observation"] = passive_comparison_value(two["accepted_writer_observation"])
+    for key in ("revision_history", "revision_conflicts", "attempt_conflicts"):
+        if isinstance(out.get(key), list):
+            out[key] = [_passive_guard_payload(row) for row in out[key]]
+    if "published_revision" in out:
+        out["published_revision"] = _passive_guard_payload(out["published_revision"])
+    return out
+
+
 def _expected_draft_matches(current: BotState | dict, expected: dict | None, expected_publish_ledger: dict | None) -> bool:
     if expected is None:
         return True
@@ -1587,8 +1628,8 @@ def _expected_draft_matches(current: BotState | dict, expected: dict | None, exp
     ledger_row = current.get("publish_ledger", {}).get(event_id)
     return (
         draft is not None
-        and fingerprint(draft) == fingerprint(json.loads(json.dumps(expected, default=json_default)))
-        and fingerprint(ledger_row) == fingerprint(expected_publish_ledger)
+        and fingerprint(_passive_guard_payload(draft)) == fingerprint(_passive_guard_payload(json.loads(json.dumps(expected, default=json_default))))
+        and fingerprint(_passive_guard_payload(ledger_row)) == fingerprint(_passive_guard_payload(expected_publish_ledger))
     )
 
 

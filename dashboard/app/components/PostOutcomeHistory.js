@@ -19,6 +19,7 @@ function Observation({ item, position, total }) {
       item.collected_at ? h("time", { dateTime: item.collected_at }, utc(item.collected_at)) : "Collection time unknown or invalid",
       " · ", item.kind === "legacy" ? "Legacy snapshot" : "Saved observation"),
     item.association === "unusable" && h("p", { className: "runtime-note" }, "Observation identity or source is unusable; values are withheld."),
+    item.writer_context_status && h("p", { className: "runtime-note" }, item.writer_context_status === "recorded" ? "This observation references the retained publication context." : item.writer_context_status === "conflict" ? "This observation has conflicting publication context." : "This observation’s publication-context reference is unavailable."),
     item.conflict && h("p", { className: "runtime-note" }, "Conflicting observations at this collection time are all retained."),
     h("p", { className: "runtime-note" }, `Post age: ${postAge(item.post_age_seconds)}${item.age_status === "conflict" ? " · stored age conflicts with the recorded times" : ""}`),
     h("dl", { className: "runtime-settings", style: { gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 8rem), 1fr))", fontVariantNumeric: "tabular-nums" } },
@@ -47,7 +48,27 @@ export default function PostOutcomeHistory({ outcomes }) {
           : selected.revision_status === "unknown" ? "Published revision is unknown. Today's draft text is not used."
             : selected.text === null ? "Published text fingerprint is retained; the matching text is unavailable." : "Text matches the retained published fingerprint."),
         selected.text !== null && h("blockquote", { style: { margin: "12px 0", lineHeight: 1.6, overflowWrap: "anywhere" } }, selected.text),
+        h("p", { className: "runtime-note" }, selected.publication_context?.status === "recorded"
+          ? `Recorded type: ${selected.publication_context.type.replaceAll("_", " ")}. ${selected.publication_context.source ? "Source evidence matches the published revision." : "Source evidence details are unknown."}`
+          : selected.publication_context?.status === "conflict" ? "Published type or source evidence conflicts; no context has been selected."
+            : "Published type and source evidence are unknown."),
+        h("p", { className: "runtime-note" }, selected.writer_context?.status === "recorded"
+          ? `Writer-reported angle (captured accepted result): ${selected.writer_context.writer_reported_angle.replaceAll("_", " ")}. Published text ${selected.writer_context.text_comparison === "matches" ? "matches" : "differs from"} the captured writer text.`
+          : selected.writer_context?.status === "conflict" ? "Writer and text observations conflict; no provenance has been selected."
+            : "Writer-reported angle and text provenance are unknown."),
+        selected.writer_context?.status === "recorded" && h("p", { className: "runtime-note" },
+          `${selected.writer_context.retained_different_text ? "Retained history includes different text. " : ""}Retained history is incomplete${selected.writer_context.history_unavailable ? " and includes unavailable observations" : ""}. A text match does not establish that no edits occurred. Actor and human authorship are unknown.`),
         h("p", { className: "runtime-note" }, `${selected.observations.length} retained observations. Post age uses the platform's recorded creation time; receipt time is not a substitute.`)),
+      selected.publication_context?.status === "recorded" && selected.publication_context.source && h("details", { className: "runtime-details" },
+        h("summary", { style: { minHeight: 44 } }, "Source evidence details"),
+        h("dl", { style: { fontSize: 12, lineHeight: 1.6, overflowWrap: "anywhere" } },
+          h("dt", null, "Recorded signal"), h("dd", null, selected.publication_context.source.signal_kind.replaceAll("_", " ")),
+          h("dt", null, "Event reference"), h("dd", null, selected.publication_context.source.event_id),
+          h("dt", null, "Evidence fingerprint"), h("dd", null, selected.publication_context.source.bundle_sha256))),
+      !!selected.writer_context?.variants?.length && h("details", { className: "runtime-details" },
+        h("summary", { style: { minHeight: 44 } }, "Retained writer and text observation variants"),
+        h("ul", { style: { fontSize: 12, lineHeight: 1.6, overflowWrap: "anywhere" } },
+          ...selected.writer_context.variants.map(variant => h("li", { key: variant.sha256 }, `${variant.status}: ${variant.sha256}`)))),
       !selected.observations.length && h("p", { className: "runtime-note" }, selected.history_status === "unreadable_or_empty"
         ? "The retained metric row has no readable observations." : "No metric observations were retained for this post."),
       total > 100 && h("nav", { "aria-label": "Observation pages", style: { display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", margin: "12px 0" } },
@@ -56,5 +77,5 @@ export default function PostOutcomeHistory({ outcomes }) {
         h("p", { className: "runtime-note", role: "status" }, `Showing ${start + 1}–${Math.min(start + 100, total)} of ${total}`)),
       h("ol", { style: { listStyle: "none", padding: 0, margin: 0 } },
         ...selected.observations.slice(start, start + 100).map((item, index) => h(Observation, { key: item.id, item, position: start + index + 1, total })))),
-    h("p", { className: "runtime-note" }, "Historical counts may be revised by the platform. Different post ages are not a matched comparison or proof of improvement. Topic, angle and human-edit attribution are not established here."))
+    h("p", { className: "runtime-note" }, "Counts can change and posts may be different ages. These figures alone don’t show improvement. Writer angles are self-reported; saved text changes don’t identify an editor."))
 }

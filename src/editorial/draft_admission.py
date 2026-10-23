@@ -19,7 +19,7 @@ from src.data.places import draft_place_id, event_identity, legacy_publication_s
 from src.editorial.approval import ApprovalPolicy, recommend_approval_policy
 from src.editorial.newsworthiness import detect_impact_citation
 from src.editorial.policy import valid_policy
-from src.editorial.revisions import initialize_revision
+from src.editorial.revisions import admit_writer_observation, initialize_revision
 from src.orchestrator.caps import CITY_COOLDOWN_DAYS, ELITE_COPY_SCORE
 from src.orchestrator.dedup import _posted_city_within_days, _same_day_already_posted, _same_day_pending_collision
 
@@ -173,6 +173,7 @@ def plan_draft_admission(state: Mapping[str, Any], *, text: str, tweet_type: str
     draft["approval_policy"] = policy.as_dict()
     draft["approval_mode"] = "manual"
     initialize_revision(draft, at=stamp, policy=editorial_policy if valid_policy(editorial_policy) else None)
+    admit_writer_observation(draft)
     removed: tuple[str, ...] = ()
     if collision:
         index, other = collision

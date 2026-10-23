@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 import hashlib
 import json
 import math
+import re
 import struct
 from typing import Any
 
@@ -479,3 +480,293 @@ def project_draft(draft: dict, *, policy=_CURRENT_POLICY) -> dict:
         "review_status": "conflict" if draft.get("revision_conflicts") else "media_review_required" if "media_attachment" in draft else "policy_unverified" if policy is None else "passed" if current else "needs_revalidation",
         "review_kind": draft.get("review_binding", {}).get("kind") if current else None,
     }
+
+# Passive observations are deliberately excluded from draft_identity and every
+# decision binding above. Digests bind retained JSON; they are not signatures.
+def _passive_unicode_canonical(value: Any) -> Any:
+    # Lossless typed JSON, including invalid Unicode code units. This is used
+    # only to retain unavailable sidecar data, never for draft/check identities.
+    if isinstance(value, str):
+        return ["string", value]
+    if isinstance(value, list):
+        return ["array", [_passive_unicode_canonical(item) for item in value]]
+    if isinstance(value, dict) and all(isinstance(key, str) for key in value):
+        return ["object", [[key, _passive_unicode_canonical(value[key])] for key in sorted(value)]]
+    return _canonical(value)
+
+
+def passive_comparison_value(value: Any) -> str:
+    """Typed ASCII encoding for every passive value at an exact comparison."""
+    return json.dumps(_passive_unicode_canonical(value), ensure_ascii=True, separators=(",", ":"))
+
+
+_UNAVAILABLE_PREFIX = "unavailable-v1:"
+_UNAVAILABLE_DOMAIN = "theheat.passive.unavailable-record.v1\0"
+
+
+def _unavailable_record(category: str, value: Any) -> tuple[str, dict]:
+    frame = {"passive_unavailable_record": {"schema_version": 1, "category": category,
+             "raw_data": passive_comparison_value(value)}}
+    digest = hashlib.sha256((_UNAVAILABLE_DOMAIN + passive_comparison_value(frame)).encode("ascii")).hexdigest()
+    return _UNAVAILABLE_PREFIX + digest, frame
+
+
+def _decode_passive_data(value: Any) -> Any:
+    """Decode the complete typed data only to validate unavailable framing."""
+    if not isinstance(value, list) or not value or not isinstance(value[0], str):
+        raise ValueError("invalid_passive_data")
+    kind = value[0]
+    if kind == "null" and len(value) == 1:
+        return None
+    if len(value) != 2:
+        raise ValueError("invalid_passive_data")
+    item = value[1]
+    if kind == "boolean" and type(item) is bool:
+        return item
+    if kind == "string" and isinstance(item, str):
+        return item
+    if kind == "number" and isinstance(item, str) and re.fullmatch(r"[0-9a-f]{16}", item):
+        number = struct.unpack(">d", bytes.fromhex(item))[0]
+        if math.isfinite(number):
+            return number
+    if kind == "array" and isinstance(item, list):
+        return [_decode_passive_data(child) for child in item]
+    if kind == "object" and isinstance(item, list):
+        result = {}
+        for pair in item:
+            if (not isinstance(pair, list) or len(pair) != 2 or not isinstance(pair[0], str)
+                    or pair[0] in result):
+                raise ValueError("invalid_passive_data")
+            result[pair[0]] = _decode_passive_data(pair[1])
+        return result
+    raise ValueError("invalid_passive_data")
+
+
+def _stored_unavailable(key: Any, value: Any) -> bool:
+    # A validated key/frame denotes storage encoding, never writer provenance.
+    # Ordinary envelope-shaped raw values under unverified keys stay raw values.
+    if (not isinstance(key, str) or not key.startswith(_UNAVAILABLE_PREFIX)
+            or not isinstance(value, dict) or set(value) != {"passive_unavailable_record"}):
+        return False
+    record = value["passive_unavailable_record"]
+    if (not isinstance(record, dict) or set(record) != {"schema_version", "category", "raw_data"}
+            or type(record["schema_version"]) not in (int, float) or record["schema_version"] != 1
+            or record["category"] not in ("unicode_payload", "container")
+            or not isinstance(record["raw_data"], str) or not record["raw_data"].isascii()):
+        return False
+    try:
+        raw = _decode_passive_data(json.loads(record["raw_data"]))
+        if passive_comparison_value(raw) != record["raw_data"]:
+            return False
+        if record["category"] == "container":
+            if isinstance(raw, dict):
+                return False
+        else:
+            try:
+                fingerprint(raw)
+            except UnicodeError:
+                pass
+            else:
+                return False
+        expected_key, expected_value = _unavailable_record(record["category"], raw)
+        return key == expected_key and value == expected_value
+    except (ValueError, TypeError, UnicodeError, OverflowError, RecursionError):
+        return False
+
+
+def passive_payload(value: Any) -> tuple[str, Any]:
+    """Normal payload hashes stay exact; unavailable records use a separate domain."""
+    try:
+        return fingerprint(value), deepcopy(value)
+    except UnicodeError:
+        return _unavailable_record("unicode_payload", value)
+
+
+def merge_passive_maps(*maps: Any) -> dict:
+    rows = {}
+    for value in maps:
+        if not isinstance(value, dict):
+            digest, retained = _unavailable_record("container", value)
+            rows[digest] = retained
+            continue
+        for key, payload in value.items():
+            if _stored_unavailable(key, payload):
+                rows[key] = deepcopy(payload)
+            else:
+                digest, retained = passive_payload(payload)
+                rows[digest] = retained
+    return dict(sorted(rows.items()))
+
+
+def normalize_passive_snapshots(value: Any) -> Any:
+    """Normalize only new namespaces along already-known snapshot paths."""
+    out = deepcopy(value)
+    if not isinstance(out, dict):
+        return out
+    for key in ("writer_observations", "publication_observations"):
+        if key in out:
+            out[key] = merge_passive_maps(out[key])
+    review = out.get("review_context")
+    two = review.get("two_bot") if isinstance(review, dict) else None
+    if isinstance(two, dict) and "accepted_writer_observation" in two:
+        two["accepted_writer_observation"] = passive_payload(two["accepted_writer_observation"])[1]
+    for key in ("revision_history", "revision_conflicts", "attempt_conflicts"):
+        if isinstance(out.get(key), list):
+            out[key] = [normalize_passive_snapshots(row) for row in out[key]]
+    if "published_revision" in out:
+        out["published_revision"] = normalize_passive_snapshots(out["published_revision"])
+    return out
+
+
+def _passive_sha(value: Any) -> bool:
+    return isinstance(value, str) and re.fullmatch(r"[a-f0-9]{64}", value) is not None
+
+
+def _passive_identity(value: Any) -> bool:
+    return (isinstance(value, dict) and set(value) == {"content_revision", "text_sha256", "evidence_sha256"}
+            and type(value["content_revision"]) is int and 1 <= value["content_revision"] <= 9007199254740991
+            and _passive_sha(value["text_sha256"]) and _passive_sha(value["evidence_sha256"]))
+
+
+def _passive_time(value: Any) -> datetime | None:
+    if not isinstance(value, str) or re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})", value) is None:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def accepted_writer_observation(text: str, bundle: dict, angle: str, event_id: str) -> dict:
+    """Called only at the successful pipeline's final checked-result boundary."""
+    return {"schema_version": 1, "basis": "accepted_writer_result", "event_id": event_id,
+            "angle_chosen": angle, "text_sha256": text_hash(text), "bundle_sha256": fingerprint(bundle)}
+
+
+def valid_writer_observation(value: Any, *, admitted: bool = True) -> bool:
+    fields = {"schema_version", "basis", "event_id", "angle_chosen", "text_sha256", "bundle_sha256"}
+    if admitted:
+        fields.add("original_identity")
+    if not isinstance(value, dict) or set(value) != fields:
+        return False
+    return (type(value["schema_version"]) is int and value["schema_version"] == 1
+            and value["basis"] == "accepted_writer_result"
+            and isinstance(value["event_id"], str) and bool(value["event_id"].strip())
+            and isinstance(value["angle_chosen"], str) and len(value["angle_chosen"]) <= 80
+            and re.fullmatch(r"[a-z][a-z0-9]*(?:_[a-z0-9]+)*", value["angle_chosen"]) is not None
+            and _passive_sha(value["text_sha256"]) and _passive_sha(value["bundle_sha256"])
+            and (not admitted or (_passive_identity(value["original_identity"])
+                 and value["original_identity"]["text_sha256"] == value["text_sha256"])))
+
+
+def admit_writer_observation(draft: dict) -> None:
+    """No legacy angle, review, manual flag or selected candidate can mint this."""
+    value = _two_bot(draft).get("accepted_writer_observation")
+    bundle = _two_bot(draft).get("bundle")
+    if not isinstance(value, dict) or not valid_writer_observation(value, admitted=False) or not isinstance(bundle, dict):
+        return
+    identity = draft_identity(draft)
+    if (value["event_id"] != draft.get("event_id") or bundle.get("event_id") != value["event_id"]
+            or value["text_sha256"] != identity["text_sha256"] or value["bundle_sha256"] != fingerprint(bundle)):
+        return
+    payload = {**deepcopy(value), "original_identity": identity}
+    draft["writer_observations"] = merge_passive_maps({"captured": payload})
+
+
+def publication_observation(draft: dict, event_id: str, receipt: dict) -> dict | None:
+    """Freeze only already-retained observations from the pretransport snapshot."""
+    if "writer_observations" not in draft:
+        return None
+    writers = merge_passive_maps(draft["writer_observations"])
+    bundle = _two_bot(draft).get("bundle")
+    source = fingerprint(bundle) if isinstance(bundle, dict) and bundle.get("event_id") == event_id else None
+    history, unavailable = {}, False
+    sent_at = _passive_time(receipt.get("at"))
+    retained = draft.get("revision_history", [])
+    if not isinstance(retained, list):
+        retained, unavailable = [], True
+    for row in retained:
+        try:
+            at = _passive_time(row.get("invalidated_at")) if isinstance(row, dict) else None
+            if (not isinstance(row, dict) or not _passive_identity({key: row.get(key) for key in draft_identity(draft)})
+                    or row["content_revision"] >= receipt["content_revision"] or not isinstance(row.get("text"), str)
+                    or text_hash(row["text"]) != row["text_sha256"] or at is None
+                    or sent_at is None or at > sent_at):
+                unavailable = True
+                continue
+            compact = {key: row[key] for key in ("content_revision", "text_sha256", "invalidated_at")}
+            history[fingerprint(compact)] = compact
+        except (ValueError, TypeError, UnicodeError, OverflowError):
+            unavailable = True
+    writer: Any = next(iter(writers.values())) if len(writers) == 1 else None
+    valid = valid_writer_observation(writer)
+    return {"schema_version": 1, "basis": "pretransport_snapshot", "event_id": event_id,
+            "intent_id": receipt.get("intent_id"), "at": receipt.get("at"),
+            "identity": draft_identity(draft), "source_bundle_sha256": source,
+            "source_relation": ("matches" if writer["bundle_sha256"] == source else "differs") if valid and source else "unknown",
+            "text_comparison": ("matches" if writer["text_sha256"] == text_hash(draft["text"]) else "differs") if valid else "unknown",
+            "writer_observations": writers, "history_scope": "retained_incomplete",
+            "history_unavailable": unavailable, "text_observations": dict(sorted(history.items()))}
+
+
+def publication_observation_status(value: Any, event_id: str, receipt: dict) -> str:
+    """Malformed passive evidence is unavailable, never a new publication gate."""
+    try:
+        return _publication_observation_status(value, event_id, receipt)
+    except (ValueError, TypeError, UnicodeError, OverflowError):
+        return "unknown"
+
+
+def _publication_observation_status(value: Any, event_id: str, receipt: dict) -> str:
+    """Validate the complete send binding without consulting today's draft."""
+    fields = {"schema_version", "basis", "event_id", "intent_id", "at", "identity", "source_bundle_sha256",
+              "writer_observations", "history_scope", "history_unavailable", "text_observations", "source_relation", "text_comparison"}
+    if not isinstance(value, dict) or set(value) != fields:
+        return "unknown"
+    sent_at = _passive_time(value["at"])
+    if (type(value["schema_version"]) is not int or value["schema_version"] != 1 or value["basis"] != "pretransport_snapshot"
+            or value["event_id"] != event_id or not isinstance(event_id, str) or not event_id.strip()
+            or not isinstance(value["intent_id"], str) or not value["intent_id"].strip()
+            or value["intent_id"] != receipt.get("intent_id") or value["at"] != receipt.get("at")
+            or sent_at is None or not _passive_identity(value["identity"])
+            or value["identity"] != {key: receipt.get(key) for key in ("content_revision", "text_sha256", "evidence_sha256")}
+            or not isinstance(receipt.get("text"), str) or text_hash(receipt["text"]) != value["identity"]["text_sha256"]
+            or value["history_scope"] != "retained_incomplete" or type(value["history_unavailable"]) is not bool
+            or not isinstance(value["writer_observations"], dict) or not isinstance(value["text_observations"], dict)):
+        return "unknown"
+    writers = list(merge_passive_maps(value["writer_observations"]).values())
+    if len(writers) > 1:
+        return "conflict"
+    if (len(writers) != 1 or not valid_writer_observation(writers[0]) or writers[0]["event_id"] != event_id
+            or writers[0]["original_identity"]["content_revision"] > value["identity"]["content_revision"]
+            or writers[0]["bundle_sha256"] != value["source_bundle_sha256"]
+            or value["source_relation"] != "matches"
+            or value["text_comparison"] != ("matches" if writers[0]["text_sha256"] == value["identity"]["text_sha256"] else "differs")
+            or (writers[0]["original_identity"]["content_revision"] == value["identity"]["content_revision"]
+                and writers[0]["original_identity"] != value["identity"])):
+        return "unknown"
+    revisions: dict[int, set[str]] = {}
+    for row in value["text_observations"].values():
+        invalidated_at = _passive_time(row.get("invalidated_at")) if isinstance(row, dict) else None
+        if (not isinstance(row, dict) or set(row) != {"content_revision", "text_sha256", "invalidated_at"}
+                or type(row["content_revision"]) is not int or not 1 <= row["content_revision"] < value["identity"]["content_revision"]
+                or not _passive_sha(row["text_sha256"]) or invalidated_at is None
+                or sent_at is None or invalidated_at > sent_at):
+            return "unknown"
+        revisions.setdefault(row["content_revision"], set()).add(row["text_sha256"])
+    return "conflict" if any(len(hashes) > 1 for hashes in revisions.values()) else "recorded"
+
+
+def qualifying_publication_context(receipt: dict, event_id: str) -> str | None:
+    """A sample reference requires a single unambiguous confirmed receipt map."""
+    if (receipt.get("phase") != "confirmed" or not receipt.get("tweet_id")
+            or ("attempt_conflicts" in receipt and (not isinstance(receipt["attempt_conflicts"], list)
+                or any(not isinstance(row, dict) for row in receipt["attempt_conflicts"])))):
+        return None
+    if "publication_observations" not in receipt:
+        return None
+    values = merge_passive_maps(receipt["publication_observations"])
+    if len(values) != 1:
+        return None
+    digest, value = next(iter(values.items()))
+    return digest if publication_observation_status(value, event_id, receipt) == "recorded" else None
