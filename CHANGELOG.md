@@ -1,5 +1,7 @@
-## 0.9.109.37
+## 0.9.109.39
 
+- Retain bounded code-only delivery refusal diagnostics in offline fixture
+  failures while preserving original callbacks, assertions and deadlines.
 - Verify retained graphic review and completion evidence once within an owned
   passive dashboard read. Recheck current source, roles and original expiry
   before returning; keep independent command and delivery verification.
@@ -30,6 +32,17 @@
   retaining event/date refusals and required factual and scientific checks.
 - Run known critical CI cases first while keeping all cases, assertions and
   deadlines, and align ticking parent, child and HTTP test clocks.
+
+## 0.9.109.38
+
+- Add explicitly enabled private request evidence and offline replay, binding
+  source, candidate, SDK request/response and terminal observations without
+  changing normal model calls or publication controls.
+- Reconcile supplied billing evidence without double-counting duplicate exports,
+  conflating request/response identifiers or replacing unknown totals with zero.
+- Add a private blind copy-review form and connected diagnosis reports, preserving
+  manual-edit origins, synthetic ratings, uncertain outcomes and receipt lineage.
+- Keep capture off by default and private artifacts outside ordinary bot state.
 
 ## 0.9.109.36
 

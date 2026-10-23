@@ -172,41 +172,77 @@ def trial_scope(budget: TrialBudget) -> Iterator[None]:
         _ACTIVE.reset(token)
 
 
+def _active_archive():
+    # Private request evidence is explicit and default OFF; see request_archive.
+    from src.two_bot.request_archive import active_scope
+    return active_scope()
+
+
 def google_trial_options() -> dict:
     budget = current_trial()
-    if budget is None:
+    archive = _active_archive()
+    if budget is None and archive is None:
         return {}
     from google.genai import types
+    if budget is None:
+        # Observation only: keep the SDK's own retry/redirect/client defaults.
+        return {"client_args": {"event_hooks": archive.wire_hooks("google")}}
+    hooks: dict = {"request": [lambda request: budget.before_wire_dispatch("google", request)]}
+    if archive is not None:
+        # The trial guard runs first; evidence is recorded only for a send it allowed.
+        recorded = archive.wire_hooks("google")
+        hooks = {"request": hooks["request"] + recorded["request"], "response": recorded["response"]}
     return {"retry_options": types.HttpRetryOptions(attempts=1),
-            "client_args": {"follow_redirects": False, "event_hooks": {
-                "request": [lambda request: budget.before_wire_dispatch("google", request)]}}}
+            "client_args": {"follow_redirects": False, "event_hooks": hooks}}
 
 
 def anthropic_trial_options() -> dict:
     budget = current_trial()
-    if budget is None:
+    archive = _active_archive()
+    if budget is None and archive is None:
         return {}
     # Use the SDK's supported client family (httpx2 in the pinned SDK).
     from anthropic import DefaultHttpxClient
+    if budget is None:
+        # Observation only: the SDK's default redirect/limit settings remain.
+        return {"http_client": DefaultHttpxClient(timeout=180.0, event_hooks=archive.wire_hooks("anthropic"))}
+    hooks: dict = {"request": [lambda request: budget.before_wire_dispatch("anthropic", request)]}
+    if archive is not None:
+        recorded = archive.wire_hooks("anthropic")
+        hooks = {"request": hooks["request"] + recorded["request"], "response": recorded["response"]}
     return {"http_client": DefaultHttpxClient(timeout=180.0, follow_redirects=False,
-            event_hooks={"request": [lambda request: budget.before_wire_dispatch("anthropic", request)]})}
+            event_hooks=hooks)}
 
 
 def provider_call(stage: str, provider: str, request: dict, send: Callable):
     budget = current_trial()
-    if budget is None:
+    archive = _active_archive()
+    if budget is None and archive is None:
         return send(**request)
-    bounded = budget.reserve(stage, provider, request)
+    if archive is not None:
+        archive.require_supported_sender(provider, send)
+    bounded = budget.reserve(stage, provider, request) if budget is not None else request
+    # Durable logical intent precedes execution; a refusal here sends nothing.
+    recorder = archive.begin_call(stage, provider, bounded) if archive is not None else None
     try:
         response = send(**bounded)
-    except BaseException:
-        budget.stopped = "trial_provider_outcome_unknown"
+    except BaseException as exc:
+        if budget is not None:
+            budget.stopped = "trial_provider_outcome_unknown"
+        replacement = recorder.raised(exc) if recorder is not None else None
+        if replacement is not None:
+            raise replacement from None
         raise
-    # Returned responses are not bill reconciliation. Never refund a reservation.
-    try:
-        budget.journal({"ordinal": len(budget.calls), "stage": stage,
-                        "outcome": "response_returned", "actual_cost_known": False})
-    except Exception:
-        budget.stopped = "trial_journal_failed_after_dispatch"
-        raise
+    held = recorder.returned(response) if recorder is not None else None
+    if budget is not None:
+        # Returned responses are not bill reconciliation. Never refund a reservation.
+        try:
+            budget.journal({"ordinal": len(budget.calls), "stage": stage,
+                            "outcome": "response_returned", "actual_cost_known": False})
+        except Exception:
+            budget.stopped = "trial_journal_failed_after_dispatch"
+            raise
+    if held is not None:
+        # Evidence failed after a possible purchase: never an approved result.
+        raise held from None
     return response

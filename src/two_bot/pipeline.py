@@ -13,7 +13,7 @@ from src import config
 from src.data.firms import FireEvent
 from src.editorial.revisions import accepted_writer_observation, fingerprint, text_hash
 from src.state_schema import BotState
-from src.two_bot import critic, fact_check, memory, writer
+from src.two_bot import critic, fact_check, memory, request_archive, writer
 from src.two_bot.bundle_capture import BundleCapture
 from src.two_bot.rejected_candidate import (
     capture_critic_rejection, capture_safety_rejection, capture_stage_input, stage_unavailable,
@@ -350,16 +350,20 @@ def generate_draft(
         result_out["stage_outcomes"] = stage_outcomes
 
     def _record_kill(stage: str, reason: str) -> None:
+        # Opt-in private evidence binding only; a no-op unless capture is open.
+        request_archive.note_stage_outcome(stage, "kill", reason)
         if result_out is not None:
             result_out["kill_stage"] = stage
             result_out["kill_reason"] = reason
 
     def _mark_stage(stage: str, outcome: str) -> None:
+        request_archive.note_stage_outcome(stage, outcome)
         stage_outcomes[stage] = outcome
         if result_out is not None:
             result_out["stage_outcomes"] = stage_outcomes
 
     def _observe_candidate(text: str, attempt: int) -> None:
+        request_archive.note_candidate(text, attempt)
         if candidate_observer is not None:
             try:
                 candidate_observer(text, attempt)
@@ -395,6 +399,7 @@ def generate_draft(
             return None
 
         memory_slice = memory.build_memory_slice(state, bundle)
+        request_archive.note_generation_input(bundle.event_id, bundle.signal_kind, checked_bundle, memory_slice)
         samples = _writer_samples()
         writer_results = _writer_sample_slate(bundle, memory_slice, samples)
         viable_results = [
@@ -490,6 +495,7 @@ def generate_draft(
                     _record_kill("critic", "critic returned REVISE while revise is disabled")
                     return None
                 assert critic_result.revise_instruction is not None
+                request_archive.note_revision_request(writer_result.tweet, 2)
                 revised = writer.write_tweet(
                     bundle,
                     memory_slice,
