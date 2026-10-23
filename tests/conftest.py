@@ -170,6 +170,24 @@ def pytest_delivery_refusal_report(item, call):
     append_failure_section(item, outcome.get_result())
 
 
+@pytest.hookimpl(hookwrapper=True, specname="pytest_runtest_makereport")
+def pytest_delivery_fixture_receipt_report(item, call):
+    outcome = yield
+    from tests.t4_delivery_diagnostics import append_fixture_failure_section
+    append_fixture_failure_section(item, outcome.get_result())
+
+
+@pytest.fixture(autouse=True)
+def _t4_fixture_receipt_observer(request):
+    if request.node.path.name != "test_postgres_temperature_delivery.py":
+        yield None
+        return
+    from tests import test_postgres_delivery as owner
+    from tests.t4_delivery_diagnostics import observe_fixture_server
+    with observe_fixture_server(owner) as capture:
+        yield capture
+
+
 def pytest_itemcollected(item):
     """Reject payload-sized display IDs before CI logs or subprocess environments.
 
