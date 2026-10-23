@@ -1,6 +1,7 @@
 import { dashboardEditorialPolicy } from "./editorial-policy.js"
 import { hasUnresolvedPublish, reviewIsCurrent } from "./draft-revisions.js"
 import { buildRuntimeConfig } from "./runtime-inventory.js"
+import { postOutcomes } from "./post-outcomes.js"
 
 const HOUR = 3600000
 const DAY = 24 * HOUR
@@ -193,7 +194,7 @@ function metricsHealth(state, posts, sources, now) {
     last_sample_at: lastSample === null ? null : new Date(lastSample).toISOString(),
     totals: Object.fromEntries(METRIC_FIELDS.map((field) => [field, inventoryKnown && sampled.length && sampled.every((row) => row.values[field] !== null) ? sampled.reduce((sum, row) => sum + row.values[field], 0) : null])),
     last_collector: collector ? { at: new Date(collector.time).toISOString(), status: collector.status ?? null, error: collector.error ?? null, note: collector.note ?? null } : null,
-    notes: ["Inactive means no retained receipt-backed post is eligible for the collector's 30-day window; it requires present draft and ledger collections and does not prove credentials or collection work. Missing collections or undated receipts have unknown eligibility.", "Missing or conflicting latest fields remain null; recorded zero is data. Totals use the latest unconflicted snapshot of eligible retained receipts only. New samples preserve collection time and post age when the platform creation time is available; historical samples are not yet presented here. Old stored metrics do not establish current collection, a fixed-age comparison or causal lift."],
+    notes: ["Inactive means no retained receipt-backed post is eligible for the collector's 30-day window; it requires present draft and ledger collections and does not prove credentials or collection work. Missing collections or undated receipts have unknown eligibility.", "Missing or conflicting latest fields remain null; recorded zero is data. Totals use the latest unconflicted snapshot of eligible retained receipts only. New samples preserve collection time and post age when the platform creation time is available; retained observation history is presented separately. Old stored metrics do not establish current collection, a fixed-age comparison or causal lift."],
   }
 }
 
@@ -216,6 +217,7 @@ export function buildProductHealth(rawState, { now = Date.now(), runtimeReport =
     queue: queueHealth(state, drafts, clock),
     writer: writerHealth(state, clock),
     metrics: metricsHealth(state, posts, sources, clock),
+    post_outcomes: postOutcomes(state, { now: clock }),
     notes: ["These are latest retained observations, not a complete account history or a health guarantee. Source observations require a positive recorded count; success without an observation count does not establish that input arrived. Source-health rows retain a 7-day window and at most 10 runs per source; run history retains at most 20 runs.", "A current review is bound to the exact retained text and evidence; it is not independent scientific validation. A draft or legacy generation-memory text is not a publication. Only an explicit tweet ID establishes a stored publication receipt; this projection does not re-verify the platform.", "Missing, malformed and future timestamps cannot establish freshness. Retention can hide earlier successes and failures; absence of telemetry is unknown, not a recorded zero."],
   }
 }

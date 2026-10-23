@@ -14,6 +14,7 @@ import re
 from typing import Any, cast
 
 from src.state_schema import TweetMetric
+from src.editorial.revisions import qualifying_publication_context
 
 
 PUBLIC_FIELDS = {
@@ -116,6 +117,28 @@ def append_sample(previous: Mapping[str, Any] | None, *, tweet_id: str, counts: 
         "source": "x_api.public_metrics", "counts": metrics,
         **publication_reference(state, tweet_id, sample_time, counts.get("created_at")),
     }
+    # An absent/legacy/contradictory receipt adds no key: schema1 bytes stay exact.
+    references, unavailable = set(), False
+    def context(row, event_id):
+        nonlocal unavailable
+        if not isinstance(row, dict):
+            return
+        if str(row.get("tweet_id") or "") == tweet_id:
+            digest = qualifying_publication_context(row, event_id)
+            if digest is None:
+                unavailable = True
+            else:
+                references.add(digest)
+        for child in row.get("attempt_conflicts", []) if isinstance(row.get("attempt_conflicts"), list) else []:
+            context(child, event_id)
+    ledger = state.get("publish_ledger")
+    for event_id, row in ledger.items() if isinstance(ledger, dict) else []:
+        context(row, event_id)
+    for draft in state.get("drafts", []):
+        if isinstance(draft, dict):
+            context(draft.get("published_revision"), draft.get("event_id") or draft.get("id"))
+    if len(references) == 1 and not unavailable:
+        observation["publication_context_sha256"] = next(iter(references))
     sample_id = hashlib.sha256(_canonical(observation).encode()).hexdigest()
     latest = {"at": at, **metrics, "samples": {sample_id: observation}}
     return cast(TweetMetric, merge_metric_rows(previous, latest))

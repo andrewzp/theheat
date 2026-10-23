@@ -12,7 +12,7 @@ where ``T`` is the nested TypedDict.
 """
 from __future__ import annotations
 
-from typing import NotRequired, TypedDict
+from typing import Any, NotRequired, TypedDict
 
 
 class Hot10Snapshot(TypedDict, total=False):
@@ -233,6 +233,7 @@ class DraftRevisionFields(TypedDict, total=False):
     revision_history: list[dict]
     revision_conflicts: list[dict]
     publish_outcome: str
+    writer_observations: dict[str, Any]
 
 
 class PublishAttempt(TypedDict, total=False):
@@ -248,6 +249,7 @@ class PublishAttempt(TypedDict, total=False):
     phase: str
     tweet_id: str | None
     attempt_conflicts: list[dict]
+    publication_observations: dict[str, Any]
 
 
 class AirQualityTier(TypedDict):

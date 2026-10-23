@@ -11,7 +11,7 @@ from typing import Any
 
 from src import config
 from src.data.firms import FireEvent
-from src.editorial.revisions import fingerprint, text_hash
+from src.editorial.revisions import accepted_writer_observation, fingerprint, text_hash
 from src.state_schema import BotState
 from src.two_bot import critic, fact_check, memory, writer
 from src.two_bot.bundle_capture import BundleCapture
@@ -597,6 +597,9 @@ def generate_draft(
         metadata["reviewed_policy_sha256"] = fingerprint(checked_policy)
         metadata["reviewed_text_sha256"] = text_hash(checked_text)
         metadata["reviewed_bundle_sha256"] = fingerprint(metadata["bundle"])
+        metadata["accepted_writer_observation"] = accepted_writer_observation(
+            checked_text, metadata["bundle"], writer_result.angle_chosen, bundle.event_id,
+        )
         return {
             "type": bundle.signal_kind,
             "text": checked_text,

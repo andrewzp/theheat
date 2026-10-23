@@ -1,5 +1,6 @@
 import { policy, runtimeRun } from "./helpers/review-policy.js"
 import test from "node:test"
+import { acceptedWriterObservation, admitWriterObservation, passiveComparisonValue } from "../lib/draft-revisions.js"
 
 // Explicit policy for these mocked legacy release scenarios.
 process.env.THEHEAT_AUTOMATIC_PUBLICATION_ENABLED = "1"
@@ -455,3 +456,92 @@ for (const attachment of [null, false, {}, { schema_version: 1 }]) {
     })
   })
 }
+
+
+for (const action of ["edit", "select_candidate"]) test(`prospective passive origin survives real ${action} route without granting review`, async () => {
+  const draft = fixture("invented-provenance")
+  const metadata = draft.review_context.two_bot
+  metadata.accepted_writer_observation = acceptedWriterObservation(draft.text, metadata.bundle, "plain_number", draft.event_id)
+  admitWriterObservation(draft)
+  const origin = structuredClone(draft.writer_observations)
+  draft.candidates = [{ rank: 1, text: "Invented replacement candidate." }]
+  await withStore([draft], async ({ post, state, writes, dispatches }) => {
+    const result = await post(request(draft, action, { editedText: "Invented replacement candidate.", candidateRank: 1 }))
+    assert.equal(result.status, 200)
+    const saved = state().drafts[0]
+    assert.deepEqual(saved.writer_observations, origin)
+    assert.equal(saved.text, "Invented replacement candidate.")
+    assert.equal(reviewIsCurrent(saved), false)
+    assert.equal(Object.hasOwn(saved, "approval_binding"), false)
+    assert.equal(writes(), 1); assert.equal(dispatches.length, 0)
+  })
+})
+
+
+test("same malformed Unicode passive evidence remains editable through the actual guarded Gist route", async () => {
+  const draft = fixture("invented-unicode-passive")
+  draft.writer_observations = { bad: { note: "\ud800", n: 1.25 } }
+  await withStore([draft], async ({ post, state, writes, dispatches }) => {
+    const result = await post(request(draft, "edit", { editedText: "Invented replacement for later review." }))
+    assert.equal(result.status, 200)
+    assert.equal(state().drafts[0].text, "Invented replacement for later review.")
+    assert.equal(reviewIsCurrent(state().drafts[0]), false)
+    assert.ok(Object.values(state().drafts[0].writer_observations)[0].passive_unavailable_record.raw_data)
+    assert.equal(writes(), 1); assert.equal(dispatches.length, 0)
+  })
+})
+
+for (const field of ["passive_raw", "passive_key", "passive_type", "passive_envelope", "passive_absent",
+  "text", "status", "event_id", "updated_at", "decision_revision", "publish_intent_id", "approval_binding", "review_binding", "review_context"]) {
+  test(`guarded Gist Unicode edit refuses concurrent ${field} changes without a write`, async () => {
+    const draft = fixture("invented-unicode-stale")
+    draft.writer_observations = { bad: { note: "\ud800", n: 1.25 } }
+    await withStore([draft], async ({ post, writes, dispatches }) => {
+      const result = await post(request(draft, "edit", { editedText: "Invented replacement for later review." }))
+      assert.equal(result.status, 409)
+      assert.equal(writes(), 0); assert.equal(dispatches.length, 0)
+    }, { onRead: (state, count) => {
+      if (count !== 2) return
+      const row = state.drafts[0]
+      if (field === "passive_raw") row.writer_observations.bad.note = "\ud801"
+      else if (field === "passive_key") row.writer_observations = { different: row.writer_observations.bad }
+      else if (field === "passive_type") row.writer_observations = []
+      else if (field === "passive_envelope") row.writer_observations = { unavailable_unicode_json: passiveComparisonValue(row.writer_observations) }
+      else if (field === "passive_absent") delete row.writer_observations
+      else if (field === "decision_revision") row.decision_revision = (row.decision_revision || 0) + 1
+      else if (["approval_binding", "review_binding", "review_context"].includes(field)) row[field] = {}
+      else row[field] = "changed-ordinary-field"
+    } })
+  })
+}
+
+test('new writer-seed Unicode remains editable and never mints origin', async () => {
+  const draft = fixture('invented-unicode-seed')
+  draft.review_context.two_bot.accepted_writer_observation = { bad: '\ud800' }
+  admitWriterObservation(draft)
+  assert.equal(Object.hasOwn(draft, 'writer_observations'), false)
+  await withStore([draft], async ({ post, state, writes, dispatches }) => {
+    const result = await post(request(draft, 'edit', { editedText: 'Invented replacement for later review.' }))
+    assert.equal(result.status, 200)
+    assert.equal(Object.hasOwn(state().drafts[0], 'writer_observations'), false)
+    assert.equal(reviewIsCurrent(state().drafts[0]), false)
+    assert.equal(writes(), 1); assert.equal(dispatches.length, 0)
+  })
+})
+
+for (const field of ['raw', 'key', 'type', 'source_bundle', 'old_angle']) test(`new writer-seed Unicode guard refuses concurrent ${field} change`, async () => {
+  const draft = fixture('invented-unicode-seed-stale')
+  draft.review_context.two_bot.accepted_writer_observation = { bad: '\ud800' }
+  await withStore([draft], async ({ post, writes, dispatches }) => {
+    assert.equal((await post(request(draft, 'edit', { editedText: 'Invented replacement for later review.' }))).status, 409)
+    assert.equal(writes(), 0); assert.equal(dispatches.length, 0)
+  }, { onRead: (state, count) => {
+    if (count !== 2) return
+    const two = state.drafts[0].review_context.two_bot
+    if (field === 'raw') two.accepted_writer_observation.bad = '\ud801'
+    else if (field === 'key') two.accepted_writer_observation = { different: '\ud800' }
+    else if (field === 'type') two.accepted_writer_observation = []
+    else if (field === 'source_bundle') two.bundle = { changed: true }
+    else two.angle_chosen = 'changed_ordinary_angle'
+  } })
+})

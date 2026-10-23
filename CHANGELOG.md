@@ -1,3 +1,15 @@
+## 0.9.109.36
+
+- Show publication type and independently complete retained source context only
+  when bound to an exact confirmed receipt. Keep legacy and missing context
+  explicit without deriving historical facts from today's draft.
+- Carry prospective writer angle and editorial revision context into exact
+  publication snapshots and nullable metric history. Preserve unavailable,
+  malformed and conflicting raw evidence through edits, reloads and merges.
+- Keep passive provenance outside publication authorization, physical attempt
+  identity and ranking. A recorded authenticated action does not establish the
+  human authorship of a rewrite.
+
 ## 0.9.109.35 — 2026-10-22
 
 - Hold conflicting current GDACS episodes before severity filtering, retain stable source ordering and collapse exact duplicates.

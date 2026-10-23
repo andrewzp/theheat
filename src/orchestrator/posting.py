@@ -21,6 +21,8 @@ from src.editorial.revisions import (
     binding_matches,
     draft_identity,
     has_unresolved_publish,
+    fingerprint,
+    publication_observation,
     revoke_approval,
 )
 
@@ -268,6 +270,9 @@ def post_approved(draft_or_text: dict | str, bot_state: BotState) -> str:
         "phase": "submitted",
         "at": _utc_now_iso(),
     }
+    context = publication_observation(snapshot, event_id, row)
+    if context is not None:
+        row["publication_observations"] = {fingerprint(context): context}
     ledger[event_id] = row
     draft["publish_outcome"] = "submitted"
     draft["last_publish_attempt_at"] = row["at"]

@@ -417,6 +417,10 @@ def test_revise_single_iteration_then_terminal(
 
     assert draft is not None
     assert draft["text"] == "revised draft"
+    observation = draft["two_bot_metadata"]["accepted_writer_observation"]
+    assert observation["angle_chosen"] == "b"
+    assert observation["text_sha256"] == text_hash("revised draft")
+    assert observation["bundle_sha256"] == fingerprint(draft["two_bot_metadata"]["bundle"])
     assert mock_writer.call_count == 2
     assert "Previous draft: first draft" in mock_writer.call_args_list[1].kwargs["revision_constraint"]
     assert "The critic requires: Use the fire scale" in mock_writer.call_args_list[1].kwargs["revision_constraint"]
