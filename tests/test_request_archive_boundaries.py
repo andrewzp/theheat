@@ -203,3 +203,21 @@ def test_export_replacement_mid_write_uses_pinned_directory(tmp_path, monkeypatc
 
 def stat_mode(path: Path) -> int:
     return os.stat(path).st_mode & 0o777
+
+
+def test_durability_probe_is_isolated_from_a_warm_callers_safety_cache(journey_env, tmp_path):
+    from collections import OrderedDict
+    from unittest.mock import patch
+    from src.voice import safety
+    from tests.test_request_archive_sdk import FIXTURE, test_durable_intent_and_wire_record_exist_before_each_physical_send
+    warm_cache: OrderedDict[tuple[str, str, str], tuple[float, safety.SafetyCheckResult]] = OrderedDict()
+    providers = OfflineProviders().queue("safety", {"text": "NO"})
+    with patch.object(safety, "_SAFETY_CACHE", warm_cache), offline_transport(providers):
+        first = safety.check_llm_result(FIXTURE["accepted_tweet"])
+        assert first.execution_status == "completed" and not first.cache_hit
+        assert len(warm_cache) == 1 and len(providers.physical) == 1
+        test_durable_intent_and_wire_record_exist_before_each_physical_send(journey_env, tmp_path)
+        assert safety._SAFETY_CACHE is warm_cache and len(warm_cache) == 1
+        reused = safety.check_llm_result(FIXTURE["accepted_tweet"])
+        assert reused.execution_status == "completed" and reused.cache_hit
+        assert len(providers.physical) == 1  # The caller's valid cached verdict remains reusable.

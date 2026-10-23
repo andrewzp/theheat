@@ -250,7 +250,10 @@ def test_durable_intent_and_wire_record_exist_before_each_physical_send(journey_
     for stage, items in accepted_script().items():
         providers.queue(stage, *items)
     providers.observers.append(at_send)
-    with offline_transport(providers), redirect_stdout(io.StringIO()):
+    from src.voice import safety
+    # This probe specifically verifies all four uncached physical sends. A valid
+    # safety result from an earlier test must not change the fixture's premise.
+    with patch.object(safety, "_SAFETY_CACHE", OrderedDict()), offline_transport(providers), redirect_stdout(io.StringIO()):
         with request_archive.capture(root, operation="durability probe") as scope:
             draft, _ = scope.run_generation(_bundle(), _state_with_memory())
     assert draft is not None and seen == ["writer", "safety", "fact_check", "critic"]
