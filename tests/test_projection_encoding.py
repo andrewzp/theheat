@@ -234,3 +234,61 @@ def test_varied_json_preserves_stdlib_bytes_and_conservative_bounds():
         bounded = p._bounded_snapshot(value)
         assert bounded is not None and len(expected) <= bounded[1]
         assert p._canonical(value) == expected
+
+
+def test_private_bound_matches_snapshot_without_changing_default_check_result():
+    values: list[Any] = [None, True, False, -0.0, 1e308, 5e-324, -p.MAX_INTEGER,
+              {"é🌡\x00": [None, True, -0.0, {}, [], "x\n\\\""]}]
+    for value in values:
+        assert p._check_structure(value) is None
+        bounded = p._bounded_snapshot(value)
+        assert bounded is not None
+        assert p._check_structure(value, _with_bound=True) == bounded[1]
+
+
+@pytest.mark.parametrize(("invalid", "code"), [
+    ((1,), "unsupported_json_value"),
+    ({1: 0}, "invalid_json_key"),
+    (p.MAX_INTEGER + 1, "unsafe_json_integer"),
+    (math.inf, "nonfinite_json_number"),
+    ("x" * 65, "projection_byte_bound"),
+    ([[[0]]], "projection_structure_bound"),
+])
+def test_private_bound_overflow_never_masks_later_validation(monkeypatch, invalid, code):
+    monkeypatch.setattr(p, "MAX_BYTES", 64)
+    monkeypatch.setattr(p, "MAX_DEPTH", 3)
+    # The original LIFO walk first sees the valid string and saturates its
+    # conservative bound, then must still validate the invalid left child.
+    value = [invalid, "x" * 20]
+    for canonical in (p._canonical, p._canonical_private_decoded):
+        with pytest.raises(p.ProjectionError) as caught:
+            canonical(value)
+        assert type(caught.value) is p.ProjectionError and str(caught.value) == code
+
+
+def test_private_bound_saturation_preserves_pending_node_bound(monkeypatch):
+    monkeypatch.setattr(p, "MAX_BYTES", 64)
+    monkeypatch.setattr(p, "MAX_NODES", 5)
+    value = [[0, 0, 0], "x" * 20]
+    for canonical in (p._canonical, p._canonical_private_decoded):
+        with pytest.raises(p.ProjectionError, match="^projection_structure_bound$"):
+            canonical(value)
+
+
+def test_private_decode_actual_sixteen_mib_output_and_expanding_number(monkeypatch):
+    prefix, suffix = b'{"a":"', b'","z":1e9}'
+    canonical_suffix = b'","z":1000000000.0}'
+    count = p.MAX_BYTES - len(prefix) - len(canonical_suffix)
+    raw = prefix + b"x" * count + suffix
+    assert len(raw) < p.MAX_BYTES
+    def forbidden(*args, **kwargs):
+        raise AssertionError("A loose bound must not reach the whole encoder or snapshot")
+    monkeypatch.setattr(json.JSONEncoder, "encode", forbidden)
+    monkeypatch.setattr(p, "_bounded_snapshot", forbidden)
+    value, canonical = p._decode_with_canonical(raw)
+    assert value == {"a": "x" * count, "z": 1e9}
+    assert len(canonical) == p.MAX_BYTES
+    assert canonical == prefix + b"x" * count + canonical_suffix
+    with pytest.raises(p.ProjectionError, match="^invalid_stored_json$") as caught:
+        p._decode(prefix + b"x" * (count + 1) + suffix)
+    assert str(caught.value.__context__) == "projection_byte_bound"

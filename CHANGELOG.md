@@ -15,6 +15,9 @@
 - Reuse canonical bytes already checked by each fresh projection-field decode.
   Preserve corruption refusal order, independent field copies and every database
   read while removing duplicate validation within that read.
+- Measure the full encoding bound while validating freshly parsed private JSON,
+  avoiding another tree copy. Keep caller-owned snapshot protection and the
+  original complete validation, incremental fallback and refusal behavior.
 - Preserve standalone negative temperatures in the event suffix guard while
   retaining event/date refusals and required factual and scientific checks.
 - Run known critical CI cases first while keeping all cases, assertions and

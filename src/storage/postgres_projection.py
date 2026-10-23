@@ -47,9 +47,15 @@ def _identifier(value: Any) -> str:
     return value
 
 
-def _check_structure(value: Any) -> None:
+def _check_structure(value: Any, *, _with_bound: bool = False) -> int | None:
+    """Validate every node, optionally measuring a conservative encoding bound.
+
+    The internal measurement is only for newly parsed private JSON. Saturating
+    it never ends validation early or changes the original refusal order.
+    """
     stack = [(value, 0)]
     count = 0
+    size = 0
     while stack:
         item, depth = stack.pop()
         count += 1
@@ -60,10 +66,14 @@ def _check_structure(value: Any) -> None:
             _require(len(item) <= MAX_NODES, "projection_structure_bound")
             _require(count + len(stack) + len(item) <= MAX_NODES, "projection_structure_bound")
             stack.extend((child, depth + 1) for child in item.values())
+            if _with_bound and size <= MAX_BYTES:
+                size += 2 + max(0, len(item) - 1) + sum(6 * len(name) + 3 for name in item)
         elif kind is list:
             _require(len(item) <= MAX_NODES, "projection_structure_bound")
             _require(count + len(stack) + len(item) <= MAX_NODES, "projection_structure_bound")
             stack.extend((child, depth + 1) for child in item)
+            if _with_bound and size <= MAX_BYTES:
+                size += 2 + max(0, len(item) - 1)
         elif kind is int:
             _require(abs(item) <= MAX_INTEGER, "unsafe_json_integer")
         elif kind is float:
@@ -72,6 +82,16 @@ def _check_structure(value: Any) -> None:
             _require(len(item) <= MAX_BYTES, "projection_byte_bound")
         else:
             _require(item is None or kind is bool, "unsupported_json_value")
+        if _with_bound and size <= MAX_BYTES:
+            if kind is str:
+                size += 6 * len(item) + 2
+            elif kind is int or kind is float:
+                size += len(repr(item))
+            elif kind is not dict and kind is not list:
+                size += 4 if item is None else 5
+        if _with_bound and size > MAX_BYTES:
+            size = MAX_BYTES + 1
+    return size if _with_bound else None
 
 
 def _bounded_snapshot(value: Any) -> tuple[Any, int] | None:
@@ -169,12 +189,33 @@ def _pairs(pairs):
     return result
 
 
+def _canonical_private_decoded(value: Any) -> bytes:
+    """Encode only the fresh tree owned by this decode, without a second copy."""
+    try:
+        bound = _check_structure(value, _with_bound=True)
+        encoder = json.JSONEncoder(sort_keys=True, ensure_ascii=False, allow_nan=False, separators=(",", ":"))
+        if bound is not None and bound <= MAX_BYTES:
+            encoded = encoder.encode(value).encode("utf-8")
+            _require(len(encoded) <= MAX_BYTES, "projection_byte_bound")
+            return encoded
+        parts = []
+        size = 0
+        for part in encoder.iterencode(value):
+            encoded = part.encode("utf-8")
+            size += len(encoded)
+            _require(size <= MAX_BYTES, "projection_byte_bound")
+            parts.append(encoded)
+        return b"".join(parts)
+    except (UnicodeError, RecursionError, RuntimeError, TypeError):
+        raise ProjectionError("invalid_json") from None
+
+
 def _decode_with_canonical(payload: bytes) -> tuple[Any, bytes]:
     """Return fresh parsed data and the bytes already checked on this decode."""
     _require(type(payload) is bytes and len(payload) <= MAX_BYTES, "invalid_payload_bytes")
     try:
         value = json.loads(payload.decode("utf-8"), object_pairs_hook=_pairs)
-        return value, _canonical(value)
+        return value, _canonical_private_decoded(value)
     except (ValueError, UnicodeError, RecursionError):
         raise ProjectionError("invalid_stored_json") from None
 

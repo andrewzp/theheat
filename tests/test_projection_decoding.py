@@ -104,19 +104,108 @@ def test_real_reader_uses_one_canonicalization_per_decoded_field_part(monkeypatc
     fields = [(p._canonical(name), p._canonical(value)) for name, value in state.items()]
     connection = StoredRows(fields, restored=state)
     original = p._canonical
+    private = p._canonical_private_decoded
+    snapshot = p._bounded_snapshot
+    check = p._check_structure
+    loads = p.json.loads
     calls = []
+    private_calls = []
+    snapshots = []
+    checks = []
+    parses = []
     def counted(value):
         calls.append(value)
         return original(value)
+    def counted_private(value):
+        private_calls.append(value)
+        return private(value)
+    def counted_snapshot(value):
+        snapshots.append(value)
+        return snapshot(value)
+    def counted_check(value, **kwargs):
+        checks.append(kwargs)
+        return check(value, **kwargs)
+    def counted_loads(*args, **kwargs):
+        value = loads(*args, **kwargs)
+        parses.append(value)
+        return value
     with monkeypatch.context() as patch:
         patch.setattr(p, "_canonical", counted)
+        patch.setattr(p, "_canonical_private_decoded", counted_private)
+        patch.setattr(p, "_bounded_snapshot", counted_snapshot)
+        patch.setattr(p, "_check_structure", counted_check)
+        patch.setattr(p.json, "loads", counted_loads)
         receipt, actual = p.PostgresProjectionRepository._read(connection, "invented", "read")
-    assert len(calls) == 2 * count + 1
+    # Every name/value is still independently parsed and validated. Only the
+    # final caller-owned reconstruction uses the general serializer/snapshot.
+    assert len(calls) == len(snapshots) == 1
+    assert len(private_calls) == len(parses) == 2 * count
+    assert all(value is parsed for value, parsed in zip(private_calls, parses, strict=True))
+    assert checks == [{"_with_bound": True}] * (2 * count) + [{}]
     assert len(connection.queries) == (3 if count else 2)
     assert receipt.field_count == count and original(actual) == original(state)
     if count > 1:
         actual["field-0"]["invented"].append("changed")
         assert actual["field-1"] == state["field-1"]
+
+
+def test_private_decode_encodes_its_fresh_tree_without_snapshot(monkeypatch):
+    encode = json.JSONEncoder.encode
+    check = p._check_structure
+    seen = []
+    checks = []
+
+    def observe_encode(encoder, value):
+        seen.append(value)
+        return encode(encoder, value)
+
+    def observe_check(value, **kwargs):
+        checks.append((value, kwargs))
+        return check(value, **kwargs)
+
+    def forbidden_snapshot(value):
+        raise AssertionError("A fresh private parse must not be cloned")
+
+    monkeypatch.setattr(json.JSONEncoder, "encode", observe_encode)
+    monkeypatch.setattr(p, "_check_structure", observe_check)
+    monkeypatch.setattr(p, "_bounded_snapshot", forbidden_snapshot)
+    raw = b'{"a":[{"x":1}],"b":[{"x":1}]}'
+    first, canonical = p._decode_with_canonical(raw)
+    second, again = p._decode_with_canonical(raw)
+    assert canonical == again == raw
+    assert seen[0] is first and seen[1] is second and first is not second
+    assert checks == [(first, {"_with_bound": True}), (second, {"_with_bound": True})]
+    assert first["a"] is not first["b"] and first["a"] is not second["a"]
+    first["a"][0]["x"] = 2
+    assert first["b"][0]["x"] == second["a"][0]["x"] == 1
+
+
+def test_private_decode_loose_bound_keeps_incremental_path(monkeypatch):
+    monkeypatch.setattr(p, "MAX_BYTES", 64)
+    def forbidden(*args, **kwargs):
+        raise AssertionError("A loose bound must not reach the whole encoder")
+    monkeypatch.setattr(json.JSONEncoder, "encode", forbidden)
+    monkeypatch.setattr(p, "_bounded_snapshot", forbidden)
+    assert p._decode_with_canonical(b'"' + b"x" * 20 + b'"') == ("x" * 20, b'"' + b"x" * 20 + b'"')
+    # Valid short wire spellings can expand beyond the unchanged output cap.
+    with pytest.raises(p.ProjectionError, match="^invalid_stored_json$") as caught:
+        p._decode(b"[1e9,1e9,1e9,1e9,1e9,1e9]")
+    assert str(caught.value.__context__) == "projection_byte_bound"
+
+
+@pytest.mark.parametrize(("raw", "inner"), [
+    (b'{"a":[1e9,1e9,1e9,1e9,1e9,1e9],"z":"\\ud800"}', "projection_byte_bound"),
+    (b'{"a":"\\ud800","z":[1e9,1e9,1e9,1e9,1e9,1e9]}', "invalid_json"),
+    (b'{"a":1e999,"z":"xxxxxxxxxxxxxxxxxxxx"}', "nonfinite_json_number"),
+    (b'{"a":9007199254740992,"z":"xxxxxxxxxxxxxxxxxxxx"}', "unsafe_json_integer"),
+])
+def test_private_decode_completes_validation_and_preserves_encoding_precedence(monkeypatch, raw, inner):
+    monkeypatch.setattr(p, "MAX_BYTES", 64)
+    assert len(raw) <= p.MAX_BYTES
+    with pytest.raises(p.ProjectionError, match="^invalid_stored_json$") as caught:
+        p._decode(raw)
+    assert str(caught.value.__context__) == inner
+    assert caught.value.__cause__ is None and caught.value.__suppress_context__ is True
 
 
 @pytest.mark.parametrize(("fields", "code"), [

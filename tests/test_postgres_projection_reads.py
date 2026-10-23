@@ -58,17 +58,24 @@ def test_actual_read_round_trips_and_exact_values(repository, record_property, s
         state = {f"field-{n}": n for n in range(count)}
     original = repo.record("read-count", shape, state)
     canonical = p._canonical
+    private = p._canonical_private_decoded
     canonical_calls = []
+    private_calls = []
     def counted(value):
         canonical_calls.append(value)
         return canonical(value)
+    def counted_private(value):
+        private_calls.append(value)
+        return private(value)
     with repo._connection() as connection:
         repo._validate(connection)
         observed = CountedRead(connection)
         with monkeypatch.context() as patch:
             patch.setattr(p, "_canonical", counted)
+            patch.setattr(p, "_canonical_private_decoded", counted_private)
             receipt, actual = repo._read(observed, "read-count", shape)
-    assert len(canonical_calls) == 2 * len(state) + 1
+    assert len(canonical_calls) == 1
+    assert len(private_calls) == 2 * len(state)
     assert receipt == original
     assert p._canonical(actual) == p._canonical(state)
     assert len(observed.queries) == len(observed.fetches) == (3 if state else 2)
