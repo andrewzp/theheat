@@ -8,12 +8,15 @@ from copy import copy, deepcopy
 from datetime import timedelta
 from functools import partial
 from types import SimpleNamespace
+import hashlib
+import json
 
 import pytest
 
-from src.commands import postgres_editor_media as editor
-from src.commands.schema import CommandError
+from src.commands import postgres_editor_media as editor, postgres_delivery as delivery
+from src.commands.schema import CommandError, Principal, utc_text
 from src.commands.media_journal import MediaJournalError
+from src.posting.local_delivery import FixtureConfiguration
 from src.storage import postgres_projection as p
 from tests.test_joint_media_review import ACTOR
 from tests.test_media_review_pair import make_case, prepare, retain
@@ -217,5 +220,120 @@ def test_failed_config_capture_preserves_missing_origin_failure_order(retained, 
         actual = scope.project(case["draft"]["id"], lambda subject: ACTOR)
         assert p._canonical(actual) == p._canonical(expected)
         assert scope._pair is None and scope._proof is None
+    finally:
+        scope.close()
+
+
+@pytest.mark.parametrize("change", ["unchanged", "before_final_read", "after_first_final_read"])
+def test_real_delivery_configuration_pair_survives_capture_and_both_final_reads(
+    tmp_path, monkeypatch, change
+):
+    """Real config/retained pair; explicit lifecycle fields are not stage proof.
+
+    This component test calls finish directly with invented packet/approval/time
+    fields. It proves neither a completed check set nor a parked DB transaction.
+    Configuration, retained media/review and final guards run without pass stubs.
+    """
+    case = make_case("temperature", extended=False)
+    retain(case, prepare(case))
+    preparation(case)
+    authority, sql = case["authority"], case["sql"]
+    authority.generation_configuration = lambda: dict(
+        schema_version=2, current_inputs=[], reservations=dict(batch=None, synchronous=None))
+    case["draft"] = case["after"]["drafts"][0]
+    case["value"] = current_inputs(case)
+    case["value"]["source"] = dict(
+        source_useful_until=utc_text(NOW + timedelta(minutes=4)),
+        provenance_useful_until=utc_text(NOW + timedelta(minutes=4)))
+
+    folder = tmp_path / "invented-private-delivery"
+    folder.mkdir(mode=0o700)
+    path = folder / "configuration.json"
+    config = dict(schema_version=2, scope="local_http_fixture_v1", invented=True,
+        instance_id="11111111-2222-4333-8444-555555555555", origin="http://127.0.0.1:39131",
+        routes_version=1, actor="did:plc:aaaaaaaaaaaaaaaaaaaaaaaa",
+        platform_profile="credentialless-loopback-v1")
+    original_bytes = json.dumps(config).encode()
+    path.write_bytes(original_bytes)
+    path.chmod(0o600)
+    original_inode = path.stat().st_ino
+    loaded = FixtureConfiguration.load(path)
+    authority.delivery_configuration = loaded
+    real_pair = delivery.configuration(authority)
+    assert type(real_pair) is tuple and real_pair == (config, hashlib.sha256(original_bytes).hexdigest())
+
+    # Only an explicit invented state-pointer row supplements the existing SQL
+    # fixture. The actual authority state/snapshot reader verifies its bytes.
+    original_execute = sql.execute
+
+    def state_pointer(query, args=()):
+        if " ".join(query.split()).startswith(
+            "SELECT version,namespace,snapshot_id FROM theheat_commands.state WHERE singleton=1"
+        ):
+            return Rows([(1, "command-core-v1", "1")])
+        return original_execute(query, args)
+
+    monkeypatch.setattr(sql, "execute", state_pointer)
+    original_read = FixtureConfiguration.read
+    read_calls: list[object] = []
+
+    def read_real_file(configuration):
+        read_calls.append(configuration)
+        return original_read(configuration)
+
+    monkeypatch.setattr(FixtureConfiguration, "read", read_real_file)
+    scope = editor._open_passive_inspection(authority, NOW)
+    try:
+        scope.bind(sql, case["after"], 1, case["inputs"]["editorial_policy"], None)
+        assert scope.start_inputs() is True
+        assert len(read_calls) == 1 and scope._snapshot_ready
+        assert scope._delivery_config == p._canonical(dict(configuration=config, sha256=real_pair[1]))
+        _, record = verify(scope, case)  # Actual retained package and review verification.
+        assert record == case["transition"].review
+
+        # Explicit fields for this finalization-only component fixture; no
+        # stages.completion, approval command, grant or journal result is faked.
+        publisher = Principal("invented-final-publisher", "publisher", "offline-fixture-session")
+        intent = "22222222-3333-4444-8555-666666666666"
+        scope._draft["approval_binding"] = dict(
+            publisher_subject=publisher.subject, requesting_actor=ACTOR.subject)
+        scope._draft["publish_intent_id"] = intent
+        deadline = utc_text(NOW + timedelta(minutes=3))
+        scope.verified(dict(useful_until=utc_text(NOW + timedelta(minutes=4)),
+            check_date=utc_text(NOW)[:10]), deadline)
+        view: dict = dict(parked=True, review_current=True, checks_status="passed",
+            publication_approved=False, delivery=dict(intents=[dict(intent_id=intent, current=True, reason=None)]))
+        expected = deepcopy(view)
+        role_calls: list[str] = []
+        changed: list[bool] = []
+
+        def change_same_file():
+            assert not changed and authority.delivery_configuration is loaded
+            path.write_text(json.dumps(config | {"instance_id": "33333333-4444-4555-8666-777777777777"}))
+            assert path.stat().st_ino == original_inode
+            changed.append(True)
+
+        def resolve(subject):
+            role_calls.append(subject)
+            if change == "after_first_final_read" and subject == publisher.subject and not changed:
+                assert len(read_calls) == 2  # Capture, then the first actual final read.
+                change_same_file()
+            return publisher if subject == publisher.subject else ACTOR
+
+        if change == "before_final_read":
+            change_same_file()
+        scope.finish(view, resolve)
+        assert scope._proof[1] == deadline  # Original bound never changes.
+        if change == "unchanged":
+            assert len(read_calls) == 3  # Capture plus BOTH actual final content reads.
+            assert role_calls == [ACTOR.subject, publisher.subject, ACTOR.subject] * 2
+            assert view == expected
+        else:
+            assert len(read_calls) == (2 if change == "before_final_read" else 3)
+            assert view["parked"] is False and view["parked_status"] == "delivery_configuration_changed"
+            assert view["delivery"]["intents"][0] == dict(
+                intent_id=intent, current=False, reason="delivery_configuration_changed")
+            assert view["review_current"] is True and view["publication_approved"] is False
+        assert all(configuration is loaded for configuration in read_calls)
     finally:
         scope.close()

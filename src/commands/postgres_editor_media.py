@@ -43,6 +43,15 @@ def _open_passive_inspection(authority, now):
     return _PassiveInspection(_PASSIVE_TOKEN, authority, now)
 
 
+def _delivery_configuration_snapshot(authority):
+    from src.commands import postgres_delivery as delivery
+    if not hasattr(authority, "delivery_configuration"):
+        return None
+    content, sha256 = delivery.configuration(authority)
+    # The trusted API returns a tuple; the strict JSON codec accepts only JSON types.
+    return p._canonical(dict(configuration=content, sha256=sha256))
+
+
 class _PassiveInspection:
     """One lexical passive GET, never command, dispatch or readiness authority."""
 
@@ -116,14 +125,13 @@ class _PassiveInspection:
         if self._capture_started:
             return self._snapshot_ready
         self._capture_started = True
-        from src.commands import postgres_delivery as delivery
         # This extra capture must never become an earlier outward validation gate.
         # On failure, let the original full paths determine their own order/fields.
         try:
             source_loader = getattr(self._authority, "generation_configuration", None)
             delivery_loader = getattr(self._authority, "delivery_configuration", None)
             source_config = p._canonical(generation.configuration(self._authority))
-            delivery_config = p._canonical(delivery.configuration(self._authority)) if hasattr(self._authority, "delivery_configuration") else None
+            delivery_config = _delivery_configuration_snapshot(self._authority)
             native_config = p._canonical(getattr(self._authority, "editor_media_configuration", None))
         except Exception:
             self._snapshot_ready = False
@@ -190,7 +198,7 @@ class _PassiveInspection:
             refuse(p._canonical(generation.configuration(self._authority)) == self._source_config,
                    "media_source_not_allowlisted")
             from src.commands import postgres_delivery as delivery
-            config = p._canonical(delivery.configuration(self._authority)) if hasattr(self._authority, "delivery_configuration") else None
+            config = _delivery_configuration_snapshot(self._authority)
             refuse(config == self._delivery_config, "delivery_configuration_changed")
             binding = self._draft["approval_binding"]
 
@@ -208,7 +216,7 @@ class _PassiveInspection:
             # Compare ORIGINAL snapshots; never stabilize or accept a new baseline.
             refuse(p._canonical(generation.configuration(self._authority)) == self._source_config,
                    "media_source_not_allowlisted")
-            config = p._canonical(delivery.configuration(self._authority)) if hasattr(self._authority, "delivery_configuration") else None
+            config = _delivery_configuration_snapshot(self._authority)
             refuse(config == self._delivery_config, "delivery_configuration_changed")
             final_roles()  # Configuration callbacks may themselves revoke a role.
             if self._failure is not None:
