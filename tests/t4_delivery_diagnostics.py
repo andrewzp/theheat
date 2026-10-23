@@ -11,6 +11,8 @@ from contextlib import contextmanager, ExitStack
 import json
 import math
 from pathlib import Path
+import time as _budget_time
+from types import ModuleType, SimpleNamespace
 from typing import Any, Callable, Iterator
 from unittest.mock import patch
 
@@ -485,3 +487,236 @@ def append_fixture_failure_section(item: Any, report: Any) -> None:
     except (AttributeError, TypeError, ValueError, OverflowError, RecursionError):
         encoded = _encoded([_fixture_counts(None)])
     report.sections.append((FIXTURE_SECTION, encoded.decode("utf-8")))
+
+
+# DIAG3 explicitly permits test-only injected elapsed timer pairs. DIAG1/2 above
+# retain their original functions and schemas without new clock reads.
+BUDGET_KIND = "delivery_budget_timing/v1"
+BUDGET_SECTION = "Delivery budget timing (inclusive phases; up to 8 rows)"
+BUDGET_PHASES = ("execute", "begin", "check", "prepare_context", "context", "attempt_successor", "bounded_http")
+BUDGET_CALLS = 8
+BUDGET_TIMER_READS = 128
+
+
+class _BudgetRun:
+    def __init__(self, timer: Callable[[], Any]) -> None:
+        self.timer = timer
+        self.reads = 0
+        self.bad = False
+        self.overflow = False
+        self.stack: list[object] = []
+        self.calls = dict.fromkeys(BUDGET_PHASES, 0)
+        self.seconds = dict.fromkeys(BUDGET_PHASES, 0.0)
+        self.cap = "unavailable"
+        self.boundaries = 0
+
+    def sample(self) -> int | float | None:
+        if self.reads >= BUDGET_TIMER_READS:
+            self.bad = self.overflow = True
+            return None
+        self.reads += 1
+        try:
+            value = self.timer()
+            if type(value) in (int, float) and math.isfinite(value):
+                return value
+        except BaseException:
+            pass
+        self.bad = True
+        return None
+
+    def measure(self, phase: str, original: Callable, *args: Any, **kwargs: Any) -> Any:
+        if phase not in self.calls or self.calls[phase] >= BUDGET_CALLS:
+            self.bad = self.overflow = True
+            return original(*args, **kwargs)
+        self.calls[phase] += 1
+        token = object()
+        self.stack.append(token)
+        start = self.sample()
+        try:
+            return original(*args, **kwargs)
+        finally:
+            stop = self.sample()
+            if not self.stack or self.stack[-1] is not token:
+                self.bad = True
+                self.stack.clear()
+            else:
+                self.stack.pop()
+            if start is not None and stop is not None:
+                try:
+                    elapsed = stop - start
+                    if not 0 <= elapsed <= 180 or not math.isfinite(elapsed):
+                        self.bad = True
+                    else:
+                        self.seconds[phase] += elapsed
+                        if self.seconds[phase] > 180:
+                            self.bad = True
+                except BaseException:
+                    self.bad = True
+
+    def boundary(self, original: Callable, *args: Any, **kwargs: Any) -> Any:
+        result = original(*args, **kwargs)
+        self.boundaries = min(2, self.boundaries + 1)
+        self.cap = "unavailable"
+        try:
+            prepared = args[3] if len(args) > 3 else kwargs.get("prepared")
+            if type(prepared) is not dict:
+                return result
+            eligibility = prepared["eligibility_deadline"]
+            deadline = result.deadline
+            if (self.boundaries == 1 and type(eligibility) is float and type(deadline) is float
+                    and math.isfinite(eligibility) and math.isfinite(deadline) and deadline <= eligibility):
+                self.cap = "eligibility" if deadline == eligibility else "phase"
+        except BaseException:
+            pass
+        return result
+
+    def row(self) -> dict:
+        available = not self.bad and not self.stack
+        return dict(kind=BUDGET_KIND, available=available, overflow=self.overflow, inclusive=True,
+            cap=self.cap, phases=[dict(phase=phase, calls=self.calls[phase], available=available and self.calls[phase] > 0,
+                elapsed_seconds=round(self.seconds[phase], 6) if available and self.calls[phase] > 0 else None)
+                for phase in BUDGET_PHASES])
+
+
+class BudgetTimingDiagnostic:
+    def __init__(self, timer: Callable[[], Any]) -> None:
+        self.timer = timer
+        self.rows: list[dict] = []
+        self.overflow = False
+        self.active: _BudgetRun | None = None
+
+    def execute(self, domain: Any, adapter: Any, original: Callable, *args: Any, **kwargs: Any) -> Any:
+        if self.active is not None:
+            self.active.bad = self.active.overflow = True
+            return original(*args, **kwargs)
+        run = _BudgetRun(self.timer)
+        self.active = run
+
+        def timed(phase: str, function: Callable) -> Callable:
+            def call(*values: Any, **named: Any) -> Any:
+                return run.measure(phase, function, *values, **named)
+            return call
+
+        try:
+            with ExitStack() as stack:
+                targets = ((domain, "prepare_context"), (domain, "context"),
+                           (domain, "attempt_successor"), (adapter, "bounded_http"))
+                if not all(type(owner) in (ModuleType, SimpleNamespace) and callable(getattr(owner, name, None)) for owner, name in targets):
+                    run.bad = True
+                    return run.measure("execute", original, *args, **kwargs)
+                try:
+                    for owner, name in targets:
+                        stack.enter_context(patch.object(owner, name, timed(name, getattr(owner, name))))
+                    constructor = getattr(adapter, "_Boundary", None)
+                    if callable(constructor):
+                        def boundary(*values: Any, **named: Any) -> Any:
+                            return run.boundary(constructor, *values, **named)
+                        stack.enter_context(patch.object(adapter, "_Boundary", boundary))
+                except BaseException:
+                    run.bad = True
+                    stack.close()
+                    return run.measure("execute", original, *args, **kwargs)
+                forwarded = dict(kwargs)
+                for name in ("begin", "check"):
+                    if callable(forwarded.get(name)):
+                        forwarded[name] = timed(name, forwarded[name])
+                    else:
+                        run.bad = True
+                return run.measure("execute", original, *args, **forwarded)
+        finally:
+            self.active = None
+            try:
+                if len(self.rows) < MAX_ROWS:
+                    self.rows.append(run.row())
+                else:
+                    self.overflow = True
+            except BaseException:
+                self.overflow = True
+
+    def emit(self, emit: Callable[[dict], Any]) -> None:
+        try:
+            rows = self.rows
+            if self.overflow or not rows or len(rows) > MAX_ROWS:
+                missing = _BudgetRun(self.timer)
+                missing.bad, missing.overflow = True, self.overflow or len(rows) > MAX_ROWS
+                rows = [missing.row()]
+            for row in rows:
+                if valid_budget_row(row) and len(_encoded(row)) <= MAX_ROW_BYTES:
+                    emit(row)
+        except BaseException:
+            pass
+
+
+@contextmanager
+def observe_budget_timing(domain: Any, adapter: Any, *, timer: Callable[[], Any] | None = None) -> Iterator[BudgetTimingDiagnostic]:
+    # Resolve the restored time-module attribute at each permitted read, never a
+    # copied pytest/freezegun alias and never any production clock modification.
+    capture = BudgetTimingDiagnostic(timer if timer is not None else lambda: _budget_time.perf_counter())
+    if type(adapter) not in (ModuleType, SimpleNamespace):
+        yield capture
+        return
+    original = adapter.execute
+    def execute(*args: Any, **kwargs: Any) -> Any:
+        return capture.execute(domain, adapter, original, *args, **kwargs)
+    with patch.object(adapter, "execute", execute):
+        yield capture
+
+
+def valid_budget_row(row: Any) -> bool:
+    if (type(row) is not dict or set(row) != {"kind", "available", "overflow", "inclusive", "cap", "phases"}
+            or row["kind"] != BUDGET_KIND or type(row["available"]) is not bool
+            or type(row["overflow"]) is not bool or row["inclusive"] is not True
+            or row["cap"] not in ("phase", "eligibility", "unavailable")
+            or row["overflow"] and row["available"] or type(row["phases"]) is not list
+            or len(row["phases"]) != len(BUDGET_PHASES)):
+        return False
+    for value, phase in zip(row["phases"], BUDGET_PHASES):
+        if (type(value) is not dict or set(value) != {"phase", "calls", "available", "elapsed_seconds"}
+                or value["phase"] != phase or type(value["calls"]) is not int or not 0 <= value["calls"] <= BUDGET_CALLS
+                or type(value["available"]) is not bool or value["available"] != (row["available"] and value["calls"] > 0)):
+            return False
+        seconds = value["elapsed_seconds"]
+        if not value["available"]:
+            if seconds is not None:
+                return False
+        elif (type(seconds) not in (int, float) or not 0 <= seconds <= 180 or not math.isfinite(seconds)
+                or round(seconds, 6) != seconds):
+            return False
+    if row["available"] and row["phases"][0]["calls"] != 1:
+        return False
+    return True
+
+
+def last_budget_rows(path: Path) -> list[dict]:
+    with path.open("rb") as stream:
+        size = stream.seek(0, 2)
+        offset = max(0, size - TAIL_BYTES)
+        stream.seek(offset)
+        tail = stream.read(TAIL_BYTES)
+    if offset:
+        tail = tail.partition(b"\n")[2]
+    rows: deque[dict] = deque(maxlen=MAX_ROWS)
+    for line in tail.splitlines():
+        if len(line) > MAX_ROW_BYTES:
+            continue
+        try:
+            row = json.loads(line, object_pairs_hook=_unique)
+            if valid_budget_row(row):
+                rows.append(row)
+        except (ValueError, TypeError, OverflowError, RecursionError, UnicodeError):
+            continue
+    return list(rows)
+
+
+def append_budget_failure_section(item: Any, report: Any) -> None:
+    if not report.failed or item.path.name != "test_postgres_temperature_delivery.py":
+        return
+    try:
+        trace = Path(item.funcargs["compact_case"]["config"]["trace"])
+        if trace.is_symlink() or trace.parent.resolve() != item.funcargs["tmp_path"].resolve():
+            return
+        rows = last_budget_rows(trace)
+        text = _encoded(rows).decode("utf-8") if rows else "Delivery budget timing unavailable."
+    except (KeyError, TypeError, ValueError, OSError, AttributeError):
+        text = "Delivery budget timing unavailable."
+    report.sections.append((BUDGET_SECTION, text))

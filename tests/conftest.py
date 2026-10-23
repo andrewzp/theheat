@@ -188,6 +188,13 @@ def _t4_fixture_receipt_observer(request):
         yield capture
 
 
+@pytest.hookimpl(hookwrapper=True, specname="pytest_runtest_makereport")
+def pytest_delivery_budget_report(item, call):
+    outcome = yield
+    from tests.t4_delivery_diagnostics import append_budget_failure_section
+    append_budget_failure_section(item, outcome.get_result())
+
+
 def pytest_itemcollected(item):
     """Reject payload-sized display IDs before CI logs or subprocess environments.
 

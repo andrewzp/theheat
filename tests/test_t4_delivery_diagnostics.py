@@ -670,3 +670,288 @@ def test_both_original_cleanup_communicates_forward_and_cannot_overwrite_first_t
     assert child.calls == [((), {"input": PRIVATE, "timeout": 13}), ((), {"input": PRIVATE, "timeout": 0.5}),
                            ((), {"timeout": 0.01})]
     assert "communicate" not in vars(child) and adapter.subprocess is reference
+
+
+class InventedBudgetTimer:
+    def __init__(self, values=None):
+        self.values = iter(values) if values is not None else None
+        self.calls = 0
+
+    def __call__(self):
+        self.calls += 1
+        value = next(self.values) if self.values is not None else 1000000000.0 + self.calls
+        if isinstance(value, BaseException):
+            raise value
+        return value
+
+
+def budget_modules(execute):
+    def unchanged(*args, **kwargs):
+        return None
+    return (SimpleNamespace(prepare_context=unchanged, context=unchanged, attempt_successor=unchanged),
+        SimpleNamespace(execute=execute, bounded_http=unchanged))
+
+
+def budget_rows(capture):
+    rows: list[dict] = []
+    capture.emit(rows.append)
+    assert rows and all(diagnostic.valid_budget_row(row) for row in rows)
+    assert len(rows) <= 8 and all(len(diagnostic._encoded(row)) <= diagnostic.MAX_ROW_BYTES for row in rows)
+    assert PRIVATE not in json.dumps(rows) and "1000000000" not in json.dumps(rows)
+    return rows
+
+
+def test_budget_nested_inclusive_calls_original_identity_callback_objects_and_restoration():
+    token, named, callback_result, final, boundary_result = object(), object(), object(), object(), SimpleNamespace(deadline=20.0)
+    timer, events = InventedBudgetTimer(), []
+    def context(*args, **kwargs):
+        events.append(("context", args, kwargs))
+        return callback_result
+    def prepare(*args, **kwargs):
+        return domain.context(*args, **kwargs)
+    def begin(*args, **kwargs):
+        assert domain.context(*args, **kwargs) is callback_result
+        assert domain.attempt_successor(*args, **kwargs) is callback_result
+        return callback_result
+    def check(*args, **kwargs):
+        return domain.context(*args, **kwargs)
+    def successor(*args, **kwargs):
+        events.append(("successor", args, kwargs))
+        return callback_result
+    def http(*args, **kwargs):
+        events.append(("http", args, kwargs))
+        return callback_result
+    prepared = {"eligibility_deadline": 30.0, "private": PRIVATE}
+    def constructor(*args, **kwargs):
+        assert args == (token, "x", "upload", prepared) and kwargs == {}
+        return boundary_result
+    def execute(*args, **kwargs):
+        assert args == (token,) and kwargs["private"] is named
+        assert domain.prepare_context(token, private=named) is callback_result
+        assert adapter._Boundary(token, "x", "upload", prepared) is boundary_result
+        assert kwargs["begin"](token, private=named) is callback_result
+        assert kwargs["check"](token, private=named) is callback_result
+        assert adapter.bounded_http(token, private=named) is callback_result
+        return final
+    domain, adapter = budget_modules(execute)
+    domain.prepare_context, domain.context, domain.attempt_successor = prepare, context, successor
+    adapter.bounded_http, adapter._Boundary = http, constructor
+    with no_new_operations(), diagnostic.observe_budget_timing(domain, adapter, timer=timer) as capture:
+        assert timer.calls == 0
+        assert adapter.execute(token, private=named, begin=begin, check=check) is final
+        before = timer.calls
+        assert domain.context(token, private=named) is callback_result
+        assert timer.calls == before  # Unrelated setup outside execute is untimed.
+    assert adapter.execute is execute and adapter.bounded_http is http and adapter._Boundary is constructor
+    assert domain.prepare_context is prepare and domain.context is context and domain.attempt_successor is successor
+    assert all(args == (token,) and kwargs == {"private": named} for _, args, kwargs in events)
+    row = budget_rows(capture)[0]
+    assert row["available"] and row["inclusive"] and row["cap"] == "phase" and not row["overflow"]
+    phases = {value["phase"]: value for value in row["phases"]}
+    assert [(phases[name]["calls"], phases[name]["elapsed_seconds"]) for name in diagnostic.BUDGET_PHASES] == [
+        (1, 17.0), (1, 5.0), (1, 3.0), (1, 3.0), (3, 3.0), (1, 1.0), (1, 1.0)]
+    assert timer.calls == 18
+
+
+@pytest.mark.parametrize("failure", [InventedCommandError(PRIVATE), KeyboardInterrupt(), SystemExit(71)],
+    ids=["private-error", "keyboard", "exit"])
+def test_budget_nested_original_baseexception_and_timer_failure_do_not_change_behavior(failure):
+    timer = InventedBudgetTimer([KeyboardInterrupt()] * 8)
+    def context(*args, **kwargs):
+        raise failure
+    def prepare(*args, **kwargs):
+        return domain.context(*args, **kwargs)
+    def execute(**kwargs):
+        return domain.prepare_context(PRIVATE)
+    domain, adapter = budget_modules(execute)
+    domain.prepare_context, domain.context = prepare, context
+    with pytest.raises(type(failure)) as caught:
+        with no_new_operations(), diagnostic.observe_budget_timing(domain, adapter, timer=timer) as capture:
+            adapter.execute(begin=lambda: None, check=lambda: None)
+    assert caught.value is failure and adapter.execute is execute
+    assert domain.prepare_context is prepare and domain.context is context
+    row = budget_rows(capture)[0]
+    assert not row["available"] and all(value["elapsed_seconds"] is None for value in row["phases"])
+    assert timer.calls == 6
+
+
+@pytest.mark.parametrize("values", [[0, float("nan")], [True, 1], [0, float("inf")], [PRIVATE, 2],
+    [2, 1], [0, 181], [-10**308, 10**308]], ids=["nan", "bool", "inf", "private", "backward", "huge", "integer-subtraction-overflow"])
+def test_budget_bad_timer_values_and_arithmetic_preserve_original_result_and_exception(values):
+    for failure in (None, InventedCommandError(PRIVATE)):
+        timer, sentinel = InventedBudgetTimer(values), object()
+        run = diagnostic._BudgetRun(timer)
+        def original():
+            if failure is not None:
+                raise failure
+            return sentinel
+        with no_new_operations():
+            if failure is None:
+                assert run.measure("execute", original) is sentinel
+            else:
+                with pytest.raises(InventedCommandError) as caught:
+                    run.measure("execute", original)
+                assert caught.value is failure
+        row = run.row()
+        assert diagnostic.valid_budget_row(row) and not row["available"]
+        assert row["phases"][0]["elapsed_seconds"] is None and timer.calls == 2
+
+
+@pytest.mark.parametrize("deadline,eligibility,expected", [(20.0, 30.0, "phase"), (30.0, 30.0, "eligibility"),
+    (31.0, 30.0, "unavailable"), (True, 30.0, "unavailable"), (float("nan"), 30.0, "unavailable")])
+def test_budget_constructor_returns_exact_original_object_without_timer_or_class_changes(deadline, eligibility, expected):
+    timer, result = InventedBudgetTimer(), SimpleNamespace(deadline=deadline)
+    run = diagnostic._BudgetRun(timer)
+    calls = []
+    prepared = {"eligibility_deadline": eligibility, "private": PRIVATE}
+    def original(*args, **kwargs):
+        calls.append((args, kwargs))
+        return result
+    with no_new_operations():
+        assert run.boundary(original, PRIVATE, "x", "upload", prepared) is result
+    assert calls == [((PRIVATE, "x", "upload", prepared), {})] and timer.calls == 0 and run.cap == expected
+    assert run.boundary(original, PRIVATE, "x", "upload", prepared) is result and run.cap == "unavailable"
+
+
+def test_budget_call_read_row_bounds_unmatched_nesting_and_rounding():
+    timer = InventedBudgetTimer([0.0] * 128)
+    run = diagnostic._BudgetRun(timer)
+    with no_new_operations():
+        for phase in diagnostic.BUDGET_PHASES:
+            for _ in range(9):
+                run.measure(phase, lambda: None)
+    assert timer.calls == 112 <= diagnostic.BUDGET_TIMER_READS and run.reads == 112
+    assert run.overflow and not run.row()["available"] and all(value["calls"] == 8 for value in run.row()["phases"])
+    run = diagnostic._BudgetRun(InventedBudgetTimer())
+    sentinel = object()
+    def unbalanced():
+        run.stack.clear()
+        return sentinel
+    assert run.measure("execute", unbalanced) is sentinel and not run.row()["available"]
+    run = diagnostic._BudgetRun(InventedBudgetTimer([0.0, 0.123456789]))
+    assert run.measure("execute", lambda: sentinel) is sentinel
+    assert run.row()["phases"][0]["elapsed_seconds"] == 0.123457
+    domain, adapter = budget_modules(lambda **kwargs: sentinel)
+    with no_new_operations(), diagnostic.observe_budget_timing(domain, adapter, timer=InventedBudgetTimer()) as capture:
+        for _ in range(9):
+            assert adapter.execute(begin=lambda: None, check=lambda: None) is sentinel
+    rows = budget_rows(capture)
+    assert len(rows) == 1 and rows[0]["overflow"] and not rows[0]["available"]
+
+
+def test_budget_setup_failure_missing_references_and_reentrant_execute_forward_once():
+    token, sentinel, calls = object(), object(), []
+    def original(*args, **kwargs):
+        calls.append((args, kwargs))
+        return sentinel
+    domain, adapter = budget_modules(original)
+    del domain.context
+    begin, check = object(), object()
+    with no_new_operations(), diagnostic.observe_budget_timing(domain, adapter, timer=InventedBudgetTimer()) as capture:
+        assert adapter.execute(token, begin=begin, check=check) is sentinel
+    assert calls == [((token,), {"begin": begin, "check": check})] and not budget_rows(capture)[0]["available"]
+    domain, adapter = budget_modules(original)
+    real_patch, patches = diagnostic.patch.object, []
+    def failed_patch(*args, **kwargs):
+        patches.append(1)
+        if len(patches) == 2:
+            raise RuntimeError(PRIVATE)
+        return real_patch(*args, **kwargs)
+    capture = diagnostic.BudgetTimingDiagnostic(InventedBudgetTimer())
+    original_prepare = domain.prepare_context
+    calls.clear()
+    with no_new_operations(), patch.object(diagnostic.patch, "object", failed_patch):
+        assert capture.execute(domain, adapter, original, token, begin=begin, check=check) is sentinel
+    assert domain.prepare_context is original_prepare and calls == [((token,), {"begin": begin, "check": check})]
+    assert not budget_rows(capture)[0]["available"]
+    depth = []
+    def nested(**kwargs):
+        depth.append(1)
+        return adapter.execute(**kwargs) if len(depth) == 1 else sentinel
+    domain, adapter = budget_modules(nested)
+    with no_new_operations(), diagnostic.observe_budget_timing(domain, adapter, timer=InventedBudgetTimer()) as capture:
+        assert adapter.execute(begin=lambda: None, check=lambda: None) is sentinel
+    assert depth == [1, 1] and not budget_rows(capture)[0]["available"]
+
+
+def test_budget_closed_schema_tail_privacy_and_all_original_sections_unchanged(tmp_path):
+    from tests import conftest as shared
+    run = diagnostic._BudgetRun(InventedBudgetTimer([0.0, 1.0]))
+    run.measure("execute", lambda: None)
+    row = run.row()
+    for changes in ({"private": PRIVATE}, {"cap": PRIVATE}, {"inclusive": 1}, {"overflow": True}):
+        assert not diagnostic.valid_budget_row({**row, **changes})
+    changed = deepcopy(row)
+    changed["phases"][0]["elapsed_seconds"] = float("nan")
+    assert not diagnostic.valid_budget_row(changed)
+    path = tmp_path / "trace.jsonl"
+    old = emitted(diagnostic.DeliveryDiagnostic(), {"outcome": "unknown"})
+    window = dict(kind="check_window", now="2026-10-23T12:00:00Z", lease_expires_at="2026-10-23T12:03:00Z",
+        useful_until="2026-10-23T13:00:00Z", lease_remaining_seconds=180, available=True, operation="critic", fault="")
+    path.write_text(json.dumps(window) + "\n" + json.dumps(old) + "\n" + json.dumps({**row, "private": PRIVATE}) + "\n"
+        + (diagnostic._encoded(row).replace(b'"kind":', b'"kind":"duplicate","kind":')).decode() + "\n"
+        + (json.dumps(row) + "\n") * 9)
+    assert diagnostic.last_budget_rows(path) == [row] * 8
+    fixture_capture = diagnostic.FixtureReceiptDiagnostic()
+    fixture_capture.retain(invented_fixture_objects())
+    item = SimpleNamespace(path=Path("test_postgres_temperature_delivery.py"), funcargs={"tmp_path": tmp_path,
+        "compact_case": {"config": {"trace": str(path)}}, "_t4_fixture_receipt_observer": fixture_capture})
+    report = SimpleNamespace(failed=True, sections=[])
+    manager = pytest.PytestPluginManager()
+    manager.register(SimpleNamespace(pytest_runtest_makereport=lambda item, call: report), "report")
+    for name in ("pytest_runtest_makereport", "pytest_delivery_refusal_report", "pytest_delivery_fixture_receipt_report", "pytest_delivery_budget_report"):
+        manager.register(SimpleNamespace(**{name: getattr(shared, name)}), name)
+    assert manager.hook.pytest_runtest_makereport(item=item, call=None) is report
+    sections = dict(report.sections)
+    assert sections["Last check windows (up to 8 rows / 64 KiB tail)"] == json.dumps([
+        {key: value for key, value in window.items() if key != "kind"}], sort_keys=True, allow_nan=False)
+    assert json.loads(sections[diagnostic.SECTION]) == [old]
+    assert json.loads(sections[diagnostic.FIXTURE_SECTION]) == fixture_capture.output()
+    assert json.loads(sections[diagnostic.BUDGET_SECTION]) == [row] * 8 and PRIVATE not in json.dumps(sections)
+    report.sections.clear()
+    report.failed = False
+    diagnostic.append_budget_failure_section(item, report)
+    report.failed, item.path = True, Path("unrelated.py")
+    diagnostic.append_budget_failure_section(item, report)
+    assert report.sections == []
+
+
+def test_budget_emit_failure_and_missing_rows_never_change_operation_result():
+    capture = diagnostic.BudgetTimingDiagnostic(InventedBudgetTimer())
+    assert not budget_rows(capture)[0]["available"]
+    def refused(row):
+        raise KeyboardInterrupt()
+    capture.emit(refused)
+
+
+def test_budget_timer_read_cap_unsupported_objects_and_constructor_failures_are_passive(monkeypatch):
+    timer, sentinel = InventedBudgetTimer(), object()
+    monkeypatch.setattr(diagnostic, "BUDGET_TIMER_READS", 1)
+    run = diagnostic._BudgetRun(timer)
+    with no_new_operations():
+        assert run.measure("execute", lambda: sentinel) is sentinel
+    assert timer.calls == run.reads == 1 and run.overflow and not run.row()["available"]
+    class UnknownAdapter(SimpleNamespace):
+        pass
+    calls = []
+    def original(*args, **kwargs):
+        calls.append((args, kwargs))
+        return sentinel
+    adapter = UnknownAdapter(execute=original)
+    with no_new_operations(), diagnostic.observe_budget_timing(object(), adapter, timer=timer) as capture:
+        assert adapter.execute(PRIVATE) is sentinel
+    assert calls == [((PRIVATE,), {})] and adapter.execute is original and timer.calls == 1
+    assert not budget_rows(capture)[0]["available"]
+    failure = InventedCommandError(PRIVATE)
+    def constructor(*args, **kwargs):
+        raise failure
+    with pytest.raises(InventedCommandError) as caught:
+        run.boundary(constructor, None, None, None, {"eligibility_deadline": 10.0})
+    assert caught.value is failure and run.cap == "unavailable"
+    class UnreadableBoundary:
+        @property
+        def deadline(self):
+            raise KeyboardInterrupt()
+    boundary = UnreadableBoundary()
+    assert run.boundary(lambda *args: boundary, None, None, None, {"eligibility_deadline": 10.0}) is boundary
+    assert run.cap == "unavailable" and timer.calls == 1
