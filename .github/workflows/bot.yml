@@ -176,6 +176,13 @@ jobs:
           src/editorial/policy.py
           src/two_bot/ghcn_claim_view.py
 
+      - name: Type-check passive media inspection regressions
+        if: matrix.partition == 'core'
+        run: >-
+          mypy
+          tests/test_parked_media_inspection.py
+          tests/test_postgres_parked_media_inspection.py
+
       - name: Verify advisory source inventory
         if: matrix.partition == 'core'
         run: python scripts/gen_source_registry.py --check

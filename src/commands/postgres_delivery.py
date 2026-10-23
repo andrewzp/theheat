@@ -144,6 +144,14 @@ def description_preflight(authority, c, draft, package):
     record = retained["review"].get("platform_description")
     refuse(type(record) is dict and record["description_sha256"] == binding.get("platform_description_sha256"),
            "platform_description_changed")
+    return _description_preflight(authority, draft, package, record)
+
+
+def _description_preflight(authority, draft, package, record):
+    # Private continuation: public/active callers still reconstruct the retained pair.
+    binding = draft.get("media_review_binding", {})
+    refuse(binding.get("schema_version") == 2 and type(record) is dict
+           and record["description_sha256"] == binding.get("platform_description_sha256"), "platform_description_changed")
     try:
         descriptions.preflight(record, raw_alt=package["assets"]["alt.txt"], png=package["assets"]["preview.png"],
             expected_profiles=description_profiles(authority), graphic_spec=package["capture"]["inputs"]["graphic_spec"])
@@ -464,6 +472,10 @@ class _OwnEnrollmentTransition:
 
 
 def _context(authority, c, value, resolve_principal, now, resolve_claim):
+    return _qualified_context(authority, c, value, resolve_principal, now, resolve_claim)
+
+
+def _qualified_context(authority, c, value, resolve_principal, now, resolve_claim, *, _inspection=None):
     # Revoke authority before consulting source/scientific execution evidence.
     editor.resolve(resolve_principal, value["approval_binding"]["publisher_subject"], publisher=True)
     editor.resolve(resolve_principal, value["approval_binding"]["requesting_actor"])
@@ -478,13 +490,21 @@ def _context(authority, c, value, resolve_principal, now, resolve_claim):
     policy = current_editorial_policy()
     claim = resolve_claim(state, version)
     inputs = editor.inputs(authority, c, draft, policy, now, claim=claim)
-    refuse(editor.parked(authority, c, draft, state, version, inputs, policy, now, resolve_principal,
-                         claim=claim), "delivery_parked_approval_required")
-    package = editor.reviewed(authority, c, draft, inputs, policy, resolve_principal)
-    refuse(value.get("schema_version") == 2, "platform_description_required")
-    description = description_preflight(authority, c, draft, package)
-    refuse(description == value.get("platform_description"), "platform_description_changed")
-    refuse(package["receipt"] == value["package"] and p._sha(package["assets"]["preview.png"]) == value["png_sha256"]
+    owned = _inspection is not None and _inspection.matches(authority, c, value)
+    if owned:
+        package, record = _inspection.consume(authority, c, draft, state, version, inputs, policy, claim, value, resolve_principal)
+        refuse(value.get("schema_version") == 2, "platform_description_required")
+        description = _description_preflight(authority, draft, package, record.get("platform_description"))
+    else:
+        refuse(editor.parked(authority, c, draft, state, version, inputs, policy, now, resolve_principal,
+                             claim=claim), "delivery_parked_approval_required")
+        package = editor.reviewed(authority, c, draft, inputs, policy, resolve_principal)
+        refuse(value.get("schema_version") == 2, "platform_description_required")
+        description = description_preflight(authority, c, draft, package)
+    refuse((p._canonical(description) == p._canonical(value.get("platform_description")) if owned
+            else description == value.get("platform_description")), "platform_description_changed")
+    refuse((p._canonical(package["receipt"]) == p._canonical(value["package"]) if owned else package["receipt"] == value["package"])
+           and p._sha(package["assets"]["preview.png"]) == value["png_sha256"]
            and p._sha(package["assets"]["alt.txt"]) == value["alt_sha256"], "delivery_media_changed")
     check_id = value["approval_binding"]["completion"]["check_set_id"]
     from src.commands import postgres_stage_revision_checks as stages
@@ -622,6 +642,10 @@ def finish(c, value, saved):
 
 
 def projection(authority, c, draft_id, resolve_principal, now, *, claim=None):
+    return _projection(authority, c, draft_id, resolve_principal, now, claim=claim)
+
+
+def _projection(authority, c, draft_id, resolve_principal, now, *, claim=None, _inspection=None):
     validate(c, authority.environment)
     rows = c.execute(f"SELECT intent_id FROM {SCHEMA}.intents WHERE draft_id=%s ORDER BY intent_id LIMIT 65", (draft_id,)).fetchall()
     refuse(len(rows) <= 64, "delivery_draft_capacity")
@@ -632,9 +656,15 @@ def projection(authority, c, draft_id, resolve_principal, now, *, claim=None):
         try:
             # Passive GET resolution grants no dispatch checkpoint and performs
             # no selection replay. Historical outcomes remain visible on outage.
-            _context(authority, c, value, resolve_principal, now, lambda state, version: claim)
+            if _inspection is None:
+                _context(authority, c, value, resolve_principal, now, lambda state, version: claim)
+            else:
+                _qualified_context(authority, c, value, resolve_principal, now,
+                    lambda state, version: claim, _inspection=_inspection)
         except CommandError as exc:
             current, reason = False, exc.code
+            if _inspection is not None:
+                _inspection.refused(authority, c, value, exc.code)
         result.append(dict(intent_id=identity, current=current, reason=reason, stages={
             platform:{stage:outcome(c, attempt(c, value, platform, stage)) for stage in stages}
             for platform,stages in STAGES.items()}))

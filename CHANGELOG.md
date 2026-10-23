@@ -1,5 +1,8 @@
 ## 0.9.109.37
 
+- Verify retained graphic review and completion evidence once within an owned
+  passive dashboard read. Recheck current source, roles and original expiry
+  before returning; keep independent command and delivery verification.
 - Add an owner-installed check protocol for new saved revisions with one
   immutable lease per stage and an exact chain of timely passing evidence.
   Preserve legacy enrollments and original request, spending and no-resend rules.

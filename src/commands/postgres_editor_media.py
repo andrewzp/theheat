@@ -7,6 +7,10 @@ from __future__ import annotations
 
 from copy import deepcopy
 from datetime import timedelta
+import math
+import threading
+from time import monotonic as _passive_monotonic
+from typing import Any
 from pathlib import Path
 import os
 import stat
@@ -21,6 +25,7 @@ from src.commands.postgres_candidate_admission import refuse
 from src.commands.reducer import Reduction, _identity, _target_drafts
 from src.commands.schema import CommandError, Principal, authorize, utc_datetime, utc_text
 from src.editorial.revisions import draft_identity, fingerprint, revoke_approval
+from src.editorial.policy import current_editorial_policy
 from src.media.attachment import build_media_attachment_proposal, build_media_removal_proposal
 from src.media.joint_review import joint_media_review_status
 from src.media.review_packet import build_media_review_packet
@@ -30,6 +35,226 @@ from src.two_bot.candidate_derivation import has_ghcn_reference
 
 PREPARATION = "editor-media-preparation-v1"
 SCOPE = "local_joint_media"
+
+_PASSIVE_TOKEN = object()
+
+
+def _open_passive_inspection(authority, now):
+    return _PassiveInspection(_PASSIVE_TOKEN, authority, now)
+
+
+class _PassiveInspection:
+    """One lexical passive GET, never command, dispatch or readiness authority."""
+
+    def __init__(self, token, authority, now):
+        refuse(token is _PASSIVE_TOKEN, "passive_inspection_required")
+        self._identity = id(self)
+        self._environment = authority.environment
+        self._authority = authority
+        self._thread = threading.get_ident()
+        self._closed = False
+        self._used = False
+        self._snapshot_ready = False
+        self._capture_started = False
+        self._projected = self._delivered = False
+        self._start = utc_datetime(utc_text(now))
+        self._anchor = _passive_monotonic()
+        self._elapsed = 0.0
+        self._c: Any = None
+        self._pair: Any = None
+        self._context: bytes | None = None
+        self._proof: Any = None
+        self._failure: str | None = None
+        self._intent_bytes: bytes | None = None
+
+    def _check(self, authority, c):
+        refuse(self._identity == id(self) and not self._closed and authority is self._authority
+               and authority.environment == self._environment
+               and threading.get_ident() == self._thread and c is self._c,
+               "passive_inspection_context_changed")
+
+    def now(self):
+        self._check(self._authority, self._c)
+        elapsed = _passive_monotonic() - self._anchor
+        refuse(math.isfinite(elapsed) and elapsed >= self._elapsed and elapsed >= 0,
+               "invalid_time")
+        self._elapsed = elapsed
+        return self._start + timedelta(seconds=elapsed)
+
+    def bind(self, c, state, version, policy, claim):
+        self._check(self._authority, None)
+        refuse(self._c is None and c is not None and type(version) is int, "passive_inspection_context_changed")
+        self._c, self._state, self._version = c, state, version
+        self._policy, self._claim = policy, claim
+        self._state_bytes = p._canonical(state)
+        self._policy_bytes = p._canonical(policy)
+
+    def project(self, draft_id, resolve_principal):
+        self._check(self._authority, self._c)
+        refuse(not self._projected, "passive_inspection_context_changed")
+        self._projected = True
+        return _projection(self._authority, self._c, draft_id, state=self._state, version=self._version,
+            policy=self._policy, now=self._start, resolve_principal=resolve_principal,
+            claim=self._claim, _inspection=self)
+
+    def delivery(self, draft_id, resolve_principal):
+        from src.commands import postgres_delivery as delivery
+        self._check(self._authority, self._c)
+        refuse(not self._delivered, "passive_inspection_context_changed")
+        self._delivered = True
+        if not self._snapshot_ready:
+            return delivery.projection(self._authority, self._c, draft_id, resolve_principal,
+                self._start, claim=self._claim)
+        return delivery._projection(self._authority, self._c, draft_id, resolve_principal,
+            self._start, claim=self._claim, _inspection=self)
+
+    def _binding(self, draft, value, policy):
+        return p._canonical(dict(draft=draft, inputs=value, policy=policy))
+
+    def start_inputs(self):
+        self._check(self._authority, self._c)
+        if self._capture_started:
+            return self._snapshot_ready
+        self._capture_started = True
+        from src.commands import postgres_delivery as delivery
+        # This extra capture must never become an earlier outward validation gate.
+        # On failure, let the original full paths determine their own order/fields.
+        try:
+            source_loader = getattr(self._authority, "generation_configuration", None)
+            delivery_loader = getattr(self._authority, "delivery_configuration", None)
+            source_config = p._canonical(generation.configuration(self._authority))
+            delivery_config = p._canonical(delivery.configuration(self._authority)) if hasattr(self._authority, "delivery_configuration") else None
+            native_config = p._canonical(getattr(self._authority, "editor_media_configuration", None))
+        except Exception:
+            self._snapshot_ready = False
+            return False
+        self._source_loader, self._delivery_loader = source_loader, delivery_loader
+        self._source_config, self._delivery_config = source_config, delivery_config
+        self._native_config = native_config
+        self._snapshot_ready = True
+        return True
+
+    def review(self, authority, c, draft, value, policy, resolve_principal):
+        self._check(authority, c)
+        binding = self._binding(draft, value, policy)
+        refuse(self._snapshot_ready and self._pair is None and self._context is None,
+               "passive_inspection_context_changed")
+        package, record = _reviewed(authority, c, draft, value, policy, resolve_principal)
+        refuse(binding == self._binding(draft, value, policy), "passive_inspection_context_changed")
+        self._pair = deepcopy((package, record))
+        self._context = binding
+        self._draft, self._inputs = deepcopy(draft), deepcopy(value)
+        return package, record
+
+    def parked_review(self, authority, c, draft, value, policy):
+        self._check(authority, c)
+        refuse(self._pair is not None and self._context == self._binding(draft, value, policy),
+               "passive_inspection_context_changed")
+        return self._pair[0]
+
+    def verified(self, packet, deadline, *, day_bound=True):
+        self._check(self._authority, self._c)
+        refuse(self._pair is not None and self._proof is None, "passive_inspection_context_changed")
+        self._proof = deepcopy(packet), deadline, day_bound
+
+    def matches(self, authority, c, value):
+        self._check(authority, c)
+        return (self._snapshot_ready and self._proof is not None and value["draft_id"] == self._draft["id"]
+            and p._canonical(value["approval_binding"]) == p._canonical(self._draft.get("approval_binding"))
+            and value["intent_id"] == self._draft.get("publish_intent_id"))
+
+    def consume(self, authority, c, draft, state, version, value, policy, claim, intent, resolve_principal):
+        self._check(authority, c)
+        refuse(not self._used and self.matches(authority, c, intent), "passive_inspection_context_changed")
+        self._used = True
+        refuse(type(version) is int and version == self._version and p._canonical(state) == self._state_bytes
+               and claim is self._claim, "passive_inspection_context_changed")
+        package, record = self._pair
+        _package_current(authority, c, draft, draft["media_review_binding"]["proposal_sha256"], value, package)
+        refuse(p._canonical(policy) == self._policy_bytes, "joint_media_review_obsolete")
+        refuse(self._context == self._binding(draft, value, policy), "media_source_or_renderer_changed")
+        resolve(resolve_principal, record["reviewer"]["subject"])
+        self._intent_bytes = p._canonical(intent)
+        return deepcopy(package), deepcopy(record)
+
+    def refused(self, authority, c, intent, code):
+        if self.matches(authority, c, intent):
+            self._failure = code
+
+    def finish(self, view, resolve_principal):
+        self._check(self._authority, self._c)
+        if not self._snapshot_ready or self._proof is None:
+            return
+        try:
+            _, record = self._pair
+            refuse(p._canonical(generation.configuration(self._authority)) == self._source_config,
+                   "media_source_not_allowlisted")
+            from src.commands import postgres_delivery as delivery
+            config = p._canonical(delivery.configuration(self._authority)) if hasattr(self._authority, "delivery_configuration") else None
+            refuse(config == self._delivery_config, "delivery_configuration_changed")
+            binding = self._draft["approval_binding"]
+
+            def final_roles():
+                try:
+                    resolve(resolve_principal, record["reviewer"]["subject"])
+                except CommandError:
+                    view["review_current"] = False
+                    raise
+                resolve(resolve_principal, binding["publisher_subject"], publisher=True)
+                resolve(resolve_principal, binding["requesting_actor"])
+
+            final_roles()
+            # One bounded content reread catches same-loader/file changes in roles.
+            # Compare ORIGINAL snapshots; never stabilize or accept a new baseline.
+            refuse(p._canonical(generation.configuration(self._authority)) == self._source_config,
+                   "media_source_not_allowlisted")
+            config = p._canonical(delivery.configuration(self._authority)) if hasattr(self._authority, "delivery_configuration") else None
+            refuse(config == self._delivery_config, "delivery_configuration_changed")
+            final_roles()  # Configuration callbacks may themselves revoke a role.
+            if self._failure is not None:
+                raise CommandError(self._failure, "The parked projection is no longer current")
+            # Cheap bindings follow role callbacks; no claim of external-state atomicity.
+            refuse(getattr(self._authority, "generation_configuration", None) is self._source_loader,
+                   "media_source_not_allowlisted")
+            refuse(getattr(self._authority, "delivery_configuration", None) is self._delivery_loader,
+                   "delivery_configuration_changed")
+            if self._intent_bytes is not None:
+                refuse(p._canonical(delivery.read(self._c, self._draft["publish_intent_id"])) == self._intent_bytes,
+                       "delivery_approval_changed")
+            version, state = self._authority._state(self._c, lock=True)
+            refuse(type(version) is int and version == self._version and p._canonical(state) == self._state_bytes,
+                   "parked_media_state_changed")
+            refuse(p._canonical(current_editorial_policy()) == self._policy_bytes,
+                   "editorial_policy_changed")
+            refuse(p._canonical(getattr(self._authority, "editor_media_configuration", None)) == self._native_config,
+                   "native_renderer_changed")
+            packet, deadline, day_bound = self._proof
+            now = self.now()  # Includes claim reconstruction, proofs, second inputs and description work.
+            refuse(utc_text(now) < deadline, "parked_media_lease_expired")
+            refuse(utc_text(now) < packet["useful_until"] and (not day_bound or utc_text(now)[:10] == packet["check_date"]),
+                   "parked_media_obsolete")
+            source = self._inputs["source"]
+            refuse(now < min(utc_datetime(source["source_useful_until"]), utc_datetime(source["provenance_useful_until"])),
+                   "media_source_expired")
+            if self._inputs["spec"].get("schema_version") == 6:
+                refuse(now < utc_datetime(self._inputs["spec"]["evidence"]["useful_until"]), "media_source_expired")
+        except CommandError as exc:
+            view.update(parked=False, parked_status=exc.code, checks_status=exc.code)
+            for item in view.get("delivery", {}).get("intents", []):
+                if item["intent_id"] == self._draft.get("publish_intent_id"):
+                    item.update(current=False, reason=exc.code)
+
+    def __copy__(self):
+        raise CommandError("passive_inspection_context_changed", "An inspection cannot be copied")
+
+    def __deepcopy__(self, memo):
+        raise CommandError("passive_inspection_context_changed", "An inspection cannot be copied")
+
+    def close(self):
+        self._closed = True
+        self._snapshot_ready = False
+        self._pair = self._context = self._proof = self._intent_bytes = None
+        self._c = None
 
 
 def configure(authority, *, rasterizer, scratch, dependency_manifest):
@@ -442,6 +667,10 @@ def runner_context(authority, c, command_id, resolve_principal, state, version, 
 
 
 def parked(authority, c, draft, state, version, value, policy, now, resolve_principal, *, claim=None):
+    return _parked(authority, c, draft, state, version, value, policy, now, resolve_principal, claim=claim)
+
+
+def _parked(authority, c, draft, state, version, value, policy, now, resolve_principal, *, claim=None, _inspection=None):
     binding = draft.get("approval_binding")
     if not isinstance(binding, dict) or binding.get("scope") != SCOPE:
         return False
@@ -458,7 +687,10 @@ def parked(authority, c, draft, state, version, value, policy, now, resolve_prin
     refuse(p._canonical(retained) == p._canonical(state), "parked_media_state_changed")
     resolve(resolve_principal, command.actor_subject, publisher=True)
     resolve(resolve_principal, binding["requesting_actor"])
-    reviewed(authority, c, draft, value, policy, resolve_principal)
+    if _inspection is None:
+        reviewed(authority, c, draft, value, policy, resolve_principal)
+    else:
+        _inspection.parked_review(authority, c, draft, value, policy)
     packet, _ = checks._packet(c, binding["completion"]["check_set_id"], authority.environment)
     refuse(packet["state_version"] == binding["consumed_state_version"]
            and packet["state_sha256"] == binding["consumed_state_sha256"]
@@ -473,6 +705,8 @@ def parked(authority, c, draft, state, version, value, policy, now, resolve_prin
         refuse(utc_text(now) < stages.final_deadline(c, binding["completion"]["check_set_id"], packet), "parked_media_lease_expired")
         proof = stages.completion(c, binding["completion"]["check_set_id"], packet, now, authority.environment, resolved=claim)
         refuse(p._canonical(proof) == p._canonical(binding["completion"]), "parked_media_proof_changed")
+        if _inspection is not None:
+            _inspection.verified(packet, stages.final_deadline(c, binding["completion"]["check_set_id"], packet))
         return True
     lease = c.execute("SELECT fence,owner,expires_at FROM theheat_checks.draft_leases WHERE check_set_id=%s ORDER BY fence DESC LIMIT 1",
                       (binding["completion"]["check_set_id"],)).fetchone()
@@ -483,6 +717,8 @@ def parked(authority, c, draft, state, version, value, policy, now, resolve_prin
     proof = dict(schema_version=1, origin_kind=packet["origin_kind"], enrollment_id=packet["enrollment_id"],
                  check_set_id=binding["completion"]["check_set_id"], packet_sha256=p._sha(p._canonical(packet)), stages=proofs)
     refuse(p._canonical({**proof, "completion_sha256":fingerprint(proof)}) == p._canonical(binding["completion"]), "parked_media_proof_changed")
+    if _inspection is not None:
+        _inspection.verified(packet, lease[2], day_bound=False)
     return True
 
 
@@ -511,6 +747,12 @@ def retained_package(authority, c, draft_id, png_proposal, *, original=False):
 
 def projection(authority, c, draft_id, *, state, version, policy, now, resolve_principal, png_proposal=None, original=False,
                claim=None):
+    return _projection(authority, c, draft_id, state=state, version=version, policy=policy, now=now,
+        resolve_principal=resolve_principal, png_proposal=png_proposal, original=original, claim=claim)
+
+
+def _projection(authority, c, draft_id, *, state, version, policy, now, resolve_principal, png_proposal=None, original=False,
+                claim=None, _inspection=None):
     matches = [d for d in state["drafts"] if isinstance(d, dict) and d.get("id") == draft_id]
     refuse(len(matches) == 1, "draft_not_found")
     draft = matches[0]
@@ -540,6 +782,8 @@ def projection(authority, c, draft_id, *, state, version, policy, now, resolve_p
         if len(refs) == 64:
             break
     try:
+        if _inspection is not None and not _inspection.start_inputs():
+            _inspection = None
         value = inputs(authority, c, draft, policy, now, claim=claim)
         if value["spec"]["template"] == "published_nws_radar":
             evidence = value["spec"]["evidence"]
@@ -580,7 +824,8 @@ def projection(authority, c, draft_id, *, state, version, policy, now, resolve_p
                 continue
         if "media_attachment" in draft:
             try:
-                reviewed_package, reviewed_record = _reviewed(authority, c, draft, value, policy, resolve_principal)
+                reviewed_package, reviewed_record = (_reviewed(authority, c, draft, value, policy, resolve_principal)
+                    if _inspection is None else _inspection.review(authority, c, draft, value, policy, resolve_principal))
                 view["review_current"] = True
                 view["expected_review_sha256"] = draft["media_review_binding"]["review_sha256"]
                 if draft["media_review_binding"].get("schema_version") == 2:
@@ -588,8 +833,9 @@ def projection(authority, c, draft_id, *, state, version, policy, now, resolve_p
                     view["platform_description"].update(record=retained_description,
                         wire_text=retained_description.get("wire_text", reviewed_package["assets"]["alt.txt"].decode("utf-8")))
                 try:
-                    view["parked"] = parked(authority, c, draft, state, version, value, policy, now, resolve_principal,
-                                            claim=claim)
+                    view["parked"] = (parked(authority, c, draft, state, version, value, policy, now, resolve_principal, claim=claim)
+                        if _inspection is None else _parked(authority, c, draft, state, version, value, policy, now,
+                            resolve_principal, claim=claim, _inspection=_inspection))
                     if view["parked"]:
                         view["checks_status"] = "passed"
                         return view

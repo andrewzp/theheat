@@ -1101,18 +1101,26 @@ class PostgresCommandAuthority:
         from src.commands import postgres_editor_media as domain
         # Historical bytes need no current source; a compact claim is rebuilt
         # before the locked read, never inside it.
-        claim = domain.view_claim(self, draft_id) if png_proposal is None else None
-        with self.projections._connection() as c:
-            self._validate(c)
-            version, state = self._state(c, lock=True)
-            value = domain.projection(self, c, draft_id, state=state, version=version,
-                policy=current_editorial_policy(), now=_clock(now), resolve_principal=resolve_principal, png_proposal=png_proposal, original=original,
-                claim=claim)
-            if png_proposal is None:
+        inspection = domain._open_passive_inspection(self, _clock(now)) if png_proposal is None else None
+        try:
+            claim = domain.view_claim(self, draft_id) if inspection is not None else None
+            with self.projections._connection() as c:
+                self._validate(c)
+                version, state = self._state(c, lock=True)
+                if inspection is None:
+                    return domain.projection(self, c, draft_id, state=state, version=version,
+                        policy=current_editorial_policy(), now=_clock(now), resolve_principal=resolve_principal,
+                        png_proposal=png_proposal, original=original, claim=claim)
+                inspection.bind(c, state, version, current_editorial_policy(), claim)
+                value = inspection.project(draft_id, resolve_principal)
                 from src.commands import postgres_delivery as delivery
                 if delivery.upgraded(c):
-                    value["delivery"] = delivery.projection(self, c, draft_id, resolve_principal, _clock(now), claim=claim)
-            return value
+                    value["delivery"] = inspection.delivery(draft_id, resolve_principal)
+                inspection.finish(value, resolve_principal)
+                return value
+        finally:
+            if inspection is not None:
+                inspection.close()
 
     def execute_revision_check_once(self, command_id, resolve_principal, *, clock, reservation=None, enabled=False, transport_options=None):
         from src.commands import postgres_editor_media as domain, postgres_revision_checks as revisions
