@@ -1,0 +1,292 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Invented public-safe P17-G2 GDACS intake fixture; not source data. -->
+<rss xmlns:gdacs="http://www.gdacs.org" xmlns:georss="http://www.georss.org/georss">
+  <channel>
+    <pubDate>2026-09-30T12:00:00Z</pubDate>
+    <item>
+      <title>Invented intake-redred alert</title>
+      <description>Synthetic timing fixture.</description>
+      <pubDate>2026-09-30T12:00:00Z</pubDate>
+      <gdacs:eventtype>FL</gdacs:eventtype>
+      <gdacs:alertlevel>Red</gdacs:alertlevel>
+      <gdacs:iscurrent>true</gdacs:iscurrent>
+      <gdacs:episodealertlevel>Red</gdacs:episodealertlevel>
+      <gdacs:episodeid>ep-A1</gdacs:episodeid>
+      <gdacs:eventid>intake-redred</gdacs:eventid>
+      <gdacs:country>India</gdacs:country>
+      <gdacs:fromdate>2026-09-01T00:00:00Z</gdacs:fromdate>
+      <gdacs:todate>2026-10-02T00:00:00Z</gdacs:todate>
+      <georss:point>20 77</georss:point>
+    </item>
+    <item>
+      <title>Invented intake-redred alert</title>
+      <description>Synthetic timing fixture.</description>
+      <pubDate>2026-09-30T12:00:00Z</pubDate>
+      <gdacs:eventtype>FL</gdacs:eventtype>
+      <gdacs:alertlevel>Red</gdacs:alertlevel>
+      <gdacs:iscurrent>true</gdacs:iscurrent>
+      <gdacs:episodealertlevel>Red</gdacs:episodealertlevel>
+      <gdacs:episodeid>ep-A2</gdacs:episodeid>
+      <gdacs:eventid>intake-redred</gdacs:eventid>
+      <gdacs:country>India</gdacs:country>
+      <gdacs:fromdate>2026-09-01T00:00:00Z</gdacs:fromdate>
+      <gdacs:todate>2026-10-02T00:00:00Z</gdacs:todate>
+      <georss:point>20 77</georss:point>
+    </item>
+    <item>
+      <title>Invented intake-redgreen alert</title>
+      <description>Synthetic timing fixture.</description>
+      <pubDate>2026-09-30T12:00:00Z</pubDate>
+      <gdacs:eventtype>FL</gdacs:eventtype>
+      <gdacs:alertlevel>Red</gdacs:alertlevel>
+      <gdacs:iscurrent>true</gdacs:iscurrent>
+      <gdacs:episodealertlevel>Red</gdacs:episodealertlevel>
+      <gdacs:episodeid>ep-B1</gdacs:episodeid>
+      <gdacs:eventid>intake-redgreen</gdacs:eventid>
+      <gdacs:country>India</gdacs:country>
+      <gdacs:fromdate>2026-09-01T00:00:00Z</gdacs:fromdate>
+      <gdacs:todate>2026-10-02T00:00:00Z</gdacs:todate>
+      <georss:point>20 77</georss:point>
+    </item>
+    <item>
+      <title>Invented intake-redgreen alert</title>
+      <description>Synthetic timing fixture.</description>
+      <pubDate>2026-09-30T12:00:00Z</pubDate>
+      <gdacs:eventtype>FL</gdacs:eventtype>
+      <gdacs:alertlevel>Red</gdacs:alertlevel>
+      <gdacs:iscurrent>true</gdacs:iscurrent>
+      <gdacs:episodealertlevel>Green</gdacs:episodealertlevel>
+      <gdacs:episodeid>ep-B2</gdacs:episodeid>
+      <gdacs:eventid>intake-redgreen</gdacs:eventid>
+      <gdacs:country>India</gdacs:country>
+      <gdacs:fromdate>2026-09-01T00:00:00Z</gdacs:fromdate>
+      <gdacs:todate>2026-10-02T00:00:00Z</gdacs:todate>
+      <georss:point>20 77</georss:point>
+    </item>
+    <item>
+      <title>Invented intake-duplicate alert</title>
+      <description>Synthetic timing fixture.</description>
+      <pubDate>2026-09-30T12:00:00Z</pubDate>
+      <gdacs:eventtype>FL</gdacs:eventtype>
+      <gdacs:alertlevel>Red</gdacs:alertlevel>
+      <gdacs:iscurrent>true</gdacs:iscurrent>
+      <gdacs:episodealertlevel>Red</gdacs:episodealertlevel>
+      <gdacs:episodeid>ep-C</gdacs:episodeid>
+      <gdacs:eventid>intake-duplicate</gdacs:eventid>
+      <gdacs:country>India</gdacs:country>
+      <gdacs:fromdate>2026-09-01T00:00:00Z</gdacs:fromdate>
+      <gdacs:todate>2026-10-02T00:00:00Z</gdacs:todate>
+      <georss:point>20 77</georss:point>
+    </item>
+    <item>
+      <title>Invented intake-duplicate alert</title>
+      <description>Synthetic timing fixture.</description>
+      <pubDate>2026-09-30T12:00:00Z</pubDate>
+      <gdacs:eventtype>FL</gdacs:eventtype>
+      <gdacs:alertlevel>Red</gdacs:alertlevel>
+      <gdacs:iscurrent>true</gdacs:iscurrent>
+      <gdacs:episodealertlevel>Red</gdacs:episodealertlevel>
+      <gdacs:episodeid>ep-C</gdacs:episodeid>
+      <gdacs:eventid>intake-duplicate</gdacs:eventid>
+      <gdacs:country>India</gdacs:country>
+      <gdacs:fromdate>2026-09-01T00:00:00Z</gdacs:fromdate>
+      <gdacs:todate>2026-10-02T00:00:00Z</gdacs:todate>
+      <georss:point>20 77</georss:point>
+    </item>
+    <item>
+      <title>Invented intake-conflict alert</title>
+      <description>Synthetic timing fixture.</description>
+      <pubDate>2026-09-30T12:00:00Z</pubDate>
+      <gdacs:eventtype>FL</gdacs:eventtype>
+      <gdacs:alertlevel>Red</gdacs:alertlevel>
+      <gdacs:iscurrent>true</gdacs:iscurrent>
+      <gdacs:episodealertlevel>Red</gdacs:episodealertlevel>
+      <gdacs:episodeid>ep-D</gdacs:episodeid>
+      <gdacs:eventid>intake-conflict</gdacs:eventid>
+      <gdacs:country>India</gdacs:country>
+      <gdacs:fromdate>2026-09-01T00:00:00Z</gdacs:fromdate>
+      <gdacs:todate>2026-10-02T00:00:00Z</gdacs:todate>
+      <georss:point>20 77</georss:point>
+    </item>
+    <item>
+      <title>Invented intake-conflict alert</title>
+      <description>Invented conflicting payload.</description>
+      <pubDate>2026-09-30T12:00:00Z</pubDate>
+      <gdacs:eventtype>FL</gdacs:eventtype>
+      <gdacs:alertlevel>Red</gdacs:alertlevel>
+      <gdacs:iscurrent>true</gdacs:iscurrent>
+      <gdacs:episodealertlevel>Red</gdacs:episodealertlevel>
+      <gdacs:episodeid>ep-D</gdacs:episodeid>
+      <gdacs:eventid>intake-conflict</gdacs:eventid>
+      <gdacs:country>India</gdacs:country>
+      <gdacs:fromdate>2026-09-01T00:00:00Z</gdacs:fromdate>
+      <gdacs:todate>2026-10-02T00:00:00Z</gdacs:todate>
+      <georss:point>20 77</georss:point>
+    </item>
+    <item>
+      <title>Invented intake-current-old alert</title>
+      <description>Synthetic timing fixture.</description>
+      <pubDate>2026-09-30T12:00:00Z</pubDate>
+      <gdacs:eventtype>FL</gdacs:eventtype>
+      <gdacs:alertlevel>Red</gdacs:alertlevel>
+      <gdacs:iscurrent>true</gdacs:iscurrent>
+      <gdacs:episodealertlevel>Red</gdacs:episodealertlevel>
+      <gdacs:episodeid>ep-E1</gdacs:episodeid>
+      <gdacs:eventid>intake-current-old</gdacs:eventid>
+      <gdacs:country>India</gdacs:country>
+      <gdacs:fromdate>2026-09-01T00:00:00Z</gdacs:fromdate>
+      <gdacs:todate>2026-10-02T00:00:00Z</gdacs:todate>
+      <georss:point>20 77</georss:point>
+    </item>
+    <item>
+      <title>Invented intake-current-old alert</title>
+      <description>Synthetic timing fixture.</description>
+      <pubDate>2026-09-30T12:00:00Z</pubDate>
+      <gdacs:eventtype>FL</gdacs:eventtype>
+      <gdacs:alertlevel>Red</gdacs:alertlevel>
+      <gdacs:iscurrent>false</gdacs:iscurrent>
+      <gdacs:episodealertlevel>Red</gdacs:episodealertlevel>
+      <gdacs:episodeid>ep-E0</gdacs:episodeid>
+      <gdacs:eventid>intake-current-old</gdacs:eventid>
+      <gdacs:country>India</gdacs:country>
+      <gdacs:fromdate>2026-09-01T00:00:00Z</gdacs:fromdate>
+      <gdacs:todate>2026-10-02T00:00:00Z</gdacs:todate>
+      <georss:point>20 77</georss:point>
+    </item>
+    <item>
+      <title>Invented intake-unverified alert</title>
+      <description>Synthetic timing fixture.</description>
+      <pubDate>2026-09-30T12:00:00Z</pubDate>
+      <gdacs:eventtype>FL</gdacs:eventtype>
+      <gdacs:alertlevel>Red</gdacs:alertlevel>
+      <gdacs:episodealertlevel>Red</gdacs:episodealertlevel>
+      <gdacs:episodeid>ep-F</gdacs:episodeid>
+      <gdacs:eventid>intake-unverified</gdacs:eventid>
+      <gdacs:country>India</gdacs:country>
+      <gdacs:fromdate>2026-09-01T00:00:00Z</gdacs:fromdate>
+      <gdacs:todate>2026-10-02T00:00:00Z</gdacs:todate>
+      <georss:point>20 77</georss:point>
+    </item>
+    <item>
+      <title>Invented intake-stale alert</title>
+      <description>Synthetic timing fixture.</description>
+      <pubDate>2026-09-01T00:00:00Z</pubDate>
+      <gdacs:eventtype>FL</gdacs:eventtype>
+      <gdacs:alertlevel>Red</gdacs:alertlevel>
+      <gdacs:iscurrent>true</gdacs:iscurrent>
+      <gdacs:episodealertlevel>Red</gdacs:episodealertlevel>
+      <gdacs:episodeid>ep-G</gdacs:episodeid>
+      <gdacs:eventid>intake-stale</gdacs:eventid>
+      <gdacs:country>India</gdacs:country>
+      <gdacs:fromdate>2026-09-01T00:00:00Z</gdacs:fromdate>
+      <gdacs:todate>2026-10-02T00:00:00Z</gdacs:todate>
+      <georss:point>20 77</georss:point>
+    </item>
+    <item>
+      <title>Invented intake-future alert</title>
+      <description>Synthetic timing fixture.</description>
+      <pubDate>2026-09-30T12:00:00Z</pubDate>
+      <gdacs:eventtype>FL</gdacs:eventtype>
+      <gdacs:alertlevel>Red</gdacs:alertlevel>
+      <gdacs:iscurrent>true</gdacs:iscurrent>
+      <gdacs:episodealertlevel>Red</gdacs:episodealertlevel>
+      <gdacs:episodeid>ep-M</gdacs:episodeid>
+      <gdacs:eventid>intake-future</gdacs:eventid>
+      <gdacs:country>India</gdacs:country>
+      <gdacs:fromdate>2026-09-01T00:00:00Z</gdacs:fromdate>
+      <gdacs:todate>2026-10-02T00:00:00Z</gdacs:todate>
+      <gdacs:datemodified>2026-09-30T12:05:01Z</gdacs:datemodified>
+      <georss:point>20 77</georss:point>
+    </item>
+    <item>
+      <title>Invented intake-invalid-episode alert</title>
+      <description>Synthetic timing fixture.</description>
+      <pubDate>2026-09-30T12:00:00Z</pubDate>
+      <gdacs:eventtype>FL</gdacs:eventtype>
+      <gdacs:alertlevel>Red</gdacs:alertlevel>
+      <gdacs:iscurrent>true</gdacs:iscurrent>
+      <gdacs:episodealertlevel>Blue</gdacs:episodealertlevel>
+      <gdacs:episodeid>ep-N</gdacs:episodeid>
+      <gdacs:eventid>intake-invalid-episode</gdacs:eventid>
+      <gdacs:country>India</gdacs:country>
+      <gdacs:fromdate>2026-09-01T00:00:00Z</gdacs:fromdate>
+      <gdacs:todate>2026-10-02T00:00:00Z</gdacs:todate>
+      <georss:point>20 77</georss:point>
+    </item>
+    <item>
+      <title>Synthetic event alert</title>
+      <description>Synthetic timing fixture.</description>
+      <pubDate>2026-09-30T12:00:00Z</pubDate>
+      <gdacs:eventtype>FL</gdacs:eventtype>
+      <gdacs:alertlevel>Red</gdacs:alertlevel>
+      <gdacs:iscurrent>true</gdacs:iscurrent>
+      <gdacs:episodealertlevel>Red</gdacs:episodealertlevel>
+      <gdacs:episodeid>synthetic-episode</gdacs:episodeid>
+      <gdacs:eventid>broken</gdacs:eventid>
+      <gdacs:fromdate>2026-09-01T00:00:00Z</gdacs:fromdate>
+      <gdacs:todate>2026-10-02T00:00:00Z</gdacs:todate>
+      <georss:point>20 77</georss:point>
+    </item>
+    <item>
+      <title>Invented intake-shared-1 alert</title>
+      <description>Synthetic timing fixture.</description>
+      <pubDate>2026-09-30T12:00:00Z</pubDate>
+      <gdacs:eventtype>FL</gdacs:eventtype>
+      <gdacs:alertlevel>Red</gdacs:alertlevel>
+      <gdacs:iscurrent>true</gdacs:iscurrent>
+      <gdacs:episodealertlevel>Red</gdacs:episodealertlevel>
+      <gdacs:episodeid>shared-episode</gdacs:episodeid>
+      <gdacs:eventid>intake-shared-1</gdacs:eventid>
+      <gdacs:country>India</gdacs:country>
+      <gdacs:fromdate>2026-09-01T00:00:00Z</gdacs:fromdate>
+      <gdacs:todate>2026-10-02T00:00:00Z</gdacs:todate>
+      <georss:point>20 77</georss:point>
+    </item>
+    <item>
+      <title>Invented intake-shared-2 alert</title>
+      <description>Synthetic timing fixture.</description>
+      <pubDate>2026-09-30T12:00:00Z</pubDate>
+      <gdacs:eventtype>FL</gdacs:eventtype>
+      <gdacs:alertlevel>Red</gdacs:alertlevel>
+      <gdacs:iscurrent>true</gdacs:iscurrent>
+      <gdacs:episodealertlevel>Red</gdacs:episodealertlevel>
+      <gdacs:episodeid>shared-episode</gdacs:episodeid>
+      <gdacs:eventid>intake-shared-2</gdacs:eventid>
+      <gdacs:country>India</gdacs:country>
+      <gdacs:fromdate>2026-09-01T00:00:00Z</gdacs:fromdate>
+      <gdacs:todate>2026-10-02T00:00:00Z</gdacs:todate>
+      <georss:point>20 77</georss:point>
+    </item>
+    <item>
+      <title>Invented intake-control alert</title>
+      <description>Synthetic timing fixture.</description>
+      <pubDate>2026-09-30T12:00:00Z</pubDate>
+      <gdacs:eventtype>EQ</gdacs:eventtype>
+      <gdacs:alertlevel>Red</gdacs:alertlevel>
+      <gdacs:iscurrent>true</gdacs:iscurrent>
+      <gdacs:episodealertlevel>Red</gdacs:episodealertlevel>
+      <gdacs:episodeid>ep-K</gdacs:episodeid>
+      <gdacs:eventid>intake-control</gdacs:eventid>
+      <gdacs:country>India</gdacs:country>
+      <gdacs:fromdate>2026-09-01T00:00:00Z</gdacs:fromdate>
+      <gdacs:todate>2026-10-02T00:00:00Z</gdacs:todate>
+      <georss:point>20 77</georss:point>
+    </item>
+    <item>
+      <title>Invented intake-unknown-country alert</title>
+      <description>Synthetic timing fixture.</description>
+      <pubDate>2026-09-30T12:00:00Z</pubDate>
+      <gdacs:eventtype>TC</gdacs:eventtype>
+      <gdacs:alertlevel>Red</gdacs:alertlevel>
+      <gdacs:iscurrent>true</gdacs:iscurrent>
+      <gdacs:episodealertlevel>Red</gdacs:episodealertlevel>
+      <gdacs:episodeid>ep-L</gdacs:episodeid>
+      <gdacs:eventid>intake-unknown-country</gdacs:eventid>
+      <gdacs:country />
+      <gdacs:fromdate>2026-09-01T00:00:00Z</gdacs:fromdate>
+      <gdacs:todate>2026-10-02T00:00:00Z</gdacs:todate>
+      <georss:point>20 77</georss:point>
+      <gdacs:severity value="240" unit="km/h">Invented conflicting wind 60 km/h</gdacs:severity>
+    </item>
+  </channel>
+</rss>
