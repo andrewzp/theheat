@@ -7,8 +7,8 @@ import sys
 import pytest
 
 from src.commands import postgres_media as media, postgres_media_commands as commands
-from src.commands.schema import Principal, canonical_json
-from src.editorial.revisions import draft_identity
+from src.commands.schema import Command, CommandError, Principal, canonical_json
+from src.editorial.revisions import draft_identity, fingerprint, revoke_approval
 from src.media import joint_review as joint, platform_description as descriptions
 from src.media.review_packet import build_media_review_packet, MediaReviewError
 from src.storage import postgres_projection as p
@@ -153,7 +153,7 @@ def test_real_fresh_historical_and_current_reader_counts_preserve_legacy_and_out
     with packet_calls() as current_count:
         verified, record = editor._reviewed(case["authority"], case["sql"], case["after"]["drafts"][0],
                                             current_inputs(case), case["inputs"]["editorial_policy"], lambda subject: ACTOR)
-    assert current_count == ([7] if extended else [6])  # Extended8 ->7; currentness itself is unchanged.
+    assert current_count == [6]  # Extended current7 ->6; legacy6 unchanged.
     assert record == transition.review and verified == package
     assert (case["before"], case["inputs"], case["assets"], case["capture"]) == before
 
@@ -218,3 +218,159 @@ def test_pair_and_public_entrypoints_cannot_accept_a_supplied_packet():
     public["expected_draft_identity"]["text_sha256"] = "0" * 64
     with pytest.raises(MediaReviewError, match="Draft differs from the independent requested identity"):
         joint.record_joint_media_review(**public)
+
+
+def status_arguments(family="pm25"):
+    args = arguments(make_case(family))
+    record = unpaired(args)
+    return {key: value for key, value in args.items() if key not in
+            {"payload", "principal", "reviewed_at", "expected_packet_sha256", "derivation"}} | dict(
+        record=record, expected_review_sha256=record["review_sha256"], current_principal=ACTOR)
+
+
+def unpaired_status(args):
+    """The prior description then public status path, with independent rebuilds."""
+    values = dict(args)
+    draft = values.pop("draft")
+    package = dict(capture=dict(inputs={key: values[key] for key in ("graphic_spec", "renderer_manifest")},
+        proposal={"proposal_sha256": values.pop("proposal_sha256")}),
+        assets={"alt.txt": values.pop("raw_alt"), "preview.png": values["png_bytes"]})
+    description = commands.description_for(draft, package, values["editorial_policy"], values.pop("platform_profiles"))
+    return joint.joint_media_review_status(draft=draft, expected_draft_identity=draft_identity(draft),
+        platform_description=description, **values)
+
+
+@pytest.mark.parametrize("family", ["temperature", "pm25", "modis"])
+def test_current_pair_matches_independent_public_calls_and_builds_fresh_each_time(family):
+    args = status_arguments(family)
+    before = deepcopy(args)
+    with packet_calls() as old_count:
+        expected = unpaired_status(args)
+    with packet_calls() as new_count:
+        actual = joint._joint_media_review_status_with_description(**args)
+    assert actual == expected and actual["status"] == "accepted"
+    assert p._canonical(actual) == p._canonical(expected)
+    assert old_count == [2] and new_count == [1] and args == before
+    actual["accepted"] = False
+    with packet_calls() as again:
+        assert joint._joint_media_review_status_with_description(**args) == expected
+    assert again == [1] and args == before
+
+
+@pytest.mark.parametrize("change", [
+    "source", "bundle", "png", "policy", "identity", "record", "record_fields", "confirmation",
+    "expected_review", "principal", "role", "subject", "profile", "raw_alt", "source_and_record",
+    "png_and_role", "raw_alt_and_record",
+])
+def test_current_pair_preserves_status_and_exact_refusal_precedence(change):
+    args = status_arguments()
+    if change in {"source", "source_and_record"}:
+        args["graphic_spec"]["evidence"]["event_id"] += "-changed"
+    elif change == "bundle":
+        args["draft"]["review_context"]["two_bot"]["bundle"]["where"] += " changed"
+    elif change in {"png", "png_and_role"}:
+        args["png_bytes"] += b"changed"
+    elif change == "policy":
+        args["editorial_policy"]["execution_sha256"] = "f" * 64
+    elif change == "identity":
+        args["draft"]["content_revision"] += 1
+    elif change == "record_fields":
+        args["record"]["unexpected"] = True
+    elif change == "confirmation":
+        args["record"]["confirmations"]["text_matches_data"] = False
+    elif change == "expected_review":
+        args["expected_review_sha256"] = True
+    elif change == "principal":
+        args["current_principal"] = {"subject": ACTOR.subject, "role": "editor"}
+    elif change == "subject":
+        args["current_principal"] = Principal("another-invented-editor", "editor", "fixture")
+    elif change == "profile":
+        args["platform_profiles"]["profile"] = "changed"
+    if change in {"raw_alt", "raw_alt_and_record"}:
+        args["raw_alt"] = b"Substituted text.\n"
+    if change in {"record", "source_and_record", "raw_alt_and_record"}:
+        args["record"]["review_sha256"] = "0" * 64
+    if change in {"role", "png_and_role"}:
+        args["current_principal"] = Principal(ACTOR.subject, "viewer", "revoked")
+    before = deepcopy(args)
+    try:
+        expected = unpaired_status(args)
+    except (MediaReviewError, descriptions.DescriptionError) as old:
+        with pytest.raises(type(old)) as new:
+            joint._joint_media_review_status_with_description(**args)
+        assert str(new.value) == str(old)
+    else:
+        actual = joint._joint_media_review_status_with_description(**args)
+        assert actual == expected and actual["accepted"] is False
+        assert p._canonical(actual) == p._canonical(expected)
+    assert args == before
+
+
+def parked_draft(case):
+    """Invented retained approval SQL rows exercise only review currentness.
+
+    This does not run or certify checks/approval. Real command/result readers
+    verify these rows; no domain validator or status is stubbed.
+    """
+    from src.commands import postgres_editor_media as editor
+    from tests.test_media_attachment import revision
+    from uuid import UUID
+    draft = deepcopy(case["after"]["drafts"][0])
+    binding = draft["media_review_binding"]
+    command = Command.from_request(dict(command_id=str(UUID(int=91)), action="approve_media_revision",
+        requested_at=AT, expires_at=case["command"].expires_at, targets=[revision(draft)], payload=dict(
+            expected_policy_sha256=fingerprint(case["inputs"]["editorial_policy"]),
+            expected_renderer_profile_sha256="c" * 64, expected_packet_sha256=binding["packet_sha256"],
+            expected_review_sha256=binding["review_sha256"], expected_check_completion_sha256="f" * 64,
+            reason="Invented retained approval boundary")), Principal(ACTOR.subject, "publisher", "fixture"),
+        environment="local", now=NOW)
+    revoke_approval(draft)
+    draft["approval_binding"] = dict(schema_version=2, media=deepcopy(binding),
+        decision_revision=draft["decision_revision"], command_id=command.command_id,
+        publish_intent_id=str(UUID(int=92)))
+    state = deepcopy(case["after"])
+    state["drafts"] = [draft]
+    case["sql"].snapshot("command-core-v1", "2", state)
+    result = dict(status="applied", command_id=command.command_id, digest=command.digest,
+        actor_subject=command.actor_subject, completed_at=AT, state_version=2,
+        publish_intent_id=draft["approval_binding"]["publish_intent_id"])
+    case["sql"].command(command, result)
+    assert command.action == "approve_media_revision" and editor.SCOPE == "local_joint_media"
+    return draft
+
+
+@pytest.mark.parametrize("family", ["temperature", "pm25", "modis"])
+@pytest.mark.parametrize("change", [None, "counter", "binding", "intent"], ids=["current", "counter", "binding", "intent"])
+def test_parked_current_review_keeps_independent_builds_and_exact_transition_guards(family, change):
+    from src.commands import postgres_editor_media as editor
+    case = make_case(family)
+    retain(case, prepare(case))
+    preparation(case)
+    draft = parked_draft(case)
+    if change == "counter":
+        draft["decision_revision"] += 1
+    elif change == "binding":
+        draft["approval_binding"]["media"]["review_sha256"] = "0" * 64
+    elif change == "intent":
+        draft["approval_binding"]["publish_intent_id"] = "changed"
+    before = deepcopy(draft)
+    def current():
+        return editor._reviewed(case["authority"], case["sql"], draft, current_inputs(case),
+            case["inputs"]["editorial_policy"], lambda subject: ACTOR)
+    with packet_calls() as count:
+        if change is None:
+            package, record = current()
+            assert record == case["transition"].review and package["capture"] == case["capture"]
+            assert count == [7]  # Different decision counters keep both builds.
+        else:
+            with pytest.raises(CommandError) as caught:
+                current()
+            assert caught.value.code == "joint_media_review_obsolete" and count == [5]
+    assert draft == before
+
+
+@pytest.mark.parametrize("name", ["packet", "status", "platform_description", "expected_draft_identity"])
+def test_current_pair_accepts_no_supplied_proof(name):
+    args = status_arguments()
+    with pytest.raises(TypeError, match=name):
+        joint._joint_media_review_status_with_description(**dict(args, **{name: args["record"]["packet"]}))

@@ -211,6 +211,37 @@ def joint_media_review_status(
     context may differ; the reviewer subject and current permission must remain.
     Incompatible review contracts must advance schema_version and refuse old ones.
     """
+    return _joint_media_review_status(record, draft, expected_review_sha256=expected_review_sha256,
+        current_principal=current_principal, current_inputs=current_inputs)
+
+
+def _joint_media_review_status_with_description(
+    record, draft, *, expected_review_sha256, current_principal, editorial_policy,
+    graphic_spec, renderer_manifest, png_bytes, proposal_sha256, raw_alt, platform_profiles,
+):
+    """Build a fresh description and status for the same current draft inputs.
+
+    Accept raw inputs only, never a supplied packet or status. As in the two
+    independent public calls, description validation precedes retained review
+    and current principal checks. Parked decision transitions use separate calls.
+    """
+    current_inputs = dict(expected_draft_identity=draft_identity(draft), editorial_policy=editorial_policy,
+                          graphic_spec=graphic_spec, renderer_manifest=renderer_manifest, png_bytes=png_bytes)
+    return _joint_media_review_status(record, draft, expected_review_sha256=expected_review_sha256,
+        current_principal=current_principal, current_inputs=current_inputs,
+        description_inputs=(proposal_sha256, raw_alt, platform_profiles))
+
+
+def _joint_media_review_status(record, draft, *, expected_review_sha256, current_principal,
+                              current_inputs, description_inputs=None):
+    # Only the paired raw-input entry point builds here. Public status retains
+    # its original ordering: verify record and reviewer before building a packet.
+    if description_inputs is not None:
+        from src.media.platform_description import build
+        proposal_sha256, raw_alt, platform_profiles = description_inputs
+        packet = build_media_review_packet(draft, **current_inputs)
+        description = build(draft, packet, proposal_sha256, raw_alt, current_inputs["png_bytes"],
+                            platform_profiles, graphic_spec=current_inputs["graphic_spec"])
     result = {
         "status": "invalid", "current": False, "accepted": False, "synthetic": None,
         "publication_approved": False, "production_attachment_authorized": False,
@@ -262,9 +293,11 @@ def joint_media_review_status(
     except (ValueError, TypeError, AttributeError):
         return {**result, "status": "reviewer_unavailable"}
     try:
-        description = current_inputs.pop("platform_description", None)
+        if description_inputs is None:
+            description = current_inputs.pop("platform_description", None)
         _require(body.get("platform_description") == description, "Platform description review is obsolete")
-        packet = build_media_review_packet(draft, **current_inputs)
+        if description_inputs is None:
+            packet = build_media_review_packet(draft, **current_inputs)
         # Rebuild from current evidence, never using the retained packet as input.
         _require(_encoded(body["packet"]) == _encoded(packet), "Review is obsolete")
     except (ValueError, TypeError, KeyError, AttributeError, OverflowError, RecursionError):

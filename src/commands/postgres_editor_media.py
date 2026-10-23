@@ -267,6 +267,7 @@ def _reviewed(authority, c, draft, value, policy, resolve_principal):
     reviewer = resolve(resolve_principal, record["reviewer"]["subject"])
     stored = package["capture"]["inputs"]
     platform_inputs = {}
+    status = None
     if record.get("schema_version") == 3:
         from src.commands.postgres_delivery import description_profiles
         retained_description = record["platform_description"]
@@ -289,11 +290,17 @@ def _reviewed(authority, c, draft, value, policy, resolve_principal):
                 and approval_result["status"] == "applied"
                 and approval_result["publish_intent_id"] == approval["publish_intent_id"], "joint_media_review_obsolete")
             checked_draft["decision_revision"] = reviewed_revision
-        platform_inputs["platform_description"] = media_commands.description_for(
-            checked_draft, package, policy, description_profiles(authority))
-    status = joint_media_review_status(record, draft, expected_review_sha256=binding["review_sha256"],
-        current_principal=reviewer, expected_draft_identity=draft_identity(draft), editorial_policy=policy,
-        graphic_spec=stored["graphic_spec"], renderer_manifest=stored["renderer_manifest"], png_bytes=package["assets"]["preview.png"], **platform_inputs)
+        if draft["decision_revision"] == reviewed_revision:
+            status = media_commands._current_review_status(record, draft, package, policy,
+                description_profiles(authority), expected_review_sha256=binding["review_sha256"],
+                current_principal=reviewer)
+        else:
+            platform_inputs["platform_description"] = media_commands.description_for(
+                checked_draft, package, policy, description_profiles(authority))
+    if status is None:
+        status = joint_media_review_status(record, draft, expected_review_sha256=binding["review_sha256"],
+            current_principal=reviewer, expected_draft_identity=draft_identity(draft), editorial_policy=policy,
+            graphic_spec=stored["graphic_spec"], renderer_manifest=stored["renderer_manifest"], png_bytes=package["assets"]["preview.png"], **platform_inputs)
     refuse(status["current"] is True and status["accepted"] is True, "joint_media_review_obsolete")
     return package, record
 

@@ -16,6 +16,7 @@ from src.editorial.revisions import draft_identity, fingerprint, revoke_approval
 from src.media.attachment import build_media_attachment_proposal, build_media_removal_proposal
 from src.media.joint_review import (
     MAX_REVIEW_BYTES, record_joint_media_review, _record_joint_media_review_with_description,
+    _joint_media_review_status_with_description,
 )
 from src.media import platform_description as descriptions
 from src.media.review_packet import build_media_review_packet
@@ -110,6 +111,18 @@ def description_for(draft, package, policy, platform_profiles, *, derivation=Non
     return descriptions.build(draft, packet, package["capture"]["proposal"]["proposal_sha256"],
         assets["alt.txt"], assets["preview.png"], platform_profiles,
         graphic_spec=inputs["graphic_spec"], derivation=derivation)
+
+
+def _current_review_status(record, draft, package, policy, platform_profiles, *, expected_review_sha256,
+                           current_principal):
+    """Use one freshly verified package for this same-draft description/status."""
+    inputs, assets = package["capture"]["inputs"], package["assets"]
+    return _joint_media_review_status_with_description(record, draft,
+        expected_review_sha256=expected_review_sha256, current_principal=current_principal,
+        editorial_policy=policy, graphic_spec=inputs["graphic_spec"],
+        renderer_manifest=inputs["renderer_manifest"], png_bytes=assets["preview.png"],
+        proposal_sha256=package["capture"]["proposal"]["proposal_sha256"],
+        raw_alt=assets["alt.txt"], platform_profiles=platform_profiles)
 
 
 def _prepare(state, command, actor, now, policy, package, platform_profiles, description_derivation=None):
