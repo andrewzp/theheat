@@ -30,6 +30,7 @@ from tests.test_postgres_preview_command_ingress import clean_environment, opera
 from tests.test_postgres_important_variants import important as important
 from tests.test_postgres_sourced_generation import sourced as sourced
 from tests import test_postgres_important_variants as variants
+from tests.workflow_clock import positive_workflow_clock as positive_workflow_clock
 
 ROOT = Path(__file__).resolve().parents[1]
 ORIGIN = "http://127.0.0.1:3042"
@@ -37,6 +38,13 @@ CHILD = r"""
 import json,os,socket,sys,hashlib
 from datetime import UTC,datetime
 from pathlib import Path
+from tests.workflow_clock import start_child_clock
+cfg=json.loads(Path(sys.argv[1]).read_text())
+fixture_clock=start_child_clock(cfg["test_clock"])
+if sys.argv[2]=="fixture_clock":
+    import time
+    print(json.dumps(dict(utc=datetime.now(UTC).timestamp(),monotonic=time.monotonic())))
+    raise SystemExit(0)
 from src.voice import safety
 from src.two_bot import writer
 safety.GEMINI_API_KEY="offline-fixture-key"
@@ -51,7 +59,6 @@ from src.two_bot import check_requests
 from tests import test_check_executor as checks
 from tests.test_postgres_important_variants import transport
 from pytest import MonkeyPatch
-cfg=json.loads(Path(sys.argv[1]).read_text())
 safe_environment()
 authority=PostgresCommandAuthority(**cfg["authority"])
 authority.configure_sourced_generation(private_configuration(cfg["generation"]))
@@ -95,7 +102,7 @@ print(json.dumps(result))
 
 
 @pytest.fixture
-def important_preview(important, core, inputs, monkeypatch, tmp_path):
+def important_preview(important, core, inputs, monkeypatch, tmp_path, positive_workflow_clock):
     for key in tuple(os.environ):
         if key.startswith("PG") or any(
             word in key for word in ("TOKEN", "SECRET", "PASSWORD", "API_KEY")
@@ -148,6 +155,7 @@ def important_preview(important, core, inputs, monkeypatch, tmp_path):
         important=str(important_path),
         requests=str(tmp_path / "requests.txt"),
         policy_sha256=fingerprint(current_editorial_policy()),
+        test_clock=positive_workflow_clock,
     )
     config_path = tmp_path / "http.json"
     config_path.write_text(json.dumps(config))
