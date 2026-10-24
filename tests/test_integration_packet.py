@@ -261,6 +261,18 @@ def test_rendering_is_deterministic_and_validation_detects_tampering(world):
     assert packet.validate(fake, None, {}) == {"status": "invalid", "reasons": ["later_stage_set:E9"]}
 
 
+def test_long_absolute_worktree_paths_are_accepted(world):
+    deep = world["tmp"] / ("long-" + "d" * 120) / ("deeper-" + "e" * 120) / "clone"
+    deep.parent.mkdir(parents=True)
+    subprocess.run(["git", "clone", "-q", "-b", "codex/invented", str(world["repo"]), str(deep)], env=ENV, check=True, capture_output=True)
+    assert len(str(deep)) > 250
+    _, value = prepared(world, worktree=str(deep))
+    assert value["lines"][0]["label"] == "E9" and value["lines"][0]["worktree"]["worktree_at_head"] is True
+    assert str(deep) not in json.dumps(value)
+    with pytest.raises(packet.PacketError, match="invalid_worktree"):
+        prepared(world, worktree="relative/repo")
+
+
 def test_cli_reports_refusals_without_writing(world, capsys):
     out = world["tmp"] / "cli-packet"
     assert packet.main(["prepare", "--request", str(request(world, local_claims={"deployed": True})), "--out", str(out)]) == 2

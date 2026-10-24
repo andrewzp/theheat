@@ -87,6 +87,13 @@ def text(value: Any, field: str) -> str:
     return value
 
 
+def absolute_path(value: Any, field: str) -> Path:
+    """A caller-named absolute path (never recorded); long temporary paths are fine."""
+    if type(value) is not str or not value.startswith("/") or len(value) > 4096 or not value.isprintable():
+        refuse(f"invalid_{field}")
+    return Path(value)
+
+
 def label(value: Any, field: str) -> str:
     if type(value) is not str or not LABEL.fullmatch(value):
         refuse(f"invalid_{field}")
@@ -279,9 +286,7 @@ def prepare_line(raw: Any, root: Path, seen: set[str]) -> dict[str, Any]:
     seen.add(name)
     line: dict[str, Any] = {"base": commit_id(raw.get("base"), "base"), "head": commit_id(raw.get("head"), "head"),
             "branch": None if raw.get("branch") is None else text(raw.get("branch"), "branch")}
-    worktree = Path(text(raw.get("worktree"), "worktree"))
-    if not worktree.is_absolute():
-        refuse("invalid_worktree")
+    worktree = absolute_path(raw.get("worktree"), "worktree")
     claims = raw.get("local_claims", {})
     if type(claims) is not dict or set(claims) - set(LOCAL_STAGES):
         refuse("later_stage_not_settable_locally" if type(claims) is dict and set(claims) & set(LATER_STAGES) else "invalid_local_claims")
@@ -459,10 +464,7 @@ def build(request_path: Path) -> tuple[str, str]:
     request = strict_json(read_bounded(request_path, LIMITS["receipt_bytes"], "request"))
     if type(request) is not dict or request.get("schema") != REQUEST_SCHEMA or set(request) - {"schema", "evidence_root", "lines"}:
         refuse("invalid_request")
-    root_text = request.get("evidence_root")
-    if type(root_text) is not str or not root_text.startswith("/"):
-        refuse("invalid_evidence_root")
-    root = Path(root_text)
+    root = absolute_path(request.get("evidence_root"), "evidence_root")
     if not root.is_dir() or root.is_symlink():
         refuse("invalid_evidence_root")
     lines = request.get("lines")
