@@ -363,6 +363,10 @@ h1 span { color: #666; font-weight: 400; font-size: 14px; margin-left: 8px; }
   resize: vertical; margin-bottom: 8px;
 }
 .draft-edit-area:focus { outline: none; border-color: #ff4d00; }
+.draft-edit-label { display: block; color: #bbb; font-size: 12px; margin-bottom: 6px; }
+.draft-edit-area:focus-visible, .draft-edit-button:focus-visible, .draft-workbench-heading:focus {
+  outline: 2px solid #ff4d00; outline-offset: 3px; border-radius: 4px;
+}
 .draft-empty { color: #333; font-size: 13px; font-style: italic; padding: 20px 0; }
 
 /* Suppressed */
