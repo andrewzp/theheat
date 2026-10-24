@@ -1,14 +1,18 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import { createHash } from "node:crypto"
-import { existsSync, readFileSync, writeFileSync } from "node:fs"
+import { spawn } from "node:child_process"
+import { createHash, randomBytes } from "node:crypto"
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, writeFileSync } from "node:fs"
+import { createServer } from "node:http"
+import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { pathToFileURL } from "node:url"
+import { fileURLToPath, pathToFileURL } from "node:url"
 import { crc32, deflateSync } from "node:zlib"
 import manifest from "../lib/graphic-runtime-manifest.json" with { type: "json" }
 import { graphicRequest } from "../lib/graphic-preview.js"
 import { boundRetainedMediaBlob, jointConfirmations } from "../lib/editor-media.js"
 import { fingerprint, initializeRevision, policy, projectDraft } from "./helpers/review-policy.js"
+import { READY_PATH, options as launcherOptions, startOwned, waitOwnedReady } from "../../scripts/operator_media_journey.mjs"
 
 // An explicit, finite browser profile mounts the actual DraftWorkbench, which
 // mounts the actual GraphicPreview and EditorMedia with their real library
@@ -94,6 +98,125 @@ async function until(predicate, message, ms = 10000) {
     await new Promise((resolve) => setTimeout(resolve, 20))
   }
 }
+
+// --- Launcher ownership (ordinary Node, invented loopback children, no browser) ---
+const LAUNCHER = fileURLToPath(new URL("../../scripts/operator_media_journey.mjs", import.meta.url))
+const scratch = () => realpathSync(mkdtempSync(join(tmpdir(), "operator-launcher-")))
+async function listen(handler) {
+  const server = createServer(handler)
+  await new Promise((done) => server.listen(0, "127.0.0.1", done))
+  return { server, port: server.address().port, close: () => new Promise((done) => server.close(done)) }
+}
+async function freePort() {
+  const probe = await listen(() => {})
+  await probe.close()
+  return probe.port
+}
+function invented(kind, port) {
+  // An invented child: serves the ownership route with its env token, or exits, or fails to bind.
+  return { command: process.execPath, argv: ["-e", `
+    const http = require("node:http")
+    if (${JSON.stringify(kind)} === "exit") process.exit(7)
+    const server = http.createServer((request, response) => {
+      response.writeHead(200, { "content-type": "application/json" })
+      response.end(JSON.stringify(request.url === ${JSON.stringify(READY_PATH)}
+        ? { token: ${JSON.stringify(kind)} === "wrong" ? "not-the-token" : process.env.THEHEAT_OPERATOR_JOURNEY_TOKEN } : {}))
+    })
+    server.on("error", () => process.exit(1))
+    server.listen(${port}, "127.0.0.1")`] }
+}
+function owned(kind, port, token, dir) {
+  const { command, argv } = invented(kind, port)
+  return startOwned({ command, argv, cwd: dir, env: { PATH: "/usr/bin:/bin", THEHEAT_OPERATOR_JOURNEY_TOKEN: token },
+    logPath: join(dir, `${kind}-${randomBytes(4).toString("hex")}.log`) })
+}
+
+test("launcher pins and the result directory must be absolute as supplied", () => {
+  const dir = scratch(), pin = join(dir, "pin")
+  writeFileSync(pin, "invented pin\n")
+  const base = ["--result-dir", join(dir, "out"), "--playwright-module", pin, "--chromium", pin]
+  assert.deepEqual(launcherOptions(base), { result: join(dir, "out"), playwright: pin, chromium: pin, port: 3291 })
+  for (const [index, name] of [[1, "--result-dir"], [3, "--playwright-module"], [5, "--chromium"]]) {
+    const relativeArgs = [...base]
+    relativeArgs[index] = "relative/pin"
+    assert.throws(() => launcherOptions(relativeArgs), new RegExp(`${name} must be an absolute path`))
+  }
+  assert.throws(() => launcherOptions(base.slice(0, 4)), /explicit pins are required and missing: --chromium/)
+  assert.throws(() => launcherOptions([...base.slice(0, 5), join(dir, "missing")]), /--chromium pin does not exist/)
+})
+
+test("an occupied port is refused before any build or browser; the foreign listener is untouched", async () => {
+  const dir = scratch(), pins = join(dir, "pins")
+  mkdirSync(join(pins, "playwright"), { recursive: true })
+  writeFileSync(join(pins, "playwright", "index.mjs"), "// invented pin, never imported by a refusal\n")
+  writeFileSync(join(pins, "playwright", "package.json"), JSON.stringify({ version: "invented" }))
+  writeFileSync(join(pins, "chromium"), "invented pin\n")
+  let requests = 0
+  const foreign = await listen((request, response) => { requests++; response.end("invented foreign listener") })
+  try {
+    const result = join(dir, "run")
+    const child = spawn(process.execPath, [LAUNCHER, "--result-dir", result, "--playwright-module", join(pins, "playwright", "index.mjs"),
+      "--chromium", join(pins, "chromium"), "--port", String(foreign.port)], { env: { PATH: "/usr/bin:/bin" }, stdio: ["ignore", "ignore", "pipe"] })
+    let stderr = ""
+    child.stderr.on("data", (chunk) => { stderr += chunk })
+    const code = await new Promise((done) => child.on("exit", done))
+    assert.equal(code, 3)
+    assert.match(stderr, new RegExp(`127\\.0\\.0\\.1:${foreign.port} is already in use; refusing to build or start the journey`))
+    const receipt = JSON.parse(readFileSync(join(result, "launcher-receipt.json"), "utf8"))
+    assert.equal(receipt.failure, "port_occupied")
+    assert.equal(receipt.exit_code, 3)
+    assert.deepEqual(receipt.steps, [])
+    assert.deepEqual(readdirSync(result).sort(), ["home", "launcher-receipt.json", "node_modules", "screens", "tmp"])
+    assert.equal(requests, 0, "the launcher sent a request to a foreign listener")
+    assert.equal(await (await fetch(`http://127.0.0.1:${foreign.port}/`)).text(), "invented foreign listener")
+  } finally { await foreign.close() }
+})
+
+test("an owned child that exits or cannot spawn ends readiness, even with a foreign 200 on the port", async () => {
+  const dir = scratch(), token = randomBytes(16).toString("hex")
+  const foreign = await listen((request, response) => {
+    response.writeHead(200, { "content-type": "application/json" })
+    response.end(JSON.stringify({ token: "foreign" }))
+  })
+  try {
+    for (const kind of ["exit", "bind"]) {
+      const child = owned(kind, foreign.port, token, dir)
+      const readiness = await waitOwnedReady({ origin: `http://127.0.0.1:${foreign.port}`, token, owned: child, deadline: Date.now() + 15000 })
+      assert.equal(readiness.ready, false)
+      assert.equal(readiness.reason, "owned_server_exited")
+      assert.equal(readiness.exit.code, kind === "exit" ? 7 : 1)
+      assert.equal(child.alive(), false)
+      assert.equal(child.stop(), child.stop(), "stop must be idempotent")
+      await child.stop()
+    }
+    const missing = startOwned({ command: join(dir, "no-such-invented-binary"), argv: [], cwd: dir, env: { PATH: "/usr/bin:/bin" },
+      logPath: join(dir, "spawn-error.log") })
+    const readiness = await waitOwnedReady({ origin: `http://127.0.0.1:${foreign.port}`, token, owned: missing, deadline: Date.now() + 15000 })
+    assert.deepEqual([readiness.ready, readiness.reason, readiness.exit.error], [false, "owned_server_exited", "ENOENT"])
+    assert.ok(existsSync(join(dir, "spawn-error.log")))
+    assert.equal(await (await fetch(`http://127.0.0.1:${foreign.port}/`)).text(), JSON.stringify({ token: "foreign" }))
+  } finally { await foreign.close() }
+})
+
+test("only the owned child serving its exact token is ready; stop ends it exactly once", async () => {
+  const dir = scratch(), token = randomBytes(16).toString("hex")
+  const wrongPort = await freePort()
+  const wrong = owned("wrong", wrongPort, token, dir)
+  try {
+    const readiness = await waitOwnedReady({ origin: `http://127.0.0.1:${wrongPort}`, token, owned: wrong, deadline: Date.now() + 2500 })
+    assert.deepEqual([readiness.ready, readiness.reason], [false, "owned_token_not_served"])
+  } finally { await wrong.stop() }
+  const port = await freePort()
+  const good = owned("serve", port, token, dir)
+  const readiness = await waitOwnedReady({ origin: `http://127.0.0.1:${port}`, token, owned: good, deadline: Date.now() + 15000 })
+  assert.deepEqual([readiness.ready, readiness.reason], [true, "owned_token_verified"])
+  const first = good.stop(), second = good.stop()
+  assert.equal(first, second)
+  const exit = await first
+  assert.equal(exit.signal, "SIGTERM")
+  assert.equal(good.alive(), false)
+  await assert.rejects(fetch(`http://127.0.0.1:${port}${READY_PATH}`, { signal: AbortSignal.timeout(2000) }))
+})
 
 // Ordinary Node: the bound loader itself, with an invented response and no browser.
 test("joint review image must be the exact packet-bound PNG bytes, size and dimensions", async (t) => {
