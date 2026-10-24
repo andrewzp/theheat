@@ -31,8 +31,8 @@ export function EditorMediaPanel({ view, role, busy, imageUrl, imageError, confi
       h("h4", null, "Exact platform description"),
       h("p", { style:{whiteSpace:"pre-wrap"} }, view.platform_description.wire_text),
       h("p", null, view.platform_description.record.derivation === "modis_source_projection_v1"
-        ? "This source-backed MODIS description includes every selected row and its scientific qualifications. The complete retained description above preserves additional source and map detail. Destinations: X and Bluesky."
-        : "The full retained description is reused exactly, including its final line break. Destinations: X and Bluesky."),
+        ? "This source-backed MODIS description includes every selected row and its scientific qualifications. The complete retained description above preserves additional source and map detail. X is the first destination; Bluesky rollout is deferred. This local fixture review publishes nothing."
+        : "The full retained description is reused exactly, including its final line break. X is the first destination; Bluesky rollout is deferred. This local fixture review publishes nothing."),
       h("p", {role:"status"}, platformDescriptionStatus(view.platform_description.status)),
       h("p", null, "X uses a stricter local guard: at most 1,000 Unicode characters and 1,000 UTF-8 bytes. A fit check does not qualify a live API.")),
     packet && !view.review_current && h("fieldset", { disabled:busy || role === "viewer" || !imageUrl },

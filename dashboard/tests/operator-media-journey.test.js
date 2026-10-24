@@ -249,7 +249,7 @@ test("mounted operator media journey with invented API replies", {
   assert.match(config.origin, /^http:\/\/127\.0\.0\.1:\d+$/)
   const { chromium } = await import(pathToFileURL(config.playwright_entry).href)
   const origin = config.origin, deadline = Date.now() + 540000
-  const evidence = { scope: SCOPE, cases: [], page_errors: [], denied: [], mutations: [], console: [], late_fulfill_failures: 0,
+  const evidence = { scope: SCOPE, cases: [], layout: [], page_errors: [], denied: [], mutations: [], console: [], late_fulfill_failures: 0,
     api_reads: 0, preview_posts: 0, bytes_served: 0, screenshots: [] }
   const browser = await chromium.launch({ executablePath: config.chromium, headless: true,
     env: { PATH: "/usr/bin:/bin", TZ: "UTC", LANG: "en_US.UTF-8" },
@@ -472,13 +472,16 @@ test("mounted operator media journey with invented API replies", {
     }))
 
     const mediaA = sourceDraft("media-a", { local: true }), mediaB = sourceDraft("media-b", { local: true })
+    // The previously measured case: one 149-character unbroken token in multiline draft copy.
+    const longToken = sourceDraft("long-token", { text: `Invented long-token: ${LONG}\nSecond invented line; ordinary copy follows.` })
     const media = [mediaA, mediaB]
     const fieldset = (page) => page.locator(".graphic-preview fieldset")
     const attach = (page) => page.getByRole("button", { name: /^(Attach reviewed graphic|Record new joint review)$/ })
     async function reviewWithKeyboard(h) {
       await fieldset(h.page).locator("legend").click()
       const focus = []
-      for (let i = 0; i < Object.keys(jointConfirmations).length; i++) {
+      const boxes = await fieldset(h.page).locator("input[type=checkbox]").count()
+      for (let i = 0; i < boxes; i++) {
         await h.page.keyboard.press("Tab"); await h.page.keyboard.press("Space")
         focus.push(await h.page.evaluate(() => {
           const element = document.activeElement, style = getComputedStyle(element)
@@ -699,11 +702,15 @@ test("mounted operator media journey with invented API replies", {
     }))
 
     for (const width of [1280, 390, 320]) {
-      await t.test(`reading, keyboard focus and no horizontal overflow at ${width}px`, () => scenario(`layout-${width}`, { drafts: [previewA, mediaA], selected: "preview-a",
+      await t.test(`reading, keyboard focus and no horizontal overflow at ${width}px`, () => scenario(`layout-${width}`, { drafts: [previewA, mediaA, longToken], selected: "preview-a",
         configure: (api) => {
           api.previews.set("preview-a", [{ status: 200, value: previewValue(previewA) }])
-          api.views.set("media-a", mediaView(mediaA)); api.images.set(proposal(1), { status: 200, bytes: IMAGE })
+          const view = mediaView(mediaA)
+          view.platform_description = { record: { description_sha256: hash("invented-description"), derivation: "full_raw_alt" },
+            wire_text: view.packet.media.alt_text + "\n", status: "platform_api_unqualified" }
+          api.views.set("media-a", view); api.images.set(proposal(1), { status: 200, bytes: IMAGE })
         } }, async (h) => {
+        const problems = []
         await previewButton(h.page).click(); await figureTitle(h.page).waitFor()
         await h.page.locator(".graphic-preview details summary").focus(); await h.page.keyboard.press("Enter")
         await h.page.getByText(/^Invented complete graphic description for preview-a:/).waitFor()
@@ -725,11 +732,38 @@ test("mounted operator media journey with invented API replies", {
         const focus = await reviewWithKeyboard(h)
         assert.ok(focus.every((row) => row.visible), `review focus not visible: ${JSON.stringify(focus)}`)
         await h.page.getByText("Human review and model checks are separate. Model cost remains unknown until reconciled. Publishing stays unavailable.").waitFor()
-        assert.equal(await h.page.getByText(/Bluesky/).count(), 0, "this invented view must not present a Bluesky destination")
+        // X-first, Bluesky deferred: the exact retained description is shown without presenting two active destinations.
+        await h.page.getByText(/^Invented complete image description 1:/).first().waitFor({ state: "attached" })
+        const copy = await h.page.locator('section[aria-label="Exact platform description"]').innerText()
+        if (/Destinations: X and Bluesky/.test(copy)) problems.push("platform description presents X and Bluesky as active destinations")
+        if (!/Bluesky rollout is deferred/.test(copy) || !/This local fixture review publishes nothing/.test(copy)) {
+          problems.push("platform description does not state the Bluesky deferral and that local review publishes nothing")
+        }
         measured = await overflow()
         assert.ok(measured.scroll <= measured.width, `media overflow ${JSON.stringify(measured)}`)
         const second = join(config.screens, `${width}-media.png`)
         await h.page.screenshot({ path: second, fullPage: true }); evidence.screenshots.push(second)
+        // The already-identified 149-character unbroken token in the draft text itself.
+        await h.queueItem("long-token").click()
+        const draftText = h.page.locator(".draft-text")
+        await draftText.waitFor()
+        const reading = await draftText.evaluate((node) => {
+          const selection = getSelection(); selection.removeAllRanges(); selection.selectAllChildren(node)
+          const copied = selection.toString(); selection.removeAllRanges()
+          const style = getComputedStyle(node)
+          return { text: node.textContent, copied, nodeScroll: node.scrollWidth, nodeClient: node.clientWidth,
+            pageScroll: document.documentElement.scrollWidth, width: innerWidth, whiteSpace: style.whiteSpace, wrap: style.overflowWrap }
+        })
+        evidence.layout.push({ width, token_length: LONG.length, ...reading, text: undefined, copied: undefined,
+          text_exact: reading.text === longToken.text, copy_keeps_token: reading.copied.includes(LONG) })
+        assert.equal(reading.text, longToken.text, "draft text changed")
+        assert.ok(reading.copied.includes(LONG), "copying the draft text split the token")
+        if (reading.pageScroll > reading.width || reading.nodeScroll > reading.nodeClient + 1) {
+          problems.push(`draft text overflow ${JSON.stringify({ pageScroll: reading.pageScroll, width: reading.width, nodeScroll: reading.nodeScroll, nodeClient: reading.nodeClient })}`)
+        }
+        const third = join(config.screens, `${width}-long-token.png`)
+        await h.page.screenshot({ path: third, fullPage: true }); evidence.screenshots.push(third)
+        assert.deepEqual(problems, [])
       }, { width }))
     }
 

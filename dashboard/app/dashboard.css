@@ -353,7 +353,7 @@ h1 span { color: #666; font-weight: 400; font-size: 14px; margin-left: 8px; }
   border-radius: 3px; text-transform: uppercase; letter-spacing: 0.5px;
 }
 .draft-time { color: #444; }
-.draft-text { font-size: 15px; line-height: 1.5; color: #fff; margin-bottom: 10px; }
+.draft-text { font-size: 15px; line-height: 1.5; color: #fff; margin-bottom: 10px; overflow-wrap: anywhere; }
 .draft-chars { font-size: 11px; color: #666; margin-bottom: 10px; }
 .draft-chars.over { color: #f87171; }
 .draft-actions { display: flex; gap: 8px; }
