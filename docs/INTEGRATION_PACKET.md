@@ -197,8 +197,8 @@ Git runs read-only:
 
 ## Walkthrough (invented, clean caller)
 
-This was executed for E3/E4. The private outputs stay under
-`.gstack/implementation/results/CLAUDE-E1-E4/`.
+This walkthrough was executed with invented data. Its private evidence is
+intentionally excluded from the repository.
 
 1. **Select the E3 focused journey and its retained result.** The journey runs
    only through `node scripts/operator_media_journey.mjs` with explicit pins

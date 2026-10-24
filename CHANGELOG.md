@@ -1,3 +1,16 @@
+## 0.9.109.40
+
+- Give the draft editor a visible label and carry keyboard focus through Edit
+  and Cancel; wrap long draft tokens without changing their text.
+- Verify retained image hashes, sizes and dimensions before joint review, and
+  preserve unfinished review inputs across unchanged dashboard refreshes.
+- Add reproducible invented-data operator journeys with owned-server readiness,
+  bounded cleanup and the existing finite journey deadline.
+- Add local integration packets with explicit evidence bindings, conflicting
+  receipt preservation, current-checkout validation and no-follow private output.
+- Clarify that X is first and Bluesky rollout remains deferred; publication
+  controls and runtime model settings remain unchanged.
+
 ## 0.9.109.38
 
 - Add explicitly enabled private request evidence and offline replay, binding
