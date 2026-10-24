@@ -195,6 +195,37 @@ def pytest_delivery_budget_report(item, call):
     append_budget_failure_section(item, outcome.get_result())
 
 
+# PG2 process-death phase witness: only the exact parked-media node writes
+# fixed lines to real stderr; every other item and phase is untouched. Its
+# fixture boundaries come from a plugin registered for that node's protocol.
+@pytest.hookimpl(wrapper=True, tryfirst=True)
+def pytest_runtest_protocol(item, nextitem):
+    from tests.parked_media_phase_witness import selected_protocol
+    with selected_protocol(item):
+        return (yield)
+
+
+@pytest.hookimpl(wrapper=True, tryfirst=True)
+def pytest_runtest_setup(item):
+    from tests.parked_media_phase_witness import pytest_phase
+    with pytest_phase(item, "setup"):
+        return (yield)
+
+
+@pytest.hookimpl(wrapper=True, tryfirst=True)
+def pytest_runtest_call(item):
+    from tests.parked_media_phase_witness import pytest_phase
+    with pytest_phase(item, "call"):
+        return (yield)
+
+
+@pytest.hookimpl(wrapper=True, tryfirst=True)
+def pytest_runtest_teardown(item, nextitem):
+    from tests.parked_media_phase_witness import pytest_phase
+    with pytest_phase(item, "teardown"):
+        return (yield)
+
+
 def pytest_itemcollected(item):
     """Reject payload-sized display IDs before CI logs or subprocess environments.
 
