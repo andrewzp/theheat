@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useEffect, useState } from "react"
-import { confirmationsFor, mediaCommand, mediaStatus, sameMediaTarget, retainedMediaBlob, platformDescriptionStatus } from "../../lib/editor-media.js"
+import { confirmationsFor, mediaCommand, mediaStatus, sameMediaTarget, boundRetainedMediaBlob, platformDescriptionStatus } from "../../lib/editor-media.js"
 import { DeliveryHistory } from "./DeliveryHistory.js"
 import { deliveryHistoryKey } from "../../lib/delivery-history.js"
 
@@ -81,7 +81,7 @@ export function EditorMedia({ draft, editing, updating, submitCommand }) {
     let url
     setImage(null); setImageError("")
     if (currentView?.packet && !editing && !updating) {
-      retainedMediaBlob(currentView, control.signal).then(blob => {
+      boundRetainedMediaBlob(currentView, control.signal).then(blob => {
         if (control.signal.aborted) return
         url=URL.createObjectURL(blob)
         setImage({ view:currentView, url })

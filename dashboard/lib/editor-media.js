@@ -99,3 +99,18 @@ export async function retainedMediaBlob(view, signal) {
   // Cleanup must not create a second, unhandled rejection after a failed read.
   } finally { void reader.cancel().catch(() => {}) }
 }
+
+const sha256Hex = async bytes => [...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))].map(b => b.toString(16).padStart(2, "0")).join("")
+
+// Joint review may only show the exact image its packet binds: same bytes,
+// size and PNG dimensions. A valid PNG with other bytes is withheld.
+export async function boundRetainedMediaBlob(view, signal) {
+  const media = view?.packet?.media
+  const blob = await retainedMediaBlob(view, signal)
+  const bytes = new Uint8Array(await blob.arrayBuffer())
+  const header = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+  if (!media || bytes.length !== media.byte_count || await sha256Hex(bytes) !== media.png_sha256 ||
+      header.getUint32(16) !== media.width || header.getUint32(20) !== media.height || signal.aborted)
+    throw new Error("The retained graphic does not match this review packet")
+  return blob
+}

@@ -7,7 +7,7 @@ import { pathToFileURL } from "node:url"
 import { crc32, deflateSync } from "node:zlib"
 import manifest from "../lib/graphic-runtime-manifest.json" with { type: "json" }
 import { graphicRequest } from "../lib/graphic-preview.js"
-import { jointConfirmations } from "../lib/editor-media.js"
+import { boundRetainedMediaBlob, jointConfirmations } from "../lib/editor-media.js"
 import { fingerprint, initializeRevision, policy, projectDraft } from "./helpers/review-policy.js"
 
 // An explicit, finite browser profile mounts the actual DraftWorkbench, which
@@ -87,6 +87,25 @@ function mediaView(draft, overrides = {}, image = IMAGE, n = 1) {
 }
 
 const deferred = () => { let release; const promise = new Promise((resolve) => { release = resolve }); return { promise, release } }
+
+// Ordinary Node: the bound loader itself, with an invented response and no browser.
+test("joint review image must be the exact packet-bound PNG bytes, size and dimensions", async (t) => {
+  const original = globalThis.fetch
+  t.after(() => { globalThis.fetch = original })
+  const view = mediaView(sourceDraft("bound-unit", { local: true }))
+  const serve = (bytes) => { globalThis.fetch = async () => new Response(bytes, { headers: { "content-type": "image/png" } }) }
+  serve(IMAGE)
+  const blob = await boundRetainedMediaBlob(view, new AbortController().signal)
+  assert.deepEqual(Buffer.from(await blob.arrayBuffer()), IMAGE)
+  const wrongSize = structuredClone(view); wrongSize.packet.media.width = 121
+  for (const [bytes, current] of [[CHANGED, view], [Buffer.concat([IMAGE, Buffer.from([0])]), view], [IMAGE, wrongSize],
+    [IMAGE, { ...view, packet: null }]]) {
+    serve(bytes)
+    await assert.rejects(boundRetainedMediaBlob(current, new AbortController().signal), /does not match this review packet/)
+  }
+  const aborted = new AbortController(); aborted.abort(); serve(IMAGE)
+  await assert.rejects(boundRetainedMediaBlob(view, aborted.signal))
+})
 
 test("mounted operator media journey with invented API replies", {
   skip: !CONFIG && "unperformed: explicit browser profile (scripts/operator_media_journey.mjs)",
