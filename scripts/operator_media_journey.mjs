@@ -14,7 +14,9 @@
 // that exact token from the fixture's /operator-journey-ready route while the
 // child is alive. A child that exits or cannot spawn ends readiness at once,
 // and an occupied port is refused before any build. A foreign listener is
-// never signalled and its content is never accepted as evidence.
+// never signalled and its content is never accepted as evidence. The journey
+// child is bounded by JOURNEY_TIMEOUT_MS (900000 ms) and by the owned server's
+// lifetime; on the deadline both owned children are stopped and the run fails.
 //
 // API replies are invented by the test. A pass is UI evidence only: source,
 // PostgreSQL, native, hosted, platform and human approval stay unperformed.
@@ -31,6 +33,8 @@ const fixture = join(dashboard, "tests", "fixtures", "operator-journey")
 const TEST = "tests/operator-media-journey.test.js"
 const SCOPE = "invented_operator_media_journey"
 export const READY_PATH = "/operator-journey-ready"
+// The original finite outer allowance for the whole journey child (unchanged since before 4c05b8b).
+export const JOURNEY_TIMEOUT_MS = 900000
 
 export function options(argv) {
   const known = new Set(["--result-dir", "--playwright-module", "--chromium", "--port"])
@@ -121,6 +125,29 @@ export async function waitOwnedReady({ origin, token, owned, deadline, fetcher =
   return { ready: false, reason: owned.alive() ? "owned_token_not_served" : "owned_server_exited" }
 }
 
+// Bound the owned journey by the outer deadline AND by the owned server's lifetime.
+// On the deadline both owned children are stopped (once) and the run is a failure,
+// even if a child exits 0 while being stopped. The timer is cleared on every path.
+export async function superviseJourney({ journey, server, timeoutMs = JOURNEY_TIMEOUT_MS,
+  setTimer = setTimeout, clearTimer = clearTimeout }) {
+  let timer = null
+  const deadline = new Promise((done) => { timer = setTimer(() => done({ deadline: true }), timeoutMs) })
+  try {
+    const first = await Promise.race([journey.exited.then((exit) => ({ journey: exit })),
+      server.exited.then((exit) => ({ server: exit })), deadline])
+    if (first.journey) {
+      return { outcome: "completed", success: first.journey.code === 0 && !first.journey.error, journey_exit: first.journey }
+    }
+    if (first.server) {
+      return { outcome: "owned_server_exited_during_journey", success: false, server_exit: first.server, journey_exit: await journey.stop() }
+    }
+    const [journeyExit, serverExit] = await Promise.all([journey.stop(), server.stop()])
+    return { outcome: "journey_timed_out", success: false, timeout_ms: timeoutMs, journey_exit: journeyExit, server_exit: serverExit }
+  } finally {
+    clearTimer(timer)
+  }
+}
+
 async function main() {
   let selected
   try {
@@ -183,10 +210,11 @@ async function main() {
   async function run(label, argv, { env = environment, timeoutMs }) {
     const started = Date.now()
     const owned = startOwned({ command: process.execPath, argv, cwd: dashboard, env, logPath: join(result, `${label}.log`) })
-    const timer = setTimeout(() => owned.stop(), timeoutMs)
-    const exit = await owned.exited
-    clearTimeout(timer)
-    const step = { label, argv, cwd: dashboard, code: exit.code, signal: exit.signal, error: exit.error,
+    let timedOut = false
+    const timer = setTimeout(() => { timedOut = true; owned.stop() }, timeoutMs)
+    let exit
+    try { exit = await owned.exited } finally { clearTimeout(timer) }
+    const step = { label, argv, cwd: dashboard, code: exit.code, signal: exit.signal, error: exit.error, timed_out: timedOut,
       seconds: (Date.now() - started) / 1000, log_sha256: sha256(join(result, `${label}.log`)) }
     receipt.steps.push(step)
     return step
@@ -195,7 +223,7 @@ async function main() {
   let server = null, exitCode = 1
   try {
     const build = await run("fixture-build", [nextBin, "build", fixture], { timeoutMs: 300000 })
-    if (build.code !== 0) throw new Error("fixture build failed")
+    if (build.code !== 0 || build.timed_out) throw new Error(build.timed_out ? "fixture build timed out" : "fixture build failed")
     server = startOwned({ command: process.execPath, argv: [nextBin, "start", fixture, "-H", "127.0.0.1", "-p", String(port)],
       cwd: dashboard, env: { ...environment, THEHEAT_OPERATOR_JOURNEY_TOKEN: token }, logPath: join(result, "fixture-server.log") })
     const readiness = await waitOwnedReady({ origin: receipt.origin, token, owned: server, deadline: Date.now() + 30000 })
@@ -207,17 +235,22 @@ async function main() {
     const started = Date.now()
     const journey = startOwned({ command: process.execPath, argv: ["--test", "--test-concurrency=1", TEST], cwd: dashboard,
       env: { ...environment, THEHEAT_OPERATOR_JOURNEY_CONFIG: config }, logPath: join(result, "journey.log") })
-    // The journey's lifetime is bound to the owned server: if the server ends first, the journey is stopped.
-    const first = await Promise.race([journey.exited.then((exit) => ({ journey: exit })), server.exited.then((exit) => ({ server: exit }))])
-    if (first.server) {
+    // Bounded by JOURNEY_TIMEOUT_MS and by the owned server's lifetime.
+    const supervised = await superviseJourney({ journey, server })
+    receipt.journey_outcome = supervised.outcome
+    if (supervised.outcome === "owned_server_exited_during_journey") {
       receipt.failure = "owned_server_exited_during_journey"
-      receipt.server_exit = first.server
-      await journey.stop()
+      receipt.server_exit = supervised.server_exit
+    } else if (supervised.outcome === "journey_timed_out") {
+      receipt.failure = "journey_timed_out"
+      receipt.journey_timeout_ms = supervised.timeout_ms
+      receipt.server_exit = supervised.server_exit
     }
-    const exit = await journey.exited
+    const exit = supervised.journey_exit
     receipt.steps.push({ label: "journey", argv: ["--test", "--test-concurrency=1", TEST], cwd: dashboard, code: exit.code,
-      signal: exit.signal, error: exit.error, seconds: (Date.now() - started) / 1000, log_sha256: sha256(join(result, "journey.log")) })
-    exitCode = exit.code === 0 && !first.server ? 0 : 1
+      signal: exit.signal, error: exit.error, timed_out: supervised.outcome === "journey_timed_out",
+      seconds: (Date.now() - started) / 1000, log_sha256: sha256(join(result, "journey.log")) })
+    exitCode = supervised.success ? 0 : 1
   } catch (error) {
     receipt.failure = receipt.failure ?? String(error?.message || error)
   } finally {

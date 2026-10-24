@@ -12,7 +12,8 @@ import manifest from "../lib/graphic-runtime-manifest.json" with { type: "json" 
 import { graphicRequest } from "../lib/graphic-preview.js"
 import { boundRetainedMediaBlob, jointConfirmations } from "../lib/editor-media.js"
 import { fingerprint, initializeRevision, policy, projectDraft } from "./helpers/review-policy.js"
-import { READY_PATH, options as launcherOptions, startOwned, waitOwnedReady } from "../../scripts/operator_media_journey.mjs"
+import { JOURNEY_TIMEOUT_MS, READY_PATH, options as launcherOptions, startOwned, superviseJourney, waitOwnedReady }
+  from "../../scripts/operator_media_journey.mjs"
 
 // An explicit, finite browser profile mounts the actual DraftWorkbench, which
 // mounts the actual GraphicPreview and EditorMedia with their real library
@@ -216,6 +217,91 @@ test("only the owned child serving its exact token is ready; stop ends it exactl
   assert.equal(exit.signal, "SIGTERM")
   assert.equal(good.alive(), false)
   await assert.rejects(fetch(`http://127.0.0.1:${port}${READY_PATH}`, { signal: AbortSignal.timeout(2000) }))
+})
+
+// --- F5: the outer journey deadline (invented owned children, injected short bound) ---
+function lingering(dir, name, termCode) {
+  // Stays alive until signalled; records each SIGTERM it receives, then exits with termCode.
+  return startOwned({ command: process.execPath, argv: ["-e",
+    `process.on("SIGTERM", () => { process.stdout.write("term\\n"); process.exit(${termCode}) }); setInterval(() => {}, 1000)`],
+  cwd: dir, env: { PATH: "/usr/bin:/bin" }, logPath: join(dir, `${name}.log`) })
+}
+function trackedTimers() {
+  const active = new Set()
+  return { active,
+    setTimer: (callback, ms) => { const id = setTimeout(() => { active.delete(id); callback() }, ms); active.add(id); return id },
+    clearTimer: (id) => { active.delete(id); clearTimeout(id) } }
+}
+const terms = (dir, name) => (readFileSync(join(dir, `${name}.log`), "utf8").match(/^term$/gm) || []).length
+const exitsAfter = (dir, name, code) => startOwned({ command: process.execPath, argv: ["-e", `process.exit(${code})`], cwd: dir,
+  env: { PATH: "/usr/bin:/bin" }, logPath: join(dir, `${name}.log`) })
+
+test("the outer journey deadline ends both owned children and cannot report success", async () => {
+  assert.equal(JOURNEY_TIMEOUT_MS, 900000)
+  const dir = scratch(), timers = trackedTimers()
+  let requests = 0
+  const unrelated = await listen((request, response) => { requests++; response.end("invented unrelated listener") })
+  try {
+    // The journey exits 0 when signalled: a clean-looking exit during cleanup must stay a failure.
+    const journey = lingering(dir, "journey", 0), server = lingering(dir, "server", 15)
+    await new Promise((done) => setTimeout(done, 100)) // both children have installed their handlers
+    const started = Date.now()
+    const result = await superviseJourney({ journey, server, timeoutMs: 300, setTimer: timers.setTimer, clearTimer: timers.clearTimer })
+    assert.ok(Date.now() - started < 10000)
+    assert.equal(result.outcome, "journey_timed_out")
+    assert.equal(result.success, false)
+    assert.equal(result.timeout_ms, 300)
+    assert.equal(result.journey_exit.code, 0)
+    assert.equal(result.server_exit.code, 15)
+    assert.equal(journey.alive(), false)
+    assert.equal(server.alive(), false)
+    await Promise.all([journey.stop(), server.stop()]) // the caller's later cleanup is idempotent
+    assert.deepEqual([terms(dir, "journey"), terms(dir, "server")], [1, 1])
+    assert.equal(timers.active.size, 0, "a deadline timer was left behind")
+    assert.equal(requests, 0)
+    assert.equal(await (await fetch(`http://127.0.0.1:${unrelated.port}/`)).text(), "invented unrelated listener")
+  } finally { await unrelated.close() }
+})
+
+test("normal completion, journey failure, child error and early server exit clear the deadline", async () => {
+  const dir = scratch()
+  for (const [name, code, success] of [["passing", 0, true], ["failing", 1, false]]) {
+    const timers = trackedTimers(), server = lingering(dir, `server-${name}`, 15)
+    const result = await superviseJourney({ journey: exitsAfter(dir, name, code), server, timeoutMs: 60000,
+      setTimer: timers.setTimer, clearTimer: timers.clearTimer })
+    assert.deepEqual([result.outcome, result.success, result.journey_exit.code], ["completed", success, code])
+    assert.equal(server.alive(), true, "completion must leave the server to the caller's single cleanup")
+    assert.equal(timers.active.size, 0)
+    await server.stop()
+    assert.equal(terms(dir, `server-${name}`), 1)
+  }
+  {
+    const timers = trackedTimers(), server = lingering(dir, "server-error", 15)
+    const missing = startOwned({ command: join(dir, "no-such-invented-journey"), argv: [], cwd: dir, env: { PATH: "/usr/bin:/bin" },
+      logPath: join(dir, "journey-error.log") })
+    const result = await superviseJourney({ journey: missing, server, timeoutMs: 60000, setTimer: timers.setTimer, clearTimer: timers.clearTimer })
+    assert.deepEqual([result.outcome, result.success, result.journey_exit.error], ["completed", false, "ENOENT"])
+    assert.equal(timers.active.size, 0)
+    await server.stop()
+  }
+  {
+    const timers = trackedTimers(), journey = lingering(dir, "journey-early", 0)
+    await new Promise((done) => setTimeout(done, 100))
+    const result = await superviseJourney({ journey, server: exitsAfter(dir, "server-early", 3), timeoutMs: 60000,
+      setTimer: timers.setTimer, clearTimer: timers.clearTimer })
+    assert.deepEqual([result.outcome, result.success, result.server_exit.code], ["owned_server_exited_during_journey", false, 3])
+    assert.equal(journey.alive(), false)
+    assert.equal(terms(dir, "journey-early"), 1)
+    assert.equal(timers.active.size, 0)
+  }
+  {
+    const timers = trackedTimers(), journey = lingering(dir, "journey-exception", 0)
+    const broken = { exited: Promise.reject(new Error("invented supervision failure")), stop: () => Promise.resolve(null), alive: () => false }
+    await assert.rejects(superviseJourney({ journey, server: broken, timeoutMs: 60000, setTimer: timers.setTimer,
+      clearTimer: timers.clearTimer }), /invented supervision failure/)
+    assert.equal(timers.active.size, 0, "an exception left the deadline timer running")
+    await journey.stop()
+  }
 })
 
 // Ordinary Node: the bound loader itself, with an invented response and no browser.
