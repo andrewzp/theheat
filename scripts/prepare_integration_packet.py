@@ -32,7 +32,9 @@ from pathlib import Path, PurePosixPath
 from typing import Any, NoReturn
 
 REQUEST_SCHEMA = "theheat.integration-packet-request/v1"
-PACKET_SCHEMA = "theheat.integration-packet/v1"
+PACKET_SCHEMA = "theheat.integration-packet/v2"
+# v1 packets (before the current-state fields) still verify their own integrity.
+READABLE_SCHEMAS = ("theheat.integration-packet/v1", PACKET_SCHEMA)
 LOCAL_STAGES = ("implemented", "locally_tested")
 LATER_STAGES = ("stronger_review", "exact_head_ci", "merged", "deployed", "runtime_observed", "product_accepted")
 # Explicit generator outputs (scripts/gen_*.py at a87bb66); impact is never guessed.
@@ -234,16 +236,41 @@ def changed_paths(worktree: Path, base: str, head: str) -> list[dict[str, Any]]:
     return rows
 
 
+CURRENT_STATE_FIELDS = ("worktree_head", "tracked_dirty", "tracked_dirty_count", "untracked", "untracked_count")
+
+
 def worktree_state(worktree: Path, head: str) -> dict[str, Any]:
+    """The checkout as it is now: its actual HEAD and its tracked and untracked changes."""
     at = git(worktree, "rev-parse", "--verify", "HEAD").decode().strip()
-    if at != head:
-        return {"worktree_at_head": False, "tracked_dirty": None, "untracked": None}
     raw = git(worktree, "--no-optional-locks", "status", "--porcelain=v1", "-z", "--untracked-files=all")
     entries = [entry.decode("utf-8", "strict") for entry in raw.split(b"\0") if entry]
     tracked = sorted(entry[3:] for entry in entries if not entry.startswith("??"))
     untracked = sorted(entry[3:] for entry in entries if entry.startswith("??"))
-    return {"worktree_at_head": True, "tracked_dirty": tracked[:LIMITS["listed_untracked"]], "tracked_dirty_count": len(tracked),
-            "untracked": untracked[:LIMITS["listed_untracked"]], "untracked_count": len(untracked)}
+    return {"worktree_head": at, "worktree_at_head": at == head, "tracked_dirty": tracked[:LIMITS["listed_untracked"]],
+            "tracked_dirty_count": len(tracked), "untracked": untracked[:LIMITS["listed_untracked"]],
+            "untracked_count": len(untracked)}
+
+
+def receipt_binding(spec: dict[str, Any], root: Path) -> dict[str, Any]:
+    """Normalize and validate everything a receipt is bound to, before any deduplication."""
+    kind = spec.get("kind", "command")
+    if kind not in ("command", "journey_launcher"):
+        refuse("invalid_receipt_kind")
+    claimed = None if spec.get("claimed_head") is None else commit_id(spec["claimed_head"], "claimed_head")
+    prefix = spec.get("source_prefix")
+    if kind == "command":
+        if prefix is not None:
+            refuse("invalid_source_prefix")
+    else:
+        prefix = "" if prefix is None else prefix
+        if (type(prefix) is not str or (prefix and not prefix.endswith("/")) or ".." in prefix or prefix.startswith("/")
+                or "\\" in prefix):
+            refuse("invalid_source_prefix")
+    log_path = log_sha = None
+    if spec.get("log") is not None:
+        log_data = read_bounded(inside(root, spec["log"], "log"), LIMITS["artifact_bytes"], "log")
+        log_path, log_sha = spec["log"], sha256(log_data)
+    return {"kind": kind, "claimed_head": claimed, "source_prefix": prefix, "log_path": log_path, "log_sha256": log_sha}
 
 
 def snapshot(worktree: Path, line: dict[str, Any]) -> dict[str, Any]:
@@ -330,39 +357,49 @@ def prepare_line(raw: Any, root: Path, seen: set[str]) -> dict[str, Any]:
     by_check: dict[str, list[dict[str, Any]]] = {}
     inputs: list[dict[str, Any]] = []
     contradictions: list[dict[str, str]] = []
+    keys: dict[int, tuple[Any, ...]] = {}
     for spec in receipts:
         if type(spec) is not dict or set(spec) - {"check", "path", "kind", "log", "claimed_head", "source_prefix"}:
             refuse("invalid_receipt")
         check = label(spec.get("check"), "check")
-        kind = spec.get("kind", "command")
+        binding = receipt_binding(spec, root)
+        kind = binding["kind"]
         location = inside(root, spec.get("path"), "receipt")
         data = read_bounded(location, LIMITS["receipt_bytes"], "receipt")
         digest = sha256(data)
         rows = by_check.setdefault(check, [])
-        if any(row["sha256"] == digest for row in rows):
-            next(row for row in rows if row["sha256"] == digest)["duplicates"] += 1
+        # Only a true equivalent collapses: same bytes AND the same complete binding.
+        key = (digest, kind, binding["log_sha256"], binding["claimed_head"], binding["source_prefix"])
+        same = next((row for row in rows if keys[id(row)] == key), None)
+        if same is not None:
+            same["duplicates"] += 1
+            if spec["path"] != same["path"] and len(same.setdefault("duplicate_paths", [])) < 20:
+                same["duplicate_paths"].append(spec["path"])
+                inputs.append({"path": spec["path"], "sha256": digest})
             continue
         claim, sources = parse_receipt(kind, data)
         row: dict[str, Any] = {"path": spec["path"], "sha256": digest, "bytes": len(data), "kind": kind, "claim": claim,
                                "duplicates": 0, "contradictions": [], "log": "not_supplied", "head_binding": "unstated",
                                "source_binding": "absent"}
+        keys[id(row)] = key
         inputs.append({"path": spec["path"], "sha256": digest})
-        if spec.get("log") is not None:
-            log_path = inside(root, spec["log"], "log")
-            log_data = read_bounded(log_path, LIMITS["artifact_bytes"], "log")
-            inputs.append({"path": spec["log"], "sha256": sha256(log_data)})
-            row["log_path"], row["log_sha256"] = spec["log"], sha256(log_data)
-            row["log"] = "verified" if claim.get("log_sha256") == sha256(log_data) else "mismatch"
+        if binding["log_path"] is not None:
+            inputs.append({"path": binding["log_path"], "sha256": binding["log_sha256"]})
+            row["log_path"], row["log_sha256"] = binding["log_path"], binding["log_sha256"]
+            row["log"] = "verified" if claim.get("log_sha256") == binding["log_sha256"] else "mismatch"
             if row["log"] == "mismatch":
                 row["contradictions"].append("log_hash_mismatch")
-        if spec.get("claimed_head") is not None:
-            row["head_binding"] = "matches" if commit_id(spec["claimed_head"], "claimed_head") == line["head"] else "mismatch"
+        if binding["claimed_head"] is not None:
+            row["head_binding"] = "matches" if binding["claimed_head"] == line["head"] else "mismatch"
             if row["head_binding"] == "mismatch":
                 row["contradictions"].append("claimed_head_mismatch")
+        # The same receipt bytes under a different binding is a conflict: keep every row.
+        conflicts = [other for other in rows if other["sha256"] == digest]
+        for other in [*conflicts, row] if conflicts else []:
+            if "conflicting_duplicate_binding" not in other["contradictions"]:
+                other["contradictions"].append("conflicting_duplicate_binding")
         if sources:
-            prefix = spec.get("source_prefix", "")
-            if type(prefix) is not str or (prefix and not prefix.endswith("/")) or ".." in prefix or prefix.startswith("/"):
-                refuse("invalid_source_prefix")
+            prefix = binding["source_prefix"] or ""
             mismatched = []
             for source, expected in sorted(sources.items()):
                 path = prefix + source
@@ -515,6 +552,7 @@ def prepare(request_path: Path, out: Path) -> dict[str, Any]:
 
 def validate(directory: Path, evidence_root: Path | None, worktrees: dict[str, Path]) -> dict[str, Any]:
     reasons: list[str] = []
+    results: list[dict[str, Any]] = []
     try:
         if directory.is_symlink() or not directory.is_dir():
             refuse("invalid_packet_directory")
@@ -524,7 +562,7 @@ def validate(directory: Path, evidence_root: Path | None, worktrees: dict[str, P
         if files["packet.sha256"] != expected:
             reasons.append("marker_mismatch")
         packet = strict_json(files["packet.json"])
-        if type(packet) is not dict or packet.get("schema") != PACKET_SCHEMA:
+        if type(packet) is not dict or packet.get("schema") not in READABLE_SCHEMAS:
             refuse("invalid_packet_schema")
         identity = dict(packet)
         identity.pop("packet_id", None)
@@ -539,6 +577,8 @@ def validate(directory: Path, evidence_root: Path | None, worktrees: dict[str, P
                 rows = [(row["path"], row["sha256"]) for check in line["checks"].values() for row in check["receipts"]]
                 rows += [(row["log_path"], row["log_sha256"]) for check in line["checks"].values()
                          for row in check["receipts"] if "log_path" in row]
+                rows += [(path, row["sha256"]) for check in line["checks"].values()
+                         for row in check["receipts"] for path in row.get("duplicate_paths", [])]
                 rows += [(row["path"], row["sha256"]) for row in line["artifacts"]]
                 for relative, digest in rows:
                     try:
@@ -547,19 +587,41 @@ def validate(directory: Path, evidence_root: Path | None, worktrees: dict[str, P
                     except PacketError as error:
                         reasons.append(f"evidence_{error}:{relative}")
             if line["label"] in worktrees:
+                name = line["label"]
                 try:
-                    now = snapshot(worktrees[line["label"]], {"base": line["base"], "head": line["head"], "branch": line["branch"]})
+                    now = snapshot(worktrees[name], {"base": line["base"], "head": line["head"], "branch": line["branch"]})
+                    moved = []
                     if (now["head_tree"], now["base_tree"]) != (line["head_tree"], line["base_tree"]):
-                        reasons.append(f"tree_moved:{line['label']}")
+                        moved.append(f"tree_moved:{name}")
                     if line["branch"] is not None and now["branch_commit"] != line["head"]:
-                        reasons.append(f"branch_moved:{line['label']}")
+                        moved.append(f"branch_moved:{name}")
+                    # Historical commit identity and the current checkout are separate results.
+                    recorded, current = line["worktree"], now["state"]
+                    drift = []
+                    if packet["schema"] != PACKET_SCHEMA:
+                        drift.append(f"current_state_unrecorded_in_packet:{name}")
+                    else:
+                        if recorded.get("worktree_head") != current["worktree_head"]:
+                            drift.append(f"worktree_head_changed:{name}")
+                        if any(recorded.get(field) != current[field] for field in CURRENT_STATE_FIELDS[1:]):
+                            drift.append(f"worktree_state_changed:{name}")
+                    state = ("drifted" if drift else "not_at_line_head_as_recorded" if not current["worktree_at_head"]
+                             else "dirty_as_recorded" if current["tracked_dirty_count"] else "clean")
+                    results.append({"label": name, "commit_identity": "moved" if moved else "unchanged",
+                                    "current_state": state, "worktree_head": current["worktree_head"],
+                                    "tracked_dirty": current["tracked_dirty"], "untracked_count": current["untracked_count"]})
+                    reasons.extend(moved + drift)
                 except PacketError as error:
-                    reasons.append(f"git_{error}:{line['label']}")
+                    reasons.append(f"git_{error}:{name}")
+                    results.append({"label": name, "commit_identity": "unavailable", "current_state": "unavailable"})
     except PacketError as error:
         reasons.append(str(error))
     except (ValueError, KeyError, TypeError, UnicodeDecodeError):
         reasons.append("malformed_packet")
-    return {"status": "invalid" if reasons else "valid", "reasons": sorted(set(reasons))[:50]}
+    outcome: dict[str, Any] = {"status": "invalid" if reasons else "valid", "reasons": sorted(set(reasons))[:50]}
+    if worktrees:
+        outcome["lines"] = results
+    return outcome
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -84,7 +84,10 @@ def test_clean_line_binds_commits_paths_hashes_order_and_generator_impact(world)
     assert line["checks"]["unit"]["receipts"][0]["log"] == "verified"
     assert line["stages"]["locally_tested"] == "claimed" and line["contradictions"] == []
     assert all(line["stages"][stage] == "not_established_by_local_packet" for stage in packet.LATER_STAGES)
-    assert packet.validate(out, world["evidence"], {"E9": world["repo"]}) == {"status": "valid", "reasons": []}
+    checked = packet.validate(out, world["evidence"], {"E9": world["repo"]})
+    assert (checked["status"], checked["reasons"]) == ("valid", [])
+    assert checked["lines"] == [{"label": "E9", "commit_identity": "unchanged", "current_state": "clean",
+                                 "worktree_head": world["second"], "tracked_dirty": [], "untracked_count": 0}]
     assert oct(out.stat().st_mode & 0o777) == "0o700" and all(oct(f.stat().st_mode & 0o777) == "0o600" for f in out.iterdir())
 
 
@@ -280,3 +283,127 @@ def test_cli_reports_refusals_without_writing(world, capsys):
     assert not out.exists()
     assert packet.main(["prepare", "--request", str(request(world)), "--out", str(out)]) == 0
     assert packet.main(["validate", "--packet", str(out), "--worktree", f"E9={world['repo']}"]) == 0
+
+
+# --- F2/R2: a receipt's whole binding is validated before any deduplication ---
+
+def launcher_receipt(world, name, source_sha=None):
+    body = {"exit_code": 0, "steps": [{"label": "journey", "code": 0, "seconds": 1.0}],
+            "source_sha256": {"a.py": source_sha or packet.sha256(b"A = 1\n")}}
+    (world["evidence"] / f"{name}.json").write_text(json.dumps(body))
+    return {"check": "journey", "path": f"{name}.json", "kind": "journey_launcher", "source_prefix": "src/"}
+
+
+@pytest.mark.parametrize("order", ["correct_first", "wrong_first"])
+def test_identical_bytes_with_conflicting_claimed_heads_stay_contradictory(world, order):
+    spec = receipt(world, "unit")
+    right, wrong = dict(spec, claimed_head=world["second"]), dict(spec, claimed_head=world["first"])
+    specs = [right, wrong] if order == "correct_first" else [wrong, right]
+    _, value = prepared(world, receipts=specs, required_checks=["unit"])
+    check = value["lines"][0]["checks"]["unit"]
+    assert check["status"] == "contradictory" and len(check["receipts"]) == 2
+    expected = ["matches", "mismatch"] if order == "correct_first" else ["mismatch", "matches"]
+    assert [row["head_binding"] for row in check["receipts"]] == expected
+    assert all("conflicting_duplicate_binding" in row["contradictions"] for row in check["receipts"])
+    assert value["lines"][0]["stages"]["locally_tested"] == "unperformed"
+
+
+def test_exact_duplicate_bindings_collapse_stably(world):
+    spec = dict(receipt(world, "unit"), claimed_head=world["second"])
+    _, value = prepared(world, receipts=[spec, dict(spec), dict(spec)], required_checks=["unit"])
+    (row,) = value["lines"][0]["checks"]["unit"]["receipts"]
+    assert row["duplicates"] == 2 and row["contradictions"] == [] and row["head_binding"] == "matches"
+    assert value["lines"][0]["checks"]["unit"]["status"] == "claimed_pass"
+    log_copy = dict(spec, log="unit-copy.log")
+    (world["evidence"] / "unit-copy.log").write_bytes((world["evidence"] / "unit.log").read_bytes())
+    _, again = prepared(world, receipts=[spec, log_copy], required_checks=["unit"])
+    assert again["lines"][0]["checks"]["unit"]["receipts"][0]["duplicates"] == 1
+
+
+@pytest.mark.parametrize("change", ["log", "source_prefix", "kind"])
+def test_same_bytes_under_a_different_binding_are_preserved_as_a_conflict(world, change):
+    if change == "log":
+        first = receipt(world, "unit")
+        (world["evidence"] / "other.log").write_bytes(b"a different log\n")
+        second, name = dict(first, log="other.log"), "unit"
+    elif change == "source_prefix":
+        first = launcher_receipt(world, "launcher")
+        second, name = dict(first, source_prefix=""), "journey"
+    else:
+        first = launcher_receipt(world, "launcher")
+        second, name = {"check": "journey", "path": "launcher.json", "kind": "command"}, "journey"
+    _, value = prepared(world, receipts=[first, second], required_checks=[name])
+    check = value["lines"][0]["checks"][name]
+    assert len(check["receipts"]) == 2 and check["status"] == "contradictory"
+    assert all("conflicting_duplicate_binding" in row["contradictions"] for row in check["receipts"])
+
+
+@pytest.mark.parametrize("bad,reason", [({"claimed_head": "not-a-commit"}, "invalid_claimed_head"),
+                                        ({"kind": "shell"}, "invalid_receipt_kind"),
+                                        ({"log": "../outside.log"}, "log_path_traversal"),
+                                        ({"source_prefix": "/abs/"}, "invalid_source_prefix"),
+                                        ({"source_prefix": "src/"}, "invalid_source_prefix")],
+                         ids=["head", "kind", "log", "absolute_prefix", "prefix_on_command"])
+def test_malformed_duplicate_metadata_is_refused_not_collapsed(world, bad, reason):
+    spec = receipt(world, "unit")
+    with pytest.raises(packet.PacketError, match=reason):
+        prepared(world, receipts=[spec, dict(spec, **bad)])
+
+
+def test_a_failing_row_is_never_replaced_by_an_equal_green_duplicate(world):
+    failed = receipt(world, "unit@1", returncode=1)
+    passed = receipt(world, "unit@2")
+    _, value = prepared(world, receipts=[failed, passed, dict(failed)], required_checks=["unit"])
+    check = value["lines"][0]["checks"]["unit"]
+    assert [row["claim"]["exit"] for row in check["receipts"]] == [1, 0]
+    assert check["receipts"][0]["duplicates"] == 1 and check["status"] == "claimed_pass_after_failure"
+
+
+# --- F2/R3: --worktree compares the current checkout, not only commit identity ---
+
+def worktree_result(result, name="E9"):
+    return next(row for row in result["lines"] if row["label"] == name)
+
+
+def test_validate_worktree_reports_tracked_edits_after_a_clean_packet(world):
+    out, _ = prepared(world)
+    clean = packet.validate(out, None, {"E9": world["repo"]})
+    assert clean["status"] == "valid" and worktree_result(clean)["current_state"] == "clean"
+    (world["repo"] / "src/a.py").write_text("A = 2\n")
+    result = packet.validate(out, None, {"E9": world["repo"]})
+    assert result["status"] == "invalid" and "worktree_state_changed:E9" in result["reasons"]
+    row = worktree_result(result)
+    assert row["commit_identity"] == "unchanged" and row["current_state"] == "drifted"
+    assert row["tracked_dirty"] == ["src/a.py"]
+
+
+@pytest.mark.parametrize("move", ["detach", "switch"])
+def test_validate_worktree_reports_a_moved_head_while_the_branch_stays(world, move):
+    out, _ = prepared(world)
+    if move == "detach":
+        run(world["repo"], "checkout", "-q", "--detach", world["first"])
+    else:
+        run(world["repo"], "checkout", "-q", "-b", "codex/other", world["first"])
+    assert run(world["repo"], "rev-parse", "refs/heads/codex/invented") == world["second"]
+    result = packet.validate(out, None, {"E9": world["repo"]})
+    assert result["status"] == "invalid" and "worktree_head_changed:E9" in result["reasons"]
+    assert worktree_result(result)["current_state"] == "drifted"
+
+
+def test_untracked_drift_is_reported(world):
+    out, _ = prepared(world)
+    (world["repo"] / "new-untracked.txt").write_text("invented\n")
+    result = packet.validate(out, None, {"E9": world["repo"]})
+    assert result["status"] == "invalid" and "worktree_state_changed:E9" in result["reasons"]
+
+
+def test_allowed_dirty_packets_validate_as_dirty_never_clean(world):
+    (world["repo"] / "src/a.py").write_text("A = 2\n")
+    receipts = [receipt(world, "unit"), receipt(world, "gen_state_contract")]
+    out, value = prepared(world, allow_dirty=True, receipts=receipts)
+    assert value["lines"][0]["stages"]["locally_tested"] == "partial"
+    assert "DIRTY (1 tracked)" in (out / "packet.md").read_text()
+    result = packet.validate(out, None, {"E9": world["repo"]})
+    assert result["status"] == "valid" and worktree_result(result)["current_state"] == "dirty_as_recorded"
+    (world["repo"] / "README").write_text("changed\n")
+    assert packet.validate(out, None, {"E9": world["repo"]})["status"] == "invalid"

@@ -46,11 +46,24 @@ receipt is `contradictory` when any of these holds:
 - its claimed head differs from the line head;
 - its log bytes do not match the log hash it states;
 - the source hashes it records differ from the head's blobs;
+- the same receipt bytes appear under a different binding
+  (`conflicting_duplicate_binding`);
 - the same check is also declared skipped.
+
+**Duplicates.** Each receipt's complete binding (kind, log bytes, claimed head
+and source prefix) is validated before any deduplication. Malformed binding
+metadata is refused even on a repeated receipt.
+- **Equal binding:** a repeat of the same bytes collapses into one row with a
+  `duplicates` count.
+- **Different binding:** the same bytes stay as separate rows, all
+  contradictory, in the order supplied.
+
+Nothing is replaced by a newer green row.
 
 `locally_tested` is `claimed` only if every required check passes, nothing is
 contradictory and the worktree has no tracked edits. Even then, it is a local
-claim and not CI.
+claim and not CI. An `allow_dirty` packet is labeled DIRTY, is never more than
+`partial`, and never validates as clean.
 
 ## Request
 
@@ -91,10 +104,13 @@ A request is one JSON file the caller writes explicitly. Nothing else is read:
 **Donors.** `donors` must equal the exact first-parent chain `base..head`, in
 cherry-pick order, so a reordered, missing or foreign commit is refused.
 
-**Branches.**
+**Branches and checkout state.**
 - If a `branch` is named, it must point at `head`.
+- The packet records the worktree's actual `HEAD` commit and its tracked and
+  untracked changes (bounded lists plus counts). These are commit IDs and
+  repository-relative paths only.
 - If the worktree's `HEAD` is the line head, tracked edits are refused unless
-  `allow_dirty` is true. Untracked files are listed.
+  `allow_dirty` is true.
 
 **Receipt kinds.**
 - `command` (default): `returncode`, `seconds` and `log_sha256`, the format of
@@ -139,9 +155,24 @@ mode 0600:
 - that no later stage is set.
 
 Optional arguments add two more checks:
-- `--evidence-root`: re-hashes every receipt, log and artifact.
-- `--worktree LABEL=DIR`: confirms each line's trees and branch have not
-  moved.
+- `--evidence-root`: re-hashes every receipt, log, duplicate path and
+  artifact.
+- `--worktree LABEL=DIR`: reports two separate results per line.
+  - `commit_identity` is `unchanged` or `moved`, from the trees and named
+    branch.
+  - `current_state` compares the checkout now with the recording: its actual
+    `HEAD` and its tracked and untracked changes. It is one of:
+    - `clean`;
+    - `dirty_as_recorded`;
+    - `not_at_line_head_as_recorded`;
+    - `drifted`;
+    - `unavailable`.
+
+  Any drift makes the result `invalid`. A moved `HEAD`, even with the branch
+  left in place, gives `worktree_head_changed`; changed edits or files give
+  `worktree_state_changed`. A packet from schema v1 still verifies its
+  integrity, but a requested current-state check fails with
+  `current_state_unrecorded_in_packet`.
 
 It exits 0 for `valid` and 1 for `invalid`.
 
