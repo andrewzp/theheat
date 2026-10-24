@@ -5,6 +5,7 @@ clock hook; the fixture and its explicitly configured children share wall time.
 """
 from contextlib import contextmanager
 import atexit
+import subprocess
 from datetime import UTC, datetime, timedelta
 import time
 
@@ -29,12 +30,16 @@ def ticking_workflow_clock(metadata):
     try:
         for name, clock in elapsed.items():
             setattr(time, name, clock)
+        # Freezegun also rewrites the alias captured by subprocess at import.
+        # Its real deadlines must use the same preserved elapsed clock.
+        setattr(subprocess, "_time", elapsed["monotonic"])
         yield
     finally:
         freezer.stop()
         # A surrounding calendar canary also deliberately preserves these.
         for name, clock in elapsed.items():
             setattr(time, name, clock)
+        setattr(subprocess, "_time", elapsed["monotonic"])
 
 
 def start_child_clock(metadata):

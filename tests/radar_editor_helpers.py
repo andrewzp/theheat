@@ -5,9 +5,10 @@ from src.commands.schema import utc_text
 from tests import published_radar_fixtures as f
 from tests import test_postgres_synchronous_generation as sync
 from tests import test_postgres_sourced_generation as sourced, test_postgres_editor_media as editor
+from tests.stage_revision_check_helpers import install_revision_protocol
 
 @pytest.fixture
-def radar_case(store, core, monkeypatch, tmp_path, native_dependencies):
+def radar_case(request, store, core, monkeypatch, tmp_path, native_dependencies):
     from src.voice import safety
 
     monkeypatch.setenv("THEHEAT_CRITIC_ENABLED", "1")
@@ -66,7 +67,7 @@ def radar_case(store, core, monkeypatch, tmp_path, native_dependencies):
     assert len(sent) == 1
     core[2].initialize_media_staging()
     core[2].initialize_media_commands()
-    core[2].initialize_revision_checks(now=editor.AT)
+    install_revision_protocol(core[2], request, now=editor.AT)
     store.configure_editor_media(**native_dependencies, scratch=tmp_path / "native")
     doc, raw, references, receipt = f.input_document(at=sourced.NOW)
     retained = published.retain(store, doc, raw, references, receipt)

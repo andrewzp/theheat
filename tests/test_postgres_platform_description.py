@@ -125,6 +125,7 @@ def test_legacy_review_cannot_create_new_obligation_then_new_binding_cannot_resu
         assert trace == []
 
 
+@pytest.mark.revision_check_protocol(1)
 def test_historical_v1_long_description_obligations_remain_passive(admitted, core, tmp_path, monkeypatch):
     import base64
     import json

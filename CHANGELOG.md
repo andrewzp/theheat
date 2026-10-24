@@ -1,3 +1,38 @@
+## 0.9.109.39
+
+- Retain bounded code-only delivery refusal diagnostics in offline fixture
+  failures while preserving original callbacks, assertions and deadlines.
+- Verify retained graphic review and completion evidence once within an owned
+  passive dashboard read. Recheck current source, roles and original expiry
+  before returning; keep independent command and delivery verification.
+- Add an owner-installed check protocol for new saved revisions with one
+  immutable lease per stage and an exact chain of timely passing evidence.
+  Preserve legacy enrollments and original request, spending and no-resend rules.
+  Bind completion, parked approval and delivery to the original final-stage
+  deadline; reject generic mutations without current scoped authority.
+- Connect compact station claims to locally resolved full temperature evidence,
+  native graphics, joint review, fresh checks and parked-state restore. Keep full
+  comparator tables out of model requests and retain locked source checks.
+- Carry compact station claims through experimental local media delivery with
+  typed enrollment, acquisition and dispatch checks. Bind own-attempt recovery
+  to the exact committed request; unrelated unknown sends remain blocked.
+- Derive extended attachment description and packet together. Reuse one fresh
+  current-review calculation for identical inputs, with independent verification
+  for parked decision transitions and unchanged public review checks.
+- Encode bounded detached projection containers through the native JSON encoder
+  when their conservative complete bound fits; preserve exact bytes, refusals
+  and the incremental fallback.
+- Reuse canonical bytes already checked by each fresh projection-field decode.
+  Preserve corruption refusal order, independent field copies and every database
+  read while removing duplicate validation within that read.
+- Measure the full encoding bound while validating freshly parsed private JSON,
+  avoiding another tree copy. Keep caller-owned snapshot protection and the
+  original complete validation, incremental fallback and refusal behavior.
+- Preserve standalone negative temperatures in the event suffix guard while
+  retaining event/date refusals and required factual and scientific checks.
+- Run known critical CI cases first while keeping all cases, assertions and
+  deadlines, and align ticking parent, child and HTTP test clocks.
+
 ## 0.9.109.38
 
 - Add explicitly enabled private request evidence and offline replay, binding

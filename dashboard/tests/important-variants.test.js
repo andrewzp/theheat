@@ -8,6 +8,7 @@ import { readFileSync } from "node:fs"
 import { createServer } from "node:http"
 import { Readable } from "node:stream"
 import { runFixtureWorker } from "../test-support/fixture-worker.js"
+import { installWorkflowClock } from "../test-support/workflow-clock.js"
 import { createElement } from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 import { generationCommand, GenerationRequest } from "../app/components/SourcedGeneration.js"
@@ -77,6 +78,7 @@ test("important source and slate commands expose only immutable references", () 
 test("actual important API -> two independently checked results -> exact retained selection", { skip: !process.env.THEHEAT_IMPORTANT_TEST_CONFIG }, async () => {
   const configFile = process.env.THEHEAT_IMPORTANT_TEST_CONFIG
   const config = JSON.parse(readFileSync(configFile, "utf8"))
+  const restoreClock = installWorkflowClock(config.test_clock)
   const saved = { ...process.env }
   process.env.NODE_ENV = "test"
   process.env.DASHBOARD_AUTH_DISABLED = "1"
@@ -110,7 +112,7 @@ test("actual important API -> two independently checked results -> exact retaine
   async function worker(operation, command) {
     console.error("fixture worker", operation)
     const result = await runFixtureWorker(config.python, [config.child, configFile, operation, command], { cwd: config.root,
-      env: { PATH: process.env.PATH, PYTHONPATH: config.root, no_proxy: "*" }, encoding: "utf8", timeout: 30000 })
+      env: { PATH: process.env.PATH, PYTHONPATH: config.root, no_proxy: "*", LC_ALL: "C" }, encoding: "utf8", timeout: 30000 })
     assert.equal(result.status, 0, result.stdout + result.stderr)
     return JSON.parse(result.stdout)
   }
@@ -206,6 +208,7 @@ test("actual important API -> two independently checked results -> exact retaine
     server.closeAllConnections()
     await new Promise(resolve => server.close(resolve))
     globalThis.fetch = actualFetch
+    restoreClock()
     for (const key of Object.keys(process.env)) if (!Object.hasOwn(saved, key)) delete process.env[key]
     Object.assign(process.env, saved)
   }

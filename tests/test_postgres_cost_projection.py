@@ -6,6 +6,7 @@ from src.commands.schema import utc_datetime, utc_text
 from tests.test_postgres_projection import cluster as cluster, database as database
 from tests.test_postgres_command_authority import make_authority as make_authority, core as core
 from tests.test_spend_journal import NOW, LIMITS, intent, call
+from tests.stage_revision_check_helpers import install_revision_protocol
 
 
 def test_unknown_reserved_settled_and_released_totals(store,monkeypatch):
@@ -780,6 +781,7 @@ def test_corrected_sync_media_source_after_edit_restart_and_restore(urgent,core,
     core[2].initialize_media_staging()
     core[2].initialize_media_commands()
     urgent['store'].configure_editor_media(**native_dependencies,scratch=tmp_path/'native')
+    install_revision_protocol(core[2], now=media.AT)
     media.prepare_and_attach(urgent)
     media.complete_revision(urgent,monkeypatch)
     media_history_readback(urgent,core,cluster,tmp_path,monkeypatch)

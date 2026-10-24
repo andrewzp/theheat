@@ -25,6 +25,9 @@ from tests.test_postgres_editor_media import fact_pass
 from src.voice import safety
 safety.GEMINI_API_KEY="invented-offline-key"
 cfg=json.loads(Path(sys.argv[1]).read_text())
+if cfg.get("t4_timing_diagnostics"):
+    from tests import t4_timing_helpers as t4_timing
+    t4_started = t4_timing.sample()
 from tests.workflow_clock import start_child_clock
 fixture_clock=start_child_clock(cfg["test_clock"])
 safe_environment()
@@ -33,6 +36,11 @@ b=cfg["baseline"]
 authority.configure_ghcn_source_results(Baseline(Path(b["database"]),Path(b["manifest"]),b["database_sha256"],b["manifest_sha256"]))
 if Path(cfg["generation"]).exists():
     authority.configure_sourced_generation(private_configuration(cfg["generation"]))
+if cfg.get("native"):
+    # Local editor media for compact-claim journeys; the native child is unchanged.
+    authority.configure_editor_media(**cfg["native"])
+if cfg.get("delivery"):
+    authority.configure_delivery(cfg["delivery"])
 operators=Operators(cfg["operators"])
 assert fingerprint(current_editorial_policy())==cfg["policy_sha256"]
 original=socket.socket.connect
@@ -138,6 +146,12 @@ if fault=="final_footprint":
         temporary.replace(path)
         return result
     admission.verified_completion=replaced
+if fault=="native_failure":
+    # Explicit negative fixture: the fixed native child cannot start.
+    from src.commands import preview_media_worker
+    def failed_native(*args,**kwargs):
+        raise OSError("invented native renderer failure")
+    preview_media_worker.run_native=failed_native
 if fault=="passive_traps":
     from src.two_bot import ghcn_claim_view
     from src.commands import postgres_checks,postgres_candidate_admission,postgres_synchronous_generation
@@ -157,10 +171,26 @@ def log(row):
         stream.write(json.dumps(row,sort_keys=True)+"\n")
 from src.two_bot import writer,fact_check,critic,ghcn_claim_view
 from src.two_bot import check_executor
+if cfg.get("t4_timing_diagnostics"):
+    import atexit
+    t4_timing.emit(cfg["trace"], operation, "child_startup", t4_started, t4_timing.sample())
+    atexit.register(lambda: t4_timing.emit(cfg["trace"], operation, "child_lifetime", t4_started, t4_timing.sample()))
+    for name in ("prepare_execution", "resolve", "_reconstruct", "_read_source", "_checkpoint"):
+        t4_timing.instrument(ghcn_claim_view, name, cfg["trace"], operation, "source:" + name)
+    prepare_execution = ghcn_claim_view.prepare_execution
+    t4_timing.instrument(check_requests, "prepare_request", cfg["trace"], operation, "request_preparation")
+    for name in ("execute_candidate_check_once", "execute_revision_check_once", "execute_sourced_generation_once", "consume"):
+        t4_timing.instrument(authority, name, cfg["trace"], operation, "authority:" + name)
+    t4_timing.instrument(check_executor.GoogleCheckTransport, "execute", cfg["trace"], operation, "provider")
+    if operation == "consume":
+        from src.commands import preview_media_worker
+        for name in ("run_native", "consume_media_once"):
+            t4_timing.instrument(preview_media_worker, name, cfg["trace"], operation, "native:" + name)
 from src.commands.schema import utc_datetime
 original_window_available=check_executor._window_available
 def traced_window_available(packet,lease,now):
-    available=original_window_available(packet,lease,now)
+    available=(t4_timing.timed(cfg["trace"], operation, "preflight", original_window_available, packet, lease, now)
+        if cfg.get("t4_timing_diagnostics") else original_window_available(packet,lease,now))
     log(dict(kind="check_window",operation=operation,fault=fault,now=now,
         lease_expires_at=lease["expires_at"],useful_until=packet["useful_until"],
         lease_remaining_seconds=(utc_datetime(lease["expires_at"])-utc_datetime(now)).total_seconds(),
@@ -224,12 +254,105 @@ if operation=="checkpoint_probe":
     assert len(reads)==4
     result=dict(reads=4,distinct_validated_connections=3,full_source_preserved=True,
         later_source_tamper_refused="corrupt_projection_identity")
+elif operation in {"delivery_run", "delivery_refusals", "delivery_high_control"}:
+    from tests import test_postgres_temperature_delivery as t4
+    from src.commands import postgres_delivery as delivery
+    if operation == "delivery_run":
+        parameters = json.loads(fault)
+        if cfg.get("t4_timing_diagnostics"):
+            t4_timing.instrument(delivery, "attempt_successor", cfg["trace"], operation, "delivery:attempt_successor")
+            t4_timing.instrument(delivery._OwnAttemptContext, "current", cfg["trace"], operation, "delivery:own_context")
+        from src.posting import delivery_transport
+        from tests.t4_delivery_diagnostics import observe_callbacks
+        from tests.t4_delivery_diagnostics import observe_budget_timing
+        import time
+        with observe_budget_timing(delivery, delivery_transport, timer=lambda: time.perf_counter()) as budget_timing:
+            with observe_callbacks(delivery, delivery_transport) as diagnostic:
+                result = t4.child_delivery_run(authority, operators, cfg, identity, parameters)
+            diagnostic.emit(log, platform=parameters["platform"], stage=parameters["stage"], result=result)
+        budget_timing.emit(log)
+        log(dict(kind="delivery_stage", platform=parameters["platform"], stage=parameters["stage"], result=result))
+    elif operation == "delivery_refusals":
+        case = dict(authority=authority, operators=operators, params=cfg["t4_owner"],
+                    config=cfg, draft_id=cfg["delivery_draft_id"])
+        boundaries = tuple(json.loads(fault))
+        saved = None
+        if boundaries == ("before_call",):
+            with authority.projections._connection() as connection:
+                saved = delivery.attempt(connection, delivery.read(connection, identity), "x", "upload")
+        result = t4.source_refusal_matrix(dict(case=case, intent=identity, trace=[]), boundaries=boundaries, saved=saved)
+    else:
+        from dataclasses import replace
+        from copy import deepcopy
+        from src.storage.cyclone_supply import CycloneSupplyError
+        proof = delivery.prepare_context(authority, draft_id=cfg["delivery_draft_id"])
+        with authority.projections._connection() as connection:
+            version, state = authority._state(connection, lock=True)
+            assert proof.current(authority, connection, state, version) is proof.claim
+            reference = deepcopy(proof.claim.reference)
+            reference["selection"]["signal_field"] = "all_time_low"
+            altered = replace(proof, claim=replace(proof.claim, reference=reference))
+            try:
+                altered.current(authority, connection, state, version)
+            except (t4.CommandError, CycloneSupplyError):
+                pass
+            else:
+                raise AssertionError("Opposite field substituted for selected high claim")
+        # Use the ordinary complete local comparator evidence without rendering.
+        from src.commands import postgres_editor_media as editor_media
+        with authority.projections._connection() as connection:
+            _, state = authority._state(connection)
+            draft = next(row for row in state["drafts"] if row.get("id") == cfg["delivery_draft_id"])
+            inputs = editor_media.inputs(authority, connection, draft, current_editorial_policy(), datetime.now(UTC), claim=proof.claim)
+        spec = inputs["spec"]
+        evidence = spec["evidence"]
+        assert spec["template"] == "temperature_comparator"
+        assert evidence["variable"] == "daily_maximum_temperature"
+        assert evidence["points"][0]["value"] > evidence["baseline"]["point"]["value"]
+        assert evidence["baseline"]["point"]["value"] == proof.claim.full.historical_context["prior_record_c"]
+        result = dict(selection=proof.claim.reference["selection"], field_swap_refused=True,
+            full_story_preserved=proof.claim.full_sha256 == proof.claim.reference["full_story"]["sha256"],
+            comparator="all_time", direction="high")
 elif operation=="enroll":
     if fault=="lower_priority":
         cfg["selection"]=dict(cfg["selection"],signal_field="monthly_high")
     result=authority.retain_ghcn_generation_input(cfg["run_id"],cfg["selection"],clock=clock)
 elif operation=="consume":
-    result=authority.consume(operators.resolve,command_id=identity)
+    from src.commands.schema import CommandError
+    try:
+        result=authority.consume(operators.resolve,command_id=identity)
+    except CommandError as exc:
+        if exc.code!="native_preparation_required":
+            raise
+        from src.commands.preview_media_worker import consume_media_once
+        result=consume_media_once(authority,operators.resolve,command_id=identity)
+elif operation in {"deterministic","safety","fact_check","critic"} and "revision_checks" in authority.result(identity):
+    # A saved draft revision's required check. The invented reservation only needs
+    # the request bytes; the authority's runner resolves and fences its own context.
+    check_set_id=authority.result(identity)["revision_checks"]["check_set_id"]
+    packet=authority.check_execution("read",dict(check_set_id=check_set_id),now=clock())["packet"]
+    reference=ghcn_claim_view.structural_view(packet["bundle"])
+    claim=ghcn_claim_view.resolve(authority,reference["source_run_id"],reference["selection"])
+    request=canonical_json(check_requests.prepare_request(packet,operation,resolved=claim)).encode()
+    reservation=None if operation=="deterministic" else dict(intent_id="ghcn-media-"+packet["enrollment_id"][:12]+"-"+operation,
+        job_id=spending_job(packet),request_sha256=hashlib.sha256(request).hexdigest(),provider="google",role=operation,
+        model=packet["policy"]["models"][operation],estimate_sha256="e"*64,reserve_micro_usd=5)
+    sent=[]
+    def response(request):
+        sent.append(request)
+        if fault=="postgrant_baseline":
+            path=Path(b["manifest"])
+            path.write_bytes(path.read_bytes()+b"\n")
+        raw=checks.envelope({"safety":"NO","fact_check":fact_pass(packet["final_text"]),"critic":checks.CRITIC_PASS}.get(operation,"NO"))
+        return httpx.Response(200,stream=httpx.ByteStream(raw),request=request)
+    result=authority.execute_revision_check_once(identity,operators.resolve,clock=clock,reservation=reservation,enabled=True,
+        transport_options={"api_key":"invented-offline-key","http_transport":httpx.MockTransport(response)})
+    for body in sent:
+        log(dict(kind="model_post",stage="revision_"+operation,bytes=len(body.content),sha256=hashlib.sha256(body.content).hexdigest(),
+            full_tables=b"calendar_samples" in body.content))
+    log(dict(kind="revision_stage",stage=operation,packet_sha256=fingerprint(packet),packet_bundle_sha256=fingerprint(packet["bundle"]),
+        view_sha256=claim.view_sha256,full_sha256=claim.full_sha256,request_bytes=len(request),
+        request_full_tables=b"calendar_samples" in request,result=result))
 elif operation=="projection":
     result=authority.candidate_projection(authority.generated_candidate_inputs(),now=datetime.now(UTC),resolve_principal=operators.resolve)
 elif operation in {"write","capture","interpret"}:
@@ -242,7 +365,7 @@ else:
     packet=authority.check_execution("read",dict(check_set_id=check_set_id),now=clock())["packet"]
     prepared=prepare_execution(authority,cfg["run_id"],cfg["selection"])
     request=canonical_json(check_requests.prepare_request(packet,operation,resolved=prepared.claim)).encode()
-    reservation=None if operation=="deterministic" else dict(intent_id="ghcn-fixture-"+operation,job_id=spending_job(packet),
+    reservation=None if operation=="deterministic" else dict(intent_id="ghcn-fixture-"+check_set_id[:12]+"-"+operation,job_id=spending_job(packet),
         request_sha256=hashlib.sha256(request).hexdigest(),provider="google",role=operation,model=packet["policy"]["models"][operation],
         estimate_sha256="e"*64,reserve_micro_usd=5)
     sent=[]

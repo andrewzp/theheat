@@ -89,8 +89,10 @@ test("actual authenticated HTTP → native package → review → fresh checks �
       assert.equal(still.platform_description.record.description_sha256,descriptionHash)
     }
     await submit(attachment)
-    current=(await request(mediaPath)).body
-    assert.equal(current.review_current,true)
+    const attachedRead=await request(mediaPath)
+    assert.equal(attachedRead.status,200,JSON.stringify(attachedRead))
+    current=attachedRead.body
+    assert.equal(current.review_current,true,JSON.stringify(attachedRead))
     if(config.expect_modis_projection)assert.equal(current.platform_description.record.description_sha256,descriptionHash)
     const checks=mediaCommand(current,"request_revision_checks",null,new Date(config.at))
     await submit(checks)

@@ -93,6 +93,35 @@ generic artifact reader. The database retains all original receipts and holds
 unresolved effects across edits, restarts and full restore. A new parked intent
 cannot hide unknown work or repeat a confirmed local post for the same event.
 
+## Compact station claims
+
+An explicitly configured retained GHCN resolver can supply the full evidence for
+a compact saved station claim. It resolves before opening a mutation transaction;
+each locked enrollment, acquisition and dispatch boundary authorizes the actor
+and checks the exact source, baseline, selection, policy and draft revision again.
+No downloaded table is added to model requests, and resolving evidence does not
+extend the original review or source lifetime.
+
+The worker's committed request barrier is itself an unknown outcome until a
+response is retained. Final preflight recognizes only that exact worker-owned
+transition, through a typed single-use context constructed with the committed
+write. It does not waive an earlier or unrelated unknown outcome, allow a second
+mutation, refresh a lease, or authorize delivery from a passive view.
+
+The connected invented low-temperature case exercises one writer, all required
+checks, native PNG preparation, joint review, attachment and fresh saved-revision
+checks. Its three loopback SDK POSTs end with a lost create response; restart
+does not resend, and one same-attempt journal GET reconciles the retained receipt.
+Cancellation, editing and owned dump/restore preserve the original history.
+Passive cost views keep initial and later check requests distinct and do not buy
+calls or turn an unknown charge into zero. Full descriptions retain their exact
+UTF-8 bytes, including a trailing newline; oversized representations still refuse.
+
+This connected case is not the entire regression matrix. Opposite-comparator,
+source/role/lease drift, source-outage history and existing delivery families
+remain mandatory release checks. Hosted authority, live delivery, source truth,
+human editorial judgment and provider invoices require separate evidence.
+
 ## Focused validation
 
 ```sh

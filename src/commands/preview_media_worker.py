@@ -49,6 +49,10 @@ def run_native(args, *, input, cwd, env, timeout=45, grace=1):
 def consume_media_once(authority, resolve_principal, *, command_id=None, now=None):
     """Reconcile first, snapshot under lock, render outside lock, commit once."""
     at = _clock(now)
+    # A compact GHCN claim resolves before the locked snapshot; its context is
+    # rechecked against that locked state, and consume() resolves its own again.
+    from src.commands.postgres_sourced_generation import prepare_ghcn_command
+    ghcn = prepare_ghcn_command(authority, command_id)
     try:
         with authority.projections._connection() as c:
             authority._validate(c)
@@ -64,7 +68,8 @@ def consume_media_once(authority, resolve_principal, *, command_id=None, now=Non
             if command.action != "prepare_media_revision":
                 raise CommandError("not_native_preparation", "Use the ordinary local consumer")
             actor = domain.resolve(resolve_principal, command.actor_subject)
-            draft, value = domain.command_inputs(authority, c, state, command, actor, current_editorial_policy(), at)
+            draft, value = domain.command_inputs(authority, c, state, command, actor, current_editorial_policy(), at,
+                                                 ghcn=ghcn, version=version)
             checkpoint = fingerprint(dict(target=domain._identity(draft), inputs=value))
             spec = p._decode(p._canonical(value["spec"]))
             original = None
