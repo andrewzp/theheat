@@ -728,3 +728,208 @@ def test_plugin_registration_failures_are_explicit(monkeypatch, fail, expected):
     data = os.read(read, w.MAX_BYTES).decode()
     os.close(read)
     assert tuple(data.splitlines()[1].split()[2:]) == expected
+
+
+# --- F1: the witness's own failures, of any BaseException type, stay inside it ---
+
+class DiagnosticAbort(BaseException):
+    """Invented: raised only by the witness's own writer or installation step."""
+
+
+class OriginalStop(BaseException):
+    """Invented: raised only by the observed operation itself."""
+
+
+DIAGNOSTIC_FAILURES = pytest.mark.parametrize("failure", [DiagnosticAbort, KeyboardInterrupt, SystemExit, GeneratorExit],
+                                              ids=["custom", "interrupt", "system_exit", "generator_exit"])
+ORIGINAL_ERRORS = pytest.mark.parametrize("make_error", [OriginalStop, KeyboardInterrupt, lambda: SystemExit(3), GeneratorExit,
+                                                          lambda: ValueError("x")],
+                                          ids=["custom", "interrupt", "system_exit", "generator_exit", "value"])
+
+
+@DIAGNOSTIC_FAILURES
+def test_writer_failure_on_enter_still_calls_the_original_exactly_once(failure):
+    lines, marker, result, calls = Lines(fail_at=1, error=failure), object(), object(), []
+    witness = w.Witness(lines)
+
+    def original(argument, *, named):
+        calls.append((argument, named))
+        return result
+
+    assert w.forward(witness, "ready_admit", original, (marker,), {"named": marker}) is result
+    assert calls == [(marker, marker)] and calls[0][0] is marker
+    assert witness.stopped and lines.lines == [] and lines.calls == 1
+
+
+@DIAGNOSTIC_FAILURES
+def test_writer_failure_on_exit_returns_the_result_and_never_fabricates_completion(failure):
+    lines, result, calls = Lines(fail_at=2, error=failure), object(), []
+    witness = w.Witness(lines)
+
+    def original(mark):
+        calls.append(mark)
+        return result
+
+    assert w.forward(witness, "ready_cost", original, (1,), {}) is result
+    assert w.forward(witness, "ready_cost", original, (2,), {}) is result
+    assert calls == [1, 2] and witness.stopped
+    assert lines.events() == [("ENTER", "ready_cost")] and lines.calls == 2
+
+
+@DIAGNOSTIC_FAILURES
+@ORIGINAL_ERRORS
+def test_writer_failure_on_error_keeps_the_original_exception(failure, make_error):
+    lines, error, calls = Lines(fail_at=2, error=failure), make_error(), []
+    witness = w.Witness(lines)
+
+    def original():
+        calls.append(1)
+        raise error
+
+    with pytest.raises(BaseException) as raised:
+        w.forward(witness, "ready_command", original, (), {})
+    assert raised.value is error and calls == [1]
+    assert raised.value.__context__ is None and raised.value.__cause__ is None
+    assert lines.events() == [("ENTER", "ready_command")] and witness.stopped
+
+
+@DIAGNOSTIC_FAILURES
+@pytest.mark.parametrize("body_raises", [False, True], ids=["body_returns", "body_raises"])
+def test_ready_body_report_failure_still_runs_manager_exit_once(failure, body_raises):
+    # Lines: 1 ENTER ready_prepare, 2 EXIT ready_prepare, 3 ENTER ready_body, 4 EXIT/ERROR ready_body fails.
+    lines, value, flag, error = Lines(fail_at=4, error=failure), object(), object(), OriginalStop()
+    manager = Manager(value, suppress=False if body_raises else flag)
+    context = w.WitnessedContext(w.Witness(lines), manager)
+    if body_raises:
+        with pytest.raises(OriginalStop) as raised:
+            with context as target:
+                assert target is value
+                raise error
+        assert raised.value is error
+        (triple,) = manager.exited
+        assert triple[0] is OriginalStop and triple[1] is error and triple[2] is not None
+    else:
+        assert context.__enter__() is value
+        assert context.__exit__(None, None, None) is flag
+        assert manager.exited == [(None, None, None)]
+    assert manager.entered == 1 and len(manager.exited) == 1
+    assert lines.events() == [("ENTER", "ready_prepare"), ("EXIT", "ready_prepare"), ("ENTER", "ready_body")]
+
+
+@DIAGNOSTIC_FAILURES
+@pytest.mark.parametrize("fail_at", [5, 6], ids=["cleanup_enter", "cleanup_error"])
+def test_cleanup_report_failure_keeps_the_managers_own_exit_exception(failure, fail_at):
+    leaving, lines = OriginalStop(), Lines(fail_at=fail_at, error=failure)
+    manager = Manager(object(), exit_error=leaving)
+    with pytest.raises(OriginalStop) as raised:
+        with w.WitnessedContext(w.Witness(lines), manager):
+            pass
+    assert raised.value is leaving and manager.entered == 1 and len(manager.exited) == 1
+    assert lines.events()[:4] == [("ENTER", "ready_prepare"), ("EXIT", "ready_prepare"), ("ENTER", "ready_body"),
+                                  ("EXIT", "ready_body")]
+    assert ("EXIT", "ready_cleanup") not in lines.events()
+
+
+@DIAGNOSTIC_FAILURES
+def test_phase_report_failures_never_change_the_phase_outcome(failure):
+    error = OriginalStop()
+    for fail_at in (1, 2):
+        ran = []
+        with pytest.raises(OriginalStop) as raised:
+            with w.Phase(w.Witness(Lines(fail_at=fail_at, error=failure)), "call"):
+                ran.append(1)
+                raise error
+        assert raised.value is error and ran == [1]
+    witness = w.Witness(Lines(fail_at=1, error=failure))
+    with w.Phase(witness, "setup"):
+        ran.append(2)
+    assert ran == [1, 2] and witness.stopped
+
+
+class GuardedModule(types.ModuleType):
+    """Invented module whose attribute writes raise for one name, from a given call onward."""
+
+    def __init__(self, name, failing, failure, after=0):
+        super().__init__(name)
+        object.__setattr__(self, "_failing", failing)
+        object.__setattr__(self, "_failure", failure)
+        object.__setattr__(self, "_writes", after)
+
+    def __setattr__(self, key, value):
+        if key == self._failing:
+            object.__setattr__(self, "_writes", self._writes - 1)
+            if self._writes < 0:
+                raise self._failure()
+        object.__setattr__(self, key, value)
+
+
+def public(module):
+    """Module attributes without the invented guard's own bookkeeping."""
+    return {key: value for key, value in vars(module).items() if not key.startswith("_")}
+
+
+def _protocol_with(monkeypatch, modules, plugins):
+    read, write = os.pipe()
+    monkeypatch.setattr(w.os, "dup", lambda fd: write)
+    ran = []
+    with w.selected_protocol(Item(plugins=plugins), modules):
+        ran.append(w.current())
+    assert len(ran) == 1 and w.current() is None
+    data = os.read(read, w.MAX_BYTES).decode("ascii")
+    os.close(read)
+    return data
+
+
+@DIAGNOSTIC_FAILURES
+@pytest.mark.parametrize("fail", ["register", "unregister"])
+def test_plugin_installation_and_removal_failures_never_block_the_protocol(monkeypatch, failure, fail):
+    class Failing(Plugins):
+        def register(self, plugin, name=None):
+            self.calls.append(("register", plugin, name))
+            if fail == "register":
+                raise failure()
+
+        def unregister(self, plugin):
+            self.calls.append(("unregister", plugin, None))
+            if fail == "unregister":
+                raise failure()
+    modules = invented_modules([])
+    before = {key: dict(vars(module)) for key, module in modules.items()}
+    data = _protocol_with(monkeypatch, modules, Failing())
+    assert {key: dict(vars(module)) for key, module in modules.items()} == before
+    assert data.splitlines()[0].split()[2:] == ["ENTER", "protocol"]
+
+
+@DIAGNOSTIC_FAILURES
+def test_interposition_failure_restores_installed_wrappers_and_runs_the_protocol(monkeypatch, failure):
+    modules = invented_modules([])
+    original = modules["tests.test_postgres_temperature_editor_media"]
+    guarded = GuardedModule("tests.test_postgres_temperature_editor_media", "submit_command", failure)
+    for key, value in vars(original).items():
+        if not key.startswith("__"):
+            object.__setattr__(guarded, key, value)
+    modules["tests.test_postgres_temperature_editor_media"] = guarded
+    before = {key: public(module) for key, module in modules.items()}
+    data = _protocol_with(monkeypatch, modules, Plugins())
+    assert {key: public(module) for key, module in modules.items()} == before
+    assert all(public(module)[key] is value for name, module in modules.items() for key, value in before[name].items())
+    assert w.parse(data) == dict(status="invalid", reason="malformed", lines=2, open=["protocol"], last_closed=None,
+                                 errors=[], notes=[])
+
+
+@DIAGNOSTIC_FAILURES
+def test_restoration_failure_still_restores_every_other_target(monkeypatch, failure):
+    modules = invented_modules([])
+    original = modules["tests.test_postgres_temperature_editor_media"]
+    # The install write succeeds; the restore write of the same attribute raises.
+    guarded = GuardedModule("tests.test_postgres_temperature_editor_media", "submit_command", failure, after=1)
+    for key, value in vars(original).items():
+        if not key.startswith("__"):
+            object.__setattr__(guarded, key, value)
+    modules["tests.test_postgres_temperature_editor_media"] = guarded
+    originals = {(name, key): value for name, module in modules.items() for key, value in public(module).items()}
+    data = _protocol_with(monkeypatch, modules, Plugins())
+    for (name, key), value in originals.items():
+        if key != "submit_command":
+            assert public(modules[name])[key] is value
+    assert data.splitlines()[-1].split()[2:] == ["INVALID", "restore_conflict"]

@@ -19,7 +19,14 @@ dying, for that single node only:
 * Each witnessed call or context is forwarded exactly once with the original
   arguments. The original result, context value, suppression flag and exception
   object are returned or raised unchanged. A failed action gets ERROR, never
-  EXIT. A writer failure only stops the witness; it never replaces an outcome.
+  EXIT.
+* The witness isolates its own failures. Anything raised inside it, of any
+  BaseException type, only disables the witness: the writer, bookkeeping,
+  selection, installation and restoration are all covered. The observed call,
+  its own exception and its cleanup are never replaced, skipped or retried, and
+  no completion is fabricated. An interrupt that arrives while the witness
+  itself is writing is absorbed by this boundary and recorded as a writer
+  failure.
 * Reentrant emission, malformed nesting, a cleanup conflict and overflow end
   the witness with one explicit terminal line. Events from other threads and
   missing targets are not witnessed and are noted once each.
@@ -133,29 +140,44 @@ class Witness:
         self._noted: set[str] = set()
         self.stopped = False
         self.writer_failed = False
+        self.failed = False
         self.lines_written = 0
         self.bytes_written = 0
 
     def enter(self, phase: str) -> None:
-        self._event("ENTER", phase)
+        self._contain(lambda: self._event("ENTER", phase))
 
     def exit(self, phase: str) -> None:
-        self._event("EXIT", phase)
+        self._contain(lambda: self._event("EXIT", phase))
 
     def error(self, phase: str) -> None:
-        self._event("ERROR", phase)
+        self._contain(lambda: self._event("ERROR", phase))
 
     def note(self, reason: str) -> None:
         """Queue a once-only non-terminal note; written with the next owner event."""
+        self._contain(lambda: self._note(reason))
+
+    def invalid(self, reason: str) -> None:
+        """End the witness explicitly (owner thread only)."""
+        self._contain(lambda: self._invalid(reason))
+
+    def _contain(self, action: Callable[[], None]) -> None:
+        """The isolation boundary: the witness's own failure only disables the witness."""
+        try:
+            action()
+        except BaseException:
+            self.stopped = True
+            self.failed = True
+
+    def _note(self, reason: str) -> None:
         if reason in NOTE_REASONS and reason not in self._noted and reason not in self._pending_notes:
             self._pending_notes.append(reason)
         if threading.get_ident() == self._owner and not self._writing:
             self._event(None, None)
 
-    def invalid(self, reason: str) -> None:
-        """End the witness explicitly (owner thread only)."""
+    def _invalid(self, reason: str) -> None:
         if threading.get_ident() != self._owner:
-            self.note("foreign_thread")
+            self._note("foreign_thread")
         elif self._writing:
             self._reentered = True
         else:
@@ -163,7 +185,7 @@ class Witness:
 
     def _event(self, event: str | None, phase: str | None) -> None:
         if threading.get_ident() != self._owner:
-            self.note("foreign_thread")
+            self._note("foreign_thread")
             return
         if self._writing:
             self._reentered = True
@@ -176,9 +198,10 @@ class Witness:
         self._writing = True
         try:
             action()
-        except Exception:
+        except BaseException:
             # Bookkeeping must never replace the witnessed outcome.
             self.stopped = True
+            self.failed = True
         finally:
             self._writing = False
 
@@ -227,7 +250,7 @@ class Witness:
             return
         try:
             self._writer(line)
-        except Exception:
+        except BaseException:
             self.writer_failed = True
             self.stopped = True
             return
@@ -325,9 +348,12 @@ def wrap_call(witness: Witness, phase: str, original: Callable[..., Any]) -> Cal
 
 def worker_phase(args: tuple[Any, ...], kwargs: Mapping[str, Any]) -> str:
     """Map the worker operation to a closed phase; the value itself is never written."""
-    operation = args[1] if len(args) > 1 else kwargs.get("operation")
-    if type(operation) is str and operation in WORKER_PHASES:
-        return WORKER_PHASES[operation]
+    try:
+        operation = args[1] if len(args) > 1 else kwargs.get("operation")
+        if type(operation) is str and operation in WORKER_PHASES:
+            return WORKER_PHASES[operation]
+    except BaseException:
+        pass
     return "worker_other"
 
 
@@ -345,8 +371,27 @@ def wrap_context(witness: Witness, original: Callable[..., Any]) -> Callable[...
     return witnessed
 
 
+def _restore(installed: list[tuple[Any, str, Any, Any]]) -> bool:
+    """Restore every installed attribute in reverse; True if any could not be restored."""
+    conflict = False
+    for module, attribute, original, wrapper in reversed(installed):
+        try:
+            if vars(module).get(attribute) is wrapper:
+                setattr(module, attribute, original)
+            else:
+                conflict = True
+        except BaseException:
+            conflict = True
+    installed.clear()
+    return conflict
+
+
 def interpose(witness: Witness, modules: Mapping[str, Any]) -> Callable[[], None]:
-    """Replace each loaded target attribute; return an undo restoring originals in reverse."""
+    """Replace each loaded target attribute; return an undo restoring originals in reverse.
+
+    Installation never raises. A failure part-way restores what was installed,
+    ends the witness explicitly and leaves the observed protocol untouched.
+    """
     installed: list[tuple[Any, str, Any, Any]] = []
     try:
         for module_name, attribute, kind, phase in TARGETS:
@@ -364,19 +409,10 @@ def interpose(witness: Witness, modules: Mapping[str, Any]) -> Callable[[], None
             setattr(module, attribute, wrapper)
             installed.append((module, attribute, original, wrapper))
     except BaseException:
-        for module, attribute, original, _ in reversed(installed):
-            setattr(module, attribute, original)
-        raise
+        witness.invalid("restore_conflict" if _restore(installed) else "malformed")
 
     def undo() -> None:
-        conflict = False
-        for module, attribute, original, wrapper in reversed(installed):
-            if vars(module).get(attribute) is wrapper:
-                setattr(module, attribute, original)
-            else:
-                conflict = True
-        installed.clear()
-        if conflict:
+        if _restore(installed):
             witness.invalid("restore_conflict")
     return undo
 
@@ -439,21 +475,19 @@ class SelectedProtocol:
         try:
             # Taken between pytest phases, when capture is suspended and fd 2 is real.
             self._fd = os.dup(2)
-        except OSError:
+        except BaseException:
+            self._fd = None
             return
         witness = Witness(FdWriter(self._fd))
         self._witness = witness
         _current = witness
         witness.enter("protocol")
-        try:
-            self._undo = interpose(witness, self._modules)
-        except Exception:
-            witness.invalid("malformed")
+        self._undo = interpose(witness, self._modules)
         plugin = FixtureWitnessPlugin()
         try:
             self._plugins.register(plugin, name=PLUGIN_NAME)
             self._plugin = plugin
-        except Exception:
+        except BaseException:
             witness.note("missing_target")
 
     def __exit__(self, exc_type: type[BaseException] | None, exc: BaseException | None,
@@ -466,7 +500,7 @@ class SelectedProtocol:
             if self._plugin is not None:
                 try:
                     self._plugins.unregister(self._plugin)
-                except Exception:
+                except BaseException:
                     witness.invalid("restore_conflict")
             if self._undo is not None:
                 self._undo()
@@ -474,28 +508,39 @@ class SelectedProtocol:
                 witness.exit("protocol")
             else:
                 witness.error("protocol")
-        except Exception:
+        except BaseException:
             witness.stopped = True
+            witness.failed = True
         finally:
             _current = None
             if self._fd is not None:
                 try:
                     os.close(self._fd)
-                except OSError:
+                except BaseException:
                     pass
         return False
 
 
+def _is_target(item: Any) -> bool:
+    try:
+        return getattr(item, "nodeid", None) == TARGET_NODEID
+    except BaseException:
+        return False
+
+
 def selected_protocol(item: Any, modules: Mapping[str, Any] | None = None) -> SelectedProtocol | _Null:
-    if getattr(item, "nodeid", None) != TARGET_NODEID:
+    if not _is_target(item):
         return NULL
-    plugins = getattr(getattr(item, "config", None), "pluginmanager", None)
+    try:
+        plugins = getattr(getattr(item, "config", None), "pluginmanager", None)
+    except BaseException:
+        plugins = None
     return SelectedProtocol(sys.modules if modules is None else modules, plugins)
 
 
 def pytest_phase(item: Any, when: str) -> Phase | _Null:
     witness = _current
-    if witness is None or when not in PYTEST_PHASES or getattr(item, "nodeid", None) != TARGET_NODEID:
+    if witness is None or when not in PYTEST_PHASES or not _is_target(item):
         return NULL
     return Phase(witness, PYTEST_PHASES[when])
 
