@@ -87,6 +87,13 @@ function mediaView(draft, overrides = {}, image = IMAGE, n = 1) {
 }
 
 const deferred = () => { let release; const promise = new Promise((resolve) => { release = resolve }); return { promise, release } }
+async function until(predicate, message, ms = 10000) {
+  const end = Date.now() + ms
+  while (!await predicate()) {
+    assert.ok(Date.now() < end, message)
+    await new Promise((resolve) => setTimeout(resolve, 20))
+  }
+}
 
 // Ordinary Node: the bound loader itself, with an invented response and no browser.
 test("joint review image must be the exact packet-bound PNG bytes, size and dimensions", async (t) => {
@@ -408,13 +415,22 @@ test("mounted operator media journey with invented API replies", {
     await t.test("a passive refresh with unchanged identities keeps review inputs and the bound image", () => scenario("passive-refresh", { drafts: media, selected: "media-a", configure: twoMedia }, async (h) => {
       await imageShown(h.page).waitFor(); await reviewWithKeyboard(h)
       assert.deepEqual(await reviewState(h.page), fullReview)
-      const reads = h.api.viewReads.get("media-a")
-      await h.act("passiveRefresh"); await h.settle(6)
+      const reads = h.api.viewReads.get("media-a"), imageReads = h.api.imageReads
+      await h.act("passiveRefresh")
+      await until(() => h.api.viewReads.get("media-a") > reads, "a passive refresh no longer re-reads the media view")
+      await h.settle(6)
       assert.deepEqual(await reviewState(h.page), fullReview, "a passive refresh with unchanged identities erased the operator's review inputs")
       assert.equal(await imageShown(h.page).count(), 1)
       assert.equal(await attach(h.page).isEnabled(), true)
-      // The refreshed view is still read, so background check progress stays visible.
-      assert.ok(h.api.viewReads.get("media-a") >= reads)
+      assert.equal(h.api.imageReads, imageReads, "an unchanged bound image was reloaded")
+      // Background check progress still arrives through the same passive refresh.
+      h.api.views.set("media-a", mediaView(mediaA, { status: "attached", review_current: true, checks_status: "pending" }))
+      await h.act("passiveRefresh")
+      await h.page.getByText("Checks are pending. The separate local worker runs one stage at a time.").waitFor()
+      h.api.views.set("media-a", mediaView(mediaA, { status: "attached", review_current: true, checks_status: "passed",
+        checks: { deterministic: "passed", safety: "passed", fact_check: "passed", critic: "passed" } }))
+      await h.act("passiveRefresh")
+      await h.page.getByText("All four required checks passed for this text and graphic.").waitFor()
       assert.deepEqual(await sideEffects(h.journal), [])
     }))
 

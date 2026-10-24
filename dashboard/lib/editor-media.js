@@ -65,6 +65,20 @@ export function sameMediaTarget(view, draft) {
     Object.keys(target).every(k => target[k] === view.target?.[k]) && Object.keys(view.target || {}).length === 5
 }
 
+// What an unfinished joint review is about. Check progress is deliberately excluded.
+export function mediaReviewIdentity(view) {
+  return view ? JSON.stringify([view.draft_id, view.status, view.review_current === true, view.parked === true,
+    view.preparation?.proposal_sha256 ?? null, view.packet?.packet_sha256 ?? null,
+    view.platform_description?.record?.description_sha256 ?? null, view.expected_policy_sha256 ?? null]) : ""
+}
+
+// The exact retained image a view binds; the same identity never reloads it.
+export function mediaImageIdentity(view) {
+  const media = view?.packet?.media
+  return media ? JSON.stringify([view.draft_id, view.preparation?.proposal_sha256 ?? null, view.packet.packet_sha256 ?? null,
+    media.png_sha256 ?? null, media.byte_count ?? null, media.width ?? null, media.height ?? null]) : ""
+}
+
 export function mediaStatus(view) {
   if (view.parked) return "Approval parked for this text and graphic. Nothing will be published."
   if (view.status === "unavailable") return "Graphic unavailable for this saved revision. " + (view.code || "").replaceAll("_", " ")
