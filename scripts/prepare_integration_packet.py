@@ -131,38 +131,95 @@ def resolve(worktree: Path, revision: str) -> tuple[str, str]:
     return commit, tree
 
 
-def inside(root: Path, relative: Any, field: str) -> Path:
-    """An existing regular file under root, reached without any symlink or '..'."""
+NOFOLLOW = getattr(os, "O_NOFOLLOW", 0)
+DIRECTORY = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | NOFOLLOW
+
+
+def _component_error(parent: int, name: str, field: str) -> NoReturn:
+    """Name why a no-follow open of one path component failed."""
+    try:
+        mode = os.stat(name, dir_fd=parent, follow_symlinks=False).st_mode
+    except OSError:
+        refuse(f"{field}_missing")
+    refuse(f"{field}_symlink" if stat.S_ISLNK(mode) else f"{field}_not_directory")
+
+
+def open_directory(path: Path, field: str) -> int:
+    """Open an absolute directory, following no symlink in ANY component from '/'.
+
+    Callers pass canonical paths: an OS alias such as /var -> /private/var is a
+    symlink as well and is refused, never silently reinterpreted.
+    """
+    if not path.is_absolute():
+        refuse(f"invalid_{field}_path")
+    descriptor = os.open("/", DIRECTORY)
+    try:
+        for name in path.parts[1:]:
+            if name in ("", ".", ".."):
+                refuse(f"{field}_path_traversal")
+            try:
+                child = os.open(name, DIRECTORY, dir_fd=descriptor)
+            except OSError:
+                _component_error(descriptor, name, field)
+            os.close(descriptor)
+            descriptor = child
+        return descriptor
+    except BaseException:
+        os.close(descriptor)
+        raise
+
+
+def read_descriptor(descriptor: int, limit: int, field: str) -> bytes:
+    with os.fdopen(descriptor, "rb") as handle:
+        if not stat.S_ISREG(os.fstat(handle.fileno()).st_mode):
+            refuse(f"{field}_not_regular")
+        data = handle.read(limit + 1)
+    if len(data) > limit:
+        refuse(f"{field}_too_large")
+    return data
+
+
+def read_inside(root: Path, relative: Any, field: str, limit: int, root_field: str = "evidence_root") -> bytes:
+    """Read a regular file under root: every component of root and of the relative
+    path is opened relative to its parent descriptor without following symlinks."""
     if type(relative) is not str or not relative or relative.startswith("/") or "\\" in relative:
         refuse(f"invalid_{field}_path")
     parts = PurePosixPath(relative).parts
     if any(part in ("", ".", "..") for part in parts):
         refuse(f"{field}_path_traversal")
-    current = root
-    for part in parts:
-        current = current / part
+    descriptor = open_directory(root, root_field)
+    try:
+        for name in parts[:-1]:
+            try:
+                child = os.open(name, DIRECTORY, dir_fd=descriptor)
+            except OSError:
+                _component_error(descriptor, name, field)
+            os.close(descriptor)
+            descriptor = child
         try:
-            mode = os.lstat(current).st_mode
+            mode = os.stat(parts[-1], dir_fd=descriptor, follow_symlinks=False).st_mode
         except OSError:
             refuse(f"{field}_missing")
         if stat.S_ISLNK(mode):
             refuse(f"{field}_symlink")
-    if not stat.S_ISREG(mode):
-        refuse(f"{field}_not_regular")
-    return current
+        if not stat.S_ISREG(mode):
+            refuse(f"{field}_not_regular")
+        try:
+            handle = os.open(parts[-1], os.O_RDONLY | NOFOLLOW, dir_fd=descriptor)
+        except OSError:
+            refuse(f"{field}_unreadable")
+    finally:
+        os.close(descriptor)
+    return read_descriptor(handle, limit, field)
 
 
 def read_bounded(path: Path, limit: int, field: str) -> bytes:
-    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+    """A caller-named file (the request): its final component is never followed."""
     try:
-        descriptor = os.open(path, flags)
+        descriptor = os.open(path, os.O_RDONLY | NOFOLLOW)
     except OSError:
         refuse(f"{field}_unreadable")
-    with os.fdopen(descriptor, "rb") as handle:
-        data = handle.read(limit + 1)
-    if len(data) > limit:
-        refuse(f"{field}_too_large")
-    return data
+    return read_descriptor(descriptor, limit, field)
 
 
 def finite_number(value: Any, high: float) -> float | None:
@@ -268,7 +325,7 @@ def receipt_binding(spec: dict[str, Any], root: Path) -> dict[str, Any]:
             refuse("invalid_source_prefix")
     log_path = log_sha = None
     if spec.get("log") is not None:
-        log_data = read_bounded(inside(root, spec["log"], "log"), LIMITS["artifact_bytes"], "log")
+        log_data = read_inside(root, spec["log"], "log", LIMITS["artifact_bytes"])
         log_path, log_sha = spec["log"], sha256(log_data)
     return {"kind": kind, "claimed_head": claimed, "source_prefix": prefix, "log_path": log_path, "log_sha256": log_sha}
 
@@ -364,8 +421,7 @@ def prepare_line(raw: Any, root: Path, seen: set[str]) -> dict[str, Any]:
         check = label(spec.get("check"), "check")
         binding = receipt_binding(spec, root)
         kind = binding["kind"]
-        location = inside(root, spec.get("path"), "receipt")
-        data = read_bounded(location, LIMITS["receipt_bytes"], "receipt")
+        data = read_inside(root, spec.get("path"), "receipt", LIMITS["receipt_bytes"])
         digest = sha256(data)
         rows = by_check.setdefault(check, [])
         # Only a true equivalent collapses: same bytes AND the same complete binding.
@@ -438,7 +494,7 @@ def prepare_line(raw: Any, root: Path, seen: set[str]) -> dict[str, Any]:
         refuse("invalid_artifacts")
     artifact_rows = []
     for relative in artifacts:
-        data = read_bounded(inside(root, relative, "artifact"), LIMITS["artifact_bytes"], "artifact")
+        data = read_inside(root, relative, "artifact", LIMITS["artifact_bytes"])
         artifact_rows.append({"path": relative, "sha256": sha256(data), "bytes": len(data)})
         inputs.append({"path": relative, "sha256": sha256(data)})
     passing = {"claimed_pass", "claimed_pass_after_failure"}
@@ -502,8 +558,7 @@ def build(request_path: Path) -> tuple[str, str]:
     if type(request) is not dict or request.get("schema") != REQUEST_SCHEMA or set(request) - {"schema", "evidence_root", "lines"}:
         refuse("invalid_request")
     root = absolute_path(request.get("evidence_root"), "evidence_root")
-    if not root.is_dir() or root.is_symlink():
-        refuse("invalid_evidence_root")
+    os.close(open_directory(root, "evidence_root"))
     lines = request.get("lines")
     if type(lines) is not list or not lines or len(lines) > LIMITS["lines"]:
         refuse("invalid_lines")
@@ -515,7 +570,7 @@ def build(request_path: Path) -> tuple[str, str]:
     inputs = [row for line in prepared for row in line.pop("_inputs")]
     # Re-read every input: a file that changed while preparing is a moving snapshot.
     for row in inputs:
-        if sha256(read_bounded(inside(root, row["path"], "input"), LIMITS["artifact_bytes"], "input")) != row["sha256"]:
+        if sha256(read_inside(root, row["path"], "input", LIMITS["artifact_bytes"])) != row["sha256"]:
             refuse("moving_snapshot")
     packet: dict[str, Any] = {"schema": PACKET_SCHEMA, "lines": prepared, "limits": LIMITS, "generators": {k: list(v) for k, v in GENERATORS.items()},
                               "statement": "Local packet: identities verified, exit codes claimed. Later stages are not established."}
@@ -530,17 +585,30 @@ def build(request_path: Path) -> tuple[str, str]:
 
 
 def write_new(out: Path, files: dict[str, str]) -> None:
-    parent = out.parent
-    if not parent.is_dir() or parent.is_symlink():
-        refuse("invalid_output_parent")
+    """Create a NEW owner-only directory and its files without following any symlink.
+
+    The output path must be absolute and canonical: every ancestor is opened
+    no-follow from '/', and the directory and files are created relative to
+    those descriptors, so no ancestor alias can redirect the write.
+    """
+    if not out.is_absolute() or out.name in ("", ".", ".."):
+        refuse("invalid_output_path")
+    parent = open_directory(out.parent, "output_parent")
     try:
-        os.mkdir(out, 0o700)
-    except FileExistsError:
-        refuse("output_collision")
-    for name, content in files.items():
-        descriptor = os.open(out / name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o600)
-        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
-            handle.write(content)
+        try:
+            os.mkdir(out.name, 0o700, dir_fd=parent)
+        except FileExistsError:
+            refuse("output_collision")
+        directory = os.open(out.name, DIRECTORY, dir_fd=parent)
+        try:
+            for name, content in files.items():
+                descriptor = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | NOFOLLOW, 0o600, dir_fd=directory)
+                with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+                    handle.write(content)
+        finally:
+            os.close(directory)
+    finally:
+        os.close(parent)
 
 
 def prepare(request_path: Path, out: Path) -> dict[str, Any]:
@@ -554,9 +622,8 @@ def validate(directory: Path, evidence_root: Path | None, worktrees: dict[str, P
     reasons: list[str] = []
     results: list[dict[str, Any]] = []
     try:
-        if directory.is_symlink() or not directory.is_dir():
-            refuse("invalid_packet_directory")
-        files = {name: read_bounded(inside(directory, name, "packet_file"), LIMITS["packet_bytes"], "packet_file")
+        os.close(open_directory(directory, "packet_directory"))
+        files = {name: read_inside(directory, name, "packet_file", LIMITS["packet_bytes"], "packet_directory")
                  for name in ("packet.json", "packet.md", "packet.sha256")}
         expected = f"{sha256(files['packet.json'])}  packet.json\n{sha256(files['packet.md'])}  packet.md\n".encode()
         if files["packet.sha256"] != expected:
@@ -582,7 +649,7 @@ def validate(directory: Path, evidence_root: Path | None, worktrees: dict[str, P
                 rows += [(row["path"], row["sha256"]) for row in line["artifacts"]]
                 for relative, digest in rows:
                     try:
-                        if sha256(read_bounded(inside(evidence_root, relative, "input"), LIMITS["artifact_bytes"], "input")) != digest:
+                        if sha256(read_inside(evidence_root, relative, "input", LIMITS["artifact_bytes"])) != digest:
                             reasons.append(f"evidence_changed:{relative}")
                     except PacketError as error:
                         reasons.append(f"evidence_{error}:{relative}")

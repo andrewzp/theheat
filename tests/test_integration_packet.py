@@ -34,6 +34,8 @@ def commit(repo, files, message):
 
 @pytest.fixture
 def world(tmp_path):
+    # Canonical fixture paths: an OS alias such as /var -> /private/var is a symlink too.
+    tmp_path = tmp_path.resolve()
     repo = tmp_path / "repo"
     repo.mkdir()
     run(repo, "init", "-q", "-b", "main")
@@ -177,14 +179,14 @@ def test_moving_head_and_inconsistent_order_are_refused(world, monkeypatch):
     with pytest.raises(packet.PacketError, match="branch_not_at_head"):
         prepared(world, head=world["first"], donors=[{"label": "one", "commit": world["first"]}])
     receipt(world, "unit")
-    original_read = packet.read_bounded
+    original_read = packet.read_descriptor
     reads = []
 
-    def changing(path, limit, field):
-        data = original_read(path, limit, field)
+    def changing(descriptor, limit, field):
+        data = original_read(descriptor, limit, field)
         reads.append(field)
         return data + b" " if field == "input" else data
-    monkeypatch.setattr(packet, "read_bounded", changing)
+    monkeypatch.setattr(packet, "read_descriptor", changing)
     with pytest.raises(packet.PacketError, match="moving_snapshot"):
         prepared(world, receipts=[{"check": "unit", "path": "unit.json"}])
 
@@ -208,7 +210,7 @@ def test_output_collision_and_symlinked_parent_are_refused(world):
     with pytest.raises(packet.PacketError, match="output_collision"):
         packet.prepare(request(world), out)
     os.symlink(world["tmp"], world["tmp"] / "linked-parent")
-    with pytest.raises(packet.PacketError, match="invalid_output_parent"):
+    with pytest.raises(packet.PacketError, match="output_parent_symlink"):
         packet.prepare(request(world), world["tmp"] / "linked-parent" / "packet-new")
 
 
@@ -407,3 +409,80 @@ def test_allowed_dirty_packets_validate_as_dirty_never_clean(world):
     assert result["status"] == "valid" and worktree_result(result)["current_state"] == "dirty_as_recorded"
     (world["repo"] / "README").write_text("changed\n")
     assert packet.validate(out, None, {"E9": world["repo"]})["status"] == "invalid"
+
+
+# --- F3/R4: no symlink in ANY component of output, evidence-root or validator paths ---
+
+def aliased(world):
+    """alias -> real directory, with a nested real child; the alias is an ancestor, not the parent."""
+    real = world["tmp"] / "real-storage"
+    (real / "nested").mkdir(parents=True)
+    alias = world["tmp"] / "alias"
+    os.symlink(real, alias)
+    return real, alias
+
+
+def test_output_through_an_ancestor_symlink_is_refused_and_nothing_is_written(world):
+    real, alias = aliased(world)
+    with pytest.raises(packet.PacketError, match="output_parent_symlink"):
+        packet.prepare(request(world), alias / "nested" / "new_packet")
+    assert list((real / "nested").iterdir()) == []
+    with pytest.raises(packet.PacketError, match="output_parent_symlink"):
+        packet.write_new(alias / "nested" / "direct", {"packet.json": "{}"})
+    assert list((real / "nested").iterdir()) == []
+    with pytest.raises(packet.PacketError, match="invalid_output_path"):
+        packet.write_new(Path("relative-packet"), {"packet.json": "{}"})
+
+
+def test_canonical_output_keeps_exclusive_owner_only_creation(world):
+    out = world["tmp"] / "canonical" / "packet"
+    out.parent.mkdir()
+    packet.prepare(request(world), out)
+    assert oct(out.stat().st_mode & 0o777) == "0o700"
+    assert sorted(f.name for f in out.iterdir()) == ["packet.json", "packet.md", "packet.sha256"]
+    assert all(oct(f.stat().st_mode & 0o777) == "0o600" for f in out.iterdir())
+    with pytest.raises(packet.PacketError, match="output_collision"):
+        packet.prepare(request(world), out)
+
+
+def test_evidence_root_through_an_ancestor_symlink_is_refused(world):
+    real, alias = aliased(world)
+    evidence = real / "nested"
+    (evidence / "unit.json").write_text(json.dumps({"returncode": 0, "seconds": 1}))
+    path = world["tmp"] / "aliased-request.json"
+    path.write_text(json.dumps({"schema": packet.REQUEST_SCHEMA, "evidence_root": str(alias / "nested"), "lines": [
+        dict(label="E9", worktree=str(world["repo"]), base=world["base"], head=world["second"],
+             donors=[{"label": "one", "commit": world["first"]}, {"label": "two", "commit": world["second"]}],
+             receipts=[{"check": "unit", "path": "unit.json"}])]}))
+    with pytest.raises(packet.PacketError, match="evidence_root_symlink"):
+        packet.prepare(path, world["tmp"] / "never")
+    assert not (world["tmp"] / "never").exists()
+
+
+def test_validator_reads_refuse_ancestor_symlinks(world):
+    receipts = [receipt(world, "unit")]
+    out, _ = prepared(world, receipts=receipts)
+    real, alias = aliased(world)
+    os.rename(out, real / "nested" / "packet")
+    result = packet.validate(alias / "nested" / "packet", None, {})
+    assert result["status"] == "invalid" and "packet_directory_symlink" in result["reasons"]
+    assert packet.validate(real / "nested" / "packet", None, {})["status"] == "valid"
+    linked_evidence = world["tmp"] / "evidence-alias"
+    os.symlink(world["evidence"], linked_evidence)
+    result = packet.validate(real / "nested" / "packet", linked_evidence, {})
+    assert result["status"] == "invalid" and any(reason.startswith("evidence_evidence_root_symlink") for reason in result["reasons"])
+    assert packet.validate(real / "nested" / "packet", world["evidence"], {})["status"] == "valid"
+
+
+def test_reads_never_follow_a_component_swapped_after_checking(world, monkeypatch):
+    receipt(world, "unit")
+    (world["evidence"] / "sub").mkdir()
+    (world["evidence"] / "sub" / "unit.json").write_text(json.dumps({"returncode": 0, "seconds": 1}))
+    outside = world["tmp"] / "outside"
+    outside.mkdir()
+    (outside / "unit.json").write_text(json.dumps({"returncode": 1, "seconds": 1}))
+    # Simulate a swap between any separate check and the read: replace the directory with a link now.
+    os.rename(world["evidence"] / "sub", world["tmp"] / "sub-moved")
+    os.symlink(outside, world["evidence"] / "sub")
+    with pytest.raises(packet.PacketError, match="receipt_symlink"):
+        prepared(world, receipts=[{"check": "unit", "path": "sub/unit.json"}])

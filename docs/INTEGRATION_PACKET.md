@@ -100,6 +100,17 @@ A request is one JSON file the caller writes explicitly. Nothing else is read:
 - Each must be a regular file reached without `..` or any symlink.
 - The packet records only these relative paths, never the root or the
   worktree.
+- **Canonical paths only.** `evidence_root`, the `--out` directory's parent
+  and the `--packet` directory must be absolute and canonical: no component
+  anywhere, from `/` down, may be a symlink.
+  - **Enforcement.** Every component is opened without following links,
+    relative to its parent's descriptor. The output directory and its files
+    are created through those descriptors, so a symlinked ancestor can never
+    redirect a read or write.
+  - **OS aliases are refused too.** For example, macOS `/var -> /private/var`
+    and `/tmp -> /private/tmp` are symlinks. Pass the resolved path (for
+    example `/private/var/...`).
+  - **Relative paths.** A relative `--out` is refused.
 
 **Donors.** `donors` must equal the exact first-parent chain `base..head`, in
 cherry-pick order, so a reordered, missing or foreign commit is refused.
@@ -138,7 +149,8 @@ python scripts/prepare_integration_packet.py validate --packet NEW_PRIVATE_DIR -
 ```
 
 **`prepare` refuses**, writing nothing, on any of these:
-- an existing output directory or a symlinked parent;
+- an existing output directory, a relative output path, or a symlink in any
+  component of the output's parent or the evidence root;
 - an input file or git identity that changes while the packet is prepared;
 - inputs over the size bounds.
 
@@ -150,6 +162,8 @@ mode 0600:
 - `packet.sha256`.
 
 **`validate` checks:**
+- that the packet directory and its files are reached through no symlink in
+  any component;
 - the marker, the packet ID and the canonical form;
 - that the Markdown is exactly the rendering of the JSON;
 - that no later stage is set.
