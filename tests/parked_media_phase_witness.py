@@ -33,6 +33,10 @@ dying, for that single node only:
 * Fixture boundaries come from a plugin registered only for the selected
   protocol: a ``tests/conftest.py`` hook is never consulted for session-scoped
   fixtures such as ``native_dependencies``.
+* The target test's body is divided into ``BODY_PHASES`` spans by
+  ``body_phase(name)`` context managers in the test itself. They are inert
+  unless the selected protocol is active, never suppress an exception, and an
+  unknown name ends the witness as INVALID rather than being accepted.
 
 The witness uses no clock, profiler, subprocess, socket, database or native
 call, and it never imports a target module. ``parse`` reads the lines back from
@@ -58,7 +62,7 @@ TARGET_NODEID = (
 )
 PREFIX = "THEHEAT-PG2-WITNESS/1"
 EVENTS = ("ENTER", "EXIT", "ERROR")
-PHASES = (
+_PROTOCOL_PHASES: tuple[str, ...] = (
     # pytest item protocol and its three phases
     "protocol", "setup", "call", "teardown",
     # fixture setup boundaries of the reused compact case
@@ -72,6 +76,15 @@ PHASES = (
     "worker_check_deterministic", "worker_check_safety", "worker_check_fact_check",
     "worker_check_critic", "worker_other",
 )
+# Spans inside the target body (inside ready_body), in source order. Repeated
+# loops and matrices get one coarse span each so they cannot exhaust the budget.
+BODY_PHASES = (
+    "body_clock", "body_draft", "body_binding", "body_protocol", "body_rows", "body_history", "body_config",
+    "body_node", "body_node_checks", "body_passive_check", "body_passive_reads", "body_intent_controls",
+    "body_fault_matrix", "body_refusal_order", "body_delivery_file", "body_generation_file",
+    "body_exception_cleanup", "body_standalone", "body_restore_matrix", "body_passive_history",
+)
+PHASES: tuple[str, ...] = _PROTOCOL_PHASES + BODY_PHASES
 # A terminal reason is the last line the witness writes.
 TERMINAL_REASONS = ("overflow", "reentrant", "malformed", "restore_conflict")
 # A note is written at most once per reason; witnessing continues.
@@ -545,11 +558,34 @@ def pytest_phase(item: Any, when: str) -> Phase | _Null:
     return Phase(witness, PYTEST_PHASES[when])
 
 
+def body_phase(name: Any) -> Phase | _Null:
+    """One fixed span of the selected target body; inert for every other item.
+
+    A name outside BODY_PHASES is never silently accepted: an active witness
+    ends with INVALID malformed, and the wrapped statements still run unchanged.
+    """
+    witness = _current
+    if witness is None:
+        return NULL
+    if type(name) is not str or name not in BODY_PHASES:
+        witness.invalid("malformed")
+        return NULL
+    return Phase(witness, name)
+
+
 def fixture_phase(argname: Any) -> Phase | _Null:
     witness = _current
     if witness is None or type(argname) is not str or argname not in FIXTURE_PHASES:
         return NULL
     return Phase(witness, FIXTURE_PHASES[argname])
+
+
+def _cut_short(line: str, sequence: int) -> bool:
+    """A final line that is a strict prefix of some complete vocabulary line was cut off."""
+    head = f"{PREFIX} {sequence:03d} "
+    complete = [f"{head}{kind} {word}" for kind in EVENTS for word in PHASES]
+    complete += [f"{head}{kind} {word}" for kind in ("UNAVAILABLE", "INVALID") for word in TERMINAL_REASONS + NOTE_REASONS]
+    return any(full != line and full.startswith(line) for full in complete)
 
 
 def parse(text: str) -> dict[str, Any]:
@@ -570,6 +606,11 @@ def parse(text: str) -> dict[str, Any]:
     for index, line in enumerate(candidates):
         final = index == len(candidates) - 1
         match = LINE.fullmatch(line) if len(line) < MAX_LINE_BYTES else None
+        known = match is not None and (match.group(3) in PHASES if match.group(2) in EVENTS
+                                       else match.group(3) in TERMINAL_REASONS + NOTE_REASONS)
+        if final and index > 0 and not known and _cut_short(line, index + 1):
+            # e.g. "... ENTER bo": a valid-looking line cut inside its word.
+            return dict(result, status="truncated", reason="last_line", open=list(stack))
         if match is None:
             if final and index > 0:
                 return dict(result, status="truncated", reason="last_line", open=list(stack))

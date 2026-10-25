@@ -6,6 +6,8 @@ injected writer, a local pipe or invented module objects.
 """
 import ast
 import contextlib
+import hashlib
+import sys
 import os
 import socket
 import subprocess
@@ -128,7 +130,8 @@ def invented_modules(log):
 
 def test_published_protocol_is_fixed_ascii_and_bounded():
     assert w.PREFIX == "THEHEAT-PG2-WITNESS/1"
-    assert len(w.PHASES) == len(set(w.PHASES)) == 27
+    assert len(w.PHASES) == len(set(w.PHASES)) == 27 + len(w.BODY_PHASES) == 47
+    assert set(w.BODY_PHASES) <= set(w.PHASES)
     assert set(w.FIXTURE_PHASES.values()) | set(w.WORKER_PHASES.values()) <= set(w.PHASES)
     assert {phase for *_, phase in w.TARGETS} <= set(w.PHASES)
     for kind, words in (("ENTER", w.PHASES), ("ERROR", w.PHASES), ("INVALID", w.TERMINAL_REASONS),
@@ -933,3 +936,205 @@ def test_restoration_failure_still_restores_every_other_target(monkeypatch, fail
         if key != "submit_command":
             assert public(modules[name])[key] is value
     assert data.splitlines()[-1].split()[2:] == ["INVALID", "restore_conflict"]
+
+
+
+# --- G1: fixed body spans inside the selected target's ready_body ---
+
+TARGET_FILE = Path(w.__file__).with_name("test_postgres_parked_media_inspection.py")
+# ast.dump (Python 3.12) of the target module at 29a8811, before any span existed.
+ORIGINAL_TARGET_AST_SHA256 = "9fb6b94e01277aa0032a3fe6d5e47a03cf7cd1cbc3683aa5bafc74cc24e240ed"
+EXPECTED_SPANS = ["body_clock", "body_draft", "body_binding", "body_protocol", "body_binding", "body_rows",
+                  "body_history", "body_config", "body_node", "body_node_checks", "body_passive_check",
+                  "body_passive_reads", "body_intent_controls", "body_fault_matrix", "body_refusal_order",
+                  "body_delivery_file", "body_generation_file", "body_exception_cleanup", "body_standalone",
+                  "body_restore_matrix", "body_passive_history"]
+# The retained 29a8811 PG2 sequence (run 40067247758), fixed words only: +ENTER, -EXIT.
+RETAINED_81 = ("+protocol +setup +fixture_native -fixture_native +fixture_cluster -fixture_cluster +fixture_database "
+    "-fixture_database +fixture_clock -fixture_clock +compact_fixture +compact_retain -compact_retain +compact_enrollment "
+    "-compact_enrollment +compact_protocol -compact_protocol +worker_enroll -worker_enroll -compact_fixture -setup +call "
+    "+ready_prepare +ready_admit +ready_command +worker_consume -worker_consume -ready_command +worker_write -worker_write "
+    "+worker_capture -worker_capture +ready_command +worker_consume -worker_consume -ready_command "
+    "+worker_check_deterministic -worker_check_deterministic +worker_check_safety -worker_check_safety "
+    "+worker_check_fact_check -worker_check_fact_check +worker_check_critic -worker_check_critic +worker_other "
+    "-worker_other +ready_command +worker_consume -worker_consume -ready_command -ready_admit +ready_cost -ready_cost "
+    "+ready_command +worker_consume -worker_consume -ready_command +ready_command +worker_consume -worker_consume "
+    "-ready_command +ready_command +worker_consume -worker_consume -ready_command +worker_check_deterministic "
+    "-worker_check_deterministic +worker_check_safety -worker_check_safety +worker_check_fact_check "
+    "-worker_check_fact_check +worker_check_critic -worker_check_critic +ready_command +worker_consume -worker_consume "
+    "-ready_command +ready_cost -ready_cost -ready_prepare +ready_body").split()
+
+
+def render(events):
+    return "".join(f"{w.PREFIX} {i:03d} {'ENTER' if e[0] == '+' else 'EXIT'} {e[1:]}\n" for i, e in enumerate(events, 1))
+
+
+def strip_spans(tree):
+    """Remove ONLY the body_phase import and exact body_phase(...) with-wrappers."""
+    removed: dict[str, Any] = {"imports": 0, "spans": []}
+
+    def is_span(statement):
+        if not isinstance(statement, ast.With) or len(statement.items) != 1:
+            return False
+        item, call = statement.items[0], statement.items[0].context_expr
+        return (item.optional_vars is None and isinstance(call, ast.Call) and isinstance(call.func, ast.Name)
+                and call.func.id == "body_phase" and len(call.args) == 1 and not call.keywords
+                and isinstance(call.args[0], ast.Constant) and call.args[0].value in w.BODY_PHASES)
+
+    def flatten(body):
+        out = []
+        for statement in body:
+            if (isinstance(statement, ast.ImportFrom) and statement.module == "tests.parked_media_phase_witness"
+                    and [alias.name for alias in statement.names] == ["body_phase"]):
+                removed["imports"] += 1
+                continue
+            if is_span(statement):
+                removed["spans"].append(statement.items[0].context_expr.args[0].value)
+                out.extend(flatten(statement.body))
+                continue
+            for field in ("body", "orelse", "finalbody"):
+                if isinstance(getattr(statement, field, None), list):
+                    setattr(statement, field, flatten(getattr(statement, field)))
+            for handler in getattr(statement, "handlers", []):
+                handler.body = flatten(handler.body)
+            out.append(statement)
+        return out
+
+    tree.body = flatten(tree.body)
+    return tree, removed
+
+
+@pytest.mark.skipif(sys.version_info[:2] != (3, 12), reason="the pinned AST digest is Python 3.12 ast.dump output")
+def test_target_test_is_the_original_after_removing_only_the_diagnostic_spans():
+    tree, removed = strip_spans(ast.parse(TARGET_FILE.read_text(encoding="utf-8")))
+    assert removed == {"imports": 1, "spans": EXPECTED_SPANS}
+    assert set(EXPECTED_SPANS) == set(w.BODY_PHASES)
+    assert hashlib.sha256(ast.dump(tree).encode()).hexdigest() == ORIGINAL_TARGET_AST_SHA256
+
+
+@contextlib.contextmanager
+def active(lines):
+    witness = w.Witness(lines)
+    w._current = witness
+    try:
+        yield witness
+    finally:
+        w._current = None
+
+
+def test_body_phase_is_inert_unless_the_selected_witness_is_active():
+    assert w.current() is None
+    for name in (*w.BODY_PHASES, "setup", "not_a_phase", None, 7):
+        assert w.body_phase(name) is w.NULL
+    calls = []
+    with w.body_phase("body_node"):
+        calls.append(1)
+    assert calls == [1]
+
+
+def test_body_spans_record_in_order_inside_ready_body_and_run_each_operation_once():
+    lines, calls = Lines(), []
+    with active(lines) as witness:
+        witness.enter("protocol")
+        witness.enter("call")
+        with w.WitnessedContext(witness, Manager(object())):
+            for name in w.BODY_PHASES:
+                with w.body_phase(name):
+                    calls.append(name)
+        witness.exit("call")
+        witness.exit("protocol")
+    assert calls == list(w.BODY_PHASES)
+    events = lines.events()
+    assert events[:5] == [("ENTER", "protocol"), ("ENTER", "call"), ("ENTER", "ready_prepare"), ("EXIT", "ready_prepare"),
+                          ("ENTER", "ready_body")]
+    assert events[5:5 + 2 * len(w.BODY_PHASES)] == [pair for name in w.BODY_PHASES for pair in (("ENTER", name), ("EXIT", name))]
+    assert w.parse(lines.text())["status"] == "complete"
+
+
+@ORIGINAL_ERRORS
+def test_body_span_keeps_the_operations_own_exception_and_records_error(make_error):
+    lines, error, calls = Lines(), make_error(), []
+    with active(lines) as witness:
+        witness.enter("protocol")
+        with pytest.raises(BaseException) as raised:
+            with w.body_phase("body_node"):
+                calls.append(1)
+                raise error
+        assert raised.value is error and calls == [1]
+        assert raised.value.__context__ is None
+    assert lines.events() == [("ENTER", "protocol"), ("ENTER", "body_node"), ("ERROR", "body_node")]
+
+
+@DIAGNOSTIC_FAILURES
+@pytest.mark.parametrize("fail_at,raises", [(2, False), (3, False), (2, True), (3, True)],
+                         ids=["enter-returns", "exit-returns", "enter-raises", "error-raises"])
+def test_body_span_writer_failures_never_skip_repeat_or_replace_the_operation(failure, fail_at, raises):
+    lines, error, calls = Lines(fail_at=fail_at, error=failure), OriginalStop(), []
+    with active(lines) as witness:
+        witness.enter("protocol")
+        context = pytest.raises(OriginalStop) if raises else contextlib.nullcontext()
+        with context as raised:
+            with w.body_phase("body_draft"):
+                calls.append(1)
+                if raises:
+                    raise error
+        if raises:
+            assert raised is not None and raised.value is error
+        assert calls == [1] and witness.stopped
+        with w.body_phase("body_binding"):
+            calls.append(2)
+        assert calls == [1, 2]
+    assert ("EXIT", "body_draft") not in lines.events()[fail_at - 1:]
+
+
+@pytest.mark.parametrize("name", ["setup", "ready_body", "body_unknown", None])
+def test_a_wrong_body_phase_is_reported_invalid_never_silently_accepted(name):
+    lines, calls = Lines(), []
+    with active(lines) as witness:
+        witness.enter("protocol")
+        with w.body_phase(name):
+            calls.append(1)
+        assert witness.stopped
+    assert calls == [1]
+    assert lines.events() == [("ENTER", "protocol"), ("INVALID", "malformed")]
+    assert w.parse(lines.text())["status"] == "invalid"
+
+
+def test_the_retained_29a8811_sequence_keeps_its_original_incomplete_reading():
+    assert len(RETAINED_81) == 81
+    assert w.parse(render(RETAINED_81)) == dict(status="incomplete", reason=None, lines=81,
+                                                open=["protocol", "call", "ready_body"], last_closed="ready_prepare",
+                                                errors=[], notes=[])
+
+
+def test_truncation_at_every_body_boundary_names_the_open_span():
+    spans = [event for name in EXPECTED_SPANS for event in (f"+{name}", f"-{name}")]
+    for index in range(0, len(spans), 2):
+        name = spans[index][1:]
+        cut = RETAINED_81 + spans[:index + 1]
+        result = w.parse(render(cut))
+        assert result["status"] == "incomplete"
+        assert result["open"] == ["protocol", "call", "ready_body", name]
+        for chop in (3, 12, 20):  # inside the word, inside the event, inside the sequence number
+            assert w.parse(render(cut)[:-chop])["status"] == "truncated", (name, chop)
+    # A complete line that is also a prefix of a longer phase is NOT truncation.
+    complete = w.parse(render(RETAINED_81 + ["+body_node"]))
+    assert complete["status"] == "incomplete" and complete["open"][-1] == "body_node"
+
+
+def test_a_full_body_sequence_fits_the_fixed_budget_with_room_to_spare():
+    lines = Lines()
+    witness = w.Witness(lines)
+    for event in RETAINED_81:
+        (witness.enter if event[0] == "+" else witness.exit)(event[1:])
+    for name in EXPECTED_SPANS:
+        witness.enter(name)
+        witness.exit(name)
+    for name in ("ready_body",):
+        witness.exit(name)
+    for event in ("+ready_cleanup", "-ready_cleanup", "-call", "+teardown", "-teardown", "-protocol"):
+        (witness.enter if event[0] == "+" else witness.exit)(event[1:])
+    assert not witness.stopped and witness.lines_written == 81 + 2 * 21 + 7 == 130
+    assert witness.lines_written <= w.MAX_LINES - 1 and witness.bytes_written <= w.MAX_BYTES
+    assert max(map(len, lines.lines)) <= w.MAX_LINE_BYTES
+    assert w.parse(lines.text())["status"] == "complete"
