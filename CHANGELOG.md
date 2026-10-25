@@ -1,5 +1,7 @@
-## 0.9.109.39
+## 0.9.109.41
 
+- Add fixed body-phase diagnostics to the selected parked-media CI case, with
+  mechanical preservation of original assertions, operations and deadlines.
 - Retain bounded code-only delivery refusal diagnostics in offline fixture
   failures while preserving original callbacks, assertions and deadlines.
 - Verify retained graphic review and completion evidence once within an owned
@@ -32,6 +34,19 @@
   retaining event/date refusals and required factual and scientific checks.
 - Run known critical CI cases first while keeping all cases, assertions and
   deadlines, and align ticking parent, child and HTTP test clocks.
+
+## 0.9.109.40
+
+- Give the draft editor a visible label and carry keyboard focus through Edit
+  and Cancel; wrap long draft tokens without changing their text.
+- Verify retained image hashes, sizes and dimensions before joint review, and
+  preserve unfinished review inputs across unchanged dashboard refreshes.
+- Add reproducible invented-data operator journeys with owned-server readiness,
+  bounded cleanup and the existing finite journey deadline.
+- Add local integration packets with explicit evidence bindings, conflicting
+  receipt preservation, current-checkout validation and no-follow private output.
+- Clarify that X is first and Bluesky rollout remains deferred; publication
+  controls and runtime model settings remain unchanged.
 
 ## 0.9.109.38
 

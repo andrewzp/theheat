@@ -65,6 +65,20 @@ export function sameMediaTarget(view, draft) {
     Object.keys(target).every(k => target[k] === view.target?.[k]) && Object.keys(view.target || {}).length === 5
 }
 
+// What an unfinished joint review is about. Check progress is deliberately excluded.
+export function mediaReviewIdentity(view) {
+  return view ? JSON.stringify([view.draft_id, view.status, view.review_current === true, view.parked === true,
+    view.preparation?.proposal_sha256 ?? null, view.packet?.packet_sha256 ?? null,
+    view.platform_description?.record?.description_sha256 ?? null, view.expected_policy_sha256 ?? null]) : ""
+}
+
+// The exact retained image a view binds; the same identity never reloads it.
+export function mediaImageIdentity(view) {
+  const media = view?.packet?.media
+  return media ? JSON.stringify([view.draft_id, view.preparation?.proposal_sha256 ?? null, view.packet.packet_sha256 ?? null,
+    media.png_sha256 ?? null, media.byte_count ?? null, media.width ?? null, media.height ?? null]) : ""
+}
+
 export function mediaStatus(view) {
   if (view.parked) return "Approval parked for this text and graphic. Nothing will be published."
   if (view.status === "unavailable") return "Graphic unavailable for this saved revision. " + (view.code || "").replaceAll("_", " ")
@@ -98,4 +112,19 @@ export async function retainedMediaBlob(view, signal) {
     return new Blob([bytes],{type:"image/png"})
   // Cleanup must not create a second, unhandled rejection after a failed read.
   } finally { void reader.cancel().catch(() => {}) }
+}
+
+const sha256Hex = async bytes => [...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))].map(b => b.toString(16).padStart(2, "0")).join("")
+
+// Joint review may only show the exact image its packet binds: same bytes,
+// size and PNG dimensions. A valid PNG with other bytes is withheld.
+export async function boundRetainedMediaBlob(view, signal) {
+  const media = view?.packet?.media
+  const blob = await retainedMediaBlob(view, signal)
+  const bytes = new Uint8Array(await blob.arrayBuffer())
+  const header = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+  if (!media || bytes.length !== media.byte_count || await sha256Hex(bytes) !== media.png_sha256 ||
+      header.getUint32(16) !== media.width || header.getUint32(20) !== media.height || signal.aborted)
+    throw new Error("The retained graphic does not match this review packet")
+  return blob
 }
