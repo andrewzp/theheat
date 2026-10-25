@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useId, useRef, useState } from "react"
 import { ForecastEvidence } from "./ForecastEvidence.js"
 import { NwsWarningEvidence } from "./NwsWarningEvidence.js"
 import { ClaimEvidence } from "./ClaimEvidence.js"
@@ -45,6 +45,12 @@ export function DraftWorkbench({
   botRuns,
 }) {
   const [reviewConfirmedIdentity, setReviewConfirmedIdentity] = useState("")
+  const [focusRequest, setFocusRequest] = useState(0)
+  const focusIntent = useRef(null)
+  const editor = useRef(null)
+  const editButton = useRef(null)
+  const heading = useRef(null)
+  const editorId = useId()
   const selectedDraft = drafts.find((d) => d.id === selectedDraftId) || drafts[0] || null
   const controls = draftReviewControls(selectedDraft)
   const currentRevisionKey = revisionKey(selectedDraft?.revision_identity)
@@ -56,11 +62,31 @@ export function DraftWorkbench({
     selectedDraft?.candidates?.find((c) => c.text === selectedDraft?.text) ||
     selectedDraft?.candidates?.[0]
 
+  function requestFocus(action, origin) {
+    focusIntent.current = { action, origin, previouslyFocused: origin.ownerDocument.activeElement, draftId: selectedDraft.id }
+    setFocusRequest((request) => request + 1)
+  }
+
+  useEffect(() => {
+    const intent = focusIntent.current
+    focusIntent.current = null
+    if (!intent || intent.draftId !== selectedDraft?.id) return
+    const document = intent.origin.ownerDocument
+    const active = document.activeElement
+    if (![intent.origin, intent.previouslyFocused, document.body, document.documentElement].includes(active)) return
+    if (intent.action === "edit") {
+      if (editingId === intent.draftId && editor.current && !editor.current.disabled) editor.current.focus()
+    } else if (editingId !== intent.draftId) {
+      const target = editButton.current && !editButton.current.disabled ? editButton.current : heading.current
+      target?.focus()
+    }
+  }, [focusRequest, selectedDraft?.id, editingId])
+
   return (
     <div className="card full desk-panel">
       <div className="section-head">
         <div>
-          <h2>Draft Workbench</h2>
+          <h2 ref={heading} tabIndex={-1} className="draft-workbench-heading">Draft Workbench</h2>
           <p className="card-kicker">
             {selectedDraft?.local_preview ? "Invented local preview. Approvals are parked; nothing is published." : "Review the queue with source facts, score context, alternate copy, and approval policy in one place."}
           </p>
@@ -176,14 +202,18 @@ export function DraftWorkbench({
 
                 {editingId === selectedDraft.id ? (
                   <>
+                    <label className="draft-edit-label" htmlFor={editorId}>Edit draft text</label>
                     <textarea
+                      ref={editor}
+                      id={editorId}
+                      aria-describedby={`${editorId}-count`}
                       disabled={!!pendingCommand}
                       className="draft-edit-area"
                       value={editText}
                       onChange={(e) => setEditText(e.target.value)}
                       rows={4}
                     />
-                    <div className={`draft-chars ${draftTextLength(editText) > 280 ? "over" : ""}`}>
+                    <div id={`${editorId}-count`} className={`draft-chars ${draftTextLength(editText) > 280 ? "over" : ""}`}>
                       {draftTextLength(editText)}/280
                     </div>
                   </>
@@ -459,7 +489,10 @@ export function DraftWorkbench({
                       >
                         Save
                       </button>
-                      <button type="button" className="btn sm" disabled={!!pendingCommand} onClick={() => setEditingId(null)}>
+                      <button type="button" className="btn sm" disabled={!!pendingCommand} onClick={(event) => {
+                        requestFocus("cancel", event.currentTarget)
+                        setEditingId(null)
+                      }}>
                         Cancel
                       </button>
                     </>
@@ -474,10 +507,14 @@ export function DraftWorkbench({
                         {draftAction === selectedDraft.id ? "..." : selectedDraft.local_preview ? "Approve locally" : "Approve + Post"}
                       </button>
                       <button
+                        ref={editButton}
                         type="button"
-                        className="btn sm"
+                        className="btn sm draft-edit-button"
                         disabled={!!draftAction || !controls.canEdit}
-                        onClick={() => startEditing(selectedDraft)}
+                        onClick={(event) => {
+                          requestFocus("edit", event.currentTarget)
+                          startEditing(selectedDraft)
+                        }}
                       >
                         Edit
                       </button>

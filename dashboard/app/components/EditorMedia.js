@@ -1,7 +1,8 @@
 "use client"
 
-import React, { useEffect, useState } from "react"
-import { confirmationsFor, mediaCommand, mediaStatus, sameMediaTarget, retainedMediaBlob, platformDescriptionStatus } from "../../lib/editor-media.js"
+import React, { useEffect, useRef, useState } from "react"
+import { confirmationsFor, mediaCommand, mediaStatus, sameMediaTarget, boundRetainedMediaBlob, platformDescriptionStatus, mediaReviewIdentity, mediaImageIdentity } from "../../lib/editor-media.js"
+import { revisionKey } from "../../lib/draft-review-ui.js"
 import { DeliveryHistory } from "./DeliveryHistory.js"
 import { deliveryHistoryKey } from "../../lib/delivery-history.js"
 
@@ -30,8 +31,8 @@ export function EditorMediaPanel({ view, role, busy, imageUrl, imageError, confi
       h("h4", null, "Exact platform description"),
       h("p", { style:{whiteSpace:"pre-wrap"} }, view.platform_description.wire_text),
       h("p", null, view.platform_description.record.derivation === "modis_source_projection_v1"
-        ? "This source-backed MODIS description includes every selected row and its scientific qualifications. The complete retained description above preserves additional source and map detail. Destinations: X and Bluesky."
-        : "The full retained description is reused exactly, including its final line break. Destinations: X and Bluesky."),
+        ? "This source-backed MODIS description includes every selected row and its scientific qualifications. The complete retained description above preserves additional source and map detail. X is the first destination; Bluesky rollout is deferred. This local fixture review publishes nothing."
+        : "The full retained description is reused exactly, including its final line break. X is the first destination; Bluesky rollout is deferred. This local fixture review publishes nothing."),
       h("p", {role:"status"}, platformDescriptionStatus(view.platform_description.status)),
       h("p", null, "X uses a stricter local guard: at most 1,000 Unicode characters and 1,000 UTF-8 bytes. A fit check does not qualify a live API.")),
     packet && !view.review_current && h("fieldset", { disabled:busy || role === "viewer" || !imageUrl },
@@ -63,9 +64,18 @@ export function EditorMedia({ draft, editing, updating, submitCommand }) {
   const [confirmations, setConfirmations] = useState({}), [reason, setReason] = useState("")
   const [image, setImage] = useState(null), [imageError, setImageError] = useState("")
   const currentView = view && sameMediaTarget(view, draft) ? view : null
+  const reviewIdentity = mediaReviewIdentity(currentView), imageIdentity = mediaImageIdentity(currentView)
+  // The dashboard's periodic refresh hands over new draft objects with the same
+  // values. That still re-reads the view (check progress stays current), but it
+  // keeps the operator's unfinished review unless an identity actually changed.
+  const scope = useRef(null)
   useEffect(() => {
     const control = new AbortController()
-    setView(null); setError(""); setConfirmations({}); setReason("")
+    const current = JSON.stringify([draft.id, revisionKey(draft.revision_identity), draft.operator_role, editing, updating, serial])
+    const passive = scope.current === current
+    scope.current = current
+    setError("")
+    if (!passive) { setView(null); setConfirmations({}); setReason("") }
     if (!editing && !updating) {
       fetch(`/api/editor-media?draftId=${encodeURIComponent(draft.id)}`, { cache:"no-store", signal:control.signal })
         .then(async response => {
@@ -76,26 +86,28 @@ export function EditorMedia({ draft, editing, updating, submitCommand }) {
     }
     return () => control.abort()
   }, [draft.id, draft.revision_identity, draft.operator_role, editing, updating, serial])
+  // A different proposal, packet, description or review state is a new review.
+  useEffect(() => { setConfirmations({}); setReason("") }, [reviewIdentity])
   useEffect(() => {
     const control = new AbortController()
     let url
     setImage(null); setImageError("")
     if (currentView?.packet && !editing && !updating) {
-      retainedMediaBlob(currentView, control.signal).then(blob => {
+      boundRetainedMediaBlob(currentView, control.signal).then(blob => {
         if (control.signal.aborted) return
         url=URL.createObjectURL(blob)
-        setImage({ view:currentView, url })
+        setImage({ identity:imageIdentity, url })
       }).catch(error => { if(!control.signal.aborted) setImageError(error.message) })
     }
     return () => { control.abort(); if(url) URL.revokeObjectURL(url) }
-  }, [currentView, draft.operator_role, editing, updating])
+  }, [imageIdentity, draft.operator_role, editing, updating])
   if (!draft.local_preview || !["fire", "air_quality_hazard", "severe_weather"].includes(draft.type)) return null
   return h("section", { className:"graphic-preview", "aria-label":"Local text and graphic review", style:{ overflowWrap:"anywhere" } },
     h("h3", null, "Text and graphic"),
     editing || updating ? h("p", { role:"status" }, editing ? "Save or cancel the text edit before reviewing a graphic." : "Waiting for the local action to finish. Previous review controls are paused.")
       : error ? h("div", { role:"alert" }, h("p", null, error), h("button", { type:"button", className:"btn sm", onClick:()=>setSerial(n=>n+1) }, "Retry status"))
       : !currentView ? h("p", { role:"status" }, "Loading current graphic status…")
-      : h(EditorMediaPanel, { view:currentView, role:draft.operator_role, busy:updating, historyDraft:draft, imageUrl:image?.view === currentView ? image.url : null, imageError, confirmations, setConfirmations, reason, setReason,
+      : h(EditorMediaPanel, { view:currentView, role:draft.operator_role, busy:updating, historyDraft:draft, imageUrl:image?.identity === imageIdentity && imageIdentity ? image.url : null, imageError, confirmations, setConfirmations, reason, setReason,
         refresh:()=>setSerial(n=>n+1), submit:action => submitCommand({ command:mediaCommand(view, action,
           { decision:"accept", confirmations, reason }), draftId:draft.id, action }) }))
 }
