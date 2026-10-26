@@ -11,6 +11,75 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-10-26 — Daily corpus grading (15 drafts; first graded batch since Jul 6)
+
+**Context:** Gist read via git-clone path (success). 15 pending, none previously in the corpus
+(corpus last graded Jul 6; these are Oct 7–9 pipeline drafts plus 2 manual Guam trial drafts from
+Oct 16–17). **Every draft is 9–19 days old** and nearly all carry baked-in dates ("on Oct 8",
+"tonight") — none are postable as written; graded on voice only. Grading remains an editorial
+observation under the Sept 29 evaluation boundary, not a posting authorization.
+
+**Distribution:** 0 A / 1 B / 5 B- / 6 C+ / 3 C — **A-rate 0% (0/15)**, 50 pp below the bar.
+
+**Headline finding:** the new signal types (CAMS dust / PM2.5, NHC cyclones, FIRMS fire) are
+factually clean and calm, but nearly every draft is *data delivery with a compliance clause*:
+data → threshold/guideline multiple → disclaimer. No named mechanic fires in any draft; no draft
+has a punchline. The closest to one is Isaias "exactly the NHC rapid-intensification threshold".
+
+### B
+- **[11] Isaias Cat 1→3, +30 kt** — "winds rising 30 kt to 105 kt, exactly the NHC
+  rapid-intensification threshold." "Exactly" is a real understatement beat and the draft keeps
+  distance. Capped by the stranded URL and a plain close. Same event as [10], so redundant.
+
+### B-
+- **[2] Quetta dust** (523 µg/m³ dust, PM10 mean 173, "nearly 4× the WHO daily guideline") —
+  **first dust_event draft with a WHO anchor** (P_dust). But two different concentrations in one
+  sentence blur the number; "Source: CAMS…" tail is the close.
+- **[3] Arequipa dust** — same shape as Quetta ("model-estimated dust… PM10 24-hour mean… ×
+  WHO"), 2.7× correct. Near-template repeat 1 minute apart.
+- **[5] Isaias +35 kt** — clear, but advisory number, mb and lat/long dump; "surpassing the NHC
+  threshold of 30 kt" is a public NHC definition (not an internal tier leak).
+- **[7] Kano PM2.5 ~230, 15× WHO** — best of the CAMS set: the "dust values in the same forecast
+  run above 300" clause hints at cause. Ends on a hanging data clause, not a consequence.
+- **[10] Isaias → Cat 3** — "up from Category 2 within the same advisory cycle" is clean, flat.
+
+### C+
+- **[4] Riyadh dust forecast 2,347 µg/m³, 10.7× WHO** — big number, correct math; closes on
+  "These are model estimates, not station measurements" (disclaimer-as-closer).
+- **[6] Shah Alam PM2.5 ~152, 10× WHO** — closes "No station data to verify; model forecast
+  only." Same disclaimer-closer.
+- **[9] Eastern Mongolia fire** — three FRP values (600.5/568.6/543.6 MW) and a timestamp.
+  Pure list; no framing, no season/ecosystem context.
+- **[12] Hurricane Simon +30 kt** — "meeting the NHC threshold" formula, parenthetical advisory.
+- **[14] Guam / Typhoon Champi** — "preparation window is closing" is an urgency register,
+  not calm; "the NWS warns" is attribution only. Real-time baked ("tonight"), 10 days stale.
+- **[15] Guam duplicate** — verbatim copy of [14] under a new id (manual proposal, no score).
+
+### C
+- **[1] Papua New Guinea fire 1,026 MW** — "thermal anomaly… radiating… very-high-intensity,
+  satellite-confirmed at 94% confidence": banned-opener-adjacent, jargon stack, no mechanic.
+- **[8] Klang PM2.5** — value-identical to [6] Shah Alam (152 µg/m³, 10×, same day), same city
+  region. Duplicate-signal generation, no new information.
+- **[13] Brazil Cerrado fire 519 MW** — "intense enough to register in the top tier of VIIRS
+  detections": **P_tier leak** (internal classification bucket stated as a fact). The "second
+  hotspot 200 km north… three minutes later" detail is the only vivid specific and is buried.
+
+### Patterns named
+1. **Disclaimer-as-closer** (Riyadh, Shah Alam, Klang-adjacent, Quetta/Arequipa source tails):
+   the honesty clause occupies the closing slot where a consequence or deadpan beat should sit.
+   Worsens P_close; new proposal P_disclaimer.
+2. **P_dust partially resolved on the anchor** — 3 of 3 dust drafts now state a WHO multiple.
+   Remaining gap is a mechanism/consequence, not the anchor.
+3. **P_tier recurs on fire** ([13]), third signal type after SST and absolute_extreme.
+4. **Duplicate-signal generation** — Shah Alam/Klang, Isaias ×3 (+35 kt, Cat 3, +30 kt),
+   Guam ×2. No A-grade carried by any mechanic, so no promotion candidate.
+5. **No A-grade reference moves** — nothing to promote.
+
+### Followups
+1. Operator: all 15 drafts exceed 48h and carry elapsed dates; bulk-reject via dashboard (write
+   skipped: gist path blocked, `gh` returns 403 for non-repo endpoints).
+2. Disclaimer placement (P_disclaimer) and P_tier on fire are the two actionable fixes.
+
 ## 2026-07-06 — Daily corpus grading (0 fresh drafts; 15 carry-overs from Jul 5, previously graded)
 
 **Context:** Gist read via git-clone path (success; no rate limit). Queue: 15 pending drafts —
