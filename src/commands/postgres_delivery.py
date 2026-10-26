@@ -29,6 +29,7 @@ PREVIEW_MIGRATION = p.MIGRATION.with_name("014_preview_delivery.sql")
 META = ("version", "migration_sha", "catalog_sha", "environment", "owner_role", "runtime_role")
 TABLES = ("metadata", "artifacts", "intents", "work_items", "leases", "attempts", "observations", "receipts")
 _ENROLLMENT_TOKEN = object()
+_DISPATCH_TOKEN = object()
 
 
 def refuse(condition, code):
@@ -422,10 +423,93 @@ def attempt_successor(authority, c, value, prepared, binding, request, body):
     return proof
 
 
+class _OwnDispatchPass:
+    """begin()'s own transaction: its acquire pass may reuse only this proof once.
+
+    Minted inside begin and closed before begin returns. The acquire pass still
+    rereads every role, configuration, state, policy, source and renderer input.
+    Only when all of them equal the first pass exactly does it skip replaying
+    the retained approval/review/check proof that pass verified on this same
+    connection; any difference replays all of it. Never serialized, copied,
+    renewed or accepted from a caller.
+    """
+    def __init__(self, token, authority, c, value, resolve_principal, now, ghcn):
+        refuse(token is _DISPATCH_TOKEN, "delivery_dispatch_context_required")
+        self._authority, self._connection, self._thread = authority, c, threading.get_ident()
+        self._value, self._resolve, self._now, self._ghcn = p._canonical(value), resolve_principal, now, ghcn
+        self._stage = "new"
+        self._binding: tuple | None = None
+        self._claim = None
+        self._pair: tuple | None = None
+        self._use = threading.Lock()
+
+    def __copy__(self):
+        raise CommandError("delivery_dispatch_context_changed", "A dispatch pass cannot be copied")
+
+    def __deepcopy__(self, memo):
+        raise CommandError("delivery_dispatch_context_changed", "A dispatch pass cannot be copied")
+
+    def _owned(self, authority, c, value, resolve_principal, now):
+        return (self._stage != "closed" and authority is self._authority and c is self._connection
+                and threading.get_ident() == self._thread and resolve_principal is self._resolve
+                and type(now) is type(self._now) and now == self._now and p._canonical(value) == self._value)
+
+    def current(self, authority, c, state, version):
+        # The claim is always the original context's own live reread.
+        refuse(self._stage != "closed" and authority is self._authority and c is self._connection
+               and threading.get_ident() == self._thread, "delivery_dispatch_context_changed")
+        return self._ghcn.current(authority, c, state, version) if self._ghcn is not None else None
+
+    def first(self, authority, c, value, resolve_principal, now):
+        """Only begin's own first pass records; nested and later passes never do."""
+        if self._stage == "new" and self._owned(authority, c, value, resolve_principal, now):
+            self._stage = "recording"
+            return True
+        return False
+
+    def _bound(self, draft, state, version, inputs, policy, claim):
+        # The same exact encodings the passive inspection binds; never a field hash.
+        identity = None if claim is None else dict(reference=claim.reference, full=claim.full_sha256, view=claim.view_sha256)
+        return (type(version) is int, version, p._canonical(state),
+                p._canonical(dict(draft=draft, inputs=inputs, policy=policy, claim=identity)))
+
+    def record(self, draft, state, version, inputs, policy, claim, package, record):
+        refuse(self._stage == "recording", "delivery_dispatch_context_changed")
+        self._binding, self._claim = self._bound(draft, state, version, inputs, policy, claim), claim
+        self._pair = deepcopy((package, record))
+        self._stage = "verified"
+
+    def consume(self, authority, c, draft, state, version, inputs, policy, claim, value, resolve_principal, now):
+        """None replays the complete original proof; otherwise one exact reuse."""
+        if self._stage != "verified" or self._pair is None or not self._use.acquire(blocking=False):
+            return None
+        self._stage = "consumed"
+        if (not self._owned(authority, c, value, resolve_principal, now) or claim is not self._claim
+                or self._bound(draft, state, version, inputs, policy, claim) != self._binding):
+            return None
+        package, record = deepcopy(self._pair)
+        # The live remainder of the skipped approval and review reads, in their
+        # original order: both approval roles, this pass's renderer/source inputs
+        # against the retained package, then the reviewer each skipped read resolved.
+        binding = draft["approval_binding"]
+        approval, _ = authority._intent(c, binding["command_id"])
+        editor.resolve(resolve_principal, approval.actor_subject, publisher=True)
+        editor.resolve(resolve_principal, binding["requesting_actor"])
+        editor._package_current(authority, c, draft, draft["media_review_binding"]["proposal_sha256"], inputs, package)
+        for _ in range(2):
+            editor.resolve(resolve_principal, record["reviewer"]["subject"])
+        return package, record
+
+    def close(self):
+        self._stage = "closed"
+        self._binding = self._claim = self._pair = None
+
+
 def context(authority, c, value, resolve_principal, now, *, ghcn=None):
     """An active send boundary requires its own current execution checkpoint."""
     return _context(authority, c, value, resolve_principal, now,
-        lambda state, version: ghcn.current(authority, c, state, version) if ghcn is not None else None)
+        lambda state, version: ghcn.current(authority, c, state, version) if ghcn is not None else None,
+        _dispatch=ghcn if type(ghcn) is _OwnDispatchPass else None)
 
 
 def _enrollment_expected(previous, value):
@@ -471,11 +555,12 @@ class _OwnEnrollmentTransition:
         return deepcopy(self._expected)
 
 
-def _context(authority, c, value, resolve_principal, now, resolve_claim):
-    return _qualified_context(authority, c, value, resolve_principal, now, resolve_claim)
+def _context(authority, c, value, resolve_principal, now, resolve_claim, *, _dispatch=None):
+    return _qualified_context(authority, c, value, resolve_principal, now, resolve_claim, _dispatch=_dispatch)
 
 
-def _qualified_context(authority, c, value, resolve_principal, now, resolve_claim, *, _inspection=None):
+def _qualified_context(authority, c, value, resolve_principal, now, resolve_claim, *, _inspection=None, _dispatch=None):
+    first = _dispatch is not None and _dispatch.first(authority, c, value, resolve_principal, now)
     # Revoke authority before consulting source/scientific execution evidence.
     editor.resolve(resolve_principal, value["approval_binding"]["publisher_subject"], publisher=True)
     editor.resolve(resolve_principal, value["approval_binding"]["requesting_actor"])
@@ -491,14 +576,20 @@ def _qualified_context(authority, c, value, resolve_principal, now, resolve_clai
     claim = resolve_claim(state, version)
     inputs = editor.inputs(authority, c, draft, policy, now, claim=claim)
     owned = _inspection is not None and _inspection.matches(authority, c, value)
+    reused = None if owned or first or _dispatch is None else _dispatch.consume(
+        authority, c, draft, state, version, inputs, policy, claim, value, resolve_principal, now)
     if owned:
         package, record = _inspection.consume(authority, c, draft, state, version, inputs, policy, claim, value, resolve_principal)
+        refuse(value.get("schema_version") == 2, "platform_description_required")
+        description = _description_preflight(authority, draft, package, record.get("platform_description"))
+    elif reused is not None:
+        package, record = reused
         refuse(value.get("schema_version") == 2, "platform_description_required")
         description = _description_preflight(authority, draft, package, record.get("platform_description"))
     else:
         refuse(editor.parked(authority, c, draft, state, version, inputs, policy, now, resolve_principal,
                              claim=claim), "delivery_parked_approval_required")
-        package = editor.reviewed(authority, c, draft, inputs, policy, resolve_principal)
+        package, record = editor._reviewed(authority, c, draft, inputs, policy, resolve_principal)
         refuse(value.get("schema_version") == 2, "platform_description_required")
         description = description_preflight(authority, c, draft, package)
     refuse((p._canonical(description) == p._canonical(value.get("platform_description")) if owned
@@ -515,6 +606,8 @@ def _qualified_context(authority, c, value, resolve_principal, now, resolve_clai
     else:
         expires = c.execute("SELECT expires_at FROM theheat_checks.draft_leases WHERE check_set_id=%s ORDER BY fence DESC LIMIT 1", (check_id,)).fetchone()[0]
     deadline = min(utc_datetime(expires), utc_datetime(value["approval_binding"]["useful_until"]))
+    if first:
+        _dispatch.record(draft, state, version, inputs, policy, claim, package, record)
     return package, deadline
 
 
@@ -570,10 +663,16 @@ def acquire(authority, c, value, platform, stage, owner, resolve_principal, now,
 
 
 def begin(authority, c, value, platform, stage, lease, request, body, resolve_principal, now, *, ghcn=None):
-    _, deadline = context(authority, c, value, resolve_principal, now, ghcn=ghcn)
-    # Re-derive all dependencies/current lease rather than trusting the prepared
-    # worker's prior payload, even though intake is not a public HTTP endpoint.
-    prepared = acquire(authority, c, value, platform, stage, lease["owner"], resolve_principal, now, ghcn=ghcn)
+    # Both passes reread every live input. The acquire pass skips replaying only
+    # the retained proof this same transaction's first pass just verified.
+    own = _OwnDispatchPass(_DISPATCH_TOKEN, authority, c, value, resolve_principal, now, ghcn)
+    try:
+        _, deadline = context(authority, c, value, resolve_principal, now, ghcn=own)
+        # Re-derive all dependencies/current lease rather than trusting the prepared
+        # worker's prior payload, even though intake is not a public HTTP endpoint.
+        prepared = acquire(authority, c, value, platform, stage, lease["owner"], resolve_principal, now, ghcn=own)
+    finally:
+        own.close()
     if "attempt" in prepared:
         return dict(dispatch_granted=False)
     refuse(prepared["lease"] == lease and (deadline-now).total_seconds() >= MIN_WINDOW_SECONDS,
