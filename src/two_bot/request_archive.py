@@ -35,6 +35,9 @@ import threading
 from typing import Any, Iterator
 
 SCHEMA = "theheat.request-archive/v1"
+# v2 is opted into explicitly per scope (``capture(..., routes=True)``). It adds
+# only the closed route-family records below; a default scope stays v1 exactly.
+SCHEMA_V2 = "theheat.request-archive/v2"
 MIB = 1024 * 1024
 MAX_LOGICAL_REQUEST_BYTES = 2 * MIB
 MAX_WIRE_REQUEST_BYTES = 2 * MIB
@@ -58,11 +61,38 @@ CODE_IDENTITY_FILES = (
     "src/two_bot/request_archive.py", "src/two_bot/prompts/writer_prompt.py",
     "src/two_bot/prompts/fact_check_prompt.py", "src/two_bot/prompts/critic_prompt.py",
 )
+# Additional running sources observed only by route-family (v2) scopes.
+ROUTE_CODE_IDENTITY_FILES = (
+    "src/two_bot/batch_transport.py", "src/two_bot/batch_collector.py", "src/two_bot/check_transport.py",
+    "src/two_bot/check_executor.py", "src/two_bot/provider_http.py",
+)
 SDK_DISTRIBUTIONS = ("anthropic", "google-genai", "httpx", "httpx2", "pydantic")
 PROVIDER_HOSTS = {"anthropic": "api.anthropic.com", "google": "generativelanguage.googleapis.com"}
 _PATHS = {"anthropic": re.compile(r"\A/v1/messages\Z"),
           "google": re.compile(r"\A/v1(?:beta|alpha)?/models/[A-Za-z0-9._-]{1,128}:generateContent\Z")}
 _RESPONSE_HEADERS = ("content-type", "content-encoding", "content-length", "request-id", "x-request-id")
+_BATCH_ID = r"msgbatch_[A-Za-z0-9_-]{1,128}"
+# Closed operation families: provider, method, exact canonical path and the
+# entity form each transport's EXISTING bounded reader exposes.
+ROUTES = {
+    "batch_submit": ("anthropic", "POST", re.compile(r"\A/v1/messages/batches\Z"), "decoded_http_entity"),
+    "batch_metadata": ("anthropic", "GET", re.compile(rf"\A/v1/messages/batches/{_BATCH_ID}\Z"),
+                       "decoded_http_entity"),
+    "batch_results": ("anthropic", "GET", re.compile(rf"\A/v1/messages/batches/{_BATCH_ID}/results\Z"),
+                      "decoded_http_entity"),
+    "command_check": ("google", "POST", re.compile(r"\A/v1beta/models/[A-Za-z0-9._-]{1,160}:generateContent\Z"),
+                      "raw_http_entity_identity"),
+}
+ROUTE_BINDING_SOURCES = frozenset({
+    "batch_registration", "validated_plan", "batch_begin_result", "batch_results_status",
+    "verified_current_context", "check_lease", "check_grant", "check_packet", "invoking_request", "missing"})
+# Fixed transport diagnostics only; never an exception body or provider text.
+ROUTE_REASONS = frozenset({
+    "received", "batch_ack_read_bound_exceeded", "batch_submit_response_unavailable",
+    "batch_read_size_exceeded", "batch_read_time_exceeded", "batch_read_unavailable", "batch_read_cleanup_failed",
+    "size_exceeded", "time_exceeded", "transport_unavailable", "cleanup_failed"})
+ROUTE_OUTCOMES = frozenset({"returned", "raised", "refused_before_send", "not_dispatched", "blocked"})
+_BATCH_ID_FULL = re.compile(rf"\A{_BATCH_ID}\Z")
 _SAFE_ID = re.compile(r"\A[A-Za-z0-9_.:-]{1,200}\Z")
 _LABEL = re.compile(r"\A[A-Za-z0-9][A-Za-z0-9 ._:/-]{0,199}\Z")
 _HEX64 = re.compile(r"\A[0-9a-f]{64}\Z")
@@ -379,9 +409,9 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _file_hashes() -> dict[str, str | None]:
+def _file_hashes(files: tuple[str, ...] = CODE_IDENTITY_FILES) -> dict[str, str | None]:
     hashes: dict[str, str | None] = {}
-    for relative in CODE_IDENTITY_FILES:
+    for relative in files:
         try:
             hashes[relative] = sha256_hex((_ROOT / relative).read_bytes())
         except OSError:
@@ -443,17 +473,22 @@ def _bound_scope() -> RequestArchiveScope | None:
 
 
 @contextmanager
-def capture(root: str | os.PathLike, *, operation: str) -> Iterator[RequestArchiveScope]:
+def capture(root: str | os.PathLike, *, operation: str, routes: bool = False) -> Iterator[RequestArchiveScope]:
     """Open one explicit private capture scope for the current thread only.
 
     ``root`` must already be (or be creatable as) an absolute canonical 0700
     directory selected by the operator. ``operation`` is a bounded caller label
     retained verbatim; it certifies nothing. Nested, concurrent, foreign and
     reused scopes are refused. The context resets on every exit path.
+
+    ``routes=True`` opens a v2 scope that may also observe the closed batch and
+    command-check route families. It never enables a disabled lane or sends.
     """
     global _OPEN_SCOPE
     if type(operation) is not str or not _LABEL.fullmatch(operation):
         raise RequestArchiveRefused("archive_operation_label_invalid")
+    if type(routes) is not bool:
+        raise RequestArchiveRefused("archive_routes_flag_invalid")
     if _ACTIVE.get() is not None:
         raise RequestArchiveRefused("archive_nested_scope")
     try:
@@ -464,7 +499,7 @@ def capture(root: str | os.PathLike, *, operation: str) -> Iterator[RequestArchi
         if _OPEN_SCOPE is not None:
             raise RequestArchiveRefused("archive_scope_already_open")
         try:
-            scope = RequestArchiveScope(directory, operation)
+            scope = RequestArchiveScope(directory, operation, routes=routes)
         except RequestArchiveError:
             raise
         except Exception:
@@ -489,8 +524,15 @@ def capture(root: str | os.PathLike, *, operation: str) -> Iterator[RequestArchi
 class RequestArchiveScope:
     """One private, append-only capture for one owning thread."""
 
-    def __init__(self, root: Path, operation: str):
+    def __init__(self, root: Path, operation: str, *, routes: bool = False):
         self._lock = threading.RLock()
+        self._routes_enabled = routes
+        self._schema = SCHEMA_V2 if routes else SCHEMA
+        self._route: _RouteRecorder | None = None
+        self._route_count = 0
+        self._route_attempts = 0
+        self._route_hook: Any = None
+        self._route_clients: list = []
         self._owner = threading.get_ident()
         self._closed = False
         self._held: str | None = None
@@ -527,8 +569,8 @@ class RequestArchiveScope:
                                      | os.O_EXCL | _O_NOFOLLOW | _O_CLOEXEC, 0o600, dir_fd=self._directory_fd)
             os.fchmod(self._manifest, 0o600)
             os.fsync(self._directory_fd)
-            self._code = _file_hashes()
-            self._record("scope_opened", {
+            self._code = _file_hashes(CODE_IDENTITY_FILES + (ROUTE_CODE_IDENTITY_FILES if routes else ()))
+            opened = {
                 "scope_id": self.scope_id,
                 "operation": {"label": operation, "authority": "caller_label_only"},
                 "limits": {"logical_request_bytes": MAX_LOGICAL_REQUEST_BYTES,
@@ -540,7 +582,10 @@ class RequestArchiveScope:
                                   "sdk_versions": _sdk_versions(),
                                   "python": platform.python_version(),
                                   "authority": "local_provenance_only"},
-            })
+            }
+            if routes:
+                opened["route_families"] = sorted(ROUTES)
+            self._record("scope_opened", opened)
         except BaseException:
             for name in ("_manifest", "_artifacts_fd", "_directory_fd"):
                 fd = getattr(self, name, None)
@@ -564,7 +609,7 @@ class RequestArchiveScope:
 
     def _record(self, kind: str, data: dict) -> None:
         with self._lock:
-            line = canonical_json({"schema": SCHEMA, "seq": self._records + 1, "prev": self._prev,
+            line = canonical_json({"schema": self._schema, "seq": self._records + 1, "prev": self._prev,
                                    "type": kind, "at": _now(), "data": data})
             if len(line) + 1 > MAX_RECORD_BYTES:
                 raise RequestArchiveError("archive_record_limit")
@@ -604,7 +649,7 @@ class RequestArchiveScope:
                 self._held = "archive_write_failed"
 
     def _check_drift(self) -> None:
-        current = _file_hashes()
+        current = _file_hashes(tuple(self._code))
         for path, before in self._code.items():
             after = current.get(path)
             if after != before and path not in self._drift_reported:
@@ -616,14 +661,17 @@ class RequestArchiveScope:
             if self._closed:
                 return
             try:
-                if self._current is not None:
+                if self._current is not None or self._route is not None:
                     self._hold("archive_call_left_open")
                 self._check_drift()
-                self._record("scope_closed", {
+                closed = {
                     "exit": exit_kind, "exception_type": exception_type, "calls": self._calls,
-                    "wire_attempts": self._attempts, "retained_content_bytes": self._retained,
+                    "wire_attempts": self._attempts - self._route_attempts, "retained_content_bytes": self._retained,
                     "artifacts": len(self._artifacts), "held": self._held,
-                    "foreign_refusals": self._foreign_refusals})
+                    "foreign_refusals": self._foreign_refusals}
+                if self._routes_enabled:
+                    closed.update(routes=self._route_count, route_wire_attempts=self._route_attempts)
+                self._record("scope_closed", closed)
             except Exception:
                 self._held = self._held or "archive_close_failed"
             finally:
@@ -693,7 +741,7 @@ class RequestArchiveScope:
         """Durably record logical intent BEFORE execution, or refuse the call."""
         with self._lock:
             self._require_usable()
-            if self._current is not None:
+            if self._current is not None or self._route is not None:
                 raise RequestArchiveRefused("archive_call_already_open")
             if self._calls >= MAX_CALLS:
                 self._try_record_refusal(None, "archive_call_limit")
@@ -895,6 +943,184 @@ class RequestArchiveScope:
             ids[f"response_body_{field}"] = value
         return ids
 
+    # ------------------------------------------------------- route families
+    def route_hook(self):
+        """This scope's single request-only witness; never a response reader."""
+        with self._lock:
+            if self._route_hook is None:
+                def request_hook(request):
+                    self._on_route_request(request)
+                self._route_hook = request_hook
+            return self._route_hook
+
+    def observe_client(self, client) -> None:
+        """Install the request witness on one transport-owned HTTP client."""
+        with self._lock:
+            self._require_usable()
+            if not self._routes_enabled:
+                self._try_record_refusal(None, "archive_route_scope_required")
+                raise RequestArchiveRefused("archive_route_scope_required")
+            hooks = client.event_hooks
+            hook = self.route_hook()
+            requests = list(hooks.get("request", []))
+            if not any(item is hook for item in requests):
+                requests.append(hook)
+            client.event_hooks = {"request": requests, "response": list(hooks.get("response", []))}
+            if not any(item is client for item in self._route_clients):
+                self._route_clients.append(client)
+
+    def begin_route(self, family: str, *, client: Any, expected_path: str, binding: dict,
+                    logical: Any = None) -> _RouteRecorder:
+        """Durably record one route operation BEFORE execution, or refuse it."""
+        with self._lock:
+            self._require_usable()
+            if not self._routes_enabled:
+                self._try_record_refusal(None, "archive_route_scope_required")
+                raise RequestArchiveRefused("archive_route_scope_required")
+            if self._current is not None or self._route is not None:
+                raise RequestArchiveRefused("archive_call_already_open")
+            if family not in ROUTES:
+                raise RequestArchiveRefused("archive_unsupported_route")
+            if self._route_count >= MAX_CALLS:
+                self._try_record_refusal(None, "archive_call_limit")
+                raise RequestArchiveRefused("archive_call_limit")
+            provider, method, pattern, _ = ROUTES[family]
+            if type(expected_path) is not str or not pattern.fullmatch(expected_path):
+                self._try_record_refusal(None, "archive_unsupported_endpoint")
+                raise RequestArchiveRefused("archive_unsupported_endpoint")
+            hooks = getattr(client, "event_hooks", None)
+            if (client is None or not any(item is client for item in self._route_clients)
+                    or not isinstance(hooks, dict) or not any(h is self._route_hook for h in hooks.get("request", []))
+                    or getattr(client, "follow_redirects", True) is not False):
+                self._try_record_refusal(None, "archive_unobserved_transport")
+                raise RequestArchiveRefused("archive_unobserved_transport")
+            checked = _route_binding(binding)
+            if checked is None:
+                self._try_record_refusal(None, "archive_route_binding_invalid")
+                raise RequestArchiveRefused("archive_route_binding_invalid")
+            encoded, unavailable = (None, "not_applicable") if logical is None else logical_request_bytes(logical)
+            if encoded is not None and len(encoded) > MAX_LOGICAL_REQUEST_BYTES:
+                self._try_record_refusal(None, "archive_logical_request_limit")
+                raise RequestArchiveRefused("archive_logical_request_limit")
+            number = self._route_count + 1
+            try:
+                self._check_drift()
+                artifact = self._artifact(encoded) if encoded is not None else None
+                self._record("route_intent", {
+                    "route": number, "family": family, "provider": provider, "method": method,
+                    "expected_path": expected_path, "binding": checked,
+                    "logical_request": ({"availability": "captured", "artifact": artifact,
+                                         "bytes": len(encoded), "form": "tagged_kwargs_json_v1"}
+                                        if encoded is not None else
+                                        {"availability": "unavailable", "reason": unavailable}),
+                    "recorded_before_execution": True})
+            except RequestArchiveError as exc:
+                if exc.code == "archive_scope_content_limit":
+                    self._try_record_refusal(None, exc.code)
+                else:
+                    self._hold(exc.code)
+                raise RequestArchiveRefused(exc.code) from None
+            except Exception:
+                self._hold("archive_write_failed_before_dispatch")
+                raise RequestArchiveRefused("archive_write_failed_before_dispatch") from None
+            self._route_count = number
+            self._route = _RouteRecorder(self, number, family, expected_path)
+            return self._route
+
+    def _on_route_request(self, request) -> None:
+        with self._lock:
+            route = self._route
+            if route is None or self._closed or threading.get_ident() != self._owner:
+                self._hold("archive_unbound_wire_request")
+                raise RequestArchiveRefused("archive_unbound_wire_request")
+            code = self._held or route.endpoint_problem(request)
+            if code is None and route.attempts:
+                code = "archive_second_send_refused"
+            body = None
+            if code is None:
+                try:
+                    body = request.read()  # The SDK's already-built entity; nothing is re-encoded.
+                except Exception:
+                    code = "archive_unreadable_request_body"
+            if code is None and (not isinstance(body, bytes) or len(body) > MAX_WIRE_REQUEST_BYTES
+                                 or (route.method == "GET" and body)):
+                code = "archive_wire_request_limit"
+            if code is None and self._attempts >= MAX_WIRE_ATTEMPTS:
+                code = "archive_wire_attempt_limit"
+            if code is not None:
+                route.refusal = code
+                if route.attempts:
+                    self._hold(code)  # Any later send after a real send.
+                raise RequestArchiveRefused(code)
+            assert isinstance(body, bytes)
+            try:
+                observed = ({"custom_ids": _custom_ids(body)} if route.family == "batch_submit" else {})
+                self._record("route_wire_request", {
+                    "route": route.number, "attempt": 1, "method": str(request.method),
+                    "scheme": str(request.url.scheme), "host": str(request.url.host), "path": str(request.url.path),
+                    "query_present": bool(request.url.query), "content_type": request.headers.get("content-type"),
+                    "body": ({"availability": "captured", "artifact": self._artifact(body), "bytes": len(body),
+                              "form": "exact_request_entity"} if route.method == "POST" else
+                             {"availability": "no_entity", "bytes": 0}),
+                    "observed": observed, "recorded_before_send": True})
+            except Exception as exc:
+                code = exc.code if isinstance(exc, RequestArchiveError) else "archive_write_failed_before_dispatch"
+                route.refusal = code
+                self._hold(code)
+                raise RequestArchiveRefused(code) from None
+            route.attempts = 1
+            self._attempts += 1
+            self._route_attempts += 1
+
+    def _on_route_response(self, family: str, status: Any, headers: Any, data: Any, complete: Any,
+                           reason: Any) -> None:
+        """Retain what the existing bounded reader saw; never raises or reads."""
+        with self._lock:
+            route = self._route
+            if route is None or route.family != family or self._closed or threading.get_ident() != self._owner:
+                self._hold("archive_unbound_wire_response")
+                return
+            if route.attempts == 0:
+                return  # Nothing was sent; the route result says so.
+            if route.responses:
+                route.incomplete = "archive_second_response"
+                self._hold("archive_second_response")
+                return
+            try:
+                if (not (data is None or isinstance(data, bytes)) or type(complete) is not bool
+                        or (data is None and complete) or reason not in ROUTE_REASONS
+                        or not (status is None or type(status) is int)):
+                    raise RequestArchiveError("archive_route_observation_invalid")
+                kept = {name: str(headers[name]) for name in _RESPONSE_HEADERS
+                        if headers is not None and name in headers}
+                record: dict[str, Any] = {"route": route.number, "attempt": 1, "status": status, "headers": kept,
+                                          "complete": complete, "reason": reason, "observed": {}}
+                if data is None:
+                    # The SDK raised before the bounded reader saw any byte (e.g.
+                    # its own status error); that entity was never observed here.
+                    record["body"] = {"availability": "not_observed"}
+                    self._record("route_response", record)
+                    route.responses, route.entity = 1, "not_observed"
+                    return
+                record["observed"] = _route_ids(family, kept, data, complete)
+                form = ROUTES[family][3] + ("" if complete else "_bounded_prefix")
+                if len(data) > MAX_RESPONSE_BYTES:
+                    record["body"] = {"availability": "not_retained_over_limit", "bytes": len(data),
+                                      "sha256": sha256_hex(data)}
+                    self._record("route_response", record)
+                    route.responses, route.entity = 1, "not_retained"
+                    route.incomplete = "archive_response_over_limit"
+                    self._hold("archive_response_over_limit")
+                    return
+                record["body"] = {"availability": "captured", "artifact": self._artifact(data),
+                                  "bytes": len(data), "form": form}
+                self._record("route_response", record)
+                route.responses, route.entity = 1, "captured"
+            except Exception as exc:
+                code = exc.code if isinstance(exc, RequestArchiveError) else "archive_write_failed_after_dispatch"
+                route.incomplete = code
+                self._hold(code)
+
 
 class _CallRecorder:
     def __init__(self, scope: RequestArchiveScope, number: int, stage: str, provider: str):
@@ -949,6 +1175,184 @@ class _CallRecorder:
                              "status_code": status, "archival": "complete" if self.attempts else "no_physical_send_observed",
                              "response_observed": self.responses > 0,
                              "provider_outcome": "unknown"})
+
+
+class _RouteRecorder:
+    def __init__(self, scope: RequestArchiveScope, number: int, family: str, expected_path: str):
+        self.scope = scope
+        self.number = number
+        self.family = family
+        self.provider, self.method, _, _ = ROUTES[family]
+        self.expected_path = expected_path
+        self.attempts = 0
+        self.responses = 0
+        self.refusal: str | None = None
+        self.incomplete: str | None = None
+        self.entity: str | None = None
+        self.finished = False
+
+    def endpoint_problem(self, request) -> str | None:
+        """Exact method, host and canonical path; any query (e.g. ``alt=sse``) refuses."""
+        try:
+            url = request.url
+            if (str(request.method) != self.method or url.scheme != "https"
+                    or url.host != PROVIDER_HOSTS[self.provider] or str(url.path) != self.expected_path
+                    or url.query or url.fragment):
+                return "archive_unsupported_endpoint"
+        except Exception:
+            return "archive_unsupported_endpoint"
+        return None
+
+    def bind(self, binding: dict) -> None:
+        """Add identities known only after authority (e.g. a grant), BEFORE any send."""
+        scope = self.scope
+        with scope._lock:
+            scope._require_usable()
+            if self.attempts or self.finished or scope._route is not self:
+                raise RequestArchiveRefused("archive_route_bind_after_send")
+            checked = _route_binding(binding)
+            if not checked:
+                raise RequestArchiveRefused("archive_route_binding_invalid")
+            try:
+                scope._record("route_bound", {"route": self.number, "binding": checked})
+            except Exception:
+                scope._hold("archive_write_failed_before_dispatch")
+                raise RequestArchiveRefused("archive_write_failed_before_dispatch") from None
+
+    def finish(self, outcome: str, disposition: dict | None = None) -> str | None:
+        """Close this route with the caller's fixed disposition; never raises.
+
+        Returns a hold code when evidence is incomplete. It never changes the
+        caller's own outcome: an archive failure after a send is not a result.
+        """
+        scope = self.scope
+        with scope._lock:
+            if self.finished:
+                return scope._held
+            self.finished = True
+            scope._route = None
+            if outcome not in ROUTE_OUTCOMES:
+                outcome = "raised"
+            sent = self.attempts > 0
+            # Archival describes the recorder; a missing provider entity is its own field.
+            data: dict[str, Any] = {
+                "route": self.number, "family": self.family, "outcome": outcome,
+                "wire_attempts": self.attempts, "responses": self.responses,
+                "physical_send_observed": sent, "refusal": self.refusal if not sent else None,
+                "disposition": _route_disposition(disposition), "billing": "unknown",
+                "provider_outcome": ("not_sent" if not sent else "response_observed"
+                                     if self.entity in ("captured", "not_retained") else "unknown")}
+            if self.incomplete is not None or scope._held is not None or (sent and not self.responses):
+                data["archival"] = "incomplete"
+                scope._safe_record("route_result", data)
+                if sent and not self.responses and scope._held is None:
+                    scope._hold("archive_route_response_not_observed")
+                return self.incomplete or scope._held or "archive_route_response_not_observed"
+            data["archival"] = "complete"
+            try:
+                scope._record("route_result", data)
+            except Exception:
+                scope._hold("archive_write_failed_after_dispatch" if sent else "archive_write_failed")
+                return scope._held
+            return None
+
+
+_ROUTE_BINDING_KEYS = frozenset({
+    "job_id", "plan_sha256", "policy_sha256", "lease_fence", "grant_id", "provider_batch_id", "submission_state",
+    "context_sha256", "check_set_id", "stage", "request_sha256", "packet_sha256", "candidate_text_sha256",
+    "source_origin_sha256", "model"})
+_ROUTE_DISPOSITION_KEYS = frozenset({
+    "outcome", "reason", "state", "grant_id", "provider_batch_id", "job_id", "receipt_id", "complete",
+    "processing_status", "http_status", "stage", "observation_complete"})
+
+
+def route_entry(value: Any, source: str) -> dict:
+    """One binding entry; an absent value is explicitly ``missing``, never guessed."""
+    return {"value": value, "source": source} if value is not None else {"value": None, "source": "missing"}
+
+
+def _route_value(value: Any) -> bool:
+    return value is None or type(value) in (bool, int) or (type(value) is str and bool(_SAFE_ID.fullmatch(value)))
+
+
+def _route_binding(binding: Any) -> dict | None:
+    """Fixed identity fields, each with its explicit source; missing stays missing."""
+    if type(binding) is not dict or not set(binding) <= _ROUTE_BINDING_KEYS:
+        return None
+    result = {}
+    for key, entry in binding.items():
+        if (type(entry) is not dict or set(entry) != {"value", "source"} or entry["source"] not in ROUTE_BINDING_SOURCES
+                or not _route_value(entry["value"]) or (entry["source"] == "missing") != (entry["value"] is None)):
+            return None
+        result[key] = {"value": entry["value"], "source": entry["source"]}
+    return result
+
+
+def _route_disposition(disposition: Any) -> dict:
+    if type(disposition) is not dict:
+        return {}
+    return {key: value for key, value in disposition.items()
+            if key in _ROUTE_DISPOSITION_KEYS and _route_value(value)}
+
+
+def _custom_ids(body: bytes) -> dict:
+    """Custom IDs observed in the exact outgoing batch entity; never repaired."""
+    try:
+        value = strict_json_loads(body, allow_floats=True)
+        rows = value.get("requests") if isinstance(value, dict) else None
+        if type(rows) is not list:
+            return {"availability": "unparseable"}
+        ids = [row.get("custom_id") if isinstance(row, dict) else None for row in rows]
+        if len(ids) > MAX_CALLS or not all(type(item) is str and _SAFE_ID.fullmatch(item) for item in ids):
+            return {"availability": "invalid", "count": len(ids)}
+        return {"availability": "observed", "values": ids}
+    except Exception:
+        return {"availability": "unparseable"}
+
+
+def _route_ids(family: str, headers: dict, data: bytes, complete: bool) -> dict:
+    ids: dict[str, Any] = {}
+    header = headers.get("request-id")
+    if family != "command_check" and isinstance(header, str) and _SAFE_ID.fullmatch(header):
+        ids["request_id_header"] = header
+    if not complete or family == "batch_results":
+        return ids  # A prefix or a JSONL stream is never parsed into an identity here.
+    try:
+        body = strict_json_loads(data, allow_floats=True)
+    except Exception:
+        return ids
+    if not isinstance(body, dict):
+        return ids
+    if family == "command_check":
+        value = body.get("responseId")
+        if isinstance(value, str) and _SAFE_ID.fullmatch(value):
+            ids["response_body_responseId"] = value
+    else:
+        value = body.get("id")
+        if isinstance(value, str) and _BATCH_ID_FULL.fullmatch(value):
+            ids["provider_batch_id"] = value
+        status = body.get("processing_status")
+        if isinstance(status, str) and _SAFE_ID.fullmatch(status):
+            ids["processing_status"] = status
+    return ids
+
+
+def route_scope() -> RequestArchiveScope | None:
+    """None when capture is OFF; a foreign or v1-only open scope refuses."""
+    scope = active_scope()
+    if scope is not None and not scope._routes_enabled:
+        scope._try_record_refusal(None, "archive_route_scope_required")
+        raise RequestArchiveRefused("archive_route_scope_required")
+    return scope
+
+
+def observe_route_response(family: str, *, status: Any, headers: Any, data: Any, complete: Any,
+                           reason: Any) -> None:
+    """Observation seam after a transport's existing bounded reader; no-op when OFF."""
+    scope = _bound_scope()
+    if scope is None or not scope._routes_enabled:
+        return
+    scope._on_route_response(family, status, headers, data, complete, reason)
 
 
 # ------------------------------------------------- pipeline binding notes

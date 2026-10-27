@@ -10,6 +10,7 @@ import re
 import time
 from typing import Protocol, cast
 
+from src.two_bot import request_archive
 from src.two_bot.batch_authority import BatchAuthority
 from src.two_bot.provider_http import anthropic_httpx
 
@@ -48,6 +49,11 @@ class AnthropicBatchTransport:
             raise BatchTransportError("batch_redirects_must_be_disabled")
         client = http_client or httpx.Client(follow_redirects=False, timeout=NETWORK_TIMEOUT)
         try:
+            # An explicit private capture scope only adds its request-only witness.
+            scope = request_archive.route_scope()
+            if scope is not None:
+                scope.observe_client(client)
+            self._http = client
             self._client = Anthropic(
                 api_key=api_key,
                 base_url="https://api.anthropic.com",
@@ -65,20 +71,33 @@ class AnthropicBatchTransport:
         started = _monotonic()
         chunks = []
         size = 0
+        status = headers = None
+        observed, complete, reason = False, False, "batch_submit_response_unavailable"
         try:
             with self._client.messages.batches.with_streaming_response.create(
                 requests=cast(list[Request], requests), timeout=NETWORK_TIMEOUT
             ) as response:
+                status, headers, observed = response.status_code, response.headers, True
                 for chunk in response.iter_bytes(chunk_size=4096):
                     size += len(chunk)
                     if size > ACK_LIMIT or _monotonic() - started > NETWORK_TIMEOUT:
+                        reason = "batch_ack_read_bound_exceeded"
                         raise BatchTransportError("batch_ack_read_bound_exceeded")
                     chunks.append(chunk)
+            complete, reason = True, "received"
             return b"".join(chunks)
-        except Exception:
+        except Exception as exc:
+            code = getattr(exc, "status_code", None)
+            if status is None and type(code) is int:
+                status = code
             # SDK error bodies can contain unpublished inputs. The durable grant
             # remains uncertain regardless of API status or transport exception.
             raise BatchTransportError("batch_submit_response_unavailable") from None
+        finally:
+            # Observation only: exactly the bytes this bounded reader kept.
+            request_archive.observe_route_response(
+                "batch_submit", status=status, headers=headers,
+                data=b"".join(chunks) if observed else None, complete=complete, reason=reason)
 
     def close(self) -> None:
         self._client.close()
@@ -175,7 +194,40 @@ def _uncertain(authority, job, owner, fence, clock, *, reason):
         return _report(outcome, record, reason=reason)
 
 
-def _attempt(authority, job, context, owner, clock, transport, requests):
+def _submission_route(job, transport, requests, observed):
+    """Private evidence intent BEFORE any lease or grant; None when capture is OFF."""
+    scope = request_archive.route_scope()
+    if scope is None:
+        return None
+    return scope.begin_route(
+        "batch_submit", client=getattr(transport, "_http", None), expected_path="/v1/messages/batches",
+        binding=dict(job_id=request_archive.route_entry(job, "batch_registration"),
+                     plan_sha256=request_archive.route_entry(observed.get("plan_sha256"), "batch_registration"),
+                     policy_sha256=request_archive.route_entry(observed.get("policy_sha256"), "validated_plan")),
+        logical={"requests": requests})
+
+
+def _attempt(authority, job, context, owner, clock, transport, requests, observed=None):
+    try:
+        route = _submission_route(job, transport, requests, observed or {})
+    except Exception:
+        # Capture failure before a send refuses it: no lease, grant or request.
+        return _report("blocked", {"job_id": job}, reason="archive_refused_before_grant")
+    progress = {"sent": None}
+    report = None
+    try:
+        report = _attempt_once(authority, job, context, owner, clock, transport, requests, route, progress)
+        return report
+    finally:
+        if route is not None:
+            sent = progress["sent"]
+            route.finish("returned" if sent is True else "raised" if sent is False else
+                         "refused_before_send" if route.refusal else
+                         "not_dispatched" if report and report["outcome"] == "not_dispatched" else "blocked",
+                         report)
+
+
+def _attempt_once(authority, job, context, owner, clock, transport, requests, route, progress):
     try:
         leased = authority.batch_work(
             "acquire", dict(job_id=job, owner=owner, ttl_seconds=LEASE_SECONDS), now=clock()
@@ -192,9 +244,21 @@ def _attempt(authority, job, context, owner, clock, transport, requests):
         return _uncertain(authority, job, owner, fence, clock, reason="batch_grant_not_confirmed")
     if not grant["dispatch_granted"]:
         return _report("not_dispatched", grant, reason="batch_attempt_already_recorded")
+    if route is not None:
+        try:
+            route.bind(dict(
+                grant_id=request_archive.route_entry(grant["grant_id"], "batch_begin_result"),
+                lease_fence=request_archive.route_entry(fence, "batch_begin_result"),
+                context_sha256=request_archive.route_entry(
+                    request_archive.sha256_hex(request_archive.canonical_json(context)), "verified_current_context")))
+        except Exception:
+            # The grant exists but nothing was sent: never send unrecorded, never resubmit.
+            return _uncertain(authority, job, owner, fence, clock, reason="archive_refused_before_send")
     try:
         raw = transport.submit(requests)
+        progress["sent"] = True
     except Exception:
+        progress["sent"] = False
         return _uncertain(authority, job, owner, fence, clock, reason="batch_response_unavailable")
     try:
         if type(raw) is not bytes or len(raw) > ACK_LIMIT:
@@ -274,7 +338,8 @@ def submit_batch_once(
     report = None
     try:
         report = _attempt(
-            authority, job_id, current_context, owner, clock, transport, plan["requests"]
+            authority, job_id, current_context, owner, clock, transport, plan["requests"],
+            dict(plan_sha256=registration["plan_sha256"], policy_sha256=plan["policy_sha256"]),
         )
     finally:
         try:
