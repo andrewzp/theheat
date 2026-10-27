@@ -6,8 +6,9 @@
   as historical records and remove machine-specific links from their index.
 - Clarify X-first publishing with Bluesky deferred and distinguish software
   release evidence from runtime, scientific, editorial and cost acceptance.
-- Documentation only; runtime code, publishing controls and dashboard deployment
-  are unchanged.
+- Wait for an invented child's signal-handler acknowledgement in launcher tests
+  before fast completion/cleanup, preserving every deadline and cleanup assertion.
+- Runtime code, publishing controls and dashboard deployment are unchanged.
 
 ## 0.9.109.40
 
