@@ -1,3 +1,14 @@
+## 0.9.109.41
+
+- Document a fixture-based Python/Node setup, lockfile installation, six generated
+  checks and the separate native/database and required CI profiles.
+- Make current upgrade/development guidance easy to find, preserve dated handoffs
+  as historical records and remove machine-specific links from their index.
+- Clarify X-first publishing with Bluesky deferred and distinguish software
+  release evidence from runtime, scientific, editorial and cost acceptance.
+- Documentation only; runtime code, publishing controls and dashboard deployment
+  are unchanged.
+
 ## 0.9.109.40
 
 - Give the draft editor a visible label and carry keyboard focus through Edit
