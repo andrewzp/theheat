@@ -261,3 +261,17 @@ invented.
   post-age engagement sample or a measured improvement.
 - **HOLD stays.** No result approves, settles a hold, releases or changes a
   budget, replays a provider, posts or corrects. Promotion stays HOLD.
+
+## Route families (v2 archives)
+
+When a supplied archive is v2, the JSON report gains a `routes` section. The rendered views, and every v1-only report, are unchanged.
+
+For each archive, the section lists:
+- the families observed and not observed;
+- reused provider batch IDs;
+- mechanical dispositions per route, for example:
+  - `acknowledgment_not_completion_or_usage`, `status_read_not_generation`;
+  - `results_partial`, `predecessor_durable_status_reference`, `duplicate_custom_ids_visible`;
+  - `entity_not_observed`, `no_physical_send`, `billing_unknown`.
+
+Weekly promotion stays HOLD. No route disposition is a root cause, a quality grade or an approval.

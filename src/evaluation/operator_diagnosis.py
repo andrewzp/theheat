@@ -27,10 +27,10 @@ from typing import Any
 from src.editorial.revisions import fingerprint
 from src.evaluation import invoice_evidence, private_copy_pack
 from src.two_bot.request_archive import (
-    RequestArchiveRefused, read_private_file, require_private_directory, sha256_hex, strict_json_loads,
-    write_private_file_exclusive,
+    ROUTES, SCHEMA_V2, RequestArchiveRefused, read_private_file, require_private_directory, sha256_hex,
+    strict_json_loads, write_private_file_exclusive,
 )
-from src.two_bot.request_archive_replay import VerifiedArchive, lineage
+from src.two_bot.request_archive_replay import VerifiedArchive, lineage, route_lineage
 
 SCHEMA = "theheat.private-diagnosis/v1"
 COMPONENTS = ("diagnosis.json", "diagnosis.md", "diagnosis.html")
@@ -406,8 +406,59 @@ def diagnose(*, archives: list[VerifiedArchive], components: list[dict], usable:
                          "Missing optional inputs are absent, never zero usage, cost, engagement or proof.",
                          "Billing is operator-supplied; ratings may be synthetic; neither certifies the other.",
                          "No action here generates, replays, approves, releases budget, posts or corrects."]}
+    if any(archive.schema == SCHEMA_V2 and archive.status != "invalid" for archive in archives):
+        # Route families exist only in explicit v2 archives; v1-only reports are unchanged.
+        report["routes"] = _routes_section(archives)
     report["report_sha256"] = _identity(report)
     return report
+
+
+def _route_dispositions(row: dict) -> list[str]:
+    """Mechanical labels only: what the retained route evidence does and does not show."""
+    out = ["billing_unknown"]
+    if row["archival"] != "complete":
+        out.append("archive_incomplete")
+    if not row["physical_send_observed"]:
+        out.append("no_physical_send")
+    elif row["entity"] != "captured":
+        out.append(f"entity_{row['entity']}")
+    elif row["entity_complete"] is False:
+        out.append("entity_partial")
+    if row["family"] == "batch_submit":
+        out.append("acknowledgment_not_completion_or_usage")
+    elif row["family"] == "batch_metadata":
+        out.append("status_read_not_generation")
+    elif row["family"] == "batch_results":
+        results = row.get("results") or {}
+        out.append(f"results_{results.get('status')}")
+        if results.get("duplicate_custom_ids"):
+            out.append("duplicate_custom_ids_visible")
+        if results.get("unknown_custom_ids"):
+            out.append("unknown_custom_ids_visible")
+    if "predecessor" in row:
+        out.append(f"predecessor_{row['predecessor']}")
+    return sorted(set(out))
+
+
+def _routes_section(archives: list[VerifiedArchive]) -> dict:
+    scopes = []
+    for archive in archives:
+        if archive.schema != SCHEMA_V2 or archive.status == "invalid":
+            continue
+        view = route_lineage(archive)
+        families = sorted({row["family"] for row in view["routes"]})
+        scopes.append({"scope_id": archive.scope_id, "archive_status": archive.status,
+                       "families_observed": families,
+                       "families_not_observed": sorted(set(ROUTES) - set(families)),
+                       "reused_provider_batch_ids": view["reused_provider_batch_ids"],
+                       "routes": [{"route": row["route"], "family": row["family"], "outcome": row["outcome"],
+                                   "provider_batch_id": row.get("provider_batch_id"),
+                                   "dispositions": _route_dispositions(row)} for row in view["routes"]]})
+    return {"scopes": scopes, "supported_families": sorted(ROUTES),
+            "limits": ["A batch acknowledgment is never completion, usage or billing evidence.",
+                       "Batch status reads are not model generations; results usage counts once per custom ID.",
+                       "Links are observed_in_scope, durable_status_reference or unverified; nothing is fetched or repaired.",
+                       "Route families outside the four supported ones are not captured by this archive."]}
 
 
 def _join_publications(candidates: list[dict], posts: list[dict]) -> dict[str, str]:

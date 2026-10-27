@@ -8,6 +8,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 import shutil
+from typing import Any
 
 import pytest
 
@@ -250,3 +251,112 @@ def test_same_text_on_different_generation_evidence_keeps_its_own_outcome(journe
     assert len(facts) == 2 and facts[0]["candidate_text_sha256"] == facts[1]["candidate_text_sha256"]
     assert [row["candidate_stage_outcome"] for row in facts] == ["pass" if passed else "kill" for passed in outcomes]
     assert usage["denominators"]["rejected_answers_with_usage"] == 1
+
+
+# ---------------------------------------------------------------- route families
+# One INVENTED walkthrough: installed SDK serialization -> exact bounded transport
+# evidence -> separate-process strict replay -> usage projection -> diagnosis handoff.
+
+from tests import test_check_executor as check_fixtures  # noqa: E402
+from tests.test_check_executor import inputs, store  # noqa: E402,F401
+from tests.test_request_archive_batch import fresh_store, httpx as anthropic_http, run as submit_batch  # noqa: E402
+from tests.test_request_archive_batch_replay import Provider, cli, collect_once, factory  # noqa: E402
+
+
+@pytest.fixture
+def check_case(store, inputs, monkeypatch):  # noqa: F811
+    return getattr(check_fixtures.case, "__wrapped__")(store, inputs, monkeypatch)
+
+
+def test_route_family_walkthrough_from_sdk_evidence_to_usage_and_diagnosis(check_case, inputs, tmp_path,  # noqa: F811
+                                                                          monkeypatch):
+    import httpx
+    from src.evaluation import operator_diagnosis as diagnosis
+    from src.two_bot import request_archive as archive
+    from tests import test_batch_result_journal as receipts, test_batch_worker_journal as workers
+    from tests.test_operator_diagnosis import AS_OF
+    from tests.two_bot import test_batch_contract as contracts
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "canary-walkthrough-key-never-archive")
+    monkeypatch.setenv("WRITER_SAMPLES", "1")
+    # A: one submission, then its metadata and results, joined inside one scope.
+    a_store = fresh_store(tmp_path, "a")
+    a_pair = workers.ready(a_store, inputs)
+    a_provider = Provider(a_pair)
+    with archive.capture(private_root(tmp_path, "a-root"), operation="walkthrough batch", routes=True) as a:
+        assert submit_batch(a_store, a_pair, factory(a_provider))["outcome"] == "submitted"
+        assert collect_once(a_store, a_pair, a_provider)["outcome"] == "reviewed"
+    # B: a later collection in another scope: durable reference only, results cut mid-stream.
+    b_store = fresh_store(tmp_path, "b")
+    b_pair, _ = receipts.started(b_store, inputs)
+    good = contracts.raw_rows(receipts.rows(b_pair))
+
+    stream_base: Any = anthropic_http.SyncByteStream  # The Anthropic SDK's own HTTP family.
+
+    def cut(request):
+        class Failing(stream_base):
+            def __iter__(self):
+                yield good + b"\n" + b"x" * 8192
+                raise anthropic_http.ReadError("invented interruption", request=request)
+        return anthropic_http.Response(200, stream=Failing())
+    with archive.capture(private_root(tmp_path, "b-root"), operation="walkthrough collection", routes=True) as b:
+        collect_once(b_store, b_pair, Provider(b_pair, results=cut))
+    # C: one command check through the actual google-genai SDK.
+    assert check_fixtures.run(check_case)["outcome"] == "completed"
+    sent: list = []
+
+    def reply(request):
+        sent.append(request)
+        return httpx.Response(200, request=request, stream=httpx.ByteStream(check_fixtures.envelope("NO")))
+    with archive.capture(private_root(tmp_path, "c-root"), operation="walkthrough check", routes=True) as c:
+        checked = check_fixtures.run(check_case, "safety", transport_options={
+            "api_key": "canary-walkthrough-key-never-archive", "http_transport": httpx.MockTransport(reply)})
+    assert checked["checks"]["stages"]["safety"] == "passed" and len(sent) == 1
+
+    # Separate-process strict replay: no credentials, network or archive mutation.
+    for scope in (a, b, c):
+        code, value = cli("validate", str(scope.directory))
+        assert code == 0 and value["status"] == "complete"
+    code, traced = cli("lineage", str(b.directory))
+    results = traced["routes"]["routes"][1]
+    assert code == 0 and results["predecessor"] == "durable_status_reference"
+    assert results["results"]["status"] == "partial"
+
+    archives = [replay.load_archive(scope.directory) for scope in (a, b, c)]
+    usage = archive_usage.archive_usage(archives)
+    assert usage["billing"] == "unknown" and usage["complete_account_coverage"] is False
+    roles = {(row["scope_id"], row["route"]): row for row in usage["routes"]}
+    submitted = roles[(archives[0].scope_id, 1)]
+    assert submitted["usage_status"] == "not_in_acknowledgment" and submitted["completion_evidence"] == "none"
+    assert submitted["model_generation"] is False and submitted["submitted_requests"] == 1
+    assert roles[(archives[0].scope_id, 2)]["usage_status"] == "not_applicable"
+    check = roles[(archives[2].scope_id, 1)]
+    assert check["model_generation"] is True and check["usage_status"] == "present"
+    lines = usage["route_result_lines"]
+    assert [row["counted"] for row in lines if row["scope_id"] == archives[0].scope_id] == [True]
+    partial = [row for row in lines if row["scope_id"] == archives[1].scope_id]
+    # The cut tail never becomes a result. The one complete line reuses A's invented
+    # provider batch ID and custom ID, so it is listed but never counted twice.
+    assert [row["usage_status"] for row in partial] == ["duplicate_not_counted"]
+    assert usage["route_denominators"]["result_lines_duplicate_not_counted"] == 1
+    assert all(group["responses"] >= 1 for group in usage["route_token_totals"])
+    priced = archive_usage.priced_scenario(usage, SCENARIO)
+    assert priced["actual_cost_known"] is False and priced["billed_amount"] is None
+    assert {tuple(row["reasons"]) for row in priced["rows"] if "route" in row} == {
+        ("route_family_not_in_named_scenario",)}
+
+    components, usable = diagnosis.verify_components(archives=archives, reconciliation=None, copy_private=None,
+                                                     copy_import=None, readers=None, state=None, as_of=AS_OF)
+    report = diagnosis.diagnose(archives=archives, components=components, usable=usable, as_of=AS_OF,
+                                input_files=[])
+    scopes = {row["scope_id"]: row for row in report["routes"]["scopes"]}
+    first = scopes[archives[0].scope_id]["routes"]
+    assert "acknowledgment_not_completion_or_usage" in first[0]["dispositions"]
+    assert "predecessor_observed_in_scope" in first[2]["dispositions"]
+    later = scopes[archives[1].scope_id]["routes"][1]["dispositions"]
+    assert {"predecessor_durable_status_reference", "results_partial", "billing_unknown"} <= set(later)
+    assert scopes[archives[2].scope_id]["families_not_observed"] == ["batch_metadata", "batch_results",
+                                                                     "batch_submit"]
+    assert report["decision"]["promotion"] == "HOLD" and report["decision"]["provider_replay"] is False
+    for scope in (a, b, c):
+        assert b"canary-walkthrough-key-never-archive" not in (scope.directory / archive.MANIFEST).read_bytes()

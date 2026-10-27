@@ -204,3 +204,24 @@ statement never matches. Running the same command again reports
   invented.
 - Missing usage, missing responses, HTTP errors and timeouts remain separate
   and unknown, never zero.
+
+## Route families in the usage projection (v2 archives only)
+
+When any supplied archive is v2, `archive_usage` adds four keys: `routes`, `route_result_lines`, `route_denominators` and `route_token_totals`. Output for v1-only inputs is unchanged.
+
+| Route row | Counted as |
+|---|---|
+| `batch_submit` | not a generation; `usage_status: not_in_acknowledgment`; `completion_evidence: none` |
+| `batch_metadata` | not a generation; `usage_status: not_applicable` |
+| `batch_results` | per result line, derived from the parsed line's message (`usage_source: parsed_results_line_message`) |
+| `command_check` | a generation, parsed by the same unchanged usage parser as synchronous calls |
+
+**Counting rules:**
+- A result line counts once per (provider batch ID, custom ID). A repeat, whether inside one stream, across refreshes, or across archives, is listed as `duplicate_not_counted`.
+- Errored, expired or canceled lines carry no usage.
+- A cut tail of an incomplete entity is never a result line.
+- Missing usage stays missing.
+
+**Scenarios.** A named scenario prices none of these rows. Each is listed as `excluded: route_family_not_in_named_scenario`.
+
+**Billing.** No billing, account binding or invoice is inferred: `billing` stays `unknown` and `actual_cost_known` stays `false`.

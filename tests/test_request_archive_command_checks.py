@@ -109,6 +109,8 @@ def test_capture_on_and_off_keep_identical_observations_and_send_counts(tmp_path
     assert response["body"]["form"] == "raw_http_entity_identity" + ("" if on.complete else "_bounded_prefix")
     loaded = replay.load_archive(scope.directory)
     assert loaded.status == "complete" and loaded.routes[0].family == "command_check"
+    traced, = replay.route_lineage(loaded)["routes"]
+    assert traced["family"] == "command_check" and "predecessor" not in traced
     # The exact bounded entity (even an error body) is private evidence; credentials never are.
     assert KEY.encode() not in all_bytes(scope) and b"x-goog-api-key" not in all_bytes(scope).lower()
 

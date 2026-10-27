@@ -593,6 +593,10 @@ def route_lineage(archive: VerifiedArchive) -> dict:
                        completion_evidence="none", billable_usage_evidence="none")
             if batch:
                 submissions.setdefault(batch, []).append(row)
+        elif route.family == "command_check":
+            # One generateContent check; no batch predecessor exists for it.
+            row.update({key: (route.binding.get(key) or {}).get("value") for key in ("check_set_id", "stage", "model")})
+            row["response_id"] = route.response_observed.get("response_body_responseId")
         else:
             path_batch = route.expected_path.split("/")[4]
             bound = route.binding.get("provider_batch_id") or {}
