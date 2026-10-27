@@ -1,6 +1,6 @@
 # TheHeat upgrade acceptance ledger
 
-As of 21 October 2026: **7 complete packages, 37 partial packages, 1 untouched planned deliverable** across the original 45-package upgrade. The full upgrade remains unfinished. Package sizes differ, so these counts are not a completion percentage.
+As of 27 October 2026: **7 complete packages, 37 partial packages, 1 untouched planned deliverable** across the original 45-package upgrade. The full upgrade remains unfinished. Package sizes differ, so these counts are not a completion percentage.
 
 The [product priorities](plans/2026-09-09-product-priorities.md) remain sharper writing, worldwide coverage, reliable sources, useful graphics, lower operating cost and fewer regressions. Test counts measure exercised cases; they do not measure editorial quality, global recall or savings.
 
@@ -15,6 +15,15 @@ Gist remains the production authority. Substantial local PostgreSQL command, job
 Signed-in read-only Dashboard, Sources, Health and feedback presentation have been observed. [PR691](https://github.com/andrewzp/theheat/pull/691) adds observed disabled collection controls and clear configuration-versus-history labels. A deployed UI or policy manifest is separate from accepted hosted mutations, media attachment and platform delivery.
 
 Recent releases include the domain definition and bounded selected rejection context in [PR701](https://github.com/andrewzp/theheat/pull/701), qualified station-comparator preparation in [PR697](https://github.com/andrewzp/theheat/pull/697), warning message/event timing in [PR698](https://github.com/andrewzp/theheat/pull/698), and local manual event-portfolio planning in [PR699](https://github.com/andrewzp/theheat/pull/699). The lifecycle limits below still apply; none establishes independent model-writing quality, global recall or invoice savings.
+
+The private request/replay, supplied-billing reconciliation, blind-review and
+diagnosis workflows were released in [PR709](https://github.com/andrewzp/theheat/pull/709).
+The operator edit/focus, preview/review continuity and owned local-journey/evidence
+fixes were released in [PR710](https://github.com/andrewzp/theheat/pull/710).
+These are bounded software releases, not actual blind model ratings, invoice
+savings, scientific qualification or complete hosted mutating acceptance.
+Use the [local development guide](local-development.md) to reproduce ordinary
+fixture checks; [dated handoffs](handoffs/README.md) retain their historical scope.
 
 ## Original work packages
 

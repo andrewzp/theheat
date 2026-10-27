@@ -220,11 +220,22 @@ test("only the owned child serving its exact token is ready; stop ends it exactl
 })
 
 // --- F5: the outer journey deadline (invented owned children, injected short bound) ---
-function lingering(dir, name, termCode) {
+function lingering(dir, name, termCode, readyDelayMs = 0) {
   // Stays alive until signalled; records each SIGTERM it receives, then exits with termCode.
   return startOwned({ command: process.execPath, argv: ["-e",
-    `process.on("SIGTERM", () => { process.stdout.write("term\\n"); process.exit(${termCode}) }); setInterval(() => {}, 1000)`],
+    `setTimeout(() => { process.on("SIGTERM", () => { process.stdout.write("term\\n"); process.exit(${termCode}) }); process.stdout.write("ready\\n") }, ${readyDelayMs}); setInterval(() => {}, 1000)`],
   cwd: dir, env: { PATH: "/usr/bin:/bin" }, logPath: join(dir, `${name}.log`) })
+}
+async function waitForHandlers(dir, entries) {
+  try {
+    await until(() => entries.every(([name, owned]) => {
+      assert.ok(owned.alive(), "invented child exited before installing its signal handler")
+      return /^ready$/m.test(readFileSync(join(dir, `${name}.log`), "utf8"))
+    }), "invented child did not acknowledge its installed signal handler")
+  } catch (error) {
+    await Promise.all(entries.map(([, owned]) => owned.stop()))
+    throw error
+  }
 }
 function trackedTimers() {
   const active = new Set()
@@ -244,7 +255,7 @@ test("the outer journey deadline ends both owned children and cannot report succ
   try {
     // The journey exits 0 when signalled: a clean-looking exit during cleanup must stay a failure.
     const journey = lingering(dir, "journey", 0), server = lingering(dir, "server", 15)
-    await new Promise((done) => setTimeout(done, 100)) // both children have installed their handlers
+    await waitForHandlers(dir, [["journey", journey], ["server", server]])
     const started = Date.now()
     const result = await superviseJourney({ journey, server, timeoutMs: 300, setTimer: timers.setTimer, clearTimer: timers.clearTimer })
     assert.ok(Date.now() - started < 10000)
@@ -267,6 +278,7 @@ test("normal completion, journey failure, child error and early server exit clea
   const dir = scratch()
   for (const [name, code, success] of [["passing", 0, true], ["failing", 1, false]]) {
     const timers = trackedTimers(), server = lingering(dir, `server-${name}`, 15)
+    await waitForHandlers(dir, [[`server-${name}`, server]])
     const result = await superviseJourney({ journey: exitsAfter(dir, name, code), server, timeoutMs: 60000,
       setTimer: timers.setTimer, clearTimer: timers.clearTimer })
     assert.deepEqual([result.outcome, result.success, result.journey_exit.code], ["completed", success, code])
@@ -277,6 +289,7 @@ test("normal completion, journey failure, child error and early server exit clea
   }
   {
     const timers = trackedTimers(), server = lingering(dir, "server-error", 15)
+    await waitForHandlers(dir, [["server-error", server]])
     const missing = startOwned({ command: join(dir, "no-such-invented-journey"), argv: [], cwd: dir, env: { PATH: "/usr/bin:/bin" },
       logPath: join(dir, "journey-error.log") })
     const result = await superviseJourney({ journey: missing, server, timeoutMs: 60000, setTimer: timers.setTimer, clearTimer: timers.clearTimer })
@@ -286,7 +299,7 @@ test("normal completion, journey failure, child error and early server exit clea
   }
   {
     const timers = trackedTimers(), journey = lingering(dir, "journey-early", 0)
-    await new Promise((done) => setTimeout(done, 100))
+    await waitForHandlers(dir, [["journey-early", journey]])
     const result = await superviseJourney({ journey, server: exitsAfter(dir, "server-early", 3), timeoutMs: 60000,
       setTimer: timers.setTimer, clearTimer: timers.clearTimer })
     assert.deepEqual([result.outcome, result.success, result.server_exit.code], ["owned_server_exited_during_journey", false, 3])
@@ -296,12 +309,28 @@ test("normal completion, journey failure, child error and early server exit clea
   }
   {
     const timers = trackedTimers(), journey = lingering(dir, "journey-exception", 0)
+    await waitForHandlers(dir, [["journey-exception", journey]])
     const broken = { exited: Promise.reject(new Error("invented supervision failure")), stop: () => Promise.resolve(null), alive: () => false }
     await assert.rejects(superviseJourney({ journey, server: broken, timeoutMs: 60000, setTimer: timers.setTimer,
       clearTimer: timers.clearTimer }), /invented supervision failure/)
     assert.equal(timers.active.size, 0, "an exception left the deadline timer running")
     await journey.stop()
   }
+})
+
+test("an acknowledged delayed handler observes cleanup after a fast journey", async () => {
+  const dir = scratch(), timers = trackedTimers(), server = lingering(dir, "delayed-server", 15, 150)
+  try {
+    await waitForHandlers(dir, [["delayed-server", server]])
+    const result = await superviseJourney({ journey: exitsAfter(dir, "fast-journey", 0), server, timeoutMs: 60000,
+      setTimer: timers.setTimer, clearTimer: timers.clearTimer })
+    assert.deepEqual([result.outcome, result.success], ["completed", true])
+    assert.equal(server.alive(), true)
+    assert.equal(timers.active.size, 0)
+    await server.stop()
+    assert.equal(terms(dir, "delayed-server"), 1)
+    assert.equal((readFileSync(join(dir, "delayed-server.log"), "utf8").match(/^ready$/gm) || []).length, 1)
+  } finally { await server.stop() }
 })
 
 // Ordinary Node: the bound loader itself, with an invented response and no browser.
