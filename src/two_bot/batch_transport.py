@@ -121,6 +121,7 @@ class AnthropicBatchTransport:
         data = bytearray()
         response = None
         outcome = None
+        status = None
         started = _monotonic()
         try:
             # The SDK's convenience results() follows results_url and retrieves
@@ -129,6 +130,7 @@ class AnthropicBatchTransport:
             response = self._client.get(
                 path, cast_to=httpx.Response, stream=True, options={"timeout": NETWORK_TIMEOUT}
             )
+            status = response.status_code
             for chunk in response.iter_bytes(chunk_size=4096):
                 remaining = limit - len(data)
                 data.extend(chunk[:remaining])
@@ -144,7 +146,10 @@ class AnthropicBatchTransport:
                     if _monotonic() - started > NETWORK_TIMEOUT
                     else BatchDownload(bytes(data), True)
                 )
-        except Exception:
+        except Exception as exc:
+            code = getattr(exc, "status_code", None)
+            if status is None and type(code) is int:
+                status = code
             outcome = BatchDownload(bytes(data), False, "batch_read_unavailable")
         finally:
             if response is not None:
@@ -152,6 +157,12 @@ class AnthropicBatchTransport:
                     response.close()
                 except Exception:
                     outcome = BatchDownload(bytes(data), False, "batch_read_cleanup_failed")
+        # Observation only, after cleanup: exactly the bounded bytes returned below.
+        request_archive.observe_route_response(
+            "batch_results" if results else "batch_metadata", status=status,
+            headers=response.headers if response is not None else None,
+            data=outcome.raw if response is not None else None, complete=outcome.complete,
+            reason=outcome.reason or "received")
         return outcome
 
 
