@@ -25,7 +25,7 @@ import time
 from typing import Any
 
 from src.editorial.revisions import fingerprint
-from src.evaluation import invoice_evidence, private_copy_pack
+from src.evaluation import archive_usage, invoice_evidence, private_copy_pack
 from src.two_bot.request_archive import (
     ROUTES, SCHEMA_V2, RequestArchiveRefused, read_private_file, require_private_directory, sha256_hex,
     strict_json_loads, write_private_file_exclusive,
@@ -424,10 +424,15 @@ def _route_dispositions(row: dict) -> list[str]:
         out.append(f"entity_{row['entity']}")
     elif row["entity_complete"] is False:
         out.append("entity_partial")
+    if row.get("evidence_gap"):
+        out.append(f"evidence_gap:{row['evidence_gap']}")
     if row["family"] == "batch_submit":
         out.append("acknowledgment_not_completion_or_usage")
     elif row["family"] == "batch_metadata":
         out.append("status_read_not_generation")
+        out.append(f"batch_identity_{row['batch_identity']}")
+        if row["results_disposition"] == "unresolved":
+            out.append("status_not_certified_for_requested_batch")
     elif row["family"] == "batch_results":
         results = row.get("results") or {}
         out.append(f"results_{results.get('status')}")
@@ -441,9 +446,14 @@ def _route_dispositions(row: dict) -> list[str]:
 
 
 def _routes_section(archives: list[VerifiedArchive]) -> dict:
+    # The same capture supplied twice is one scope; one identity with two contents is shown, never chosen.
+    usage = archive_usage.archive_usage(archives)
+    used = [archives[source["input"]] for source in usage["sources"] if source["used"]]
+    conflicted = {(source["scope_id"], source["route"]) for conflict in usage.get("route_conflicts", [])
+                  for source in conflict["sources"]}
     scopes = []
-    for archive in archives:
-        if archive.schema != SCHEMA_V2 or archive.status == "invalid":
+    for archive in used:
+        if archive.schema != SCHEMA_V2:
             continue
         view = route_lineage(archive)
         families = sorted({row["family"] for row in view["routes"]})
@@ -453,10 +463,18 @@ def _routes_section(archives: list[VerifiedArchive]) -> dict:
                        "reused_provider_batch_ids": view["reused_provider_batch_ids"],
                        "routes": [{"route": row["route"], "family": row["family"], "outcome": row["outcome"],
                                    "provider_batch_id": row.get("provider_batch_id"),
-                                   "dispositions": _route_dispositions(row)} for row in view["routes"]]})
+                                   "dispositions": sorted(_route_dispositions(row) + (
+                                       ["result_conflict_with_other_retained_line"]
+                                       if (archive.scope_id, row["route"]) in conflicted else []))}
+                                  for row in view["routes"]]})
     return {"scopes": scopes, "supported_families": sorted(ROUTES),
+            "identity_reconciliation": usage["identity_reconciliation"],
+            "result_conflicts": usage.get("route_conflicts", []),
+            "route_totals_status": usage.get("route_totals_status"),
             "limits": ["A batch acknowledgment is never completion, usage or billing evidence.",
                        "Batch status reads are not model generations; results usage counts once per custom ID.",
+                       "Differing retained results for one custom ID are conflicts with every source; none is chosen.",
+                       "A status body naming another batch, or none, is never attributed to the requested batch.",
                        "Links are observed_in_scope, durable_status_reference or unverified; nothing is fetched or repaired.",
                        "Route families outside the four supported ones are not captured by this archive."]}
 

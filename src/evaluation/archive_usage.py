@@ -6,6 +6,12 @@ and returned response stays a separate denominator. No response, malformed
 response, missing usage, unknown send outcome and a rejected editorial answer
 are different outcomes. Missing usage is never zero; no window is applied, so
 every call in the supplied archives is listed and nothing more is implied.
+
+One retained capture counts once: inputs are reconciled by verified scope
+identity before any row or denominator, so a repeated path or an exact copy
+adds provenance, never sends. Distinct captures always count separately, even
+with byte-equal requests; different contents claiming one scope identity are
+an unresolved conflict and count nowhere.
 """
 from __future__ import annotations
 
@@ -131,12 +137,16 @@ def _route_time(archive: VerifiedArchive, route: int, kind: str) -> str | None:
 
 def _route_row(archive: VerifiedArchive, route: RouteRecord) -> dict:
     binding = {key: entry.get("value") for key, entry in route.binding.items()}
+    # A status/results read names the batch it requested; a returned body never replaces it.
+    requested = route.expected_path.split("/")[4] if route.family in ("batch_metadata", "batch_results") else None
     row: dict[str, Any] = {
         "scope_id": archive.scope_id, "route": route.number, "family": route.family,
         "role": ROUTE_ROLES[route.family], "provider": route.provider, "outcome": route.outcome,
         "archival": (route.result or {}).get("archival"), "physical_send_observed": route.sent,
         "http_status": route.status, "entity": route.response.availability, "entity_complete": route.complete,
-        "provider_batch_id": route.response_observed.get("provider_batch_id") or binding.get("provider_batch_id"),
+        "evidence_gap": route.evidence_gap,
+        "provider_batch_id": requested or route.response_observed.get("provider_batch_id")
+        or binding.get("provider_batch_id"),
         "stage": binding.get("stage"), "requested_model": binding.get("model"), "billing": "unknown"}
     if route.family == "batch_submit":
         ids = (route.request_observed.get("custom_ids") or {}).get("values")
@@ -144,8 +154,10 @@ def _route_row(archive: VerifiedArchive, route: RouteRecord) -> dict:
         row.update(model_generation=False, submitted_requests=len(ids) if isinstance(ids, list) else None,
                    usage_status="not_in_acknowledgment", completion_evidence="none")
     elif route.family == "batch_metadata":
-        row.update(model_generation=False, usage_status="not_applicable",
-                   processing_status=route.response_observed.get("processing_status"))
+        returned = route.response_observed.get("provider_batch_id")
+        row.update(model_generation=False, usage_status="not_applicable", returned_batch_id=returned,
+                   processing_status=route.response_observed.get("processing_status") if returned == requested
+                   else None)
     elif route.family == "batch_results":
         row.update(model_generation=False, usage_status="per_result_line")
     elif route.response.availability != "captured" or route.response.artifact is None or not route.complete:
@@ -162,8 +174,8 @@ def _route_row(archive: VerifiedArchive, route: RouteRecord) -> dict:
     return row
 
 
-def _result_line_rows(archive: VerifiedArchive, route: RouteRecord, seen: set) -> list[dict]:
-    """Usage per retained result line, counted once per (provider batch, custom ID)."""
+def _result_line_rows(archive: VerifiedArchive, route: RouteRecord) -> list[dict]:
+    """Usage per retained result line; duplicates and conflicts are resolved by ``_resolve_lines``."""
     if route.family != "batch_results" or route.response.availability != "captured" or route.response.artifact is None:
         return []
     batch = route.expected_path.split("/")[4]
@@ -171,11 +183,12 @@ def _result_line_rows(archive: VerifiedArchive, route: RouteRecord, seen: set) -
     lines = archive.artifact(route.response.artifact).split(b"\n")
     tail = lines.pop()
     if tail and route.complete:
-        lines.append(tail)
+        lines.append(tail)  # Only an incomplete entity's tail is cut; an unparseable one stays an invalid line.
     rows = []
     for index, line in enumerate(lines, start=1):
         base = {"scope_id": archive.scope_id, "route": route.number, "line": index, "provider_batch_id": batch,
-                "stage": "writer", "stage_source": "batch_plan_writer_lane", "billing": "unknown"}
+                "stage": "writer", "stage_source": "batch_plan_writer_lane", "billing": "unknown",
+                "route_evidence_gap": route.evidence_gap}
         try:
             value = strict_json_loads(line, allow_floats=True)
             custom = value.get("custom_id")
@@ -187,13 +200,11 @@ def _result_line_rows(archive: VerifiedArchive, route: RouteRecord, seen: set) -
             rows.append({**base, "custom_id": None, "result_type": None, "counted": False,
                          "usage_status": "invalid_line"})
             continue
-        key = (batch, custom)
-        duplicate = key in seen
-        seen.add(key)
-        row = {**base, "custom_id": custom, "result_type": kind, "counted": not duplicate and kind == "succeeded"}
-        if duplicate:
-            row["usage_status"] = "duplicate_not_counted"
-        elif kind != "succeeded" or not isinstance(result.get("message"), dict):
+        # The full retained line content, not only its identity, decides duplicate vs conflict.
+        row = {**base, "custom_id": custom, "result_type": kind, "counted": kind == "succeeded",
+               "content_sha256": hashlib.sha256(json.dumps(value, sort_keys=True, ensure_ascii=False,
+                                                           separators=(",", ":")).encode()).hexdigest()}
+        if kind != "succeeded" or not isinstance(result.get("message"), dict):
             row["usage_status"] = "not_applicable_result_type"
         else:
             message = result["message"]
@@ -208,16 +219,49 @@ def _result_line_rows(archive: VerifiedArchive, route: RouteRecord, seen: set) -
     return rows
 
 
+def _line_order(row: dict) -> tuple:
+    # A copy from complete route evidence is preferred; then a fixed (scope, route, line) order.
+    return (row["route_evidence_gap"] is not None, str(row["scope_id"]), row["route"], row["line"])
+
+
+def _resolve_lines(lines: list[dict]) -> list[dict]:
+    """Per (provider batch, custom ID): exact duplicates count once; any difference is a conflict.
+
+    Order-independent: the counted copy of a duplicate is the first from
+    complete route evidence, then by (scope, route, line); a conflict counts no
+    line and keeps every source.
+    """
+    groups: dict[tuple, list[dict]] = {}
+    for row in lines:
+        if row["custom_id"] is not None:
+            groups.setdefault((row["provider_batch_id"], row["custom_id"]), []).append(row)
+    conflicts = []
+    for key in sorted(groups):
+        members = sorted(groups[key], key=_line_order)
+        if len({row["content_sha256"] for row in members}) > 1:
+            for row in members:
+                row.update(observed_usage_status=row["usage_status"], usage_status="conflict", counted=False)
+            conflicts.append({"provider_batch_id": key[0], "custom_id": key[1], "billing": "unknown",
+                              "sources": [{"scope_id": row["scope_id"], "route": row["route"], "line": row["line"],
+                                           "result_type": row["result_type"], "content_sha256": row["content_sha256"]}
+                                          for row in members]})
+            continue
+        for row in members[1:]:
+            row.update(observed_usage_status=row["usage_status"], usage_status="duplicate_not_counted",
+                       counted=False)
+    return conflicts
+
+
 def _route_usage(archives: list[VerifiedArchive]) -> dict:
     routes: list[dict] = []
     lines: list[dict] = []
-    seen: set = set()
     for archive in archives:
         if archive.status == "invalid" or archive.schema != SCHEMA_V2:
             continue
         for route in archive.routes:
             routes.append(_route_row(archive, route))
-            lines.extend(_result_line_rows(archive, route, seen))
+            lines.extend(_result_line_rows(archive, route))
+    conflicts = _resolve_lines(lines)
     totals: dict[tuple, dict] = {}
     for row in [*routes, *lines]:
         if row.get("usage_status") != "present" or row.get("invalid_fields") or row.get("counted") is False:
@@ -242,10 +286,56 @@ def _route_usage(archives: list[VerifiedArchive]) -> dict:
         "result_lines": len(lines), "result_lines_counted": sum(1 for r in lines if r["counted"]),
         "result_lines_duplicate_not_counted": sum(1 for r in lines if r["usage_status"] == "duplicate_not_counted"),
         "result_lines_invalid": sum(1 for r in lines if r["usage_status"] == "invalid_line"),
+        "result_lines_in_conflict": sum(1 for r in lines if r["usage_status"] == "conflict"),
+        "result_conflicts": len(conflicts),
         "incomplete_route_entities": sum(1 for r in routes if r["entity_complete"] is False),
+        "routes_with_evidence_gap": sum(1 for r in routes if r["evidence_gap"] is not None),
     }
+    # Known subtotals stay labeled: any conflict, gap or unknown usage leaves them incomplete.
+    unknown = (conflicts or any(r["evidence_gap"] is not None for r in routes
+                                if r["family"] in ("batch_results", "command_check"))
+               or any(r["usage_status"] not in ("present", "not_applicable_result_type", "duplicate_not_counted")
+                      or r.get("invalid_fields") for r in lines)
+               or any(r["usage_status"] != "present" or r.get("invalid_fields")
+                      for r in routes if r["family"] == "command_check" and r["physical_send_observed"]))
     return {"routes": routes, "route_result_lines": lines, "route_denominators": denominators,
+            "route_conflicts": conflicts,
+            "route_totals_status": "incomplete" if unknown else "complete_for_retained_rows",
             "route_token_totals": [totals[key] for key in sorted(totals)]}
+
+
+def reconcile_identities(archives: list[VerifiedArchive]) -> tuple[list[dict], list[VerifiedArchive], dict]:
+    """Count each verified capture once, keeping every input's provenance.
+
+    Inputs with one scope ID and one manifest hash are the same retained capture
+    (a repeated path or an exact copy). One scope ID with different manifests is
+    an unresolved identity conflict: none of those inputs is used.
+    """
+    members: dict[str, list[int]] = {}
+    for index, archive in enumerate(archives):
+        if archive.status != "invalid" and archive.scope_id is not None:
+            members.setdefault(archive.scope_id, []).append(index)
+    duplicate_of: dict[int, int] = {}
+    conflict_with: dict[int, list[int]] = {}
+    for indexes in members.values():
+        if len({archives[i].manifest_sha256 for i in indexes}) > 1:
+            conflict_with.update({i: [j for j in indexes if j != i] for i in indexes})
+            continue
+        # Equal manifests verify to equal records; prefer a complete copy, then input order.
+        kept = min(indexes, key=lambda i: (archives[i].status != "complete", i))
+        duplicate_of.update({i: kept for i in indexes if i != kept})
+    sources, used = [], []
+    for index, archive in enumerate(archives):
+        use = archive.status != "invalid" and index not in duplicate_of and index not in conflict_with
+        sources.append({"input": index, "scope_id": archive.scope_id, "manifest_sha256": archive.manifest_sha256,
+                        "status": archive.status, "problems": list(archive.problems), "used": use,
+                        "duplicate_of_input": duplicate_of.get(index),
+                        "identity_conflict_with": conflict_with.get(index, [])})
+        if use:
+            used.append(archive)
+    reconciliation = {"rule": "scope_id_and_manifest_sha256", "duplicate_inputs": len(duplicate_of),
+                      "conflicting_scope_ids": sorted({str(archives[i].scope_id) for i in conflict_with})}
+    return sources, used, reconciliation
 
 
 def archive_usage(archives: list[VerifiedArchive]) -> dict:
@@ -257,13 +347,8 @@ def archive_usage(archives: list[VerifiedArchive]) -> dict:
     """
     rows: list[dict] = []
     calls: list[dict] = []
-    sources: list[dict] = []
-    for archive in archives:
-        sources.append({"scope_id": archive.scope_id, "manifest_sha256": archive.manifest_sha256,
-                        "status": archive.status, "problems": list(archive.problems),
-                        "used": archive.status != "invalid"})
-        if archive.status == "invalid":
-            continue
+    sources, used, reconciliation = reconcile_identities(archives)
+    for archive in used:
         outcomes = _candidate_outcomes(archive)
         for call in archive.calls:
             calls.append({"scope_id": archive.scope_id, **_call_row(call)})
@@ -287,13 +372,13 @@ def archive_usage(archives: list[VerifiedArchive]) -> dict:
                                            and r["usage_status"] == "present"),
         "provider_id_conflicts": sum(1 for r in rows if r["provider_id_conflict"]),
     }
-    result = {"schema": SCHEMA, "sources": sources, "calls": calls, "attempts": rows,
-              "denominators": denominators, "token_totals": _token_totals(rows),
+    result = {"schema": SCHEMA, "sources": sources, "identity_reconciliation": reconciliation,
+              "calls": calls, "attempts": rows, "denominators": denominators, "token_totals": _token_totals(rows),
               "billing": "unknown", "complete_account_coverage": False,
               "scope": "Only calls retained in the supplied archives; not an account or invoice total."}
     if any(archive.schema == SCHEMA_V2 and archive.status != "invalid" for archive in archives):
         # Route families appear only for explicit v2 archives; v1-only output is unchanged.
-        result.update(_route_usage(archives))
+        result.update(_route_usage(used))
     return result
 
 

@@ -217,7 +217,9 @@ def test_sdk_status_error_after_observed_send_keeps_status_never_error_body(prep
     assert response["status"] == status and response["body"] == {"availability": "not_observed"}
     result, = records(scope, "route_result")
     assert result["outcome"] == "raised" and result["provider_outcome"] == "unknown"
-    assert result["archival"] == "complete" and scope.held is None
+    # The SDK read the error entity itself; it was never observed here, so it is a labeled gap, not a hold.
+    assert result["archival"] == "incomplete" and result["evidence_gap"] == "entity_not_observed"
+    assert scope.held is None
     assert CANARIES[2].encode() not in all_bytes(scope)
 
 

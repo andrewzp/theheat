@@ -272,6 +272,9 @@ For each archive, the section lists:
 - mechanical dispositions per route, for example:
   - `acknowledgment_not_completion_or_usage`, `status_read_not_generation`;
   - `results_partial`, `predecessor_durable_status_reference`, `duplicate_custom_ids_visible`;
-  - `entity_not_observed`, `no_physical_send`, `billing_unknown`.
+  - `entity_not_observed`, `no_physical_send`, `billing_unknown`;
+  - `evidence_gap:<gap>`, `batch_identity_<identity>`, `status_not_certified_for_requested_batch`, `result_conflict_with_other_retained_line`.
+
+The same capture supplied twice is listed once (`identity_reconciliation`). The section also lists `result_conflicts`, each with every source scope, route and line, and `route_totals_status`. No conflicting line is chosen or counted.
 
 Weekly promotion stays HOLD. No route disposition is a root cause, a quality grade or an approval.

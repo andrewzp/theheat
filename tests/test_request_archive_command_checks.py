@@ -108,7 +108,10 @@ def test_capture_on_and_off_keep_identical_observations_and_send_counts(tmp_path
     assert response["status"] == on.http_status
     assert response["body"]["form"] == "raw_http_entity_identity" + ("" if on.complete else "_bounded_prefix")
     loaded = replay.load_archive(scope.directory)
-    assert loaded.status == "complete" and loaded.routes[0].family == "command_check"
+    # A fully retained entity is complete evidence whatever it says; a bounded prefix never is.
+    assert loaded.status == ("complete" if on.complete else "incomplete")
+    assert loaded.routes[0].family == "command_check"
+    assert loaded.routes[0].evidence_gap == (None if on.complete else "entity_bounded_prefix")
     traced, = replay.route_lineage(loaded)["routes"]
     assert traced["family"] == "command_check" and "predecessor" not in traced
     # The exact bounded entity (even an error body) is private evidence; credentials never are.
@@ -209,7 +212,8 @@ def test_incomplete_or_failed_responses_never_pass_a_check(case, tmp_path, kind)
         result = run(case, "safety", transport_options=transport_options)
     assert result["checks"]["stages"]["safety"] != "passed" and len(provider.sent) == 1
     result_record, = records(scope, "route_result")
-    assert result_record["archival"] == "complete" and KEY.encode() not in all_bytes(scope)
+    assert result_record["archival"] == ("incomplete" if kind == "oversize" else "complete")
+    assert KEY.encode() not in all_bytes(scope)
     assert SECRET.encode() not in archive.read_private_file(scope.directory / archive.MANIFEST, 1 << 22)
 
 

@@ -207,7 +207,12 @@ statement never matches. Running the same command again reports
 
 ## Route families in the usage projection (v2 archives only)
 
-When any supplied archive is v2, `archive_usage` adds four keys: `routes`, `route_result_lines`, `route_denominators` and `route_token_totals`. Output for v1-only inputs is unchanged.
+When any supplied archive is v2, `archive_usage` adds `routes`, `route_result_lines`, `route_denominators`, `route_conflicts`, `route_totals_status` and `route_token_totals`.
+
+**One capture counts once (v1 and v2).** Before any row or denominator, inputs are reconciled by verified scope ID and manifest hash (`identity_reconciliation`):
+- The same path given twice, or a byte-identical copy, is one capture. Later inputs are listed with `duplicate_of_input` and `used: false`, so repeated `--archive` never doubles sends, generations or tokens.
+- Distinct captures always count separately, even with byte-equal requests: a body hash or a caller label never proves two sends are one.
+- One scope ID with different manifests is an unresolved conflict (`identity_conflict_with`, `conflicting_scope_ids`): none of those inputs is used, and nothing is chosen.
 
 | Route row | Counted as |
 |---|---|
@@ -217,10 +222,13 @@ When any supplied archive is v2, `archive_usage` adds four keys: `routes`, `rout
 | `command_check` | a generation, parsed by the same unchanged usage parser as synchronous calls |
 
 **Counting rules:**
-- A result line counts once per (provider batch ID, custom ID). A repeat, whether inside one stream, across refreshes, or across archives, is listed as `duplicate_not_counted`.
+- Lines for one (provider batch ID, custom ID) are compared by their full retained content, inside one stream and across archives, in any order.
+  - Exactly equal lines count once; the others are listed as `duplicate_not_counted`.
+  - Any difference (usage, result type, model, missing vs present usage, a value's type) makes every such line `conflict`. None is counted, and `route_conflicts` keeps every source reference. No input order selects a winner.
 - Errored, expired or canceled lines carry no usage.
 - A cut tail of an incomplete entity is never a result line.
 - Missing usage stays missing.
+- `route_totals_status` is `complete_for_retained_rows` only without any conflict, evidence gap or unknown usage; otherwise the known subtotals are `incomplete`. Neither label is a system, account or invoice total.
 
 **Scenarios.** A named scenario prices none of these rows. Each is listed as `excluded: route_family_not_in_named_scenario`.
 

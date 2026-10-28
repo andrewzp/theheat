@@ -92,6 +92,9 @@ ROUTE_REASONS = frozenset({
     "batch_read_size_exceeded", "batch_read_time_exceeded", "batch_read_unavailable", "batch_read_cleanup_failed",
     "size_exceeded", "time_exceeded", "transport_unavailable", "cleanup_failed"})
 ROUTE_OUTCOMES = frozenset({"returned", "raised", "refused_before_send", "not_dispatched", "blocked"})
+# Why a SENT route's retained entity is not complete evidence; None means complete.
+ROUTE_EVIDENCE_GAPS = frozenset({"entity_not_recorded", "entity_not_observed", "entity_not_retained",
+                                 "entity_bounded_prefix", "results_final_line_unparseable"})
 _BATCH_ID_FULL = re.compile(rf"\A{_BATCH_ID}\Z")
 _SAFE_ID = re.compile(r"\A[A-Za-z0-9_.:-]{1,200}\Z")
 _LABEL = re.compile(r"\A[A-Za-z0-9][A-Za-z0-9 ._:/-]{0,199}\Z")
@@ -1116,6 +1119,9 @@ class RequestArchiveScope:
                                   "bytes": len(data), "form": form}
                 self._record("route_response", record)
                 route.responses, route.entity = 1, "captured"
+                route.entity_complete = complete
+                route.final_line_unparseable = (family == "batch_results" and complete
+                                                and jsonl_final_line_unparseable(data))
             except Exception as exc:
                 code = exc.code if isinstance(exc, RequestArchiveError) else "archive_write_failed_after_dispatch"
                 route.incomplete = code
@@ -1189,6 +1195,8 @@ class _RouteRecorder:
         self.refusal: str | None = None
         self.incomplete: str | None = None
         self.entity: str | None = None
+        self.entity_complete = False
+        self.final_line_unparseable = False
         self.finished = False
 
     def endpoint_problem(self, request) -> str | None:
@@ -1222,8 +1230,8 @@ class _RouteRecorder:
     def finish(self, outcome: str, disposition: dict | None = None) -> str | None:
         """Close this route with the caller's fixed disposition; never raises.
 
-        Returns a hold code when evidence is incomplete. It never changes the
-        caller's own outcome: an archive failure after a send is not a result.
+        Returns a hold or evidence-gap code when evidence is incomplete. It never
+        changes the caller's own outcome: an archive failure after a send is not a result.
         """
         scope = self.scope
         with scope._lock:
@@ -1234,20 +1242,30 @@ class _RouteRecorder:
             if outcome not in ROUTE_OUTCOMES:
                 outcome = "raised"
             sent = self.attempts > 0
-            # Archival describes the recorder; a missing provider entity is its own field.
+            # A sent route is complete evidence only with its whole entity retained.
+            # A fully retained negative provider response is still complete evidence.
+            gap = None if not sent else (
+                "entity_not_recorded" if not self.responses else
+                "entity_not_observed" if self.entity == "not_observed" else
+                "entity_not_retained" if self.entity != "captured" else
+                "entity_bounded_prefix" if not self.entity_complete else
+                "results_final_line_unparseable" if self.final_line_unparseable else None)
             data: dict[str, Any] = {
                 "route": self.number, "family": self.family, "outcome": outcome,
                 "wire_attempts": self.attempts, "responses": self.responses,
                 "physical_send_observed": sent, "refusal": self.refusal if not sent else None,
                 "disposition": _route_disposition(disposition), "billing": "unknown",
                 "provider_outcome": ("not_sent" if not sent else "response_observed"
-                                     if self.entity in ("captured", "not_retained") else "unknown")}
-            if self.incomplete is not None or scope._held is not None or (sent and not self.responses):
+                                     if self.entity in ("captured", "not_retained") else "unknown"),
+                "evidence_gap": gap}
+            if self.incomplete is not None or scope._held is not None or gap is not None:
+                # Incomplete evidence never changes the caller's outcome or holds the scope;
+                # only a recorder failure (or no response record at all) holds it.
                 data["archival"] = "incomplete"
                 scope._safe_record("route_result", data)
                 if sent and not self.responses and scope._held is None:
                     scope._hold("archive_route_response_not_observed")
-                return self.incomplete or scope._held or "archive_route_response_not_observed"
+                return self.incomplete or scope._held or gap
             data["archival"] = "complete"
             try:
                 scope._record("route_result", data)
@@ -1269,6 +1287,17 @@ _ROUTE_DISPOSITION_KEYS = frozenset({
 def route_entry(value: Any, source: str) -> dict:
     """One binding entry; an absent value is explicitly ``missing``, never guessed."""
     return {"value": value, "source": source} if value is not None else {"value": None, "source": "missing"}
+
+
+def jsonl_final_line_unparseable(data: bytes) -> bool:
+    """True when a JSONL entity ends mid-record: an unterminated last line that is not one JSON value."""
+    if not data or data.endswith(b"\n"):
+        return False
+    try:
+        strict_json_loads(data.rsplit(b"\n", 1)[-1], allow_floats=True)
+    except Exception:
+        return True
+    return False
 
 
 def _route_value(value: Any) -> bool:

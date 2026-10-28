@@ -314,13 +314,17 @@ def test_route_family_walkthrough_from_sdk_evidence_to_usage_and_diagnosis(check
     assert checked["checks"]["stages"]["safety"] == "passed" and len(sent) == 1
 
     # Separate-process strict replay: no credentials, network or archive mutation.
-    for scope in (a, b, c):
+    for scope in (a, c):
         code, value = cli("validate", str(scope.directory))
         assert code == 0 and value["status"] == "complete"
+    # B's results entity is a bounded prefix: its bytes are verified, but it is never a complete replay.
+    code, value = cli("validate", str(b.directory))
+    assert code == 1 and value["status"] == "incomplete"
+    assert "route_evidence_incomplete:2:entity_bounded_prefix" in value["problems"]
     code, traced = cli("lineage", str(b.directory))
     results = traced["routes"]["routes"][1]
-    assert code == 0 and results["predecessor"] == "durable_status_reference"
-    assert results["results"]["status"] == "partial"
+    assert code == 1 and results["predecessor"] == "durable_status_reference"  # exit follows archive status
+    assert results["results"]["status"] == "partial" and results["evidence_gap"] == "entity_bounded_prefix"
 
     archives = [replay.load_archive(scope.directory) for scope in (a, b, c)]
     usage = archive_usage.archive_usage(archives)
@@ -340,6 +344,7 @@ def test_route_family_walkthrough_from_sdk_evidence_to_usage_and_diagnosis(check
     assert [row["usage_status"] for row in partial] == ["duplicate_not_counted"]
     assert usage["route_denominators"]["result_lines_duplicate_not_counted"] == 1
     assert all(group["responses"] >= 1 for group in usage["route_token_totals"])
+    assert usage["route_totals_status"] == "incomplete" and usage["route_conflicts"] == []
     priced = archive_usage.priced_scenario(usage, SCENARIO)
     assert priced["actual_cost_known"] is False and priced["billed_amount"] is None
     assert {tuple(row["reasons"]) for row in priced["rows"] if "route" in row} == {
@@ -354,7 +359,8 @@ def test_route_family_walkthrough_from_sdk_evidence_to_usage_and_diagnosis(check
     assert "acknowledgment_not_completion_or_usage" in first[0]["dispositions"]
     assert "predecessor_observed_in_scope" in first[2]["dispositions"]
     later = scopes[archives[1].scope_id]["routes"][1]["dispositions"]
-    assert {"predecessor_durable_status_reference", "results_partial", "billing_unknown"} <= set(later)
+    assert {"predecessor_durable_status_reference", "results_partial", "billing_unknown",
+            "evidence_gap:entity_bounded_prefix", "archive_incomplete"} <= set(later)
     assert scopes[archives[2].scope_id]["families_not_observed"] == ["batch_metadata", "batch_results",
                                                                      "batch_submit"]
     assert report["decision"]["promotion"] == "HOLD" and report["decision"]["provider_replay"] is False

@@ -13,7 +13,7 @@ completeness of a historical run, billing, or that a call was charged.
 from __future__ import annotations
 
 import base64
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 import json
 import os
@@ -22,10 +22,10 @@ import re
 from typing import Any
 
 from src.two_bot.request_archive import (
-    ARTIFACTS, GENESIS, MANIFEST, MAX_RECORD_BYTES, MAX_SCOPE_CONTENT_BYTES, PROVIDER_HOSTS, ROUTE_OUTCOMES,
-    ROUTE_REASONS, ROUTES, SCHEMA, SCHEMA_V2, RequestArchiveRefused, _custom_ids, _route_binding, _route_ids,
-    canonical_json, read_private_file, require_private_directory, sha256_hex, strict_json_loads,
-    write_private_file_exclusive,
+    ARTIFACTS, GENESIS, MANIFEST, MAX_RECORD_BYTES, MAX_SCOPE_CONTENT_BYTES, PROVIDER_HOSTS, ROUTE_EVIDENCE_GAPS,
+    ROUTE_OUTCOMES, ROUTE_REASONS, ROUTES, SCHEMA, SCHEMA_V2, RequestArchiveRefused, _custom_ids, _route_binding,
+    _route_ids, canonical_json, jsonl_final_line_unparseable, read_private_file, require_private_directory, sha256_hex,
+    strict_json_loads, write_private_file_exclusive,
 )
 
 READ_API_VERSION = 1
@@ -107,6 +107,8 @@ class RouteRecord:
     response_observed: dict
     result: dict | None
     intent_seq: int
+    # Derived by the reader from the retained observations, never from a flag.
+    evidence_gap: str | None = None
 
     @property
     def outcome(self) -> str:
@@ -225,7 +227,7 @@ def load_archive(path: str | os.PathLike) -> VerifiedArchive:
         state = _assemble(records, sizes, problems)
         _verify_artifacts(artifacts_dir, sizes, state, problems)
         _verify_bindings(records, artifacts_dir)
-        _verify_routes(state["routes"], artifacts_dir)
+        state["routes"] = _verify_routes(state["routes"], artifacts_dir, problems)
     except ArchiveInvalid as exc:
         return _invalid(directory, str(exc), manifest_sha)
     status = "complete" if not problems else "incomplete"
@@ -492,8 +494,11 @@ def _route_record(kind: str, data: dict, seq: int, routes: dict, open_route: int
         entity = route["response"]["body"].availability if route["response"] else None
         expected = ("not_sent" if not sent else "response_observed"
                     if entity in ("captured", "not_retained_over_limit") else "unknown")
-        if (set(data) != {"route", "family", "outcome", "wire_attempts", "responses", "physical_send_observed",
-                          "refusal", "disposition", "billing", "provider_outcome", "archival"}
+        # ``evidence_gap`` is absent from archives written before it existed; they are read, never rewritten.
+        if (set(data) - {"evidence_gap"} != {"route", "family", "outcome", "wire_attempts", "responses",
+                                             "physical_send_observed", "refusal", "disposition", "billing",
+                                             "provider_outcome", "archival"}
+                or not (data.get("evidence_gap") is None or data["evidence_gap"] in ROUTE_EVIDENCE_GAPS)
                 or data["family"] != family or data["outcome"] not in ROUTE_OUTCOMES
                 or data["wire_attempts"] != (1 if sent else 0) or data["responses"] != (1 if route["response"] else 0)
                 or data["physical_send_observed"] is not sent or data["billing"] != "unknown"
@@ -517,8 +522,14 @@ def _route_view(number: int, route: dict) -> RouteRecord:
         dict(response["data"]["observed"]) if response else {}, route["result"], route["seq"])
 
 
-def _verify_routes(routes: list[RouteRecord], directory: Path) -> None:
-    """Recompute every observed identity from the retained bytes themselves."""
+def _verify_routes(routes: list[RouteRecord], directory: Path, problems: list[str]) -> list[RouteRecord]:
+    """Recompute every observed identity and evidence gap from the retained bytes themselves.
+
+    Hash integrity (``invalid``) and evidence completeness (``incomplete``) stay
+    separate: a hash-consistent archive whose recorded flags claim more than its
+    observations show is incomplete, whatever its ``route_result`` or seal says.
+    """
+    verified = []
     for route in routes:
         if route.request.availability == "captured" and route.request.artifact is not None:
             try:
@@ -534,6 +545,40 @@ def _verify_routes(routes: list[RouteRecord], directory: Path) -> None:
                 raise ArchiveInvalid("artifact_changed_during_validation") from None
             if route.response_observed != _route_ids(route.family, route.response_headers, raw, bool(route.complete)):
                 raise ArchiveInvalid(f"route_response_ids:{route.number}")
+        gap = _evidence_gap(route, directory)
+        result = route.result or {}
+        if gap is not None:
+            problems.append(f"route_evidence_incomplete:{route.number}:{gap}")
+        if route.result is not None and ((gap is not None and result.get("archival") == "complete")
+                                         or ("evidence_gap" in result and result["evidence_gap"] != gap)):
+            problems.append(f"route_archival_flag_contradicted:{route.number}")
+        verified.append(replace(route, evidence_gap=gap))
+    return verified
+
+
+def _evidence_gap(route: RouteRecord, directory: Path) -> str | None:
+    """Why a sent route's retained entity is not complete evidence; None when it is.
+
+    A fully retained provider rejection (any status) is complete evidence.
+    """
+    if not route.sent:
+        return None
+    if route.complete is None:
+        return "entity_not_recorded"
+    if route.response.availability == "not_observed":
+        return "entity_not_observed"
+    if route.response.availability != "captured" or route.response.artifact is None:
+        return "entity_not_retained"
+    if not route.complete:
+        return "entity_bounded_prefix"
+    if route.family == "batch_results":
+        try:
+            raw = read_private_file(directory / route.response.artifact, MAX_ARTIFACT_BYTES)
+        except (OSError, RequestArchiveRefused):
+            raise ArchiveInvalid("artifact_changed_during_validation") from None
+        if jsonl_final_line_unparseable(raw):
+            return "results_final_line_unparseable"
+    return None
 
 
 # ------------------------------------------------------------ route lineage
@@ -566,7 +611,8 @@ def _results_lines(raw: bytes, complete: bool) -> dict:
         counts[row["custom_id"]] = counts.get(row["custom_id"], 0) + 1
     return {"rows": rows, "invalid_lines": invalid, "final_line_cut": cut,
             "duplicate_custom_ids": sorted(k for k, v in counts.items() if v > 1),
-            "status": ("invalid" if invalid else "partial" if cut or not complete else "complete")}
+            "status": ("invalid" if invalid else "partial" if cut or not complete else
+                       "empty" if not raw else "complete")}
 
 
 def route_lineage(archive: VerifiedArchive) -> dict:
@@ -584,6 +630,7 @@ def route_lineage(archive: VerifiedArchive) -> dict:
                                "archival": result.get("archival"), "physical_send_observed": route.sent,
                                "http_status": route.status, "entity": route.response.availability,
                                "entity_complete": route.complete, "reason": route.reason,
+                               "evidence_gap": route.evidence_gap,
                                "binding": {k: v for k, v in route.binding.items()}, "billing": "unknown"}
         if route.family == "batch_submit":
             batch = route.response_observed.get("provider_batch_id")
@@ -607,7 +654,7 @@ def route_lineage(archive: VerifiedArchive) -> dict:
                                   "durable_status_reference" if bound.get("value") == path_batch
                                   and bound.get("source") == "batch_results_status" else "unverified")
             if route.family == "batch_metadata":
-                row["processing_status"] = route.response_observed.get("processing_status")
+                row.update(_returned_identity(archive, route, path_batch))
             if route.family == "batch_results":
                 if route.response.availability != "captured" or route.response.artifact is None:
                     row["results"] = {"status": "not_sent" if not route.sent else route.response.availability}
@@ -631,11 +678,39 @@ def route_lineage(archive: VerifiedArchive) -> dict:
     fetched = {r["provider_batch_id"] for r in rows if r["family"] == "batch_results"}
     for row in rows:
         if row["family"] == "batch_metadata":
-            row["results_disposition"] = ("results_fetched" if row["provider_batch_id"] in fetched else
+            # A body naming another batch (or none) never certifies the requested one.
+            row["results_disposition"] = (
+                "unresolved" if row["batch_identity"] in ("missing", "invalid", "mismatched") else
+                "results_fetched" if row["provider_batch_id"] in fetched else
                                           "absent" if row["provider_batch_id"] in metadata_ended else
                                           "no_results_needed" if row.get("processing_status") else "unknown")
     return {"read_api_version": READ_API_VERSION, "schema": archive.schema, "status": archive.status,
             "routes": rows, "reused_provider_batch_ids": reused, "authority": "mechanical_evidence_only"}
+
+def _returned_identity(archive: VerifiedArchive, route: RouteRecord, requested: str) -> dict:
+    """Requested (canonical path) vs returned (complete body) batch ID, both kept as observed.
+
+    The status is attributed to the requested batch only when the complete
+    retained body names exactly that batch.
+    """
+    returned = route.response_observed.get("provider_batch_id")
+    status = route.response_observed.get("processing_status")
+    if not route.sent:
+        identity = "not_sent"
+    elif route.response.availability != "captured" or route.response.artifact is None or not route.complete:
+        identity = "unverified"
+    elif returned is not None:
+        identity = "matching" if returned == requested else "mismatched"
+    else:
+        raw = archive.artifact(route.response.artifact)  # a changed artifact still raises
+        try:
+            body = strict_json_loads(raw, allow_floats=True)
+        except (ValueError, UnicodeError):
+            body = None
+        identity = "invalid" if isinstance(body, dict) and "id" in body else "missing"
+    return {"requested_batch_id": requested, "returned_batch_id": returned, "batch_identity": identity,
+            "returned_processing_status": status, "processing_status": status if identity == "matching" else None}
+
 
 def _verify_bindings(records: list[dict], directory: Path) -> None:
     """Check internal observation identities, not the archive author's truth."""
@@ -837,7 +912,7 @@ def summary(archive: VerifiedArchive) -> dict:
                             "archival": (r.result or {}).get("archival"), "physical_send_observed": r.sent,
                             "provider_outcome": (r.result or {}).get("provider_outcome"),
                             "entity": r.response.availability, "entity_complete": r.complete,
-                            "billing": "unknown"} for r in archive.routes]}
+                            "evidence_gap": r.evidence_gap, "billing": "unknown"} for r in archive.routes]}
                if archive.schema == SCHEMA_V2 else {})}
 
 
