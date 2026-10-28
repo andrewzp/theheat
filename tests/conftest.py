@@ -63,7 +63,7 @@ def pytest_addoption(parser):
     )
     parser.addoption(
         "--ci-postgres-shard", choices=("all", "0", "1", "2", "3", "4", "5", "6", "7", "8"), default="all",
-        help="Stable file shard within --ci-partition=postgres; all preserves the complete partition.",
+        help="Stable file/function cohort within --ci-partition=postgres; all preserves the complete partition.",
     )
     parser.addoption(
         "--ci-critical-first", action="store_true", default=False,
@@ -71,10 +71,48 @@ def pytest_addoption(parser):
     )
 
 
-def _ci_postgres_shard(path):
+_CI_STAGE_REVISION_SHARDS = {
+    "test_catalog4_owner_atomic_idempotent_legacy_receipts_and_runtime_denial": "2",
+    "test_catalog4_concurrent_owner_install_retains_single_chain": "2",
+    "test_catalog4_every_installation_boundary_rolls_back": "2",
+    "test_frozen_previous_binary_refuses_catalog4_before_work": "2",
+    "test_catalog4_tamper_fails_closed_without_repair": "2",
+    "test_catalog4_receipt_nested_numeric_metadata_is_byte_exact": "2",
+    "test_genuine_v2_chain_exceeds_first_cap_and_generic_status_never_certifies": "3",
+    "test_actual_protocol2_seal_removed_between_begin_passes_rolls_back_before_attempt": "3",
+    "test_v2_published_frame_minimum_bounds_every_cap_and_final_readiness": "3",
+    "test_v2_transaction_interruptions_never_repurchase_or_repair_missing_seal": "3",
+    "test_same_owner_initial_cap_race_and_unused_cap_cannot_renew": "4",
+    "test_same_owner_successor_cap_race_cannot_rotate_without_attempt": "4",
+    "test_predecessor_expiring_during_real_prefix_work_rolls_back_successor": "4",
+    "test_v2_current_authority_drift_cannot_create_successor": "4",
+    "test_v2_completion_delay_rolls_back_critic_receipt_seal_keeps_raw_and_unknown_cost": "4",
+    "test_v2_nonpass_raw_is_terminal_and_cannot_rotate_or_resend": "0",
+    "test_v2_restored_unattempted_cap_must_bind_the_exact_verified_predecessor": "0",
+    "test_v2_explicit_sdk_original_raw_recovery_has_no_second_request": "0",
+    "test_v2_genuine_park_one_use_delivery_and_passive_original_cap_cost": "0",
+    "test_v2_first_cap_issuance_uses_postproof_clock_and_reuse_never_refreshes_it": "0",
+    "test_catalog4_never_adopts_unused_legacy_semantic_enrollment": "0",
+    "test_v2_strict_request_window_equality_and_one_microsecond": "6",
+    "test_v2_scope_is_connection_bound_and_untrusted_inputs_cannot_mint_cap": "6",
+    "test_v2_exact_terminal_replay_is_history_and_cannot_reseal_corruption": "6",
+    "test_v2_exact_reservation_request_and_stage_are_required_before_dispatch": "6",
+    "test_v2_prefix_missing_corrupt_and_late_evidence_never_grants_readiness": "5",
+    "test_v2_modis_approval_final_bound_and_reauthorization_roll_back_all_writes": "7",
+    "test_v2_outbox_tail_uses_original_critic_deadline_and_rolls_back_park": "7",
+    "test_v2_ghcn_approval_final_bound_and_reauthorization_roll_back_all_writes": "1",
+    "test_v2_full_park_restore_keeps_legacy_sets_and_exact_protocol_chain": "1",
+}
+
+
+def _ci_postgres_shard(path, test_name=None):
     # Anchor to this repository, not the working directory or randomized hash().
-    # Every parameter and test in a module shares its module-scoped fixtures.
+    # Keep modules whole except the stage-revision module's explicit function
+    # cohorts. Every parameter of a function stays together. Its database and
+    # native scratch are case-local; each destination owns a fresh cluster.
     relative = path.resolve().relative_to(Path(__file__).resolve().parents[1]).as_posix()
+    if relative == "tests/test_postgres_stage_revision_checks.py" and test_name in _CI_STAGE_REVISION_SHARDS:
+        return _CI_STAGE_REVISION_SHARDS[test_name]
     # Keep heavy modules whole while balancing measured CI work. Shards7 and0
     # hit the unchanged 35-minute job limit. Shard8 isolates the complete
     # temperature-editor module. Measured editor-media work moves whole from3
@@ -108,7 +146,10 @@ def pytest_collection_modifyitems(config, items):
             else "postgres" if filename.startswith("test_postgres_")
             else "core"
         )
-        keep = group == partition and (group != "postgres" or shard == "all" or _ci_postgres_shard(item.path) == shard)
+        keep = group == partition and (
+            group != "postgres" or shard == "all"
+            or _ci_postgres_shard(item.path, getattr(item, "originalname", None)) == shard
+        )
         (selected if keep else deselected).append(item)
     items[:] = selected
     if partition == "postgres" and config.getoption("--ci-critical-first"):

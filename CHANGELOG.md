@@ -28,6 +28,8 @@
   preserving every case and the unchanged job and execution deadlines.
 - Move the complete temperature-delivery module to an existing database group,
   preserving node identities, execution profiles and all original deadlines.
+- Balance stage-revision test functions across existing database groups, keeping
+  all parameters together and preserving every case, execution profile and cap.
 - Extend the bounded, private CI crash observer to the temperature-editor group;
   preserve test results and deadlines and delete raw memory after observation.
 - Keep corruption-test dispatch timestamps and encoded events consistent so the

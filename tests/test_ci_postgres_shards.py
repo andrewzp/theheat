@@ -1,4 +1,5 @@
 """Deterministic collection boundaries; no database or application execution."""
+import ast
 import hashlib
 from pathlib import Path
 import subprocess
@@ -29,7 +30,8 @@ def test_critical_order_preserves_each_shard_membership_and_all_other_relative_o
     ordinary = [SimpleNamespace(path=ROOT / "tests/test_postgres_temperature_editor_media.py",
                                nodeid="tests/test_postgres_temperature_editor_media.py::ordinary[" + p + "]")
                 for p in ("a", "b")]
-    critical = [SimpleNamespace(path=ROOT / nodeid.split("::")[0], nodeid=nodeid)
+    critical = [SimpleNamespace(path=ROOT / nodeid.split("::")[0], nodeid=nodeid,
+                                originalname=nodeid.split("::", 1)[1].split("[", 1)[0])
                 for nodeid in _CI_CRITICAL_NODEIDS]
     six = SimpleNamespace(path=ordinary[0].path, nodeid="tests/test_postgres_temperature_editor_media.py::test_six_compact_claims_reach_actual_native_editor_preparation[six_variants]")
     items = [ordinary[0], six, *reversed(critical), ordinary[1]]
@@ -102,6 +104,86 @@ def test_nine_file_shards_partition_all_modules_and_parameters_without_changing_
     original = [_ci_postgres_shard(path) for path in files]
     monkeypatch.chdir(tmp_path)
     assert [_ci_postgres_shard(path) for path in files] == original
+
+
+def test_stage_function_cohorts_partition_every_case_without_splitting_parameters():
+    path = ROOT / "tests/test_postgres_stage_revision_checks.py"
+    # Independently frozen routing contract: complete functions, including all
+    # interruption boundaries and every final-authorization fault, stay together.
+    cohorts = {
+        "0": (
+            "test_v2_nonpass_raw_is_terminal_and_cannot_rotate_or_resend",
+            "test_v2_restored_unattempted_cap_must_bind_the_exact_verified_predecessor",
+            "test_v2_explicit_sdk_original_raw_recovery_has_no_second_request",
+            "test_v2_genuine_park_one_use_delivery_and_passive_original_cap_cost",
+            "test_v2_first_cap_issuance_uses_postproof_clock_and_reuse_never_refreshes_it",
+            "test_catalog4_never_adopts_unused_legacy_semantic_enrollment",
+        ),
+        "1": (
+            "test_v2_ghcn_approval_final_bound_and_reauthorization_roll_back_all_writes",
+            "test_v2_full_park_restore_keeps_legacy_sets_and_exact_protocol_chain",
+        ),
+        "2": (
+            "test_catalog4_owner_atomic_idempotent_legacy_receipts_and_runtime_denial",
+            "test_catalog4_concurrent_owner_install_retains_single_chain",
+            "test_catalog4_every_installation_boundary_rolls_back",
+            "test_frozen_previous_binary_refuses_catalog4_before_work",
+            "test_catalog4_tamper_fails_closed_without_repair",
+            "test_catalog4_receipt_nested_numeric_metadata_is_byte_exact",
+        ),
+        "3": (
+            "test_genuine_v2_chain_exceeds_first_cap_and_generic_status_never_certifies",
+            "test_actual_protocol2_seal_removed_between_begin_passes_rolls_back_before_attempt",
+            "test_v2_published_frame_minimum_bounds_every_cap_and_final_readiness",
+            "test_v2_transaction_interruptions_never_repurchase_or_repair_missing_seal",
+        ),
+        "4": (
+            "test_same_owner_initial_cap_race_and_unused_cap_cannot_renew",
+            "test_same_owner_successor_cap_race_cannot_rotate_without_attempt",
+            "test_predecessor_expiring_during_real_prefix_work_rolls_back_successor",
+            "test_v2_current_authority_drift_cannot_create_successor",
+            "test_v2_completion_delay_rolls_back_critic_receipt_seal_keeps_raw_and_unknown_cost",
+        ),
+        "5": ("test_v2_prefix_missing_corrupt_and_late_evidence_never_grants_readiness",),
+        "6": (
+            "test_v2_strict_request_window_equality_and_one_microsecond",
+            "test_v2_scope_is_connection_bound_and_untrusted_inputs_cannot_mint_cap",
+            "test_v2_exact_terminal_replay_is_history_and_cannot_reseal_corruption",
+            "test_v2_exact_reservation_request_and_stage_are_required_before_dispatch",
+        ),
+        "7": (
+            "test_v2_modis_approval_final_bound_and_reauthorization_roll_back_all_writes",
+            "test_v2_outbox_tail_uses_original_critic_deadline_and_rolls_back_park",
+        ),
+        "8": (),
+    }
+    expected = {name: shard for shard, names in cohorts.items() for name in names}
+    functions = [node.name for node in ast.parse(path.read_text()).body
+                 if isinstance(node, ast.FunctionDef) and node.name.startswith("test_")]
+    assert len(expected) == len(functions) == 30 and set(expected) == set(functions)
+    items = [SimpleNamespace(path=path, originalname=name, nodeid=f"{path.relative_to(ROOT)}::{name}[{parameter}]")
+             for parameter in ("modis", "ghcn", "fault-with-brackets[and spaces]") for name in functions]
+    seen = set()
+    for shard in map(str, range(9)):
+        for critical_first in (False, True):
+            kept = select(items, "postgres", shard, critical_first)
+            assert kept == [item for item in items if expected[item.originalname] == shard]
+        assert seen.isdisjoint(map(id, kept))
+        seen.update(map(id, kept))
+    assert seen == {id(item) for item in items}
+    assert select(items, "postgres") == items
+    assert select(items, "all", critical_first=True) == items
+    assert select(items, "core") == select(items, "media") == []
+
+
+def test_stage_function_routes_do_not_leak_to_other_modules_or_guess_unknown_names():
+    stage = ROOT / "tests/test_postgres_stage_revision_checks.py"
+    foreign = ROOT / "tests/test_postgres_temperature_delivery.py"
+    name = "test_v2_ghcn_approval_final_bound_and_reauthorization_roll_back_all_writes"
+    assert _ci_postgres_shard(stage, name) == "1"
+    assert _ci_postgres_shard(foreign, name) == _ci_postgres_shard(foreign) == "0"
+    for unknown in (None, "test_future_stage_case", name + "[injected]"):
+        assert _ci_postgres_shard(stage, unknown) == _ci_postgres_shard(stage) == "3"
 
 
 def test_viirs_native_package_runs_only_in_required_media_lane_with_complete_union():
