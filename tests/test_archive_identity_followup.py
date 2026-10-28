@@ -182,8 +182,8 @@ def test_malformed_same_id_rows_conflict_with_a_valid_result_in_every_order(batc
         group = [view for count, view in views if count == size]
         assert all(view == group[0] for view in group)
     # Unrelated valid controls stay complete and count once.
-    for order in ([good, control], [control, good]):
-        usage = archive_usage.archive_usage(order)
+    for supplied in ([good, control], [control, good]):
+        usage = archive_usage.archive_usage(supplied)
         assert usage["route_totals_status"] == "complete_for_retained_rows"
         assert sum(t["counts"]["input_tokens"] for t in usage["route_token_totals"]) == 107
 

@@ -115,21 +115,70 @@ def _component(name: str, status: str, **extra: Any) -> dict:
     return {"component": name, "status": status, **extra}
 
 
+def _input_identity(source: dict) -> dict:
+    """How one supplied archive argument was counted; its own status stays integrity/completeness."""
+    if source["status"] == "invalid":
+        return {"identity": "invalid_not_counted"}
+    if source["identity_conflict_with"]:
+        return {"identity": "conflict_quarantined", "identity_conflict_with": source["identity_conflict_with"]}
+    if source["duplicate_of_input"] is not None:
+        return {"identity": "duplicate_not_counted", "duplicate_of_input": source["duplicate_of_input"]}
+    return {"identity": "counted"}
+
+
+def _counted_identities(sources: list[dict]) -> tuple[set[tuple], set[str]]:
+    counted = {(s["scope_id"], s["manifest_sha256"]) for s in sources if s["used"]}
+    return counted, {str(s["scope_id"]) for s in sources if s["identity_conflict_with"]}
+
+
+def _report_identity_problem(report: dict) -> str | None:
+    """A sealed reconciliation must have counted each capture once; older reports may not have."""
+    counted = [(s["scope_id"], s["manifest_sha256"]) for s in report["inputs"]["archives"] if s.get("used")]
+    scopes = [scope for scope, _ in counted]
+    if len(set(counted)) != len(counted):
+        return "older_report_counted_a_repeated_capture"
+    if len(set(scopes)) != len(scopes):
+        return "older_report_counted_conflicting_identities"
+    keys = [(row["scope_id"], row["call"], row["attempt"]) for row in report["usage_attempts"]]
+    if len(set(keys)) != len(keys) or any(key[0] not in scopes for key in keys):
+        return "attempt_rows_not_one_per_counted_capture"
+    return None
+
+
 def verify_components(*, archives: list[VerifiedArchive], reconciliation: Any, copy_private: Any,
                       copy_import: Any, readers: dict | None, state: Any, as_of: datetime,
                       feedback: Any = None) -> tuple[list[dict], dict]:
-    """Verify each optional component and its exact lineage before any join."""
-    manifests = {a.manifest_sha256 for a in archives if a.status != "invalid"}
+    """Verify each optional component and its exact lineage before any join.
+
+    Every join uses the one capture-identity rule: repeated or copied archive
+    arguments count once, and a component that names a quarantined (conflicting)
+    identity, or that itself counted a capture more than once, is held.
+    """
+    sources, _, identity = archive_usage.reconcile_identities(archives)
+    counted, quarantined = _counted_identities(sources)
     components = [_component("archive", a.status, scope_id=a.scope_id, manifest_sha256=a.manifest_sha256,
-                             problems=list(a.problems)) for a in archives]
+                             problems=list(a.problems), input=index, **_input_identity(sources[index]))
+                  for index, a in enumerate(archives)]
+    components.append(_component("capture_identity", "verified" if identity["status"] == "consistent"
+                                 else "conflict_quarantined", **{key: identity[key] for key in (
+                                     "rule", "supplied_inputs", "counted_captures", "duplicate_inputs",
+                                     "invalid_inputs", "quarantined_inputs", "conflicting_scope_ids")}))
     usable: dict[str, Any] = {"reconciliation": None, "copy_private": None, "copy_import": None, "readers": None}
     if reconciliation is None:
         components.append(_component("reconciliation", "absent"))
     else:
         try:
             report = invoice_evidence.verify_report(reconciliation)
-            named = {s["manifest_sha256"] for s in report["inputs"]["archives"] if s.get("used")}
-            if not named <= manifests or datetime.fromisoformat(report["as_of"]) > as_of:
+            named = {(s["scope_id"], s["manifest_sha256"]) for s in report["inputs"]["archives"] if s.get("used")}
+            problem = _report_identity_problem(report)
+            if problem is not None:
+                # Never repaired or re-derived: its signed contributions are not one per capture.
+                components.append(_component("reconciliation", "unverifiable_identity", reason=problem,
+                                             report_sha256=report["report_sha256"]))
+            elif any(scope in quarantined for scope, _ in named):
+                components.append(_component("reconciliation", "held_identity_conflict",
+                                             report_sha256=report["report_sha256"]))
+            elif not named <= counted or datetime.fromisoformat(report["as_of"]) > as_of:
                 components.append(_component("reconciliation", "lineage_mismatch",
                                              report_sha256=report["report_sha256"]))
             else:
@@ -147,8 +196,11 @@ def verify_components(*, archives: list[VerifiedArchive], reconciliation: Any, c
     else:
         try:
             pack = private_copy_pack.verify_private_record(copy_private)
-            named = {a["manifest_sha256"] for a in copy_private.get("archives", []) if a.get("status") != "invalid"}
-            if (not named <= manifests or not _copy_lineage_matches(copy_private, archives)
+            named = {(a["scope_id"], a["manifest_sha256"]) for a in copy_private.get("archives", [])
+                     if a.get("status") != "invalid"}
+            if any(scope in quarantined for scope, _ in named):
+                components.append(_component("copy_review", "held_identity_conflict", pack_id=pack["pack_id"]))
+            elif (not named <= counted or not _copy_lineage_matches(copy_private, archives)
                     or datetime.fromisoformat(copy_private["created_at"]) > as_of):
                 components.append(_component("copy_review", "lineage_mismatch", pack_id=pack["pack_id"]))
             else:
@@ -167,6 +219,9 @@ def verify_components(*, archives: list[VerifiedArchive], reconciliation: Any, c
                         components.append(_component("copy_ratings", "invalid", reason=str(exc)))
         except private_copy_pack.CopyReviewError as exc:
             components.append(_component("copy_review", "invalid", reason=str(exc)))
+        if copy_import is not None and usable["copy_private"] is None:
+            # Ratings bind to a verified pack only; a held pack holds them too, never zero ratings.
+            components.append(_component("copy_ratings", "held", reason="copy_review_not_verified"))
     if readers is None:
         components.append(_component("retained_state", "absent"))
         if feedback is not None:
@@ -195,9 +250,8 @@ def _copy_lineage_matches(private: dict, archives: list[VerifiedArchive]) -> boo
 
 
 def _copy_lineage_matches_checked(private: dict, archives: list[VerifiedArchive]) -> bool:
-    by_scope = {archive.scope_id: archive for archive in archives if archive.status != "invalid"}
-    if len(by_scope) != len([a for a in archives if a.status != "invalid"]):
-        return False
+    # Counted captures only: a repeated or copied archive argument is one capture, never a mismatch.
+    by_scope = {archive.scope_id: archive for archive in archive_usage.reconcile_identities(archives)[1]}
     for named in private["archives"]:
         archive = by_scope.get(named["scope_id"])
         if archive is None or (archive.manifest_sha256, archive.status) != (named["manifest_sha256"], named["status"]):
@@ -250,7 +304,8 @@ def _attempt_index(reconciliation: dict | None) -> tuple[dict, dict]:
     return usage, billing
 
 
-def _call_view(archive: VerifiedArchive, call, usage: dict, billing: dict, has_billing: bool) -> tuple[dict, list[str]]:
+def _call_view(archive: VerifiedArchive, call, usage: dict, billing: dict, has_billing: bool,
+               reconciled: bool = False) -> tuple[dict, list[str]]:
     dispositions: list[str] = []
     attempts = []
     for attempt in call.attempts:
@@ -259,7 +314,8 @@ def _call_view(archive: VerifiedArchive, call, usage: dict, billing: dict, has_b
         bill = billing.get(key, "no_billing_item" if has_billing else "billing_absent")
         attempts.append({"attempt": attempt.attempt, "wire_request": attempt.request.availability,
                          "raw_response": attempt.response.availability, "http_status": attempt.status,
-                         "usage_status": row["usage_status"] if row else "reconciliation_absent",
+                         "usage_status": row["usage_status"] if row else (
+                             "not_counted_in_reconciliation" if reconciled else "reconciliation_absent"),
                          "billing": bill})
         if attempt.response.availability in ("not_observed", "read_failed"):
             dispositions.append(f"missing_response:call_{call.number}")
@@ -299,12 +355,18 @@ def diagnose(*, archives: list[VerifiedArchive], components: list[dict], usable:
                     entry = copy_by_text.setdefault((record["scope_id"], candidate["text_sha256"]),
                                                     {"in_pack": True, "pair_kinds": []})
                     entry["pair_kinds"] = sorted({*entry["pair_kinds"], copy_private["pair_kinds"][pair["pair_id"]]})
+    # Under a held pack, membership is unknown; "not in pack" is only said of a verified or absent one.
+    not_in_pack: dict = ({"in_pack": None, "pack": "held"} if _held(components, "copy_review")["status"] == "held"
+                         else {"in_pack": False})
     posts = (readers or {}).get("outcomes", {}).get("posts", []) if readers else []
+    # One capture counts once; conflicting exports of one identity are quarantined, never chosen.
+    sources, counted, identity = archive_usage.reconcile_identities(archives)
+    held_texts = {(item["candidate_text_sha256"], generation["bundle_sha256"])
+                  for source in sources if source["identity_conflict_with"]
+                  for generation in lineage(archives[source["input"]]) for item in generation["candidates"]}
     candidates: list[dict] = []
     generations: list[dict] = []
-    for archive in archives:
-        if archive.status == "invalid":
-            continue
+    for archive in counted:
         for index, generation in enumerate(lineage(archive)):
             start = archive.inputs[index]["seq"]
             end = archive.inputs[index + 1]["seq"] if index + 1 < len(archive.inputs) else float("inf")
@@ -318,7 +380,7 @@ def diagnose(*, archives: list[VerifiedArchive], components: list[dict], usable:
             writer_calls = []
             for call in local_calls:
                 if call.stage == "writer":
-                    view, found = _call_view(archive, call, usage, billing, has_billing)
+                    view, found = _call_view(archive, call, usage, billing, has_billing, reconciliation is not None)
                     writer_calls.append(view)
                     writer_dispositions += found
             kill_stage = terminal.get("kill_stage") if terminal else None
@@ -345,7 +407,7 @@ def diagnose(*, archives: list[VerifiedArchive], components: list[dict], usable:
                     if (candidate_seq < call.intent_seq < candidate_end
                             and call.binding.get("candidate_text_sha256") == digest
                             and call.binding.get("candidate_attempt") == candidate["attempt"]):
-                        view, found = _call_view(archive, call, usage, billing, has_billing)
+                        view, found = _call_view(archive, call, usage, billing, has_billing, reconciliation is not None)
                         calls.append(view)
                         dispositions += found
                         candidate_stages.setdefault(call.stage, {"outcome": None, "calls": []})["calls"].append(
@@ -384,19 +446,20 @@ def diagnose(*, archives: list[VerifiedArchive], components: list[dict], usable:
                     "candidate_text_sha256": digest, "attempt": candidate["attempt"], "decision": decision,
                     "stages": {s: {"outcome": e["outcome"], "disposition": e["disposition"],
                                    "calls": [c["call"] for c in e["calls"]]} for s, e in sorted(candidate_stages.items())},
-                    "calls": calls, "copy_review": copy_by_text.get((archive.scope_id, digest), {"in_pack": False}),
+                    "calls": calls, "copy_review": copy_by_text.get((archive.scope_id, digest), not_in_pack),
                     "accepted_terminal": accepted_here,
                     "dispositions": sorted(set(dispositions + (["archive_incomplete"] if archive.status != "complete"
                                                                else [])))})
-    joined_posts = _join_publications(candidates, posts)
+    joined_posts = _join_publications(candidates, posts, held_texts)
     unjoined = [_post_row(post, joined_posts.get(post["tweet_id"])) for post in posts
                 if joined_posts.get(post["tweet_id"]) != "joined"]
     report = {"schema": SCHEMA, "view_renderer": VIEW_RENDERER, "as_of": as_of.isoformat(), "components": components,
               "inputs": sorted(input_files, key=lambda f: (f["role"], f["sha256"])),
-              "overview": _overview(archives, candidates, generations, reconciliation, copy_private, copy_import,
-                                    readers, unjoined),
+              "identity_reconciliation": identity,
+              "overview": _overview(sources, identity, components, candidates, generations, reconciliation,
+                                    copy_private, copy_import, readers, unjoined),
               "candidates": candidates, "generations": generations, "unjoined_posts": unjoined,
-              "copy_review": _copy_summary(copy_private, copy_import),
+              "copy_review": _preference(components, copy_private, copy_import),
               "decision": {"promotion": "HOLD", "weekly_review_decision": (readers or {}).get("weekly", {}).get(
                   "decision", {}).get("promotion") if readers else "absent",
                   "automatic_changes": False, "approvals": "none", "budget_released": False,
@@ -404,6 +467,8 @@ def diagnose(*, archives: list[VerifiedArchive], components: list[dict], usable:
               "limits": ["Mechanical dispositions only; no root cause, weather diagnosis or quality grade.",
                          "Receipt joins require exact writer, source, unchanged saved revision and receipt identities; actor remains unknown.",
                          "Missing optional inputs are absent, never zero usage, cost, engagement or proof.",
+                         "Repeated or copied archive arguments count once; exports claiming one capture identity "
+                         "with different contents are quarantined from every count and join, never chosen.",
                          "Billing is operator-supplied; ratings may be synthetic; neither certifies the other.",
                          "No action here generates, replays, approves, releases budget, posts or corrects."]}
     if any(archive.schema == SCHEMA_V2 and archive.status != "invalid" for archive in archives):
@@ -480,7 +545,7 @@ def _routes_section(archives: list[VerifiedArchive]) -> dict:
                        "Route families outside the four supported ones are not captured by this archive."]}
 
 
-def _join_publications(candidates: list[dict], posts: list[dict]) -> dict[str, str]:
+def _join_publications(candidates: list[dict], posts: list[dict], held_texts: set[tuple]) -> dict[str, str]:
     """Join only supported original writer -> unchanged saved revision -> receipt identities."""
     outcome: dict[str, str] = {}
     for candidate in candidates:
@@ -493,6 +558,12 @@ def _join_publications(candidates: list[dict], posts: list[dict]) -> dict[str, s
         same_text = [c for c in candidates if c["candidate_text_sha256"] == digest]
         exact = [c for c in same_text if usable and c["accepted_terminal"] and c["bundle_sha256"] == bundle
                  and _publication_lineage_matches(c, post)]
+        if usable and (digest, bundle) in held_texts:
+            # A quarantined export could be this post's source: hold the join rather than pick a capture.
+            outcome[post["tweet_id"]] = "held_capture_identity_conflict"
+            for candidate in exact:
+                candidate["publication"] = {"status": "held_capture_identity_conflict", "tweet_id": post["tweet_id"]}
+            continue
         if len(exact) == 1:
             publication = exact[0]["publication"]
             if publication["status"] != "joined":
@@ -565,12 +636,37 @@ def _copy_summary(copy_private: dict | None, copy_import: dict | None) -> dict:
     return summary
 
 
-def _overview(archives, candidates, generations, reconciliation, copy_private, copy_import, readers, unjoined) -> dict:
-    statuses = [a.status for a in archives]
-    spend: dict[str, Any] = {"status": "absent"}
+def _held(components: list[dict], name: str) -> dict:
+    """A supplied component that did not verify is held, not absent; only an unsupplied one is absent."""
+    found = next((c for c in components if c["component"] == name), None)
+    if found is None or found["status"] in ("absent", "verified"):
+        return {"status": "absent"}
+    return {"status": "held", "component_status": found["status"]}
+
+
+def _preference(components: list[dict], copy_private: dict | None, copy_import: dict | None) -> dict:
+    if copy_private is None:
+        return _held(components, "copy_review")
+    summary = _copy_summary(copy_private, copy_import)
+    if copy_import is None:
+        held = _held(components, "copy_ratings")
+        summary["ratings"] = "absent" if held["status"] == "absent" else held
+    return summary
+
+
+def _overview(sources, identity, components, candidates, generations, reconciliation, copy_private, copy_import,
+              readers, unjoined) -> dict:
+    # A repeated argument is provenance, not another archive; every other input (even a conflict) is listed.
+    statuses = [s["status"] for s in sources if s["duplicate_of_input"] is None]
+    spend: dict[str, Any] = _held(components, "reconciliation")
     if reconciliation is not None:
         rec = reconciliation["reconciliation"]
+        # Derived from the report's retained rows by the shared rule; a supplied label never decides it.
+        unknown = archive_usage.token_totals_unknown_reasons(reconciliation["inputs"]["archives"],
+                                                             reconciliation["usage_attempts"])
         spend = {"status": "verified", **reconciliation["observed"]["denominators"],
+                 "token_totals_status": "incomplete" if unknown else "complete_for_retained_rows",
+                 "token_totals_unknown_reasons": unknown,
                  "billing_matches": len(rec["matches"]), "unmatched_billing_items": len(rec["unmatched_billing_items"]),
                  "conflicting_matches": len(rec["conflicting_matches"]),
                  "quarantined_billing": len(reconciliation["supplied_billing"]["quarantined"]),
@@ -579,7 +675,10 @@ def _overview(archives, candidates, generations, reconciliation, copy_private, c
                  "actual_cost_known": False}
     weekly = (readers or {}).get("weekly") if readers else None
     return {
-        "source": {"archives": len(archives), "archive_statuses": {s: statuses.count(s) for s in sorted(set(statuses))},
+        "source": {"archives": len(statuses), "archive_statuses": {s: statuses.count(s) for s in sorted(set(statuses))},
+                   "supplied_inputs": identity["supplied_inputs"], "duplicate_inputs": identity["duplicate_inputs"],
+                   "counted_captures": identity["counted_captures"],
+                   "identity_quarantined_inputs": identity["quarantined_inputs"],
                    "generations": len(generations), "distinct_bundles": len({g["bundle_sha256"] for g in generations})},
         "checks": {"candidates": len(candidates),
                    "accepted": sum(1 for c in candidates if c["decision"] == "accepted"),
@@ -588,7 +687,7 @@ def _overview(archives, candidates, generations, reconciliation, copy_private, c
                    "decided_without_provider_call": sum(1 for c in candidates for d in c["dispositions"]
                                                         if d.startswith("decided_without_provider_call"))},
         "spend": spend,
-        "preference": _copy_summary(copy_private, copy_import),
+        "preference": _preference(components, copy_private, copy_import),
         "publication": ({"status": "verified", "weekly_delivery_count": weekly["delivery"]["count"],
                          "manual_or_edited": weekly["copy"]["manual_or_edited"],
                          "outcome_inventory_status": readers["outcomes"]["status"],
@@ -602,7 +701,7 @@ def _overview(archives, candidates, generations, reconciliation, copy_private, c
                          "editorial_feedback": weekly["editorial_feedback"], "exclusions": weekly["exclusions"],
                          "weekly_cost_context": weekly["cost_context"],
                          "feedback": "supplied" if readers and readers["feedback_supplied"] else "absent"}
-                        if weekly else {"status": "absent"})}
+                        if weekly else _held(components, "retained_state"))}
 
 
 def _identity(report: dict) -> str:
