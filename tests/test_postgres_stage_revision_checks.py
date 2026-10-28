@@ -617,7 +617,7 @@ def test_v2_prefix_missing_corrupt_and_late_evidence_never_grants_readiness(admi
         ("late seal", "UPDATE theheat_checks.stage_seals SET completed_at=%s WHERE grant_id=%s", (caps[1][4], grant)),
         ("nonpass disposition", "UPDATE theheat_checks.receipts SET disposition='rejected' WHERE grant_id=%s", (grant,)),
         ("unresolved", "DELETE FROM theheat_checks.receipts WHERE grant_id=%s", (grant,)),
-        ("wrong original dispatch", "UPDATE theheat_spending.events SET recorded_at=%s WHERE intent_id=%s AND kind='dispatched'", (utc_text(editor.AT+timedelta(microseconds=1)), saved["attempts"]["safety"]["intent_id"])),
+        ("wrong original dispatch", None, (utc_text(editor.AT+timedelta(microseconds=1)), saved["attempts"]["safety"]["intent_id"])),
         ("wrong seal hash", "UPDATE theheat_checks.stage_seals SET receipt_sha256=%s WHERE grant_id=%s", ("0"*64, grant)),
         ("wrong prefix hash", "UPDATE theheat_checks.stage_seals SET prefix_sha256=%s WHERE grant_id=%s", ("0"*64, grant)),
     ]
@@ -630,6 +630,18 @@ def test_v2_prefix_missing_corrupt_and_late_evidence_never_grants_readiness(admi
                 encoded = canonical_json(metadata).encode()
                 c.execute("INSERT INTO theheat_check_executions.metadata_artifacts VALUES(%s,%s,%s)", (p._sha(encoded), encoded, len(encoded)))
                 c.execute("UPDATE theheat_check_executions.observations SET metadata_sha256=%s WHERE grant_id=%s", (p._sha(encoded), grant))
+            elif label == "wrong original dispatch":
+                at, intent_id = values
+                row = c.execute("SELECT payload,digest FROM theheat_spending.events WHERE intent_id=%s AND kind='dispatched'", (intent_id,)).fetchone()
+                assert row is not None
+                event = stages.spend._decode(*row)
+                assert event["intent_id"] == intent_id and event["kind"] == "dispatched"
+                assert event["recorded_at"] != at and stages.spend._time(at) == at
+                event = dict(event, recorded_at=at)
+                encoded = stages.spend._body(event)
+                changed = c.execute("UPDATE theheat_spending.events SET recorded_at=%s,payload=%s,digest=%s WHERE intent_id=%s AND kind='dispatched' RETURNING recorded_at,payload,digest", (at, encoded, p._sha(encoded), intent_id)).fetchone()
+                assert changed is not None and changed[0] == at
+                assert stages.spend._decode(changed[1], changed[2]) == event
             else:
                 c.execute(sql, values)
             # An owner-corrupted restore is deliberately outside the normal

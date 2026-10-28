@@ -42,6 +42,7 @@ _TIME_TRAVEL_ENV = "THEHEAT_TIME_TRAVEL_DAYS"
 # preserves every other item's order; ordinary local collection is unchanged.
 _CI_CRITICAL_NODEIDS = (
     "tests/test_postgres_stage_revision_checks.py::test_catalog4_owner_atomic_idempotent_legacy_receipts_and_runtime_denial",
+    "tests/test_postgres_stage_revision_checks.py::test_v2_prefix_missing_corrupt_and_late_evidence_never_grants_readiness[modis]",
     "tests/test_postgres_stage_revision_checks.py::test_v2_restored_unattempted_cap_must_bind_the_exact_verified_predecessor[prefix-modis]",
     "tests/test_postgres_stage_revision_checks.py::test_v2_restored_unattempted_cap_must_bind_the_exact_verified_predecessor[before_completion-modis]",
     "tests/test_postgres_stage_revision_checks.py::test_v2_restored_unattempted_cap_must_bind_the_exact_verified_predecessor[at_predecessor_expiry-modis]",
