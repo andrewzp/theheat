@@ -27,7 +27,7 @@ from tests import test_postgres_published_media as published
 from tests import test_postgres_revision_checks as catalog
 from tests import test_postgres_temperature_editor_media as temperature
 from tests import test_postgres_temperature_delivery as temperature_delivery
-from tests.stage_revision_check_helpers import assert_protocol, stage_rows
+from tests.stage_revision_check_helpers import assert_protocol, assert_runtime_grant_refused, stage_rows
 from tests.radar_editor_helpers import radar_case as radar_case
 from tests.test_postgres_editor_media import admitted as admitted, offline_connections as offline_connections
 from tests.test_postgres_projection import cluster as cluster, database as database, admin, wrap_connections
@@ -188,11 +188,12 @@ def test_catalog4_owner_atomic_idempotent_legacy_receipts_and_runtime_denial(sto
         "DELETE FROM theheat_checks.stage_leases",
         "TRUNCATE theheat_checks.stage_seals",
         "ALTER TABLE theheat_checks.stage_leases ADD COLUMN injected integer",
-        "GRANT UPDATE ON theheat_checks.stage_seals TO projection_runtime",
     ):
         with pytest.raises(Exception):
             with store.projections._connection(writing=True) as c:
                 c.execute(statement)
+    with store.projections._connection(writing=True) as c:
+        assert_runtime_grant_refused(c)
     assert editor.all_application_rows(core[3]) == rows
 
 
@@ -1382,13 +1383,19 @@ def test_v2_modis_approval_final_bound_and_reauthorization_roll_back_all_writes(
     admitted, core, tmp_path, monkeypatch, boundary, fault
 ):
     from tests.local_delivery_helpers import fixture_server
+    from tests.test_postgres_platform_description import review_exact
 
     case = admitted
     prepared, png = editor.prepare_and_attach(case)
     core[2].initialize_delivery(now=editor.AT)
     with fixture_server(png, case["text"]) as (config, trace, accepted):
         delivery.configure(case["store"], tmp_path, config)
-        delivery.bind_platform(case, monkeypatch)
+        description = editor.view(case)["platform_description"]
+        assert description["status"] == "fits_local_limits", description
+        raw = description["wire_text"].encode("utf-8")
+        assert len(raw) <= 1000 and len(description["wire_text"]) <= 1000
+        review_exact(case)
+        editor.complete_revision(case, monkeypatch)
         current = editor.view(case)
         draft = next(row for row in case["store"].read()[1]["drafts"] if row["id"] == case["draft_id"])
         command = Command.from_request(dict(command_id=str(uuid4()), action="approve_media_revision",

@@ -15,6 +15,10 @@
 - On a PG2 CI interpreter crash, retain bounded native function names from one
   private postmortem, delete core memory and preserve the original test result,
   diagnostic timer and job deadline. No diagnostic replay or production change.
+- Verify denied grants with PostgreSQL's warning and unchanged effective rights,
+  ACL and catalog; retain direct mutation refusals and full state preservation.
+- Use the applicable source projection in MODIS approval regressions while
+  retaining complete review, required checks and description size limits.
 - Verify retained graphic review and completion evidence once within an owned
   passive dashboard read. Recheck current source, roles and original expiry
   before returning; keep independent command and delivery verification.
