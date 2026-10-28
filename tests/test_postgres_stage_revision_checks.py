@@ -1033,6 +1033,10 @@ def test_v2_genuine_park_one_use_delivery_and_passive_original_cap_cost(
         assert parked["status"] == "applied" and editor.view(case)["parked"]
         intent = parked["delivery"]["intent_id"]
         assert case["store"].consume(candidate.resolve, command_id=command.command_id, now=editor.AT) == parked
+        # The offline model fixture installs invented keys; local delivery must
+        # retain its real credential-free boundary after those checks finish.
+        for key in ("ANTHROPIC_API_KEY", "GEMINI_API_KEY"):
+            monkeypatch.delenv(key, raising=False)
         before_send = editor.all_application_rows(core[3])
         expired = delivery.run(case, intent, "x", "upload", at=utc_datetime(caps[-1][4]))
         assert expired["outcome"] != "confirmed" and expired["network_mutation"] is False

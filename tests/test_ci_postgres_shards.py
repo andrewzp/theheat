@@ -81,7 +81,7 @@ def test_nine_file_shards_partition_all_modules_and_parameters_without_changing_
                 "tests/test_postgres_ghcn_generation.py": 5,
                 "tests/test_postgres_platform_description.py": 6,
                 "tests/test_postgres_temperature_editor_media.py": 8,
-                "tests/test_postgres_temperature_delivery.py": 3,
+                "tests/test_postgres_temperature_delivery.py": 0,
                 "tests/test_postgres_editor_media.py": 5,
             }
             if relative in assigned:
@@ -94,7 +94,7 @@ def test_nine_file_shards_partition_all_modules_and_parameters_without_changing_
     assert any(item.path.name == "test_postgres_ghcn_generation.py" for item in shards[5])
     assert any(item.path.name == "test_postgres_platform_description.py" for item in shards[6])
     assert {item.path.name for item in shards[8]} == {"test_postgres_temperature_editor_media.py"}
-    assert any(item.path.name == "test_postgres_temperature_delivery.py" for item in shards[3])
+    assert any(item.path.name == "test_postgres_temperature_delivery.py" for item in shards[0])
     assert any(item.path.name == "test_postgres_editor_media.py" for item in shards[5])
     assert not any(item.path.name == "test_postgres_editor_media.py" for item in shards[3])
     legacy = [select(items, partition) for partition in ("core", "postgres", "media")]

@@ -26,10 +26,14 @@
   database format, preserving the same corruption cases and 180-second lifetime.
 - Rebalance the complete editor-media test module across existing CI groups,
   preserving every case and the unchanged job and execution deadlines.
+- Move the complete temperature-delivery module to an existing database group,
+  preserving node identities, execution profiles and all original deadlines.
 - Extend the bounded, private CI crash observer to the temperature-editor group;
   preserve test results and deadlines and delete raw memory after observation.
 - Keep corruption-test dispatch timestamps and encoded events consistent so the
   original reader-refusal and rollback checks exercise the intended disagreement.
+- Clear invented model-fixture keys before the credential-free delivery journey;
+  preserve the production environment refusal and all delivery assertions.
 - Verify retained graphic review and completion evidence once within an owned
   passive dashboard read. Recheck current source, roles and original expiry
   before returning; keep independent command and delivery verification.
