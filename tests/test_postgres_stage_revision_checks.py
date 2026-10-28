@@ -116,7 +116,7 @@ def test_actual_protocol2_seal_removed_between_begin_passes_rolls_back_before_at
     assert editor.all_application_rows(core[3]) == before
 
     # Rollback restores eligibility for an independent connection/complete read.
-    with authority.projections._connection(writing=True) as c:
+    with authority.projections._connection(writing=True) as c, c.transaction(force_rollback=True):
         authority._validate(c)
         domain.validate(c, authority.environment)
         authority._pointer(c, lock=True)
@@ -125,7 +125,6 @@ def test_actual_protocol2_seal_removed_between_begin_passes_rolls_back_before_at
                              candidate.resolve, editor.AT)
         assert grant["dispatch_granted"] is True
         assert c.execute("SELECT count(*) FROM theheat_delivery.attempts").fetchone() == (1,)
-        c.rollback()
     assert editor.all_application_rows(core[3]) == before
 
 
