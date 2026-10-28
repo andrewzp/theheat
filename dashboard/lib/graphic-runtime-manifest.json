@@ -1,6 +1,6 @@
 {
   "identity": {
-    "archive_sha256": "6934a19e030e8e8ce81b4d45e03439661fac6d43fabc2e6509f73c345b758572",
+    "archive_sha256": "c61276e66af03063213be00d000a926dc7abbcdfcab6e4b46b7d5caeab4c449c",
     "deployment_files": {
       "api/graphic_preview.py": "f7521adcbd618f4b65b2a0de30ea62aaff4cdd36f2254e9af38bf68646d361ad",
       "api/graphic_reader_status.py": "5e9685d699625a4eea9d5be884b6e266939a0ad344a2997351ba79bd114407ba",
@@ -72,7 +72,7 @@
       "src/media/maps/NOTICE.md": "f6ebf3caca500621c4b2c9f9fe9aad802099b82a4a1c21c479daf97d29aabac0",
       "src/media/maps/manifest.json": "1af072edc46ae3252bf6cf0edb43993986de262a2840b2cd4907eb4866f970e9",
       "src/media/maps/ne_110m_land_v4_1_0.json": "a37b057aca4fc9714a0c24b5d6bc9778bb5845894646e4052383ea63fa3cd50d",
-      "src/media/temperature_graphic_adapter.py": "b21fae6e151f16465780e36bbb5ce186372482df382a8f569e0cd868db2c0513",
+      "src/media/temperature_graphic_adapter.py": "9800badb803f38cb1241a1a56fd09ee8c8ed59c9f20e8ec087f88dad393f2edf",
       "src/media/viirs_map_graphic_adapter.py": "657db3caef8503a4e0b9c9596bad8d28c029c3711e1d974f153fc1b60d3dd8d3",
       "src/state_schema.py": "96d0934e017ffd5e8493e20dd058e250ca000073a4b210a79598f22e9b57f63a",
       "src/two_bot/__init__.py": "57333e1314a97e2fc83e03db569e03b0199c67ff52fad71770853226b9a68f00",
@@ -85,12 +85,12 @@
       "src/two_bot/types.py": "36ed2e6475a655f4112012486795702159ed546c3040e8ef1874b7a0b02a9035"
     },
     "format": "saved-source-svg-preview-v2",
-    "policy_source_sha256": "b23b794a2c531b4f2301c451329cb95c3981587fecaf6e3382783f88add3f18c",
+    "policy_source_sha256": "d61f78ba10ac388048a3759275d5d66064be082cb91397536ddb207b40492de7",
     "resource_sources": {
       "src/data/registry/country_codes.json": "data/country_codes.json",
       "src/data/registry/place_registry.json": "data/place_registry.json"
     },
     "schema_version": 1
   },
-  "runtime_sha256": "3e30621f9b1839a6644729a66f1c85803e516b7f1c477214d6f2688994b0e90f"
+  "runtime_sha256": "085665516a1d4609b4e86f3b0e0b5b41524e443e497bbee20b1341cb4d09d8e3"
 }
