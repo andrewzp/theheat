@@ -79,7 +79,9 @@ def test_actual_protocol2_seal_removed_between_begin_passes_rolls_back_before_at
     assert admin(core[3], "SELECT count(*) FROM theheat_delivery.leases") == [(0,)]
 
     # The normal runtime cannot remove an immutable stage seal.
-    with pytest.raises(psycopg.Error):
+    assert admin(core[3], "SELECT has_table_privilege('projection_runtime', "
+        "'theheat_checks.stage_seals','DELETE')") == [(False,)]
+    with pytest.raises(p.ProjectionError, match="write_outcome_unknown"):
         with authority.projections._connection(writing=True) as c:
             c.execute("DELETE FROM theheat_checks.stage_seals WHERE check_set_id=%s", (identity,))
     assert editor.all_application_rows(core[3]) == before
