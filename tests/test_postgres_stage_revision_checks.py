@@ -121,8 +121,13 @@ def test_actual_protocol2_seal_removed_between_begin_passes_rolls_back_before_at
         domain.validate(c, authority.environment)
         authority._pointer(c, lock=True)
         value = domain.read(c, intent)
-        grant = domain.begin(authority, c, value, "bluesky", "upload", lease, request, png,
-                             candidate.resolve, editor.AT)
+        try:
+            grant = domain.begin(authority, c, value, "bluesky", "upload", lease, request, png,
+                                 candidate.resolve, editor.AT)
+        except psycopg.Error as error:
+            # Keep only a bounded database code before the adapter deliberately
+            # replaces driver details with the conservative unknown outcome.
+            raise AssertionError(f"fresh_begin_database_error:{type(error).__name__}:{error.sqlstate}") from None
         assert grant["dispatch_granted"] is True
         assert c.execute("SELECT count(*) FROM theheat_delivery.attempts").fetchone() == (1,)
     assert editor.all_application_rows(core[3]) == before
