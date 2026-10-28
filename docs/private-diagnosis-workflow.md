@@ -23,7 +23,7 @@ All inputs are explicit absolute owner-only files or directories.
 | Input | Flag | Required | Verified as |
 |---|---|---|---|
 | Private request archives | `--archive DIR` (repeatable) | yes | D1 read API: canonical hash chain, artifacts, bindings |
-| Reconciliation report | `--reconciliation FILE` | no | D2 `report_sha256`; every archive it used must be supplied (manifest hashes) |
+| Reconciliation report | `--reconciliation FILE` | no | D2 `report_sha256`; every capture it counted must be a counted capture here (scope and manifest), each counted once |
 | Copy-review private record | `--copy-private FILE` | no | D3 v2 complete private-record identity and rebuilt pack; archive manifests, status and unique candidate provenance checked against supplied archives |
 | Copy-review import report | `--copy-import FILE` | no | D3 v2 report/private/pack/rubric identities; summaries reconstructed from bound ratings; import clock cannot exceed diagnosis clock |
 | Retained state snapshot | `--state FILE` | no | Read by the existing Node readers; the state's semantic fingerprint must match |
@@ -81,6 +81,7 @@ becomes zero usage, zero cost, zero engagement or an empty proof.
   - `evidence_changed_since_capture`
   - `published_receipt_joined`
   - `archive_incomplete`
+  - `held_capture_identity_conflict` (an unjoined post whose text and bundle match a quarantined export)
 
   There is no root cause, weather diagnosis or quality grade.
 - **Receipt join.** A post joins exactly one accepted archived candidate only
@@ -105,6 +106,40 @@ leaves only through `export-copy`, written to a new private file. That command
 refuses a text hash naming multiple candidate records, before writing any output.
 For a unique candidate it exports reasons only within that candidate's generation
 and attempt; identical text never selects the first generation implicitly.
+
+## Repeated, copied and conflicting inputs
+
+Every consumer uses one rule: a capture is its verified scope ID plus manifest
+hash (`identity_reconciliation`, also a `capture_identity` component). A caller
+path, a body hash, a label or a supplied "complete" flag is never an identity.
+
+| You supplied | The diagnosis does |
+|---|---|
+| The same `--archive` twice | Counts it once; the second argument is `duplicate_not_counted` with `duplicate_of_input` |
+| A byte-identical copied export | Same as a repeat (same scope and manifest) |
+| Two separate captures with identical requests or texts | Counts both: they are two physical attempts. A post matching both stays `ambiguous_multiple_accepted_candidates` |
+| Two exports claiming one scope with different contents | Quarantines both from every count, total and join (`conflict_quarantined`); exits 1; nothing is chosen |
+| An export that fails integrity checks | `invalid_not_counted`; it has no identity and never hides behind a valid copy |
+
+Optional components follow the same rule:
+- A reconciliation, copy pack or import naming a quarantined capture is
+  `held_identity_conflict` (ratings bound to a held pack are `held`).
+- A sealed older reconciliation that counted one capture twice, or two contents
+  of one identity, is `unverifiable_identity`. It is read, never repaired, re-sealed
+  or re-derived; rebuild it with the current `reconcile` command.
+- A supplied component that does not verify is shown as `held` in the overview
+  with its `component_status`. Only an unsupplied component is `absent`, and
+  neither is ever zero. Under a held pack, candidate membership is unknown.
+- Spend reports `token_totals_status` and its unknown reasons, derived from the
+  reconciliation's own retained rows. An `incomplete` total is a known partial
+  subtotal (partial coverage), never a complete or zero amount.
+
+Changing the order of `--archive` arguments can only reorder input-indexed
+provenance; it never selects a different counted contribution.
+
+`next_actions` lists fixed mechanical steps (for example
+`compare_conflicting_exports`, `rebuild_older_component`,
+`totals_are_known_partial_subtotals`). None fetches, retries, repairs or approves.
 
 ## Durability and restart
 
@@ -261,3 +296,20 @@ invented.
   post-age engagement sample or a measured improvement.
 - **HOLD stays.** No result approves, settles a hold, releases or changes a
   budget, replays a provider, posts or corrects. Promotion stays HOLD.
+
+## Route families (v2 archives)
+
+When a supplied archive is v2, the JSON report gains a `routes` section, and the views (renderer v3) summarize its totals status, unknown reasons and result conflicts. v1-only reports have no route section.
+
+For each archive, the section lists:
+- the families observed and not observed;
+- reused provider batch IDs;
+- mechanical dispositions per route, for example:
+  - `acknowledgment_not_completion_or_usage`, `status_read_not_generation`;
+  - `results_partial`, `predecessor_durable_status_reference`, `duplicate_custom_ids_visible`;
+  - `entity_not_observed`, `no_physical_send`, `billing_unknown`;
+  - `evidence_gap:<gap>`, `batch_identity_<identity>`, `status_not_certified_for_requested_batch`, `result_conflict_with_other_retained_line`.
+
+The same capture supplied twice is listed once (`identity_reconciliation`). The section also lists `result_conflicts`, each with every source scope, route and line, `route_totals_status` and `route_totals_unknown_reasons`. No conflicting line is chosen or counted, and a quarantined identity keeps the route totals incomplete.
+
+Weekly promotion stays HOLD. No route disposition is a root cause, a quality grade or an approval.

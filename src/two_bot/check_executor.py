@@ -19,7 +19,7 @@ from src.commands import check_journal as checks
 from src.commands.schema import canonical_json, utc_datetime
 from src.editorial.policy import current_editorial_policy
 from src.editorial.revisions import fingerprint
-from src.two_bot import check_requests, check_origin
+from src.two_bot import check_requests, check_origin, request_archive
 from src.two_bot.check_transport import (
     CheckObservation,
     GoogleCheckTransport,
@@ -118,6 +118,26 @@ def _window_available(packet, lease, now):
     ).total_seconds() > READ_BUDGET_SECONDS + 2 * SOCKET_TIMEOUT_SECONDS
 
 
+def _check_route(transport, check_set_id, stage, request, encoded, packet, context, lease):
+    """Private evidence intent BEFORE the grant; None when capture is OFF."""
+    scope = request_archive.route_scope()
+    if scope is None:
+        return None
+    entry = request_archive.route_entry
+    text = packet.get("text_sha256")
+    return scope.begin_route(
+        "command_check", client=getattr(transport, "_http", None),
+        expected_path=f"/v1beta/models/{request['model']}:generateContent",
+        binding=dict(check_set_id=entry(check_set_id, "invoking_request"), stage=entry(stage, "check_lease"),
+                     lease_fence=entry(lease["fence"], "check_lease"),
+                     request_sha256=entry(hashlib.sha256(encoded).hexdigest(), "check_packet"),
+                     packet_sha256=entry(hashlib.sha256(canonical_json(packet).encode()).hexdigest(), "check_packet"),
+                     candidate_text_sha256=entry(text if isinstance(text, str) else None, "check_packet"),
+                     model=entry(request["model"], "check_packet"),
+                     policy_sha256=entry(context.get("policy_sha256"), "verified_current_context")),
+        logical=request)
+
+
 def execute_check_once(
     authority: CheckAuthority,
     check_set_id: str,
@@ -144,6 +164,8 @@ def execute_check_once(
     resolved = getattr(authority, "resolved_check_context", None)
     transport = None
     report = None
+    route = None
+    executed = False
     try:
         if not isinstance(checker_state, dict) or not isinstance(current_context, dict):
             return _report("blocked", reason="invalid_current_check_context")
@@ -201,6 +223,13 @@ def execute_check_once(
                 return _report("blocked", reason="missing_check_credential", stage=stage)
             transport = GoogleCheckTransport(api_key=key, model=request["model"],
                 **({"http_transport": transport_options["http_transport"]} if transport_options is not None else {}))
+            try:
+                route = _check_route(transport, check_set_id, stage, request, encoded, packet, context,
+                                     leased["lease"])
+            except request_archive.RequestArchiveError:
+                # Capture failure before a send refuses it: no grant or request.
+                report = _report("blocked", reason="archive_refused_before_grant", stage=stage)
+                return report
         try:
             grant = authority.candidate_checks(
                 "begin",
@@ -237,6 +266,14 @@ def execute_check_once(
                     reason="check_window_changed_before_execution",
                     stage=stage,
                 )
+            if route is not None:
+                try:
+                    route.bind(dict(grant_id=request_archive.route_entry(grant["grant_id"], "check_grant")))
+                except request_archive.RequestArchiveError:
+                    # The grant exists but nothing was sent: recover, never resend unrecorded.
+                    report = _report("reconciliation_required", reason="archive_refused_before_send", stage=stage)
+                    return report
+            executed = True
             observed = transport.execute(request)
         metadata = dict(
             check_set_id=check_set_id,
@@ -258,6 +295,12 @@ def execute_check_once(
             "reconciliation_required", reason="check_execution_not_confirmed", stage=stage
         )
     finally:
+        if route is not None:
+            observation = transport._http.observation if executed and transport is not None else None
+            route.finish("returned" if executed else "refused_before_send" if route.refusal else "blocked",
+                         dict(stage=stage, outcome=(report or {}).get("outcome"), reason=(report or {}).get("reason"),
+                              observation_complete=getattr(observation, "complete", None),
+                              http_status=getattr(observation, "http_status", None)))
         if transport is not None:
             try:
                 transport.close()

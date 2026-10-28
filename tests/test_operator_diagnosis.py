@@ -220,8 +220,9 @@ def test_component_lineage_mismatches_hold_instead_of_joining(scenario):
                  reconciliation={"schema": "theheat.archive-reconciliation/v1", "report_sha256": "0" * 64},
                  copy_private={"schema": "theheat.copy-review-private/v1"})
     statuses = {c["component"]: c["status"] for c in report["components"] if c["component"] != "archive"}
-    assert statuses == {"reconciliation": "invalid", "copy_review": "invalid", "retained_state": "lineage_mismatch"}
-    assert report["overview"]["publication"]["status"] == "absent"
+    assert statuses == {"capture_identity": "verified", "reconciliation": "invalid", "copy_review": "invalid",
+                        "retained_state": "lineage_mismatch"}
+    assert report["overview"]["publication"]["status"] == "held"  # G9: a supplied, mismatched state is not absent
     assert all(c["publication"]["status"] == "receipts_absent" for c in report["candidates"])
 
 
@@ -362,7 +363,7 @@ def test_outcome_unknowns_post_age_stale_feedback_and_receipt_denominators_are_p
     assert "PRIVATE STALE OPINION" not in json.dumps(report)
     # The feedback read must bind to the same contents used by the Node reader.
     mismatched = run(archives, state=state, readers=readers, feedback={"records": []})
-    assert mismatched["overview"]["publication"] == {"status": "absent"}
+    assert mismatched["overview"]["publication"] == {"status": "held", "component_status": "lineage_mismatch"}
     state["publish_ledger"] = {}
     readers = _readers(write_private(inputs, "draft-only.json", state))
     draft_only = run(archives, state=state, readers=readers)

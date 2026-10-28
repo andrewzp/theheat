@@ -384,7 +384,8 @@ def _aggregates(usage: dict, collected: dict, scenario: dict | None, bound: set)
         scenario_rows = []
         if scenario is not None and document["currency"] == scenario["currency"]:
             keys = {(r["scope_id"], r["call"], r["attempt"]) for r in inside}
-            scenario_rows = [s for s in scenario["rows"] if (s["scope_id"], s["call"], s["attempt"]) in keys
+            # Route rows (v2) carry no call/attempt identity and are never eligible; they join nothing.
+            scenario_rows = [s for s in scenario["rows"] if (s["scope_id"], s.get("call"), s.get("attempt")) in keys
                              and s["disposition"] == "eligible"]
         rows.append({"document_id": document["document_id"], "provider": document["provider"],
                      "account": document["scope"]["account"], "currency": document["currency"],
@@ -441,10 +442,11 @@ def build_report(*, as_of: datetime, usage: dict, documents: list[dict], rejecte
     report = {
         "schema": REPORT_SCHEMA, "as_of": as_of.isoformat(),
         "inputs": {"files": sorted(input_files, key=lambda f: (f["role"], f["sha256"])),
-                   "archives": usage["sources"], "account_bindings": bindings,
-                   "rejected_billing_files": rejected_billing},
+                   "archives": usage["sources"], "identity_reconciliation": usage["identity_reconciliation"],
+                   "account_bindings": bindings, "rejected_billing_files": rejected_billing},
         "observed": {"denominators": usage["denominators"], "calls": usage["calls"],
-                     "token_totals": usage["token_totals"]},
+                     "token_totals": usage["token_totals"], "token_totals_status": usage["token_totals_status"],
+                     "token_totals_unknown_reasons": usage["token_totals_unknown_reasons"]},
         "usage_attempts": [{key: value for key, value in row.items() if key != "observation"}
                            for row in usage["attempts"]],
         "priced_scenario": scenario,
@@ -498,6 +500,13 @@ def render_markdown(report: dict) -> str:
     lines += ["", "| archive scope | status | problems |", "|---|---|---|"]
     lines += [f"| {_cell(a['scope_id'])} | {a['status']} | {_cell(', '.join(a['problems']) or 'none')} |"
               for a in report["inputs"]["archives"]]
+    identity = report["inputs"].get("identity_reconciliation")
+    if identity is not None:
+        lines += ["", f"Capture identity ({identity['rule']}): {identity['status']}; {identity['supplied_inputs']} "
+                  f"inputs, {identity['counted_captures']} counted captures, {identity['duplicate_inputs']} repeated "
+                  f"or copied inputs counted once, {identity['quarantined_inputs']} quarantined inputs "
+                  f"(conflicting scope IDs: {_cell(', '.join(identity['conflicting_scope_ids']) or 'none')}). "
+                  "Quarantined and invalid inputs contribute nothing below."]
     lines += ["", "## Observed (separate denominators)", "", "| measure | count |", "|---|---|"]
     lines += [f"| {name} | {value} |" for name, value in sorted(observed.items())]
     lines += ["", "## Provider-reported usage (present, valid, non-conflicting only)", "",
@@ -511,6 +520,10 @@ def render_markdown(report: dict) -> str:
         missing = ", ".join(f"{k}:{v}" for k, v in sorted(group["missing_counts"].items()) if v)
         lines.append(f"| {group['provider']} | {group['stage']} | {_cell(group['model'])} | {group['responses']} | "
                      f"{_cell(counts or 'none')} | {_cell(missing or 'none')} |")
+    if "token_totals_status" in report["observed"]:
+        reasons = ", ".join(report["observed"]["token_totals_unknown_reasons"]) or "none"
+        lines += ["", f"Totals status: {report['observed']['token_totals_status']} (unknown because: {reasons}). "
+                  "An incomplete total is a known partial subtotal, never a complete or zero amount."]
     scenario = report["priced_scenario"]
     lines += ["", "## Named price scenario (not billed)", ""]
     if scenario is None:

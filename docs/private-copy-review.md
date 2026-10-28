@@ -183,6 +183,16 @@ Changes only to retained provenance or archive metadata instead report
 identify more than one generation/attempt are held rather than assigned to the
 first matching generation.
 
+**Archive identity.** `build` accepts a repeated `--archive` argument or a
+byte-identical copied export as the same capture (same scope ID and manifest);
+it refuses two exports claiming one scope with different contents
+(`archive_scope_identity_conflict`). In a later diagnosis, a repeated or copied
+archive never causes a false lineage mismatch, but a pack naming a capture that
+the diagnosis quarantines is `held_identity_conflict`, its ratings are `held`,
+and candidate membership reads "pack held; membership unknown". Repeated
+identical ballot files collapse as identical retries; synthetic ballots never
+increase `real_human_ratings_added`.
+
 ## Synthetic journey
 
 `tests/private-copy-review-browser.mjs` runs the whole flow:
