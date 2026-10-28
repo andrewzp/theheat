@@ -42,6 +42,10 @@ _TIME_TRAVEL_ENV = "THEHEAT_TIME_TRAVEL_DAYS"
 # preserves every other item's order; ordinary local collection is unchanged.
 _CI_CRITICAL_NODEIDS = (
     "tests/test_postgres_stage_revision_checks.py::test_catalog4_owner_atomic_idempotent_legacy_receipts_and_runtime_denial",
+    "tests/test_postgres_stage_revision_checks.py::test_v2_restored_unattempted_cap_must_bind_the_exact_verified_predecessor[prefix-modis]",
+    "tests/test_postgres_stage_revision_checks.py::test_v2_restored_unattempted_cap_must_bind_the_exact_verified_predecessor[before_completion-modis]",
+    "tests/test_postgres_stage_revision_checks.py::test_v2_restored_unattempted_cap_must_bind_the_exact_verified_predecessor[at_predecessor_expiry-modis]",
+    "tests/test_postgres_stage_revision_checks.py::test_v2_restored_unattempted_cap_must_bind_the_exact_verified_predecessor[future_start-modis]",
     "tests/test_postgres_temperature_delivery.py::test_genuine_compact_temperature_delivery_recovery_history_and_cost[compact_case0]",
     "tests/test_postgres_temperature_editor_media.py::test_compact_claim_native_review_checks_park_restore_and_invalidation[all_time_low]",
     "tests/test_postgres_temperature_editor_media.py::test_actual_authenticated_http_compact_claim_editor_journey[calendar_date_low]",

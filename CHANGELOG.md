@@ -19,6 +19,8 @@
   ACL and catalog; retain direct mutation refusals and full state preservation.
 - Use the applicable source projection in MODIS approval regressions while
   retaining complete review, required checks and description size limits.
+- Keep restored-capability test timestamps in the existing fixed-microsecond
+  database format, preserving the same corruption cases and 180-second lifetime.
 - Verify retained graphic review and completion evidence once within an owned
   passive dashboard read. Recheck current source, roles and original expiry
   before returning; keep independent command and delivery verification.

@@ -448,13 +448,13 @@ def test_v2_restored_unattempted_cap_must_bind_the_exact_verified_predecessor(
             body["predecessor_prefix_sha256"] = wrong
         elif corruption == "before_completion":
             completed = c.execute("SELECT completed_at FROM theheat_checks.stage_seals WHERE check_set_id=%s AND stage='deterministic'", (identity,)).fetchone()[0]
-            body["recorded_at"] = utc_text(utc_datetime(completed)-timedelta(microseconds=1))
+            body["recorded_at"] = stages.spend._time(utc_text(utc_datetime(completed)-timedelta(microseconds=1)))
         elif corruption == "at_predecessor_expiry":
             body["recorded_at"] = c.execute("SELECT expires_at FROM theheat_checks.stage_leases WHERE check_set_id=%s AND stage='deterministic'", (identity,)).fetchone()[0]
             current_at = utc_datetime(body["recorded_at"])
         else:
-            body["recorded_at"] = utc_text(current_at+timedelta(seconds=1))
-        body["expires_at"] = utc_text(min(utc_datetime(body["recorded_at"])+timedelta(seconds=180), utc_datetime(packet["useful_until"])))
+            body["recorded_at"] = stages.spend._time(utc_text(current_at+timedelta(seconds=1)))
+        body["expires_at"] = stages.spend._time(utc_text(min(utc_datetime(body["recorded_at"])+timedelta(seconds=180), utc_datetime(packet["useful_until"]))))
         assert packet["captured_at"] <= body["recorded_at"] < body["expires_at"] <= packet["useful_until"]
         assert utc_datetime(body["expires_at"])-utc_datetime(body["recorded_at"]) == timedelta(seconds=180)
         changed_id = fingerprint(body)
@@ -552,8 +552,8 @@ def test_v2_first_cap_issuance_uses_postproof_clock_and_reuse_never_refreshes_it
         assert result["outcome"] == "reconciliation_required" and advanced == [True]
         caps = stage_rows(core[3], identity)
         assert len(caps) == 2 and caps[0] == predecessor
-        assert caps[1][3] == utc_text(editor.AT+timedelta(seconds=30))
-        assert caps[1][4] == min(utc_text(editor.AT+timedelta(seconds=210)), packet["useful_until"])
+        assert caps[1][3] == stages.spend._time(utc_text(editor.AT+timedelta(seconds=30)))
+        assert caps[1][4] == min(stages.spend._time(utc_text(editor.AT+timedelta(seconds=210))), packet["useful_until"])
         assert caps[1][3] < predecessor[4]
         current[0] = editor.AT+timedelta(seconds=40)
         result = editor.run_revision(case, command, packet, "safety", clock=lambda: utc_text(current[0]))
