@@ -1307,31 +1307,18 @@ def test_v2_outbox_tail_uses_original_critic_deadline_and_rolls_back_park(
         assert_unknown(case)
 
 
-def assert_nonradar_approval_final_refusal(
-    case, params, command_id, current, resolve, at, trace, accepted,
+def inject_nonradar_approval_final_refusal(
+    case, command_id, check_command_id, resolve, at, critic_expiry,
     monkeypatch, boundary, fault, *, source_file=None,
 ):
-    """Fault a real approval after exact proof or after real outbox writes."""
+    """Run the original fault block in the caller's proper execution process."""
     from src.commands import postgres_authority as authority_module, postgres_delivery
 
     authority = case["store"]
-    identity = current["check_set_id"]
-    assert_protocol(authority, identity)
-    caps = stage_rows(params, identity)
-    assert len(caps) == 4 and caps[-1][0] == "critic"
-    critic_expiry = utc_datetime(caps[-1][4])
-    assert at < critic_expiry
     with authority.projections._connection() as c:
         approving, _ = authority._intent(c, command_id)
-        requesting, _ = authority._intent(c, current["check_command_id"])
+        requesting, _ = authority._intent(c, check_command_id)
     assert approving.actor_subject != requesting.actor_subject
-    draft = next(row for row in authority.read()[1]["drafts"] if row["id"] == case["draft_id"])
-    assert draft["type"] != "severe_weather"
-    before, state = editor.all_application_rows(params), authority.read()
-    raw = admin(params, "SELECT grant_id,raw_sha256 FROM theheat_check_executions.observations ORDER BY grant_id")
-    assert len(raw) >= 4
-    money = authority.spending("status", {}, now=utc_text(at))
-    assert money["totals"]["held_micro_usd"] >= 5 and money["accounting_complete"] is False
     original_source = source_file.read_bytes() if source_file is not None else list(case["config"]["current_inputs"])
     original_verify, original_enroll = stages._verify_prefix, postgres_delivery.enroll
     original_clock = authority_module._clock
@@ -1393,6 +1380,61 @@ def assert_nonradar_approval_final_refusal(
             case["config"]["current_inputs"][:] = original_source
         else:
             assert isinstance(original_source, bytes)
+            source_file.write_bytes(original_source)
+
+
+def isolated_ghcn_approval_final_refusal(authority, operators, config, command_id, parameters):
+    """Test-worker adapter only; real scientific replay keeps its isolation guard."""
+    with pytest.MonkeyPatch.context() as patch:
+        inject_nonradar_approval_final_refusal(
+            {"store": authority, "config": config}, command_id, parameters["check_command_id"],
+            operators.resolve, utc_datetime(parameters["at"]), utc_datetime(parameters["critic_expiry"]),
+            patch, parameters["boundary"], parameters["fault"], source_file=Path(config["generation"]),
+        )
+    return {"status": "refused", "boundary": parameters["boundary"], "fault": parameters["fault"]}
+
+
+def assert_nonradar_approval_final_refusal(
+    case, params, command_id, current, resolve, at, trace, accepted,
+    monkeypatch, boundary, fault, *, source_file=None,
+):
+    """Fault a real approval after exact proof or after real outbox writes."""
+    authority = case["store"]
+    identity = current["check_set_id"]
+    assert_protocol(authority, identity)
+    caps = stage_rows(params, identity)
+    assert len(caps) == 4 and caps[-1][0] == "critic"
+    critic_expiry = utc_datetime(caps[-1][4])
+    assert at < critic_expiry
+    with authority.projections._connection() as c:
+        approving, _ = authority._intent(c, command_id)
+        requesting, _ = authority._intent(c, current["check_command_id"])
+    assert approving.actor_subject != requesting.actor_subject
+    draft = next(row for row in authority.read()[1]["drafts"] if row["id"] == case["draft_id"])
+    assert draft["type"] != "severe_weather"
+    before, state = editor.all_application_rows(params), authority.read()
+    raw = admin(params, "SELECT grant_id,raw_sha256 FROM theheat_check_executions.observations ORDER BY grant_id")
+    assert len(raw) >= 4
+    money = authority.spending("status", {}, now=utc_text(at))
+    assert money["totals"]["held_micro_usd"] >= 5 and money["accounting_complete"] is False
+    if source_file is None:
+        inject_nonradar_approval_final_refusal(
+            case, command_id, current["check_command_id"], resolve, at, critic_expiry,
+            monkeypatch, boundary, fault,
+        )
+    else:
+        # Parent owns the real HTTP witnesses and before/after DB snapshots.
+        # The child installs the same fault patches around its real consume;
+        # its existing AF_UNIX-only guard independently forbids HTTP entry.
+        parameters = dict(check_command_id=current["check_command_id"], at=utc_text(at),
+                          critic_expiry=utc_text(critic_expiry), boundary=boundary, fault=fault)
+        assert source_file == Path(case["config"]["generation"])
+        original_source = source_file.read_bytes()
+        try:
+            assert temperature.ghcn_worker(case, "approval_final_refusal", command_id, json.dumps(parameters)) == {
+                "status": "refused", "boundary": boundary, "fault": fault}
+            assert source_file.read_bytes() == original_source
+        finally:
             source_file.write_bytes(original_source)
     assert editor.all_application_rows(params) == before
     assert authority.read() == state and authority.result(command_id) is None

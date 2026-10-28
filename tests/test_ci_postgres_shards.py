@@ -106,56 +106,59 @@ def test_nine_file_shards_partition_all_modules_and_parameters_without_changing_
     assert [_ci_postgres_shard(path) for path in files] == original
 
 
-def test_stage_function_cohorts_partition_every_case_without_splitting_parameters():
+def test_stage_function_defaults_partition_cases_without_explicit_fault_metadata():
     path = ROOT / "tests/test_postgres_stage_revision_checks.py"
-    # Independently frozen routing contract: complete functions, including all
-    # interruption boundaries and every final-authorization fault, stay together.
+    # Frozen defaults keep complete functions together. Actual GHCN final-fault
+    # metadata has its separate explicit pair-cohort test below.
     cohorts = {
         "0": (
+            "test_same_owner_initial_cap_race_and_unused_cap_cannot_renew",
+            "test_v2_modis_approval_final_bound_and_reauthorization_roll_back_all_writes",
             "test_v2_nonpass_raw_is_terminal_and_cannot_rotate_or_resend",
-            "test_v2_restored_unattempted_cap_must_bind_the_exact_verified_predecessor",
-            "test_v2_explicit_sdk_original_raw_recovery_has_no_second_request",
-            "test_v2_genuine_park_one_use_delivery_and_passive_original_cap_cost",
-            "test_v2_first_cap_issuance_uses_postproof_clock_and_reuse_never_refreshes_it",
-            "test_catalog4_never_adopts_unused_legacy_semantic_enrollment",
+            "test_v2_prefix_missing_corrupt_and_late_evidence_never_grants_readiness",
         ),
         "1": (
+            "test_predecessor_expiring_during_real_prefix_work_rolls_back_successor",
             "test_v2_ghcn_approval_final_bound_and_reauthorization_roll_back_all_writes",
-            "test_v2_full_park_restore_keeps_legacy_sets_and_exact_protocol_chain",
+            "test_v2_strict_request_window_equality_and_one_microsecond",
         ),
         "2": (
-            "test_catalog4_owner_atomic_idempotent_legacy_receipts_and_runtime_denial",
-            "test_catalog4_concurrent_owner_install_retains_single_chain",
-            "test_catalog4_every_installation_boundary_rolls_back",
-            "test_frozen_previous_binary_refuses_catalog4_before_work",
-            "test_catalog4_tamper_fails_closed_without_repair",
-            "test_catalog4_receipt_nested_numeric_metadata_is_byte_exact",
+            "test_catalog4_never_adopts_unused_legacy_semantic_enrollment",
+            "test_v2_exact_reservation_request_and_stage_are_required_before_dispatch",
+            "test_v2_restored_unattempted_cap_must_bind_the_exact_verified_predecessor",
         ),
         "3": (
-            "test_genuine_v2_chain_exceeds_first_cap_and_generic_status_never_certifies",
             "test_actual_protocol2_seal_removed_between_begin_passes_rolls_back_before_attempt",
-            "test_v2_published_frame_minimum_bounds_every_cap_and_final_readiness",
+            "test_v2_exact_terminal_replay_is_history_and_cannot_reseal_corruption",
+            "test_v2_outbox_tail_uses_original_critic_deadline_and_rolls_back_park",
+            "test_v2_scope_is_connection_bound_and_untrusted_inputs_cannot_mint_cap",
             "test_v2_transaction_interruptions_never_repurchase_or_repair_missing_seal",
         ),
         "4": (
-            "test_same_owner_initial_cap_race_and_unused_cap_cannot_renew",
-            "test_same_owner_successor_cap_race_cannot_rotate_without_attempt",
-            "test_predecessor_expiring_during_real_prefix_work_rolls_back_successor",
-            "test_v2_current_authority_drift_cannot_create_successor",
+            "test_catalog4_owner_atomic_idempotent_legacy_receipts_and_runtime_denial",
             "test_v2_completion_delay_rolls_back_critic_receipt_seal_keeps_raw_and_unknown_cost",
+            "test_v2_full_park_restore_keeps_legacy_sets_and_exact_protocol_chain",
+            "test_v2_genuine_park_one_use_delivery_and_passive_original_cap_cost",
         ),
-        "5": ("test_v2_prefix_missing_corrupt_and_late_evidence_never_grants_readiness",),
+        "5": (
+            "test_catalog4_receipt_nested_numeric_metadata_is_byte_exact",
+            "test_catalog4_tamper_fails_closed_without_repair",
+            "test_v2_explicit_sdk_original_raw_recovery_has_no_second_request",
+            "test_v2_published_frame_minimum_bounds_every_cap_and_final_readiness",
+        ),
         "6": (
-            "test_v2_strict_request_window_equality_and_one_microsecond",
-            "test_v2_scope_is_connection_bound_and_untrusted_inputs_cannot_mint_cap",
-            "test_v2_exact_terminal_replay_is_history_and_cannot_reseal_corruption",
-            "test_v2_exact_reservation_request_and_stage_are_required_before_dispatch",
+            "test_catalog4_every_installation_boundary_rolls_back",
+            "test_genuine_v2_chain_exceeds_first_cap_and_generic_status_never_certifies",
+            "test_v2_current_authority_drift_cannot_create_successor",
+            "test_v2_first_cap_issuance_uses_postproof_clock_and_reuse_never_refreshes_it",
         ),
         "7": (
-            "test_v2_modis_approval_final_bound_and_reauthorization_roll_back_all_writes",
-            "test_v2_outbox_tail_uses_original_critic_deadline_and_rolls_back_park",
+            "test_catalog4_concurrent_owner_install_retains_single_chain",
+            "test_frozen_previous_binary_refuses_catalog4_before_work",
+            "test_same_owner_successor_cap_race_cannot_rotate_without_attempt",
         ),
-        "8": (),
+        "8": (
+        ),
     }
     expected = {name: shard for shard, names in cohorts.items() for name in names}
     functions = [node.name for node in ast.parse(path.read_text()).body
@@ -167,7 +170,12 @@ def test_stage_function_cohorts_partition_every_case_without_splitting_parameter
     for shard in map(str, range(9)):
         for critical_first in (False, True):
             kept = select(items, "postgres", shard, critical_first)
-            assert kept == [item for item in items if expected[item.originalname] == shard]
+            expected_items = [item for item in items if expected[item.originalname] == shard]
+            if critical_first:
+                expected_items = [item for nodeid in _CI_CRITICAL_NODEIDS for item in expected_items
+                                  if item.nodeid == nodeid] + [
+                    item for item in expected_items if item.nodeid not in _CI_CRITICAL_NODEIDS]
+            assert kept == expected_items
         assert seen.isdisjoint(map(id, kept))
         seen.update(map(id, kept))
     assert seen == {id(item) for item in items}
@@ -215,3 +223,27 @@ def test_ninth_postgres_shard_is_accepted_by_actual_collection_cli():
     # This core test module is intentionally deselected; argument parsing succeeds.
     assert result.returncode == 5
     assert "--ci-postgres-shard" not in result.stderr
+
+
+def test_actual_ghcn_fault_metadata_keeps_all_ten_cases_in_disjoint_fixed_pairs():
+    path = ROOT / "tests/test_postgres_stage_revision_checks.py"
+    name = "test_v2_ghcn_approval_final_bound_and_reauthorization_roll_back_all_writes"
+    expected = {'expiry': '1', 'source': '1', 'editor': '7', 'publisher': '7', 'policy': '4'}
+    items = [SimpleNamespace(path=path, originalname=name,
+              callspec=SimpleNamespace(params=dict(fault=fault, boundary=boundary)),
+              nodeid=f"tests/test_postgres_stage_revision_checks.py::{name}[{fault}-{boundary}-compact_case0]")
+             for fault in expected for boundary in ("proof", "outbox")]
+    assert len(items) == 10
+    selected = []
+    for shard in map(str, range(9)):
+        before = select(items, "postgres", shard)
+        after = select(items, "postgres", shard, critical_first=True)
+        assert sorted(map(id, after)) == sorted(map(id, before))
+        assert {item.nodeid for item in before} == {
+            item.nodeid for item in items if expected[item.callspec.params["fault"]] == shard}
+        selected.extend(before)
+    assert len(selected) == len({id(item) for item in selected}) == 10
+    assert set(map(id, selected)) == set(map(id, select(items, "postgres")))
+    foreign = ROOT / "tests/test_postgres_temperature_delivery.py"
+    assert _ci_postgres_shard(foreign, name, {"fault": "policy"}) == "0"
+    assert _ci_postgres_shard(path, name, {"fault": "future_fault"}) == _ci_postgres_shard(path, name)

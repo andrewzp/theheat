@@ -254,6 +254,9 @@ if operation=="checkpoint_probe":
     assert len(reads)==4
     result=dict(reads=4,distinct_validated_connections=3,full_source_preserved=True,
         later_source_tamper_refused="corrupt_projection_identity")
+elif operation == "approval_final_refusal":
+    from tests.test_postgres_stage_revision_checks import isolated_ghcn_approval_final_refusal
+    result = isolated_ghcn_approval_final_refusal(authority, operators, cfg, identity, json.loads(fault))
 elif operation == "delivery_standalone_proof":
     import pytest
     from src.commands.schema import utc_datetime

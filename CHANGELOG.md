@@ -38,6 +38,10 @@
   preserve the production environment refusal and all delivery assertions.
 - Verify an expired original capability returns its exact refusal before any
   transport entry, with no request or state change, without assuming a send flag.
+- Run temperature approval fault injection in the existing isolated worker;
+  preserve real reconstruction, exact faults, deadlines and parent HTTP/DB witnesses.
+- Split the larger temperature approval family into fixed fault pairs across
+  existing CI groups, preserving every proof/outbox case and all time limits.
 - Match the policy-drift regression to the earlier joint-review refusal while
   retaining every fault injection, rollback and no-send assertion.
 - Verify retained graphic review and completion evidence once within an owned
