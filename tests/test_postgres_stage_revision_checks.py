@@ -1298,7 +1298,12 @@ def test_v2_outbox_tail_uses_original_critic_deadline_and_rolls_back_park(
             patch.setattr(authority_module, "_clock", lambda now: changed if advanced else editor.AT)
             with pytest.raises(CommandError) as caught:
                 case["store"].consume(candidate.resolve, command_id=command.command_id, now=editor.AT)
-        assert caught.value.code == ("media_completion_clock_regressed" if drift == "clock_backward" else "media_completion_expired")
+        # The final source check precedes the completion deadline check.
+        assert caught.value.code == {
+            "frame_expired": "radar_frame_expired_or_future",
+            "lease_expired": "media_completion_expired",
+            "clock_backward": "media_completion_clock_regressed",
+        }[drift]
         assert advanced and editor.all_application_rows(core[3]) == before
         assert case["store"].read() == state and case["store"].result(command.command_id) is None
         assert admin(core[3], "SELECT count(*) FROM theheat_delivery.intents") == [(0,)]

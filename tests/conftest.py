@@ -38,9 +38,13 @@ from src.state import DEFAULT_STATE
 
 _TIME_TRAVEL_ENV = "THEHEAT_TIME_TRAVEL_DAYS"
 
-# Exact observed failures first in their existing CI shards. Stable sorting
-# preserves every other item's order; ordinary local collection is unchanged.
+# Exact targeted regressions, then the remaining stage-revision cases, run first
+# in their existing CI shards. Both other cohorts retain their relative order;
+# ordinary local collection is unchanged.
 _CI_CRITICAL_NODEIDS = (
+    "tests/test_postgres_stage_revision_checks.py::test_v2_outbox_tail_uses_original_critic_deadline_and_rolls_back_park[frame_expired]",
+    "tests/test_postgres_stage_revision_checks.py::test_v2_outbox_tail_uses_original_critic_deadline_and_rolls_back_park[lease_expired]",
+    "tests/test_postgres_stage_revision_checks.py::test_v2_outbox_tail_uses_original_critic_deadline_and_rolls_back_park[clock_backward]",
     "tests/test_postgres_stage_revision_checks.py::test_v2_ghcn_approval_final_bound_and_reauthorization_roll_back_all_writes[expiry-proof-compact_case0]",
     "tests/test_postgres_stage_revision_checks.py::test_catalog4_owner_atomic_idempotent_legacy_receipts_and_runtime_denial",
     "tests/test_postgres_stage_revision_checks.py::test_v2_genuine_park_one_use_delivery_and_passive_original_cap_cost",
@@ -167,7 +171,8 @@ def pytest_collection_modifyitems(config, items):
     items[:] = selected
     if partition == "postgres" and config.getoption("--ci-critical-first"):
         priority = {nodeid: index for index, nodeid in enumerate(_CI_CRITICAL_NODEIDS)}
-        items.sort(key=lambda item: priority.get(item.nodeid, len(priority)))
+        items.sort(key=lambda item: priority.get(item.nodeid, len(priority) + (
+            item.path.name != "test_postgres_stage_revision_checks.py")))
     config.hook.pytest_deselected(items=deselected)
 
 

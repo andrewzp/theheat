@@ -247,3 +247,16 @@ def test_actual_ghcn_fault_metadata_keeps_all_ten_cases_in_disjoint_fixed_pairs(
     foreign = ROOT / "tests/test_postgres_temperature_delivery.py"
     assert _ci_postgres_shard(foreign, name, {"fault": "policy"}) == "0"
     assert _ci_postgres_shard(path, name, {"fault": "future_fault"}) == _ci_postgres_shard(path, name)
+
+
+def test_targeted_priority_then_stage_family_preserve_membership_and_legacy_order():
+    path = ROOT / "tests/test_postgres_stage_revision_checks.py"
+    legacy = [SimpleNamespace(path=ROOT / "tests/test_postgres_command_authority.py", nodeid=f"legacy[{i}]")
+              for i in range(2)]
+    remaining = [SimpleNamespace(path=path, originalname="test_future_stage_case", nodeid=f"remaining[{i}]")
+                 for i in range(2)]
+    critical = SimpleNamespace(path=path, nodeid=_CI_CRITICAL_NODEIDS[0])
+    items = [legacy[0], remaining[0], critical, legacy[1], remaining[1]]
+    assert select(items, "postgres") == items
+    assert select(items, "all", critical_first=True) == items
+    assert select(items, "postgres", critical_first=True) == [critical, *remaining, *legacy]

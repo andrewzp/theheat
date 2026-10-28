@@ -42,6 +42,10 @@
   preserve real reconstruction, exact faults, deadlines and parent HTTP/DB witnesses.
 - Split the larger temperature approval family into fixed fault pairs across
   existing CI groups, preserving every proof/outbox case and all time limits.
+- Match radar-frame expiry to the earlier source-validity refusal while retaining
+  all outbox rollback, original deadline and no-send assertions.
+- Run the remaining stage-revision regressions before other database tests in
+  their existing groups, retaining every case and stable order within cohorts.
 - Match the policy-drift regression to the earlier joint-review refusal while
   retaining every fault injection, rollback and no-send assertion.
 - Verify retained graphic review and completion evidence once within an owned
