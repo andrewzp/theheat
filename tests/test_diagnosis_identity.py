@@ -71,8 +71,13 @@ def load(matrix: dict, names: list[str]) -> list:
 
 
 def usage_semantics(usage: dict) -> dict:
-    """Counted contributions only; input-indexed provenance is compared separately."""
-    return {key: value for key, value in usage.items() if key not in ("sources", "identity_reconciliation")}
+    """Counted contributions only; input-indexed provenance is compared separately.
+
+    Row lists follow the order of the counted inputs; their order is not a contribution.
+    """
+    rows = ("calls", "attempts", "routes", "route_result_lines")
+    return {key: sorted(value, key=lambda row: json.dumps(row, sort_keys=True)) if key in rows else value
+            for key, value in usage.items() if key not in ("sources", "identity_reconciliation")}
 
 
 def test_identity_boundary_counts_each_capture_once_and_quarantines_conflicts(matrix):
@@ -346,3 +351,46 @@ def test_copy_review_and_ratings_join_once_and_hold_conflicting_identities(journ
 def packs_created():
     from tests.test_private_copy_pack import CREATED
     return CREATED
+
+
+# ------------------------------------------------ order invariance
+
+FAMILIES = {
+    "repeated_v1": ["A", "B", "A", "A_copy"],
+    "conflict_v1": ["A", "A_conflict", "B", "A_copy"],
+    "repeated_v2": ["V", "A", "V_copy", "V"],
+    "conflict_v2": ["V", "V_conflict", "A", "V_copy"],
+    "invalid_beside_copies": ["A_invalid", "A", "B", "A_copy"],
+}
+ORDERS = {"given": [0, 1, 2, 3], "reversed": [3, 2, 1, 0], "rotated": [1, 2, 3, 0], "interleaved": [2, 0, 3, 1]}
+
+
+def identity_semantics(identity: dict) -> dict:
+    """Input indexes are provenance; every count, status and claimed manifest must be order-independent."""
+    return {**{k: v for k, v in identity.items() if k != "conflict_groups"},
+            "conflict_groups": [{k: v for k, v in g.items() if k != "inputs"} | {"inputs": len(g["inputs"])}
+                                for g in identity["conflict_groups"]]}
+
+
+@pytest.mark.parametrize("family", sorted(FAMILIES))
+def test_every_order_selects_the_same_contributions(matrix, family):
+    names = FAMILIES[family]
+    seen = []
+    for order in ORDERS.values():
+        archives = load(matrix, [names[i] for i in order])
+        usage, report = archive_usage.archive_usage(archives), diagnose(archives)
+        seen.append({"usage": usage_semantics(usage), "report": report_semantics(report),
+                     "identity": identity_semantics(report["identity_reconciliation"]),
+                     "next_actions": report["next_actions"]})
+        # Provenance keeps every argument and points each duplicate at a counted input of the same capture.
+        rows = [c for c in report["components"] if c["component"] == "archive"]
+        assert len(rows) == len(names)
+        for row in rows:
+            if row["identity"] == "duplicate_not_counted":
+                kept = rows[row["duplicate_of_input"]]
+                assert (kept["identity"], kept["scope_id"], kept["manifest_sha256"]) == (
+                    "counted", row["scope_id"], row["manifest_sha256"])
+    for view in seen[1:]:
+        assert [k for k in view if view[k] != seen[0][k]] == [], family
+        assert [k for k in view["usage"] if view["usage"][k] != seen[0]["usage"][k]] == [], family
+        assert [k for k in view["report"] if view["report"][k] != seen[0]["report"][k]] == [], family

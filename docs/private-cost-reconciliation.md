@@ -212,7 +212,8 @@ When any supplied archive is v2, `archive_usage` adds `routes`, `route_result_li
 **One capture counts once (v1 and v2).** Before any row or denominator, inputs are reconciled by verified scope ID and manifest hash (`identity_reconciliation`):
 - The same path given twice, or a byte-identical copy, is one capture. Later inputs are listed with `duplicate_of_input` and `used: false`, so repeated `--archive` never doubles sends, generations or tokens.
 - Distinct captures always count separately, even with byte-equal requests: a body hash or a caller label never proves two sends are one.
-- One scope ID with different manifests is an unresolved conflict (`identity_conflict_with`, `conflicting_scope_ids`): none of those inputs is used, and nothing is chosen.
+- One scope ID with different manifests is an unresolved conflict (`identity_conflict_with`, `conflicting_scope_ids`, and `conflict_groups` with every claimed manifest): none of those inputs is used, and nothing is chosen.
+- `identity_reconciliation` also reports `status` (`consistent` or `conflict_quarantined`), `supplied_inputs`, `counted_captures`, `invalid_inputs` and `quarantined_inputs`. An invalid input has no verified identity, so it is never a "duplicate" of a valid capture; it stays listed as rejected.
 
 | Route row | Counted as |
 |---|---|
@@ -226,9 +227,14 @@ When any supplied archive is v2, `archive_usage` adds `routes`, `route_result_li
   - Exactly equal lines count once; the others are listed as `duplicate_not_counted`.
   - Any difference (usage, result type, model, missing vs present usage, a value's type) makes every such line `conflict`. None is counted, and `route_conflicts` keeps every source reference. No input order selects a winner.
 - Errored, expired or canceled lines carry no usage.
+- A line whose custom ID is usable but whose classification is malformed (for example `result.type` missing, not a known type, or `result` not an object) keeps that custom ID and its content hash, so it conflicts with any differing line for the same ID; it is `invalid_line` and never counted.
+- A `succeeded` line without a message object is `usage_status: invalid` (`usage_reason: succeeded_result_without_message`) and is not counted; it is never a complete not-applicable row.
+- A malformed provider body is still retained evidence; it does not make the archive's hash chain invalid.
 - A cut tail of an incomplete entity is never a result line.
 - Missing usage stays missing.
-- `route_totals_status` is `complete_for_retained_rows` only without any conflict, evidence gap or unknown usage; otherwise the known subtotals are `incomplete`. Neither label is a system, account or invoice total.
+- `route_totals_status` is `complete_for_retained_rows` only without any conflict, evidence gap, unknown usage or excluded input; otherwise the known subtotals are `incomplete` and `route_totals_unknown_reasons` names why (`result_conflict`, `route_evidence_gap`, `result_line_usage_not_present`, `command_check_usage_not_present`, `identity_conflict_quarantined`, `invalid_input_not_counted`, `archive_incomplete`). A quarantined identity conflict therefore never reads as a complete zero, alone or beside unrelated valid evidence. Neither label is a system, account or invoice total.
+
+**Call-level totals.** `token_totals_status` and `token_totals_unknown_reasons` apply the same rule to the call/attempt `token_totals`: `unknown_send_outcome`, `usage_not_present`, `provider_id_conflict` and the three input reasons above. The reconciliation report carries them in `observed`, with `inputs.identity_reconciliation`; its Markdown states both. `reconcile` exits 1 (`completed_with_gaps`) when an identity conflict is quarantined, and its summary includes the `identity` counts and `token_totals_status`.
 
 **Scenarios.** A named scenario prices none of these rows. Each is listed as `excluded: route_family_not_in_named_scenario`.
 

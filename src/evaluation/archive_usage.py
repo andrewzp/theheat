@@ -11,7 +11,9 @@ One retained capture counts once: inputs are reconciled by verified scope
 identity before any row or denominator, so a repeated path or an exact copy
 adds provenance, never sends. Distinct captures always count separately, even
 with byte-equal requests; different contents claiming one scope identity are
-an unresolved conflict and count nowhere.
+an unresolved conflict and count nowhere. Every total carries a status derived
+from retained rows: anything excluded or unknown leaves it an ``incomplete``
+known partial subtotal, never a complete or zero amount.
 """
 from __future__ import annotations
 

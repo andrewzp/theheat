@@ -217,7 +217,13 @@ weather truth, copy quality, approval or a model result.
   or a held scope. Absence of a wire observation is never proof of `not_sent`. Inspect it
   as it is. Missing historical inputs remain missing.
 - `invalid` means the bytes no longer verify. Keep the copy for diagnosis and
-  never treat it as evidence.
+  never treat it as evidence. An invalid copy exposes no scope identity, so a
+  consumer never counts it as a duplicate of a valid capture.
+- A capture is its scope ID plus manifest hash. Copying a scope directory
+  byte-for-byte keeps that identity, so every consumer counts the copy once.
+  Two exports with one scope ID and different manifests are a conflict that
+  consumers quarantine; neither is chosen. A malformed provider body inside an
+  intact scope is retained evidence, not a broken hash chain.
 - If the private directory's permissions are wrong, the tools refuse it. Fix
   the mode yourself (`chmod 700`/`600`) only if you know why it changed.
 
