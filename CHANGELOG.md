@@ -21,6 +21,8 @@
   retaining complete review, required checks and description size limits.
 - Keep restored-capability test timestamps in the existing fixed-microsecond
   database format, preserving the same corruption cases and 180-second lifetime.
+- Rebalance the complete editor-media test module across existing CI groups,
+  preserving every case and the unchanged job and execution deadlines.
 - Verify retained graphic review and completion evidence once within an owned
   passive dashboard read. Recheck current source, roles and original expiry
   before returning; keep independent command and delivery verification.

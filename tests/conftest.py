@@ -75,7 +75,8 @@ def _ci_postgres_shard(path):
     relative = path.resolve().relative_to(Path(__file__).resolve().parents[1]).as_posix()
     # Keep heavy modules whole while balancing measured CI work. Shards7 and0
     # hit the unchanged 35-minute job limit. Shard8 isolates the complete
-    # temperature-editor module; all other default assignments keep modulo8.
+    # temperature-editor module. Measured editor-media work moves whole from3
+    # to5 after3 hit the same cap; all other defaults keep modulo8.
     assigned = {
         "tests/test_postgres_published_media.py": "2",
         "tests/test_postgres_cost_projection.py": "5",
@@ -84,6 +85,7 @@ def _ci_postgres_shard(path):
         "tests/test_postgres_platform_description.py": "6",
         "tests/test_postgres_temperature_editor_media.py": "8",
         "tests/test_postgres_temperature_delivery.py": "3",
+        "tests/test_postgres_editor_media.py": "5",
     }
     if relative in assigned:
         return assigned[relative]

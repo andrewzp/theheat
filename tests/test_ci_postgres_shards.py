@@ -82,6 +82,7 @@ def test_nine_file_shards_partition_all_modules_and_parameters_without_changing_
                 "tests/test_postgres_platform_description.py": 6,
                 "tests/test_postgres_temperature_editor_media.py": 8,
                 "tests/test_postgres_temperature_delivery.py": 3,
+                "tests/test_postgres_editor_media.py": 5,
             }
             if relative in assigned:
                 assert index == assigned[relative]
@@ -94,6 +95,8 @@ def test_nine_file_shards_partition_all_modules_and_parameters_without_changing_
     assert any(item.path.name == "test_postgres_platform_description.py" for item in shards[6])
     assert {item.path.name for item in shards[8]} == {"test_postgres_temperature_editor_media.py"}
     assert any(item.path.name == "test_postgres_temperature_delivery.py" for item in shards[3])
+    assert any(item.path.name == "test_postgres_editor_media.py" for item in shards[5])
+    assert not any(item.path.name == "test_postgres_editor_media.py" for item in shards[3])
     legacy = [select(items, partition) for partition in ("core", "postgres", "media")]
     assert sorted(id(item) for group in legacy for item in group) == sorted(id(item) for item in select(items, "all"))
     original = [_ci_postgres_shard(path) for path in files]
