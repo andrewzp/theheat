@@ -1009,6 +1009,16 @@ def test_target_test_is_the_original_after_removing_only_the_diagnostic_spans():
     tree, removed = strip_spans(ast.parse(TARGET_FILE.read_text(encoding="utf-8")))
     assert removed == {"imports": 1, "spans": EXPECTED_SPANS}
     assert set(EXPECTED_SPANS) == set(w.BODY_PHASES)
+    # The original four owner-corruption connections inherited autocommit=True,
+    # so SET LOCAL expired before each write. Reverse ONLY the reviewed explicit
+    # transaction setup when comparing with the unchanged historical AST digest.
+    original = ast.parse('psycopg.connect(**case["params"])', mode="eval").body
+    repaired = ast.parse('psycopg.connect(**dict(case["params"], autocommit=False))', mode="eval").body
+    connections = [item for node in ast.walk(tree) if isinstance(node, ast.With)
+                   for item in node.items if ast.dump(item.context_expr) == ast.dump(repaired)]
+    assert len(connections) == 4
+    for item in connections:
+        item.context_expr = original
     assert hashlib.sha256(ast.dump(tree).encode()).hexdigest() == ORIGINAL_TARGET_AST_SHA256
 
 

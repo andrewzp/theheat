@@ -276,8 +276,10 @@ def test_compact_owned_get_real_proofs_fresh_operations_and_restored_faults(
             origin_key = (SOURCE_NAMESPACE, fingerprint(dict(draft_id=case["draft_id"])))
             origin = admin(case["params"], "SELECT * FROM theheat_projection.versions WHERE namespace=%s AND snapshot_id=%s", origin_key)
             assert len(origin) == 1
+            # Fixture params autocommit by default. Keep SET LOCAL and each
+            # privileged damaged-restore write in the same explicit transaction.
             try:
-                with psycopg.connect(**case["params"]) as c:
+                with psycopg.connect(**dict(case["params"], autocommit=False)) as c:
                     c.execute("SET LOCAL session_replication_role='replica'")
                     c.execute("DELETE FROM theheat_projection.versions WHERE namespace=%s AND snapshot_id=%s", origin_key)
                 missing_origin_rows = media.all_application_rows(case["params"])
@@ -291,7 +293,7 @@ def test_compact_owned_get_real_proofs_fresh_operations_and_restored_faults(
                     assert media.all_application_rows(case["params"]) == missing_origin_rows
                     assert path["trace"] == [] and not path["accepted"]
             finally:
-                with psycopg.connect(**case["params"]) as c:
+                with psycopg.connect(**dict(case["params"], autocommit=False)) as c:
                     c.execute("SET LOCAL session_replication_role='replica'")
                     c.execute("INSERT INTO theheat_projection.versions VALUES(%s,%s,%s,%s,%s,%s)", origin[0])
             assert_passive(case, path, before, history)
@@ -410,7 +412,7 @@ def test_compact_owned_get_real_proofs_fresh_operations_and_restored_faults(
                 original = admin(case["params"], f"SELECT {column} FROM {table} WHERE grant_id=%s", (grant,))[0][0]
                 assert original != wrong
                 try:
-                    with psycopg.connect(**case["params"]) as c:
+                    with psycopg.connect(**dict(case["params"], autocommit=False)) as c:
                         c.execute("SET LOCAL session_replication_role='replica'")
                         c.execute(f"UPDATE {table} SET {column}=%s WHERE grant_id=%s", (wrong, grant))
                     corrupted = media.all_application_rows(case["params"])
@@ -423,7 +425,7 @@ def test_compact_owned_get_real_proofs_fresh_operations_and_restored_faults(
                     assert media.all_application_rows(case["params"]) == corrupted
                     assert path["trace"] == [] and not path["accepted"]
                 finally:
-                    with psycopg.connect(**case["params"]) as c:
+                    with psycopg.connect(**dict(case["params"], autocommit=False)) as c:
                         c.execute("SET LOCAL session_replication_role='replica'")
                         c.execute(f"UPDATE {table} SET {column}=%s WHERE grant_id=%s", (original, grant))
                 assert_passive(case, path, before, history)

@@ -6,6 +6,8 @@
 
 - Add fixed body-phase diagnostics to the selected parked-media CI case, with
   mechanical preservation of original assertions, operations and deadlines.
+- Keep owner-corruption fixture writes in explicit transactions so their local
+  setting survives through the write; preserve runtime immutability and checks.
 - Retain bounded code-only delivery refusal diagnostics in offline fixture
   failures while preserving original callbacks, assertions and deadlines.
 - Verify retained graphic review and completion evidence once within an owned
