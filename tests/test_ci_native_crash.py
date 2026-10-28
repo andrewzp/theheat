@@ -25,7 +25,9 @@ def facade(tmp_path, monkeypatch):
 
     def read(path, *args, **kwargs):
         if str(path) == "/proc/sys/kernel/core_pattern":
-            return state["pattern"] + "\n"
+            pattern = state["pattern"]
+            assert isinstance(pattern, str)
+            return pattern + "\n"
         return original_read(path, *args, **kwargs)
 
     def run(command, **kwargs):
@@ -117,6 +119,7 @@ def test_missing_debugger_install_is_bounded_and_only_requests_gdb(facade, monke
 
 
 def test_prepare_preserves_existing_plugins_and_exports_only_to_pg2(facade, monkeypatch, capsys):
+    # Retain this original PG2 node; the separate PG8 cases cover the new scope.
     _, environment, _, _, prepare, _ = facade
     monkeypatch.setenv("PYTEST_PLUGINS", "invented_existing")
     directory = prepare()
@@ -313,11 +316,43 @@ def test_original_suite_string_and_matrix_remain_exact():
     assert suite["run"] == 'python -m pytest tests/ -v -m "not voice_replay" --ci-partition=${{ matrix.partition }} --ci-postgres-shard=${{ matrix.postgres-shard }} --ci-critical-first --maxfail=1 --durations=20 -o faulthandler_timeout=300'
     assert "continue-on-error" not in suite
     assert suite["env"] == {"THEHEAT_TEST_POSTGRES": "1", "THEHEAT_POSTGRES_BINDIR": "/usr/lib/postgresql/17/bin"}
-    prepare = next(step for step in job["steps"] if step.get("name") == "Prepare private PG2 crash evidence")
-    assert prepare["if"] == "matrix.partition == 'postgres' && matrix.postgres-shard == '2'"
+    prepare = next(step for step in job["steps"] if step.get("name") == "Prepare private PG2/PG8 crash evidence")
+    assert prepare["if"] == "matrix.partition == 'postgres' && (matrix.postgres-shard == '2' || matrix.postgres-shard == '8')"
     assert prepare["timeout-minutes"] == 3
-    cleanup = next(step for step in job["steps"] if step.get("name") == "Observe and remove private PG2 crash evidence")
-    assert cleanup["if"].startswith("always() && matrix.partition == 'postgres' && matrix.postgres-shard == '2'")
+    cleanup = next(step for step in job["steps"] if step.get("name") == "Observe and remove private PG2/PG8 crash evidence")
+    assert cleanup["if"] == "always() && matrix.partition == 'postgres' && (matrix.postgres-shard == '2' || matrix.postgres-shard == '8') && env.THEHEAT_CI_CORE_DIR != ''"
     assert cleanup["timeout-minutes"] == 2
     assert cleanup["env"]["THEHEAT_CI_TEST_OUTCOME"] == "${{ steps.offline-suite.outcome }}"
     assert workflow["jobs"]["test"]["needs"] == "test-partition"
+
+
+@pytest.mark.parametrize("outcome", ["success", "failure"])
+def test_pg8_records_its_owned_interpreter_and_keeps_original_outcome(facade, capsys, outcome):
+    _, _, calls, _, prepare, _ = facade
+    directory = prepare()
+    config = types.SimpleNamespace(getoption=lambda name: {
+        "--ci-partition": "postgres", "--ci-postgres-shard": "8"}[name])
+    observer.pytest_configure(config)
+    identity = observer._read(directory / "interpreter.json")
+    assert identity == {"pid": observer.os.getpid(), "executable": str(Path(sys.executable).resolve())}
+    (directory / f"core.{identity['pid']}").write_bytes(b"invented, not a core")
+    assert observer.finish(directory, outcome) == 0
+    debugger = [command for command, _ in calls if isinstance(command, list)
+                and command[0] == "/invented/gdb"]
+    assert len(debugger) == (1 if outcome == "failure" else 0)
+    assert not directory.exists()
+    assert rows(capsys)[-1] == {"status": "finished", "test_outcome": outcome, "cleanup_failed": False}
+
+
+@pytest.mark.parametrize("shard", ["0", "1", "4", "5", "6", "7", "all"])
+def test_unselected_postgres_shards_cannot_record_a_crash_identity(facade, capsys, shard):
+    _, _, calls, _, prepare, _ = facade
+    directory = prepare()
+    config = types.SimpleNamespace(getoption=lambda name: {
+        "--ci-partition": "postgres", "--ci-postgres-shard": shard}[name])
+    observer.pytest_configure(config)
+    assert not (directory / "interpreter.json").exists()
+    assert not any(name == "limit" for name, _ in calls)
+    assert observer.finish(directory, "skipped") == 0
+    assert not directory.exists()
+    assert rows(capsys)[-1]["test_outcome"] == "skipped"

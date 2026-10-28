@@ -23,6 +23,8 @@
   database format, preserving the same corruption cases and 180-second lifetime.
 - Rebalance the complete editor-media test module across existing CI groups,
   preserving every case and the unchanged job and execution deadlines.
+- Extend the bounded, private CI crash observer to the temperature-editor group;
+  preserve test results and deadlines and delete raw memory after observation.
 - Verify retained graphic review and completion evidence once within an owned
   passive dashboard read. Recheck current source, roles and original expiry
   before returning; keep independent command and delivery verification.

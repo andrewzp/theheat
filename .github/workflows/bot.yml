@@ -198,8 +198,8 @@ jobs:
       # `voice_replay` tests live in tests/voice_regression/ and call the
       # real Anthropic writer. They run in voice-regression.yml (daily
       # canary + weekly full + writer-path PR gate), not in this suite.
-      - name: Prepare private PG2 crash evidence
-        if: matrix.partition == 'postgres' && matrix.postgres-shard == '2'
+      - name: Prepare private PG2/PG8 crash evidence
+        if: matrix.partition == 'postgres' && (matrix.postgres-shard == '2' || matrix.postgres-shard == '8')
         timeout-minutes: 3
         run: python scripts/ci_native_crash.py prepare
 
@@ -209,8 +209,8 @@ jobs:
           THEHEAT_TEST_POSTGRES: "1"
           THEHEAT_POSTGRES_BINDIR: /usr/lib/postgresql/17/bin
 
-      - name: Observe and remove private PG2 crash evidence
-        if: always() && matrix.partition == 'postgres' && matrix.postgres-shard == '2' && env.THEHEAT_CI_CORE_DIR != ''
+      - name: Observe and remove private PG2/PG8 crash evidence
+        if: always() && matrix.partition == 'postgres' && (matrix.postgres-shard == '2' || matrix.postgres-shard == '8') && env.THEHEAT_CI_CORE_DIR != ''
         timeout-minutes: 2
         run: python scripts/ci_native_crash.py finish
         env:

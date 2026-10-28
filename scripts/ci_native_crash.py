@@ -1,6 +1,6 @@
 """Observe a CI pytest SIGSEGV without replaying it or publishing core memory.
 
-Only the held Linux PG2 job loads this CI plugin. The original pytest command,
+Only the held Linux PG2 and PG8 jobs load this CI plugin. The original pytest command,
 output, 300-second diagnostic and original job deadline remain unchanged.
 Core files stay in a private runner directory and are deleted after one bounded
 GDB read. Only sanitized function names, frame counts and statuses reach stdout;
@@ -121,7 +121,7 @@ def _directory(path: Path) -> None:
 def prepare(runner_temp: Path, environment_file: Path) -> None:
     """Publish restoration information BEFORE attempting a kernel mutation."""
     if shutil.which("gdb") is None:
-        # This CI-only prepare step is guarded to PG2 in the workflow. Keep the
+        # This CI-only prepare step is guarded to PG2/PG8 in the workflow. Keep the
         # original three native dependency steps and their exact gates intact.
         subprocess.run([
             "sudo", "--non-interactive", "apt-get", "-o", "Acquire::Retries=2",
@@ -152,12 +152,12 @@ def prepare(runner_temp: Path, environment_file: Path) -> None:
 
 
 def pytest_configure(config: Any) -> None:
-    """Record only this actual PG2 interpreter; never wrap or replay a test."""
+    """Record only this selected interpreter; never wrap or replay a test."""
     if sys.platform != "linux" or os.environ.get("GITHUB_ACTIONS") != "true":
         return
     try:
         selected = (config.getoption("--ci-partition") == "postgres"
-                    and config.getoption("--ci-postgres-shard") == "2")
+                    and config.getoption("--ci-postgres-shard") in {"2", "8"})
     except ValueError:
         return  # A nested pytest need not load this repository's conftest.
     if not selected:
