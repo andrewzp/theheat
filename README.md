@@ -1,25 +1,36 @@
 # The Heat
 
-The Heat is a climate-events Twitter/X and Bluesky bot. It polls public climate,
+The Heat is an extreme-weather publication built for Twitter/X. Bluesky rollout
+is deferred. It polls public climate,
 weather, ocean, fire, air-quality, and disaster sources; scores genuinely unusual
 signals; writes draft posts through the two-bot editorial pipeline; and stores
 state in a GitHub Gist-backed approval queue reviewed from the Next.js dashboard.
 
-## Quickstart
+## Local development
+
+Use Python 3.12 and Node.js 24, matching the required CI profiles. Start in a
+local environment without production credentials or a copied production state.
+The ordinary tests use fixtures; database, native graphics and paid model
+workflows have separate requirements.
 
 ```bash
-python3 -m venv .venv
+python3.12 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt -r requirements-graphics.txt
-python -m pytest
-python -m mypy src/
+python -m pip install -r requirements.txt
+python -m pytest tests/test_editorial_revisions.py tests/test_draft_save_retention.py -q
 cd dashboard
-npm install
+npm ci
 npm test
 ```
 
-`python -m pytest` automatically excludes `voice_replay` tests. Those live
-writer replays call paid APIs and are run only by the voice-regression workflow.
+This is a development smoke check, not the complete release gate. Follow the
+[local development guide](docs/local-development.md) for the full checks,
+optional native/database profiles and their limits. No provider key, Gist token,
+platform login or production database is needed for this smoke check.
+
+`python -m pytest` excludes `voice_replay` tests by default. Those tests call paid
+APIs; ordinary development does not select them. Do not run a scheduled bot or
+writer entry point to test installation.
 
 ## Workflows
 
@@ -103,7 +114,9 @@ remains unknown. This value changes no authentication or publication setting.
 
 - `PIPELINE.md`: current source-to-draft flow and stage glossary.
 - `BRIEFING.md`: operator-level status and context.
-- `docs/handoffs/README.md`: current resume handoff plus dated session records.
+- `docs/upgrade-progress.md`: original upgrade packages and acceptance limits.
+- `docs/local-development.md`: fixture-based setup and validation profiles.
+- `docs/handoffs/README.md`: dated session history and its reading convention.
 - `docs/runbooks/source-redundancy.md`: how backup-served sources, `served_via`,
   evidence grades, and remaining unbacked sources work.
 - `docs/source-to-writer-evidence-contract.md`: what facts the writer can see
@@ -113,12 +126,19 @@ remains unknown. This value changes no authentication or publication setting.
 - `src/orchestrator/`: scheduled modes, source runners, triage, draft saving,
   posting, and finalize hooks.
 - `src/two_bot/`: writer, fact-check, critic, prompts, and bundle builders.
-- `docs/plans/`: dated implementation plans. The active one is the **Throughput
-  Initiative** (`2026-06-16-throughput-initiative-EXECUTION.md` + phases A-D),
-  aiming to move from ~6 drafts/week toward 3-5 outstanding tweets/day. Each phase
-  is flag-gated default-OFF and carries a codex outside review.
+- `docs/plans/`: dated implementation plans. The
+  [product priorities](docs/plans/2026-09-09-product-priorities.md) and
+  [upgrade acceptance ledger](docs/upgrade-progress.md) describe the upgrade.
+  The June throughput initiative is historical context; a dated plan or handoff
+  does not authorize enabling a source, paid lane or publisher.
 
-## Current Operations
+## Operating behavior and dated background
+
+The notes below describe implemented behavior and dated changes, not current
+credential health, source freshness or effective deployment settings. Read those
+from the dashboard's timestamped operating evidence and the
+[production-pause runbook](docs/runbooks/production-pause.md). Do not infer
+activation from an old handoff or a configured workflow schedule.
 
 - The non-US world temperature half (`provider=both`) is backed by an in-run
   threshold cache (`world_threshold_cache.json`) since 2026-06-26, mirroring the US
