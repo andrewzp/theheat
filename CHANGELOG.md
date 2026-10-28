@@ -36,6 +36,8 @@
   preserve the production environment refusal and all delivery assertions.
 - Verify an expired original capability returns its exact refusal before any
   transport entry, with no request or state change, without assuming a send flag.
+- Match the policy-drift regression to the earlier joint-review refusal while
+  retaining every fault injection, rollback and no-send assertion.
 - Verify retained graphic review and completion evidence once within an owned
   passive dashboard read. Recheck current source, roles and original expiry
   before returning; keep independent command and delivery verification.

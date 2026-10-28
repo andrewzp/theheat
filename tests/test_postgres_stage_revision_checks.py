@@ -1381,8 +1381,11 @@ def assert_nonradar_approval_final_refusal(
                 authority.consume(resolver, command_id=command_id, now=at)
             expected_code = {"expiry": "media_completion_expired", "source": "media_source_not_allowlisted",
                 "editor": "forbidden", "publisher": "forbidden", "policy": "editorial_policy_changed"}[fault]
-            if source_file is not None and boundary == "proof" and fault == "policy":
-                expected_code = "ghcn_execution_context_changed"
+            if boundary == "proof" and fault == "policy":
+                # Enrollment rechecks the current joint review before the final
+                # policy fence; GHCN first rechecks its own source context.
+                expected_code = ("ghcn_execution_context_changed" if source_file is not None
+                                 else "joint_media_review_obsolete")
             assert refused.value.code == expected_code and armed == [True]
     finally:
         if source_file is None:
