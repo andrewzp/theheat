@@ -12,6 +12,9 @@
   retaining its assertions and the single-threaded replay safeguard.
 - Retain bounded code-only delivery refusal diagnostics in offline fixture
   failures while preserving original callbacks, assertions and deadlines.
+- On a PG2 CI interpreter crash, retain bounded native function names from one
+  private postmortem, delete core memory and preserve the original test result,
+  diagnostic timer and job deadline. No diagnostic replay or production change.
 - Verify retained graphic review and completion evidence once within an owned
   passive dashboard read. Recheck current source, roles and original expiry
   before returning; keep independent command and delivery verification.

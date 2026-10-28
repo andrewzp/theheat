@@ -135,7 +135,11 @@ jobs:
         if: matrix.partition != 'core'
         timeout-minutes: 5
         run: |
-          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 install -y --no-install-recommends postgresql-17 postgresql-client-17 poppler-utils
+          packages=(postgresql-17 postgresql-client-17 poppler-utils)
+          if [[ "${{ matrix.partition }}" == postgres && "${{ matrix.postgres-shard }}" == 2 ]]; then
+            packages+=(gdb)
+          fi
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 install -y --no-install-recommends "${packages[@]}"
 
       - name: Verify native graphics dependency capture
         if: matrix.partition == 'media'
@@ -198,10 +202,22 @@ jobs:
       # `voice_replay` tests live in tests/voice_regression/ and call the
       # real Anthropic writer. They run in voice-regression.yml (daily
       # canary + weekly full + writer-path PR gate), not in this suite.
+      - name: Prepare private PG2 crash evidence
+        if: matrix.partition == 'postgres' && matrix.postgres-shard == '2'
+        run: python scripts/ci_native_crash.py prepare
+
       - run: python -m pytest tests/ -v -m "not voice_replay" --ci-partition=${{ matrix.partition }} --ci-postgres-shard=${{ matrix.postgres-shard }} --ci-critical-first --maxfail=1 --durations=20 -o faulthandler_timeout=300
+        id: offline-suite
         env:
           THEHEAT_TEST_POSTGRES: "1"
           THEHEAT_POSTGRES_BINDIR: /usr/lib/postgresql/17/bin
+          PYTEST_PLUGINS: ${{ matrix.partition == 'postgres' && matrix.postgres-shard == '2' && 'scripts.ci_native_crash' || '' }}
+
+      - name: Observe and remove private PG2 crash evidence
+        if: always() && matrix.partition == 'postgres' && matrix.postgres-shard == '2' && env.THEHEAT_CI_CORE_DIR != ''
+        run: python scripts/ci_native_crash.py finish
+        env:
+          THEHEAT_CI_TEST_OUTCOME: ${{ steps.offline-suite.outcome }}
 
       - name: SQLite backend smoke
         if: matrix.partition == 'core'
