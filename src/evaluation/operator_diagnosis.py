@@ -471,6 +471,7 @@ def _routes_section(archives: list[VerifiedArchive]) -> dict:
             "identity_reconciliation": usage["identity_reconciliation"],
             "result_conflicts": usage.get("route_conflicts", []),
             "route_totals_status": usage.get("route_totals_status"),
+            "route_totals_unknown_reasons": usage.get("route_totals_unknown_reasons", []),
             "limits": ["A batch acknowledgment is never completion, usage or billing evidence.",
                        "Batch status reads are not model generations; results usage counts once per custom ID.",
                        "Differing retained results for one custom ID are conflicts with every source; none is chosen.",

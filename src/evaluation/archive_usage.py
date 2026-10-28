@@ -126,6 +126,24 @@ def _call_row(call: CallRecord) -> dict:
 # Route families (schema v2): what each operation is, and is NOT, evidence of.
 ROUTE_ROLES = {"batch_submit": "batch_submission_acknowledgment", "batch_metadata": "batch_status_read",
                "batch_results": "batch_results_read", "command_check": "command_check_generation"}
+RESULT_TYPES = ("succeeded", "errored", "canceled", "expired")
+
+
+def input_unknown_reasons(sources: list[dict]) -> list[str]:
+    """Why supplied inputs leave every aggregate incomplete, from verified source rows only.
+
+    A quarantined identity conflict or an invalid input contributes nothing, so a
+    total without it is a known partial subtotal, never a complete zero.
+    """
+    reasons = set()
+    for source in sources:
+        if source["status"] == "invalid":
+            reasons.add("invalid_input_not_counted")
+        elif source.get("identity_conflict_with"):
+            reasons.add("identity_conflict_quarantined")
+        elif source.get("used") and source["status"] != "complete":
+            reasons.add("archive_incomplete")  # A complete exact copy, when supplied, is the one counted.
+    return sorted(reasons)
 
 
 def _route_time(archive: VerifiedArchive, route: int, kind: str) -> str | None:
@@ -191,22 +209,29 @@ def _result_line_rows(archive: VerifiedArchive, route: RouteRecord) -> list[dict
                 "route_evidence_gap": route.evidence_gap}
         try:
             value = strict_json_loads(line, allow_floats=True)
-            custom = value.get("custom_id")
-            result = value.get("result") or {}
-            kind = result.get("type")
-            if type(custom) is not str or kind not in ("succeeded", "errored", "canceled", "expired"):
-                raise ValueError("result_shape")
-        except (ValueError, UnicodeError, AttributeError):
+        except (ValueError, UnicodeError):
+            value = None
+        custom = value.get("custom_id") if type(value) is dict else None
+        if type(custom) is not str:
             rows.append({**base, "custom_id": None, "result_type": None, "counted": False,
                          "usage_status": "invalid_line"})
             continue
+        result = value.get("result")
+        kind = result.get("type") if type(result) is dict else None
         # The full retained line content, not only its identity, decides duplicate vs conflict.
-        row = {**base, "custom_id": custom, "result_type": kind, "counted": kind == "succeeded",
-               "content_sha256": hashlib.sha256(json.dumps(value, sort_keys=True, ensure_ascii=False,
-                                                           separators=(",", ":")).encode()).hexdigest()}
-        if kind != "succeeded" or not isinstance(result.get("message"), dict):
+        row = {**base, "custom_id": custom, "result_type": kind if kind in RESULT_TYPES else None,
+               "counted": False, "content_sha256": hashlib.sha256(json.dumps(
+                   value, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode()).hexdigest()}
+        if kind not in RESULT_TYPES:
+            # A usable ID keeps its identity and content for conflict handling; no usage is read.
+            row["usage_status"] = "invalid_line"
+        elif kind != "succeeded":
             row["usage_status"] = "not_applicable_result_type"
+        elif type(result.get("message")) is not dict:
+            # A succeeded classification without a message is malformed usage, never "not applicable".
+            row.update(usage_status="invalid", usage_reason="succeeded_result_without_message")
         else:
+            row["counted"] = True
             message = result["message"]
             # Derived from the parsed result line, never labeled as a raw provider entity.
             extracted = retained_usage.extract(json.dumps(message, sort_keys=True).encode(), provider="anthropic",
@@ -252,7 +277,7 @@ def _resolve_lines(lines: list[dict]) -> list[dict]:
     return conflicts
 
 
-def _route_usage(archives: list[VerifiedArchive]) -> dict:
+def _route_usage(archives: list[VerifiedArchive], unknown_inputs: list[str]) -> dict:
     routes: list[dict] = []
     lines: list[dict] = []
     for archive in archives:
@@ -291,16 +316,22 @@ def _route_usage(archives: list[VerifiedArchive]) -> dict:
         "incomplete_route_entities": sum(1 for r in routes if r["entity_complete"] is False),
         "routes_with_evidence_gap": sum(1 for r in routes if r["evidence_gap"] is not None),
     }
-    # Known subtotals stay labeled: any conflict, gap or unknown usage leaves them incomplete.
-    unknown = (conflicts or any(r["evidence_gap"] is not None for r in routes
-                                if r["family"] in ("batch_results", "command_check"))
-               or any(r["usage_status"] not in ("present", "not_applicable_result_type", "duplicate_not_counted")
-                      or r.get("invalid_fields") for r in lines)
-               or any(r["usage_status"] != "present" or r.get("invalid_fields")
-                      for r in routes if r["family"] == "command_check" and r["physical_send_observed"]))
+    # Known subtotals stay labeled: any conflict, gap, unknown usage or excluded input leaves them incomplete.
+    unknown = set(unknown_inputs)
+    if conflicts:
+        unknown.add("result_conflict")
+    if any(r["evidence_gap"] is not None for r in routes if r["family"] in ("batch_results", "command_check")):
+        unknown.add("route_evidence_gap")
+    if any(r["usage_status"] not in ("present", "not_applicable_result_type", "duplicate_not_counted")
+           or r.get("invalid_fields") for r in lines):
+        unknown.add("result_line_usage_not_present")
+    if any(r["usage_status"] != "present" or r.get("invalid_fields")
+           for r in routes if r["family"] == "command_check" and r["physical_send_observed"]):
+        unknown.add("command_check_usage_not_present")
     return {"routes": routes, "route_result_lines": lines, "route_denominators": denominators,
             "route_conflicts": conflicts,
             "route_totals_status": "incomplete" if unknown else "complete_for_retained_rows",
+            "route_totals_unknown_reasons": sorted(unknown),
             "route_token_totals": [totals[key] for key in sorted(totals)]}
 
 
@@ -378,7 +409,7 @@ def archive_usage(archives: list[VerifiedArchive]) -> dict:
               "scope": "Only calls retained in the supplied archives; not an account or invoice total."}
     if any(archive.schema == SCHEMA_V2 and archive.status != "invalid" for archive in archives):
         # Route families appear only for explicit v2 archives; v1-only output is unchanged.
-        result.update(_route_usage(used))
+        result.update(_route_usage(used, input_unknown_reasons(sources)))
     return result
 
 
