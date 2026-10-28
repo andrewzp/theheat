@@ -46,6 +46,84 @@ def retained(case, identity, *, at=editor.AT):
     return case["store"].check_execution("read", {"check_set_id": identity}, now=utc_text(at))
 
 
+@pytest.mark.parametrize("admitted", ["modis"], indirect=True)
+def test_actual_protocol2_seal_removed_between_begin_passes_rolls_back_before_attempt(
+    admitted, core, tmp_path, monkeypatch
+):
+    """Real owner-corrupted restore, not a runtime-role write or a send.
+
+    MODIS is the smallest genuine fixture for this transaction boundary. The
+    original compact-temperature journey separately exercises temperature reuse;
+    this case does not claim a temperature calculation hit or a timing outcome.
+    """
+    import psycopg
+    from src.commands import postgres_delivery as domain
+    from src.posting.delivery_receipts import descriptor
+    from src.posting.local_delivery import SCOPE
+
+    case, authority = admitted, admitted["store"]
+    _, png = editor.prepare_and_attach(case)
+    core[2].initialize_delivery(now=editor.AT)
+    delivery.configure(authority, tmp_path, dict(
+        schema_version=2, platform_profile="credentialless-loopback-v1", scope=SCOPE,
+        invented=True, instance_id=str(uuid4()), origin="http://127.0.0.1:1",
+        routes_version=1, actor="did:plc:aaaaaaaaaaaaaaaaaaaaaaaa"))
+    delivery.bind_platform(case, monkeypatch)
+    identity = editor.view(case)["check_set_id"]
+    assert_protocol(authority, identity)
+    _, parked = delivery.park(case)
+    assert parked["status"] == "applied", parked
+    intent = parked["delivery"]["intent_id"]
+    before = editor.all_application_rows(core[3])
+    assert admin(core[3], "SELECT count(*) FROM theheat_delivery.attempts") == [(0,)]
+    assert admin(core[3], "SELECT count(*) FROM theheat_delivery.leases") == [(0,)]
+
+    # The normal runtime cannot remove an immutable stage seal.
+    with pytest.raises(psycopg.Error):
+        with authority.projections._connection(writing=True) as c:
+            c.execute("DELETE FROM theheat_checks.stage_seals WHERE check_set_id=%s", (identity,))
+    assert editor.all_application_rows(core[3]) == before
+    lease = dict(owner="invented-seal-boundary", fence=1,
+                 expires_at=utc_text(editor.AT + timedelta(seconds=domain.LEASE_SECONDS)))
+    request = descriptor("bluesky", "upload", "*/*", png)
+    roles = []
+    with psycopg.connect(**dict(core[3], autocommit=False)) as c:
+        authority._validate(c)
+        domain.validate(c, authority.environment)
+        authority._pointer(c, lock=True)
+        value = domain.read(c, intent)
+        def resolve(subject):
+            roles.append(subject)
+            if len(roles) == 7:
+                # Deliberately privileged owner corruption in this uncommitted
+                # transaction. Ordinary runtime immutability was checked above.
+                c.execute("SET LOCAL session_replication_role='replica'")
+                removed = c.execute("DELETE FROM theheat_checks.stage_seals "
+                    "WHERE check_set_id=%s AND stage='deterministic' RETURNING grant_id", (identity,)).fetchall()
+                assert len(removed) == 1
+            return candidate.resolve(subject)
+        with pytest.raises(checks.checks.CheckJournalError, match="stage_seal_required"):
+            domain.begin(authority, c, value, "bluesky", "upload", lease, request, png, resolve, editor.AT)
+        assert len(roles) == 11
+        assert c.execute("SELECT count(*) FROM theheat_delivery.attempts").fetchone() == (0,)
+        assert c.execute("SELECT count(*) FROM theheat_delivery.leases").fetchone() == (0,)
+        c.rollback()
+    assert editor.all_application_rows(core[3]) == before
+
+    # Rollback restores eligibility for an independent connection/complete read.
+    with authority.projections._connection(writing=True) as c:
+        authority._validate(c)
+        domain.validate(c, authority.environment)
+        authority._pointer(c, lock=True)
+        value = domain.read(c, intent)
+        grant = domain.begin(authority, c, value, "bluesky", "upload", lease, request, png,
+                             candidate.resolve, editor.AT)
+        assert grant["dispatch_granted"] is True
+        assert c.execute("SELECT count(*) FROM theheat_delivery.attempts").fetchone() == (1,)
+        c.rollback()
+    assert editor.all_application_rows(core[3]) == before
+
+
 def begin_case(case):
     editor.prepare_and_attach(case)
     command, identity, packet = editor.request_revision(case)

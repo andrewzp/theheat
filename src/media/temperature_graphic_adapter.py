@@ -6,9 +6,13 @@ again, approve tweet text, or grant posting approval.
 """
 from __future__ import annotations
 
+from contextlib import contextmanager
+from contextvars import ContextVar
+from copy import deepcopy
 from datetime import date, timedelta
 import json
 import re
+import threading
 
 from src.data.ghcn import GHCN_SOURCE_PRODUCT, MIN_ARCHIVE_YEARS, RECORD_MARGIN_C, record_comparison_qualified
 from src.data.temperature_evidence import finite, fingerprint as source_fingerprint
@@ -58,8 +62,12 @@ def _count(value):
     return type(value) is int and value >= 0
 
 
-def _qualified(bundle, expected_sha):
+def _qualified_value(bundle, expected_sha):
     snapshot = story_bundle_snapshot(bundle)
+    return _qualified_snapshot(bundle, snapshot, expected_sha)
+
+
+def _qualified_snapshot(bundle, snapshot, expected_sha):
     _require(_sha(expected_sha) and fingerprint(snapshot) == expected_sha, "obsolete input bundle binding")
     _require(bundle.signal_kind in _KINDS, "unsupported signal; only individual GHCN daily extrema are supported")
     direction, tier = _KINDS[bundle.signal_kind]
@@ -240,6 +248,106 @@ class _StoredBundle:
 
     def to_dict(self):
         return self.snapshot
+
+
+class _RetainedCalculation:
+    """One reader's pure retained-input calculation, never a current proof.
+
+    Only serialized bundle values enter this slot. Roles, policies, files, SQL,
+    draft/review decisions and clocks are deliberately outside it. Each reader
+    owns a new slot; even another reader on the same connection starts empty.
+    """
+
+    def __init__(self):
+        self.owner = threading.get_ident()
+        self.open = True
+        self.key: tuple | None = None
+        self.value: dict | None = None
+
+    def close(self):
+        self.open = False
+        self.key = self.value = None
+
+
+_RETAINED_CALCULATION: ContextVar[_RetainedCalculation | None] = ContextVar(
+    "temperature_retained_calculation", default=None)
+
+
+@contextmanager
+def _retained_calculation_scope():
+    """Private lexical scope: no caller-provided values or authority token."""
+    calculation = _RetainedCalculation()
+    token = _RETAINED_CALCULATION.set(calculation)
+    try:
+        yield
+    finally:
+        calculation.close()
+        _RETAINED_CALCULATION.reset(token)
+
+
+def _plain_json(value):
+    # JSON serialization alone conflates tuples/lists and non-string keys.
+    # Those and user-defined objects retain the original uncached execution.
+    if type(value) is dict:
+        return all(type(k) is str and _plain_json(v) for k, v in value.items())
+    if type(value) is list:
+        return all(_plain_json(v) for v in value)
+    return type(value) in (str, int, float, bool, type(None))
+
+
+def _calculation_key(bundle, expected_sha):
+    if type(bundle) is not _StoredBundle or type(expected_sha) is not str:
+        return None
+    try:
+        if not _plain_json(bundle.snapshot):
+            return None
+        raw = json.dumps(bundle.snapshot, allow_nan=False, ensure_ascii=False,
+                         separators=(",", ":")).encode("utf-8")
+        if len(raw) > 1_000_000:
+            return None
+        # Keep exact bytes, not fingerprint(): fingerprint normalizes numeric
+        # representations which have different scientific type constraints.
+        implementation = (_qualified_value, _qualified_snapshot, story_bundle_snapshot, audit_story_bundle,
+            record_comparison_qualified, source_fingerprint, fingerprint, finite,
+            json_default, _time, _require, _sha, _count,
+            _StoredBundle.to_dict, _StoredBundle.__getattr__)
+        constants = json.dumps([ADAPTER_VERSION, GHCN_SOURCE_PRODUCT, MIN_ARCHIVE_YEARS,
+            RECORD_MARGIN_C, _KINDS,
+            getattr(record_comparison_qualified, "__globals__", {}).get("GHCN_SOURCE_PRODUCT")],
+            allow_nan=False)
+        return raw, expected_sha, implementation, constants
+    except (ValueError, TypeError, UnicodeError, OverflowError, RecursionError):
+        # Key preparation must never replace the original refusal or its order.
+        return None
+
+
+def _qualified(bundle, expected_sha):
+    calculation = _RETAINED_CALCULATION.get()
+    if calculation is None or not calculation.open or calculation.owner != threading.get_ident():
+        return _qualified_value(bundle, expected_sha)
+    # The complete P05 audit, including its dynamically imported validators,
+    # still runs on EVERY use before the reusable arithmetic/projection work.
+    # No validator verdict, dynamic domain guard or input serialization is cached.
+    try:
+        snapshot = story_bundle_snapshot(bundle)
+    except Exception:
+        calculation.key = calculation.value = None
+        raise
+    key = _calculation_key(bundle, expected_sha)
+    if key is not None and calculation.key == key:
+        return deepcopy(calculation.value)
+    calculation.key = calculation.value = None
+    result = _qualified_snapshot(bundle, snapshot, expected_sha)
+    # No failure is retained. A mutation during calculation also cannot seed a
+    # later hit. Retain a detached output so a caller cannot alter the slot.
+    if key is not None and _calculation_key(bundle, expected_sha) == key:
+        try:
+            encoded = json.dumps(result, allow_nan=False, ensure_ascii=False).encode("utf-8")
+            if len(encoded) <= 1_000_000:
+                calculation.key, calculation.value = key, deepcopy(result)
+        except (ValueError, TypeError, UnicodeError, OverflowError, RecursionError):
+            pass  # A non-cacheable output still has its original outcome.
+    return result
 
 
 def validate_temperature_adapter_binding(template, evidence):

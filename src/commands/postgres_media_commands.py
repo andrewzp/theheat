@@ -254,7 +254,12 @@ def read_with_package(c, command: Command, result: dict, environment):
     """
     validate(c, environment)
     try:
-        return _read(c, command, result, environment)
+        from src.media.temperature_graphic_adapter import _retained_calculation_scope
+        # Each retained read still reconstructs its complete review and package
+        # from fresh rows. Only duplicate pure temperature-bundle calculations
+        # within this one reconstruction share exact, detached input values.
+        with _retained_calculation_scope():
+            return _read(c, command, result, environment)
     except (CommandError, ValueError, TypeError, KeyError, AttributeError, OverflowError, RecursionError):
         raise p.ProjectionError("corrupt_media_command_review") from None
 
