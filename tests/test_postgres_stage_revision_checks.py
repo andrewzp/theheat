@@ -88,7 +88,7 @@ def test_actual_protocol2_seal_removed_between_begin_passes_rolls_back_before_at
     request = descriptor("bluesky", "upload", "*/*", png)
     roles = []
     with psycopg.connect(**dict(core[3], autocommit=False)) as c:
-        authority._validate(c)
+        core[2]._validate(c, runtime=False)  # Explicit privileged restore, never runtime authority.
         domain.validate(c, authority.environment)
         authority._pointer(c, lock=True)
         value = domain.read(c, intent)
