@@ -196,3 +196,28 @@ def test_fresh_process_identity_journey_across_json_markdown_and_html(journey, r
     # No provider was called anywhere in the journey.
     assert sum(len(run.providers.physical) for run in runs.values()) == physical
     assert diagnosis.VIEW_RENDERER.endswith("/v3")
+
+
+def test_mixed_v1_v2_reconciliation_with_scenario_and_aggregate_billing_reaches_diagnosis(journey, routes):
+    """Found while proving unique-input compatibility: G6-era reconcile crashed (KeyError 'call')."""
+    runs, archives, inputs_dir, tmp_path, _ = journey
+    mixed = [archives["accepted"], archives["factual"], routes["valid"]]
+    out = private_root(tmp_path, "mixed-reconciliation")
+    args = ["reconcile", "--as-of", AS_OF, "--output-dir", str(out), "--scenario", "google-standard-paid-2026-10-02",
+            "--account-binding", "google:acct-invented-google-0001",
+            "--billing", str(inputs_dir / "billing-google-aggregate-invented.json")]
+    for path in mixed:
+        args += ["--archive", str(path)]
+    code, summary, loaded = fresh(cli("reconcile_request_archive.py"), *args)
+    assert loaded == [] and code == 0 and summary["identity"]["counted_captures"] == 3, summary
+    report = json.loads((out / "reconciliation.json").read_bytes())
+    comparison, = report["reconciliation"]["aggregate_comparisons"]
+    eligible = [row for row in report["priced_scenario"]["rows"] if row["disposition"] == "eligible"]
+    assert comparison["scenario_token_component_usd"] is not None and eligible and all("call" in r for r in eligible)
+    assert {row["reasons"][0] for row in report["priced_scenario"]["rows"] if "route" in row} == {
+        "route_family_not_in_named_scenario"}
+    code, summary, diagnosed = diagnose_cli(private_root(tmp_path, "d-mixed"), mixed,
+                                            reconciliation=out / "reconciliation.json")
+    assert code == 0 and {"component": "reconciliation", "status": "verified"} not in summary["held_components"]
+    assert diagnosed["overview"]["spend"]["status"] == "verified" and "routes" in diagnosed
+    assert_views_agree(diagnosed, views(tmp_path / "d-mixed"))

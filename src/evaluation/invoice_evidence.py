@@ -384,7 +384,8 @@ def _aggregates(usage: dict, collected: dict, scenario: dict | None, bound: set)
         scenario_rows = []
         if scenario is not None and document["currency"] == scenario["currency"]:
             keys = {(r["scope_id"], r["call"], r["attempt"]) for r in inside}
-            scenario_rows = [s for s in scenario["rows"] if (s["scope_id"], s["call"], s["attempt"]) in keys
+            # Route rows (v2) carry no call/attempt identity and are never eligible; they join nothing.
+            scenario_rows = [s for s in scenario["rows"] if (s["scope_id"], s.get("call"), s.get("attempt")) in keys
                              and s["disposition"] == "eligible"]
         rows.append({"document_id": document["document_id"], "provider": document["provider"],
                      "account": document["scope"]["account"], "currency": document["currency"],
