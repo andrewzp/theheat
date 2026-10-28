@@ -538,7 +538,14 @@ class PostgresProjectionRepository:
             value, canonical_value = _reader_decode_with_canonical(connection, payload)
             _require(canonical_value == payload, "noncanonical_projection_artifact")
             restored[name] = value
-        encoded = _canonical(restored)
+        calculation = _READER_DECODING.get()
+        private = (calculation is not None and calculation.open
+                   and calculation.connection is connection
+                   and calculation.thread == threading.get_ident())
+        # Every container here belongs to this reconstruction: fresh parses or
+        # detached decoder returns. Keep complete whole-tree validation (depth,
+        # nodes, bytes and numeric types), without cloning this private tree.
+        encoded = _canonical_private_decoded(restored) if private else _canonical(restored)
         _require(len(encoded) == byte_count and _sha(encoded) == sha, "corrupt_projection_identity")
         return ProjectionReceipt(namespace, snapshot_id, sha, byte_count, field_count, created.isoformat()), restored
 

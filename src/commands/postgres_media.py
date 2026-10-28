@@ -133,9 +133,10 @@ def _load(c, identity):
     row = c.execute(f"SELECT capture_sha256,staged_at FROM {SCHEMA}.packages WHERE proposal_sha256=%s", (identity,)).fetchone()
     _require(row is not None, "media_staging_package_not_found")
     raw = _raw(c, row[0], MAX_METADATA_BYTES)
-    capture = p._reader_decode_with_canonical(c, raw)[0]
+    capture, canonical = p._reader_decode_with_canonical(c, raw)
     _shape(capture, _CAPTURE)
-    _require(_encoded(capture) == raw and type(capture["schema_version"]) is int
+    _require(0 < len(canonical) <= MAX_METADATA_BYTES, "media_staging_metadata_bound")
+    _require(canonical == raw and type(capture["schema_version"]) is int
              and capture["schema_version"] in (1, 2)
              and capture["schema_version"] == capture["inputs"]["renderer_manifest"]["schema_version"], "invalid_media_staging_capture")
     _require(type(capture["authority_version"]) is int and 0 <= capture["authority_version"] <= p.MAX_INTEGER,

@@ -37,14 +37,14 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/commands/postgres_editor_media.py": "eed7c054a633b0fb2cf4c2a42cf370f379c5c2f0edc4191eeaf33fedf31c9aa6",
     "src/commands/postgres_ghcn_source_results.py": "fc06f61b007c003e299f78dac9be51b03db74a1d65569a59e0c407eb243eab42",
     "src/commands/postgres_important_variants.py": "eca11e40c09b5dbaf3ab50c8b5fa215067538cf3c4a77e4a32477d8260896002",
-    "src/commands/postgres_media.py": "010ee527ba2646fc36750bc263d5782c653dbfdfde7fa27452462f4698bea10e",
-    "src/commands/postgres_media_commands.py": "a8621fea42d9e28afce6f04b391bdcd237d6caaae8e071b0df21ef96aab8819e",
+    "src/commands/postgres_media.py": "653e260f94841b0fbc7f16d457c810cbd520834c93e5117cf30026bdf8309171",
+    "src/commands/postgres_media_commands.py": "e7a115fe423e35c130df4648be2d8634161edfa1f36078082b29f4484f4e67bd",
     "src/commands/postgres_published_media.py": "bf34d53dd3b52cb00b81542d864787b056943e64ec5c1ccaa652876d5083143c",
     "src/commands/postgres_report_development.py": "4a93f353cd6560753d83afdf1ae4b9507b57318f3275351f2d9a5d8480230b68",
     "src/commands/postgres_revision_checks.py": "a18a3620e22e61c3370a88107b15d2ea2c50bcee1bd52711657620cb4367d87f",
     "src/commands/postgres_source_results.py": "ae478a315644970b0f6f69dce86ff1fd331c80ea3523154867510c465ce80a67",
     "src/commands/postgres_sourced_generation.py": "b454cd46dd698aff47145b4c76178a2da2cb8f05c3b490b9b82e8f1d1ddf85e4",
-    "src/commands/postgres_stage_revision_checks.py": "513da0b22e281716fdf20a9c1afeede7bb2959ce5d61170c14a6ec0571697679",
+    "src/commands/postgres_stage_revision_checks.py": "0f41aadedddba2ec242cb2e3a87e8fb143e5109d961bf756298f33466ad90ddd",
     "src/commands/postgres_sync_checks.py": "2e8bcc42b86bb5379156fe491266514c8d876de24a9ab6c38180d8308283f902",
     "src/commands/postgres_synchronous_generation.py": "d74df2ee7a8bb4b3957fde36ff8e198e600e475d4aa594c3c401ec1f731f1ebf",
     "src/commands/preview_delivery_worker.py": "d7d2da6aa6ccfd99a4bd5f067ea9d13a67284d72271e6289e7602957ac11be89",
@@ -89,7 +89,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/editorial/policy.py": "0f2b41bdb270ea9c5fcb804e764dc3b41211d5dbe3de9291c57e2316544be761",
     "src/editorial/portfolio.py": "da6dd9a39fae1872c63fb2c54c1f973ce4417f5dc7204fb8e1e09d40fc440dc8",
     "src/editorial/report_development.py": "e2ed39a9ff957683c8befff0f3b99533fdc9d90d84af88220ed13f2bf1489995",
-    "src/editorial/revisions.py": "e23df717f4d2515d76ed017388c0b1ee3d045ef895f1016ef2a2fdae1b09ead0",
+    "src/editorial/revisions.py": "24e4907b7e695a62aa2fb84d64d490fcc4ad8e85a0a0909b23ef3532fc0803ce",
     "src/editorial/synthesis.py": "c3230d7f91f287550e158548998ed5df778148592c2989cf7155cd2a3182498b",
     "src/editorial/thresholds.py": "a24fefb63fc25510cbe693151c2479c9384ab259ac90d4dfee59e64309f22afe",
     "src/evaluation/coverage.py": "3e1595ad6e65646ac1a83cdd0b95adcebc21bf3d32cd4073f5881d555c66b67e",
@@ -146,7 +146,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/storage/migrations/014_preview_delivery.sql": "eb4273b808de7b60c376b7249dfaca0f1be96c1b50c334d6bd8f245eceb92bfa",
     "src/storage/migrations/015_stage_revision_checks.sql": "df13f7060a136afd14da7630d01c9585b883592be6f1cdf2d97faa2db688c17c",
     "src/storage/physical_events.py": "9706a04510f7699eccfc8b83a9ad310954e5bc4c97df23f4bf8787f5021be867",
-    "src/storage/postgres_projection.py": "2355ea3437e6045427f3fdfece2bf54a9e602464ee7b6ae59bfeb0a01326e614",
+    "src/storage/postgres_projection.py": "799e65ff2cacd359a04ee1901c715d78dc92869d0cfddd9619581c13f347875d",
     "src/storage/retained_reports.py": "21634f249fa8ccb07ecbaae34f44727bf5388bf5079bfb70c5191e946ef941ac",
     "src/storage/scientific_supply.py": "5c89128bcdc0f708477ff19579cb913f0b1081eee46ea170e3fc3979cce0896c",
     "src/two_bot/air_quality_claims.py": "b2d5232a2cd8678614ec9baeb3d20fc2e9097ed635244f2373891707c03711b8",
@@ -201,5 +201,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "8c4887f395618e343dafd55f5843987dfa6a7a620713c7c34bab9f419e4434fe"
   },
   "schema_version": 1,
-  "source_sha256": "91f21f7aff1fd7f0b554695b6c12fcbe132f050634e3aabc4ff0ca18179f3804"
+  "source_sha256": "3d593ff130122ca05cd7186f1a3b9a92fa5105c6a84ebc1212e1ed051396bf0b"
 }

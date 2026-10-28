@@ -1,8 +1,8 @@
 ## 0.9.109.42
 
-- Reuse exact retained temperature comparison calculations within each review
-  read while retaining fresh source audits, database reads, independent delivery
-  checks, original deadlines and all publication pauses.
+- Reuse exact retained temperature, JSON and scientific-data calculations within
+  verification reads while retaining fresh source audits, database and permission
+  checks, independent delivery verification, deadlines and publication pauses.
 
 - Add fixed body-phase diagnostics to the selected parked-media CI case, with
   mechanical preservation of original assertions, operations and deadlines.
