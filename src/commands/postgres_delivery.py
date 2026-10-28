@@ -478,6 +478,12 @@ def _context(authority, c, value, resolve_principal, now, resolve_claim):
 
 
 def _qualified_context(authority, c, value, resolve_principal, now, resolve_claim, *, _inspection=None):
+    with p._reader_decoding_scope(c):
+        return _qualified_context_read(authority, c, value, resolve_principal, now, resolve_claim,
+                                       _inspection=_inspection)
+
+
+def _qualified_context_read(authority, c, value, resolve_principal, now, resolve_claim, *, _inspection=None):
     # Revoke authority before consulting source/scientific execution evidence.
     editor.resolve(resolve_principal, value["approval_binding"]["publisher_subject"], publisher=True)
     editor.resolve(resolve_principal, value["approval_binding"]["requesting_actor"])

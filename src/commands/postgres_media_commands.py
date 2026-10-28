@@ -269,7 +269,7 @@ def _read(c, command, result, environment):
     p._require(row is not None and command.action in {"attach_media_revision", "review_media_revision"}
                and result["status"] == "applied", "media_command_review_not_found")
     raw = media._raw(c, row[2], MAX_REVIEW_BYTES)
-    record = p._decode(raw)
+    record = p._reader_decode_with_canonical(c, raw)[0]
     p._require(p._canonical(record) == raw and row[0] == command.payload["proposal_sha256"]
                and row[1] == record["review_sha256"] and row[3] == command.requested_at,
                "changed_media_command_reference")

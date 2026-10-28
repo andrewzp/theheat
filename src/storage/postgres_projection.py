@@ -7,6 +7,8 @@ write receipt is returned only after commit. There is no current-state pointer.
 from __future__ import annotations
 
 from contextlib import contextmanager
+from contextvars import ContextVar
+from copy import deepcopy
 from dataclasses import dataclass
 import hashlib
 import json
@@ -14,6 +16,7 @@ import math
 import os
 from pathlib import Path
 import re
+import threading
 from typing import Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -222,6 +225,71 @@ def _decode_with_canonical(payload: bytes) -> tuple[Any, bytes]:
 
 def _decode(payload: bytes) -> Any:
     return _decode_with_canonical(payload)[0]
+
+
+class _ReaderDecoding:
+    """A single connection/pass's bounded pure byte decoder, never a proof.
+
+    Fresh SQL reads, sizes, digests, row relationships and all domain/currentness
+    checks remain with their callers. Only parsing the SAME complete bytes and
+    calculating their canonical encoding can be repeated without more work.
+    """
+    def __init__(self, connection):
+        self.connection = connection
+        self.thread = threading.get_ident()
+        self.open = True
+        self.entries: dict[bytes, tuple[Any, bytes]] = {}
+        self.byte_count = 0
+        self.implementation: tuple | None = None
+
+    def close(self):
+        self.open = False
+        self.connection = None
+        self.entries.clear()
+        self.byte_count = 0
+
+
+_READER_DECODING: ContextVar[_ReaderDecoding | None] = ContextVar(
+    "projection_reader_decoding", default=None)
+
+
+@contextmanager
+def _reader_decoding_scope(connection):
+    # Nested calls start empty too; no connection/operation can inherit a result.
+    calculation = _ReaderDecoding(connection)
+    token = _READER_DECODING.set(calculation)
+    try:
+        yield
+    finally:
+        calculation.close()
+        _READER_DECODING.reset(token)
+
+
+def _reader_decode_with_canonical(connection, payload):
+    calculation = _READER_DECODING.get()
+    limits = (MAX_BYTES, MAX_FIELDS, MAX_DEPTH, MAX_NODES, MAX_INTEGER)
+    if (calculation is None or not calculation.open or calculation.connection is not connection
+            or calculation.thread != threading.get_ident() or type(payload) is not bytes
+            or not 4096 <= len(payload) <= 1_000_000 or not all(type(v) is int for v in limits)):
+        return _decode_with_canonical(payload)
+    implementation = (_decode_with_canonical, _canonical_private_decoded, _check_structure,
+                      _pairs, _require, json.loads, json.JSONEncoder,
+                      json.JSONEncoder.encode, json.JSONEncoder.iterencode, *limits)
+    if calculation.implementation != implementation:
+        calculation.entries.clear()
+        calculation.byte_count = 0
+        calculation.implementation = implementation
+    if payload in calculation.entries:
+        value, canonical = calculation.entries[payload]
+        return deepcopy(value), canonical
+    # Failures are never cached. This is the unchanged finite/duplicate-key/
+    # canonical decoder, not a replacement for its acceptance conditions.
+    value, canonical = _decode_with_canonical(payload)
+    size = len(payload) + len(canonical)
+    if len(calculation.entries) < 8 and calculation.byte_count + size <= 2_000_000:
+        calculation.entries[payload] = deepcopy(value), canonical
+        calculation.byte_count += size
+    return value, canonical
 
 
 def _snapshot(value: Any) -> tuple[bytes, dict[bytes, bytes]]:
@@ -465,9 +533,9 @@ class PostgresProjectionRepository:
         restored = {}
         for name_bytes, artifact_sha, artifact_size in refs:
             payload = payloads[artifact_sha]
-            name, canonical_name = _decode_with_canonical(name_bytes)
+            name, canonical_name = _reader_decode_with_canonical(connection, name_bytes)
             _require(type(name) is str and name not in restored and canonical_name == name_bytes, "corrupt_projection_field")
-            value, canonical_value = _decode_with_canonical(payload)
+            value, canonical_value = _reader_decode_with_canonical(connection, payload)
             _require(canonical_value == payload, "noncanonical_projection_artifact")
             restored[name] = value
         encoded = _canonical(restored)

@@ -100,7 +100,7 @@ def _proof(c, digest):
     row = c.execute("SELECT payload,byte_count FROM theheat_checks.stage_proof_artifacts WHERE sha=%s", (digest,)).fetchone()
     checks._require(row is not None and type(row[0]) is bytes and type(row[1]) is int
                     and 0 < len(row[0]) == row[1] <= 16384 and p._sha(row[0]) == digest, "changed_stage_prefix")
-    value = p._decode(row[0])
+    value = p._reader_decode_with_canonical(c, row[0])[0]
     checks._require(p._canonical(value) == row[0], "changed_stage_prefix")
     return value
 
