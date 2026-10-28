@@ -398,7 +398,7 @@ def test_compact_owned_get_real_proofs_fresh_operations_and_restored_faults(
         with body_phase("body_standalone"):
             # Active replay requires the existing single-threaded, credentialless
             # worker. Keep the original proof sequence and assertions there.
-            result = temperature.ghcn_worker(case, "delivery_standalone_proof", path["intent"], case["inspection_at"].isoformat())
+            result = temperature.ghcn_worker(case, "delivery_standalone_proof", path["intent"], temperature.utc_text(case["inspection_at"]))
             assert result == dict(draft_id=case["draft_id"], intent_id=path["intent"], standalone_proof="verified")
             assert_passive(case, path, before, history)
 

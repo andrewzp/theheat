@@ -1019,7 +1019,7 @@ def restore_isolated_standalone_proof(tree):
     assert ast.dump(helper.body[-1]) == ast.dump(result)
     tree.body.remove(helper)
     seam = ast.parse('result = temperature.ghcn_worker(case, "delivery_standalone_proof", path["intent"], '
-        'case["inspection_at"].isoformat())\n'
+        'temperature.utc_text(case["inspection_at"]))\n'
         'assert result == dict(draft_id=case["draft_id"], intent_id=path["intent"], standalone_proof="verified")').body
     expected = [ast.dump(node) for node in seam]
     targets = [node for node in tree.body if isinstance(node, ast.FunctionDef)
@@ -1037,6 +1037,25 @@ def restore_isolated_standalone_proof(tree):
                     replacements += 1
     assert replacements == 1
     return tree
+
+
+@pytest.mark.parametrize("microsecond", [0, 145274, 999999])
+def test_standalone_worker_timestamp_uses_the_existing_utc_contract(microsecond):
+    from datetime import UTC, datetime
+    from src.commands.schema import utc_datetime, utc_text
+
+    tree = ast.parse(TARGET_FILE.read_text(encoding="utf-8"))
+    calls = [node for node in ast.walk(tree) if isinstance(node, ast.Call)
+             and isinstance(node.func, ast.Attribute) and isinstance(node.func.value, ast.Name)
+             and node.func.value.id == "temperature" and node.func.attr == "ghcn_worker"
+             and len(node.args) == 4 and isinstance(node.args[1], ast.Constant)
+             and node.args[1].value == "delivery_standalone_proof"]
+    assert len(calls) == 1
+    moment = datetime(2026, 10, 28, 12, 3, 26, microsecond, tzinfo=UTC)
+    expression = ast.Expression(calls[0].args[3])
+    stamp = eval(compile(expression, str(TARGET_FILE), "eval"), {"__builtins__": {},
+        "case": {"inspection_at": moment}, "temperature": types.SimpleNamespace(utc_text=utc_text)})
+    assert utc_datetime(stamp) == moment
 
 
 @pytest.mark.skipif(sys.version_info[:2] != (3, 12), reason="the pinned AST digest is Python 3.12 ast.dump output")
