@@ -60,6 +60,7 @@ def test_actual_protocol2_seal_removed_between_begin_passes_rolls_back_before_at
     from src.commands import postgres_delivery as domain
     from src.posting.delivery_receipts import descriptor
     from src.posting.local_delivery import SCOPE
+    from tests.test_postgres_platform_description import review_exact
 
     case, authority = admitted, admitted["store"]
     _, png = editor.prepare_and_attach(case)
@@ -68,7 +69,9 @@ def test_actual_protocol2_seal_removed_between_begin_passes_rolls_back_before_at
         schema_version=2, platform_profile="credentialless-loopback-v1", scope=SCOPE,
         invented=True, instance_id=str(uuid4()), origin="http://127.0.0.1:1",
         routes_version=1, actor="did:plc:aaaaaaaaaaaaaaaaaaaaaaaa"))
-    delivery.bind_platform(case, monkeypatch)
+    assert editor.view(case)["platform_description"]["status"] == "fits_local_limits"
+    review_exact(case)
+    editor.complete_revision(case, monkeypatch)
     identity = editor.view(case)["check_set_id"]
     assert_protocol(authority, identity)
     _, parked = delivery.park(case)
