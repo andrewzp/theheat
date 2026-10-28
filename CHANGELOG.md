@@ -1,5 +1,8 @@
 ## 0.9.109.42
 
+- Patch Next.js and its matching platform packages to 15.5.28 for the October
+  security advisories, preserving React, Sharp and other locked dependencies.
+
 - Reuse exact retained temperature, JSON and scientific-data calculations within
   verification reads while retaining fresh source audits, database and permission
   checks, independent delivery verification, deadlines and publication pauses.
