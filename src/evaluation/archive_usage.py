@@ -364,8 +364,17 @@ def reconcile_identities(archives: list[VerifiedArchive]) -> tuple[list[dict], l
                         "identity_conflict_with": conflict_with.get(index, [])})
         if use:
             used.append(archive)
-    reconciliation = {"rule": "scope_id_and_manifest_sha256", "duplicate_inputs": len(duplicate_of),
-                      "conflicting_scope_ids": sorted({str(archives[i].scope_id) for i in conflict_with})}
+    groups = sorted({str(archives[i].scope_id) for i in conflict_with})
+    reconciliation = {
+        "rule": "scope_id_and_manifest_sha256", "duplicate_inputs": len(duplicate_of),
+        "conflicting_scope_ids": groups,
+        "status": "conflict_quarantined" if conflict_with else "consistent",
+        "supplied_inputs": len(archives), "counted_captures": len(used),
+        "invalid_inputs": sum(1 for archive in archives if archive.status == "invalid"),
+        "quarantined_inputs": len(conflict_with),
+        # Every claimed content is listed; none is chosen, merged or counted.
+        "conflict_groups": [{"scope_id": scope, "manifest_sha256s": sorted(
+            {archives[i].manifest_sha256 for i in members[scope]}), "inputs": members[scope]} for scope in groups]}
     return sources, used, reconciliation
 
 
@@ -403,14 +412,34 @@ def archive_usage(archives: list[VerifiedArchive]) -> dict:
                                            and r["usage_status"] == "present"),
         "provider_id_conflicts": sum(1 for r in rows if r["provider_id_conflict"]),
     }
+    unknown = token_totals_unknown_reasons(sources, rows)
     result = {"schema": SCHEMA, "sources": sources, "identity_reconciliation": reconciliation,
               "calls": calls, "attempts": rows, "denominators": denominators, "token_totals": _token_totals(rows),
+              "token_totals_status": "incomplete" if unknown else "complete_for_retained_rows",
+              "token_totals_unknown_reasons": unknown,
               "billing": "unknown", "complete_account_coverage": False,
               "scope": "Only calls retained in the supplied archives; not an account or invoice total."}
     if any(archive.schema == SCHEMA_V2 and archive.status != "invalid" for archive in archives):
         # Route families appear only for explicit v2 archives; v1-only output is unchanged.
         result.update(_route_usage(used, input_unknown_reasons(sources)))
     return result
+
+
+def token_totals_unknown_reasons(sources: list[dict], attempts: list[dict]) -> list[str]:
+    """Why call-level token totals are a partial known subtotal, from retained rows only.
+
+    Shared by every consumer of the same rows (usage, reconciliation reports and
+    diagnosis), so a supplied completeness flag is never what decides it.
+    """
+    reasons = set(input_unknown_reasons(sources))
+    for row in attempts:
+        if row["send_outcome"] != "response_received":
+            reasons.add("unknown_send_outcome")
+        elif row["usage_status"] != "present" or row.get("invalid_fields"):
+            reasons.add("usage_not_present")
+        if row.get("provider_id_conflict"):
+            reasons.add("provider_id_conflict")
+    return sorted(reasons)
 
 
 def _token_totals(rows: list[dict]) -> list[dict]:
