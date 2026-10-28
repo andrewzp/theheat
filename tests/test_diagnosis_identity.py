@@ -307,6 +307,20 @@ def test_reconciliation_joins_once_and_holds_inflated_or_conflicting_contributio
     assert component(partial, "reconciliation")["status"] == "verified"
     assert partial["overview"]["spend"]["token_totals_status"] == "incomplete"
     assert "identity_conflict_quarantined" in partial["overview"]["spend"]["token_totals_unknown_reasons"]
+    # A supplied completeness label never decides it: a G8-shaped report without the label and a
+    # re-sealed report claiming completeness both derive "incomplete" from their own retained rows.
+    from src.evaluation import invoice_evidence as evidence
+    for claimed in (None, "complete_for_retained_rows"):
+        sealed = _report([a, x, b])
+        if claimed is None:
+            for key in ("token_totals_status", "token_totals_unknown_reasons"):
+                del sealed["observed"][key]
+        else:
+            sealed["observed"].update(token_totals_status=claimed, token_totals_unknown_reasons=[])
+        sealed["report_sha256"] = evidence._report_identity(sealed)
+        spend = diagnose([b], reconciliation=sealed)["overview"]["spend"]
+        assert (spend["status"], spend["token_totals_status"]) == ("verified", "incomplete"), claimed
+        assert "identity_conflict_quarantined" in spend["token_totals_unknown_reasons"]
     # Absent stays absent.
     assert diagnose([a])["overview"]["spend"] == {"status": "absent"}
 
