@@ -11,11 +11,16 @@ def install_revision_protocol(owner, request=None, *, now):
 
 
 def assert_protocol(store, identity, expected=2):
+    from src.commands.postgres_stage_revision_checks import protocol
+
     with store.projections._connection() as c:
-        row = c.execute(
-            "SELECT authority_protocol FROM theheat_checks.sets WHERE check_set_id=%s",
+        retained = c.execute(
+            "SELECT check_set_id FROM theheat_checks.sets WHERE check_set_id=%s",
             (identity,),
         ).fetchone()
+        # Catalog3 stores protocol1 implicitly; catalog4 records it explicitly.
+        # Keep the identity existence check, then use the actual engine's rule.
+        row = (protocol(c, identity),) if retained == (identity,) else None
     assert row == (expected,), (identity, row, expected)
 
 
