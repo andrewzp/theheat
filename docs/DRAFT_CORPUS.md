@@ -11,6 +11,55 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-10-28 — Daily corpus grading (15 fresh drafts; 0 carry-overs)
+
+**Context:** Gist read via git-clone path (success). 15 pending, all new to the corpus (draft_ids
+`draft_20261007_*`–`draft_20261009_*` plus two manual severe_weather proposals from Oct 16–17).
+Newest is 11 days old, oldest 21. `main`'s corpus ended at Jul 6, so there is no documented grading
+for Jul 7 – Oct 27; this section is graded cold against the Jul 5 baseline. The rolling
+`daily-plan-current` branch no longer exists on remote (merged/deleted); this cycle starts fresh from `main`.
+
+**Distribution:** 0 A · 2 B · 5 B- · 6 C+ · 2 D → **A-rate 0% (0/15)**. Bar (50%) missed by 50 pp.
+
+**Headline:** Cyclone, PM2.5/dust and fire drafts are accurate but flat data delivery with no
+mechanic and weak closes. Two things are new: (1) `dust_event` drafts now state a WHO multiple
+unprompted (3 of 3), breaking the 11-of-11 no-anchor run; (2) 7 of 15 drafts are same-event or
+same-text duplicates (Isaias ×3, Klang/Shah Alam, Guam ×2, Quetta/Arequipa template twins).
+
+### B (2)
+- **[2] Quetta dust_event** (523 µg/m³ peak, PM10 mean 173, "nearly 4× the WHO daily guideline") — 173/45 = 3.8, checks. First WHO-anchored dust_event; peak-vs-mean gap is the implicit violation. Close is a bare source credit (P_close failing). B.
+- **[4] Riyadh dust_event** (peak 2,347 µg/m³ vs mean ~10.7× WHO) — same anchor, plus the peak/mean contrast is the best setup in the batch. Ends on a disclaimer ("model estimates, not station measurements") that spends the punchline slot on hedging. B.
+
+### B- (5)
+- **[3] Arequipa dust_event** — 2.7× WHO anchor present, near-template twin of [2]; close is "(CAMS global model, 45 km resolution)", a parenthetical, not a close. B-.
+- **[6] Shah Alam air_quality_hazard** — 152 µg/m³, ~10× WHO; ends "No station data to verify; model forecast only." Honest, not a close. B-.
+- **[7] Kano air_quality_hazard** — 230 µg/m³, 15× WHO, dust >300 in the same run; biggest multiple of the batch but no named cause (harmattan) and no close. B-.
+- **[9] Eastern Mongolian steppe fire** — three anomalies 600.5/568.6/543.6 MW within 10 km at 01:13 UTC. Cluster is vivid, exact numbers (no approximation), deadpan; no consequence/mechanism. B-.
+- **[10] Isaias Cat 3 tier_crossing** — 105 kt, 959 mb, "up from Category 2 within the same advisory cycle". Clean, but "Advisory 012a" is bureaucratic and the URL sits in the text. B-.
+
+### C+ (6)
+- **[1] Papua New Guinea fire** — "is radiating 1,026 MW" (banned-formula verb family; P3 class), plus tier label "very-high-intensity". No mechanic, no close. C+.
+- **[5] Isaias rapid_intensification (35 kt)** — "surpassing the NHC rapid intensification threshold of 30 kt" + advisory number + lat/lon + URL: P_tier leak and dispatcher register. C+.
+- **[8] Klang air_quality_hazard** — same ~152 µg/m³ forecast as [6] (adjacent city, same day): redundant, would read as a repeat. C+.
+- **[11] Isaias rapid_intensification (Cat 1→3)** — "exactly the NHC rapid-intensification threshold": P_tier. Third Isaias draft; same event as [5] and [10]. C+.
+- **[12] East Pacific Simon** — "meeting the NHC threshold for rapid intensification (NHC advisory 009a)": P_tier plus advisory ID. C+.
+- **[13] Brazil Cerrado fire** — "intense enough to register in the top tier of VIIRS detections": P_tier ("top tier"). Also undercut by the second hotspot (529 MW) being larger than the lead (519 MW). C+.
+
+### D (2)
+- **[14] / [15] Guam, Typhoon Champi (severe_weather, manual proposals, identical text)** — "Guam's preparation window is closing: life-threatening winds could arrive tonight" is NWS urgency paraphrase: no figure, no distance, panic register (violates HUMOR_RESEARCH §8.4 benign-violation), and "tonight" is 11–12 days old. [15] also has no score object (`score: ?`). D ×2.
+
+### Patterns named
+1. **P_tier, 5 instances in one cycle** ([1], [5], [11], [12], [13]) across fire + both cyclone types. Threshold/tier names leak as the "so what".
+2. **P_dust partial counter-evidence:** 3/3 dust_event drafts carry a WHO multiple. Unknown whether a fix shipped in the gap; hold open until it repeats.
+3. **P_close:** 0 of 15 close on mechanism/consequence. Disclaimer closes ([4], [6], [8]), source-credit closes ([2], [3]), and no close ([1], [7], [9], [10]).
+4. **Same-event saturation:** Isaias ×3 (Oct 8–9), Shah Alam/Klang, Guam ×2. Per-event cap not working across draft types.
+5. **Mechanic census:** no comic triple, idiom flip, or era anchor in any draft. Pure data delivery everywhere; Mongolia cluster and Riyadh peak/mean are the only stranded setups.
+6. **Political anchors:** none. **Plant-comparison regex:** no hits. **Wodehouse:** no approximation where exact available; disclaimers read as defensive.
+
+### Followups
+- Operator: P_tier fix now covers cyclone + VIIRS "tier" phrases (see plan).
+- Operator: Guam pair are manual proposals; reject both (stale, panic register).
+
 ## 2026-07-06 — Daily corpus grading (0 fresh drafts; 15 carry-overs from Jul 5, previously graded)
 
 **Context:** Gist read via git-clone path (success; no rate limit). Queue: 15 pending drafts —
