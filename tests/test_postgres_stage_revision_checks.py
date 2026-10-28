@@ -1037,9 +1037,19 @@ def test_v2_genuine_park_one_use_delivery_and_passive_original_cap_cost(
         # retain its real credential-free boundary after those checks finish.
         for key in ("ANTHROPIC_API_KEY", "GEMINI_API_KEY"):
             monkeypatch.delenv(key, raising=False)
+        expiry = utc_datetime(caps[-1][4])
+        packet = retained(case, identity)["packet"]
+        assert caps[-1][0] == "critic" and editor.AT < expiry < utc_datetime(packet["useful_until"])
         before_send = editor.all_application_rows(core[3])
-        expired = delivery.run(case, intent, "x", "upload", at=utc_datetime(caps[-1][4]))
-        assert expired["outcome"] != "confirmed" and expired["network_mutation"] is False
+        with monkeypatch.context() as patch:
+            from src.commands import preview_delivery_worker
+            def expired_transport(*args, **kwargs):
+                pytest.fail("Expired original cap reached delivery transport")
+            patch.setattr(preview_delivery_worker.transport, "execute", expired_transport)
+            patch.setattr(preview_delivery_worker.transport, "bounded_http", expired_transport)
+            expired = delivery.run(case, intent, "x", "upload", at=expiry)
+        assert expired == dict(outcome="withheld", scope=postgres_delivery.SCOPE,
+                               publication_approved=False, reason="parked_media_lease_expired"), expired
         assert trace == [] and not accepted and editor.all_application_rows(core[3]) == before_send
         for platform, phases in postgres_delivery.STAGES.items():
             for phase in phases:

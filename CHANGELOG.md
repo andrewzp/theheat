@@ -34,6 +34,8 @@
   original reader-refusal and rollback checks exercise the intended disagreement.
 - Clear invented model-fixture keys before the credential-free delivery journey;
   preserve the production environment refusal and all delivery assertions.
+- Verify an expired original capability returns its exact refusal before any
+  transport entry, with no request or state change, without assuming a send flag.
 - Verify retained graphic review and completion evidence once within an owned
   passive dashboard read. Recheck current source, roles and original expiry
   before returning; keep independent command and delivery verification.
