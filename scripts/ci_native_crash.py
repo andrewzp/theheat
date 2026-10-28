@@ -121,7 +121,15 @@ def _directory(path: Path) -> None:
 def prepare(runner_temp: Path, environment_file: Path) -> None:
     """Publish restoration information BEFORE attempting a kernel mutation."""
     if shutil.which("gdb") is None:
-        raise ValueError("debugger_unavailable")
+        # This CI-only prepare step is guarded to PG2 in the workflow. Keep the
+        # original three native dependency steps and their exact gates intact.
+        subprocess.run([
+            "sudo", "--non-interactive", "apt-get", "-o", "Acquire::Retries=2",
+            "-o", "Acquire::http::Timeout=20", "-o", "Acquire::https::Timeout=20",
+            "install", "-y", "--no-install-recommends", "gdb",
+        ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=120, check=True)
+        if shutil.which("gdb") is None:
+            raise ValueError("debugger_unavailable")
     directory = Path(tempfile.mkdtemp(prefix="theheat-native-", dir=runner_temp))
     _directory(directory)
     if any(character in str(directory) for character in "\n\r%"):
@@ -130,6 +138,11 @@ def prepare(runner_temp: Path, environment_file: Path) -> None:
     _write(directory / "restore.json", {"directory": str(directory), "previous": previous})
     with environment_file.open("a", encoding="ascii") as output:
         output.write(f"THEHEAT_CI_CORE_DIR={directory}\n")
+        plugins = os.environ.get("PYTEST_PLUGINS", "")
+        if "\n" in plugins or "\r" in plugins:
+            raise ValueError("plugin_configuration_refused")
+        plugins = plugins + ("," if plugins else "") + "scripts.ci_native_crash"
+        output.write(f"PYTEST_PLUGINS={plugins}\n")
     # A timeout/error is uncertain: the later always() step still restores.
     subprocess.run(["sudo", "--non-interactive", "sysctl", "-w",
                     f"kernel.core_pattern={directory}/core.%p"],

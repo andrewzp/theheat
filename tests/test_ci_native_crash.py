@@ -30,6 +30,9 @@ def facade(tmp_path, monkeypatch):
 
     def run(command, **kwargs):
         calls.append((command, kwargs))
+        if command[:3] == ["sudo", "--non-interactive", "apt-get"]:
+            state["gdb_ready"] = True
+            return subprocess.CompletedProcess(command, 0)
         if command[0] == "sudo":
             restoring = command[-1].startswith("kernel.core_pattern=|")
             state["pattern"] = command[-1].partition("=")[2]
@@ -52,10 +55,11 @@ def facade(tmp_path, monkeypatch):
     monkeypatch.setattr(observer.subprocess, "Popen", lambda *a, **k: pytest.fail("test subprocess"))
     monkeypatch.setattr(observer.sys, "platform", "linux")
     monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    monkeypatch.delenv("PYTEST_PLUGINS", raising=False)
 
     def prepare():
         observer.prepare(root, environment_file)
-        directory = Path(environment_file.read_text().strip().partition("=")[2])
+        directory = Path(environment_file.read_text().splitlines()[0].partition("=")[2])
         monkeypatch.setenv("THEHEAT_CI_CORE_DIR", str(directory))
         return directory
 
@@ -76,7 +80,7 @@ def test_uncertain_kernel_write_already_has_restoration_information(facade, monk
     state["setup_error"] = True
     with pytest.raises(subprocess.TimeoutExpired):
         prepare()
-    directory = Path(environment_file.read_text().strip().partition("=")[2])
+    directory = Path(environment_file.read_text().splitlines()[0].partition("=")[2])
     assert directory.stat().st_mode & 0o777 == 0o700
     assert observer.finish(directory, "skipped") == 0
     assert state["pattern"] == "|/invented/collector --option $(literal)"
@@ -97,6 +101,31 @@ def test_plugin_records_only_the_real_interpreter_before_any_test(facade, capsys
     assert observer.finish(directory, "success") == 0
     assert not directory.exists()
     assert rows(capsys)[-1]["test_outcome"] == "success"
+
+
+def test_missing_debugger_install_is_bounded_and_only_requests_gdb(facade, monkeypatch, capsys):
+    _, _, calls, state, prepare, _ = facade
+    monkeypatch.setattr(observer.shutil, "which", lambda _: "/invented/gdb" if state.get("gdb_ready") else None)
+    directory = prepare()
+    installs = [(command, kwargs) for command, kwargs in calls if isinstance(command, list) and "apt-get" in command]
+    assert len(installs) == 1
+    command, kwargs = installs[0]
+    assert command == ["sudo", "--non-interactive", "apt-get", "-o", "Acquire::Retries=2", "-o", "Acquire::http::Timeout=20", "-o", "Acquire::https::Timeout=20", "install", "-y", "--no-install-recommends", "gdb"]
+    assert kwargs["timeout"] == 120 and kwargs["check"] is True
+    assert observer.finish(directory, "skipped") == 0
+    rows(capsys)
+
+
+def test_prepare_preserves_existing_plugins_and_exports_only_to_pg2(facade, monkeypatch, capsys):
+    _, environment, _, _, prepare, _ = facade
+    monkeypatch.setenv("PYTEST_PLUGINS", "invented_existing")
+    directory = prepare()
+    assert environment.read_text().splitlines() == [
+        f"THEHEAT_CI_CORE_DIR={directory}",
+        "PYTEST_PLUGINS=invented_existing,scripts.ci_native_crash",
+    ]
+    assert observer.finish(directory, "skipped") == 0
+    rows(capsys)
 
 
 @pytest.mark.parametrize("outcome", ["success", "cancelled", "skipped"])
@@ -283,8 +312,12 @@ def test_original_suite_string_and_matrix_remain_exact():
     suite = next(step for step in job["steps"] if step.get("run", "").startswith("python -m pytest tests/ -v "))
     assert suite["run"] == 'python -m pytest tests/ -v -m "not voice_replay" --ci-partition=${{ matrix.partition }} --ci-postgres-shard=${{ matrix.postgres-shard }} --ci-critical-first --maxfail=1 --durations=20 -o faulthandler_timeout=300'
     assert "continue-on-error" not in suite
-    assert suite["env"]["PYTEST_PLUGINS"] == "${{ matrix.partition == 'postgres' && matrix.postgres-shard == '2' && 'scripts.ci_native_crash' || '' }}"
+    assert suite["env"] == {"THEHEAT_TEST_POSTGRES": "1", "THEHEAT_POSTGRES_BINDIR": "/usr/lib/postgresql/17/bin"}
+    prepare = next(step for step in job["steps"] if step.get("name") == "Prepare private PG2 crash evidence")
+    assert prepare["if"] == "matrix.partition == 'postgres' && matrix.postgres-shard == '2'"
+    assert prepare["timeout-minutes"] == 3
     cleanup = next(step for step in job["steps"] if step.get("name") == "Observe and remove private PG2 crash evidence")
     assert cleanup["if"].startswith("always() && matrix.partition == 'postgres' && matrix.postgres-shard == '2'")
+    assert cleanup["timeout-minutes"] == 2
     assert cleanup["env"]["THEHEAT_CI_TEST_OUTCOME"] == "${{ steps.offline-suite.outcome }}"
     assert workflow["jobs"]["test"]["needs"] == "test-partition"
