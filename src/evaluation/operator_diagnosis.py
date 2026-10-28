@@ -35,7 +35,7 @@ from src.two_bot.request_archive_replay import VerifiedArchive, lineage, route_l
 SCHEMA = "theheat.private-diagnosis/v1"
 COMPONENTS = ("diagnosis.json", "diagnosis.md", "diagnosis.html")
 # Views are re-rendered during verification; a renderer change is a new version, not tampering.
-VIEW_RENDERER = "theheat.private-diagnosis-views/v2"
+VIEW_RENDERER = "theheat.private-diagnosis-views/v3"
 MARKER = "diagnosis.complete.json"
 MAX_READER_OUTPUT = 16 * 1024 * 1024
 MAX_REPORT_COMPONENT_BYTES = 64 * 1024 * 1024
@@ -453,7 +453,8 @@ def diagnose(*, archives: list[VerifiedArchive], components: list[dict], usable:
     joined_posts = _join_publications(candidates, posts, held_texts)
     unjoined = [_post_row(post, joined_posts.get(post["tweet_id"])) for post in posts
                 if joined_posts.get(post["tweet_id"]) != "joined"]
-    report = {"schema": SCHEMA, "view_renderer": VIEW_RENDERER, "as_of": as_of.isoformat(), "components": components,
+    report: dict[str, Any] = {
+              "schema": SCHEMA, "view_renderer": VIEW_RENDERER, "as_of": as_of.isoformat(), "components": components,
               "inputs": sorted(input_files, key=lambda f: (f["role"], f["sha256"])),
               "identity_reconciliation": identity,
               "overview": _overview(sources, identity, components, candidates, generations, reconciliation,
@@ -474,6 +475,7 @@ def diagnose(*, archives: list[VerifiedArchive], components: list[dict], usable:
     if any(archive.schema == SCHEMA_V2 and archive.status != "invalid" for archive in archives):
         # Route families exist only in explicit v2 archives; v1-only reports are unchanged.
         report["routes"] = _routes_section(archives)
+    report["next_actions"] = _next_actions(components, identity, report["overview"]["spend"], report.get("routes"))
     report["report_sha256"] = _identity(report)
     return report
 
@@ -508,6 +510,48 @@ def _route_dispositions(row: dict) -> list[str]:
     if "predecessor" in row:
         out.append(f"predecessor_{row['predecessor']}")
     return sorted(set(out))
+
+
+# Fixed mechanical next steps; none generates, replays, fetches, repairs, retries or approves anything.
+NEXT_ACTIONS = {
+    "compare_conflicting_exports": "Exports claiming one capture identity differ; nothing was chosen or counted. "
+                                   "Supply one export per capture after comparing the listed manifests offline.",
+    "replace_or_omit_invalid_input": "An input failed integrity verification and was not counted; supply an intact "
+                                     "copy from the private source or omit it.",
+    "rebuild_component_from_these_inputs": "A supplied component does not match these inputs; rebuild it from exactly "
+                                           "these archives/state with the existing command. It was not repaired.",
+    "rebuild_older_component": "A sealed older component counted a capture more than once; rebuild it with the "
+                               "current command. Its signed contents were not rewritten.",
+    "resolve_capture_identity_first": "A component names a quarantined capture identity; it is held until the "
+                                      "identity conflict is resolved.",
+    "replace_invalid_component": "A supplied component failed its own verification and was not used.",
+    "totals_are_known_partial_subtotals": "Some totals omit unknown usage; see the listed reasons. Unknown usage is "
+                                          "never zero and no command here can fill it in.",
+    "none_repeated_inputs_counted_once": "Repeated or copied archive arguments were counted once; no action needed.",
+}
+
+
+def _next_actions(components: list[dict], identity: dict, spend: dict, routes: dict | None) -> list[dict]:
+    codes = set()
+    for component in components:
+        status = component["status"]
+        if component["component"] == "capture_identity" and status == "conflict_quarantined":
+            codes.add("compare_conflicting_exports")
+        elif component["component"] == "archive" and status == "invalid":
+            codes.add("replace_or_omit_invalid_input")
+        elif status == "lineage_mismatch":
+            codes.add("rebuild_component_from_these_inputs")
+        elif status == "unverifiable_identity":
+            codes.add("rebuild_older_component")
+        elif status == "held_identity_conflict":
+            codes.add("resolve_capture_identity_first")  # Ratings held with their pack follow the pack's action.
+        elif status == "invalid" and component["component"] != "archive":
+            codes.add("replace_invalid_component")
+    if spend.get("token_totals_status") == "incomplete" or (routes or {}).get("route_totals_status") == "incomplete":
+        codes.add("totals_are_known_partial_subtotals")
+    if identity["duplicate_inputs"]:
+        codes.add("none_repeated_inputs_counted_once")
+    return [{"code": code, "action": NEXT_ACTIONS[code]} for code in sorted(codes)]
 
 
 def _routes_section(archives: list[VerifiedArchive]) -> dict:
@@ -717,8 +761,9 @@ def report_json(report: dict) -> bytes:
 # ----------------------------------------------------------------- views
 
 def _md(value: Any) -> str:
+    # Provider-supplied identifiers (for example a batch custom ID) stay inert text in any Markdown viewer.
     text = "—" if value is None else str(value)
-    return text.replace("|", "\\|").replace("\n", " ")
+    return text.replace("|", "\\|").replace("\n", " ").replace("<", "&lt;").replace(">", "&gt;")
 
 
 def _view_value(value: Any) -> str:
@@ -731,18 +776,21 @@ def render_markdown(report: dict) -> str:
              f"As of `{report['as_of']}`. Promotion: **HOLD**. No action here approves, replays, releases "
              "budget, posts or corrects.", "", "## Components", "", "| component | status | detail |", "|---|---|---|"]
     for component in report["components"]:
-        detail = ", ".join(f"{k}={v}" for k, v in sorted(component.items()) if k not in ("component", "status")
-                           and not isinstance(v, list))
-        lines.append(f"| {component['component']} | {component['status']} | {_md(detail or '—')} |")
+        lines.append(f"| {component['component']} | {component['status']} | {_md(_component_detail(component))} |")
+    if "identity_reconciliation" in report:  # Hand-built renderer fixtures may carry no identity data.
+        lines += _identity_markdown(report["identity_reconciliation"], report["components"])
     lines += ["", "## Overview (separate denominators)", ""]
     for section in ("source", "checks", "spend", "preference", "publication"):
         values = o[section]
         flat = ", ".join(f"{k}={_view_value(v)}" for k, v in sorted(values.items()))
         lines.append(f"- **{section}**: {_md(flat)}")
-    lines += ["", "## Candidates", "", "| candidate | event | decision | dispositions | publication |",
-              "|---|---|---|---|---|"]
+    if "routes" in report:
+        lines += _routes_markdown(report["routes"])
+    lines += ["", "## Candidates", "", "| candidate | archive · attempt · text sha256 | event | decision | dispositions "
+              "| publication |", "|---|---|---|---|---|---|"]
     for c in report["candidates"]:
-        lines.append(f"| `{c['anchor']}` | {_md(c['event_id'])} | {c['decision']} | "
+        lines.append(f"| `{c['anchor']}` | {c['scope_id']} · {c.get('attempt')} · `{c['candidate_text_sha256']}` | "
+                     f"{_md(c['event_id'])} | {c['decision']} | "
                      f"{_md(', '.join(c['dispositions']) or 'none')} | {c['publication']['status']} |")
         if c["publication"]["status"] == "joined":
             lines.append(f"\nPublication evidence for `{c['anchor']}`: {_md(_view_value(c['publication']))}\n")
@@ -758,8 +806,56 @@ def render_markdown(report: dict) -> str:
         lines += [f"| {p['tweet_id']} | {p['revision_status']} | {p['publication_context']} | {p['join']} |"
                   for p in report["unjoined_posts"]]
         lines += [f"\nOutcome evidence {p['tweet_id']}: {_md(_view_value(p))}" for p in report["unjoined_posts"]]
+    lines += ["", "## Next mechanical actions", ""] + ([f"- `{a['code']}`: {a['action']}"
+                                                         for a in report.get("next_actions", [])] or ["- None."])
     lines += ["", "## Limits", ""] + [f"- {item}" for item in report["limits"]]
     return "\n".join(lines) + "\n"
+
+
+def _component_detail(component: dict) -> str:
+    detail = ", ".join(f"{k}={_view_value(v)}" for k, v in sorted(component.items())
+                       if k not in ("component", "status", "problems"))
+    return detail or "—"
+
+
+def _input_cells(component: dict) -> tuple:
+    related = component.get("duplicate_of_input", component.get("identity_conflict_with"))
+    return (component["input"], component["status"], component["identity"], component["scope_id"],
+            component["manifest_sha256"], "—" if related is None else _view_value(related))
+
+
+def _identity_markdown(identity: dict, components: list[dict]) -> list[str]:
+    lines = ["", "## Capture identity", "",
+             f"Rule `{identity['rule']}`: **{identity['status']}**. {identity['supplied_inputs']} archive arguments, "
+             f"{identity['counted_captures']} counted captures, {identity['duplicate_inputs']} repeated or copied "
+             f"arguments counted once, {identity['quarantined_inputs']} quarantined, {identity['invalid_inputs']} "
+             "invalid. Quarantined and invalid inputs contribute to no count, total or join.", "",
+             "| input | status | identity | scope | manifest sha256 | duplicate of / conflicts with |",
+             "|---|---|---|---|---|---|"]
+    lines += ["| " + " | ".join(_md(cell) for cell in _input_cells(c)) + " |"
+              for c in components if c["component"] == "archive" and "identity" in c]
+    for group in identity["conflict_groups"]:
+        lines.append(f"\nConflict `{group['scope_id']}`: inputs {_view_value(group['inputs'])} claim manifests "
+                     f"{_md(', '.join(group['manifest_sha256s']))}; none was chosen.")
+    return lines
+
+
+def _routes_markdown(routes: dict) -> list[str]:
+    reasons = ", ".join(routes["route_totals_unknown_reasons"]) or "none"
+    lines = ["", "## Route evidence", "",
+             f"Route totals: **{routes['route_totals_status']}** (unknown because: {reasons}). "
+             f"{len(routes['scopes'])} counted route scopes.", ""]
+    for conflict in routes["result_conflicts"]:
+        sources = ", ".join(f"{s['scope_id']} route {s['route']} line {s['line']}" for s in conflict["sources"])
+        lines.append(f"- Result conflict `{_md(conflict['custom_id'])}` in batch {_md(conflict['provider_batch_id'])}: "
+                     f"{_md(sources)}; none counted.")
+    return lines
+
+
+def _pack_membership(copy_review: dict) -> str:
+    if copy_review.get("in_pack"):
+        return "in pack (" + ", ".join(copy_review["pair_kinds"]) + ")"
+    return "pack held; membership unknown" if copy_review.get("in_pack") is None else "not in pack"
 
 
 def render_html(report: dict) -> str:
@@ -783,14 +879,41 @@ def render_html(report: dict) -> str:
              f"<h1>Private diagnosis</h1><p><code>{e(report['report_sha256'])}</code> as of {e(report['as_of'])}</p>",
              "<p class='hold'><strong>Promotion: HOLD.</strong> This report approves nothing, releases no budget, "
              "replays no provider, posts nothing and corrects nothing.</p>",
-             "<nav aria-label='Sections'><a href='#overview'>Overview</a> · <a href='#candidates'>Candidates</a> · "
-             "<a href='#generations'>Generations</a> · <a href='#posts'>Unjoined posts</a> · "
-             "<a href='#components'>Components</a></nav>", "<h2 id='overview'>Overview</h2>"]
+             "<nav aria-label='Sections'><a href='#identity'>Capture identity</a> · <a href='#overview'>Overview</a> · "
+             "<a href='#candidates'>Candidates</a> · <a href='#generations'>Generations</a> · "
+             "<a href='#posts'>Unjoined posts</a> · <a href='#components'>Components</a> · "
+             "<a href='#actions'>Next actions</a></nav>"]
+    identity = report.get("identity_reconciliation") or {"rule": "absent", "status": "absent", "supplied_inputs": 0,
+                                                         "counted_captures": 0, "duplicate_inputs": 0,
+                                                         "quarantined_inputs": 0, "invalid_inputs": 0,
+                                                         "conflict_groups": []}
+    parts.append(
+        f"<h2 id='identity'>Capture identity</h2><p>Rule <code>{e(identity['rule'])}</code>: "
+        f"<strong>{e(identity['status'])}</strong>. {identity['supplied_inputs']} archive arguments, "
+        f"{identity['counted_captures']} counted captures, {identity['duplicate_inputs']} repeated or copied arguments "
+        f"counted once, {identity['quarantined_inputs']} quarantined, {identity['invalid_inputs']} invalid. "
+        "Quarantined and invalid inputs contribute to no count, total or join.</p><table><thead><tr><th>input</th>"
+        "<th>status</th><th>identity</th><th>scope</th><th>manifest sha256</th><th>duplicate of / conflicts with</th>"
+        "</tr></thead><tbody>" + "".join("<tr>" + "".join(f"<td>{e(str(cell))}</td>" for cell in _input_cells(c))
+                                         + "</tr>" for c in report["components"] if c["component"] == "archive" and "identity" in c)
+        + "</tbody></table>")
+    parts += [f"<p>Conflict <code>{e(g['scope_id'])}</code>: inputs {e(_view_value(g['inputs']))} claim manifests "
+              f"<code>{e(', '.join(g['manifest_sha256s']))}</code>; none was chosen.</p>"
+              for g in identity["conflict_groups"]]
+    parts.append("<h2 id='overview'>Overview</h2>")
     for section, title in (("source", "Source"), ("checks", "Checks"), ("spend", "Spend"),
                            ("preference", "Preference"), ("publication", "Publication")):
         rows = "".join(f"<tr><th scope='row'>{e(k)}</th><td>{e(_view_value(v))}</td></tr>"
                        for k, v in sorted(o[section].items()))
         parts.append(f"<h3>{title}</h3><table>{rows}</table>")
+    if "routes" in report:
+        routes = report["routes"]
+        parts.append(f"<h3>Route evidence</h3><p>Route totals: <strong>{e(routes['route_totals_status'])}</strong> "
+                     f"(unknown because: {e(', '.join(routes['route_totals_unknown_reasons']) or 'none')}). "
+                     f"{len(routes['scopes'])} counted route scopes.</p>")
+        parts += [f"<p>Result conflict <code>{e(c['custom_id'])}</code> in batch {e(str(c['provider_batch_id']))}: "
+                  + e(", ".join(f"{s['scope_id']} route {s['route']} line {s['line']}" for s in c["sources"]))
+                  + "; none counted.</p>" for c in routes["result_conflicts"]]
     parts.append("<h2 id='candidates'>Candidates</h2>")
     for c in report["candidates"]:
         calls = "".join(f"<tr><td>{x['call']}</td><td>{e(x['stage'])}</td><td>{e(x['outcome'])}</td>"
@@ -802,9 +925,10 @@ def render_html(report: dict) -> str:
             f"<section id='{e(c['anchor'])}' aria-labelledby='{e(c['anchor'])}-t'><h3 id='{e(c['anchor'])}-t'>"
             f"{e(c['decision'])} · <code>{e(c['anchor'])}</code></h3>"
             f"<p>Event {e(str(c['event_id']))}; archive <code>{e(c['scope_id'])}</code> ({e(c['archive_status'])}); "
-            f"bundle <code>{e(c['bundle_sha256'])}</code>; candidate text <code>{e(c['candidate_text_sha256'])}</code>.</p>"
+            f"attempt {e(str(c.get('attempt')))}; bundle <code>{e(c['bundle_sha256'])}</code>; candidate text "
+            f"<code>{e(c['candidate_text_sha256'])}</code>.</p>"
             f"<p>Dispositions: {tags}</p><p>Publication: {e(c['publication']['status'])}; copy review: "
-            f"{e('in pack (' + ', '.join(c['copy_review']['pair_kinds']) + ')' if c['copy_review'].get('in_pack') else 'not in pack')}</p>"
+            f"{e(_pack_membership(c['copy_review']))}</p>"
             f"<p>Publication evidence: {e(_view_value(c['publication']))}</p>"
             "<table><thead><tr><th>call</th><th>stage</th><th>outcome</th><th>provider outcome</th><th>logical request</th>"
             f"<th>response / usage / billing</th></tr></thead><tbody>{calls}</tbody></table></section>")
@@ -825,9 +949,15 @@ def render_html(report: dict) -> str:
         parts += [f"<p>Outcome evidence {e(p['tweet_id'])}: {e(_view_value(p))}</p>" for p in report["unjoined_posts"]]
     else:
         parts.append("<p>None in the supplied state (or no state supplied).</p>")
-    parts.append("<h2 id='components'>Components</h2><table><thead><tr><th>component</th><th>status</th></tr></thead><tbody>")
-    parts += [f"<tr><td>{e(c['component'])}</td><td>{e(c['status'])}</td></tr>" for c in report["components"]]
-    parts.append("</tbody></table><h2>Limits</h2><ul>" + "".join(f"<li>{e(item)}</li>" for item in report["limits"])
+    parts.append("<h2 id='components'>Components</h2><table><thead><tr><th>component</th><th>status</th>"
+                 "<th>detail</th></tr></thead><tbody>")
+    parts += [f"<tr><td>{e(c['component'])}</td><td>{e(c['status'])}</td><td>{e(_component_detail(c))}</td></tr>"
+              for c in report["components"]]
+    parts.append("</tbody></table><h2 id='actions'>Next mechanical actions</h2><ul>"
+                 + ("".join(f"<li><code>{e(a['code'])}</code>: {e(a['action'])}</li>"
+                            for a in report.get("next_actions", []))
+                    or "<li>None.</li>") + "</ul>")
+    parts.append("<h2>Limits</h2><ul>" + "".join(f"<li>{e(item)}</li>" for item in report["limits"])
                  + "</ul></main></body></html>\n")
     return "".join(parts)
 

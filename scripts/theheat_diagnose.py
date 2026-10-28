@@ -10,6 +10,12 @@ export-copy  write one archived candidate's exact text and stage reasons to a NE
 
 No command generates, replays, calls a provider, approves, releases budget, posts,
 corrects, reads Gist/DB live state or follows a path found inside an input.
+
+Archive identity: a repeated --archive argument or a byte-identical copied export
+counts once (every argument stays listed). Distinct captures always count
+separately, even with identical requests. Two exports claiming one capture
+identity with different contents are quarantined from every count and join and
+the run exits 1; nothing is chosen, merged or repaired.
 Exit codes: 0 complete, 1 completed with held/absent-lineage components, 2 refused, 64 usage.
 """
 from __future__ import annotations
@@ -142,6 +148,10 @@ def _diagnose(args, diagnosis) -> int:
     _emit({"status": "completed_with_held_components" if held else "completed",
            "report_sha256": report["report_sha256"], "written": written,
            "held_components": [{"component": c["component"], "status": c["status"]} for c in held],
+           "identity": {key: report["identity_reconciliation"][key] for key in (
+               "status", "supplied_inputs", "counted_captures", "duplicate_inputs", "quarantined_inputs",
+               "invalid_inputs")},
+           "next_actions": [action["code"] for action in report["next_actions"]],
            "candidates": len(report["candidates"]), "generations": len(report["generations"]),
            "unjoined_posts": len(report["unjoined_posts"]), "promotion": "HOLD", "content_written_to_stdout": False})
     return 1 if held else 0
