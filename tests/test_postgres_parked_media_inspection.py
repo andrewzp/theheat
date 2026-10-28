@@ -82,6 +82,22 @@ def assert_passive(case, path, before, history):
     assert case["authority"].delivery_content(case["draft_id"], path["intent"]) == history
 
 
+def standalone_delivery_proof(case, path, monkeypatch):
+    authority, resolve = case["authority"], case["operators"].resolve
+    counts = dict(pair=0, prefix=0, inputs=0)
+    with monkeypatch.context() as patch:
+        observe(patch, counts)
+        standalone = authority.delivery_projection(case["draft_id"], resolve, now=case["inspection_at"])
+        assert standalone["intents"][0]["current"] is True
+        assert counts["pair"] >= 2 and counts["prefix"] == 1 and counts["inputs"] == 1
+        prepared = delivery.prepare_context(authority, intent_id=path["intent"])
+        prior = dict(counts)
+        with authority.projections._connection() as c:
+            delivery.context(authority, c, delivery.read(c, path["intent"]), resolve, case["inspection_at"], ghcn=prepared)
+        assert counts["pair"] >= prior["pair"] + 2 and counts["prefix"] == prior["prefix"] + 1
+    return dict(draft_id=case["draft_id"], intent_id=path["intent"], standalone_proof="verified")
+
+
 @pytest.mark.parametrize("compact_case", [("all_time_low",)], indirect=True)
 def test_compact_owned_get_real_proofs_fresh_operations_and_restored_faults(
     compact_case, tmp_path, monkeypatch
@@ -380,18 +396,10 @@ def test_compact_owned_get_real_proofs_fresh_operations_and_restored_faults(
             assert_passive(case, path, before, history)
 
         with body_phase("body_standalone"):
-            # Standalone passive and active APIs independently replay the real proof.
-            counts = dict(pair=0, prefix=0, inputs=0)
-            with monkeypatch.context() as patch:
-                observe(patch, counts)
-                standalone = authority.delivery_projection(case["draft_id"], resolve, now=case["inspection_at"])
-                assert standalone["intents"][0]["current"] is True
-                assert counts["pair"] >= 2 and counts["prefix"] == 1 and counts["inputs"] == 1
-                prepared = delivery.prepare_context(authority, intent_id=path["intent"])
-                prior = dict(counts)
-                with authority.projections._connection() as c:
-                    delivery.context(authority, c, delivery.read(c, path["intent"]), resolve, case["inspection_at"], ghcn=prepared)
-                assert counts["pair"] >= prior["pair"] + 2 and counts["prefix"] == prior["prefix"] + 1
+            # Active replay requires the existing single-threaded, credentialless
+            # worker. Keep the original proof sequence and assertions there.
+            result = temperature.ghcn_worker(case, "delivery_standalone_proof", path["intent"], case["inspection_at"].isoformat())
+            assert result == dict(draft_id=case["draft_id"], intent_id=path["intent"], standalone_proof="verified")
             assert_passive(case, path, before, history)
 
 

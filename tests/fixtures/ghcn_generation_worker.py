@@ -254,6 +254,14 @@ if operation=="checkpoint_probe":
     assert len(reads)==4
     result=dict(reads=4,distinct_validated_connections=3,full_source_preserved=True,
         later_source_tamper_refused="corrupt_projection_identity")
+elif operation == "delivery_standalone_proof":
+    import pytest
+    from src.commands.schema import utc_datetime
+    from tests.test_postgres_parked_media_inspection import standalone_delivery_proof
+    case = dict(authority=authority, operators=operators, draft_id=cfg["delivery_draft_id"],
+                inspection_at=utc_datetime(fault))
+    with pytest.MonkeyPatch.context() as patch:
+        result = standalone_delivery_proof(case, dict(intent=identity), patch)
 elif operation in {"delivery_run", "delivery_refusals", "delivery_high_control"}:
     from tests import test_postgres_temperature_delivery as t4
     from src.commands import postgres_delivery as delivery

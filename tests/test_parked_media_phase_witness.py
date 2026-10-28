@@ -1004,6 +1004,41 @@ def strip_spans(tree):
     return tree, removed
 
 
+def restore_isolated_standalone_proof(tree):
+    """Reverse exactly one reviewed relocation, preserving its full proof AST."""
+    helpers = [node for node in tree.body if isinstance(node, ast.FunctionDef)
+               and node.name == "standalone_delivery_proof"]
+    assert len(helpers) == 1
+    helper = helpers[0]
+    signature = ast.parse('def standalone_delivery_proof(case, path, monkeypatch): pass').body[0]
+    assert ast.dump(helper.args) == ast.dump(signature.args)
+    assert helper.returns is None and not helper.decorator_list and helper.type_comment is None
+    setup = ast.parse('authority, resolve = case["authority"], case["operators"].resolve').body[0]
+    result = ast.parse('return dict(draft_id=case["draft_id"], intent_id=path["intent"], standalone_proof="verified")').body[0]
+    assert ast.dump(helper.body[0]) == ast.dump(setup)
+    assert ast.dump(helper.body[-1]) == ast.dump(result)
+    tree.body.remove(helper)
+    seam = ast.parse('result = temperature.ghcn_worker(case, "delivery_standalone_proof", path["intent"], '
+        'case["inspection_at"].isoformat())\n'
+        'assert result == dict(draft_id=case["draft_id"], intent_id=path["intent"], standalone_proof="verified")').body
+    expected = [ast.dump(node) for node in seam]
+    targets = [node for node in tree.body if isinstance(node, ast.FunctionDef)
+               and node.name == "test_compact_owned_get_real_proofs_fresh_operations_and_restored_faults"]
+    assert len(targets) == 1
+    replacements = 0
+    for node in ast.walk(targets[0]):
+        for field in ("body", "orelse", "finalbody"):
+            body = getattr(node, field, None)
+            if not isinstance(body, list):
+                continue
+            for index in range(len(body) - 1):
+                if [ast.dump(item) for item in body[index:index + 2]] == expected:
+                    body[index:index + 2] = helper.body[1:-1]
+                    replacements += 1
+    assert replacements == 1
+    return tree
+
+
 @pytest.mark.skipif(sys.version_info[:2] != (3, 12), reason="the pinned AST digest is Python 3.12 ast.dump output")
 def test_target_test_is_the_original_after_removing_only_the_diagnostic_spans():
     tree, removed = strip_spans(ast.parse(TARGET_FILE.read_text(encoding="utf-8")))
@@ -1019,6 +1054,7 @@ def test_target_test_is_the_original_after_removing_only_the_diagnostic_spans():
     assert len(connections) == 4
     for item in connections:
         item.context_expr = original
+    tree = restore_isolated_standalone_proof(tree)
     assert hashlib.sha256(ast.dump(tree).encode()).hexdigest() == ORIGINAL_TARGET_AST_SHA256
 
 
