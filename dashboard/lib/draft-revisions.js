@@ -2,6 +2,7 @@ import { createHash } from "node:crypto"
 import { validEditorialPolicy } from "./editorial-policy.js"
 import { configuredAutomaticPolicy } from "./publication-control.js"
 import { projectSavedClaimEvidence } from "./saved-claim-evidence.js"
+import { buildOperatorClaimReferences, projectOperatorClaimReferenceHistory, projectOperatorClaimReferences } from "./operator-claim-references.js"
 
 // Paired with src/editorial/revisions.py. This is a decision binding, not a lock.
 function validUnicode(text) {
@@ -200,10 +201,21 @@ export function revokeApproval(draft) {
   return draft
 }
 
-export function invalidateText(draft, newText) {
+const referencesOmitted = Symbol("references omitted")
+export function invalidateText(draft, newText, operatorClaimReferences = referencesOmitted) {
   if (typeof newText !== "string" || !newText.trim() || [...newText].length > 280) throw new Error("Invalid draft text")
   textHash(newText) // Reject malformed Unicode before changing durable fields.
-  if (newText === draft.text && !draft.revision_conflicts?.length) return draft
+  if (draft.review_context != null && (typeof draft.review_context !== "object" || Array.isArray(draft.review_context))) throw new Error("Invalid draft review context")
+  const old = draft.review_context && Object.hasOwn(draft.review_context, "operator_claim_references") ? draft.review_context.operator_claim_references : referencesOmitted
+  let references
+  if (operatorClaimReferences === referencesOmitted) references = newText === draft.text ? old : referencesOmitted
+  else {
+    const bundle = draft.review_context?.two_bot?.bundle
+    if (Array.isArray(operatorClaimReferences) && operatorClaimReferences.length && (bundle?.event_id !== draft.event_id || bundle?.signal_kind !== draft.type)) throw new Error("Saved source snapshot does not match this draft")
+    references = buildOperatorClaimReferences(newText, bundle, operatorClaimReferences) ?? referencesOmitted
+  }
+  const sameReferences = references === old || (references !== referencesOmitted && old !== referencesOmitted && fingerprint(references) === fingerprint(old))
+  if (newText === draft.text && sameReferences && !draft.revision_conflicts?.length) return draft
   const previous = {}
   for (const key of ["text", "review_context", "review_binding", "approval_binding", "revision_conflicts", "decision_revision", "media_attachment", "media_review_binding"]) {
     if (Object.hasOwn(draft, key)) previous[key] = structuredClone(draft[key])
@@ -221,6 +233,12 @@ export function invalidateText(draft, newText) {
   for (const key of ["review_binding", "media_review_binding", "revision_conflicts", "candidate_score", "selected_candidate_rank"]) delete draft[key]
   if (draft.review_context?.two_bot) {
     draft.review_context.two_bot = Object.fromEntries(Object.entries(draft.review_context.two_bot).filter(([key]) => ["bundle", "signal_kind"].includes(key)))
+  }
+  if (references === referencesOmitted) {
+    if (draft.review_context) delete draft.review_context.operator_claim_references
+  } else {
+    draft.review_context ??= {}
+    draft.review_context.operator_claim_references = structuredClone(references)
   }
   return draft
 }
@@ -241,6 +259,8 @@ export function projectDraft(draft, policy = null) {
   } catch { /* An unverifiable historical analysis stays hidden. */ }
   return { ...draft, revision_identity: identity,
     claim_evidence: projectSavedClaimEvidence(draft, { identity, analysisMatches }),
+    operator_claim_reference_view: projectOperatorClaimReferences(draft, draftIdentity(draft)),
+    operator_claim_reference_history: projectOperatorClaimReferenceHistory(draft),
     review_status: draft.revision_conflicts?.length ? "conflict" : Object.hasOwn(draft, "media_attachment") ? "media_review_required" : !validEditorialPolicy(policy) ? "policy_unverified" : current ? "passed" : "needs_revalidation", review_kind: current ? draft.review_binding.kind : null }
 }
 

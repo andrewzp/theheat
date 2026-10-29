@@ -100,11 +100,24 @@ test("display is identity-bound, validates facts again, and never upgrades refer
 test("component presents honest saved facts and accessible edit controls without link execution", () => {
   const draft = projected()
   const html = renderToStaticMarkup(React.createElement(OperatorClaimReferences, { draft }))
-  for (const phrase of ["Operator-selected source references", "do not establish scientific support", "Saved source type: Invented fixture", "Source scope: Unknown", "Not supplied", "false", "&lt;img"])
+  for (const phrase of ["Operator-selected source references", "do not establish scientific support", "Saved source label: Invented fixture", "Saved source type: Unknown", "Source scope: Unknown", "Not supplied", "false", "&lt;img"])
     assert.ok(html.includes(phrase), phrase)
   assert.ok(!html.includes("<img") && !html.includes("href="))
   const editing = renderToStaticMarkup(React.createElement(OperatorClaimReferences, { draft, editing: true, items: fixture.items, onChange() {} }))
   for (const phrase of ["Saved references are hidden while editing", "Use selected quote", "Change reference 1", "Remove reference 1", "readOnly", "Select a quote from the current draft"])
     assert.ok(editing.includes(phrase), phrase)
   assert.ok(!editing.includes("Saved for this exact text"))
+})
+
+test("explicit retained source type, spatial scope and valid times are displayed without inventing an issue time", () => {
+  const draft = projected()
+  draft.review_context.two_bot.bundle = structuredClone(draft.review_context.two_bot.bundle)
+  draft.review_context.two_bot.bundle.evidence = { evidence_type: "forecast", spatial_scope: "model_grid_point", issued_at: null,
+    valid_start: "2032-01-02T00:00:00Z", valid_end: "2032-01-03T00:00:00Z" }
+  draft.review_context.operator_claim_references = buildOperatorClaimReferences(draft.text, draft.review_context.two_bot.bundle, fixture.items)
+  draft.revision_identity = draftIdentity(draft)
+  draft.operator_claim_reference_view = projectOperatorClaimReferences(draft)
+  const html = renderToStaticMarkup(React.createElement(OperatorClaimReferences, { draft }))
+  for (const value of ["Saved source type: forecast", "Source scope: model_grid_point", "Issue time: Unknown", "2032-01-02T00:00:00Z"])
+    assert.ok(html.includes(value), value)
 })

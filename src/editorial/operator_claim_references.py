@@ -123,3 +123,54 @@ def read_operator_claim_references(text: str, bundle: Any, value: Any) -> dict |
         return expected if fingerprint(expected) == fingerprint(value) else None
     except (ValueError, TypeError, UnicodeError, OverflowError, RecursionError):
         return None
+
+
+def project_operator_claim_references(draft: dict) -> dict:
+    from src.editorial.revisions import draft_identity
+    identity = draft_identity(draft)
+    review = draft.get("review_context")
+    if not isinstance(review, dict) or "operator_claim_references" not in review:
+        return {"status": "missing", "identity": identity, "items": []}
+    two = review.get("two_bot")
+    bundle = two.get("bundle") if isinstance(two, dict) else None
+    text = draft.get("text")
+    if not isinstance(bundle, dict) or not isinstance(text, str):
+        return {"status": "unavailable", "identity": identity, "items": []}
+    value = read_operator_claim_references(text, bundle, review["operator_claim_references"])
+    if (value is None or draft.get("revision_conflicts") or bundle.get("event_id") != draft.get("event_id") or bundle.get("signal_kind") != draft.get("type")):
+        return {"status": "unavailable", "identity": identity, "items": []}
+    items = []
+    for item in value["items"]:
+        sources = []
+        for source in item["sources"]:
+            fact = bundle["current_facts"][int(source["pointer"].rsplit("/", 1)[1])]
+            sources.append({"pointer": source["pointer"], "fact": {"label": fact["label"], "value": fact["value"], "unit": fact.get("unit")}})
+        items.append({"claim": item["claim"], "sources": sources})
+    def string(value, maximum):
+        return value if _string(value, maximum) else None
+    evidence = bundle.get("evidence")
+    if not isinstance(evidence, dict):
+        evidence = {}
+    return {"status": "saved", "identity": identity, "items": items,
+            "where": string(bundle.get("where"), 512), "when": string(bundle.get("when"), 128), "source_label": string(review.get("source"), 80),
+            "source_type": string(evidence.get("evidence_type"), 80), "scope": string(evidence.get("spatial_scope"), 160),
+            "issued_at": string(evidence.get("issued_at"), 128), "valid_start": string(evidence.get("valid_start"), 128), "valid_end": string(evidence.get("valid_end"), 128)}
+
+
+def project_operator_claim_reference_history(draft: dict) -> list[dict]:
+    from copy import deepcopy
+    from src.editorial.revisions import draft_identity
+    history = draft.get("revision_history")
+    if not isinstance(history, list):
+        return []
+    result = []
+    for row in history:
+        review = row.get("review_context") if isinstance(row, dict) else None
+        if not isinstance(review, dict) or "operator_claim_references" not in review:
+            continue
+        snapshot = {**deepcopy(row), "event_id": draft.get("event_id"), "type": draft.get("type")}
+        try:
+            result.append({**snapshot, "revision_identity": draft_identity(snapshot), "operator_claim_reference_view": project_operator_claim_references(snapshot)})
+        except (ValueError, TypeError, UnicodeError, OverflowError):
+            result.append({"content_revision": None, "operator_claim_reference_view": {"status": "unavailable", "items": []}})
+    return result

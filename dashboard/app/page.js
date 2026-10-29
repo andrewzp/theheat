@@ -363,7 +363,7 @@ export default function Dashboard() {
         type: "success",
         draftId,
         text: action === "edit" || action === "select_candidate"
-          ? (result.draft?.review_status === "passed" ? "Text unchanged; current review retained." : "Saved. Previous approval was cancelled. Review this version against its sources before posting.")
+          ? (result.draft?.review_status === "passed" ? "Text and references unchanged; current review retained." : "Saved. Previous approval was cancelled. Review this version against its sources before posting.")
           : action === "review" ? "Human review recorded for this version. You can now approve it for posting."
           : result.action ? `${result.action.replaceAll("_", " ")}.` : "Draft updated.",
       })

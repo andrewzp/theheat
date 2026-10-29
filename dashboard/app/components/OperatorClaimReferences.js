@@ -75,7 +75,20 @@ export function OperatorClaimReferences({ draft, text = draft?.text ?? "", items
         } }, `Change reference ${index + 1}`),
         h("button", { type: "button", className: "btn sm btn-ghost", style: { minHeight: 44 }, disabled, onClick: () => change(items.filter((_, i) => i !== index)) }, `Remove reference ${index + 1}`))))),
     !editing && view?.status === "saved" && h(React.Fragment, null,
+      h("p", null, `Saved source label: ${view.source_label || "Unknown"}`),
       h("p", null, `Saved source type: ${view.source_type || "Unknown"}`), h("p", null, `Saved source time: ${view.when || "Unknown"}`),
-      h("p", null, `Saved place: ${view.where || "Unknown"}`), h("p", null, "Source scope: Unknown; inspect the retained source before review."),
+      h("p", null, `Saved place: ${view.where || "Unknown"}`), h("p", null, `Source scope: ${view.scope || "Unknown"}`),
+      h("p", null, `Issue time: ${view.issued_at || "Unknown"}`), h("p", null, `Valid time: ${view.valid_start || "Unknown"} to ${view.valid_end || "Unknown"}`),
       h("p", { className: "text-muted" }, "A retained source fact is not an external official citation.")))
+}
+
+export function OperatorClaimReferenceHistory({ draft, editing = false }) {
+  const history = draft?.operator_claim_reference_history
+  if (editing || !Array.isArray(history) || !history.length) return null
+  return h("details", { className: "forecast-evidence", "aria-label": "Historical operator-selected references" },
+    h("summary", null, "Earlier operator-selected references"),
+    h("p", null, "Historical connections only. They do not apply to the current draft or record a current review."),
+    history.map((row, index) => h("article", { key: index },
+      h("h4", null, row.content_revision === null ? "Earlier version unavailable" : `Earlier version ${row.content_revision}`),
+      h(OperatorClaimReferences, { draft: row }))))
 }

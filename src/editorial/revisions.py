@@ -493,14 +493,42 @@ def revoke_approval(draft: dict) -> dict:
     return draft
 
 
-def invalidate_text(draft: dict, new_text: str, *, at: str | None = None) -> dict:
+_REFERENCES_OMITTED = object()
+
+
+def invalidate_text(draft: dict, new_text: str, *, at: str | None = None,
+                    operator_claim_references: Any = _REFERENCES_OMITTED) -> dict:
     if not isinstance(new_text, str) or not new_text.strip() or len(new_text) > 280:
         raise ValueError("Invalid draft text")
     text_hash(new_text)  # Reject malformed Unicode before changing durable fields.
-    if new_text == draft.get("text") and not draft.get("revision_conflicts"):
+    from src.editorial.operator_claim_references import build_operator_claim_references
+    review = draft.get("review_context")
+    if review is not None and not isinstance(review, dict):
+        raise ValueError("Invalid draft review context")
+    old_references = (review or {}).get("operator_claim_references", _REFERENCES_OMITTED)
+    if operator_claim_references is _REFERENCES_OMITTED:
+        references = old_references if new_text == draft.get("text") else _REFERENCES_OMITTED
+    else:
+        two = (review or {}).get("two_bot")
+        bundle = two.get("bundle") if isinstance(two, dict) else None
+        if operator_claim_references and (not isinstance(bundle, dict) or bundle.get("event_id") != draft.get("event_id") or bundle.get("signal_kind") != draft.get("type")):
+            raise ValueError("Saved source snapshot does not match this draft")
+        built = build_operator_claim_references(new_text, bundle, operator_claim_references)
+        references = built if built is not None else _REFERENCES_OMITTED
+    same_references = (references is old_references or
+                       (references is not _REFERENCES_OMITTED and old_references is not _REFERENCES_OMITTED and fingerprint(references) == fingerprint(old_references)))
+    if new_text == draft.get("text") and same_references and not draft.get("revision_conflicts"):
         return draft
     _invalidate_content(draft, at=at)
     draft["text"] = new_text
+    if references is _REFERENCES_OMITTED:
+        if isinstance(draft.get("review_context"), dict):
+            draft["review_context"].pop("operator_claim_references", None)
+    else:
+        draft.setdefault("review_context", {})
+        if draft["review_context"] is None:
+            draft["review_context"] = {}
+        draft["review_context"]["operator_claim_references"] = deepcopy(references)
     return draft
 
 
@@ -556,10 +584,13 @@ def _invalidate_content(draft: dict, *, at: str | None = None) -> dict:
 
 
 def project_draft(draft: dict, *, policy=_CURRENT_POLICY) -> dict:
+    from src.editorial.operator_claim_references import project_operator_claim_reference_history, project_operator_claim_references
     policy = _editorial_policy(policy)
     current = review_is_current(draft, policy=policy)
     return {
         **draft, "revision_identity": {**draft_identity(draft), "decision_revision": decision_revision(draft)},
+        "operator_claim_reference_view": project_operator_claim_references(draft),
+        "operator_claim_reference_history": project_operator_claim_reference_history(draft),
         "review_status": "conflict" if draft.get("revision_conflicts") else "media_review_required" if "media_attachment" in draft else "policy_unverified" if policy is None else "passed" if current else "needs_revalidation",
         "review_kind": draft.get("review_binding", {}).get("kind") if current else None,
     }

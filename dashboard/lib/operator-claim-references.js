@@ -33,8 +33,23 @@ export function projectOperatorClaimReferences(draft, identity = draftIdentity(d
   if (!value || draft.revision_conflicts?.length || bundle.event_id !== draft.event_id || bundle.signal_kind !== draft.type)
     return { status: "unavailable", identity: { ...identity }, items: [] }
   const string = (v, max) => validString(v, max) ? v : null
+  const evidence = bundle.evidence && typeof bundle.evidence === "object" && !Array.isArray(bundle.evidence) ? bundle.evidence : {}
   return { status: "saved", identity: { ...identity }, items: value.items.map(item => ({ claim: item.claim, sources: item.sources.map(({ pointer }) => {
     const row = bundle.current_facts[Number(pointer.split("/").at(-1))]
     return { pointer, fact: { label: row.label, value: row.value, unit: row.unit ?? null } }
-  }) })), where: string(bundle.where, 512), when: string(bundle.when, 128), source_type: string(review.source, 80) }
+  }) })), where: string(bundle.where, 512), when: string(bundle.when, 128), source_label: string(review.source, 80),
+    source_type: string(evidence.evidence_type, 80), scope: string(evidence.spatial_scope, 160), issued_at: string(evidence.issued_at, 128),
+    valid_start: string(evidence.valid_start, 128), valid_end: string(evidence.valid_end, 128) }
+}
+
+export function projectOperatorClaimReferenceHistory(draft) {
+  if (!Array.isArray(draft.revision_history)) return []
+  return draft.revision_history.flatMap(row => {
+    if (!row?.review_context || !Object.hasOwn(row.review_context, "operator_claim_references")) return []
+    const snapshot = { ...row, event_id: draft.event_id, type: draft.type }
+    try {
+      const identity = draftIdentity(snapshot)
+      return [{ ...snapshot, revision_identity: identity, operator_claim_reference_view: projectOperatorClaimReferences(snapshot, identity) }]
+    } catch { return [{ content_revision: null, operator_claim_reference_view: { status: "unavailable", items: [] } }] }
+  })
 }

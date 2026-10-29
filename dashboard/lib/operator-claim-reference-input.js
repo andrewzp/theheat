@@ -74,6 +74,8 @@ export function operatorReferencesForDisplay(draft) {
     })
     validateReferenceItems(draft.text, bundle, items)
     const string = (value, max) => validString(value, max) ? value : null
-    return { status: "saved", items: structuredClone(view.items), where: string(view.where, 512), when: string(view.when, 128), source_type: string(view.source_type, 80) }
+    return { status: "saved", items: structuredClone(view.items), where: string(view.where, 512), when: string(view.when, 128), source_label: string(view.source_label, 80),
+      source_type: string(view.source_type, 80), scope: string(view.scope, 160), issued_at: string(view.issued_at, 128),
+      valid_start: string(view.valid_start, 128), valid_end: string(view.valid_end, 128) }
   } catch { return unavailable }
 }
