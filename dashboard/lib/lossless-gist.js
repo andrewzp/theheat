@@ -1,4 +1,5 @@
 import { isDeepStrictEqual } from "node:util"
+import { validGistTemperatureMedia } from "./gist-temperature-media.js"
 
 // A storage boundary, not a source validator. Never repair or rehash evidence.
 const MAX_BYTES = 8 * 1024 * 1024
@@ -120,6 +121,26 @@ function containsSource(draft) {
   return ["review_context", "hot10_rows", "media_attachment"].some(key => own(draft, key))
 }
 
+function knownMediaTransition(before, after) {
+  if (isDeepStrictEqual(before.media_attachment, after.media_attachment)) return false
+  if (own(after, "media_attachment") && !validGistTemperatureMedia(after)) return false
+  if (!Number.isSafeInteger(before.content_revision ?? 0) || after.content_revision !== (before.content_revision ?? 0) + 1
+      || !Number.isSafeInteger(before.decision_revision ?? 0) || after.decision_revision !== (before.decision_revision ?? 0) + 1
+      || after.status !== "pending" || after.text !== before.text) return false
+  for (const key of ["approval_binding", "review_binding", "media_review_binding", "approved_at", "auto_approve_at",
+    "auto_approve_requested_at", "publish_requested_at", "publish_intent_id", "autoship_on_critic_pass"])
+    if (own(after, key)) return false
+  const history = after.revision_history, oldHistory = before.revision_history ?? []
+  if (!Array.isArray(history) || !Array.isArray(oldHistory)
+      || !oldHistory.every(row => history.some(current => isDeepStrictEqual(row, current)))) return false
+  if (!history.some(row => row.text === before.text && row.content_revision === (before.content_revision ?? 0)
+      && isDeepStrictEqual(row.review_context, before.review_context)
+      && isDeepStrictEqual(row.media_attachment, before.media_attachment))) return false
+  const left = protectedEvidence(before), right = protectedEvidence(after)
+  delete left.media_attachment; delete right.media_attachment
+  return isDeepStrictEqual(left, right)
+}
+
 export function assertGistEvidenceUnchanged(document, drafts) {
   const originals = draftNodes(document), seen = new Set()
   if (!Array.isArray(drafts)) fail()
@@ -128,7 +149,8 @@ export function assertGistEvidenceUnchanged(document, drafts) {
     seen.add(draft.id)
     const original = originals.get(draft.id)
     if (original) {
-      if (!isDeepStrictEqual(protectedEvidence(draft), protectedEvidence(original.value))) fail()
+      if (!isDeepStrictEqual(protectedEvidence(draft), protectedEvidence(original.value))
+          && !knownMediaTransition(original.value, draft)) fail()
     } else if (containsSource(draft)) fail()
   }
 }

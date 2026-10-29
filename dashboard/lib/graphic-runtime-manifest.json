@@ -1,6 +1,6 @@
 {
   "identity": {
-    "archive_sha256": "c676641b1b4f5b85aff393595fe94cc8cfa5bc3cdf9d92152fd9b7f07c8a49f6",
+    "archive_sha256": "94f55977ce3a10295fc4a986fa2c78e67ec455ff66ba4b34ef1323cad1602df4",
     "deployment_files": {
       "api/graphic_preview.py": "f7521adcbd618f4b65b2a0de30ea62aaff4cdd36f2254e9af38bf68646d361ad",
       "api/graphic_reader_status.py": "5e9685d699625a4eea9d5be884b6e266939a0ad344a2997351ba79bd114407ba",
@@ -13,7 +13,7 @@
       "src/dashboard_preview/auth.py": "eafa95e1ed18c7e993fa13e016799d9e92f0ee843fe6d3f2843adf28579a8e21",
       "src/dashboard_preview/errors.py": "2a6a5a87017b534f0b1b0ee9e317c7880cc10ef185734ad3a92827f7dd0152b7",
       "src/dashboard_preview/http.py": "dbcbf1e3b4f4f3fa4a231c6e1f80946e321c098e51f12543fee889490f9011ad",
-      "src/dashboard_preview/preview.py": "81c476d83dd3e3fa715622f1cc311e7a4b53c41fd6e06b8e76e9103b9a0c90fb",
+      "src/dashboard_preview/preview.py": "e72868a8e1c25d4a31ba39b58d73e2a14555b2236235679cfd3fc9030cc51ecf",
       "src/dashboard_preview/reader.py": "6cd9c00c79810a3b1ed7a107dbce9b2687b5aaa9cd761c02dcfe8de8cd888d18",
       "src/dashboard_preview/reader_status.py": "1f3d9d42dabebe1218eacd7133bd2477f58c85b53a6e2a719658846fbc5e96bb",
       "src/data/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
@@ -46,7 +46,7 @@
       "src/editorial/candidates.py": "80d50c488f44fd879c137751701a306cfae78eb376c3da33b9b7f3150cf9270d",
       "src/editorial/marine_evidence.py": "7183f93f1068d75856063cf061a1dea8751bd4dd98cc1f1f34488bcf39296f5c",
       "src/editorial/publication.py": "7fa23a8f51530dc7f128beacc23689f0df7a8c95b6888beb39afca4212f1a5fe",
-      "src/editorial/revisions.py": "24e4907b7e695a62aa2fb84d64d490fcc4ad8e85a0a0909b23ef3532fc0803ce",
+      "src/editorial/revisions.py": "510f4f2798f08778b759b539600df7c2f430e4af20c4f1c840e183c5df122294",
       "src/editorial/scoring/__init__.py": "f969fa55020ff1a436f9bce87701b43f574a98f340f1d5345fd74a5410db0de4",
       "src/editorial/scoring/_shared.py": "ecfbe383674644f82223150fc3beb9761b0ec3942f31b93d245514721fee16f0",
       "src/editorial/scoring/air_quality.py": "973727e2037d76129d68283a0889e23fafc8034b993315fd35af3c6c894dd30b",
@@ -69,6 +69,7 @@
       "src/media/fire_map_graphic_adapter.py": "083b3ca9c1473bf1458aa9a9d4bc1052c7128f40341d8c2f1bf086cd7c1713e7",
       "src/media/fonts/DejaVu-LICENSE.txt": "7a083b136e64d064794c3419751e5c7dd10d2f64c108fe5ba161eae5e5958a93",
       "src/media/fonts/DejaVuSansMono.ttf": "b4a6c3e4faab8773f4ff761d56451646409f29abedd68f05d38c2df667d3c582",
+      "src/media/gist_temperature_media.py": "ca51d19d054bc8e1c31a1bf61a31a589a91543e1ea5ddcad443ee42b628b2138",
       "src/media/maps/NOTICE.md": "f6ebf3caca500621c4b2c9f9fe9aad802099b82a4a1c21c479daf97d29aabac0",
       "src/media/maps/manifest.json": "1af072edc46ae3252bf6cf0edb43993986de262a2840b2cd4907eb4866f970e9",
       "src/media/maps/ne_110m_land_v4_1_0.json": "a37b057aca4fc9714a0c24b5d6bc9778bb5845894646e4052383ea63fa3cd50d",
@@ -85,12 +86,12 @@
       "src/two_bot/types.py": "36ed2e6475a655f4112012486795702159ed546c3040e8ef1874b7a0b02a9035"
     },
     "format": "saved-source-svg-preview-v2",
-    "policy_source_sha256": "d22df0fde7776ed320050d82699e3f9c33673c1d443b540606c85c8860dc52f6",
+    "policy_source_sha256": "e5dd2b068fa5294b287026af90d9160e4a81cc7b54c00ed76cd687d89ad45da9",
     "resource_sources": {
       "src/data/registry/country_codes.json": "data/country_codes.json",
       "src/data/registry/place_registry.json": "data/place_registry.json"
     },
     "schema_version": 1
   },
-  "runtime_sha256": "22f5306339b9e0d4fc6660e50ae9e03895249baabdb9306a84dc145432ad317e"
+  "runtime_sha256": "9e5900e9bfc170d11ae6b6ee6a1613784388367a03226dd6a08d553be42d5b75"
 }

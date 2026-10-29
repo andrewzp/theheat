@@ -7,8 +7,9 @@ const canonical = value => JSON.stringify(value, function (_key, item) {
   return item && typeof item === "object" && !Array.isArray(item)
     ? Object.fromEntries(Object.keys(item).sort().map(key => [key, item[key]])) : item
 })
-const digest = async value => Array.from(new Uint8Array(await globalThis.crypto.subtle.digest("SHA-256", encoder.encode(value))))
+const digestBytes = async bytes => Array.from(new Uint8Array(await globalThis.crypto.subtle.digest("SHA-256", bytes)))
   .map(byte => byte.toString(16).padStart(2, "0")).join("")
+const digest = value => digestBytes(encoder.encode(value))
 
 // Match editorial/revisions.py's typed fingerprint for this fixed ASCII-keyed
 // renderer binding. This does not compute or qualify scientific source evidence.
@@ -41,6 +42,11 @@ export function graphicRequest(draft, manifest) {
     evidence_sha256: revision.evidence_sha256, decision_revision: revision.decision_revision,
   }, expected_policy_source_sha256: manifest.identity.policy_source_sha256,
   expected_preview_runtime_sha256: manifest.runtime_sha256 }
+}
+
+export function temperaturePNGRequest(draft, manifest) {
+  const request = graphicRequest(draft, manifest)
+  return request ? { ...request, format: "png" } : null
 }
 
 export const graphicRequestKey = request => request ? canonical(request) : "unavailable"
@@ -128,7 +134,60 @@ function sourceContext(value, template) {
     && [context.valid_start, context.valid_end, context.requested_at, context.retrieved_at].every(utcTimestamp)
 }
 
+const descriptorKeys = ["schema_version", "kind", "bundle_sha256", "source_revision_sha256",
+  "baseline_revision_sha256", "station_id", "valid_date", "renderer", "png_sha256", "alt_text", "alt_sha256"]
+const pngResponseKeys = ["schema_version", "draft_id", "revision_identity", "policy_source_sha256", "preview_runtime_sha256",
+  "publication_approved", "attachment", "width", "height", "title", "alt_text", "scope", "source", "source_context",
+  "png_base64", "png_sha256", "media_descriptor", "media_descriptor_sha256"]
+
+function pngBytes(base64) {
+  if (typeof base64 !== "string" || base64.length === 0 || base64.length > 1_000_000
+      || base64.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(base64)) throw new Error("invalid PNG")
+  const decoded = atob(base64)
+  if (btoa(decoded) !== base64) throw new Error("invalid PNG")
+  const bytes = Uint8Array.from(decoded, char => char.charCodeAt(0))
+  if (bytes.length < 33 || bytes.length > 750_000
+      || [137, 80, 78, 71, 13, 10, 26, 10].some((byte, index) => bytes[index] !== byte)
+      || new DataView(bytes.buffer).getUint32(8) !== 13
+      || String.fromCharCode(...bytes.slice(12, 16)) !== "IHDR"
+      || new DataView(bytes.buffer).getUint32(16) !== 1200
+      || new DataView(bytes.buffer).getUint32(20) !== 1500) throw new Error("invalid PNG")
+  return bytes
+}
+
+async function validatePNGResponse(value, request, manifest) {
+  const descriptor = value?.media_descriptor, renderer = descriptor?.renderer, files = manifest?.identity?.files
+  const template = templates.temperature_comparator
+  if (!exactKeys(value, pngResponseKeys) || value.schema_version !== 3 || value.draft_id !== request.draft_id
+      || canonical(value.revision_identity) !== canonical(request.expected_revision)
+      || value.policy_source_sha256 !== request.expected_policy_source_sha256
+      || value.preview_runtime_sha256 !== request.expected_preview_runtime_sha256
+      || value.publication_approved !== false || value.attachment !== false
+      || value.width !== 1200 || value.height !== 1500 || value.source !== template.source
+      || !sourceContext(value, template)
+      || ![value.title, value.alt_text, value.scope].every(text => typeof text === "string" && text.length > 0 && text.length <= 10000)
+      || !isSHA(value.png_sha256) || !isSHA(value.media_descriptor_sha256)
+      || !exactKeys(descriptor, descriptorKeys) || descriptor.schema_version !== 1
+      || descriptor.kind !== "gist_temperature_comparator_v1" || encoder.encode(JSON.stringify(descriptor)).length > 16384
+      || ![descriptor.bundle_sha256, descriptor.source_revision_sha256, descriptor.baseline_revision_sha256,
+        descriptor.png_sha256, descriptor.alt_sha256].every(isSHA)
+      || descriptor.station_id !== value.source_context.station_id || descriptor.valid_date !== value.source_context.valid_date
+      || descriptor.png_sha256 !== value.png_sha256 || descriptor.alt_text !== value.alt_text
+      || !exactKeys(renderer, ["implementation_sha256", "font_sha256", "pillow", "freetype", "zlib", "width", "height"])
+      || renderer.width !== 1200 || renderer.height !== 1500
+      || !isSHA(files?.["src/media/gist_temperature_media.py"])
+      || !isSHA(files?.["src/media/fonts/DejaVuSansMono.ttf"])
+      || renderer.implementation_sha256 !== files["src/media/gist_temperature_media.py"]
+      || renderer.font_sha256 !== files["src/media/fonts/DejaVuSansMono.ttf"]
+      || ![renderer.pillow, renderer.freetype, renderer.zlib].every(value => typeof value === "string" && value.length > 0 && value.length <= 64)
+      || await digestBytes(pngBytes(value.png_base64)) !== value.png_sha256
+      || await digest(value.alt_text) !== descriptor.alt_sha256
+      || await digest(JSON.stringify(bindingPayload(descriptor))) !== value.media_descriptor_sha256) throw new Error("invalid preview")
+  return value
+}
+
 export async function validateGraphicResponse(value, request, manifest) {
+  if (request?.format === "png") return validatePNGResponse(value, request, manifest)
   const r = value?.binding?.renderer, files = manifest.identity.files
   const template = Object.hasOwn(templates, value?.binding?.template) ? templates[value.binding.template] : null
   if (!value || value.schema_version !== 2 || value.draft_id !== request.draft_id
@@ -218,7 +277,8 @@ export function createGraphicPreviewController({ manifest, onChange, fetcher = g
         if (!response.ok) { onChange({ status: "error", message: errors[response.status] || unavailable }); return }
         const value = await validateGraphicResponse(await readBounded(response), request, manifest)
         if (!valid() || controller.signal.aborted) return
-        url = createURL(new Blob([value.svg_utf8], { type: "image/svg+xml" }))
+        const image = value.schema_version === 3 ? pngBytes(value.png_base64) : value.svg_utf8
+        url = createURL(new Blob([image], { type: value.schema_version === 3 ? "image/png" : "image/svg+xml" }))
         onChange({ status: "ready", value, url })
       } catch {
         if (valid()) onChange({ status: "error", message: unavailable })

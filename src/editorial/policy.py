@@ -21,6 +21,8 @@ POLICY_FILES = (
     "src/commands/postgres_important_variants.py",
     "src/commands/postgres_cost_projection.py", "src/two_bot/retained_usage.py",
     "src/media/published_radar.py",
+    "src/media/gist_temperature_media.py", "dashboard/lib/gist-temperature-media.js",
+    "dashboard/lib/lossless-gist.js", "dashboard/lib/request-json.js",
     "src/commands/postgres_published_media.py",
     "src/data/nws_alerts.py",
     "src/orchestrator/sources/nws_alerts.py",

@@ -251,9 +251,9 @@ export function DraftWorkbench({
                 <NwsWarningEvidence key={"nws:" + reviewKey} draft={selectedDraft} />
                 {selectedDraft.local_preview
                   ? <EditorMedia key={`media:${reviewKey}`} draft={selectedDraft} editing={editingId === selectedDraft.id} updating={!!draftAction || !!pendingCommand} submitCommand={submitLocalCommand} />
-                  : <GraphicPreview key={`graphic:${reviewKey}`} draft={selectedDraft} editing={editingId === selectedDraft.id} updating={draftAction === selectedDraft.id} />}
+                  : <GraphicPreview key={`graphic:${reviewKey}`} draft={selectedDraft} editing={editingId === selectedDraft.id} updating={draftAction === selectedDraft.id} onAction={(action, payload) => draftAct(selectedDraft.id, action, payload)} />}
 
-                {controls.canReview && editingId !== selectedDraft.id && (
+                {controls.canReview && !selectedDraft.media_attachment_sha256 && !selectedDraft.media_attachment && editingId !== selectedDraft.id && (
                   <div className="workbench-panel">
                     <h3>Review this version</h3>
                     <p>Previous checks do not cover this text. Check it against the saved source evidence. Recording your review permits manual approval; it does not run or replace model checks.</p>
@@ -371,7 +371,7 @@ export function DraftWorkbench({
                     <h3>Approval Policy</h3>
                     <div className="workbench-headline">
                       {selectedDraft.review_status === "media_review_required"
-                        ? (hasLocalMediaPanel(selectedDraft) ? "Use Text and graphic for joint review, required checks and local approval status. Publishing is unavailable." : "Review the text and attached graphic together before approval. Joint graphic review is not available here yet.")
+                        ? (hasLocalMediaPanel(selectedDraft) ? "Use Text and graphic for joint review, required checks and local approval status. Publishing is unavailable." : "Review the text, image and full description together in Graphic preview before approval.")
                         : selectedDraft.review_status === "policy_unverified"
                         ? selectedDraft.editorial_policy?.reason
                         : controls.needsReview
