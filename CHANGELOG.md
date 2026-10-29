@@ -21,6 +21,8 @@
 - Register supplied warnings as a conditional input rather than a new provider
   availability claim. Keep bounded grant-refusal diagnostics in offline fixtures
   so delivery checks report the original refusal without exposing payloads.
+- Balance four complete local-media test modules across the existing CI workers,
+  preserving every case and job limit while leaving room for dashboard checks.
 
 ## 0.9.109.46
 

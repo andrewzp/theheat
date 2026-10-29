@@ -117,6 +117,18 @@ _CI_GHCN_FINAL_FAULT_SHARDS = {
     "policy": "4",
 }
 
+# Whole local-media modules measured at ~816s in CI40953371063. Moving them to
+# the existing media worker keeps every node while leaving time for the core
+# worker's dashboard checks inside the unchanged 45-minute job limit.
+_CI_LOCAL_MEDIA_MODULES = frozenset(
+    Path(__file__).resolve().parent / name for name in (
+        "test_retained_temperature_calculation.py",
+        "test_parked_media_inspection.py",
+        "test_media_replay_reuse.py",
+        "test_media_review_pair.py",
+    )
+)
+
 
 def _ci_postgres_shard(path, test_name=None, parameters=None):
     # Anchor to this repository, not the working directory or randomized hash().
@@ -158,7 +170,8 @@ def pytest_collection_modifyitems(config, items):
     for item in items:
         filename = item.path.name
         group = (
-            "media" if filename.startswith("test_postgres_media") or filename == "test_viirs_native_package.py"
+            "media" if (filename.startswith("test_postgres_media") or filename == "test_viirs_native_package.py"
+                        or item.path.resolve() in _CI_LOCAL_MEDIA_MODULES)
             else "postgres" if filename.startswith("test_postgres_")
             else "core"
         )
