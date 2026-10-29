@@ -45,8 +45,8 @@ def _hold_nws_draft(draft: dict, reason: str) -> None:
     revoke_approval(draft)
     draft["status"] = "pending"
     draft["approval_mode"] = "manual"
-    source = {"official_warning": "Official warning", "nhc_advisory": "NHC advisory"}.get(
-        draft.get("type"), "NWS warning")
+    source_names: dict[object, str] = {"official_warning": "Official warning", "nhc_advisory": "NHC advisory"}
+    source = source_names.get(draft.get("type"), "NWS warning")
     draft["post_error"] = f"{source} needs fresh source review: {reason}"
     _touch_draft(draft)
 

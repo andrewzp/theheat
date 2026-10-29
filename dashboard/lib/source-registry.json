@@ -635,7 +635,7 @@
     "src/data/methane.py": "061c60608f1d7c016b5afcce91c4d178d98e9f26ea1fdffb600e5f9cc6161355",
     "src/data/newsworthiness.py": "8f433217218fb8cd7855eba39722e87c81b9c7f0ecc8ee8f97127c0812d98ce3",
     "src/data/nhc.py": "2cfa04ab49bd13c1231e298fa2d0e08fd833e649b93f265199ffe5a4071a7ab1",
-    "src/data/nhc_advisory.py": "5744695539f8060ae76f9bf9da3a90f47e294f9ed26b5374593a3e81c0e9bae5",
+    "src/data/nhc_advisory.py": "c54a764d194d376a39e98c87af40d1911dbc9f088817a2c36416b399b6e45acf",
     "src/data/nsidc_snow.py": "ab75c73ec88130ae5805b1c5cf33a9b3912922c74da72b281b34d9cb9c7ae535",
     "src/data/nws_alerts.py": "f96c74c51bedaefc6e667c5d93e00d3ff08de8dcf1f3ecdb16dacad68a4bf402",
     "src/data/ocean.py": "46987453207a69d4b6772d46de0c61235d4825eaa85b544ca5b61d340c669891",
@@ -650,7 +650,7 @@
     "src/data/temperature_evidence.py": "f656cee4dd86e6f6762932e98ea189e39e5965852c5d3e06299d8ffff3173046",
     "src/data/usgs_quakes.py": "d074863aba46097e0aa31a0c16c48158a2769c1403cac51e1e2054b2deb96650",
     "src/data/water_levels.py": "2b77738fe2e5f4a246b29691879726873a48622ee26e6ffcd35713f07c505ab3",
-    "src/editorial/nhc_advisory.py": "e82d28af090ffe33d9b4167535c6c9111dac53c199dc2f8de631f9835d90d998",
+    "src/editorial/nhc_advisory.py": "ffa814251ed31011de5642d9fc3fc1a4aec92ea7ddd82d0a733ce49741400f7b",
     "src/editorial/nhc_advisory_runtime.py": "aae58135f5f89026b01b9bcfe0e873bc48bbf25694d412af80643be23c9d242c",
     "src/editorial/official_warning.py": "e37a232fe19e8ef90bfc825c92b95b89d9c9f9df7818b4a3352466ad2beeff87",
     "src/editorial/warning_runtime.py": "3d2cb7e2d449545d682728e4adf777a622a2f5139081e46e14398122864d5f38",
@@ -690,5 +690,5 @@
     "src/two_bot/intern/warnings.py": "04e0a4506ffbb29124c8d2960a5e5025305699297fcf8f9178b23caac2cd7a37"
   },
   "evidence_scope": "Referenced local code inventory; not live/provider/transitive-source qualification.",
-  "registry_sha256": "f76c0e8ad6cd2fb71e0132c51a3f3b525128242e4433fa4fd6a8f5ce12faa28d"
+  "registry_sha256": "ec0e5e6d9051c4194bafa7cb3871bdca9e1b6b707ad2df8e2dc12eb68382b201"
 }
