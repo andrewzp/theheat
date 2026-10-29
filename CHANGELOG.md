@@ -1,3 +1,9 @@
+## 0.9.109.45
+
+- Redistribute two expensive approval-regression cohorts across existing CI jobs,
+  keeping paired cases together and preserving every test, critical ordering,
+  assertion and deadline. Production behavior and dashboard assets are unchanged.
+
 ## 0.9.109.44
 
 - Label invented temperature previews visibly in the PNG as well as its image
