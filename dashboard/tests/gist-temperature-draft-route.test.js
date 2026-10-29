@@ -42,7 +42,8 @@ function pythonJSON(code, input) {
   const result = spawnSync(python, ["-c", code], { cwd: root, input: JSON.stringify(input), encoding: "utf8", timeout: 30000,
     env: { PATH: process.env.PATH, HOME: "/nonexistent-invented-gist-test", LC_ALL: "C", LANG: "C", NETRC: "/dev/null",
       PYTHON_DOTENV_DISABLED: "1", PYTHONDONTWRITEBYTECODE: "1", NO_PROXY: "*", no_proxy: "*" } })
-  assert.equal(result.status, 0, result.stderr)
+  assert.equal(result.status, 0, JSON.stringify({ stderr: result.stderr, signal: result.signal,
+    error: result.error ? { name: result.error.name, code: result.error.code, message: result.error.message } : null }))
   return JSON.parse(result.stdout)
 }
 let fixture

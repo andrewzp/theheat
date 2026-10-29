@@ -5,7 +5,7 @@ import { pathToFileURL } from "node:url"
 
 // New, opt-in invented-data scope. Never opens a personal profile or reruns an
 // old browser case. Ordinary npm test records this journey as unperformed.
-test("owned real PNG attach/joint-review/edit/remove/switch/refusal UI at 1280/390/320", {
+test("owned reference selection + real PNG joint-review invalidation UI at 1280/390/320", {
   skip: !process.env.THEHEAT_GIST_TEMPERATURE_JOURNEY_CONFIG && "Run the new owned temperature journey launcher",
 }, async () => {
   const config = JSON.parse(readFileSync(process.env.THEHEAT_GIST_TEMPERATURE_JOURNEY_CONFIG, "utf8"))
@@ -37,6 +37,34 @@ test("owned real PNG attach/joint-review/edit/remove/switch/refusal UI at 1280/3
         await panel.locator("img").waitFor()
         await page.waitForFunction(() => { const image = document.querySelector(".graphic-preview img"); return image?.complete && image.naturalWidth === 1200 && image.naturalHeight === 1500 })
       }
+      // The composed union's saved legacy GHCN type must expose its actual facts.
+      // Connect the exact current quote to the observed reading with the keyboard.
+      const references = page.getByRole("region", { name: "Operator-selected source references", exact: true }).first()
+      const initial = await saved()
+      const factIndex = initial.review_context.two_bot.bundle.current_facts.findIndex(fact => fact.label === "today_temp_c")
+      assert.ok(factIndex >= 0)
+      await press(page.getByRole("button", { name: "Edit", exact: true }))
+      const quote = references.getByLabel("Select a quote from the current draft")
+      await quote.focus(); await page.keyboard.press("ControlOrMeta+A")
+      const selectedQuote = await quote.evaluate(element => ({ start: element.selectionStart, end: element.selectionEnd, text: element.value }))
+      assert.deepEqual(selectedQuote, { start: 0, end: initial.text.length, text: initial.text })
+      await page.keyboard.press("Tab")
+      assert.equal(await page.evaluate(() => document.activeElement?.textContent), "Use selected quote")
+      await page.keyboard.press("Enter")
+      const fact = references.getByRole("checkbox", { name: /today temp c: 42\.2/ })
+      await fact.focus(); await page.keyboard.press("Space")
+      assert.equal(await fact.isChecked(), true)
+      await press(references.getByRole("button", { name: "Add reference", exact: true }))
+      await press(page.getByRole("button", { name: "Save", exact: true }))
+      await references.getByText("Saved for this exact text and source snapshot.", { exact: true }).waitFor()
+      const referenceSaved = await saved(), referenceEnvelope = referenceSaved.review_context.operator_claim_references
+      assert.equal(referenceSaved.content_revision, initial.content_revision + 1)
+      assert.equal(referenceSaved.text, initial.text)
+      assert.equal(referenceEnvelope.items.length, 1)
+      assert.equal(referenceEnvelope.items[0].claim.text, initial.text)
+      assert.equal(referenceEnvelope.items[0].sources[0].pointer, `/current_facts/${factIndex}`)
+      assert.equal(referenceSaved.review_binding, undefined)
+      assert.equal(referenceSaved.approval_binding, undefined)
       await preview()
       assert.match(await panel.innerText(), /Full graphic description/)
       assert.match(await panel.innerText(), /reporting interval and timezone unknown/)
@@ -63,8 +91,24 @@ test("owned real PNG attach/joint-review/edit/remove/switch/refusal UI at 1280/3
       assert.equal(reviewed.review_binding.media_sha256.length, 64)
       assert.deepEqual(reviewed.media_attachment, attached.media_attachment)
       assert.equal(reviewed.approval_binding, undefined)
+      assert.deepEqual(reviewed.review_context.operator_claim_references, referenceEnvelope)
       await preview()
       await page.screenshot({ path: `${config.screens}/${width}-reviewed.png`, fullPage: true })
+      // A references-only edit must revoke the existing joint review even though
+      // the exact tweet, retained source and reviewed image remain unchanged.
+      await press(page.getByRole("button", { name: "Edit", exact: true }))
+      await press(references.getByRole("button", { name: "Remove reference 1", exact: true }))
+      await press(page.getByRole("button", { name: "Save", exact: true }))
+      await references.getByText(/No operator-selected references were saved/).waitFor()
+      const referenceRemoved = await saved()
+      assert.equal(referenceRemoved.content_revision, reviewed.content_revision + 1)
+      assert.equal(referenceRemoved.text, reviewed.text)
+      assert.deepEqual(referenceRemoved.media_attachment, reviewed.media_attachment)
+      assert.equal(referenceRemoved.review_context.operator_claim_references, undefined)
+      assert.equal(referenceRemoved.review_binding, undefined)
+      assert.equal(referenceRemoved.approval_binding, undefined)
+      assert.ok(referenceRemoved.revision_history.some(row => row.content_revision === reviewed.content_revision
+        && row.review_binding?.kind === "human_media" && row.review_context?.operator_claim_references?.items[0].claim.text === initial.text))
       await press(page.getByRole("button", { name: "Edit", exact: true }))
       const editor = page.getByLabel("Edit draft text", { exact: true })
       const edited = reviewed.text + " Changed."
@@ -103,6 +147,8 @@ test("owned real PNG attach/joint-review/edit/remove/switch/refusal UI at 1280/3
       assert.equal(final.state.drafts.some(d => d.status === "approved" || d.publish_intent_id), false)
       await page.screenshot({ path: `${config.screens}/${width}-refusal.png`, fullPage: true })
       report.widths.push({ width, passed: true, writes: final.writes, previews: final.previews, overflow,
+        operator_reference_selected: true, selected_fact_pointer: `/current_facts/${factIndex}`,
+        references_only_edit_invalidated_joint_review: true,
         attachment_png_sha256: attached.media_attachment.png_sha256, attachment_alt_sha256: attached.media_attachment.alt_sha256 })
       await context.close()
     }
