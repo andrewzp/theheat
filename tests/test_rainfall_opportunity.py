@@ -561,9 +561,11 @@ def test_r2_malformed_nested_fields_hold_that_record_without_aborting_the_audit(
     bad = _with(_grid_trace(rows, DAY + timedelta(days=1), read={1}, run_id="run_alerts_bad"), path, value)
     report = audit.evaluate([good, bad], [pop])
     rows_by = {(r["identity"], r["status"]) for r in report["runs"]}
-    assert (None, "unsupported") in rows_by and ("run_alerts_good", "counted") in rows_by
+    assert ("run_alerts_bad", "unsupported") in rows_by and ("run_alerts_good", "counted") in rows_by
     refused = next(r for r in report["runs"] if r["status"] == "unsupported")
+    assert refused["selection_date"] == (DAY + timedelta(days=1)).isoformat()
     assert refused["reasons"] == [code]
+    assert report["calendar"][1] == {"date": refused["selection_date"], "status": "missing_run", "held": ["unsupported"]}
     assert report["opportunity_member_runs"]["fresh_primary"] == 1
 
 

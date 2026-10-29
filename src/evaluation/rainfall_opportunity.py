@@ -281,19 +281,22 @@ def derived_incomplete(document: dict[str, Any]) -> list[str]:
     elif not population["within_trace_bound"]:
         reasons.add("population_exceeds_trace_bound")
     for leg in document["legs"]:
-        if leg["leg"] in GRID_LEGS and "candidates" in leg:
-            if not {"downloads", "candidates_omitted"} <= set(leg) or \
-                    len(leg["candidates"]) + leg["candidates_omitted"] != leg["downloads"]:
+        if leg["leg"] in GRID_LEGS:
+            if not {"candidates", "downloads", "candidates_omitted"} <= set(leg):
+                reasons.add("grid_capture_missing")
+            elif len(leg["candidates"]) + leg["candidates_omitted"] != leg["downloads"]:
                 reasons.add("retained_counts_inconsistent")
-            elif leg["candidates_omitted"]:
+            if leg.get("candidates_omitted", 0):
                 reasons.add("grid_candidates_exceed_trace_bound")
             if leg.get("inspection") == "completed" and "reading_bitmap" not in leg:
                 reasons.add("grid_membership_not_captured")
-        if "date_probes" in leg:
-            if not {"date_probe_calls", "date_probes_omitted"} <= set(leg) or \
-                    len(leg["date_probes"]) + leg["date_probes_omitted"] != leg["date_probe_calls"]:
+        probe_fields = {"date_probes", "date_probe_calls", "date_probes_omitted"}
+        if set(leg) & probe_fields:
+            if not probe_fields <= set(leg):
+                reasons.add("date_probe_capture_missing")
+            elif len(leg["date_probes"]) + leg["date_probes_omitted"] != leg["date_probe_calls"]:
                 reasons.add("retained_counts_inconsistent")
-            elif leg["date_probes_omitted"]:
+            if leg.get("date_probes_omitted", 0):
                 reasons.add("date_probes_exceed_trace_bound")
         if leg["leg"] in WINDOW_LEGS and set(leg) & (_WINDOW_KEYS - {"data_date"}):
             if not _WINDOW_KEYS <= set(leg):
@@ -393,6 +396,24 @@ def _walkback(trace: dict[str, Any]) -> dict[str, Any]:
             "depth_days": max(((selection - date.fromisoformat(d)).days for d in data), default=None)}
 
 
+def capture_context(document: Any) -> dict[str, Any]:
+    """Independently checked identity/date, solely for withholding unauditable days.
+
+    This does not validate the trace or make any of its evidence countable. A
+    different schema/source or malformed identity/date cannot affect this audit.
+    """
+    if type(document) is not dict or document.get("schema") != TRACE_SCHEMA or document.get("source_id") != "gpm_imerg":
+        return {}
+    run_id = document.get("run_id")
+    if run_id is not None and (type(run_id) is not str or _KEY.fullmatch(run_id) is None):
+        return {}
+    try:
+        selection = _day(document.get("selection_date_utc"), "trace_selection_date")
+    except TraceError:
+        return {}
+    return {"run_id": run_id, "selection_date": selection}
+
+
 def evaluate(traces: list[Any], populations: list[Any], *, start: date | None = None,
              end: date | None = None) -> dict[str, Any]:
     """Audit detached traces against matching canonical populations."""
@@ -416,7 +437,9 @@ def evaluate(traces: list[Any], populations: list[Any], *, start: date | None = 
         try:
             checked = validate_trace(document)
         except TraceError as exc:
-            rows.append({"identity": None, "trace_sha256": content, "status": "unsupported", "reasons": [str(exc)]})
+            context = capture_context(document)
+            rows.append({"identity": context.get("run_id"), "trace_sha256": content, "status": "unsupported",
+                         "reasons": [str(exc)], **_dated(context)})
             continue
         if checked["run_id"] is None:
             rows.append({"identity": None, "trace_sha256": content, "status": "unidentified_held",

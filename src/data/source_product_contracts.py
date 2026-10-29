@@ -838,6 +838,44 @@ def _aq_served(details: Any) -> list[str] | None:
     return served or None
 
 
+def _gdacs_witness_served(details: Any) -> list[str] | None:
+    """Resolve the shared witness label from the runner's per-feed diagnostics.
+
+    Missing/contradictory diagnostics establish no serving product. Success with
+    zero selected events is still a completed feed, never proof of global recall.
+    """
+    try:
+        diagnostics = details["feed_diagnostics"]
+        feeds = diagnostics["legs"]
+        if diagnostics.get("source_leg") != "subtype_witnesses" or type(feeds) is not dict \
+                or set(feeds) != {"usgs_quakes", "nhc", "jtwc"}:
+            return None
+        served = []
+        selected_total = 0
+        for name, product in (("usgs_quakes", "usgs"), ("nhc", "nhc"), ("jtwc", "jtwc")):
+            feed = feeds[name]
+            if type(feed) is not dict or set(feed) != {"status", "records_received", "records_selected"}:
+                return None
+            received, selected = feed.get("records_received"), feed.get("records_selected")
+            if feed.get("status") == "success":
+                if type(received) is not int or type(selected) is not int or not 0 <= selected <= received:
+                    return None
+                selected_total += selected
+                served.append("gdacs.subtype_witness_" + product)
+            elif feed.get("status") != "failed" or received is not None or selected is not None:
+                return None
+        if type(diagnostics.get("selected_alerts")) is not int or diagnostics["selected_alerts"] != selected_total:
+            return None
+        expected = "witnesses_completed" if len(served) == 3 else "partial_witness_failure"
+        if "status" in diagnostics and diagnostics["status"] != expected:
+            return None
+        if "primary_status" in diagnostics and diagnostics["primary_status"] != "unavailable":
+            return None
+    except (KeyError, TypeError, AttributeError):
+        return None
+    return served or None
+
+
 def serving_disposition_from_run_entry(entry: Any, *, legs=LEGS, registry=REGISTRY_CONTRACTS) -> dict[str, Any]:
     """Read serving evidence from one actual source-run entry, never from status alone."""
     if type(entry) is not dict or type(entry.get("source")) is not str or type(entry.get("status")) is not str:
@@ -861,7 +899,15 @@ def serving_disposition_from_run_entry(entry: Any, *, legs=LEGS, registry=REGIST
             result["reasons"].append("conflicting_serving_labels")
         return result
     if labels:
-        return serving_disposition(source_id, status=entry["status"], runtime_leg_label=labels.pop(),
+        label = labels.pop()
+        if source_id == "gdacs" and label == "subtype_witnesses":
+            served = _gdacs_witness_served(entry.get("details"))
+            result = serving_disposition(source_id, status=entry["status"], served_product_ids=served,
+                                         health_key=health_key, legs=legs)
+            if served is None:
+                result["reasons"].append("witness_serving_diagnostics_missing_or_inconsistent")
+            return result
+        return serving_disposition(source_id, status=entry["status"], runtime_leg_label=label,
                                    health_key=health_key, legs=legs)
     served = _aq_served(entry.get("details")) if source_id == "air_quality" else None
     return serving_disposition(source_id, status=entry["status"], served_product_ids=served,

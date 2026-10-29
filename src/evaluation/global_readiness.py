@@ -84,7 +84,11 @@ def strict_loads(raw: bytes) -> Any:
 
     try:
         return json.loads(raw.decode("utf-8"), object_pairs_hook=pairs, parse_constant=nonfinite)
-    except (UnicodeDecodeError, json.JSONDecodeError):
+    except ReadinessError:
+        # Keep the explicit duplicate-key/nonfinite refusal codes.
+        raise
+    except (UnicodeDecodeError, ValueError):
+        # JSON decoding also raises plain ValueError for oversized integers.
         raise ReadinessError("invalid_json") from None
     except RecursionError:
         raise ReadinessError("input_structure_bound") from None
@@ -279,8 +283,11 @@ def _report(export, cutoff):
         if story is not None:
             reports.require(type(story) is dict and set(story) == {"episode_id", "episode_head", "association_status",
                                                                    "time_compatibility"}, "report_projection_story")
+            physical_events._episode(story["episode_id"])
             reports.sha(story["episode_head"])
             reports.require(story["association_status"] == "source_identity_reference_only", "report_projection_story")
+            reports.require(type(story["time_compatibility"]) is str and story["time_compatibility"] in {
+                "explicit_utc_interval", "source_calendar_compatibility_only"}, "report_projection_story")
     except (ValueError, TypeError, KeyError):
         raise _Unsupported("invalid_report_projection") from None
     held = sorted(set(holds))
@@ -580,28 +587,38 @@ def component_presence(rows) -> dict[str, str]:
     return presence
 
 
-def _rainfall_audit(rows):
-    """Measured opportunity over current traces only; a separate, labelled section.
+def _rainfall_audit(rows, cutoff):
+    """Audit eligible captures including holds; never promote their evidence.
 
-    Only the populations the current traces name are audited; an unreferenced
-    population adds nothing. More referenced populations than one audit accepts
-    hold the section instead of truncating it.
+    Cutoff and source/schema checks precede the lower evaluator. Conflicting,
+    incomplete and unsupported dated captures must still withhold their day.
+    Only populations these eligible captures name are audited.
     """
-    def current(kind):
-        return [row for row in rows if row["component_type"] == "rainfall_opportunity"
-                and row["facts"].get("kind") == kind and row["status"] == "current"]
-    traces = current("trace")
-    populations = current("population")
+    traces = []
+    referenced = set()
+    populations = _current(rows, "rainfall_opportunity")
+    populations = [row for row in populations if row["facts"].get("kind") == "population"]
+    for row in rows:
+        if row["component_type"] != "rainfall_opportunity":
+            continue
+        export = row["_export"]
+        context = rainfall.capture_context(export)
+        if not context or context["selection_date"] > cutoff.date():
+            continue
+        traces.append(export)
+        population = export.get("population")
+        sha = population.get("sha256") if type(population) is dict else None
+        if type(sha) is str:
+            referenced.add(sha)
     if not traces:
         return None, None, len(populations), []
-    referenced = {row["facts"]["population_sha256"] for row in traces} - {None}
     chosen = sorted((row for row in populations if row["identity"].split(":", 1)[1] in referenced),
                     key=lambda row: row["identity"])
     audited = [row["identity"].split(":", 1)[1] for row in chosen]
     if len(chosen) > rainfall.MAX_AUDIT_POPULATIONS:
         return None, "audit_population_bound", len(populations), audited
     try:
-        return (rainfall.evaluate([row["_export"] for row in traces], [row["_export"] for row in chosen]), None,
+        return (rainfall.evaluate(traces, [row["_export"] for row in chosen]), None,
                 len(populations), audited)
     except rainfall.TraceError as exc:
         return None, str(exc), len(populations), audited
@@ -729,7 +746,7 @@ def assess(envelope: Any) -> dict[str, Any]:
     cutoff, components = validate_envelope(envelope)
     rows = _decode_components(components, cutoff)
     joins = _joins(rows)
-    audit, audit_hold, populations_supplied, populations_audited = _rainfall_audit(rows)
+    audit, audit_hold, populations_supplied, populations_audited = _rainfall_audit(rows, cutoff)
     for row in rows:
         del row["_export"]
     result = {
