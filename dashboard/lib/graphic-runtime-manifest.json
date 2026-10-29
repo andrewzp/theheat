@@ -1,6 +1,6 @@
 {
   "identity": {
-    "archive_sha256": "e1d6f54bf1ec5e25fe9be1f28e68f11ae35ca5cda87cfa89bbd40a54001158ef",
+    "archive_sha256": "a385e33d79238b0bce55f9d55964dd974a49b0704dbd2584ac33a0c7667dfbd3",
     "deployment_files": {
       "api/graphic_preview.py": "f7521adcbd618f4b65b2a0de30ea62aaff4cdd36f2254e9af38bf68646d361ad",
       "api/graphic_reader_status.py": "5e9685d699625a4eea9d5be884b6e266939a0ad344a2997351ba79bd114407ba",
@@ -45,7 +45,7 @@
       "src/editorial/approval.py": "7c74edff3e93cd2024522df5281dda73cef287c8b038f705f4e391ad8ebb89c3",
       "src/editorial/candidates.py": "80d50c488f44fd879c137751701a306cfae78eb376c3da33b9b7f3150cf9270d",
       "src/editorial/marine_evidence.py": "7183f93f1068d75856063cf061a1dea8751bd4dd98cc1f1f34488bcf39296f5c",
-      "src/editorial/operator_claim_references.py": "dbd11ac41b88e0019dde2f51b078c43cf8bd46966f1cb06e2adffc267f3bfbdc",
+      "src/editorial/operator_claim_references.py": "06cf74fbcc05a158bcead06568b0f61fc6a2c756c60084b661d4659a9be7bba3",
       "src/editorial/publication.py": "7fa23a8f51530dc7f128beacc23689f0df7a8c95b6888beb39afca4212f1a5fe",
       "src/editorial/revisions.py": "3bf102c60a4077e5ae1c58cd26af75ee674ac1daaab0feb655b7b04c1b7a2cf5",
       "src/editorial/scoring/__init__.py": "f969fa55020ff1a436f9bce87701b43f574a98f340f1d5345fd74a5410db0de4",
@@ -90,12 +90,12 @@
       "src/two_bot/types.py": "36ed2e6475a655f4112012486795702159ed546c3040e8ef1874b7a0b02a9035"
     },
     "format": "saved-source-svg-preview-v2",
-    "policy_source_sha256": "f11f5fe767fc22f12aa0edf68692df00807cbf767ae4c509f7f758ea6e50b43e",
+    "policy_source_sha256": "c8b9049197e76be017b0d2a29d5d95bb1e977ad020b3d1647a867330510a67ff",
     "resource_sources": {
       "src/data/registry/country_codes.json": "data/country_codes.json",
       "src/data/registry/place_registry.json": "data/place_registry.json"
     },
     "schema_version": 1
   },
-  "runtime_sha256": "4d9888f52925b0df733930f15b48105bd2c7746e3af247838d4b5bf5305def49"
+  "runtime_sha256": "017cbd0349eebf6c5e191a16d62b7346e26e738cc8dffaa6068b62b085ccb76f"
 }

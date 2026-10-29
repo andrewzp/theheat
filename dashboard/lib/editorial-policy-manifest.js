@@ -13,8 +13,8 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "dashboard/lib/lossless-gist.js": "e6fb2965e0632a6d914fc8688cf664341a6386a4925ea0682a57430eef77241e",
     "dashboard/lib/nws-source-timing.js": "3a7b4be177cc5d28be7a8150d7c6937b7c15f113c5475134254dba233df47975",
     "dashboard/lib/nws-warning-evidence.js": "eb98b1dec65d7cac93ea4e8a8b85045324a1aef52ada2834de924ae03a59b3e6",
-    "dashboard/lib/operator-claim-reference-input.js": "973e3b1e9cf3797f348965f6aaf45d1dad736fde85fe26d54945f84050d4d3ad",
-    "dashboard/lib/operator-claim-references.js": "f44ee49e6306fc9bf60cf0ed15ff8d31d269768ac87c1e2d2a822625ca972fc2",
+    "dashboard/lib/operator-claim-reference-input.js": "19c6e1ce13ef5da93386b234adba58221996fdbbcabbfaa51dc9969b88cb6bde",
+    "dashboard/lib/operator-claim-references.js": "5a902d2b65e2f191b34e50f9e00cb131962f377794edc8e7bf5a5346611e1cc9",
     "dashboard/lib/publication-control.js": "3bb989dac6b3fa8335afc5df58d82b51e192018a8d72fb76e0f589eedfec1b4b",
     "dashboard/lib/request-json.js": "ca3f5c9c685a8d623e3e116fbfbd9edc4129d7676d94b491f861109abf898688",
     "dashboard/lib/runtime-inventory.js": "b2ecad04e295be60f3f4756a690403225adecaa389968de060c94f8406ebb5a6",
@@ -92,7 +92,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/editorial/draft_admission.py": "a726ca826cc564f43e3dd1169fa0f2a8d671be09d5f8ca80413587a64b857eb7",
     "src/editorial/marine_evidence.py": "7183f93f1068d75856063cf061a1dea8751bd4dd98cc1f1f34488bcf39296f5c",
     "src/editorial/newsworthiness.py": "2df18f17c51f772b761609bf10dc1c5b7289d2b1f1e2ce6f3f9dd743dbe73236",
-    "src/editorial/operator_claim_references.py": "dbd11ac41b88e0019dde2f51b078c43cf8bd46966f1cb06e2adffc267f3bfbdc",
+    "src/editorial/operator_claim_references.py": "06cf74fbcc05a158bcead06568b0f61fc6a2c756c60084b661d4659a9be7bba3",
     "src/editorial/policy.py": "afbeb0e8cc575b9370950e08a4acd1980bda73a10ca4d7a1d27c41732e3abd1c",
     "src/editorial/portfolio.py": "da6dd9a39fae1872c63fb2c54c1f973ce4417f5dc7204fb8e1e09d40fc440dc8",
     "src/editorial/report_development.py": "e2ed39a9ff957683c8befff0f3b99533fdc9d90d84af88220ed13f2bf1489995",
@@ -215,5 +215,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "8c4887f395618e343dafd55f5843987dfa6a7a620713c7c34bab9f419e4434fe"
   },
   "schema_version": 1,
-  "source_sha256": "f11f5fe767fc22f12aa0edf68692df00807cbf767ae4c509f7f758ea6e50b43e"
+  "source_sha256": "c8b9049197e76be017b0d2a29d5d95bb1e977ad020b3d1647a867330510a67ff"
 }

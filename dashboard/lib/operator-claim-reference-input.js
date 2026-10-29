@@ -1,5 +1,7 @@
 // Browser-safe quote/fact validation. No checks, review or source fetching.
-export const MAX_ITEMS = 32, MAX_FACTS = 64, MAX_BYTES = 16384
+export const MAX_ITEMS = 32, MAX_FACTS = 64, MAX_LIST = 64, MAX_BYTES = 16384
+// A scalar fact is referenced whole; a list-valued fact only by one exact element.
+const POINTER = /^\/current_facts\/(0|[1-9][0-9]?)(?:\/value\/(0|[1-9][0-9]?))?$/
 export const exact = (value, keys) => value && Object.getPrototypeOf(value) === Object.prototype
   && Object.keys(value).length === keys.length && keys.every(key => Object.hasOwn(value, key))
 export const dense = (value, max) => Array.isArray(value) && value.length <= max
@@ -14,14 +16,37 @@ export function operatorClaimKindMatches(draftType, bundleKind) {
   return validString(draftType, 80) && validString(bundleKind, 80)
     && (draftType === bundleKind || (Object.hasOwn(kindAliases, draftType) && kindAliases[draftType] === bundleKind))
 }
+const scalar = value => value === null || typeof value === "boolean" || (typeof value === "number" && Number.isFinite(value)) || validString(value, 2048)
 export function retainedClaimFacts(bundle) {
   const facts = bundle?.current_facts
-  const scalar = value => value === null || typeof value === "boolean" || (typeof value === "number" && Number.isFinite(value)) || validString(value, 2048)
+  const valid = value => scalar(value) || (dense(value, MAX_LIST) && value.length > 0 && value.every(scalar))
   if (!dense(facts, MAX_FACTS) || !facts.every(row => row && Object.getPrototypeOf(row) === Object.prototype
-    && validString(row.label, 160) && Object.hasOwn(row, "value") && scalar(row.value)
+    && validString(row.label, 160) && Object.hasOwn(row, "value") && valid(row.value)
     && (row.unit == null || row.unit === "" || validString(row.unit, 80))))
     throw new Error("Saved source facts are unavailable; refresh before linking a quote")
   return facts
+}
+// Paired with resolve_reference: the exact fact (or list element) and the value its digest binds.
+export function resolveReference(facts, pointer, fingerprint = null) {
+  const match = typeof pointer === "string" ? POINTER.exec(pointer) : null
+  if (!match) throw new Error("Select a saved source fact from this draft")
+  const index = Number(match[1])
+  if (index >= facts.length) throw new Error("A selected source fact is missing or repeated")
+  const fact = facts[index], listed = Array.isArray(fact.value)
+  if (match[2] === undefined) {
+    if (listed) throw new Error("Select one exact element of a list-valued source fact")
+    return { view: { label: fact.label, value: fact.value, unit: fact.unit ?? null }, bound: fact }
+  }
+  const element = Number(match[2])
+  if (!listed || element >= fact.value.length) throw new Error("A selected source fact is missing or repeated")
+  return { view: { label: `${fact.label}[${element}]`, value: fact.value[element], unit: fact.unit ?? null },
+    bound: fingerprint ? { fact_sha256: fingerprint(fact), element, value: fact.value[element] } : null }
+}
+// One choice per scalar fact and per element of a list-valued fact, in saved order.
+export function referenceChoices(facts) {
+  return facts.flatMap((fact, index) => Array.isArray(fact.value)
+    ? fact.value.map((_, element) => ({ pointer: `/current_facts/${index}/value/${element}`, fact: resolveReference(facts, `/current_facts/${index}/value/${element}`).view }))
+    : [{ pointer: `/current_facts/${index}`, fact: resolveReference(facts, `/current_facts/${index}`).view }])
 }
 export function validateReferenceItems(text, bundle, items) {
   if (!validString(text, 280)) throw new Error("The quote must belong to a valid current draft")
@@ -43,9 +68,9 @@ export function validateReferenceItems(text, bundle, items) {
     if (selected > MAX_FACTS) throw new Error("Use at most 64 selected source facts in total")
     const pointers = new Set()
     for (const source of sources) {
-      if (!exact(source, ["pointer"]) || typeof source.pointer !== "string" || !/^\/current_facts\/(?:0|[1-9][0-9]?)$/.test(source.pointer))
-        throw new Error("Select a saved source fact from this draft")
-      if (Number(source.pointer.split("/").at(-1)) >= facts.length || pointers.has(source.pointer)) throw new Error("A selected source fact is missing or repeated")
+      if (!exact(source, ["pointer"]) || typeof source.pointer !== "string") throw new Error("Select a saved source fact from this draft")
+      resolveReference(facts, source.pointer)
+      if (pointers.has(source.pointer)) throw new Error("A selected source fact is missing or repeated")
       pointers.add(source.pointer)
     }
     return structuredClone(item)
@@ -76,8 +101,8 @@ export function operatorReferencesForDisplay(draft) {
       if (!exact(item, ["claim", "sources"]) || !dense(item.sources, MAX_FACTS)) throw new Error("Unavailable references")
       return { claim: item.claim, sources: item.sources.map(source => {
         if (!exact(source, ["pointer", "fact"]) || !exact(source.fact, ["label", "value", "unit"])) throw new Error("Unavailable fact")
-        const index = Number(source.pointer?.split("/").at(-1)), current = bundle.current_facts[index]
-        if (!current || source.fact.label !== current.label || source.fact.value !== current.value || source.fact.unit !== (current.unit ?? null)) throw new Error("Source changed")
+        const current = resolveReference(bundle.current_facts, source.pointer).view
+        if (source.fact.label !== current.label || source.fact.value !== current.value || source.fact.unit !== current.unit) throw new Error("Source changed")
         return { pointer: source.pointer }
       }) }
     })
