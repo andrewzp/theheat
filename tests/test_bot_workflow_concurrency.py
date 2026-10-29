@@ -138,7 +138,7 @@ def test_partitions_preserve_every_check_without_repeating_dashboard(workflow):
         "fail-fast": "false", "matrix": {"include": [
             {"partition":"core", "postgres-shard":"all"},
             {"partition":"media", "postgres-shard":"all"},
-            *({"partition":"postgres", "postgres-shard":str(shard)} for shard in range(9)),
+            *({"partition":"postgres", "postgres-shard":str(shard)} for shard in range(12)),
         ]},
     }
     for step in worker["steps"]:
