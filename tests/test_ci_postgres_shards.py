@@ -7,8 +7,9 @@ import sys
 from types import SimpleNamespace
 
 import pytest
+import yaml
 
-from tests.conftest import _CI_CRITICAL_NODEIDS, _ci_postgres_shard, pytest_collection_modifyitems
+from tests.conftest import _CI_CRITICAL_NODEIDS, _ci_postgres_shard, pytest_addoption, pytest_collection_modifyitems
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -35,7 +36,7 @@ def test_critical_order_preserves_each_shard_membership_and_all_other_relative_o
                 for nodeid in _CI_CRITICAL_NODEIDS]
     six = SimpleNamespace(path=ordinary[0].path, nodeid="tests/test_postgres_temperature_editor_media.py::test_six_compact_claims_reach_actual_native_editor_preparation[six_variants]")
     items = [ordinary[0], six, *reversed(critical), ordinary[1]]
-    for shard in ("all", *(str(i) for i in range(9))):
+    for shard in ("all", *(str(i) for i in range(12))):
         before = select(items, "postgres", shard)
         after = select(items, "postgres", shard, critical_first=True)
         assert sorted(map(id, after)) == sorted(map(id, before))
@@ -63,14 +64,17 @@ def test_actual_pytest_maxfail_keeps_failures_nonzero_and_all_passing_tests(tmp_
         assert "stopping after 1 failures" in result.stdout and "1 passed" not in result.stdout
 
 
-def test_nine_file_shards_partition_all_modules_and_parameters_without_changing_legacy_groups(monkeypatch, tmp_path):
+def test_expanded_file_shards_partition_all_modules_and_parameters_without_changing_legacy_groups(monkeypatch, tmp_path):
     files = sorted((ROOT / "tests").glob("test_postgres_*.py"))
     items = [SimpleNamespace(path=path, nodeid=f"{path.name}::invented[{parameter}]")
              for path in [ROOT / "tests/test_ci_postgres_shards.py", *files] for parameter in ("a", "b", "c")]
     postgres = select(items, "postgres")
-    shards = [select(items, "postgres", str(index)) for index in range(9)]
+    shards = [select(items, "postgres", str(index)) for index in range(12)]
     identities = [{id(item) for item in shard} for shard in shards]
-    assert all(identities) and set.union(*identities) == {id(item) for item in postgres}
+    # Whole-file fixtures populate original0..8 and new11; the function-cohort
+    # test below independently covers new9/10 with actual test metadata.
+    assert {i for i, ids in enumerate(identities) if ids} == {*range(9), 11}
+    assert set.union(*identities) == {id(item) for item in postgres}
     for index, shard in enumerate(shards):
         assert all(identities[index].isdisjoint(other) for other in identities[index+1:])
         for path in {item.path for item in shard}:
@@ -84,7 +88,7 @@ def test_nine_file_shards_partition_all_modules_and_parameters_without_changing_
                 "tests/test_postgres_platform_description.py": 6,
                 "tests/test_postgres_temperature_editor_media.py": 8,
                 "tests/test_postgres_temperature_delivery.py": 0,
-                "tests/test_postgres_editor_media.py": 5,
+                "tests/test_postgres_editor_media.py": 11,
             }
             if relative in assigned:
                 assert index == assigned[relative]
@@ -97,8 +101,8 @@ def test_nine_file_shards_partition_all_modules_and_parameters_without_changing_
     assert any(item.path.name == "test_postgres_platform_description.py" for item in shards[6])
     assert {item.path.name for item in shards[8]} == {"test_postgres_temperature_editor_media.py"}
     assert any(item.path.name == "test_postgres_temperature_delivery.py" for item in shards[0])
-    assert any(item.path.name == "test_postgres_editor_media.py" for item in shards[5])
-    assert not any(item.path.name == "test_postgres_editor_media.py" for item in shards[3])
+    assert {item.path.name for item in shards[11]} == {"test_postgres_editor_media.py"}
+    assert not any(item.path.name == "test_postgres_editor_media.py" for item in shards[5])
     legacy = [select(items, partition) for partition in ("core", "postgres", "media")]
     assert sorted(id(item) for group in legacy for item in group) == sorted(id(item) for item in select(items, "all"))
     original = [_ci_postgres_shard(path) for path in files]
@@ -113,7 +117,6 @@ def test_stage_function_defaults_partition_cases_without_explicit_fault_metadata
     cohorts = {
         "0": (
             "test_same_owner_initial_cap_race_and_unused_cap_cannot_renew",
-            "test_v2_modis_approval_final_bound_and_reauthorization_roll_back_all_writes",
             "test_v2_nonpass_raw_is_terminal_and_cannot_rotate_or_resend",
             "test_v2_prefix_missing_corrupt_and_late_evidence_never_grants_readiness",
         ),
@@ -132,7 +135,6 @@ def test_stage_function_defaults_partition_cases_without_explicit_fault_metadata
             "test_v2_exact_terminal_replay_is_history_and_cannot_reseal_corruption",
             "test_v2_outbox_tail_uses_original_critic_deadline_and_rolls_back_park",
             "test_v2_scope_is_connection_bound_and_untrusted_inputs_cannot_mint_cap",
-            "test_v2_transaction_interruptions_never_repurchase_or_repair_missing_seal",
         ),
         "4": (
             "test_catalog4_owner_atomic_idempotent_legacy_receipts_and_runtime_denial",
@@ -159,6 +161,14 @@ def test_stage_function_defaults_partition_cases_without_explicit_fault_metadata
         ),
         "8": (
         ),
+        "9": (
+            "test_v2_modis_approval_final_bound_and_reauthorization_roll_back_all_writes",
+        ),
+        "10": (
+            "test_v2_transaction_interruptions_never_repurchase_or_repair_missing_seal",
+        ),
+        "11": (
+        ),
     }
     expected = {name: shard for shard, names in cohorts.items() for name in names}
     functions = [node.name for node in ast.parse(path.read_text()).body
@@ -167,7 +177,7 @@ def test_stage_function_defaults_partition_cases_without_explicit_fault_metadata
     items = [SimpleNamespace(path=path, originalname=name, nodeid=f"{path.relative_to(ROOT)}::{name}[{parameter}]")
              for parameter in ("modis", "ghcn", "fault-with-brackets[and spaces]") for name in functions]
     seen = set()
-    for shard in map(str, range(9)):
+    for shard in map(str, range(12)):
         for critical_first in (False, True):
             kept = select(items, "postgres", shard, critical_first)
             expected_items = [item for item in items if expected[item.originalname] == shard]
@@ -206,7 +216,7 @@ def test_viirs_native_package_runs_only_in_required_media_lane_with_complete_uni
 
 
 @pytest.mark.parametrize("partition,shard", [("all","0"), ("core","1"), ("media","3"),
-                                            ("postgres","9"), ("postgres","-1"), ("postgres","invalid")])
+                                            ("postgres","12"), ("postgres","-1"), ("postgres","invalid")])
 def test_invalid_shard_requests_fail_before_collection(partition, shard):
     result = subprocess.run([sys.executable, "-m", "pytest", str(Path(__file__)), "--collect-only", "-q",
         "-p", "no:cacheprovider", f"--ci-partition={partition}", f"--ci-postgres-shard={shard}"],
@@ -216,9 +226,10 @@ def test_invalid_shard_requests_fail_before_collection(partition, shard):
     assert "tests collected" not in result.stdout
 
 
-def test_ninth_postgres_shard_is_accepted_by_actual_collection_cli():
+@pytest.mark.parametrize("shard", ["8", "9", "10", "11"])
+def test_dedicated_postgres_shards_are_accepted_by_actual_collection_cli(shard):
     result = subprocess.run([sys.executable, "-m", "pytest", str(Path(__file__)), "--collect-only", "-q",
-        "-p", "no:cacheprovider", "--ci-partition=postgres", "--ci-postgres-shard=8"],
+        "-p", "no:cacheprovider", "--ci-partition=postgres", f"--ci-postgres-shard={shard}"],
         cwd=ROOT, capture_output=True, text=True, timeout=15)
     # This core test module is intentionally deselected; argument parsing succeeds.
     assert result.returncode == 5
@@ -235,7 +246,7 @@ def test_actual_ghcn_fault_metadata_keeps_all_ten_cases_in_disjoint_fixed_pairs(
              for fault in expected for boundary in ("proof", "outbox")]
     assert len(items) == 10
     selected = []
-    for shard in map(str, range(9)):
+    for shard in map(str, range(12)):
         before = select(items, "postgres", shard)
         after = select(items, "postgres", shard, critical_first=True)
         assert sorted(map(id, after)) == sorted(map(id, before))
@@ -260,3 +271,15 @@ def test_targeted_priority_then_stage_family_preserve_membership_and_legacy_orde
     assert select(items, "postgres") == items
     assert select(items, "all", critical_first=True) == items
     assert select(items, "postgres", critical_first=True) == [critical, *remaining, *legacy]
+
+
+def test_all_fourteen_workflow_groups_have_matching_parser_choices_and_original_limits():
+    options = {}
+    pytest_addoption(SimpleNamespace(addoption=lambda name, **kw: options.update({name: kw})))
+    workflow = yaml.load((ROOT / ".github/workflows/bot.yml").read_text(), Loader=yaml.BaseLoader)
+    job = workflow["jobs"]["test-partition"]
+    groups = [(r["partition"], r["postgres-shard"]) for r in job["strategy"]["matrix"]["include"]]
+    expected = [("core", "all"), ("media", "all"), *(("postgres", str(i)) for i in range(12))]
+    assert groups == expected and len(set(groups)) == 14
+    assert options["--ci-postgres-shard"]["choices"] == ("all", *(str(i) for i in range(12)))
+    assert job["timeout-minutes"] == "35" and job["strategy"]["fail-fast"] == "false"

@@ -67,7 +67,7 @@ def pytest_addoption(parser):
         help="Disjoint offline CI file partitions; ordinary local runs select all.",
     )
     parser.addoption(
-        "--ci-postgres-shard", choices=("all", "0", "1", "2", "3", "4", "5", "6", "7", "8"), default="all",
+        "--ci-postgres-shard", choices=("all", *(str(i) for i in range(12))), default="all",
         help="Stable file/function cohort within --ci-partition=postgres; all preserves the complete partition.",
     )
     parser.addoption(
@@ -98,7 +98,7 @@ _CI_STAGE_REVISION_SHARDS = {
     "test_v2_full_park_restore_keeps_legacy_sets_and_exact_protocol_chain": "4",
     "test_v2_genuine_park_one_use_delivery_and_passive_original_cap_cost": "4",
     "test_v2_ghcn_approval_final_bound_and_reauthorization_roll_back_all_writes": "1",
-    "test_v2_modis_approval_final_bound_and_reauthorization_roll_back_all_writes": "0",
+    "test_v2_modis_approval_final_bound_and_reauthorization_roll_back_all_writes": "9",
     "test_v2_nonpass_raw_is_terminal_and_cannot_rotate_or_resend": "0",
     "test_v2_outbox_tail_uses_original_critic_deadline_and_rolls_back_park": "3",
     "test_v2_prefix_missing_corrupt_and_late_evidence_never_grants_readiness": "0",
@@ -106,7 +106,7 @@ _CI_STAGE_REVISION_SHARDS = {
     "test_v2_restored_unattempted_cap_must_bind_the_exact_verified_predecessor": "2",
     "test_v2_scope_is_connection_bound_and_untrusted_inputs_cannot_mint_cap": "3",
     "test_v2_strict_request_window_equality_and_one_microsecond": "1",
-    "test_v2_transaction_interruptions_never_repurchase_or_repair_missing_seal": "3",
+    "test_v2_transaction_interruptions_never_repurchase_or_repair_missing_seal": "10",
 }
 
 _CI_GHCN_FINAL_FAULT_SHARDS = {
@@ -130,9 +130,9 @@ def _ci_postgres_shard(path, test_name=None, parameters=None):
             return _CI_GHCN_FINAL_FAULT_SHARDS.get(parameters.get("fault"), _CI_STAGE_REVISION_SHARDS[test_name])
         return _CI_STAGE_REVISION_SHARDS[test_name]
     # Keep heavy modules whole while balancing measured CI work. Shards7 and0
-    # hit the unchanged 35-minute job limit. Shard8 isolates the complete
-    # temperature-editor module. Measured editor-media work moves whole from3
-    # to5 after3 hit the same cap; all other defaults keep modulo8.
+    # hit the unchanged 35-minute job limit. Shard8 isolates temperature editing;
+    # shards9/10 own complete heavy stage functions, and11 owns editor media.
+    # Existing groups and all other modulo8 defaults remain unchanged.
     assigned = {
         "tests/test_postgres_published_media.py": "2",
         "tests/test_postgres_cost_projection.py": "5",
@@ -141,7 +141,7 @@ def _ci_postgres_shard(path, test_name=None, parameters=None):
         "tests/test_postgres_platform_description.py": "6",
         "tests/test_postgres_temperature_editor_media.py": "8",
         "tests/test_postgres_temperature_delivery.py": "0",
-        "tests/test_postgres_editor_media.py": "5",
+        "tests/test_postgres_editor_media.py": "11",
     }
     if relative in assigned:
         return assigned[relative]

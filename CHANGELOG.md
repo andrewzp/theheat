@@ -46,6 +46,9 @@
   all outbox rollback, original deadline and no-send assertions.
 - Run the remaining stage-revision regressions before other database tests in
   their existing groups, retaining every case and stable order within cohorts.
+- Give complete MODIS approval, interruption and editor-media test collections
+  dedicated parallel jobs after measured job-limit cancellations; require every
+  existing and added group while retaining all tests, profiles and time limits.
 - Match the policy-drift regression to the earlier joint-review refusal while
   retaining every fault injection, rollback and no-send assertion.
 - Verify retained graphic review and completion evidence once within an owned
