@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Audit exported rainfall-opportunity traces offline; prints one JSON document.
 
-Reads only the named files (bounded, no symlinks). No source, database, model,
-platform or network access. Exit 0 with an audit, 2 for unusable input files.
+Reads only the named regular files (bounded, nonblocking, no symlink in any path
+component). No source, database, model, platform or network access. Exit 0 with
+an audit, 2 for unusable input files.
 """
 
 from __future__ import annotations
@@ -10,12 +11,12 @@ from __future__ import annotations
 import argparse
 from datetime import date
 import json
-import os
 from pathlib import Path
 import sys
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
+from src.evaluation import file_boundary  # noqa: E402
 from src.evaluation import rainfall_opportunity as opportunity  # noqa: E402
 
 MAX_INPUT_BYTES = 16 * 1024 * 1024
@@ -34,16 +35,12 @@ def _nonfinite(value):
 
 
 def read_json(path: str):
-    """Strict bounded read of one regular, non-symlinked file."""
-    target = Path(path)
-    if target.is_symlink() or any(parent.is_symlink() for parent in target.absolute().parents):
-        raise ValueError("input_symlink")
-    fd = os.open(target, os.O_RDONLY | os.O_NOFOLLOW)
-    with os.fdopen(fd, "rb") as handle:
-        raw = handle.read(MAX_INPUT_BYTES + 1)
-    if len(raw) > MAX_INPUT_BYTES:
-        raise ValueError("input_too_large")
-    return json.loads(raw.decode("utf-8"), object_pairs_hook=_pairs, parse_constant=_nonfinite)
+    """Strict bounded read of one regular file reached without following a symlink."""
+    raw = file_boundary.read_regular(path, MAX_INPUT_BYTES)
+    try:
+        return json.loads(raw.decode("utf-8"), object_pairs_hook=_pairs, parse_constant=_nonfinite)
+    except RecursionError:
+        raise ValueError("input_structure_bound") from None
 
 
 def main(argv=None) -> int:

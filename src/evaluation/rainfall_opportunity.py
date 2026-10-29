@@ -27,6 +27,7 @@ MAX_NETWORK_CITIES = 75
 FRESH_MAX_AGE_DAYS = 6
 MAX_TRACES = 4096
 MAX_POPULATION = 4096
+MAX_TRACE_CANDIDATES = 32
 GRID_LEGS = frozenset({"imerg_late_grid_datapool", "imerg_late_grid_s3"})
 WINDOW_LEGS = frozenset({"imerg_late_opendap", "open_meteo_witness"})
 PRIMARY_LEGS = GRID_LEGS | {"imerg_late_opendap"}
@@ -77,47 +78,237 @@ def validate_population(document: Any) -> dict[str, Any]:
     return {"sha256": document["sha256"], "members": members}
 
 
+_CODE = re.compile(r"[a-z][a-z0-9_]{0,63}\Z")
+_TRACE_KEYS = frozenset({"schema", "source_id", "run_id", "trace_status", "incomplete_reasons"})
+_RUN_KEYS = frozenset({"selection_date_utc", "requested_target_date", "product", "configured", "population",
+                       "primary_gate", "legs", "request_counts", "cost"})
+_FINISH_KEYS = frozenset({"outcome", "serving_leg", "readings", "failure_class"})
+_COUNT_KEYS = frozenset({"grid_downloads", "opendap_date_probes", "opendap_point_calls", "witness_point_calls"})
+_WINDOW_KEYS = frozenset({"scan_date", "max_cities", "window_size", "selection_sha256", "data_date", "dispositions",
+                          "failure_signatures", "member_calls", "in_flight_at_export"})
+_LEG_KEYS = frozenset({"leg", "population_semantics", "outcome", "reason", "walkback_start_date", "max_lookback_days",
+                       "candidates", "candidates_omitted", "downloads", "data_date", "inspection", "readings",
+                       "reading_bitmap", "missing_values", "date_probes", "date_probe_calls", "date_probes_omitted",
+                       *_WINDOW_KEYS})
+_LEG_COUNTS = ("candidates_omitted", "downloads", "readings", "missing_values", "date_probe_calls",
+               "date_probes_omitted", "window_size", "member_calls", "in_flight_at_export")
+
+
+def _count(value: Any, code: str, *, limit: int = 10_000_000) -> int:
+    # bool is an int subclass; a detached count must be a plain non-negative int.
+    _require(type(value) is int and 0 <= value <= limit, code)
+    return value
+
+
+def _optional_day(value: Any, code: str) -> None:
+    if value is not None:
+        _day(value, code)
+
+
+def _code(value: Any, code: str) -> str:
+    _require(type(value) is str and _CODE.fullmatch(value) is not None, code)
+    return value
+
+
+def _validate_leg(leg: Any) -> None:
+    _require(type(leg) is dict and set(leg) <= _LEG_KEYS and type(leg.get("leg")) is str
+             and leg["leg"] in GRID_LEGS | WINDOW_LEGS, "trace_legs")
+    _code(leg.get("population_semantics"), "trace_legs")
+    _code(leg.get("outcome"), "trace_legs")
+    if "reason" in leg:
+        _code(leg["reason"], "trace_legs")
+    for key in _LEG_COUNTS:
+        if key in leg:
+            _count(leg[key], "trace_legs")
+    if leg.get("max_lookback_days") is not None:
+        _count(leg["max_lookback_days"], "trace_legs", limit=366)
+    if "inspection" in leg:
+        _require(type(leg["inspection"]) is str and leg["inspection"] in {"not_reached", "completed"}, "trace_legs")
+    for key, outcomes in (("candidates", {"not_found", "transient", "downloaded"}),
+                          ("date_probes", {"not_found", "published", "unavailable"})):
+        if key in leg:
+            items = leg[key]
+            _require(type(items) is list and len(items) <= MAX_TRACE_CANDIDATES, "trace_legs")
+            for item in items:
+                _require(type(item) is dict and set(item) == {"date", "outcome"} and type(item["outcome"]) is str
+                         and _CODE.fullmatch(item["outcome"]) is not None, "trace_legs")
+                _day(item["date"], "trace_legs")
+    _optional_day(leg.get("walkback_start_date"), "trace_legs")
+    _optional_day(leg.get("data_date"), "trace_data_date")
+    if "reading_bitmap" in leg:
+        _require(type(leg["reading_bitmap"]) is str and len(leg["reading_bitmap"]) <= 2 * MAX_POPULATION,
+                 "trace_bitmap")
+    if "dispositions" in leg:
+        codes = leg["dispositions"]
+        _require(leg["leg"] in WINDOW_LEGS and type(codes) is str and set(codes) <= _DISPOSITIONS
+                 and len(codes) <= MAX_NETWORK_CITIES, "trace_dispositions")
+        _require(leg.get("window_size") == len(codes), "trace_dispositions")
+    if "selection_sha256" in leg:
+        _require(type(leg["selection_sha256"]) is str and _SHA.fullmatch(leg["selection_sha256"]) is not None,
+                 "trace_selection")
+    if "scan_date" in leg:
+        _day(leg["scan_date"], "trace_selection")
+    if leg.get("max_cities") is not None:
+        _count(leg["max_cities"], "trace_legs", limit=MAX_POPULATION)
+    if "failure_signatures" in leg:
+        signatures = leg["failure_signatures"]
+        _require(type(signatures) is dict and len(signatures) <= 9, "trace_legs")
+        for key, value in signatures.items():
+            _require(type(key) is str and 0 < len(key) <= 80, "trace_legs")
+            _count(value, "trace_legs")
+
+
+def _validate_counts(counts: Any) -> None:
+    _require(type(counts) is dict and set(counts) == _COUNT_KEYS | {"http_requests"}, "trace_request_counts")
+    for key in _COUNT_KEYS:
+        _count(counts[key], "trace_request_counts")
+    http = counts["http_requests"]
+    _require(type(http) is dict and set(http) == {"min", "max", "unmeasured_components"}, "trace_request_counts")
+    low, high = _count(http["min"], "trace_request_counts"), _count(http["max"], "trace_request_counts")
+    _require(low <= high, "trace_request_counts")
+    unmeasured = http["unmeasured_components"]
+    _require(type(unmeasured) is list and len(unmeasured) <= 8 and len(set(map(str, unmeasured))) == len(unmeasured)
+             and all(type(item) is str and _CODE.fullmatch(item) for item in unmeasured), "trace_request_counts")
+
+
 def validate_trace(document: Any) -> dict[str, Any]:
-    """Structural validation of one exported trace; never upgrades its own status."""
-    _require(isinstance(document, dict) and document.get("schema") == TRACE_SCHEMA, "trace_schema")
+    """Strict structural validation of one exported trace; never upgrades its own status.
+
+    Every nested field is type-checked before any membership test or conversion,
+    so a malformed record is refused with a fixed code instead of aborting the audit.
+    """
+    _require(type(document) is dict and document.get("schema") == TRACE_SCHEMA, "trace_schema")
     _require(document.get("source_id") == "gpm_imerg", "trace_source")
     status = document.get("trace_status")
-    _require(status in {"complete", "incomplete"}, "trace_status")
+    _require(type(status) is str and status in {"complete", "incomplete"}, "trace_status")
     reasons = document.get("incomplete_reasons")
-    _require(isinstance(reasons, list) and all(isinstance(r, str) for r in reasons), "trace_reasons")
+    _require(type(reasons) is list and len(reasons) <= 32 and all(type(r) is str and _CODE.fullmatch(r)
+                                                                   for r in reasons), "trace_reasons")
     _require((status == "complete") == (not reasons), "trace_status_reasons")
     run_id = document.get("run_id")
-    _require(run_id is None or (isinstance(run_id, str) and _KEY.fullmatch(run_id) is not None), "trace_run_id")
+    _require(run_id is None or (type(run_id) is str and _KEY.fullmatch(run_id) is not None), "trace_run_id")
+    keys = set(document)
+    _require(_TRACE_KEYS <= keys <= _TRACE_KEYS | _RUN_KEYS | _FINISH_KEYS, "trace_keys")
     if "selection_date_utc" not in document:
-        _require(status == "incomplete", "trace_selection_date")
+        _require(keys == _TRACE_KEYS and status == "incomplete", "trace_selection_date")
         return {"status": status, "run_id": run_id, "selection_date": None}
-    selection = _day(document.get("selection_date_utc"), "trace_selection_date")
-    population = document.get("population")
-    _require(isinstance(population, dict), "trace_population")
-    sha = population.get("sha256")
-    _require(sha is None or (isinstance(sha, str) and _SHA.fullmatch(sha) is not None), "trace_population")
-    legs = document.get("legs")
-    _require(isinstance(legs, list) and len(legs) <= 8, "trace_legs")
-    names = [leg.get("leg") if isinstance(leg, dict) else None for leg in legs]
-    _require(all(name in GRID_LEGS | WINDOW_LEGS for name in names) and len(set(names)) == len(names), "trace_legs")
+    _require(_RUN_KEYS <= keys, "trace_keys")
+    selection = _day(document["selection_date_utc"], "trace_selection_date")
+    _optional_day(document["requested_target_date"], "trace_selection_date")
+    _require(type(document["product"]) is str and 0 < len(document["product"]) <= 32, "trace_keys")
+    configured = document["configured"]
+    _require(type(configured) is dict and set(configured) == {"max_cities", "max_workers"}, "trace_keys")
+    for value in configured.values():
+        _require(value is None or (type(value) is int and 0 <= value <= MAX_POPULATION), "trace_keys")
+    _require(document["primary_gate"] is None or (type(document["primary_gate"]) is str
+                                                  and _CODE.fullmatch(document["primary_gate"]) is not None),
+             "trace_keys")
+    population = document["population"]
+    _require(type(population) is dict and set(population) == {"basis", "count", "sha256", "within_trace_bound"}
+             and population["basis"] == POPULATION_BASIS and type(population["within_trace_bound"]) is bool,
+             "trace_population")
+    _require(population["count"] is None or (type(population["count"]) is int and population["count"] >= 0),
+             "trace_population")
+    sha = population["sha256"]
+    _require(sha is None or (type(sha) is str and _SHA.fullmatch(sha) is not None), "trace_population")
+    legs = document["legs"]
+    _require(type(legs) is list and len(legs) <= 8, "trace_legs")
     for leg in legs:
-        if leg["leg"] in WINDOW_LEGS and "dispositions" in leg:
-            codes = leg["dispositions"]
-            _require(isinstance(codes, str) and set(codes) <= _DISPOSITIONS, "trace_dispositions")
-            _require(leg.get("window_size") == len(codes) <= MAX_NETWORK_CITIES, "trace_dispositions")
-            _require(isinstance(leg.get("selection_sha256"), str) and _SHA.fullmatch(leg["selection_sha256"]) is not None,
-                     "trace_selection")
-            _day(leg.get("scan_date"), "trace_selection")
-        if leg.get("data_date") is not None:
-            _day(leg["data_date"], "trace_data_date")
-        if "reading_bitmap" in leg:
-            _require(isinstance(leg["reading_bitmap"], str) and len(leg["reading_bitmap"]) <= 2 * MAX_POPULATION,
-                     "trace_bitmap")
-    counts = document.get("request_counts")
-    _require(isinstance(counts, dict) and isinstance(counts.get("http_requests"), dict), "trace_request_counts")
-    cost = document.get("cost")
-    _require(isinstance(cost, dict) and cost.get("amount") is None, "trace_cost")
+        _validate_leg(leg)
+    _require(len({leg["leg"] for leg in legs}) == len(legs), "trace_legs")
+    _validate_counts(document["request_counts"])
+    cost = document["cost"]
+    _require(type(cost) is dict and set(cost) == {"amount", "status"} and cost["amount"] is None
+             and type(cost["status"]) is str, "trace_cost")
+    if "outcome" in document:
+        _require(keys >= _FINISH_KEYS, "trace_outcome")
+        _code(document["outcome"], "trace_outcome")
+        _require(document["serving_leg"] is None or (type(document["serving_leg"]) is str
+                                                     and document["serving_leg"] in GRID_LEGS | WINDOW_LEGS),
+                 "trace_outcome")
+        _count(document["readings"], "trace_outcome")
+        _require(document["failure_class"] is None or (type(document["failure_class"]) is str
+                                                       and 0 < len(document["failure_class"]) <= 80), "trace_outcome")
+    else:
+        _require(not keys & _FINISH_KEYS, "trace_outcome")
     return {"status": status, "run_id": run_id, "selection_date": selection}
+
+
+def request_bounds(legs: list[dict[str, Any]]) -> dict[str, Any]:
+    """Recompute scalar counts and HTTP bounds from a trace's own retained legs.
+
+    Mirrors RainfallOpportunityTrace.export; any difference means the retained
+    counts are inconsistent. ``max`` bounds the counted components only.
+    """
+    counts = {key: 0 for key in _COUNT_KEYS}
+    low = high = 0
+    unmeasured: set[str] = set()
+    for leg in legs:
+        name = leg["leg"]
+        if name in GRID_LEGS:
+            downloads = leg.get("downloads", 0)
+            counts["grid_downloads"] += downloads
+            if name == "imerg_late_grid_datapool":
+                low += downloads
+                high += downloads
+            elif downloads:
+                unmeasured.add("s3_credential_and_object_requests")
+        elif name == "imerg_late_opendap":
+            probes, calls = leg.get("date_probe_calls", 0), leg.get("member_calls", 0)
+            counts["opendap_date_probes"] += probes
+            counts["opendap_point_calls"] += calls
+            low += probes + calls
+            high += probes + 2 * calls
+        else:
+            calls = leg.get("member_calls", 0)
+            counts["witness_point_calls"] += calls
+            low += calls
+            high += 6 * calls
+    if low:
+        unmeasured.add("redirects_not_counted")
+    return {**counts, "http_requests": {"min": low, "max": high, "unmeasured_components": sorted(unmeasured)}}
+
+
+def derived_incomplete(document: dict[str, Any]) -> list[str]:
+    """Completeness derived from the retained bytes; a caller's label cannot clear it."""
+    if "selection_date_utc" not in document:
+        return ["capture_not_started"]
+    reasons: set[str] = set()
+    population = document["population"]
+    if population["count"] is None or population["sha256"] is None:
+        reasons.add("population_not_captured")
+    elif not population["within_trace_bound"]:
+        reasons.add("population_exceeds_trace_bound")
+    for leg in document["legs"]:
+        if leg["leg"] in GRID_LEGS and "candidates" in leg:
+            if not {"downloads", "candidates_omitted"} <= set(leg) or \
+                    len(leg["candidates"]) + leg["candidates_omitted"] != leg["downloads"]:
+                reasons.add("retained_counts_inconsistent")
+            elif leg["candidates_omitted"]:
+                reasons.add("grid_candidates_exceed_trace_bound")
+            if leg.get("inspection") == "completed" and "reading_bitmap" not in leg:
+                reasons.add("grid_membership_not_captured")
+        if "date_probes" in leg:
+            if not {"date_probe_calls", "date_probes_omitted"} <= set(leg) or \
+                    len(leg["date_probes"]) + leg["date_probes_omitted"] != leg["date_probe_calls"]:
+                reasons.add("retained_counts_inconsistent")
+            elif leg["date_probes_omitted"]:
+                reasons.add("date_probes_exceed_trace_bound")
+        if leg["leg"] in WINDOW_LEGS and set(leg) & (_WINDOW_KEYS - {"data_date"}):
+            if not _WINDOW_KEYS <= set(leg):
+                reasons.add("window_capture_missing")
+                continue
+            codes = leg["dispositions"]
+            if leg["member_calls"] != sum(code != "n" for code in codes) or \
+                    leg["in_flight_at_export"] != codes.count("p"):
+                reasons.add("retained_counts_inconsistent")
+            if "p" in codes:
+                reasons.add("in_flight_at_export")
+    if document["request_counts"] != request_bounds(document["legs"]):
+        reasons.add("retained_counts_inconsistent")
+    if "outcome" not in document:
+        reasons.add("not_finished")
+    return sorted(reasons)
 
 
 def window_members(members: list[str], scan_date: date, max_cities: int | None) -> list[str]:
@@ -230,6 +421,7 @@ def evaluate(traces: list[Any], populations: list[Any], *, start: date | None = 
             rows.append({"identity": None, "trace_sha256": content, "status": "unidentified_held",
                          "reasons": ["run_identity_missing"], **_dated(checked)})
             continue
+        checked["derived"] = derived_incomplete(document)
         by_identity.setdefault(checked["run_id"], []).append((content, document, checked))
 
     counted: list[tuple[str, Any]] = []
@@ -244,8 +436,11 @@ def evaluate(traces: list[Any], populations: list[Any], *, start: date | None = 
             continue
         content, document, checked = group[0]
         row: dict[str, Any] = {"identity": identity, "trace_sha256": content, "copies": len(group), "reasons": []}
-        if checked["selection_date"] is None or checked["status"] == "incomplete":
-            row.update(status="trace_incomplete", reasons=list(document.get("incomplete_reasons", [])))
+        if checked["selection_date"] is None or checked["status"] == "incomplete" or checked["derived"]:
+            reasons = set(document["incomplete_reasons"]) | set(checked["derived"])
+            if checked["status"] == "complete":
+                reasons.add("supplied_complete_contradicted")
+            row.update(status="trace_incomplete", reasons=sorted(reasons))
             if checked["selection_date"] is not None:
                 row["selection_date"] = checked["selection_date"].isoformat()
             rows.append(row)
@@ -273,20 +468,26 @@ def evaluate(traces: list[Any], populations: list[Any], *, start: date | None = 
         selection = document["selection_date_utc"]
         population = document["population"].get("sha256")
         members = known.get(population) if population else None
-        try:
-            view = _member_view(document, members)
-        except TraceError as exc:
-            view = {key: set() for key in totals} | {"reasons": [str(exc)]}
         row = next(r for r in rows if r.get("identity") == identity and r["status"] == "counted")
-        if members is None:
-            row["reasons"].append("population_missing")
+        view: dict[str, Any]
+        if members is not None and document["population"]["count"] != len(members):
+            # The supplied hash matches but the retained count does not: unauditable, never complete.
+            view = {key: set() for key in totals} | {"reasons": ["population_count_mismatch"]}
+            members = None
+        else:
+            try:
+                view = _member_view(document, members)
+            except TraceError as exc:
+                view = {key: set() for key in totals} | {"reasons": [str(exc)]}
+            if members is None:
+                row["reasons"].append("population_missing")
         row["reasons"].extend(sorted(set(view["reasons"]) - set(row["reasons"])))
         for key in totals:
             totals[key] += len(view[key])
         counts = document["request_counts"]["http_requests"]
-        low += int(counts.get("min", 0))
-        high += int(counts.get("max", 0))
-        unmeasured.update(counts.get("unmeasured_components", []))
+        low += counts["min"]
+        high += counts["max"]
+        unmeasured.update(counts["unmeasured_components"])
         walk = _walkback(document)
         if walk["local_utc_start_mismatch"]:
             midnight.append(identity)
@@ -319,6 +520,10 @@ def evaluate(traces: list[Any], populations: list[Any], *, start: date | None = 
                 populations_seen = sorted(p or "" for p in info["populations"])
                 status = "observed" if info["auditable"] and len(populations_seen) == 1 else (
                     "population_changed" if len(populations_seen) > 1 else "not_auditable")
+                if status == "observed" and held:
+                    # Valid runs stay inspectable, but a held capture on this day
+                    # means the day's capture is not complete: the window ends.
+                    status = "observed_with_held_capture"
                 calendar.append({"date": key, "status": status, "outcomes": sorted(set(map(str, info["outcomes"]))),
                                  "held": held})
                 if status != "observed":
@@ -351,6 +556,8 @@ def evaluate(traces: list[Any], populations: list[Any], *, start: date | None = 
         "coverage_denominator": None,
         "limits": [
             "Measured gaps are bounded by observed complete windows; missing or held days end a window.",
+            "Completeness is derived from each trace's retained bytes; a supplied status cannot clear it.",
+            "HTTP max bounds counted components only; redirects and unmeasured legs are listed, cost unknown.",
             "Theoretical rotation days are a selector property, not an achieved revisit SLA.",
             "Model witness readings are counted separately and never as GPM recovery or station truth.",
             "A population hash binds supplied identities; it does not prove which members were attempted.",
@@ -395,6 +602,6 @@ def _dated(checked: dict[str, Any]) -> dict[str, str]:
 def _jsonable(value: Any) -> bool:
     try:
         canonical(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, RecursionError):
         return False
     return True

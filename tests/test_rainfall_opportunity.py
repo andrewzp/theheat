@@ -125,7 +125,9 @@ def test_grid_trace_records_whole_population_download_walkback_and_reading_membe
     assert (leg["walkback_start_date"], leg["data_date"]) == ("2026-06-04", "2026-06-03")
     assert (leg["readings"], leg["missing_values"]) == (89, 1)
     assert trace["request_counts"]["grid_downloads"] == 2
-    assert trace["request_counts"]["http_requests"] == {"min": 2, "max": 2, "unmeasured_components": []}
+    # Exact attempt counts; redirects the HTTP client follows are listed as unmeasured.
+    assert trace["request_counts"]["http_requests"] == {"min": 2, "max": 2,
+                                                        "unmeasured_components": ["redirects_not_counted"]}
     members = gpm.opportunity_population(rows)
     assert trace["population"] == {"basis": gpm.POPULATION_BASIS, "count": 90, "sha256": members["sha256"],
                                    "within_trace_bound": True}
@@ -488,3 +490,202 @@ def test_cli_audits_detached_files_and_refuses_unsafe_inputs(tmp_path):
         refused = subprocess.run([sys.executable, script, "--trace", str(bad)], capture_output=True, text=True,
                                  timeout=60)
         assert refused.returncode == 2 and "error" in json.loads(refused.stdout)
+
+
+# G11-R1 repairs (R2): counterexamples from the S2 checkpoint review. All fixtures
+# are invented test evidence, never proof that a satellite or model served.
+
+def _days(report):
+    return {row["date"]: row for row in report["calendar"]}
+
+
+def test_r2_held_capture_breaks_a_complete_window_but_keeps_valid_runs():
+    """S2-R1: three valid days plus a conflicting capture on the middle day."""
+    rows = population(2)
+    pop = gpm.opportunity_population(rows)
+    valid = [_grid_trace(rows, DAY + timedelta(days=d), read={0, 1}, run_id=f"run_alerts_v{d}") for d in range(3)]
+    held = _grid_trace(rows, DAY + timedelta(days=1), read={0, 1}, run_id="run_alerts_held")
+    other = copy.deepcopy(held)
+    other["legs"][0]["readings"] += 1
+    for inputs in ([*valid, held, other], [other, *reversed(valid), held]):
+        report = audit.evaluate(inputs, [pop])
+        middle = _days(report)["2026-06-06"]
+        assert middle["status"] == "observed_with_held_capture" and middle["held"] == ["conflict_held"]
+        spans = [(w["from"], w["to"]) for w in report["observed_complete_windows"]]
+        assert spans == [("2026-06-05", "2026-06-05"), ("2026-06-07", "2026-06-07")]
+        statuses = {r["identity"]: r["status"] for r in report["runs"]}
+        assert statuses["run_alerts_v1"] == "counted"  # valid evidence stays inspectable
+        assert report["opportunity_member_runs"]["fresh_primary"] == 6
+    incomplete = gpm.RainfallOpportunityTrace(run_id="run_alerts_partial")
+    incomplete.begin(rows, today=DAY + timedelta(days=1), product="late", max_cities=75, max_workers=8,
+                     target_date=None)
+    report = audit.evaluate([*valid, json.loads(json.dumps(incomplete.export()))], [pop])
+    assert _days(report)["2026-06-06"]["status"] == "observed_with_held_capture"
+    assert len(report["observed_complete_windows"]) == 2
+
+
+def _with(trace, path, value):
+    changed = copy.deepcopy(trace)
+    target = changed
+    for key in path[:-1]:
+        target = target[key]
+    target[path[-1]] = value
+    return changed
+
+
+@pytest.mark.parametrize("path,value,code", [
+    (("trace_status",), [], "trace_status"),
+    (("trace_status",), {"complete": True}, "trace_status"),
+    (("request_counts", "http_requests", "min"), [], "trace_request_counts"),
+    (("request_counts", "http_requests", "min"), True, "trace_request_counts"),
+    (("request_counts", "http_requests", "max"), 1.5, "trace_request_counts"),
+    (("request_counts", "http_requests", "min"), -1, "trace_request_counts"),
+    (("request_counts", "http_requests", "min"), 99, "trace_request_counts"),
+    (("request_counts", "http_requests", "unmeasured_components"), "s3", "trace_request_counts"),
+    (("request_counts", "grid_downloads"), "1", "trace_request_counts"),
+    (("incomplete_reasons",), "none", "trace_reasons"),
+    (("outcome",), ["primary_served"], "trace_outcome"),
+    (("population", "count"), "2", "trace_population"),
+    (("population", "within_trace_bound"), 1, "trace_population"),
+    (("legs", 0, "candidates"), "downloaded", "trace_legs"),
+    (("legs", 0, "inspection"), ["completed"], "trace_legs"),
+    (("legs", 0, "readings"), True, "trace_legs"),
+    (("legs", 0, "data_date"), 20260604, "trace_data_date"),
+    (("legs", 0), "imerg_late_grid_datapool", "trace_legs"),
+])
+def test_r2_malformed_nested_fields_hold_that_record_without_aborting_the_audit(path, value, code):
+    """S2-R2: strict detached types before any membership or conversion."""
+    rows = population(3)
+    pop = gpm.opportunity_population(rows)
+    good = _grid_trace(rows, DAY, read={0}, run_id="run_alerts_good")
+    bad = _with(_grid_trace(rows, DAY + timedelta(days=1), read={1}, run_id="run_alerts_bad"), path, value)
+    report = audit.evaluate([good, bad], [pop])
+    rows_by = {(r["identity"], r["status"]) for r in report["runs"]}
+    assert (None, "unsupported") in rows_by and ("run_alerts_good", "counted") in rows_by
+    refused = next(r for r in report["runs"] if r["status"] == "unsupported")
+    assert refused["reasons"] == [code]
+    assert report["opportunity_member_runs"]["fresh_primary"] == 1
+
+
+def test_r2_population_count_and_basis_are_cross_checked_against_the_canonical_population():
+    """S2-R3: a forged count with the same supplied hash is held, never complete."""
+    rows = population(2)
+    pop = gpm.opportunity_population(rows)
+    forged = _grid_trace(rows, DAY, read={0, 1}, run_id="run_alerts_forged")
+    forged["population"]["count"] = 99
+    report = audit.evaluate([forged], [pop])
+    (row,) = report["runs"]
+    assert row["status"] == "counted" and "population_count_mismatch" in row["reasons"]
+    assert report["observed_complete_windows"] == [] and _days(report)["2026-06-05"]["status"] == "not_auditable"
+    basis = _grid_trace(rows, DAY, read={0, 1}, run_id="run_alerts_basis")
+    basis["population"]["basis"] = "caller_basis"
+    assert audit.evaluate([basis], [pop])["runs"][0]["status"] == "unsupported"
+
+
+def _window_trace(rows, codes, *, run_id="run_alerts_window"):
+    trace = gpm.RainfallOpportunityTrace(run_id=run_id)
+    trace.begin(rows, today=DAY, product="late", max_cities=len(rows), max_workers=1, target_date=None)
+    trace.window("imerg_late_opendap", rows, scan_date=DAY, max_cities=len(rows), data_date=DAY - timedelta(days=1))
+    for index, code in enumerate(codes):
+        trace.member("imerg_late_opendap", index, code)
+    trace.leg_result("imerg_late_opendap", "served")
+    trace.finish("primary_served", [gpm.CityPrecipReading("a", "b", 0, 0, "2026-06-04", 1.0, "late", "x")])
+    return json.loads(json.dumps(trace.export()))
+
+
+def test_r2_completeness_is_derived_from_retained_bytes_not_caller_labels():
+    """S2-R3: a pending member cannot become complete because its reasons were cleared."""
+    rows = population(4)
+    pop = gpm.opportunity_population(rows)
+    pending = _window_trace(rows, "rrrs")
+    assert pending["legs"][0]["dispositions"] == "rrrp" and pending["trace_status"] == "incomplete"
+    relabelled = copy.deepcopy(pending)
+    relabelled["trace_status"], relabelled["incomplete_reasons"] = "complete", []
+    for trace in (pending, relabelled):
+        (row,) = audit.evaluate([trace], [pop])["runs"]
+        assert row["status"] == "trace_incomplete" and "in_flight_at_export" in row["reasons"]
+    complete = _window_trace(rows, "rrrr")
+    assert audit.evaluate([complete], [pop])["runs"][0]["status"] == "counted"
+    for change in (("legs", 0, "member_calls", 2), ("legs", 0, "in_flight_at_export", 1),
+                   ("request_counts", "opendap_point_calls", 3), ("request_counts", "http_requests", "max", 50)):
+        (row,) = audit.evaluate([_with(complete, change[:-1], change[-1])], [pop])["runs"]
+        assert row["status"] == "trace_incomplete" and "retained_counts_inconsistent" in row["reasons"], change
+    missing_window = copy.deepcopy(complete)
+    del missing_window["legs"][0]["selection_sha256"]
+    (row,) = audit.evaluate([missing_window], [pop])["runs"]
+    assert row["status"] == "trace_incomplete" and "window_capture_missing" in row["reasons"]
+    no_outcome = copy.deepcopy(complete)
+    for key in ("outcome", "serving_leg", "readings", "failure_class"):
+        del no_outcome[key]
+    (row,) = audit.evaluate([no_outcome], [pop])["runs"]
+    assert row["status"] == "trace_incomplete" and "not_finished" in row["reasons"]
+    partial = copy.deepcopy(complete)
+    del partial["outcome"]  # half a finish record is malformed, not unfinished
+    assert audit.evaluate([partial], [pop])["runs"][0]["status"] == "unsupported"
+    no_minimum = copy.deepcopy(complete)
+    del no_minimum["request_counts"]["http_requests"]["min"]  # unknown, never zero
+    assert audit.evaluate([no_minimum], [pop])["runs"][0]["status"] == "unsupported"
+
+
+@responses.activate
+def test_r2_supported_forty_day_walkback_keeps_exact_counts_with_bounded_capture(clean_env):
+    """S2-R4: 41 grid 404s, 41 probe 404s, failing point and model witness through the real paths."""
+    clean_env.setenv("THEHEAT_GPM_SOURCE", "datapool")
+    clean_env.setenv("GPM_IMERG_MAX_LOOKBACK_DAYS", "40")
+    rows = population(1)
+    Transport(rows, point={0: "fail"}, witness={0: (60.0, True)}).install()
+    readings, trace = traced(rows, max_cities=1, max_workers=1)
+    assert len(readings) == 1 and readings[0].source_leg == "open_meteo"
+    actual = len(responses.calls)
+    grid_calls = sum("data.gesdisc" in call.request.url for call in responses.calls)
+    probe_calls = sum("gpm1.gesdisc" in call.request.url for call in responses.calls)
+    assert grid_calls == 41 and probe_calls >= 41
+    counts = trace["request_counts"]
+    assert counts["grid_downloads"] == 41 and counts["opendap_date_probes"] == 41
+    bounds = counts["http_requests"]
+    assert bounds["min"] <= actual <= bounds["max"], (bounds, actual)
+    grid, opendap = trace["legs"][:2]
+    assert len(grid["candidates"]) <= gpm.MAX_TRACE_CANDIDATES < 41 and grid["candidates_omitted"] == 41 - len(
+        grid["candidates"])
+    assert len(opendap["date_probes"]) <= gpm.MAX_TRACE_CANDIDATES and opendap["date_probes_omitted"] == 41 - len(
+        opendap["date_probes"])
+    assert trace["trace_status"] == "incomplete"
+    assert {"grid_candidates_exceed_trace_bound", "date_probes_exceed_trace_bound"} <= set(trace["incomplete_reasons"])
+    assert "redirects_not_counted" in bounds["unmeasured_components"]
+    (row,) = audit.evaluate([trace], [gpm.opportunity_population(rows)])["runs"]
+    assert row["status"] == "trace_incomplete"
+
+
+def test_r2_cli_refuses_fifo_directory_and_device_promptly(tmp_path):
+    """S2-R5: O_NOFOLLOW alone blocks on a writerless FIFO and accepts devices."""
+    import os
+    tmp_path = tmp_path.resolve()
+    fifo = tmp_path / "trace.fifo"
+    os.mkfifo(fifo)
+    script = "scripts/audit_rainfall_opportunity.py"
+    for target, code in ((fifo, "input_not_regular"), (tmp_path, "input_not_regular"),
+                         ("/dev/null", "input_not_regular")):
+        try:
+            done = subprocess.run([sys.executable, script, "--trace", str(target)], capture_output=True, text=True,
+                                  timeout=20)
+        except subprocess.TimeoutExpired:
+            pytest.fail(f"audit CLI blocked on {target}")
+        assert done.returncode == 2 and json.loads(done.stdout) == {"error": code}, (target, done.stdout)
+
+
+def test_r2_forty_day_walkback_is_identical_traced_and_untraced(clean_env):
+    """Compatibility for the S2-R4 counterexample: readings, events and request URLs unchanged."""
+    clean_env.setenv("THEHEAT_GPM_SOURCE", "datapool")
+    clean_env.setenv("GPM_IMERG_MAX_LOOKBACK_DAYS", "40")
+    rows = population(3)
+    results = []
+    for with_trace in (False, True):
+        with responses.RequestsMock(assert_all_requests_are_fired=False) as mock:
+            _install(mock, rows, dict(point={i: "fail" for i in range(3)}, witness={i: (90.0, True) for i in range(3)}))
+            trace = gpm.RainfallOpportunityTrace(run_id="run_x") if with_trace else None
+            readings = gpm.fetch_daily_precip(rows, today=DAY, strict=True, trace=trace, max_cities=1, max_workers=1)
+            state = {"precip_daily_records": {gpm._daily_record_key(r): {"mm": 0.5, "year": 2020} for r in readings}}
+            events = gpm.detect_precip_records(readings, state)
+            results.append((readings, events, [call.request.url for call in mock.calls]))
+    assert results[0] == results[1]
+    assert results[0][1] and len(results[0][2]) > 82

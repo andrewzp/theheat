@@ -244,12 +244,19 @@ class RainfallOpportunityTrace:
     def grid_begin(self, source: str, *, start_date: date | None, max_lookback: int | None) -> None:
         entry = self._leg(_GRID_TRACE_LEGS[source], "whole_population_one_download")
         entry.update(walkback_start_date=start_date.isoformat() if start_date else None,
-                     max_lookback_days=max_lookback, candidates=[], data_date=None, inspection="not_reached")
+                     max_lookback_days=max_lookback, candidates=[], candidates_omitted=0, downloads=0,
+                     data_date=None, inspection="not_reached")
 
     @_observed
     def grid_candidate(self, source: str, candidate: date, outcome: str) -> None:
-        self._leg(_GRID_TRACE_LEGS[source], "whole_population_one_download")["candidates"].append(
-            {"date": candidate.isoformat(), "outcome": outcome})
+        # The scalar counts every attempt; the retained list is bounded and its
+        # omissions are counted, so a long walkback never falsifies the request count.
+        entry = self._leg(_GRID_TRACE_LEGS[source], "whole_population_one_download")
+        entry["downloads"] += 1
+        if len(entry["candidates"]) < MAX_TRACE_CANDIDATES:
+            entry["candidates"].append({"date": candidate.isoformat(), "outcome": outcome})
+        else:
+            entry["candidates_omitted"] += 1
 
     @_observed
     def grid_inspected(self, source: str, resolved: date, readings: Sequence[CityPrecipReading]) -> None:
@@ -275,7 +282,13 @@ class RainfallOpportunityTrace:
     @_observed
     def probe(self, candidate: date, outcome: str, *, start_date: date, max_lookback: int) -> None:
         entry = self._leg("imerg_late_opendap", "bounded_rotating_window")
-        entry.setdefault("date_probes", []).append({"date": candidate.isoformat(), "outcome": outcome})
+        probes = entry.setdefault("date_probes", [])
+        entry["date_probe_calls"] = entry.get("date_probe_calls", 0) + 1
+        entry.setdefault("date_probes_omitted", 0)
+        if len(probes) < MAX_TRACE_CANDIDATES:
+            probes.append({"date": candidate.isoformat(), "outcome": outcome})
+        else:
+            entry["date_probes_omitted"] += 1
         entry.update(walkback_start_date=start_date.isoformat(), max_lookback_days=max_lookback)
 
     @_observed
@@ -337,9 +350,10 @@ class RainfallOpportunityTrace:
         low = high = 0
         unmeasured: list[str] = []
         for entry in legs:
-            if len(entry.get("candidates", [])) > MAX_TRACE_CANDIDATES:
-                entry["candidates"] = entry["candidates"][:MAX_TRACE_CANDIDATES]
-                reasons.append("candidates_exceed_trace_bound")
+            if entry.get("candidates_omitted"):
+                reasons.append("grid_candidates_exceed_trace_bound")
+            if entry.get("date_probes_omitted"):
+                reasons.append("date_probes_exceed_trace_bound")
             if "dispositions" in entry:
                 started = sum(code != "n" for code in entry["dispositions"])
                 pending = sum(code == "s" for code in entry["dispositions"])
@@ -349,7 +363,7 @@ class RainfallOpportunityTrace:
                 if pending:
                     reasons.append("in_flight_at_export")
             if entry["leg"] in _GRID_TRACE_LEGS.values():
-                downloads = len(entry.get("candidates", []))
+                downloads = entry.get("downloads", 0)
                 counts["grid_downloads"] += downloads
                 if entry["leg"] == "imerg_late_grid_datapool":
                     low += downloads
@@ -359,7 +373,7 @@ class RainfallOpportunityTrace:
                 if entry["inspection"] == "completed" and "reading_bitmap" not in entry:
                     reasons.append("grid_membership_not_captured")
             elif entry["leg"] == "imerg_late_opendap":
-                probes = len(entry.get("date_probes", []))
+                probes = entry.get("date_probe_calls", 0)
                 calls = entry.get("member_calls", 0)
                 counts["opendap_date_probes"] += probes
                 counts["opendap_point_calls"] += calls
@@ -370,6 +384,10 @@ class RainfallOpportunityTrace:
                 counts["witness_point_calls"] += calls
                 low += calls
                 high += 6 * calls
+        if low:
+            # The HTTP client follows redirects; those requests are not counted,
+            # so ``max`` bounds the counted components only.
+            unmeasured.append("redirects_not_counted")
         if capture_error:
             reasons.append("capture_error")
         if not finished:

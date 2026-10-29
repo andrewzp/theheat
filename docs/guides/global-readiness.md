@@ -66,4 +66,23 @@ fixed error code.
 inert text.
 
 Rainfall traces can also be audited on their own with
-`scripts/audit_rainfall_opportunity.py --trace FILE --population FILE`.
+`scripts/audit_rainfall_opportunity.py --trace FILE --population FILE`. The tool
+reads regular files only. It refuses a FIFO, device or directory at once, and it
+refuses a symlink in any path component.
+
+How the rainfall audit treats traces:
+
+- Each trace is type-checked field by field. A malformed trace is held with a
+  fixed reason, and the other traces are still audited.
+- Completeness is derived from the trace's own retained bytes. A pending member, a
+  missing window record, inconsistent counts or a missing finish keep a trace
+  incomplete, whatever its supplied status says. A population count that differs
+  from the canonical population makes the run unauditable.
+- A day that has a held, conflicting or incomplete capture ends the complete
+  window, even when other runs on that day are valid. The valid runs stay listed.
+- The recorder keeps independent counters for every grid download and date probe.
+  At most 32 of each are retained as records. When some are omitted, the trace is
+  marked incomplete; the counts themselves are never truncated.
+- HTTP `min`/`max` bound the counted components only. Redirects the HTTP client
+  follows, and S3 credential and object requests, are listed as unmeasured. Cost
+  stays unknown.
