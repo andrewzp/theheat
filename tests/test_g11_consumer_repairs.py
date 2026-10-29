@@ -36,12 +36,15 @@ def _gdacs(legs):
                                                     selected_alerts=sum(x["records_selected"] or 0 for x in legs.values()))))
 
 
-def test_gdacs_actual_partial_witness_diagnostics_identify_only_successful_products():
+@pytest.mark.parametrize("status", ["degraded", "success"])
+def test_gdacs_actual_partial_witness_diagnostics_identify_only_successful_products(status):
     legs = {"usgs_quakes": dict(status="success", records_received=1, records_selected=1),
             "nhc": dict(status="failed", records_received=None, records_selected=None),
             "jtwc": dict(status="failed", records_received=None, records_selected=None)}
     for ordered in permutations(legs):
-        result = products.serving_disposition_from_run_entry(_gdacs({key: legs[key] for key in ordered}))
+        entry = _gdacs({key: legs[key] for key in ordered})
+        entry["status"] = status
+        result = products.serving_disposition_from_run_entry(entry)
         assert result["serving_product_ids"] == ["gdacs.subtype_witness_usgs"]
         assert result["primary_leg_served_this_run"] is False
     # A completed feed can have zero selected alerts without claiming an event.
@@ -54,9 +57,11 @@ def test_gdacs_actual_partial_witness_diagnostics_identify_only_successful_produ
 
 
 @pytest.mark.parametrize("change", ["missing", "wrong_leg", "contradictory_count", "contradictory_total", "wrong_type", "missing_feed", "missing_count", "wrong_status", "wrong_primary"])
-def test_gdacs_missing_or_contradictory_diagnostics_retain_unknown_service(change):
+@pytest.mark.parametrize("status", ["degraded", "success"])
+def test_gdacs_missing_or_contradictory_diagnostics_retain_unknown_service(change, status):
     entry = _gdacs({key: dict(status="success", records_received=1, records_selected=1)
                     for key in ("usgs_quakes", "nhc", "jtwc")})
+    entry["status"] = status
     diagnostics = entry["details"]["feed_diagnostics"]
     if change == "missing":
         entry.pop("details")
@@ -79,7 +84,15 @@ def test_gdacs_missing_or_contradictory_diagnostics_retain_unknown_service(chang
     result = products.serving_disposition_from_run_entry(entry)
     assert result["serving_product_ids"] == []
     assert result["primary_leg_served_this_run"] is None
-    assert result["reasons"]
+    assert result["observed_status"] == status
+    assert "witness_serving_diagnostics_missing_or_inconsistent" in result["reasons"]
+
+
+def test_gdacs_unlabelled_success_still_identifies_the_wired_primary():
+    result = products.serving_disposition_from_run_entry(dict(source="gdacs", status="success"))
+    assert result["serving_product_ids"] == ["gdacs.georss"]
+    assert result["primary_leg_served_this_run"] is True
+    assert result["evidence"] == "sole_wired_unlabelled_primary"
 
 
 def test_malformed_dated_capture_withholds_middle_day_but_keeps_valid_neighbors():

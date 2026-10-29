@@ -737,12 +737,14 @@ _OBSERVED_STATUSES = frozenset({"success", "degraded", "partial_failure", "faile
 
 
 def serving_disposition(source_id: str, *, status: str, runtime_leg_label: str | None = None,
-                        served_product_ids=None, health_key: str | None = None, legs=LEGS) -> dict[str, Any]:
+                        served_product_ids=None, health_key: str | None = None, legs=LEGS,
+                        infer_unlabelled_primary: bool = True) -> dict[str, Any]:
     """Describe what one observed source-run entry can and cannot show.
 
     Status alone never identifies a served product: evidence is a runtime leg label
     or explicit served product IDs. The one exception is an unlabelled success
-    when a single wired, unlabelled primary exists for the observed health key,
+    when a single wired, unlabelled primary exists for the observed health key
+    and the caller permits that inference,
     because runners record every labelled alternate or retained serving as
     degraded. Anything else stays unknown (None). A workflow success, empty
     result, alternate response or static contract never establishes operational
@@ -772,7 +774,7 @@ def serving_disposition(source_id: str, *, status: str, runtime_leg_label: str |
             reasons.append("unknown_serving_label")
     else:
         candidates = [leg for leg in members if leg.role in {"primary", "alternate_route"} and leg.runtime_leg_label is None]
-        if status == "success" and len(candidates) == 1 and candidates[0].role == "primary" \
+        if infer_unlabelled_primary and status == "success" and len(candidates) == 1 and candidates[0].role == "primary" \
                 and candidates[0].status == "wired":
             served, evidence = candidates, "sole_wired_unlabelled_primary"
             reasons.append("unlabelled_success_sole_wired_primary")
@@ -902,8 +904,10 @@ def serving_disposition_from_run_entry(entry: Any, *, legs=LEGS, registry=REGIST
         label = labels.pop()
         if source_id == "gdacs" and label == "subtype_witnesses":
             served = _gdacs_witness_served(entry.get("details"))
+            # A known subtype label cannot become an unlabelled primary merely
+            # because its diagnostics fail to identify the supplying witnesses.
             result = serving_disposition(source_id, status=entry["status"], served_product_ids=served,
-                                         health_key=health_key, legs=legs)
+                                         health_key=health_key, legs=legs, infer_unlabelled_primary=False)
             if served is None:
                 result["reasons"].append("witness_serving_diagnostics_missing_or_inconsistent")
             return result
