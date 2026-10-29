@@ -1,3 +1,89 @@
+## 0.9.109.42
+
+- Patch Next.js and its matching platform packages to 15.5.28 for the October
+  security advisories, preserving React, Sharp and other locked dependencies.
+
+- Reuse exact retained temperature, JSON and scientific-data calculations within
+  verification reads while retaining fresh source audits, database and permission
+  checks, independent delivery verification, deadlines and publication pauses.
+
+- Add fixed body-phase diagnostics to the selected parked-media CI case, with
+  mechanical preservation of original assertions, operations and deadlines.
+- Keep owner-corruption fixture writes in explicit transactions so their local
+  setting survives through the write; preserve runtime immutability and checks.
+- Run the standalone scientific proof in the existing isolated test worker,
+  retaining its assertions and the single-threaded replay safeguard.
+- Retain bounded code-only delivery refusal diagnostics in offline fixture
+  failures while preserving original callbacks, assertions and deadlines.
+- On a PG2 CI interpreter crash, retain bounded native function names from one
+  private postmortem, delete core memory and preserve the original test result,
+  diagnostic timer and job deadline. No diagnostic replay or production change.
+- Verify denied grants with PostgreSQL's warning and unchanged effective rights,
+  ACL and catalog; retain direct mutation refusals and full state preservation.
+- Use the applicable source projection in MODIS approval regressions while
+  retaining complete review, required checks and description size limits.
+- Keep restored-capability test timestamps in the existing fixed-microsecond
+  database format, preserving the same corruption cases and 180-second lifetime.
+- Rebalance the complete editor-media test module across existing CI groups,
+  preserving every case and the unchanged job and execution deadlines.
+- Move the complete temperature-delivery module to an existing database group,
+  preserving node identities, execution profiles and all original deadlines.
+- Balance stage-revision test functions across existing database groups, keeping
+  all parameters together and preserving every case, execution profile and cap.
+- Extend the bounded, private CI crash observer to the temperature-editor group;
+  preserve test results and deadlines and delete raw memory after observation.
+- Keep corruption-test dispatch timestamps and encoded events consistent so the
+  original reader-refusal and rollback checks exercise the intended disagreement.
+- Clear invented model-fixture keys before the credential-free delivery journey;
+  preserve the production environment refusal and all delivery assertions.
+- Verify an expired original capability returns its exact refusal before any
+  transport entry, with no request or state change, without assuming a send flag.
+- Run temperature approval fault injection in the existing isolated worker;
+  preserve real reconstruction, exact faults, deadlines and parent HTTP/DB witnesses.
+- Split the larger temperature approval family into fixed fault pairs across
+  existing CI groups, preserving every proof/outbox case and all time limits.
+- Match radar-frame expiry to the earlier source-validity refusal while retaining
+  all outbox rollback, original deadline and no-send assertions.
+- Run the remaining stage-revision regressions before other database tests in
+  their existing groups, retaining every case and stable order within cohorts.
+- Give the full offline CI suite a bounded 45-minute job window after measured
+  late-suite cutoffs; production jobs, per-check deadlines and budgets stay fixed.
+- Give complete MODIS approval, interruption and editor-media test collections
+  dedicated parallel jobs after measured job-limit cancellations; require every
+  existing and added group while retaining all tests, profiles and production limits.
+- Match the policy-drift regression to the earlier joint-review refusal while
+  retaining every fault injection, rollback and no-send assertion.
+- Verify retained graphic review and completion evidence once within an owned
+  passive dashboard read. Recheck current source, roles and original expiry
+  before returning; keep independent command and delivery verification.
+- Add an owner-installed check protocol for new saved revisions with one
+  immutable lease per stage and an exact chain of timely passing evidence.
+  Preserve legacy enrollments and original request, spending and no-resend rules.
+  Bind completion, parked approval and delivery to the original final-stage
+  deadline; reject generic mutations without current scoped authority.
+- Connect compact station claims to locally resolved full temperature evidence,
+  native graphics, joint review, fresh checks and parked-state restore. Keep full
+  comparator tables out of model requests and retain locked source checks.
+- Carry compact station claims through experimental local media delivery with
+  typed enrollment, acquisition and dispatch checks. Bind own-attempt recovery
+  to the exact committed request; unrelated unknown sends remain blocked.
+- Derive extended attachment description and packet together. Reuse one fresh
+  current-review calculation for identical inputs, with independent verification
+  for parked decision transitions and unchanged public review checks.
+- Encode bounded detached projection containers through the native JSON encoder
+  when their conservative complete bound fits; preserve exact bytes, refusals
+  and the incremental fallback.
+- Reuse canonical bytes already checked by each fresh projection-field decode.
+  Preserve corruption refusal order, independent field copies and every database
+  read while removing duplicate validation within that read.
+- Measure the full encoding bound while validating freshly parsed private JSON,
+  avoiding another tree copy. Keep caller-owned snapshot protection and the
+  original complete validation, incremental fallback and refusal behavior.
+- Preserve standalone negative temperatures in the event suffix guard while
+  retaining event/date refusals and required factual and scientific checks.
+- Run known critical CI cases first while keeping all cases, assertions and
+  deadlines, and align ticking parent, child and HTTP test clocks.
+
 ## 0.9.109.41
 
 - Document a fixture-based Python/Node setup, lockfile installation, six generated

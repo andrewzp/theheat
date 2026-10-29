@@ -112,6 +112,7 @@ def test_changed_catalog3_refuses_without_repair(store, core, statement):
 
 
 @pytest.mark.parametrize("admitted", ["modis"], indirect=True)
+@pytest.mark.revision_check_protocol(1)
 def test_populated_saved_media_receipts_survive_catalog3_and_continue(admitted, core, monkeypatch):
     from tests import test_postgres_editor_media as editor, test_check_executor as executor
     editor.prepare_and_attach(admitted)

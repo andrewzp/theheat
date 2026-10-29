@@ -30,6 +30,7 @@ from tests.test_postgres_batch_results import worker_store as worker_store
 from tests.test_postgres_check_observations import base_store as base_store, store as store
 from tests.two_bot.test_batch_contract import inputs as inputs
 from tests.native_profile_helpers import native_dependencies as native_dependencies
+from tests.stage_revision_check_helpers import install_revision_protocol
 
 AT = candidate.AT
 
@@ -187,7 +188,7 @@ def admitted(request, store, core, tmp_path, monkeypatch, native_dependencies):
     assert result["status"] == "applied", result
     core[2].initialize_media_staging()
     core[2].initialize_media_commands()
-    core[2].initialize_revision_checks(now=AT)
+    install_revision_protocol(core[2], request, now=AT)
     store.configure_editor_media(**native_dependencies, scratch=tmp_path / "native")
     case.update(draft_id=result["candidate"]["draft_id"], provider_requests=sent)
     return case
@@ -699,6 +700,7 @@ def test_complete_native_check_park_dump_restore_and_resumption(
 
 
 @pytest.mark.parametrize("admitted", ["modis"], indirect=True)
+@pytest.mark.revision_check_protocol(1)
 def test_saved_origin_union_constraints_and_concurrent_expiring_leases(admitted, core):
     from concurrent.futures import ThreadPoolExecutor
     from src.commands.check_journal import CheckJournalError

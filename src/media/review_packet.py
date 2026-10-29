@@ -202,12 +202,24 @@ def _build(
     )
     bound = input_binding["bundles"][0]
     bundle = draft["review_context"]["two_bot"]["bundle"]
-    _require(
-        isinstance(bundle, dict)
-        and fingerprint(bundle) == bound["bundle_sha256"]
-        and bundle == bound["bundle"],
-        "Graphic and draft use different retained bundles",
-    )
+    claim = input_binding.get("claim_view") if spec["template"] == "temperature_comparator" else None
+    if claim is None:
+        _require(
+            isinstance(bundle, dict)
+            and fingerprint(bundle) == bound["bundle_sha256"]
+            and bundle == bound["bundle"],
+            "Graphic and draft use different retained bundles",
+        )
+    else:
+        # A compact saved claim draws from full evidence the draft names but does
+        # not carry. validate_graphic already replayed that projection.
+        _require(
+            isinstance(bundle, dict) and isinstance(bundle.get("raw_signal_dump"), dict)
+            and fingerprint(bundle) == claim["view_sha256"]
+            and bundle["raw_signal_dump"].get("ghcn_claim_view") == claim["reference"]
+            and claim["reference"]["full_story"]["sha256"] == bound["bundle_sha256"] == fingerprint(bound["bundle"]),
+            "Graphic and draft use different retained bundles",
+        )
     _require(
         draft["event_id"] == evidence["event_id"] == bundle["event_id"],
         "Graphic and draft event identities differ",

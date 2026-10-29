@@ -7,6 +7,8 @@ write receipt is returned only after commit. There is no current-state pointer.
 from __future__ import annotations
 
 from contextlib import contextmanager
+from contextvars import ContextVar
+from copy import deepcopy
 from dataclasses import dataclass
 import hashlib
 import json
@@ -14,6 +16,7 @@ import math
 import os
 from pathlib import Path
 import re
+import threading
 from typing import Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -47,9 +50,15 @@ def _identifier(value: Any) -> str:
     return value
 
 
-def _check_structure(value: Any) -> None:
+def _check_structure(value: Any, *, _with_bound: bool = False) -> int | None:
+    """Validate every node, optionally measuring a conservative encoding bound.
+
+    The internal measurement is only for newly parsed private JSON. Saturating
+    it never ends validation early or changes the original refusal order.
+    """
     stack = [(value, 0)]
     count = 0
+    size = 0
     while stack:
         item, depth = stack.pop()
         count += 1
@@ -60,10 +69,14 @@ def _check_structure(value: Any) -> None:
             _require(len(item) <= MAX_NODES, "projection_structure_bound")
             _require(count + len(stack) + len(item) <= MAX_NODES, "projection_structure_bound")
             stack.extend((child, depth + 1) for child in item.values())
+            if _with_bound and size <= MAX_BYTES:
+                size += 2 + max(0, len(item) - 1) + sum(6 * len(name) + 3 for name in item)
         elif kind is list:
             _require(len(item) <= MAX_NODES, "projection_structure_bound")
             _require(count + len(stack) + len(item) <= MAX_NODES, "projection_structure_bound")
             stack.extend((child, depth + 1) for child in item)
+            if _with_bound and size <= MAX_BYTES:
+                size += 2 + max(0, len(item) - 1)
         elif kind is int:
             _require(abs(item) <= MAX_INTEGER, "unsafe_json_integer")
         elif kind is float:
@@ -72,15 +85,95 @@ def _check_structure(value: Any) -> None:
             _require(len(item) <= MAX_BYTES, "projection_byte_bound")
         else:
             _require(item is None or kind is bool, "unsupported_json_value")
+        if _with_bound and size <= MAX_BYTES:
+            if kind is str:
+                size += 6 * len(item) + 2
+            elif kind is int or kind is float:
+                size += len(repr(item))
+            elif kind is not dict and kind is not list:
+                size += 4 if item is None else 5
+        if _with_bound and size > MAX_BYTES:
+            size = MAX_BYTES + 1
+    return size if _with_bound else None
+
+
+def _bounded_snapshot(value: Any) -> tuple[Any, int] | None:
+    """Detach containers only while a conservative UTF-8 JSON bound fits.
+
+    One code point needs at most six bytes (a JSON control escape). Count every
+    occurrence, including shared children. Immutable scalars can be shared; no
+    caller-owned container reaches the whole encoder. A loose overestimate
+    returns None to select the original bounded incremental path.
+    """
+    root: list[Any] = [None]
+    pending: list[tuple[Any, int, Any, Any]] = [(value, 0, root, 0)]
+    size = 0
+    count = 0
+    while pending:
+        item, depth, parent, key = pending.pop()
+        count += 1
+        _require(count <= MAX_NODES and depth <= MAX_DEPTH, "projection_structure_bound")
+        kind = type(item)
+        if kind is dict:
+            _require(len(item) <= MAX_NODES and count + len(pending) + len(item) <= MAX_NODES,
+                     "projection_structure_bound")
+            copied: Any = {}
+            parent[key] = copied
+            size += 2
+            for name, child in item.items():
+                _require(type(name) is str, "invalid_json_key")
+                size += 6 * len(name) + 3 + bool(copied)  # Quoted key, colon, comma.
+                if size > MAX_BYTES:
+                    return None
+                _require(count + len(pending) + 1 <= MAX_NODES, "projection_structure_bound")
+                copied[name] = None
+                pending.append((child, depth + 1, copied, name))
+        elif kind is list:
+            _require(len(item) <= MAX_NODES and count + len(pending) + len(item) <= MAX_NODES,
+                     "projection_structure_bound")
+            copied = []
+            parent[key] = copied
+            size += 2
+            for child in item:
+                size += bool(copied)
+                if size > MAX_BYTES:
+                    return None
+                _require(count + len(pending) + 1 <= MAX_NODES, "projection_structure_bound")
+                pending.append((child, depth + 1, copied, len(copied)))
+                copied.append(None)
+        elif kind is str:
+            _require(len(item) <= MAX_BYTES, "projection_byte_bound")
+            size += 6 * len(item) + 2
+            parent[key] = item
+        elif kind is int:
+            _require(abs(item) <= MAX_INTEGER, "unsafe_json_integer")
+            size += len(repr(item))
+            parent[key] = item
+        elif kind is float:
+            _require(math.isfinite(item), "nonfinite_json_number")
+            size += len(repr(item))
+            parent[key] = item
+        else:
+            _require(item is None or kind is bool, "unsupported_json_value")
+            size += 4 if item is None else 5  # null / true or false.
+            parent[key] = item
+        if size > MAX_BYTES:
+            return None
+    return root[0], size
 
 
 def _canonical(value: Any) -> bytes:
     """Finite JSON, exact Python numeric types, no coercion of unsupported data."""
     try:
         _check_structure(value)
+        encoder = json.JSONEncoder(sort_keys=True, ensure_ascii=False, allow_nan=False, separators=(",", ":"))
+        bounded = _bounded_snapshot(value)
+        if bounded is not None:
+            encoded = encoder.encode(bounded[0]).encode("utf-8")
+            _require(len(encoded) <= MAX_BYTES, "projection_byte_bound")
+            return encoded
         parts = []
         size = 0
-        encoder = json.JSONEncoder(sort_keys=True, ensure_ascii=False, allow_nan=False, separators=(",", ":"))
         for part in encoder.iterencode(value):
             encoded = part.encode("utf-8")
             size += len(encoded)
@@ -99,14 +192,104 @@ def _pairs(pairs):
     return result
 
 
-def _decode(payload: bytes) -> Any:
+def _canonical_private_decoded(value: Any) -> bytes:
+    """Encode only the fresh tree owned by this decode, without a second copy."""
+    try:
+        bound = _check_structure(value, _with_bound=True)
+        encoder = json.JSONEncoder(sort_keys=True, ensure_ascii=False, allow_nan=False, separators=(",", ":"))
+        if bound is not None and bound <= MAX_BYTES:
+            encoded = encoder.encode(value).encode("utf-8")
+            _require(len(encoded) <= MAX_BYTES, "projection_byte_bound")
+            return encoded
+        parts = []
+        size = 0
+        for part in encoder.iterencode(value):
+            encoded = part.encode("utf-8")
+            size += len(encoded)
+            _require(size <= MAX_BYTES, "projection_byte_bound")
+            parts.append(encoded)
+        return b"".join(parts)
+    except (UnicodeError, RecursionError, RuntimeError, TypeError):
+        raise ProjectionError("invalid_json") from None
+
+
+def _decode_with_canonical(payload: bytes) -> tuple[Any, bytes]:
+    """Return fresh parsed data and the bytes already checked on this decode."""
     _require(type(payload) is bytes and len(payload) <= MAX_BYTES, "invalid_payload_bytes")
     try:
         value = json.loads(payload.decode("utf-8"), object_pairs_hook=_pairs)
-        _canonical(value)
-        return value
+        return value, _canonical_private_decoded(value)
     except (ValueError, UnicodeError, RecursionError):
         raise ProjectionError("invalid_stored_json") from None
+
+
+def _decode(payload: bytes) -> Any:
+    return _decode_with_canonical(payload)[0]
+
+
+class _ReaderDecoding:
+    """A single connection/pass's bounded pure byte decoder, never a proof.
+
+    Fresh SQL reads, sizes, digests, row relationships and all domain/currentness
+    checks remain with their callers. Only parsing the SAME complete bytes and
+    calculating their canonical encoding can be repeated without more work.
+    """
+    def __init__(self, connection):
+        self.connection = connection
+        self.thread = threading.get_ident()
+        self.open = True
+        self.entries: dict[bytes, tuple[Any, bytes]] = {}
+        self.byte_count = 0
+        self.implementation: tuple | None = None
+
+    def close(self):
+        self.open = False
+        self.connection = None
+        self.entries.clear()
+        self.byte_count = 0
+
+
+_READER_DECODING: ContextVar[_ReaderDecoding | None] = ContextVar(
+    "projection_reader_decoding", default=None)
+
+
+@contextmanager
+def _reader_decoding_scope(connection):
+    # Nested calls start empty too; no connection/operation can inherit a result.
+    calculation = _ReaderDecoding(connection)
+    token = _READER_DECODING.set(calculation)
+    try:
+        yield
+    finally:
+        calculation.close()
+        _READER_DECODING.reset(token)
+
+
+def _reader_decode_with_canonical(connection, payload):
+    calculation = _READER_DECODING.get()
+    limits = (MAX_BYTES, MAX_FIELDS, MAX_DEPTH, MAX_NODES, MAX_INTEGER)
+    if (calculation is None or not calculation.open or calculation.connection is not connection
+            or calculation.thread != threading.get_ident() or type(payload) is not bytes
+            or not 4096 <= len(payload) <= 1_000_000 or not all(type(v) is int for v in limits)):
+        return _decode_with_canonical(payload)
+    implementation = (_decode_with_canonical, _canonical_private_decoded, _check_structure,
+                      _pairs, _require, json.loads, json.JSONEncoder,
+                      json.JSONEncoder.encode, json.JSONEncoder.iterencode, *limits)
+    if calculation.implementation != implementation:
+        calculation.entries.clear()
+        calculation.byte_count = 0
+        calculation.implementation = implementation
+    if payload in calculation.entries:
+        value, canonical = calculation.entries[payload]
+        return deepcopy(value), canonical
+    # Failures are never cached. This is the unchanged finite/duplicate-key/
+    # canonical decoder, not a replacement for its acceptance conditions.
+    value, canonical = _decode_with_canonical(payload)
+    size = len(payload) + len(canonical)
+    if len(calculation.entries) < 8 and calculation.byte_count + size <= 2_000_000:
+        calculation.entries[payload] = deepcopy(value), canonical
+        calculation.byte_count += size
+    return value, canonical
 
 
 def _snapshot(value: Any) -> tuple[bytes, dict[bytes, bytes]]:
@@ -350,12 +533,19 @@ class PostgresProjectionRepository:
         restored = {}
         for name_bytes, artifact_sha, artifact_size in refs:
             payload = payloads[artifact_sha]
-            name = _decode(name_bytes)
-            _require(type(name) is str and name not in restored and _canonical(name) == name_bytes, "corrupt_projection_field")
-            value = _decode(payload)
-            _require(_canonical(value) == payload, "noncanonical_projection_artifact")
+            name, canonical_name = _reader_decode_with_canonical(connection, name_bytes)
+            _require(type(name) is str and name not in restored and canonical_name == name_bytes, "corrupt_projection_field")
+            value, canonical_value = _reader_decode_with_canonical(connection, payload)
+            _require(canonical_value == payload, "noncanonical_projection_artifact")
             restored[name] = value
-        encoded = _canonical(restored)
+        calculation = _READER_DECODING.get()
+        private = (calculation is not None and calculation.open
+                   and calculation.connection is connection
+                   and calculation.thread == threading.get_ident())
+        # Every container here belongs to this reconstruction: fresh parses or
+        # detached decoder returns. Keep complete whole-tree validation (depth,
+        # nodes, bytes and numeric types), without cloning this private tree.
+        encoded = _canonical_private_decoded(restored) if private else _canonical(restored)
         _require(len(encoded) == byte_count and _sha(encoded) == sha, "corrupt_projection_identity")
         return ProjectionReceipt(namespace, snapshot_id, sha, byte_count, field_count, created.isoformat()), restored
 

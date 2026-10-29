@@ -30,6 +30,10 @@ MAX_INPUT = 131072
 FIELDS = {"schema_version", "source_key", "source_revision", "captured_at", "useful_until", "urgent", "bundle", "save"}
 RESERVATION_FIELDS = {"schema_version", "basis", "provider", "role", "model", "policy_sha256",
     "brief_ids", "reserve_micro_usd", "valid_from", "valid_until"}
+# Editor media commands that use a saved draft's current source evidence. Removal
+# only invalidates, so it stays available while a source cannot be resolved.
+EDITOR_SOURCE_ACTIONS = frozenset({"prepare_media_revision", "attach_media_revision", "review_media_revision",
+    "request_revision_checks", "approve_media_revision"})
 
 
 def configuration(authority):
@@ -438,10 +442,28 @@ def prepare_ghcn_command(authority, command_id, *, executed=False):
         elif command.action in {"request_candidate_checks","admit_checked_candidate"} and command.payload.get("origin_kind")=="synchronous_writer_v1":
             value=admission.read_input(c,command.payload)
             bundle=sync.job(c,value["generation_id"])["bundle"]
+        elif command.action in EDITOR_SOURCE_ACTIONS and len(command.targets)==1:
+            # The saved draft names its compact claim. The command boundary still
+            # verifies that draft, origin and claim against the locked state.
+            _,state=authority._state(c)
+            drafts=[d for d in state.get("drafts",[]) if isinstance(d,dict) and d.get("id")==command.targets[0].draft_id]
+            if len(drafts)!=1:
+                return None
+            context=drafts[0].get("review_context")
+            two_bot=context.get("two_bot") if isinstance(context,dict) else None
+            bundle=two_bot.get("bundle") if isinstance(two_bot,dict) else None
         else:
             return None
         if not has_ghcn_reference(bundle):
             return None
+    if command.action in EDITOR_SOURCE_ACTIONS:
+        from src.storage.cyclone_supply import CycloneSupplyError
+        try:
+            return prepare_ghcn_bundle(authority,bundle)
+        except CycloneSupplyError as exc:
+            # A malformed saved reference is a durable editor refusal, not an
+            # infrastructure fault that would hold the command queue.
+            return GhcnPreparationFailure(str(exc))
     return prepare_ghcn_bundle(authority,bundle)
 
 

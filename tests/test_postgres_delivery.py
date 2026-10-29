@@ -369,7 +369,7 @@ def test_post_barrier_recheck_preserves_original_scope_and_deadline(admitted, co
         for key in ("ANTHROPIC_API_KEY", "GEMINI_API_KEY"):
             monkeypatch.delenv(key, raising=False)
         original = delivery.before_call
-        def drift_after_barrier(authority, c, value, saved, resolve, now):
+        def drift_after_barrier(authority, c, value, saved, resolve, now, **kwargs):
             if drift == "role":
                 def resolve(_):
                     return None
@@ -383,7 +383,7 @@ def test_post_barrier_recheck_preserves_original_scope_and_deadline(admitted, co
                 encoded, fields = p._snapshot(state)
                 authority.projections._record(c, "command-core-v1", str(version+1), encoded, fields)
                 c.execute("UPDATE theheat_commands.state SET version=%s,snapshot_id=%s WHERE singleton=1", (version+1,str(version+1)))
-            return original(authority, c, value, saved, resolve, now)
+            return original(authority, c, value, saved, resolve, now, **kwargs)
         with monkeypatch.context() as patch:
             patch.setattr(delivery, "before_call", drift_after_barrier)
             outcome = run(case, intent, "x", "upload")

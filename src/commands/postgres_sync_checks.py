@@ -15,7 +15,7 @@ def upgraded(c):
     return revisions.upgraded(c) and c.execute("SELECT 1 FROM theheat_checks.schema_upgrades WHERE upgrade_version=3").fetchone() is not None
 
 
-def validate_chain(c, rows, original, observed, environment, roles):
+def validate_chain(c, rows, original, observed, environment, roles, *, catalog=None):
     checks._require(len(rows) == 2 and [r[0] for r in rows] == [2, 3], "sync_check_upgrade_receipt_required")
     _, raw, size, digest = rows[1]
     checks._require(type(raw) is bytes and type(size) is int and 0 < len(raw) == size <= 16384 and p._sha(raw) == digest,
@@ -28,7 +28,7 @@ def validate_chain(c, rows, original, observed, environment, roles):
         and value["previous_upgrade_sha256"] == rows[0][3]
         and value["upgrade_migration_sha256"] == p._sha(MIGRATION.read_bytes())
         and value["checks_metadata"] == original and value["observations_metadata"] == observed
-        and value["current_checks_catalog_sha256"] == p._catalog(c, "theheat_checks")
+        and value["current_checks_catalog_sha256"] == (catalog if catalog is not None else p._catalog(c, "theheat_checks"))
         and value["observations_catalog_sha256"] == observed["catalog_sha"]
         and value["environment"] == environment and (value["owner_role"], value["runtime_role"]) == roles
         and revisions.spend._time(value["installed_at"]) == value["installed_at"], "changed_sync_check_upgrade")
