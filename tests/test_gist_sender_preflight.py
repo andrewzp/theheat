@@ -10,9 +10,13 @@ import pytest
 
 from src.media import gist_media, gist_temperature_media as media
 from src.orchestrator import posting
-from tests.test_gist_temperature_posting import state_for
-
-pytest_plugins = ["tests.test_gist_temperature_posting"]
+from tests.test_gist_temperature_posting import (
+    draft_factory as draft_factory,
+    fake_transport as fake_transport,
+    invented_clock as invented_clock,
+    retained_media as retained_media,
+    state_for,
+)
 
 
 def test_render_interruption_creates_no_attempt_or_storage_write(draft_factory, fake_transport, monkeypatch):
