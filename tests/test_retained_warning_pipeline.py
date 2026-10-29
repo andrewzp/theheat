@@ -13,7 +13,7 @@ from src.editorial.warning_runtime import (
     SuppliedWarning, WarningSource, current_warning_source, guard_warning_story, warning_source_scope,
 )
 from src.orchestrator import common
-from src.orchestrator.sources.official_warning import run_official_warning
+from src.orchestrator.sources.official_warning import run_official_warning, run_official_warning_source
 from src.orchestrator.triage_queue import _drain_and_write_triage_queue
 from src.orchestrator.two_bot_dispatch import _try_two_bot_draft
 from src.state import DEFAULT_STATE
@@ -80,6 +80,17 @@ def test_real_dispatch_pipeline_and_admission_make_one_pending_manual_draft(case
     assert retained["metadata_utf8"].encode() == case["selected"]["input"].metadata_bytes
     assert retained["source_utf8"].encode() == case["selected"]["input"].source_bytes
     assert result["stage_outcomes"]["writer"] == "pass"
+
+
+def test_registered_source_runner_preserves_absence_and_queues_before_model_work(case):
+    before = deepcopy(case["state"])
+    assert run_official_warning_source(case["state"], None) is None
+    assert case["state"] == before and counts(case) == [0, 0, 0, 0]
+    assert run_official_warning_source(case["state"], None,
+        source=case["source"], score=case["score"]) is None
+    assert len(case["state"]["_triage_queue"]) == 1
+    assert counts(case) == [0, 0, 0, 0]
+    assert case["state"]["drafts"] == []
 
 
 def test_current_scope_is_required_and_cleanup_does_not_leave_authority(case):

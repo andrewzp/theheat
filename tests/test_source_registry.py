@@ -51,6 +51,18 @@ def test_entry_points_exist_and_all_frozen_references_match_actual_code():
     assert document == registry_document(ROOT)
 
 
+def test_supplied_warning_inventory_preserves_absence_and_claim_limits():
+    row = next(row for row in CONTRACTS if row.source_id == "official_warning")
+    assert row.health_keys == ("official_warning",)
+    assert row.data_family == "official_warning"
+    assert row.entry_point == "src/orchestrator/sources/official_warning.py:run_official_warning_source"
+    assert "not an autonomous provider feed" in row.scope
+    assert "absent by default" in row.collection_rule and "no source fetch" in row.collection_rule
+    assert "independently current matching source revision" in row.time_rule
+    assert "no inferred observed impact" in row.claim_limit
+    assert registry_document(ROOT)["claim_permission_granted"] is False
+
+
 def test_generated_dashboard_inventory_is_exact_current_python_inventory():
     saved = (ROOT / "dashboard/lib/source-registry.json").read_text()
     assert saved == json.dumps(registry_document(ROOT), ensure_ascii=False, indent=2) + "\n", (

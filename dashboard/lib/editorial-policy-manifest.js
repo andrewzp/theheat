@@ -130,7 +130,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/orchestrator/ghcn_source_result_client.py": "d30d22b50ffd270f647187e11fc8b17fe7f7dff28368e492b1d86fc0131cf1cd",
     "src/orchestrator/nws_publication.py": "a41593f9b1e11216a250c84cf2f4002f68cbd315dcfe3b0d16ca7d8fdaa4f25b",
     "src/orchestrator/posting.py": "95da3e74d28848ce39c86e4825cd0454a49fc94831f15ed888137f03f8b81d3c",
-    "src/orchestrator/run_alerts.py": "208f7d56ece725ed7a7020d1ca2f75ce18a4cf2af03d0bc01750c34d1968953a",
+    "src/orchestrator/run_alerts.py": "54edf2378c2f0e525a435ddb227d13dbe3cb36a4b58f70ab57e30d96f37644ba",
     "src/orchestrator/source_result_client.py": "c1c8ae63f62169dcc26f87c8746b1994302cd36e26d6cb2146ff8a803fe089fb",
     "src/orchestrator/sources/air_quality.py": "254d2a44d4bf534b19cf18ae49574ebc3616895e5fe6ef2399f1d46bc26f5d50",
     "src/orchestrator/sources/coral_dhw.py": "6596f95e1ba183c4833d365c9d1d1b009e299e28e555295351fb061899d37e2f",
@@ -139,7 +139,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/orchestrator/sources/newsworthiness.py": "f02a894bfed36b91437f693f1c31f1810854c39761ebc9234746ead49b04c2d0",
     "src/orchestrator/sources/nws_alerts.py": "3665bc870e5df69c9c38183134157bcfd8f822b76c46606d8f31ce0fd75354f3",
     "src/orchestrator/sources/ocean_sst_anomaly.py": "ec85134ee7af9ecd60b8b1c1287fdce0585e5b1c1b8875a2f0c019499da74b69",
-    "src/orchestrator/sources/official_warning.py": "f41f80b1320af14aede5217c54e491847873680da0720861aae9c59dd9b48a07",
+    "src/orchestrator/sources/official_warning.py": "1f6c25135709b0810e4e1f78997f33a9496b968930acc74f9f863311e768278c",
     "src/orchestrator/sources/open_meteo.py": "e3f535af7394f45c9d2e8abd7b1c31d4c01f0d510f325e37bbe14ebc915e2fc3",
     "src/orchestrator/sources/synthesis.py": "e1e101948dde8a2ac07be65d78e37ed0cd8e080c43523ea0ded1b1071cd31522",
     "src/orchestrator/triage_queue.py": "c65664e1260a23718096fe02f9ad4b10cb1351dd4c96d18198b78d9429372105",
@@ -218,5 +218,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "8c4887f395618e343dafd55f5843987dfa6a7a620713c7c34bab9f419e4434fe"
   },
   "schema_version": 1,
-  "source_sha256": "e2aa7cad61b68d68e1a6cf84a4c5666392e270612097abbf1d922b6870ed607c"
+  "source_sha256": "de148eb1aafc07e2fdf36c478ca9811ba3e1985632d249ddd47eba96248f71c0"
 }

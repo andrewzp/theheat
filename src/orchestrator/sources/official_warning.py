@@ -18,6 +18,12 @@ from src.two_bot.bundle_capture import capture_bundle
 from src.two_bot.types import StoryBundle
 
 
+def run_official_warning_source(bot_state: BotState, current_run: dict | None, *,
+                                source: WarningSource | None = None, score: EditorialScore | None = None) -> None:
+    """Use the ordinary runner contract; the nomination retains its disposition."""
+    run_official_warning(bot_state, current_run, source=source, score=score)
+
+
 def run_official_warning(bot_state: BotState, current_run: dict | None, *,
                          source: WarningSource | None = None, score: EditorialScore | None = None) -> dict:
     """One independently nominated packet. Absent means no work or state change.

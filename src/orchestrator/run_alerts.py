@@ -246,8 +246,10 @@ def run_alerts(bot_state: BotState, current_run: dict | None = None, *, ghcn_sup
     # cycle-cap prune, so cycle_cap reclassification is included.
     pending_callbacks: list = []
     if warning_source is not None:
-        from src.orchestrator.sources.official_warning import run_official_warning
-        run_official_warning(bot_state, current_run, source=warning_source, score=warning_score)
+        from src.orchestrator.sources.official_warning import run_official_warning_source
+        warning_runner = SourceRunner("official_warning", lambda: run_official_warning_source(
+            bot_state, current_run, source=warning_source, score=warning_score))
+        warning_runner.run()
     from src.editorial.warning_runtime import WarningSource, warning_source_scope
     warning_context = warning_source_scope(warning_source) if type(warning_source) is WarningSource else nullcontext()
     with warning_context:

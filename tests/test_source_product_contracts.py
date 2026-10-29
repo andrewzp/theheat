@@ -43,7 +43,10 @@ def _mutated(target, /, **change):
 def test_every_wired_adapter_and_health_key_has_product_legs():
     document = products.product_contract_document()
     assert [row["source_id"] for row in document["adapters"]] == [row.source_id for row in CONTRACTS]
-    assert len(CONTRACTS) == 30  # frozen accepted-base inventory: 29 alert collectors plus leaderboard
+    assert len(CONTRACTS) == 31
+    # Preserve all 30 accepted-base entries; supplied warnings are an explicit,
+    # default-absent adapter rather than a new autonomous provider feed.
+    assert len([row for row in CONTRACTS if row.source_id != "official_warning"]) == 30
     for row in CONTRACTS:
         legs = [leg for leg in products.LEGS if leg.source_id == row.source_id]
         assert legs and {key for leg in legs for key in leg.health_keys} == set(row.health_keys)
@@ -59,6 +62,18 @@ def test_every_code_and_restriction_reference_names_a_real_module_symbol():
         path, symbol = ref.split(":")
         assert symbol in _module_symbols(path), ref
     assert products.ADVISORY in {scope for _m, scope in products.RESTRICTIONS.values()}
+
+
+def test_nominated_warning_product_is_conditional_and_not_a_provider_access_grant():
+    leg = next(leg for leg in products.LEGS if leg.product_id == "official_warning.nominated_packet")
+    assert leg.status == "conditional" and leg.data_kind == "official_warning"
+    assert leg.provider == "nominated_input" and leg.upstream == "theheat_supplied.official_warning_v1"
+    assert "forecast_not_outcome" in leg.claim_restrictions and leg.claim_permissions == ()
+    assert "No source acquisition" in leg.request_bound
+    observed = products.serving_disposition("official_warning", status="success")
+    assert observed["primary_leg_served_this_run"] is None
+    assert observed["serving_product_ids"] == []
+    assert "serving_leg_not_evidenced" in observed["reasons"]
 
 
 def test_runtime_leg_labels_are_the_labels_the_actual_code_emits():
