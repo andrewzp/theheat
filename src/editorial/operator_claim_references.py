@@ -13,6 +13,12 @@ from typing import Any
 MAX_ITEMS = 32
 MAX_FACTS = 64
 MAX_BYTES = 16_384
+_KIND_ALIASES = {
+    "all_time_high": "open_meteo_archive_high",
+    "all_time_low": "open_meteo_archive_low",
+    "record": "calendar_record",
+    "record_low": "calendar_record_low",
+}
 
 
 def _exact(value: Any, keys: set[str]) -> bool:
@@ -27,6 +33,17 @@ def _string(value: Any, limit: int) -> bool:
     except UnicodeError:
         return False
     return re.search(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", value) is None
+
+
+def operator_claim_kind_matches(draft_type: Any, bundle_kind: Any) -> bool:
+    """Only the four saved legacy labels documented by two_bot_dispatch.
+
+    Alias direction matters: the saved draft keeps the legacy label while the
+    intern gives its retained bundle the more precise kind. No broad temperature
+    family matching or normalization is permitted.
+    """
+    return (_string(draft_type, 80) and _string(bundle_kind, 80)
+            and (draft_type == bundle_kind or _KIND_ALIASES.get(draft_type) == bundle_kind))
 
 
 def _fact(value: Any) -> bool:
@@ -137,7 +154,7 @@ def project_operator_claim_references(draft: dict) -> dict:
     if not isinstance(bundle, dict) or not isinstance(text, str):
         return {"status": "unavailable", "identity": identity, "items": []}
     value = read_operator_claim_references(text, bundle, review["operator_claim_references"])
-    if (value is None or draft.get("revision_conflicts") or bundle.get("event_id") != draft.get("event_id") or bundle.get("signal_kind") != draft.get("type")):
+    if (value is None or draft.get("revision_conflicts") or bundle.get("event_id") != draft.get("event_id") or not operator_claim_kind_matches(draft.get("type"), bundle.get("signal_kind"))):
         return {"status": "unavailable", "identity": identity, "items": []}
     items = []
     for item in value["items"]:

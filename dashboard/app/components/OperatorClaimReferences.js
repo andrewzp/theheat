@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useId, useRef, useState } from "react"
-import { operatorReferencesForDisplay, quoteFromSelection, retainedClaimFacts, validateReferenceItems } from "../../lib/operator-claim-reference-input.js"
+import { operatorClaimKindMatches, operatorReferencesForDisplay, quoteFromSelection, retainedClaimFacts, validateReferenceItems } from "../../lib/operator-claim-reference-input.js"
 
 const h = React.createElement
 const factText = fact => `${fact.label.replaceAll("_", " ")}: ${fact.value === null ? "Not supplied" : String(fact.value)}${fact.unit ? ` ${fact.unit}` : ""}`
@@ -16,7 +16,7 @@ export function OperatorClaimReferences({ draft, text = draft?.text ?? "", items
   const bundle = draft?.review_context?.two_bot?.bundle
   let facts = [], sourceProblem = ""
   try {
-    if (bundle?.event_id !== draft?.event_id || bundle?.signal_kind !== draft?.type) throw new Error("The source snapshot does not match this draft. Refresh before adding references.")
+    if (bundle?.event_id !== draft?.event_id || !operatorClaimKindMatches(draft?.type, bundle?.signal_kind)) throw new Error("The source snapshot does not match this draft. Refresh before adding references.")
     facts = retainedClaimFacts(bundle)
   } catch (error) { sourceProblem = error.message }
   const view = operatorReferencesForDisplay(draft)

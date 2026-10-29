@@ -1,6 +1,7 @@
 """Select the exact saved draft twice; a preview never changes state or grants review."""
 
 from copy import deepcopy
+import base64
 import json
 import re
 from typing import cast
@@ -21,7 +22,7 @@ REVISION_KEYS = {"content_revision", "text_sha256", "evidence_sha256", "decision
 
 
 def check_request(request, policy_sha, runtime_sha):
-    if not isinstance(request, dict) or set(request) != REQUEST_KEYS:
+    if not isinstance(request, dict) or set(request) not in (REQUEST_KEYS, REQUEST_KEYS | {"format"}) or ("format" in request and request["format"] != "png"):
         raise PreviewError("bad_request")
     draft_id, revision = request["draft_id"], request["expected_revision"]
     if (not isinstance(draft_id, str) or not 0 < len(draft_id) <= 200
@@ -123,7 +124,12 @@ def build_preview(request, *, policy_sha, runtime_sha, read_state, budget, synth
         spec, source, context = qualified_spec(bundle, synthetic=synthetic, include_viirs=True,
                                               include_temperature=True)
         budget.remaining()
-        rendered = render_svg(**spec)
+        if request.get("format") == "png":
+            from src.media.gist_temperature_media import prepare_media
+            prepared = prepare_media(bundle, synthetic=synthetic)
+            rendered = None
+        else:
+            rendered = render_svg(**spec)
         budget.remaining()
         current = _selected(read_state(), request)
         if (current["status"] != original_status
@@ -131,7 +137,20 @@ def build_preview(request, *, policy_sha, runtime_sha, read_state, budget, synth
                                          code="stale_preview") != retained_bundle):
             raise PreviewError("stale_preview")
         budget.remaining()
-        result = {"schema_version": 2, "draft_id": request["draft_id"],
+        if request.get("format") == "png":
+            descriptor = prepared["descriptor"]
+            result = {"schema_version": 3, "draft_id": request["draft_id"],
+                "revision_identity": deepcopy(request["expected_revision"]),
+                "policy_source_sha256": policy_sha, "preview_runtime_sha256": runtime_sha,
+                "media_descriptor": descriptor, "media_descriptor_sha256": fingerprint(descriptor),
+                "png_base64": base64.b64encode(prepared["png"]).decode("ascii"),
+                "png_sha256": descriptor["png_sha256"], "title": prepared["title"],
+                "alt_text": descriptor["alt_text"], "scope": spec["evidence"]["scope"],
+                "source": source, "source_context": context, "width": 1200, "height": 1500,
+                "publication_approved": False, "attachment": False}
+        else:
+            assert rendered is not None
+            result = {"schema_version": 2, "draft_id": request["draft_id"],
                   "revision_identity": deepcopy(request["expected_revision"]),
                   "policy_source_sha256": policy_sha, "preview_runtime_sha256": runtime_sha,
                   "binding": rendered["binding"], "cache_key": rendered["cache_key"],

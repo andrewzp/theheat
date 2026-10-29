@@ -1,3 +1,20 @@
+## 0.9.109.43
+
+- Connect retained GHCN station comparisons to colourful temperature PNGs in the
+  Gist Workbench. Operators can attach/remove an image, review the exact text,
+  image and description together, then use the existing manual X workflow.
+  Delivery regenerates the reviewed bytes and refuses changed or stale evidence,
+  changed renderer profiles and uncertain prior attempts.
+- Add operator-selected quote-to-source-fact references to existing draft editing,
+  with current and historical display. Reference edits invalidate obsolete checks,
+  reviews and approval; references themselves establish no factual verdict.
+- Preserve uncertainty in source-service attribution and rainfall/readiness
+  diagnostics, including conflicting captures and malformed evidence.
+- Harden retained request diagnosis and cost evidence against malformed batch
+  results, duplicate/conflicting captures and active Markdown content. Unknown
+  usage and incomplete billing remain explicit.
+- Keep collection, draft-generation and automatic publication controls unchanged.
+
 ## 0.9.109.42
 
 - Patch Next.js and its matching platform packages to 15.5.28 for the October

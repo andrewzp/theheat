@@ -1,6 +1,6 @@
 // Server codec paired with src/editorial/operator_claim_references.py.
 import { draftIdentity, fingerprint, textHash } from "./draft-revisions.js"
-import { dense, exact, MAX_BYTES, MAX_ITEMS, retainedClaimFacts, validString, validateReferenceItems } from "./operator-claim-reference-input.js"
+import { dense, exact, MAX_BYTES, MAX_ITEMS, operatorClaimKindMatches, retainedClaimFacts, validString, validateReferenceItems } from "./operator-claim-reference-input.js"
 
 export function buildOperatorClaimReferences(text, bundle, items) {
   const checked = validateReferenceItems(text, bundle, items)
@@ -30,7 +30,7 @@ export function projectOperatorClaimReferences(draft, identity = draftIdentity(d
   const review = draft.review_context, bundle = review?.two_bot?.bundle
   if (!review || !Object.hasOwn(review, "operator_claim_references")) return { status: "missing", identity: { ...identity }, items: [] }
   const value = readOperatorClaimReferences(draft.text, bundle, review.operator_claim_references)
-  if (!value || draft.revision_conflicts?.length || bundle.event_id !== draft.event_id || bundle.signal_kind !== draft.type)
+  if (!value || draft.revision_conflicts?.length || bundle.event_id !== draft.event_id || !operatorClaimKindMatches(draft.type, bundle.signal_kind))
     return { status: "unavailable", identity: { ...identity }, items: [] }
   const string = (v, max) => validString(v, max) ? v : null
   const evidence = bundle.evidence && typeof bundle.evidence === "object" && !Array.isArray(bundle.evidence) ? bundle.evidence : {}

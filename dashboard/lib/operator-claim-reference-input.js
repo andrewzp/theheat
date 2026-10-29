@@ -6,6 +6,14 @@ export const dense = (value, max) => Array.isArray(value) && value.length <= max
   && Object.keys(value).length === value.length && Array.from({ length: value.length }, (_, i) => Object.hasOwn(value, i)).every(Boolean)
 export const validString = (value, limit) => typeof value === "string" && !!value.trim() && [...value].length <= limit
   && !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/u.test(value) && !/[\uD800-\uDFFF]/u.test(value)
+const kindAliases = Object.freeze({ all_time_high: "open_meteo_archive_high", all_time_low: "open_meteo_archive_low",
+  record: "calendar_record", record_low: "calendar_record_low" })
+// Paired with operator_claim_kind_matches: directional saved legacy labels,
+// exactly as documented in two_bot_dispatch; no family matching or coercion.
+export function operatorClaimKindMatches(draftType, bundleKind) {
+  return validString(draftType, 80) && validString(bundleKind, 80)
+    && (draftType === bundleKind || (Object.hasOwn(kindAliases, draftType) && kindAliases[draftType] === bundleKind))
+}
 export function retainedClaimFacts(bundle) {
   const facts = bundle?.current_facts
   const scalar = value => value === null || typeof value === "boolean" || (typeof value === "number" && Number.isFinite(value)) || validString(value, 2048)
@@ -62,6 +70,7 @@ export function operatorReferencesForDisplay(draft) {
   if (view.status !== "saved" || !dense(view.items, MAX_ITEMS) || !view.items.length) return unavailable
   try {
     const bundle = draft.review_context?.two_bot?.bundle
+    if (bundle?.event_id !== draft.event_id || !operatorClaimKindMatches(draft.type, bundle?.signal_kind)) throw new Error("Source changed")
     retainedClaimFacts(bundle)
     const items = view.items.map(item => {
       if (!exact(item, ["claim", "sources"]) || !dense(item.sources, MAX_FACTS)) throw new Error("Unavailable references")

@@ -1,8 +1,10 @@
 import { createHash } from "node:crypto"
+import { validGistTemperatureMedia } from "./gist-temperature-media.js"
 import { validEditorialPolicy } from "./editorial-policy.js"
 import { configuredAutomaticPolicy } from "./publication-control.js"
 import { projectSavedClaimEvidence } from "./saved-claim-evidence.js"
 import { buildOperatorClaimReferences, projectOperatorClaimReferenceHistory, projectOperatorClaimReferences } from "./operator-claim-references.js"
+import { operatorClaimKindMatches } from "./operator-claim-reference-input.js"
 
 // Paired with src/editorial/revisions.py. This is a decision binding, not a lock.
 function validUnicode(text) {
@@ -105,11 +107,12 @@ function validDelegation(value) {
 }
 
 export function reviewIsCurrent(draft, policy = null) {
-  if (Object.hasOwn(draft, "media_attachment")) return false
+  const media = Object.hasOwn(draft, "media_attachment")
   const binding = draft.review_binding
+  if (media && (!validGistTemperatureMedia(draft) || binding?.kind !== "human_media" || binding.media_sha256 !== fingerprint(draft.media_attachment))) return false
   if (draft.revision_conflicts?.length || !bindingMatches(draft, binding)) return false
   if (!policyMatches(binding, policy)) return false
-  if (binding.kind === "human") return true
+  if (binding.kind === "human" || (media && binding.kind === "human_media")) return true
   if (binding.kind === "delegated") return validDelegation(binding.delegation)
   if (binding.kind !== "model" || !checksPass(twoBot(draft))) return false
   try { return proofMatches(twoBot(draft), binding) && binding.checks_sha256 === fingerprint(checks(twoBot(draft))) } catch { return false }
@@ -174,6 +177,42 @@ export function recordHumanReview(draft, policy = null) {
   return draft
 }
 
+export function recordJointMediaReview(draft, policy = null) {
+  if (!validGistTemperatureMedia(draft)) throw new Error("This graphic needs a new preview")
+  if (draft.revision_conflicts?.length) throw new Error("Resolve the conflicting revision before reviewing")
+  if (typeof draft.text !== "string" || !draft.text.trim() || [...draft.text].length > 280) throw new Error("Invalid draft text")
+  textHash(draft.text)
+  if (!validEditorialPolicy(policy)) throw new Error("Editorial policy unverified")
+  draft.content_revision = Math.max(1, draftIdentity(draft).content_revision)
+  revokeApproval(draft)
+  draft.review_binding = { ...draftIdentity(draft), kind: "human_media", reviewed_at: new Date().toISOString(),
+    editorial_policy: structuredClone(policy), policy_sha256: fingerprint(policy), media_sha256: fingerprint(draft.media_attachment) }
+  return draft
+}
+
+export function invalidateMediaAttachment(draft, attachment) {
+  if (attachment !== null && (!attachment || typeof attachment !== "object" || Array.isArray(attachment))) throw new Error("Invalid media attachment")
+  if (attachment === null && !Object.hasOwn(draft, "media_attachment")) return draft
+  if (attachment !== null && Object.hasOwn(draft, "media_attachment") && fingerprint(attachment) === fingerprint(draft.media_attachment)) return draft
+  const previous = {}
+  for (const key of ["text", "review_context", "review_binding", "approval_binding", "revision_conflicts", "decision_revision", "media_attachment", "media_review_binding"]) {
+    if (Object.hasOwn(draft, key)) previous[key] = structuredClone(draft[key])
+  }
+  Object.assign(previous, draftIdentity(draft), { invalidated_at: new Date().toISOString() })
+  if (previous.content_revision >= Number.MAX_SAFE_INTEGER || decisionRevision(draft) >= Number.MAX_SAFE_INTEGER - 1) throw new Error("Revision exhausted")
+  if (Object.hasOwn(draft, "revision_history") && (!Array.isArray(draft.revision_history) || draft.revision_history.some(x => !x || typeof x !== "object" || Array.isArray(x)))) throw new Error("Invalid revision history")
+  draft.revision_history ??= []
+  draft.revision_history.push(previous)
+  draft.content_revision = previous.content_revision + 1
+  draft.status = "pending"
+  revokeApproval(draft)
+  for (const key of ["review_binding", "media_review_binding", "revision_conflicts", "candidate_score", "selected_candidate_rank"]) delete draft[key]
+  if (draft.review_context?.two_bot) draft.review_context.two_bot = Object.fromEntries(Object.entries(draft.review_context.two_bot).filter(([key]) => ["bundle", "signal_kind"].includes(key)))
+  if (attachment === null) delete draft.media_attachment
+  else draft.media_attachment = structuredClone(attachment)
+  return draft
+}
+
 export function authorizeDraft(draft, mode, intentId = null, publicationEpoch = null, policy = null) {
   if (!reviewIsCurrent(draft, policy)) throw new Error("This revision needs revalidation")
   if (!["manual", "auto"].includes(mode)) throw new Error("Invalid approval mode")
@@ -211,7 +250,7 @@ export function invalidateText(draft, newText, operatorClaimReferences = referen
   if (operatorClaimReferences === referencesOmitted) references = newText === draft.text ? old : referencesOmitted
   else {
     const bundle = draft.review_context?.two_bot?.bundle
-    if (Array.isArray(operatorClaimReferences) && operatorClaimReferences.length && (bundle?.event_id !== draft.event_id || bundle?.signal_kind !== draft.type)) throw new Error("Saved source snapshot does not match this draft")
+    if (Array.isArray(operatorClaimReferences) && operatorClaimReferences.length && (bundle?.event_id !== draft.event_id || !operatorClaimKindMatches(draft.type, bundle?.signal_kind))) throw new Error("Saved source snapshot does not match this draft")
     references = buildOperatorClaimReferences(newText, bundle, operatorClaimReferences) ?? referencesOmitted
   }
   const sameReferences = references === old || (references !== referencesOmitted && old !== referencesOmitted && fingerprint(references) === fingerprint(old))
@@ -258,10 +297,11 @@ export function projectDraft(draft, policy = null) {
       && binding.checks_sha256 === fingerprint(checks(value))
   } catch { /* An unverifiable historical analysis stays hidden. */ }
   return { ...draft, revision_identity: identity,
+    media_attachment_sha256: validGistTemperatureMedia(draft) ? fingerprint(draft.media_attachment) : null,
     claim_evidence: projectSavedClaimEvidence(draft, { identity, analysisMatches }),
     operator_claim_reference_view: projectOperatorClaimReferences(draft, draftIdentity(draft)),
     operator_claim_reference_history: projectOperatorClaimReferenceHistory(draft),
-    review_status: draft.revision_conflicts?.length ? "conflict" : Object.hasOwn(draft, "media_attachment") ? "media_review_required" : !validEditorialPolicy(policy) ? "policy_unverified" : current ? "passed" : "needs_revalidation", review_kind: current ? draft.review_binding.kind : null }
+    review_status: draft.revision_conflicts?.length ? "conflict" : Object.hasOwn(draft, "media_attachment") && !current ? "media_review_required" : !validEditorialPolicy(policy) ? "policy_unverified" : current ? "passed" : "needs_revalidation", review_kind: current ? draft.review_binding.kind : null }
 }
 
 // Passive provenance never participates in draftIdentity or authorization.
