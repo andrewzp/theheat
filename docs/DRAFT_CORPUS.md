@@ -11,6 +11,21 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-10-29 — Daily corpus grading (0 fresh drafts; 15 carry-overs from Oct 28, previously graded)
+
+**Context:** Gist read via git-clone path (success). 15 pending, identical to the Oct 28 queue
+(same text, same created_at timestamps Oct 7–17; newest is 12 days old, oldest 22). No new drafts
+reached pending since Oct 17. No re-grading performed; all Oct 28 grades stand
+(0 A · 2 B · 5 B- · 6 C+ · 2 D).
+
+**Headline:** Queue static for 12+ days. Nothing new to grade, so no evidence updates to any active
+proposal. All 15 remain staleness bulk-reject candidates (time-baked: Oct 8 forecasts, live NHC
+advisories, Guam "tonight"); the gist write is still blocked (`gh` token invalid, gist API 403).
+
+### Followups
+- Operator: reject all 15 via the dashboard (stale, time-baked). Guam pair first (manual proposals, D).
+- Operator: check suppression ledger / source health for why nothing has reached pending since Oct 17.
+
 ## 2026-10-28 — Daily corpus grading (15 fresh drafts; 0 carry-overs)
 
 **Context:** Gist read via git-clone path (success). 15 pending, all new to the corpus (draft_ids
