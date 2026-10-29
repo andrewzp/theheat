@@ -92,8 +92,9 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/editorial/draft_admission.py": "a726ca826cc564f43e3dd1169fa0f2a8d671be09d5f8ca80413587a64b857eb7",
     "src/editorial/marine_evidence.py": "7183f93f1068d75856063cf061a1dea8751bd4dd98cc1f1f34488bcf39296f5c",
     "src/editorial/newsworthiness.py": "2df18f17c51f772b761609bf10dc1c5b7289d2b1f1e2ce6f3f9dd743dbe73236",
+    "src/editorial/official_warning.py": "0cc0bdbe7896de9db99754ccd167ee6a80f447a44ce18d036eea5ad0ab145592",
     "src/editorial/operator_claim_references.py": "dbd11ac41b88e0019dde2f51b078c43cf8bd46966f1cb06e2adffc267f3bfbdc",
-    "src/editorial/policy.py": "491d6023a549aac6cbfa96b55263d5bedc76236f250dea9186aebd5359bcc104",
+    "src/editorial/policy.py": "f5c0c110cb1462c58219102290dd44d9b4fbc28b29d7d2166e486c263353902b",
     "src/editorial/portfolio.py": "da6dd9a39fae1872c63fb2c54c1f973ce4417f5dc7204fb8e1e09d40fc440dc8",
     "src/editorial/report_development.py": "e2ed39a9ff957683c8befff0f3b99533fdc9d90d84af88220ed13f2bf1489995",
     "src/editorial/revisions.py": "d88d4c456f3bd5a3240f30b8d7c3ef3b8a97dc5bd8fc445596943379582a9209",
@@ -187,6 +188,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/two_bot/intern/precipitation.py": "da903f54b66f50fcc19fac5a84187d388f1da8edf8d14493489901c8f06e3f06",
     "src/two_bot/intern/synthesis.py": "ad8129bb2852e09aeba9bb2432862338e07be1558cb852d613b44e3e98150792",
     "src/two_bot/intern/temperature.py": "aeee8fcbc69fd8774c31cefc20e61f4c82dd424c326836e8c2276541af6455d4",
+    "src/two_bot/intern/warnings.py": "3373d9591d1fdf3a95f3e7b8708e188fec8c42f5e657c50dc97e9e89882d1352",
     "src/two_bot/intern/wetbulb.py": "76cbe14776d3e95bbbea1b7dc74f1f79af9fd3a4d32ec75c49f4c44946a250f8",
     "src/two_bot/json_utils.py": "c09fd98817c8e478a38cdeb1028769ec146ad0f94701235b7c1e12de7a46e7da",
     "src/two_bot/memory.py": "33634f80d4002dd6246c5f627a8cf3db26cf8cb18fae5f81875db86f199c4bb9",
@@ -211,5 +213,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "8c4887f395618e343dafd55f5843987dfa6a7a620713c7c34bab9f419e4434fe"
   },
   "schema_version": 1,
-  "source_sha256": "7e2c8419b1cc57501b3d424e7f42792860aeedcfcc546835b6faed757ce32e7f"
+  "source_sha256": "9b6924191d488f563323ab6ec3a26df0f8210a9f818129fc9c2716814289907a"
 }
