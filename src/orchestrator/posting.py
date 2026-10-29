@@ -15,7 +15,7 @@ from src.editorial.approval import (
 )
 from src.editorial.publication import automatic_approval_allowed, observe_publication_policy
 from src.orchestrator.draft_save import _critic_passed
-from src.orchestrator.nws_publication import current_nws_source as _current_nws_source
+from src.orchestrator.nws_publication import current_nws_source as _retained_nws_source
 from src.editorial.revisions import (
     approval_is_current,
     binding_matches,
@@ -30,11 +30,19 @@ from src.editorial.revisions import (
 _DEFAULT_MIN_TWEET_SPACING_MIN = 15
 
 
+def _current_nws_source(draft, *, live):
+    # The supplied-warning seam has no implicit URL lookup. Without its owner's
+    # independently current input this family stops before paid safety/transport.
+    from src.editorial.warning_runtime import current_warning_source
+    return current_warning_source(draft) or _retained_nws_source(draft, live=live)
+
+
 def _hold_nws_draft(draft: dict, reason: str) -> None:
     revoke_approval(draft)
     draft["status"] = "pending"
     draft["approval_mode"] = "manual"
-    draft["post_error"] = f"NWS warning needs fresh source review: {reason}"
+    source = "Official warning" if draft.get("type") == "official_warning" else "NWS warning"
+    draft["post_error"] = f"{source} needs fresh source review: {reason}"
     _touch_draft(draft)
 
 
@@ -473,7 +481,16 @@ def run_manual_tweet(bot_state: BotState, current_run: dict | None = None) -> Bo
                            status="failed", observed=1, error="Editorial policy changed before final safety")
         return bot_state
 
-    passed, safety_reason = run_safety_pipeline(tweet_text)
+    from src.editorial.official_warning import WarningHold
+    from src.editorial.warning_runtime import warning_final_safety_scope
+    try:
+        with warning_final_safety_scope(draft):
+            passed, safety_reason = run_safety_pipeline(tweet_text)
+    except WarningHold as exc:
+        _hold_nws_draft(draft, exc.code)
+        _record_source_run(current_run, bot_state, "manual_publish", manual_start,
+                           status="failed", observed=1, error=draft["post_error"])
+        return bot_state
     if not passed:
         reason = safety_reason or "Safety pipeline rejected tweet"
         print(f"[manual] Safety rejected tweet: {reason}")

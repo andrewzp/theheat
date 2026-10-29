@@ -144,6 +144,26 @@
       ]
     },
     {
+      "source_id": "official_warning",
+      "health_keys": [
+        "official_warning"
+      ],
+      "kind": "adapter",
+      "entry_point": "src/orchestrator/sources/official_warning.py:run_official_warning_source",
+      "scope": "One explicitly nominated English-original warning; not an autonomous provider feed.",
+      "data_family": "official_warning",
+      "provenance": "Exact retained source bytes and an independent issuer/origin/report/revision nomination.",
+      "collection_rule": "Only with an explicitly supplied WarningSource and EditorialScore; absent by default; no source fetch.",
+      "time_rule": "Require coherent issue/capture/expiry times and an independently current matching source revision.",
+      "claim_limit": "Attributed prospective warning only; no inferred observed impact, source authentication or translation.",
+      "evidence_files": [
+        "src/orchestrator/sources/official_warning.py",
+        "src/editorial/official_warning.py",
+        "src/editorial/warning_runtime.py",
+        "src/two_bot/intern/warnings.py"
+      ]
+    },
+    {
       "source_id": "nhc",
       "health_keys": [
         "nhc"
@@ -604,13 +624,15 @@
     "src/data/reanalysis_anomaly.py": "396755069ccecfe73a17f3dd7a51d1b1a1d7e5ab6172d3826b440af14426b1fa",
     "src/data/river_gauges.py": "7f7f5bfa89c84d95f6d8b872476a9512116047e86a62e4d4db0412c87ee7ee14",
     "src/data/sea_ice.py": "373dc72240b8ee7439995cf194b9b190b9a1940df393723119849cdeeff455f8",
-    "src/data/source_registry.py": "6d8c7d45dbf3aee285405f9a70db2a24d2c2806d78e56d19391db9c1120404a5",
+    "src/data/source_registry.py": "703524a0a84b109230053c3ea9fc14a080c6bd18e7aa20057160b7fb6cf53fac",
     "src/data/temperature_evidence.py": "f656cee4dd86e6f6762932e98ea189e39e5965852c5d3e06299d8ffff3173046",
     "src/data/usgs_quakes.py": "d074863aba46097e0aa31a0c16c48158a2769c1403cac51e1e2054b2deb96650",
     "src/data/water_levels.py": "2b77738fe2e5f4a246b29691879726873a48622ee26e6ffcd35713f07c505ab3",
+    "src/editorial/official_warning.py": "e37a232fe19e8ef90bfc825c92b95b89d9c9f9df7818b4a3352466ad2beeff87",
+    "src/editorial/warning_runtime.py": "c382ce38b2892605aad689ba9cd22b647de3fd1a2d049a72040de92a0e2d9f35",
     "src/orchestrator/cyclones.py": "389c6441db0839763b6a9cd42146f75e3ab14d1179125d60a9c368eb1e03697d",
     "src/orchestrator/hot10.py": "6a6f77bf54e7fa0907d21454c460c0ea991f2dd32edf4d251be10989007bb9a1",
-    "src/orchestrator/run_alerts.py": "147fc41c4e87718d0e5601b291097739b829ab12be77d9577f96a4a6c05d4170",
+    "src/orchestrator/run_alerts.py": "54edf2378c2f0e525a435ddb227d13dbe3cb36a4b58f70ab57e30d96f37644ba",
     "src/orchestrator/sources/air_quality.py": "254d2a44d4bf534b19cf18ae49574ebc3616895e5fe6ef2399f1d46bc26f5d50",
     "src/orchestrator/sources/climate_indices.py": "e46485639d62d426b5d55b6f02191a47b0434bb31eb23e8f4a6bece33e980208",
     "src/orchestrator/sources/co2.py": "2ed59676536ab5ff9fc45d3116c91ffad10986a5a4380687a7191f2bd518d4a6",
@@ -631,14 +653,16 @@
     "src/orchestrator/sources/nws_alerts.py": "3665bc870e5df69c9c38183134157bcfd8f822b76c46606d8f31ce0fd75354f3",
     "src/orchestrator/sources/ocean_sst.py": "2d7f803dfe21695b1595053ef9b7f9d17c37f5b4563bfda6dcd5fcfc52cc0a39",
     "src/orchestrator/sources/ocean_sst_anomaly.py": "ec85134ee7af9ecd60b8b1c1287fdce0585e5b1c1b8875a2f0c019499da74b69",
+    "src/orchestrator/sources/official_warning.py": "1f6c25135709b0810e4e1f78997f33a9496b968930acc74f9f863311e768278c",
     "src/orchestrator/sources/open_meteo.py": "e3f535af7394f45c9d2e8abd7b1c31d4c01f0d510f325e37bbe14ebc915e2fc3",
     "src/orchestrator/sources/ozone_hole.py": "04e8f94c2d73330ab7693ae5ff240693262468e7764076148c58841acfc7e77f",
     "src/orchestrator/sources/reanalysis_anomaly.py": "4d69825455870e1adeddbd106d3cccb5875cbd0ea36305bd9a01ae7d1518dde8",
     "src/orchestrator/sources/river_gauges.py": "09d881a1a07ba215796be928f153aeefd4b55c8851919b6422ed912780db84a1",
     "src/orchestrator/sources/sea_ice.py": "5160beb235d00b6dcc91653bd41712c165d6c713ea9b76af08e3ca13ac2057dd",
     "src/orchestrator/sources/synthesis.py": "e1e101948dde8a2ac07be65d78e37ed0cd8e080c43523ea0ded1b1071cd31522",
-    "src/orchestrator/sources/usgs_quakes.py": "8ce82d003a52235fb92750c9f1e5450a672ff942ab71268a78d77f2ac8aa5c05"
+    "src/orchestrator/sources/usgs_quakes.py": "8ce82d003a52235fb92750c9f1e5450a672ff942ab71268a78d77f2ac8aa5c05",
+    "src/two_bot/intern/warnings.py": "04e0a4506ffbb29124c8d2960a5e5025305699297fcf8f9178b23caac2cd7a37"
   },
   "evidence_scope": "Referenced local code inventory; not live/provider/transitive-source qualification.",
-  "registry_sha256": "a68357b33f6ffc511de7805c2792187ee14b76efefbf4d3601cc8c24babde532"
+  "registry_sha256": "e2b1c77ec2d3c85137243778d67f2df67943dc41e0a76f8d93bc8cb543ef81ab"
 }

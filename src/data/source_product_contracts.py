@@ -64,6 +64,9 @@ PROVIDER_KINDS = {
     "grounded_search": frozenset({"discovery"}),
     "reliefweb": frozenset({"source_reported_impact"}),
     "theheat_retained": frozenset({"derived_combination", "reanalysis", "official_reference"}),
+    # This names the actual supplied-packet input, never its upstream issuer or
+    # an authenticated provider. Nomination/currentness remain story boundaries.
+    "nominated_input": frozenset({"official_warning"}),
 }
 # Upstream product keys are namespaced by their provider, so a leg cannot borrow
 # another provider's product (or kind) by relabelling.
@@ -75,7 +78,7 @@ PROVIDER_NAMESPACES = {
     "noaa_psl": "noaa_psl", "climate_reanalyzer": "climate_reanalyzer", "noaa_crw": "noaa_crw", "openaq": "openaq",
     "noaa_coops": "noaa_coops", "usgs_nwis": "usgs_nwis", "noaa_nwps": "noaa_nwps", "nasa_gesdisc": "nasa_gesdisc",
     "nasa_jpl_grace": "nasa_jpl", "nasa_ozone_watch": "nasa_ozone_watch", "grounded_search": "grounded_search",
-    "reliefweb": "reliefweb", "theheat_retained": "theheat",
+    "reliefweb": "reliefweb", "theheat_retained": "theheat", "nominated_input": "theheat_supplied",
 }
 # Each restriction is either advisory (only the accepted registry claim limit
 # states it) or enforced by named checks scoped to the products they actually
@@ -218,6 +221,16 @@ def _cache(source_id, chain, kind, provider, upstream, refs, *, health=None, leg
 
 
 LEGS: tuple[ProductLeg, ...] = (
+    _leg("official_warning", "nominated_packet", "supplied_warning", "primary", "nominated_input",
+         "theheat_supplied.official_warning_v1", "official_warning", "Exact nominated warning packet v1",
+         "Only the nominated source's anchored place; no provider-wide coverage.",
+         "Aware issue/capture/expiry and independently current matching revision.", "Attributed warning statement",
+         "Exact retained source with separately configured issuer/origin nomination; not authenticated by this inventory.",
+         ("forecast_not_outcome", "region_sample_not_census"),
+         ("src/orchestrator/sources/official_warning.py:run_official_warning_source",
+          "src/editorial/warning_runtime.py:guard_warning_story"),
+         status="conditional", disposition="Default absent; explicit trusted source and editorial nomination required.",
+         bound="No source acquisition; existing generation call and output bounds apply."),
     # 1. GHCN observed station path versus the Open-Meteo forecast/model path.
     _leg("open_meteo_extreme_signals", "om_forecast", "forecast", "primary", "open_meteo",
          "open_meteo.best_match_forecast_daily", "forecast_model", "Best-match daily forecast",

@@ -27,12 +27,14 @@ from PIL import Image, ImageColor, ImageDraw, ImageFont, features, __version__ a
 from src.data import air_quality_contract, fire_source_contract
 from src.editorial.revisions import fingerprint
 from src.media.evidence_graphic import HEIGHT, WIDTH, build_alt_text, chart_title
-from src.media import air_quality_graphic_adapter as pm25_adapter, fire_map_graphic_adapter as locator
+from src.media import air_quality_graphic_adapter as pm25_adapter, canonical_png, fire_map_graphic_adapter as locator
 from src.media import viirs_map_graphic_adapter as viirs_adapter
 from src.media.temperature_graphic_adapter import _StoredBundle
 
-SCHEMA_VERSION = 1
-RENDERER_VERSION = "gist-hazard-png-1"
+# Schema 2 / renderer 2: canonical PNG bytes (canonical_png.py) replace the host
+# zlib identity. Schema 1 recipes need a new preview and joint review.
+SCHEMA_VERSION = 2
+RENDERER_VERSION = "gist-hazard-png-2"
 PM25 = "gist_pm25_forecast_v1"
 MODIS = "gist_modis_locator_v1"
 VIIRS = "gist_viirs_locator_v1"
@@ -53,7 +55,7 @@ FAMILIES = {
         template=pm25_adapter.TEMPLATE, template_version=pm25_adapter.TEMPLATE_VERSION,
         adapter_version=pm25_adapter.ADAPTER_VERSION, derivation="pm25_delivery_v1",
         signal_kind="air_quality_hazard", products=(air_quality_contract.PRODUCT,),
-        files=("src/media/gist_media.py", "src/media/gist_hazard_media.py", FONT,
+        files=("src/media/gist_media.py", "src/media/gist_hazard_media.py", "src/media/canonical_png.py", FONT,
                "src/media/evidence_graphic.py", "src/media/temperature_graphic_adapter.py",
                "src/media/air_quality_graphic_adapter.py", "src/data/air_quality_contract.py",
                "src/data/air_quality_evidence.py"),
@@ -62,7 +64,7 @@ FAMILIES = {
         template=locator.TEMPLATE, template_version=locator.TEMPLATE_VERSION,
         adapter_version=locator.ADAPTER_VERSION, derivation="modis_delivery_v1",
         signal_kind="fire", products=("MODIS_NRT",),
-        files=("src/media/gist_media.py", "src/media/gist_hazard_media.py", FONT,
+        files=("src/media/gist_media.py", "src/media/gist_hazard_media.py", "src/media/canonical_png.py", FONT,
                "src/media/evidence_graphic.py", "src/media/temperature_graphic_adapter.py",
                "src/media/fire_graphic_adapter.py", "src/media/fire_map_graphic_adapter.py",
                "src/data/fire_source_contract.py", "src/data/fire_evidence.py",
@@ -74,7 +76,7 @@ FAMILIES = {
         template=viirs_adapter.TEMPLATE, template_version=viirs_adapter.TEMPLATE_VERSION,
         adapter_version=viirs_adapter.ADAPTER_VERSION, derivation="viirs_delivery_v1",
         signal_kind="fire", products=tuple(viirs_adapter.PLATFORMS),
-        files=("src/media/gist_media.py", "src/media/gist_hazard_media.py", FONT,
+        files=("src/media/gist_media.py", "src/media/gist_hazard_media.py", "src/media/canonical_png.py", FONT,
                "src/media/evidence_graphic.py", "src/media/temperature_graphic_adapter.py",
                "src/media/fire_graphic_adapter.py", "src/media/fire_map_graphic_adapter.py",
                "src/media/viirs_map_graphic_adapter.py", "src/data/fire_source_contract.py",
@@ -94,7 +96,7 @@ _SOURCE_KEYS = {
     MODIS: frozenset({"bundle_sha256", "evidence_sha256", "source_product", "receipt_sha256", "acquired_at"}),
     VIIRS: frozenset({"bundle_sha256", "evidence_sha256", "source_product", "receipt_sha256", "acquired_at"}),
 }
-_RENDERER_KEYS = frozenset({"version", "files", "pillow", "freetype", "zlib", "layout", "width", "height"})
+_RENDERER_KEYS = frozenset({"version", "files", "pillow", "freetype", "png_codec", "layout", "width", "height"})
 _IMAGE_KEYS = frozenset({"mime_type", "png_sha256", "byte_count", "width", "height", "mode"})
 _DESCRIPTION_KEYS = frozenset({"derivation", "delivery_text", "delivery_sha256", "delivery_scalars",
                                "delivery_bytes", "full_sha256", "full_bytes"})
@@ -129,7 +131,7 @@ def renderer_identity(kind):
     return {"version": RENDERER_VERSION,
             "files": {path: _digest(_resource(path)) for path in family["files"]},
             "pillow": pillow_version, "freetype": features.version("freetype2"),
-            "zlib": features.version("zlib"), "layout": "basic", "width": WIDTH, "height": HEIGHT}
+            "png_codec": canonical_png.PROFILE, "layout": "basic", "width": WIDTH, "height": HEIGHT}
 
 
 def _bundle_signal(bundle):
@@ -356,11 +358,10 @@ class _Canvas:
         return len(rows)
 
     def png(self):
-        output = BytesIO()
-        self.image.save(output, format="PNG", optimize=False, compress_level=9)
-        body = output.getvalue()
-        _require(0 < len(body) <= MAX_PNG_BYTES, "media_png_too_large", "the PNG exceeds its byte bound")
-        return body
+        try:
+            return canonical_png.encode_image(self.image, max_bytes=MAX_PNG_BYTES)
+        except canonical_png.CanonicalPNGError:
+            raise MediaWithheld("media_png_too_large", "the PNG exceeds its byte bound") from None
 
 
 INK = "#f4f4f5"
@@ -639,8 +640,10 @@ def _is_sha(value):
 
 def validate_descriptor(value, bundle):
     """Structure, current source binding and renderer profile; the sender also rebuilds bytes."""
-    _require(_exact(value, _TOP_KEYS) and type(value["schema_version"]) is int
-             and value["schema_version"] == SCHEMA_VERSION and value["kind"] in FAMILIES,
+    _require(_exact(value, _TOP_KEYS) and value["kind"] in FAMILIES, "media_unsupported", "unsupported attachment")
+    _require(not (type(value["schema_version"]) is int and value["schema_version"] == 1), "media_renderer_changed",
+             "render profile changed; preview and review again")
+    _require(type(value["schema_version"]) is int and value["schema_version"] == SCHEMA_VERSION,
              "media_unsupported", "unsupported attachment")
     kind, family = value["kind"], FAMILIES[value["kind"]]
     try:
@@ -670,7 +673,7 @@ def validate_descriptor(value, bundle):
     _require(_exact(renderer, _RENDERER_KEYS) and type(renderer["files"]) is dict
              and set(renderer["files"]) == set(family["files"])
              and all(_is_sha(v) for v in renderer["files"].values())
-             and all(type(renderer[k]) is str and 0 < len(renderer[k]) <= 64 for k in ("version", "pillow", "freetype", "zlib", "layout"))
+             and all(type(renderer[k]) is str and 0 < len(renderer[k]) <= 64 for k in ("version", "pillow", "freetype", "png_codec", "layout"))
              and type(renderer["width"]) is int and type(renderer["height"]) is int,
              "media_descriptor_invalid", "invalid renderer")
     _require(renderer == renderer_identity(kind), "media_renderer_changed", "render profile changed; preview and review again")

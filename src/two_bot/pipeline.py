@@ -222,6 +222,19 @@ def _writer_sample_slate(
         return [future.result() for future in futures]
 
 
+def _warning_boundary(bundle, record_kill, *, candidate=None) -> bool:
+    from src.editorial.official_warning import WarningHold
+    from src.editorial.warning_runtime import guard_warning_generation_settings, guard_warning_story
+    try:
+        guard_warning_story(bundle, candidate=candidate)
+        if getattr(bundle, "signal_kind", None) == "official_warning":
+            guard_warning_generation_settings()
+        return True
+    except WarningHold as exc:
+        record_kill("warning_source", exc.code)
+        return False
+
+
 def _check_safety_honesty_fact(
     tweet: str,
     bundle: StoryBundle,
@@ -233,6 +246,8 @@ def _check_safety_honesty_fact(
     candidate_attempt: int = 1,
     generation_input: BundleCapture | None = None,
 ) -> FactCheckResult | None:
+    if not _warning_boundary(bundle, record_kill, candidate=tweet):
+        return None
     forbidden_hit = _forbidden_claim_violation(tweet, bundle)
     if forbidden_hit is not None:
         print(
@@ -260,6 +275,8 @@ def _check_safety_honesty_fact(
     if fact_result is None:
         safety_input = (capture_stage_input(bundle, generation_input)
                         if result_out is not None and generation_input is not None else None)
+        if not _warning_boundary(bundle, record_kill, candidate=tweet):
+            return None
         safety_passed, safety_reason = run_safety_pipeline(tweet)
         if not safety_passed:
             print(
@@ -273,6 +290,8 @@ def _check_safety_honesty_fact(
             record_kill("safety", safety_reason or "unknown")
             return None
 
+        if not _warning_boundary(bundle, record_kill, candidate=tweet):
+            return None
         fact_origin = "required_checker"
         fact_result = fact_check.fact_check(tweet, [], bundle, state)
     if not fact_result.passed:
@@ -372,10 +391,15 @@ def generate_draft(
                 raise RuntimeError("candidate_observation_failed") from None
 
     from src.editorial.policy import current_editorial_policy
+    from src.editorial.official_warning import WarningHold
+    from src.editorial.warning_runtime import begin_warning_provider_scope, end_warning_provider_scope
+    warning_provider_token = None
     checked_policy = current_editorial_policy()
     try:
         if checked_policy is None:
             _record_kill("editorial_policy", "Current editorial policy cannot be established")
+            return None
+        if not _warning_boundary(bundle, _record_kill):
             return None
         if not _audit_bundle_for_generation(bundle, state, record_kill=_record_kill, result_out=result_out):
             return None
@@ -387,6 +411,8 @@ def generate_draft(
             _mark_stage("bundle_retention", "kill")
             _record_kill("bundle_retention", str(exc))
             return None
+
+        warning_provider_token = begin_warning_provider_scope(bundle, checked_bundle)
 
         preflight = current_provider_preflight(critic_enabled=_critic_enabled())
         if result_out is not None:
@@ -400,7 +426,9 @@ def generate_draft(
 
         memory_slice = memory.build_memory_slice(state, bundle)
         request_archive.note_generation_input(bundle.event_id, bundle.signal_kind, checked_bundle, memory_slice)
-        samples = _writer_samples()
+        if not _warning_boundary(bundle, _record_kill):
+            return None
+        samples = 1 if bundle.signal_kind == "official_warning" else _writer_samples()
         writer_results = _writer_sample_slate(bundle, memory_slice, samples)
         viable_results = [
             replace(result, tweet=format_source_link(result.tweet, bundle))
@@ -477,10 +505,12 @@ def generate_draft(
         critic_result = None
         if _critic_enabled() and slate_critic_result is None:
             shipped_recent = memory_slice.shipped_tweet_texts[:10]
-            revise_enabled = _critic_revise_enabled()
+            revise_enabled = False if bundle.signal_kind == "official_warning" else _critic_revise_enabled()
             critic_input = capture_stage_input(bundle, checked_bundle) if result_out is not None else None
             critic_attempt = 1
             critic_text = writer_result.tweet
+            if not _warning_boundary(bundle, _record_kill, candidate=writer_result.tweet):
+                return None
             critic_result = critic.critic_review(
                 writer_result.tweet,
                 bundle,
@@ -555,6 +585,8 @@ def generate_draft(
                 return None
             _mark_stage("critic", "pass")
 
+        if not _warning_boundary(bundle, _record_kill, candidate=writer_result.tweet):
+            return None
         try:
             if capture_bundle(bundle) != checked_bundle:
                 raise BundleCaptureError("bundle_changed_during_checks")
@@ -612,6 +644,9 @@ def generate_draft(
             "event_id": bundle.event_id,
             "two_bot_metadata": metadata,
         }
+    except WarningHold as exc:
+        _record_kill("warning_source", exc.code)
+        return None
     except BudgetExhaustedError as exc:
         print(
             f"[two_bot.pipeline] Budget exhausted ({bundle.signal_kind}): {exc}"
@@ -624,6 +659,8 @@ def generate_draft(
         )
         _record_kill("pipeline_error", f"{type(exc).__name__}: {exc}")
         return None
+    finally:
+        end_warning_provider_scope(warning_provider_token)
 
 
 def generate_fire_draft(

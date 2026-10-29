@@ -12,7 +12,10 @@ from typing import Any
 
 MAX_ITEMS = 32
 MAX_FACTS = 64
+MAX_LIST = 64
 MAX_BYTES = 16_384
+# A scalar fact is referenced whole; a list-valued fact only by one exact element.
+POINTER = re.compile(r"/current_facts/(0|[1-9][0-9]?)(?:/value/(0|[1-9][0-9]?))?")
 _KIND_ALIASES = {
     "all_time_high": "open_meteo_archive_high",
     "all_time_low": "open_meteo_archive_low",
@@ -46,16 +49,46 @@ def operator_claim_kind_matches(draft_type: Any, bundle_kind: Any) -> bool:
             and (draft_type == bundle_kind or _KIND_ALIASES.get(draft_type) == bundle_kind))
 
 
+def _scalar(value: Any) -> bool:
+    try:
+        return (value is None or type(value) is bool or
+                (type(value) in (int, float) and math.isfinite(value)) or _string(value, 2048))
+    except OverflowError:
+        return False
+
+
 def _fact(value: Any) -> bool:
     if type(value) is not dict or not _string(value.get("label"), 160) or "value" not in value:
         return False
-    scalar = value["value"]
-    try:
-        valid = (scalar is None or type(scalar) is bool or
-                 (type(scalar) in (int, float) and math.isfinite(scalar)) or _string(scalar, 2048))
-    except OverflowError:
-        valid = False
+    item = value["value"]
+    valid = _scalar(item) or (type(item) is list and 1 <= len(item) <= MAX_LIST and all(_scalar(x) for x in item))
     return valid and (value.get("unit") in (None, "") or _string(value.get("unit"), 80))
+
+
+def resolve_reference(facts: list[dict], pointer: Any) -> tuple[dict, Any]:
+    """The exact referenced fact (or list element) and the value bound by its digest.
+
+    An element keeps provenance: its digest binds the whole fact's fingerprint, the
+    element index and the element value; it is never relabelled as a scalar fact.
+    """
+    from src.editorial.revisions import fingerprint
+    match = POINTER.fullmatch(pointer) if isinstance(pointer, str) else None
+    if match is None:
+        raise ValueError("Select a saved source fact from this draft")
+    index = int(match[1])
+    if index >= len(facts):
+        raise ValueError("A selected source fact is missing or repeated")
+    fact = facts[index]
+    listed = type(fact["value"]) is list
+    if match[2] is None:
+        if listed:
+            raise ValueError("Select one exact element of a list-valued source fact")
+        return {"label": fact["label"], "value": fact["value"], "unit": fact.get("unit")}, fact
+    element = int(match[2])
+    if not listed or element >= len(fact["value"]):
+        raise ValueError("A selected source fact is missing or repeated")
+    view = {"label": f"{fact['label']}[{element}]", "value": fact["value"][element], "unit": fact.get("unit")}
+    return view, {"fact_sha256": fingerprint(fact), "element": element, "value": fact["value"][element]}
 
 
 def _integer(value: Any) -> bool:
@@ -103,14 +136,13 @@ def build_operator_claim_references(text: str, bundle: Any, items: Any) -> dict 
         rows, pointers = [], set()
         for source in sources:
             pointer = source.get("pointer") if type(source) is dict else None
-            if (not _exact(source, {"pointer"}) or not isinstance(pointer, str) or
-                    re.fullmatch(r"/current_facts/(?:0|[1-9][0-9]?)", pointer) is None):
+            if not _exact(source, {"pointer"}) or not isinstance(pointer, str):
                 raise ValueError("Select a saved source fact from this draft")
-            index = int(pointer.rsplit("/", 1)[1])
-            if index >= len(facts) or pointer in pointers:
+            _, bound = resolve_reference(facts, pointer)
+            if pointer in pointers:
                 raise ValueError("A selected source fact is missing or repeated")
             pointers.add(pointer)
-            rows.append({"pointer": pointer, "value_sha256": fingerprint(facts[index])})
+            rows.append({"pointer": pointer, "value_sha256": fingerprint(bound)})
         retained.append({"claim": {"start": int(claim["start"]), "end": int(claim["end"]), "text": claim["text"]}, "sources": rows})
     result = {"schema_version": 1, "origin": "operator_supplied", "text_sha256": text_hash(text),
               "bundle_sha256": fingerprint(bundle), "items": retained}
@@ -160,8 +192,8 @@ def project_operator_claim_references(draft: dict) -> dict:
     for item in value["items"]:
         sources = []
         for source in item["sources"]:
-            fact = bundle["current_facts"][int(source["pointer"].rsplit("/", 1)[1])]
-            sources.append({"pointer": source["pointer"], "fact": {"label": fact["label"], "value": fact["value"], "unit": fact.get("unit")}})
+            fact, _ = resolve_reference(bundle["current_facts"], source["pointer"])
+            sources.append({"pointer": source["pointer"], "fact": fact})
         items.append({"claim": item["claim"], "sources": sources})
     def string(value, maximum):
         return value if _string(value, maximum) else None

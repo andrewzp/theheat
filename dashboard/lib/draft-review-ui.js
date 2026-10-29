@@ -1,4 +1,10 @@
 import { nwsSourceTiming } from "./nws-source-timing.js"
+import { officialWarningTiming } from "./official-warning-evidence.js"
+
+function savedSourceTiming(draft, now) {
+  const nws = nwsSourceTiming(draft, now)
+  return nws.blocked ? nws : officialWarningTiming(draft, now)
+}
 
 // Browser-safe view decisions. Identities are computed by the server; the
 // browser only carries them back for optimistic checks.
@@ -11,7 +17,7 @@ export function draftTextLength(text) { return typeof text === "string" ? Array.
 
 export function reviewQueueOrder(drafts, { localPreview = false, now = Date.now() } = {}) {
   return [...drafts].sort((a, b) => {
-    const held = localPreview ? 0 : Number(nwsSourceTiming(a, now).blocked) - Number(nwsSourceTiming(b, now).blocked)
+    const held = localPreview ? 0 : Number(savedSourceTiming(a, now).blocked) - Number(savedSourceTiming(b, now).blocked)
     return held || (b.created_at || "").localeCompare(a.created_at || "")
   })
 }
@@ -25,7 +31,7 @@ export function draftReviewControls(draft, now = Date.now()) {
   const reviewed = draft?.review_status === "passed"
   // The local command authority owns its separate source/currentness contract.
   // This preflight is for the existing Gist publication workflow.
-  const source = draft?.local_preview ? { blocked: false } : nwsSourceTiming(draft, now)
+  const source = draft?.local_preview ? { blocked: false } : savedSourceTiming(draft, now)
   return {
     canEdit: mutable,
     canReview: mutable && pending && !source.blocked && !conflict && !reviewed && !["policy_unverified", "media_review_required"].includes(draft?.review_status),

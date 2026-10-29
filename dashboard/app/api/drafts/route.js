@@ -1,4 +1,4 @@
-import { gistMediaCurrentness, prepareGistMedia } from "../../../lib/gist-media.js"
+import { gistMediaCurrentness, prepareGistMedia, requiredAttestations } from "../../../lib/gist-media.js"
 import { acceptLocalCommand, localCommandRequest, localDraftProjection, previewConfigured, previewError } from "../../../lib/draft-command-client.js"
 import { dashboardEditorialPolicy } from "../../../lib/editorial-policy.js"
 import { dashboardAutomaticPolicy } from "../../../lib/publication-control.js"
@@ -6,6 +6,7 @@ import { readStateStore, readStateWithRuntimeReport, updateDraftStore } from "..
 import { requireDashboardAuth } from "../../../lib/auth.js"
 import { readJsonObject } from "../../../lib/request-json.js"
 import { nwsSourceTiming } from "../../../lib/nws-source-timing.js"
+import { officialWarningValidation } from "../../../lib/official-warning-validation.js"
 import {
   approvalIsCurrent,
   authorizeDraft,
@@ -41,6 +42,8 @@ function fail(message, status = 409, code = "revision_conflict") {
 function assertSavedSourceTiming(draft) {
   const timing = nwsSourceTiming(draft)
   if (timing.blocked) fail(timing.message, 409, "nws_source_review_required")
+  const warning = officialWarningValidation(draft)
+  if (warning.blocked) fail(warning.message, 409, "warning_source_review_required")
 }
 
 // New image families: explicit source recency at manual approval (the sender
@@ -173,7 +176,8 @@ export async function POST(request) {
       if (["review", "approve", "auto_approve"].includes(action)) assertSavedSourceTiming(draft)
       const editorialPolicy = dashboardEditorialPolicy(state, { runtimeReport })
       if (action === "attach_graphic") {
-        const descriptor = await prepareGistMedia(request, draft, body.expectedMediaSha256)
+        // Store-backed images also name their exact retained input (CRW packet or published asset).
+        const descriptor = await prepareGistMedia(request, draft, body.expectedMediaSha256, undefined, body.retainedInputSha256 ?? null)
         invalidateMediaAttachment(draft, descriptor)
       } else if (action === "remove_graphic") {
         invalidateMediaAttachment(draft, null)
@@ -213,14 +217,20 @@ export async function POST(request) {
         const joint = Object.hasOwn(draft, "media_attachment")
         if (joint) {
           if (body.mediaReviewConfirmed !== true) fail("Review the text, image and full description together.", 409, "media_review_required")
-          const descriptor = await prepareGistMedia(request, draft, body.expectedMediaSha256)
+          const attached = draft.media_attachment
+          const retained = attached?.source?.packet_artifact_sha256 ?? attached?.asset?.manifest_sha256 ?? null
+          const descriptor = await prepareGistMedia(request, draft, body.expectedMediaSha256, undefined, retained)
           if (fingerprint(descriptor) !== fingerprint(draft.media_attachment)) fail("The attached graphic changed; preview it again.", 409, "media_changed")
+          const required = requiredAttestations(draft.media_attachment), supplied = body.publishedAttestations ?? {}
+          if (!supplied || typeof supplied !== "object" || Array.isArray(supplied) || Object.keys(supplied).length !== required.length
+              || !required.every(name => supplied[name] === true))
+            fail("Confirm every published-image attestation together with the text and image.", 409, "media_attestation_required")
         }
         if (body.reviewConfirmed !== true) fail("Confirm that you checked this text against its source evidence.", 400, "review_confirmation_required")
         if (draft.revision_conflicts?.length) fail("Resolve the conflicting text with an edit before reviewing it.")
         if (!editorialPolicy.policy) fail(editorialPolicy.reason, 409, "editorial_policy_unverified")
         if (body.expectedPolicySha256 !== editorialPolicy.policy_sha256) fail("Editorial policy changed since your confirmation. Refresh and review again.", 409, "editorial_policy_changed")
-        if (joint) recordJointMediaReview(draft, editorialPolicy.policy)
+        if (joint) recordJointMediaReview(draft, editorialPolicy.policy, body.publishedAttestations ?? null)
         else recordHumanReview(draft, editorialPolicy.policy)
       } else if (action === "auto_approve") {
         const publication = dashboardAutomaticPolicy(state, { runtimeReport })

@@ -1,3 +1,29 @@
+## 0.9.109.47
+
+- Encode native post graphics with a pinned portable PNG profile so reviewed
+  bytes do not depend on the host compressor. Older attachments require a new
+  preview and review. Preserve the existing temperature, forecast and satellite
+  evidence checks and image descriptions.
+- Add retained-source CRW charts and qualified published radar/cone graphics to
+  the Workbench, with original-image inspection and explicit review attestations.
+  These families remain unavailable without their retained media store and
+  qualified source inputs. Add exact element references for list-valued facts.
+- Add a default-absent supplied official-warning lane through the existing queue,
+  writer, required checks and manual Gist review/X delivery. Keep warnings
+  attributed and prospective, retain their exact original evidence, and refuse
+  missing, changed or expired current-source inputs.
+- Show saved warning text, issuer and validity in the Workbench. Source/reference
+  edits require fresh review; a correctable text edit does not permanently mark
+  unchanged source evidence stale.
+- Recheck warning evidence before provider attempts, including retries, and before
+  final safety/delivery. Preserve normal retry bounds, uncertain-send handling and
+  the collection, generation and automatic publishing pauses.
+- Register supplied warnings as a conditional input rather than a new provider
+  availability claim. Keep bounded grant-refusal diagnostics in offline fixtures
+  so delivery checks report the original refusal without exposing payloads.
+- Balance four complete local-media test modules across the existing CI workers,
+  preserving every case and job limit while leaving room for dashboard checks.
+
 ## 0.9.109.46
 
 - Add source-derived PM2.5 forecast charts and MODIS/VIIRS thermal-detection maps

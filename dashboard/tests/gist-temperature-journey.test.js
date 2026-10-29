@@ -156,7 +156,9 @@ test("owned reference selection + real PNG joint-review invalidation UI at 1280/
   } catch (error) {
     report.failure = String(error)
     for (const context of browser.contexts()) for (const page of context.pages()) {
-      report.last_control = await (await page.request.get(`${config.origin}/api/fixture-control`)).json()
+      try {
+        report.last_control = await (await page.request.get(`${config.origin}/api/fixture-control`, { timeout: 2000 })).json()
+      } catch (diagnosticError) { report.control_failure = String(diagnosticError) }
     }
     for (const context of browser.contexts()) for (const page of context.pages()) {
       writeFileSync(`${config.screens}/failure.txt`, await page.locator("body").innerText())

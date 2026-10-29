@@ -27,10 +27,14 @@ with freeze_time(value['now']):
 sys.stdout.buffer.write(body)
 `
 function pythonOutput(code, input) {
+  const started = performance.now()
   const result = spawnSync(python, ["-c", code], { cwd: process.env.THEHEAT_GIST_HAZARD_JOURNEY_ROOT,
     input: JSON.stringify(input), encoding: "utf8", timeout: 60000,
     env: { PATH: process.env.PATH, HOME: process.env.HOME, TMPDIR: process.env.TMPDIR, LC_ALL: "C", LANG: "C", NETRC: "/dev/null",
       PYTHON_DOTENV_DISABLED: "1", PYTHONDONTWRITEBYTECODE: "1", NO_PROXY: "*", no_proxy: "*" } })
+  console.error(JSON.stringify({ scope: "invented_hazard_worker", phase: code === fixtureCode ? "seed" : "preview",
+    elapsed_ms: Math.round(performance.now() - started), status: result.status, signal: result.signal,
+    error_code: result.error?.code ?? null }))
   if (result.status !== 0) throw new Error(`Invented fixture Python failed: ${result.stderr}`)
   return result.stdout
 }

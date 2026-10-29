@@ -23,10 +23,14 @@ value=json.load(sys.stdin);state=json.loads(value['raw_state'])
 sys.stdout.buffer.write(build_preview(value['request'],policy_sha=value['policy'],runtime_sha=value['runtime'],read_state=lambda:state,budget=Budget()))
 `
 function pythonOutput(code, input) {
+  const started = performance.now()
   const result = spawnSync(python, ["-c", code], { cwd: process.env.THEHEAT_GIST_TEMPERATURE_JOURNEY_ROOT,
     input: JSON.stringify(input), encoding: "utf8", timeout: 30000,
     env: { PATH: process.env.PATH, HOME: process.env.HOME, TMPDIR: process.env.TMPDIR, LC_ALL: "C", LANG: "C", NETRC: "/dev/null",
       PYTHON_DOTENV_DISABLED: "1", PYTHONDONTWRITEBYTECODE: "1", NO_PROXY: "*", no_proxy: "*" } })
+  console.error(JSON.stringify({ scope: "invented_temperature_worker", phase: code === fixtureCode ? "seed" : "preview",
+    elapsed_ms: Math.round(performance.now() - started), status: result.status, signal: result.signal,
+    error_code: result.error?.code ?? null }))
   if (result.status !== 0) throw new Error(`Invented fixture Python failed: ${result.stderr}`)
   return result.stdout
 }

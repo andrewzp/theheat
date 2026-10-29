@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useId, useRef, useState } from "react"
-import { operatorClaimKindMatches, operatorReferencesForDisplay, quoteFromSelection, retainedClaimFacts, validateReferenceItems } from "../../lib/operator-claim-reference-input.js"
+import { operatorClaimKindMatches, operatorReferencesForDisplay, quoteFromSelection, referenceChoices, resolveReference, retainedClaimFacts, validateReferenceItems } from "../../lib/operator-claim-reference-input.js"
 
 const h = React.createElement
 const factText = fact => `${fact.label.replaceAll("_", " ")}: ${fact.value === null ? "Not supplied" : String(fact.value)}${fact.unit ? ` ${fact.unit}` : ""}`
@@ -47,12 +47,11 @@ export function OperatorClaimReferences({ draft, text = draft?.text ?? "", items
           h("button", { type: "button", className: "btn sm btn-ghost", style: { minHeight: 44 }, disabled, onClick: selectQuote }, "Use selected quote"),
           quote && h("fieldset", { disabled, style: { minWidth: 0 } },
             h("legend", null, editingItem === null ? "Connect source facts" : "Change connected facts"), h("blockquote", null, quote.text),
-            facts.length ? facts.map((fact, index) => {
-              const pointer = `/current_facts/${index}`
-              return h("label", { key: pointer, style: { display: "flex", gap: 8, padding: "10px 0", alignItems: "flex-start" } },
+            facts.length ? referenceChoices(facts).map(({ pointer, fact }) =>
+              h("label", { key: pointer, style: { display: "flex", gap: 8, padding: "10px 0", alignItems: "flex-start" } },
                 h("input", { type: "checkbox", checked: pointers.includes(pointer), onChange: event => setPointers(current => event.target.checked ? [...current, pointer] : current.filter(p => p !== pointer)) }),
-                h("span", null, factText(fact)))
-            }) : h("p", null, "No structured facts were saved. Add references after a source snapshot is available."),
+                h("span", null, factText(fact))))
+              : h("p", null, "No structured facts were saved. Add references after a source snapshot is available."),
             h("button", { type: "button", className: "btn sm btn-blue", style: { minHeight: 44 }, disabled: !pointers.length,
               onClick: () => {
                 const item = { claim: quote, sources: pointers.map(pointer => ({ pointer })) }
@@ -66,7 +65,8 @@ export function OperatorClaimReferences({ draft, text = draft?.text ?? "", items
     inputItems.length > 0 && h("ol", { className: "claim-list" }, inputItems.map((item, index) => h("li", { key: `${item.claim.start}:${item.claim.end}:${index}` },
       h("blockquote", null, item.claim.text),
       h("ul", null, item.sources.map(source => {
-        const fact = editing ? facts[Number(source.pointer.split("/").at(-1))] : source.fact
+        let fact = source.fact
+        if (editing) try { fact = resolveReference(facts, source.pointer).view } catch { fact = null }
         return h("li", { key: source.pointer }, fact ? factText(fact) : "Saved fact unavailable; select the source again.")
       })),
       editing && h(React.Fragment, null,
