@@ -107,7 +107,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/media/evidence_graphic.py": "d9e0e487dba14f93d59a3a6289ce48064cd35eb35ea36d5bfd94403858bd3afa",
     "src/media/fire_graphic_adapter.py": "343acd087bcbf3f566837bcf2a1799187002a734641c947b599d6f9f025e9833",
     "src/media/fire_map_graphic_adapter.py": "083b3ca9c1473bf1458aa9a9d4bc1052c7128f40341d8c2f1bf086cd7c1713e7",
-    "src/media/gist_assets.py": "008aa7c5611d8e9d18943a1d2172c99b6dabca52685c476d0ad17eefb0cc91d0",
+    "src/media/gist_assets.py": "68a76a015d7369d2b51a7e9f3a7a338fd8e5ef3fff55a783f6e0a786746d6e3f",
     "src/media/gist_crw_media.py": "6660c3696a08f517d8cbf667e2bee76a9865d2909d87b95c960a0c19be5f0fb5",
     "src/media/gist_hazard_media.py": "fa1d64cac31dbefeac3275f91e0cd1ba9fd768469339c5bbda37afc2cf880c9d",
     "src/media/gist_media.py": "e304793ba63b2fe44014fc86ba76d499900f1b01dcd0a3b9bd3d0bc137657d9b",
@@ -215,5 +215,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "8c4887f395618e343dafd55f5843987dfa6a7a620713c7c34bab9f419e4434fe"
   },
   "schema_version": 1,
-  "source_sha256": "cfba6909e9ddabb43c2073607769574882005a075ba02c34b4b2214e655f250a"
+  "source_sha256": "cf675db45921f853242b312845297a8e7755df7295e9f5576ae53db08fcc7249"
 }

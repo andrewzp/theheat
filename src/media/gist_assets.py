@@ -8,7 +8,9 @@ nothing here fetches from the network. State and approval authority stay in Gist
 
 Configuration: ``THEHEAT_MEDIA_STORE=sqlite:<absolute path>``. Unset, unsupported or
 unreachable configuration holds only the store-backed media lanes with
-``media_store_unavailable``; native recipes never read the store.
+``media_store_unavailable``; native recipes never read the store. This module is
+packaged in the sealed preview runtime so an unconfigured deployment names that
+hold; the artifact store itself loads only when a store is configured.
 """
 from __future__ import annotations
 
@@ -20,8 +22,6 @@ from pathlib import Path
 import re
 import sqlite3
 import stat
-
-from src.commands import domain_journal
 
 NAMESPACE = "theheat-gist-media"
 ENV = "THEHEAT_MEDIA_STORE"
@@ -114,6 +114,7 @@ class SQLiteMediaStore:
 
     def put_many(self, blobs):
         """Retain every blob atomically; identical retries are idempotent."""
+        from src.commands import domain_journal  # Loaded only once a store is actually configured.
         with closing(self._connect(write=True)) as connection:
             try:
                 connection.execute("BEGIN IMMEDIATE")
@@ -127,6 +128,7 @@ class SQLiteMediaStore:
         return identities
 
     def get(self, sha, *, limit):
+        from src.commands import domain_journal
         _require(type(sha) is str and SHA.fullmatch(sha), "media_asset_invalid", "invalid asset reference")
         with closing(self._connect(write=False)) as connection:
             try:

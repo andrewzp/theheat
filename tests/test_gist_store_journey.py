@@ -178,3 +178,93 @@ def test_missing_store_or_input_at_send_is_refused_before_any_attempt(family, tm
         # Pre-intent refusal: no durable write, no SDK call, no submitted ledger row.
         assert fake.calls == [] and fake.persisted == [] and attempt["publish_outcome"] == "not_sent", code
         assert code in attempt["post_error"]
+
+
+@pytest.mark.parametrize("failure", ["upload", "alt", "create", "empty_receipt"])
+def test_unknown_upload_or_create_outcomes_are_never_resent(failure, tmp_path, monkeypatch):
+    from src.editorial import revisions
+    from src.media import gist_media
+    from tests.gist_media_helpers import approve, attach, run_manual, state_for
+    from tests.gist_store_helpers import CLOCKS, TEXTS, TYPES, family_bundle
+    family = "cone"
+    store_path = tmp_path / "media.sqlite3"
+    retained = retain(family, gist_assets.SQLiteMediaStore(store_path))
+    bundle = family_bundle(family)
+    now = datetime.fromisoformat(CLOCKS[family][0].replace("Z", "+00:00"))
+    prepared = gist_media.prepare_media(bundle, retained_input_sha256=retained,
+                                        store=gist_assets.SQLiteMediaStore(store_path), now=now)
+    draft = {"id": "invented-cone", "event_id": bundle["event_id"], "type": TYPES[family], "status": "pending",
+             "text": TEXTS[family], "created_at": CLOCKS[family][0], "review_context": {"two_bot": {"bundle": bundle}}}
+    revisions.initialize_revision(draft)
+    attach(draft, prepared["descriptor"], at=CLOCKS[family][0])
+    approve(draft, attestations={name: True for name in gist_media.required_attestations(draft["media_attachment"])})
+    monkeypatch.setenv(gist_assets.ENV, f"sqlite:{store_path}")
+    fake = install_fake_x(monkeypatch)
+    fake.failure = failure
+    state = state_for(draft)
+    with freeze_time(now):
+        run_manual(monkeypatch, fake, state, draft)
+    calls = list(fake.calls)
+    assert calls[0] == ("upload", prepared["png"], "hot10.png")
+    assert draft["publish_outcome"] == "unknown" and state["publish_ledger"][draft["event_id"]]["phase"] == "unknown"
+    with freeze_time(now):
+        run_manual(monkeypatch, fake, state, draft)  # Unknown outcome: reconcile, never resend.
+    assert fake.calls == calls
+
+
+PACKAGED_HOLD = r'''
+import json, runpy, sys, socket
+socket.socket.connect = lambda *a, **k: (_ for _ in ()).throw(AssertionError("network"))
+entry = runpy.run_path(sys.argv[1])
+assert entry["PreviewHandler"] is not entry["UnavailableHandler"], "verified runtime refused"
+from src.dashboard_preview.errors import PreviewError
+from src.dashboard_preview.preview import build_preview
+from src.dashboard_preview.reader import Budget
+manifest = json.load(open(sys.argv[2]))
+policy, runtime = manifest["identity"]["policy_source_sha256"], manifest["runtime_sha256"]
+out = []
+for state, request in json.load(sys.stdin):
+    request.update(expected_policy_source_sha256=policy, expected_preview_runtime_sha256=runtime)
+    try:
+        body = json.loads(build_preview(request, policy_sha=policy, runtime_sha=runtime, read_state=lambda: state, budget=Budget()))
+        out.append({"status": 200, "kind": body.get("media_kind")})
+    except PreviewError as exc:
+        out.append({"status": exc.status, **exc.payload()})
+loaded = sorted(k for k in sys.modules if k.startswith("src.media.gist_"))
+print(json.dumps({"replies": out, "loaded": loaded}))
+'''
+
+
+def test_sealed_runtime_names_the_store_hold_and_keeps_native_previews(tmp_path):
+    """The deployed native runtime does not package store-backed modules; it holds those lanes."""
+    from scripts.gen_dashboard_graphic_runtime import DEPLOYMENT_FILES
+    from src.editorial.revisions import decision_revision, draft_identity
+    from tests.gist_hazard_helpers import saved_state as native_state
+    from tests.gist_store_helpers import saved_state
+    deploy = tmp_path / "deploy"
+    for name in (*DEPLOYMENT_FILES, "graphic-runtime.zip", "lib/graphic-runtime-manifest.json"):
+        target = deploy / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(ROOT / "dashboard" / name, target)
+    payload = []
+    for state, retained in ((saved_state("crw"), "1" * 64), (saved_state("cone"), "2" * 64), (native_state("pm25"), None)):
+        draft = state["drafts"][0]
+        request = {"draft_id": draft["id"], "format": "png",
+                   "expected_revision": {**draft_identity(draft), "decision_revision": decision_revision(draft)}}
+        if retained:
+            request["retained_input_sha256"] = retained
+        payload.append([state, request])
+    elsewhere = tmp_path / "unrelated-cwd"
+    elsewhere.mkdir()
+    result = subprocess.run([sys.executable, "-I", "-c", PACKAGED_HOLD, str(deploy / "api/graphic_preview.py"),
+                             str(deploy / "lib/graphic-runtime-manifest.json")],
+                            input=json.dumps(payload), capture_output=True, text=True, timeout=120,
+                            cwd=elsewhere, env={"PATH": "/usr/bin:/bin", "LC_ALL": "C", "HOME": str(elsewhere)})
+    assert result.returncode == 0, result.stderr[-3000:]
+    value = json.loads(result.stdout)
+    crw_reply, cone_reply, native = value["replies"]
+    for reply in (crw_reply, cone_reply):
+        assert reply == {"status": 422, "code": "media_hold", "hold": "media_store_unavailable",
+                         "error": reply["error"]} and "native charts are unaffected" in reply["error"]
+    assert native == {"status": 200, "kind": "gist_pm25_forecast_v1"}
+    assert "src.media.gist_crw_media" not in value["loaded"] and "src.media.gist_published_media" not in value["loaded"]
