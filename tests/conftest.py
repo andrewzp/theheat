@@ -111,8 +111,8 @@ _CI_STAGE_REVISION_SHARDS = {
 
 _CI_GHCN_FINAL_FAULT_SHARDS = {
     "expiry": "1",
-    "source": "1",
-    "editor": "7",
+    "source": "9",
+    "editor": "3",
     "publisher": "7",
     "policy": "4",
 }

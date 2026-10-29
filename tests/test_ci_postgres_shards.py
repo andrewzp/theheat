@@ -239,7 +239,7 @@ def test_dedicated_postgres_shards_are_accepted_by_actual_collection_cli(shard):
 def test_actual_ghcn_fault_metadata_keeps_all_ten_cases_in_disjoint_fixed_pairs():
     path = ROOT / "tests/test_postgres_stage_revision_checks.py"
     name = "test_v2_ghcn_approval_final_bound_and_reauthorization_roll_back_all_writes"
-    expected = {'expiry': '1', 'source': '1', 'editor': '7', 'publisher': '7', 'policy': '4'}
+    expected = {'expiry': '1', 'source': '9', 'editor': '3', 'publisher': '7', 'policy': '4'}
     items = [SimpleNamespace(path=path, originalname=name,
               callspec=SimpleNamespace(params=dict(fault=fault, boundary=boundary)),
               nodeid=f"tests/test_postgres_stage_revision_checks.py::{name}[{fault}-{boundary}-compact_case0]")
@@ -283,3 +283,81 @@ def test_all_fourteen_workflow_groups_have_matching_parser_choices_and_original_
     assert groups == expected and len(set(groups)) == 14
     assert options["--ci-postgres-shard"]["choices"] == ("all", *(str(i) for i in range(12)))
     assert job["timeout-minutes"] == "45" and job["strategy"]["fail-fast"] == "false"
+
+
+def actual_ghcn_fault_items():
+    """Read actual decorator metadata without importing or executing PG cases."""
+    path = ROOT / "tests/test_postgres_stage_revision_checks.py"
+    name = "test_v2_ghcn_approval_final_bound_and_reauthorization_roll_back_all_writes"
+    function, = [node for node in ast.parse(path.read_text()).body
+                 if isinstance(node, ast.FunctionDef) and node.name == name]
+    parameters = {
+        ast.literal_eval(decorator.args[0]): ast.literal_eval(decorator.args[1])
+        for decorator in function.decorator_list
+        if isinstance(decorator, ast.Call) and isinstance(decorator.func, ast.Attribute)
+        and decorator.func.attr == "parametrize"
+    }
+    # Pin the complete actual parameter product and its pytest node-ID suffix.
+    assert parameters == {
+        "compact_case": [("all_time_low",)], "boundary": ["proof", "outbox"],
+        "fault": ["expiry", "source", "editor", "publisher", "policy"],
+    }
+    return [SimpleNamespace(
+        path=path, originalname=name,
+        callspec=SimpleNamespace(params={"fault": fault, "boundary": boundary,
+                                        "compact_case": parameters["compact_case"][0]}),
+        nodeid=f"{path.relative_to(ROOT)}::{name}[{fault}-{boundary}-compact_case0]",
+    ) for fault in parameters["fault"] for boundary in parameters["boundary"]]
+
+
+def test_cohort_balance_changes_exactly_four_actual_ghcn_destinations():
+    items = actual_ghcn_fault_items()
+    previous = {"expiry": "1", "source": "1", "editor": "7", "publisher": "7", "policy": "4"}
+    before = {item.nodeid: previous[item.callspec.params["fault"]] for item in items}
+    after = {item.nodeid: _ci_postgres_shard(item.path, item.originalname, item.callspec.params)
+             for item in items}
+    prefix = "tests/test_postgres_stage_revision_checks.py::test_v2_ghcn_approval_final_bound_and_reauthorization_roll_back_all_writes"
+    assert {nodeid: (before[nodeid], after[nodeid]) for nodeid in before
+            if before[nodeid] != after[nodeid]} == {
+        f"{prefix}[editor-proof-compact_case0]": ("7", "3"),
+        f"{prefix}[editor-outbox-compact_case0]": ("7", "3"),
+        f"{prefix}[source-proof-compact_case0]": ("1", "9"),
+        f"{prefix}[source-outbox-compact_case0]": ("1", "9"),
+    }
+    assert len(before) == len(after) == 10 and before.keys() == after.keys()
+    selected = []
+    for shard in map(str, range(12)):
+        kept = select(items, "postgres", shard)
+        assert {item.nodeid for item in kept} == {nodeid for nodeid in after if after[nodeid] == shard}
+        selected.extend(kept)
+    assert len(selected) == len({id(item) for item in selected}) == 10
+    assert {id(item) for item in selected} == {id(item) for item in items}
+    for fault in previous:
+        pair = [item for item in items if item.callspec.params["fault"] == fault]
+        assert {item.callspec.params["boundary"] for item in pair} == {"proof", "outbox"}
+        assert len({after[item.nodeid] for item in pair}) == 1
+
+
+def test_critical_first_retains_actual_fault_metadata_and_stable_other_cohorts():
+    faults = actual_ghcn_fault_items()
+    critical = [SimpleNamespace(
+        path=ROOT / nodeid.split("::")[0], nodeid=nodeid,
+        originalname=nodeid.split("::", 1)[1].split("[", 1)[0],
+    ) for nodeid in _CI_CRITICAL_NODEIDS if nodeid not in {item.nodeid for item in faults}]
+    ordinary = [SimpleNamespace(path=path, nodeid=f"{path.relative_to(ROOT)}::ordinary[{index}]")
+                for path in sorted((ROOT / "tests").glob("test_postgres_*.py"))
+                if path.name != "test_postgres_stage_revision_checks.py"
+                and not path.name.startswith("test_postgres_media") for index in (0, 1)]
+    items = [*ordinary[:1], *reversed(faults), *reversed(critical), *ordinary[1:]]
+    for shard in ("all", *(str(i) for i in range(12))):
+        before = select(items, "postgres", shard)
+        after = select(items, "postgres", shard, critical_first=True)
+        assert {id(item) for item in after} == {id(item) for item in before}
+        promoted = [item for nodeid in _CI_CRITICAL_NODEIDS for item in before if item.nodeid == nodeid]
+        remaining_stage = [item for item in before if item.nodeid not in _CI_CRITICAL_NODEIDS
+                           and item.path.name == "test_postgres_stage_revision_checks.py"]
+        remaining_other = [item for item in before if item.nodeid not in _CI_CRITICAL_NODEIDS
+                           and item.path.name != "test_postgres_stage_revision_checks.py"]
+        assert after == [*promoted, *remaining_stage, *remaining_other]
+    assert select(items, "all", critical_first=True) == items
+    assert select(items, "postgres") == items
