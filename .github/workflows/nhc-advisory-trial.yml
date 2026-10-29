@@ -1,0 +1,107 @@
+name: nhc-advisory-trial
+run-name: NHC advisory sample ${{ inputs.trial_id }}
+
+# One approved NHC-advisory generation trial while the recurring bot remains paused.
+# Flag-off by default (THEHEAT_NHC_ADVISORY_TRIAL_ENABLED). No schedule, posting
+# step, production-state write, review, approval or automatic retry. Its only
+# output is an encrypted private result that may contain a pending-only proposal.
+on:
+  workflow_dispatch:
+    inputs:
+      trial_id:
+        description: 'Unique approved trial ID (32 lowercase hex characters)'
+        required: true
+        type: string
+      approval:
+        description: 'Enter APPROVE-2-USD-NHC-ADVISORY-TRIAL only after the operator approves'
+        required: true
+        type: string
+      approved_commit_sha:
+        description: 'Exact released commit approved for this trial'
+        required: true
+        type: string
+      nomination:
+        description: 'Operator nomination JSON: storm_id, bin, advisory, hazard, place, country, freshness_minutes (never a URL)'
+        required: true
+        type: string
+      recipient_certificate:
+        description: 'Approved public encryption certificate PEM (never a private key)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: nhc-advisory-trial
+  cancel-in-progress: false
+
+jobs:
+  trial:
+    if: >-
+      github.event_name == 'workflow_dispatch' && github.run_attempt == 1 &&
+      vars.THEHEAT_PRODUCTION_PAUSED == '1' &&
+      vars.THEHEAT_NHC_ADVISORY_TRIAL_ENABLED == '1' &&
+      inputs.approval == 'APPROVE-2-USD-NHC-ADVISORY-TRIAL'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Claim the first run for this approved trial ID
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TRIAL_ID: ${{ inputs.trial_id }}
+          TRIAL_WORKFLOW: nhc-advisory-trial.yml
+          APPROVED_COMMIT_SHA: ${{ inputs.approved_commit_sha }}
+          RECIPIENT_CERTIFICATE: ${{ inputs.recipient_certificate }}
+        run: python scripts/claim_sample_trial.py
+      - name: Install existing application dependencies
+        run: pip install -r requirements.txt
+      - name: Read retained production state without mutation
+        env:
+          GH_TOKEN: ${{ secrets.GH_GIST_TOKEN }}
+          GIST_ID: ${{ secrets.GIST_ID }}
+        run: |
+          umask 077
+          gh gist view "$GIST_ID" -f state.json > "$RUNNER_TEMP/trial-state.json"
+      - name: Prepare the nominated NHC advisory without paid calls
+        env:
+          NHC_ADVISORY_NOMINATION: ${{ inputs.nomination }}
+          TRIAL_ID: ${{ inputs.trial_id }}
+        run: |
+          python scripts/nhc_advisory_trial.py prepare \
+            --state "$RUNNER_TEMP/trial-state.json" --trial-id "$TRIAL_ID" \
+            --output "$RUNNER_TEMP/sample-trial" > "$RUNNER_TEMP/trial-plan-result.json"
+      - name: Execute the approved bounded trial
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          python - <<'PY'
+          import json, os, pathlib, subprocess, sys
+          base = pathlib.Path(os.environ['RUNNER_TEMP'])
+          plan = json.loads((base / 'trial-plan-result.json').read_text())
+          if plan.get('candidate_count') != 1:
+              print('No eligible current advisory; zero paid calls. No replacement loop.')
+              sys.exit(0)
+          subprocess.run([sys.executable, 'scripts/nhc_advisory_trial.py', 'execute',
+              '--output', str(base / 'sample-trial'),
+              '--approved-plan-sha256', plan['plan_sha256']], check=True)
+          PY
+      - name: Encrypt private source, history and candidate results
+        if: always()
+        env:
+          RECIPIENT_CERTIFICATE: ${{ inputs.recipient_certificate }}
+        run: python scripts/package_sample_trial.py
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: encrypted-nhc-advisory-trial-${{ github.run_id }}
+          path: ${{ runner.temp }}/sample-trial.cms
+          if-no-files-found: error
+          retention-days: 3
