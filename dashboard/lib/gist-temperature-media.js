@@ -25,7 +25,8 @@ export function validGistTemperatureMedia(draft, value = draft?.media_attachment
       && r.implementation_sha256 === files["src/media/gist_temperature_media.py"] && SHA.test(r.implementation_sha256)
       && r.font_sha256 === files["src/media/fonts/DejaVuSansMono.ttf"] && SHA.test(r.font_sha256)
       && [r.freetype, r.zlib].every(v => typeof v === "string" && v.length > 0 && v.length <= 64)
-      && typeof value.alt_text === "string" && value.alt_text.length > 0 && [...value.alt_text].length <= 10000
+      && typeof value.alt_text === "string" && value.alt_text.length > 0 && [...value.alt_text].length <= 1000
+      && Buffer.byteLength(value.alt_text, "utf8") <= 1000
       && Buffer.from(value.alt_text).toString("utf8") === value.alt_text && digest(value.alt_text) === value.alt_sha256
   } catch { return false }
 }
