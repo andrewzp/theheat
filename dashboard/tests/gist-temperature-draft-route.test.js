@@ -168,7 +168,8 @@ test("real PNG -> lossless Gist attach -> joint review -> manual approval preser
 test("repeated attach is idempotent; removal changes revision and retains exact prior attachment in history", async () => {
   await withGist(async t => {
     const { preview, attached } = await attach(t)
-    assert.equal((await t.post(body(attached, "attach_graphic", { expectedMediaSha256: preview.media_descriptor_sha256 }))).status, 200)
+    const repeated = await t.post(body(attached, "attach_graphic", { expectedMediaSha256: preview.media_descriptor_sha256 }))
+    assert.equal(repeated.status, 200, JSON.stringify(repeated.body))
     assert.equal(t.get().content_revision, attached.content_revision)
     assert.equal(t.get().revision_history.length, attached.revision_history.length)
     await joint(t)
