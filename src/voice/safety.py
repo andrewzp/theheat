@@ -86,7 +86,7 @@ BANNED_PATTERNS = [
     re.compile(r"dangerous conditions", re.IGNORECASE),
     re.compile(r"\bextreme wind warning\b", re.IGNORECASE),
     # Bureaucratic noise in event names
-    re.compile(r"-\d{2,4}\b"),  # -26, -2026 suffixes
+    re.compile(r"(?<=[^\W_])-\d{2,4}\b"),  # Alphanumeric event/date suffix, not a signed value
     # Fabricated temporal/seasonal/biological context — primary defense is the
     # writer prompt's HARD RULES bullet ("NO FABRICATED CONTEXT") in
     # src/two_bot/prompts/writer_prompt.py. These regexes are the fail-safe

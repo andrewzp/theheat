@@ -30,13 +30,14 @@ def execute_delivery_once(authority, intent_id, platform, stage, resolve_princip
         return report("disabled")
     clean_environment()
 
-    def transaction(operation):
+    def transaction(operation, *, current=False):
+        ghcn = domain.prepare_context(authority, intent_id=intent_id) if current else None
         with authority.projections._connection(writing=operation is not read_only) as c:
             authority._validate(c)
             domain.validate(c, authority.environment)
             authority._pointer(c, lock=True)
             value = domain.read(c, intent_id)
-            return operation(c, value)
+            return operation(c, value, ghcn) if current else operation(c, value)
 
     def read_only(c, value):
         config, digest = domain.configuration(authority)
@@ -70,17 +71,29 @@ def execute_delivery_once(authority, intent_id, platform, stage, resolve_princip
         # serialization, grant acknowledgement or a suspended parent consume
         # this original lifetime; they never create a later eligibility window.
         anchor, acquired_at = time.monotonic(), instant(clock)
-        prepared = transaction(lambda c,value: domain.acquire(authority, c, value, platform, stage, owner, resolve_principal, acquired_at))
+        prepared = transaction(lambda c,value,ghcn: domain.acquire(authority, c, value, platform, stage,
+            owner, resolve_principal, acquired_at, ghcn=ghcn), current=True)
         if "attempt" in prepared:
             return report("unknown", network_mutation=False)
         prepared["eligibility_deadline"] = anchor + (utc_datetime(prepared["lease"]["expires_at"])-acquired_at).total_seconds()
 
+        dispatch_context = None
         def begin(request, body):
-            return transaction(lambda c,value: domain.begin(authority, c, value, platform, stage, prepared["lease"],
-                request, body, resolve_principal, instant(clock)))
+            nonlocal dispatch_context
+            def grant(c, value, ghcn):
+                result = domain.begin(authority, c, value, platform, stage, prepared["lease"],
+                    request, body, resolve_principal, instant(clock), ghcn=ghcn)
+                successor = domain.attempt_successor(authority, c, value, ghcn, result["binding"], request, body) \
+                    if result.get("dispatch_granted") and ghcn is not None else None
+                return result, successor
+            result, successor = transaction(grant, current=True)
+            # Expose the private one-use proof only after the barrier COMMIT.
+            dispatch_context = successor
+            return result
 
         def check(saved):
-            return transaction(lambda c,value: domain.before_call(authority, c, value, saved, resolve_principal, instant(clock)))
+            return transaction(lambda c,value: domain.before_call(authority, c, value, saved,
+                resolve_principal, instant(clock), ghcn=dispatch_context))
 
         result = transport.execute(value, platform, stage, prepared, begin=begin, observe=retain, check=check)
         if result["binding"] is None:

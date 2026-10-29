@@ -2,6 +2,7 @@ import http.client
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 import json
 import threading
+import time
 
 import pytest
 
@@ -20,17 +21,27 @@ def endpoint(monkeypatch):
     class RuntimeBase(BaseHTTPRequestHandler):
         def log_message(self, *args):
             pytest.fail("runtime must not log request details")
+    completed = threading.Event()
     class Handler(RuntimeBase, handler_type(policy_sha=POLICY, runtime_sha=RUNTIME)):
-        pass
+        def finish(self):
+            try:
+                super().finish()
+            finally:
+                completed.set()
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     def call(method="POST", body=b"{}", headers=None, path="/api/graphic_preview"):
+        deadline = time.monotonic() + 5
+        completed.clear()
         conn = http.client.HTTPConnection(*server.server_address, timeout=5)
         conn.request(method, path, body=body, headers={"Content-Type": "application/json", **(headers or {})})
         response = conn.getresponse()
         status, result_headers, result = response.status, dict(response.getheaders()), response.read()
         conn.close()
+        # Reading Content-Length bytes does not join the server's finally.
+        # Wait for this owned request's cleanup within the original five seconds.
+        assert completed.wait(max(0, deadline - time.monotonic())), "Owned HTTP request did not finish"
         assert result_headers["Cache-Control"] == "private, no-store"
         assert result_headers["X-Content-Type-Options"] == "nosniff"
         assert "Access-Control-Allow-Origin" not in result_headers
@@ -85,3 +96,36 @@ def test_production_entry_always_uses_real_source_qualification(endpoint, monkey
         return b'{"fixture":true}'
     monkeypatch.setattr("src.dashboard_preview.http.build_preview", build)
     assert endpoint(body=json.dumps(request).encode(), headers={"Authorization": AUTH})[2] == {"fixture": True}
+
+
+def test_endpoint_does_not_return_while_owned_handler_cleanup_is_pending(endpoint, monkeypatch):
+    """Response bytes may arrive before the request's finally releases _BUSY."""
+    release_entered, finish_release, returned = threading.Event(), threading.Event(), threading.Event()
+    lock, errors = threading.Lock(), []
+    class DeferredRelease:
+        def acquire(self, *args, **kwargs):
+            return lock.acquire(*args, **kwargs)
+        def release(self):
+            release_entered.set()
+            assert finish_release.wait(5), "Invented cleanup release was never allowed"
+            lock.release()
+    monkeypatch.setattr("src.dashboard_preview.http._BUSY", DeferredRelease())
+    monkeypatch.setattr("src.dashboard_preview.http.build_preview", lambda *_a, **_k: b"{}")
+    def call():
+        try:
+            assert endpoint(headers={"Authorization": AUTH})[0] == 200
+        except BaseException as exc:
+            errors.append(exc)
+        finally:
+            returned.set()
+    client = threading.Thread(target=call)
+    client.start()
+    try:
+        assert release_entered.wait(5)
+        assert not returned.wait(0.2), "HTTP response was mistaken for completed handler cleanup"
+    finally:
+        finish_release.set()
+        client.join(5)
+    assert not client.is_alive() and not errors and returned.is_set()
+    assert lock.acquire(blocking=False)
+    lock.release()

@@ -1,5 +1,7 @@
 """Tests for the two-layer safety pipeline."""
 
+import pytest
+
 from src.voice.safety import (
     check_regex,
     check_month_repetition,
@@ -99,6 +101,52 @@ class TestRegexGate:
     def test_wake_up_rejected(self):
         passed, reason = check_regex("Wake up people, the planet is burning")
         assert not passed
+
+
+class TestEventNameSuffix:
+    @pytest.mark.parametrize("sign", ["-", "−"], ids=["ascii-minus", "unicode-minus"])
+    @pytest.mark.parametrize("text", [
+        "{sign}20 C at Synthetic Station.",
+        "Synthetic Station reached {sign}20 C.",
+        "Synthetic Station reached {sign}20.5°C.",
+        "Synthetic Station reached {sign}123 C.",
+        "Synthetic Station reached {sign}123.5°C.",
+        "Synthetic Station: {sign}20 C.",
+        "Synthetic Station ({sign}20 C).",
+        "Synthetic Station ({sign}123.5°C).",
+        "Synthetic Station recorded\n{sign}20 C.",
+        "Synthetic Station: '{sign}20 C'.",
+        "Synthetic Station, {sign}20 C.",
+        "Synthetic Station;{sign}20 C.",
+    ])
+    def test_free_standing_negative_temperature_is_not_an_event_suffix(self, sign, text):
+        # This text-only pass certifies neither the invented value nor its source.
+        assert check_regex(text.format(sign=sign)) == (True, None)
+
+    @pytest.mark.parametrize("text,reason", [
+        ("Storm-26 remains offshore.", "Banned pattern: '-26'"),
+        ("Flood-2026 remains active.", "Banned pattern: '-2026'"),
+        ("Storm2-26 remains offshore.", "Banned pattern: '-26'"),
+        ("台風-26 remains offshore.", "Banned pattern: '-26'"),
+        ("The source date is 2026-10-22.", "Banned pattern: '-10'"),
+    ])
+    def test_event_and_date_suffix_refusals_keep_their_exact_reason(self, text, reason):
+        assert check_regex(text) == (False, reason)
+
+    @pytest.mark.parametrize("text,reason", [
+        ("Synthetic Station reached -20 C #Cold", "Banned pattern: '#Cold'"),
+        ("Synthetic Station reached -20 C!", "Banned pattern: '!'"),
+        ("BREAKING: -20 C at Synthetic Station.", "Banned pattern: 'BREAKING:'"),
+        ("A national average of 20 C.", "Banned pattern: 'national average'"),
+    ])
+    def test_other_bans_keep_their_exact_reason(self, text, reason):
+        assert check_regex(text) == (False, reason)
+
+    def test_negative_temperature_still_needs_the_required_model_check(self, monkeypatch):
+        monkeypatch.setattr("src.voice.safety.GEMINI_API_KEY", "")
+        assert run_safety_pipeline("Synthetic Station reached -20 C.") == (
+            False, "safety_unavailable: missing credential",
+        )
 
 
 class TestPressReleaseOpeners:

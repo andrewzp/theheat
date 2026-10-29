@@ -64,6 +64,9 @@ def _at(c, now):
     at = spend._time(now)
     from src.commands.postgres_revision_checks import upgraded
     extra = f" UNION ALL SELECT MAX(recorded_at) FROM {SCHEMA}.draft_leases" if upgraded(c) else ""
+    from src.commands import postgres_stage_revision_checks as stages
+    if stages.installed(c):
+        extra += f" UNION ALL SELECT MAX(recorded_at) FROM {SCHEMA}.stage_leases UNION ALL SELECT MAX(completed_at) FROM {SCHEMA}.stage_seals"
     latest = c.execute(f"SELECT MAX(recorded_at) FROM (SELECT MAX(recorded_at) AS recorded_at FROM {SCHEMA}.sets UNION ALL SELECT MAX(recorded_at) FROM {SCHEMA}.attempts UNION ALL SELECT MAX(recorded_at) FROM {SCHEMA}.receipts{extra}) clocks").fetchone()[0]
     checks._require(latest is None or at >= latest, "check_clock_went_backwards")
     return at
@@ -299,6 +302,12 @@ def apply(c, action, payload, *, now, environment, request=None, receipt=None, r
         return _intake(c, payload, at, environment)
     packet, enrolled_at = _packet(c, payload["check_set_id"], environment)
     stages, attempts = _stages(c, payload["check_set_id"], packet, enrolled_at)
+    from src.commands import postgres_stage_revision_checks as stage_authority
+    if stage_authority.protocol(c, payload["check_set_id"]) == 2:
+        checks._require(action == "status", "scoped_revision_context_required")
+        return dict(check_set_id=payload["check_set_id"], stages=stages, blocked_reason="scoped_revision_context_required",
+                    required_checks_completed=False, publication_approved=False, dispatch_granted=False,
+                    accounting_complete=False, cost_usd=None)
     if action == "status":
         reason = None
         try:
@@ -362,6 +371,8 @@ def apply(c, action, payload, *, now, environment, request=None, receipt=None, r
 def recorded_stage_receipts(c, identity, packet, *, owner, fence, environment):
     """Exact retained receipts only; never a scientific/current completion verdict."""
     from src.commands import postgres_check_observations as observations
+    from src.commands import postgres_stage_revision_checks as stage_authority
+    checks._require(stage_authority.protocol(c, identity) == 1, "stage_protocol_requires_composed_proof")
 
     def require_proof(condition, code):
         if not condition:

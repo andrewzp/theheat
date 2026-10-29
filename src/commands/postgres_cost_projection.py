@@ -459,7 +459,15 @@ def _check(reader, record, attempt_row):
     if packet["schema_version"]==2:
         lease=reader.execute("SELECT owner,recorded_at,expires_at FROM theheat_batch_work.leases WHERE job_id=%s AND fence=%s",(packet["job_id"],binding["fence"])).fetchone()
     else:
-        lease=reader.execute("SELECT owner,recorded_at,expires_at FROM theheat_checks.draft_leases WHERE check_set_id=%s AND fence=%s",(identity,binding["fence"])).fetchone()
+        from src.commands import postgres_stage_revision_checks as stages
+        if stages.protocol(reader,identity)==2:
+            # Bounded passive original-cap join, never active prefix/current proof.
+            cap=stages.lease(reader,identity,binding["fence"])
+            require(cap is not None and cap["stage"]==stage and cap["owner"]=="revision-checks:"+packet["enrollment_id"]
+                and utc_datetime(cap["expires_at"])==min(utc_datetime(cap["recorded_at"])+timedelta(seconds=180),utc_datetime(packet["useful_until"])))
+            lease=(cap["owner"],cap["recorded_at"],cap["expires_at"])
+        else:
+            lease=reader.execute("SELECT owner,recorded_at,expires_at FROM theheat_checks.draft_leases WHERE check_set_id=%s AND fence=%s",(identity,binding["fence"])).fetchone()
     require(lease is not None and lease[0]==binding["owner"] and lease[1]<=at<lease[2] and enrolled<=at<packet["useful_until"] and at[:10]==packet["check_date"])
     reader.dispatch(intent["intent_id"],at)
     refs=origin("required_check",check_set_id=identity,stage=stage,grant_id=grant,request_sha256=request_sha)

@@ -6,9 +6,13 @@ again, approve tweet text, or grant posting approval.
 """
 from __future__ import annotations
 
+from contextlib import contextmanager
+from contextvars import ContextVar
+from copy import deepcopy
 from datetime import date, timedelta
 import json
 import re
+import threading
 
 from src.data.ghcn import GHCN_SOURCE_PRODUCT, MIN_ARCHIVE_YEARS, RECORD_MARGIN_C, record_comparison_qualified
 from src.data.temperature_evidence import finite, fingerprint as source_fingerprint
@@ -24,6 +28,12 @@ _KINDS = {
     "open_meteo_archive_low": ("low", "all_time"),
     "monthly_high": ("high", "monthly"), "monthly_low": ("low", "monthly"),
     "calendar_record": ("high", "calendar"), "calendar_record_low": ("low", "calendar"),
+}
+# A saved compact GHCN claim's selection field names the comparator it may draw.
+_CLAIM_FIELDS = {
+    "all_time_high": ("high", "all_time"), "all_time_low": ("low", "all_time"),
+    "monthly_high": ("high", "monthly"), "monthly_low": ("low", "monthly"),
+    "calendar_date_high": ("high", "calendar"), "calendar_date_low": ("low", "calendar"),
 }
 
 
@@ -52,8 +62,12 @@ def _count(value):
     return type(value) is int and value >= 0
 
 
-def _qualified(bundle, expected_sha):
+def _qualified_value(bundle, expected_sha):
     snapshot = story_bundle_snapshot(bundle)
+    return _qualified_snapshot(bundle, snapshot, expected_sha)
+
+
+def _qualified_snapshot(bundle, snapshot, expected_sha):
     _require(_sha(expected_sha) and fingerprint(snapshot) == expected_sha, "obsolete input bundle binding")
     _require(bundle.signal_kind in _KINDS, "unsupported signal; only individual GHCN daily extrema are supported")
     direction, tier = _KINDS[bundle.signal_kind]
@@ -175,7 +189,26 @@ def _qualified(bundle, expected_sha):
             "source_evidence_revision_id": evidence["revision_id"]}
 
 
-def _project(template, rows, synthetic):
+def _claim_view(view_sha256, reference, snapshot):
+    """Replay a saved compact claim view from the full evidence it names."""
+    from src.two_bot.ghcn_claim_contract import project_tree, structural_view
+    selection = reference["selection"]
+    _require(_sha(view_sha256) and reference["full_story"]["sha256"] == fingerprint(snapshot),
+             "saved claim view names different full evidence")
+    _require(_KINDS.get(snapshot["signal_kind"]) == _CLAIM_FIELDS.get(selection["signal_field"]),
+             "saved claim selects a different comparator")
+    evidence = snapshot["raw_signal_dump"]["evidence"]
+    _require(reference["observation_revision"] == evidence["revision_id"]
+             and reference["baseline_revision"] == evidence["baseline"]["revision_id"]
+             and [row["raw_sha256"] for row in reference["original_archives"]] == [evidence["baseline"]["source_payload_sha256"]],
+             "saved claim reference disagrees with its full evidence")
+    view = project_tree(snapshot, reference, selection)
+    structural_view(view)
+    _require(fingerprint(view) == view_sha256, "saved claim view is not the projection of this full evidence")
+    return {"view_sha256": view_sha256, "reference": reference}
+
+
+def _project(template, rows, synthetic, claim=None):
     first = rows[0]
     _require(all((row["station_id"], row["variable"], row["location"]) == (first["station_id"], first["variable"], first["location"])
                  for row in rows), "trajectory station, variable or location changed")
@@ -201,7 +234,7 @@ def _project(template, rows, synthetic):
         "input_binding": {"adapter_version": ADAPTER_VERSION, "synthetic": synthetic, "bundles": [
             {"bundle_sha256": row["bundle_sha256"], "source_evidence_revision_id": row["source_evidence_revision_id"],
              "source_baseline_payload_sha256": row["baseline"]["source_baseline_payload_sha256"],
-             "bundle": row["snapshot"]} for row in rows]},
+             "bundle": row["snapshot"]} for row in rows], **({} if claim is None else {"claim_view": claim})},
     }
 
 
@@ -217,6 +250,106 @@ class _StoredBundle:
         return self.snapshot
 
 
+class _RetainedCalculation:
+    """One reader's pure retained-input calculation, never a current proof.
+
+    Only serialized bundle values enter this slot. Roles, policies, files, SQL,
+    draft/review decisions and clocks are deliberately outside it. Each reader
+    owns a new slot; even another reader on the same connection starts empty.
+    """
+
+    def __init__(self):
+        self.owner = threading.get_ident()
+        self.open = True
+        self.key: tuple | None = None
+        self.value: dict | None = None
+
+    def close(self):
+        self.open = False
+        self.key = self.value = None
+
+
+_RETAINED_CALCULATION: ContextVar[_RetainedCalculation | None] = ContextVar(
+    "temperature_retained_calculation", default=None)
+
+
+@contextmanager
+def _retained_calculation_scope():
+    """Private lexical scope: no caller-provided values or authority token."""
+    calculation = _RetainedCalculation()
+    token = _RETAINED_CALCULATION.set(calculation)
+    try:
+        yield
+    finally:
+        calculation.close()
+        _RETAINED_CALCULATION.reset(token)
+
+
+def _plain_json(value):
+    # JSON serialization alone conflates tuples/lists and non-string keys.
+    # Those and user-defined objects retain the original uncached execution.
+    if type(value) is dict:
+        return all(type(k) is str and _plain_json(v) for k, v in value.items())
+    if type(value) is list:
+        return all(_plain_json(v) for v in value)
+    return type(value) in (str, int, float, bool, type(None))
+
+
+def _calculation_key(bundle, expected_sha):
+    if type(bundle) is not _StoredBundle or type(expected_sha) is not str:
+        return None
+    try:
+        if not _plain_json(bundle.snapshot):
+            return None
+        raw = json.dumps(bundle.snapshot, allow_nan=False, ensure_ascii=False,
+                         separators=(",", ":")).encode("utf-8")
+        if len(raw) > 1_000_000:
+            return None
+        # Keep exact bytes, not fingerprint(): fingerprint normalizes numeric
+        # representations which have different scientific type constraints.
+        implementation = (_qualified_value, _qualified_snapshot, story_bundle_snapshot, audit_story_bundle,
+            record_comparison_qualified, source_fingerprint, fingerprint, finite,
+            json_default, _time, _require, _sha, _count,
+            _StoredBundle.to_dict, _StoredBundle.__getattr__)
+        constants = json.dumps([ADAPTER_VERSION, GHCN_SOURCE_PRODUCT, MIN_ARCHIVE_YEARS,
+            RECORD_MARGIN_C, _KINDS,
+            getattr(record_comparison_qualified, "__globals__", {}).get("GHCN_SOURCE_PRODUCT")],
+            allow_nan=False)
+        return raw, expected_sha, implementation, constants
+    except (ValueError, TypeError, UnicodeError, OverflowError, RecursionError):
+        # Key preparation must never replace the original refusal or its order.
+        return None
+
+
+def _qualified(bundle, expected_sha):
+    calculation = _RETAINED_CALCULATION.get()
+    if calculation is None or not calculation.open or calculation.owner != threading.get_ident():
+        return _qualified_value(bundle, expected_sha)
+    # The complete P05 audit, including its dynamically imported validators,
+    # still runs on EVERY use before the reusable arithmetic/projection work.
+    # No validator verdict, dynamic domain guard or input serialization is cached.
+    try:
+        snapshot = story_bundle_snapshot(bundle)
+    except Exception:
+        calculation.key = calculation.value = None
+        raise
+    key = _calculation_key(bundle, expected_sha)
+    if key is not None and calculation.key == key:
+        return deepcopy(calculation.value)
+    calculation.key = calculation.value = None
+    result = _qualified_snapshot(bundle, snapshot, expected_sha)
+    # No failure is retained. A mutation during calculation also cannot seed a
+    # later hit. Retain a detached output so a caller cannot alter the slot.
+    if key is not None and _calculation_key(bundle, expected_sha) == key:
+        try:
+            encoded = json.dumps(result, allow_nan=False, ensure_ascii=False).encode("utf-8")
+            if len(encoded) <= 1_000_000:
+                calculation.key, calculation.value = key, deepcopy(result)
+        except (ValueError, TypeError, UnicodeError, OverflowError, RecursionError):
+            pass  # A non-cacheable output still has its original outcome.
+    return result
+
+
 def validate_temperature_adapter_binding(template, evidence):
     """Rebuild the projection before rendering/reuse, even if chart hash changed."""
     try:
@@ -226,7 +359,12 @@ def validate_temperature_adapter_binding(template, evidence):
         _require(isinstance(inputs, list) and (len(inputs) == 1 if template == "temperature_comparator" else 2 <= len(inputs) <= 8),
                  "invalid retained input bundle count")
         rows = [_qualified(_StoredBundle(row["bundle"]), row["bundle_sha256"]) for row in inputs]
-        _require(fingerprint(_project(template, rows, evidence["synthetic"])) == fingerprint(evidence),
+        claim = binding.get("claim_view")
+        if claim is not None:
+            _require(template == "temperature_comparator" and type(claim) is dict
+                     and set(claim) == {"view_sha256", "reference"}, "malformed saved claim binding")
+            claim = _claim_view(claim["view_sha256"], claim["reference"], rows[0]["snapshot"])
+        _require(fingerprint(_project(template, rows, evidence["synthetic"], claim)) == fingerprint(evidence),
                  "graphic projection differs from its retained qualified StoryBundle inputs")
     except (KeyError, TypeError, AttributeError, OverflowError) as exc:
         raise ValueError("GHCN graphic withheld: malformed adapter input binding") from exc
@@ -253,5 +391,28 @@ def temperature_graphic_spec(template: str, bundles: list[StoryBundle], *, expec
         expected = fingerprint(evidence)
         return {"template": template, "expected_evidence_sha256": expected,
                 "evidence": validate_graphic(template, evidence, expected_evidence_sha256=expected)}
+    except (KeyError, TypeError, AttributeError, OverflowError) as exc:
+        raise ValueError("GHCN graphic withheld: malformed or legacy source warrant") from exc
+
+
+def temperature_claim_graphic_spec(view: dict, full: StoryBundle, *, expected_full_sha256: str, synthetic: bool) -> dict:
+    """Adapt one saved compact GHCN claim using its locally verified full evidence.
+
+    The caller resolves ``full`` from operator-retained evidence; this adapter does
+    not. The binding names the exact saved view, its source reference and the full
+    story, and every reuse replays the projection between them. The complete
+    comparator tables stay in the graphic input, never in the saved claim.
+    """
+    if type(synthetic) is not bool:
+        raise ValueError("Synthetic status must be declared explicitly")
+    try:
+        from src.two_bot.ghcn_claim_contract import structural_view
+        reference = structural_view(view)
+        row = _qualified(full, expected_full_sha256)
+        claim = _claim_view(fingerprint(view), reference, row["snapshot"])
+        evidence = _project("temperature_comparator", [row], synthetic, claim)
+        expected = fingerprint(evidence)
+        return {"template": "temperature_comparator", "expected_evidence_sha256": expected,
+                "evidence": validate_graphic("temperature_comparator", evidence, expected_evidence_sha256=expected)}
     except (KeyError, TypeError, AttributeError, OverflowError) as exc:
         raise ValueError("GHCN graphic withheld: malformed or legacy source warrant") from exc

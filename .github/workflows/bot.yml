@@ -92,7 +92,15 @@ jobs:
             postgres-shard: '6'
           - partition: postgres
             postgres-shard: '7'
-    timeout-minutes: 35
+          - partition: postgres
+            postgres-shard: '8'
+          - partition: postgres
+            postgres-shard: '9'
+          - partition: postgres
+            postgres-shard: '10'
+          - partition: postgres
+            postgres-shard: '11'
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v6
 
@@ -159,6 +167,28 @@ jobs:
       - run: mypy src/
         if: matrix.partition == 'core'
 
+      - name: Type-check saved-revision authority boundaries
+        if: matrix.partition == 'core'
+        run: >-
+          mypy
+          src/commands/postgres_stage_revision_checks.py
+          src/commands/postgres_revision_checks.py
+          src/commands/postgres_sync_checks.py
+          src/commands/postgres_checks.py
+          src/commands/postgres_authority.py
+          src/commands/postgres_editor_media.py
+          src/commands/postgres_delivery.py
+          src/commands/postgres_cost_projection.py
+          src/editorial/policy.py
+          src/two_bot/ghcn_claim_view.py
+
+      - name: Type-check passive media inspection regressions
+        if: matrix.partition == 'core'
+        run: >-
+          mypy
+          tests/test_parked_media_inspection.py
+          tests/test_postgres_parked_media_inspection.py
+
       - name: Verify advisory source inventory
         if: matrix.partition == 'core'
         run: python scripts/gen_source_registry.py --check
@@ -174,10 +204,23 @@ jobs:
       # `voice_replay` tests live in tests/voice_regression/ and call the
       # real Anthropic writer. They run in voice-regression.yml (daily
       # canary + weekly full + writer-path PR gate), not in this suite.
-      - run: python -m pytest tests/ -v -m "not voice_replay" --ci-partition=${{ matrix.partition }} --ci-postgres-shard=${{ matrix.postgres-shard }} --durations=20
+      - name: Prepare private PG2/PG8 crash evidence
+        if: matrix.partition == 'postgres' && (matrix.postgres-shard == '2' || matrix.postgres-shard == '8')
+        timeout-minutes: 3
+        run: python scripts/ci_native_crash.py prepare
+
+      - run: python -m pytest tests/ -v -m "not voice_replay" --ci-partition=${{ matrix.partition }} --ci-postgres-shard=${{ matrix.postgres-shard }} --ci-critical-first --maxfail=1 --durations=20 -o faulthandler_timeout=300
+        id: offline-suite
         env:
           THEHEAT_TEST_POSTGRES: "1"
           THEHEAT_POSTGRES_BINDIR: /usr/lib/postgresql/17/bin
+
+      - name: Observe and remove private PG2/PG8 crash evidence
+        if: always() && matrix.partition == 'postgres' && (matrix.postgres-shard == '2' || matrix.postgres-shard == '8') && env.THEHEAT_CI_CORE_DIR != ''
+        timeout-minutes: 2
+        run: python scripts/ci_native_crash.py finish
+        env:
+          THEHEAT_CI_TEST_OUTCOME: ${{ steps.offline-suite.outcome }}
 
       - name: SQLite backend smoke
         if: matrix.partition == 'core'

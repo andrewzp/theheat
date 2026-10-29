@@ -6,6 +6,8 @@ These fingerprints detect stale decisions; they are not a storage lock.
 
 from __future__ import annotations
 
+from contextlib import contextmanager
+from contextvars import ContextVar
 from copy import deepcopy
 from collections.abc import Mapping
 from datetime import datetime, timezone
@@ -14,6 +16,7 @@ import json
 import math
 import re
 import struct
+import threading
 from typing import Any
 
 from src.editorial.publication import automatic_publication_policy, valid_epoch
@@ -42,9 +45,89 @@ def _canonical(value: Any) -> Any:
     raise ValueError("Revision evidence must be JSON data")
 
 
-def fingerprint(value: Any) -> str:
+def _fingerprint_value(value: Any) -> str:
     payload = json.dumps(_canonical(value), ensure_ascii=False, separators=(",", ":"))
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+class _RetainedFingerprints:
+    """Only pure digests of exact values within ONE retained review read."""
+    def __init__(self):
+        self.thread = threading.get_ident()
+        self.open = True
+        self.entries: dict[bytes, str] = {}
+        self.byte_count = 0
+        self.implementation: tuple | None = None
+
+    def close(self):
+        self.open = False
+        self.entries.clear()
+        self.byte_count = 0
+
+
+_RETAINED_FINGERPRINTS: ContextVar[_RetainedFingerprints | None] = ContextVar(
+    "retained_review_fingerprints", default=None)
+
+
+@contextmanager
+def _retained_fingerprint_scope():
+    calculation = _RetainedFingerprints()
+    token = _RETAINED_FINGERPRINTS.set(calculation)
+    try:
+        yield
+    finally:
+        calculation.close()
+        _RETAINED_FINGERPRINTS.reset(token)
+
+
+def _fingerprint_json(value):
+    if type(value) is dict:
+        return all(type(k) is str and _fingerprint_json(v) for k, v in value.items())
+    if type(value) is list:
+        return all(_fingerprint_json(v) for v in value)
+    return type(value) in (str, int, float, bool, type(None))
+
+
+def _fingerprint_key(value):
+    try:
+        # This lane serves retained graphic/source data, not small identity,
+        # role, policy, approval or completed-check records.
+        if type(value) is not dict or not any(k in value for k in (
+            "evidence", "input_binding", "raw_signal_dump", "historical_context",
+            "variables", "proposed_draft", "review_context")):
+            return None
+        if not _fingerprint_json(value):
+            return None
+        raw = json.dumps(value, ensure_ascii=False, allow_nan=False,
+                         separators=(",", ":")).encode("utf-8")
+        # Small values retain the ordinary path. Exact bytes deliberately keep
+        # Python numeric types distinct, even where the final digest coalesces.
+        return raw if 4096 <= len(raw) <= 1_000_000 else None
+    except (ValueError, TypeError, UnicodeError, OverflowError, RecursionError):
+        return None  # Preserve the original error and its precedence below.
+
+
+def fingerprint(value: Any) -> str:
+    calculation = _RETAINED_FINGERPRINTS.get()
+    if calculation is None or not calculation.open or calculation.thread != threading.get_ident():
+        return _fingerprint_value(value)
+    implementation = (_fingerprint_value, _canonical, json.dumps, json.JSONEncoder,
+        json.JSONEncoder.encode, json.JSONEncoder.iterencode, hashlib.sha256, struct.pack,
+        math.isfinite)
+    if calculation.implementation != implementation:
+        calculation.entries.clear()
+        calculation.byte_count = 0
+        calculation.implementation = implementation
+    key = _fingerprint_key(value)
+    if key is not None and key in calculation.entries:
+        return calculation.entries[key]
+    result = _fingerprint_value(value)
+    if (key is not None and len(calculation.entries) < 16
+            and calculation.byte_count + len(key) + 64 <= 2_000_000
+            and _fingerprint_key(value) == key):
+        calculation.entries[key] = result
+        calculation.byte_count += len(key) + 64
+    return result
 
 
 def text_hash(text: str) -> str:

@@ -5,11 +5,62 @@ import json
 import os
 from pathlib import Path
 import threading
+import subprocess
+import sys
 from types import SimpleNamespace
 
 import pytest
 
 from tests import delivery_ci_diagnostics as diagnostic
+from tests.conftest import _last_check_windows
+
+
+def check_window():
+    return dict(kind="check_window", now="2026-10-22T12:02:01Z",
+                lease_expires_at="2026-10-22T12:04:00Z", useful_until="2026-10-23T00:00:00Z",
+                lease_remaining_seconds=119.0, available=False, operation="critic", fault="")
+
+
+def test_check_window_tail_retains_actual_tuple_and_excludes_other_trace_content(tmp_path):
+    path = tmp_path / "trace.jsonl"
+    windows = [dict(check_window(), lease_remaining_seconds=float(i)) for i in range(12)]
+    records = [{"kind": "model_post", "text": "private-text", "token": "private-token"},
+               *(dict(row, raw_config="private-config", text="private-text") for row in windows)]
+    path.write_text("\n".join(json.dumps(row) for row in records))
+    actual = _last_check_windows(path)
+    assert actual == [{key: value for key, value in row.items() if key != "kind"} for row in windows[-8:]]
+    assert actual[-1]["now"] == "2026-10-22T12:02:01Z" and actual[-1]["available"] is False
+    assert "private" not in json.dumps(actual)
+
+
+def test_check_window_tail_is_byte_bounded_and_skips_malformed_or_unlisted_fields(tmp_path):
+    path = tmp_path / "trace.jsonl"
+    invalid = [[], dict(check_window(), operation="private-token"), dict(check_window(), fault="private-token"),
+               dict(check_window(), now="private-config"), dict(check_window(), available="false"),
+               dict(check_window(), lease_remaining_seconds=float("nan")),
+               dict(check_window(), lease_remaining_seconds=True)]
+    path.write_bytes((json.dumps(dict(check_window(), private="x" * 70_000)) + "\nnot-json\n").encode()
+                     + b"\xff\n" + "\n".join(json.dumps(row) for row in [*invalid, check_window()]).encode())
+    assert _last_check_windows(path) == [{key: value for key, value in check_window().items() if key != "kind"}]
+
+
+def test_actual_failed_pytest_report_preserves_failure_and_only_prints_window_whitelist(tmp_path):
+    folder = tmp_path / "invented"
+    folder.mkdir()
+    module = folder / "test_postgres_temperature_delivery.py"
+    row = dict(check_window(), raw_config="private-config", text="private-text", token="private-token")
+    module.write_text("import json\nimport pytest\n\n@pytest.fixture\ndef compact_case(tmp_path):\n"
+                      "    trace = tmp_path / 'trace.jsonl'\n"
+                      + "    trace.write_text(" + repr(json.dumps(row) + "\n") + ")\n"
+                      "    return {'config': {'trace': str(trace)}}\n\n"
+                      "def test_invented_refusal(compact_case):\n    assert False, 'invented refusal'\n")
+    result = subprocess.run([sys.executable, "-m", "pytest", str(module), "-q", "--tb=short",
+                             "-p", "tests.conftest", "-p", "no:cacheprovider"],
+                            cwd=Path(__file__).resolve().parents[1], capture_output=True, text=True, timeout=15)
+    assert result.returncode == 1 and "1 failed" in result.stdout
+    assert "Last check windows" in result.stdout
+    assert json.dumps({key: value for key, value in check_window().items() if key != "kind"}, sort_keys=True) in result.stdout
+    assert not any(value in result.stdout + result.stderr for value in ("private-config", "private-text", "private-token"))
 
 
 class FakeTimer:
