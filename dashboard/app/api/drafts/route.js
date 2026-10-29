@@ -1,3 +1,4 @@
+import { prepareGistTemperatureMedia } from "../../../lib/gist-temperature-media.js"
 import { acceptLocalCommand, localCommandRequest, localDraftProjection, previewConfigured, previewError } from "../../../lib/draft-command-client.js"
 import { dashboardEditorialPolicy } from "../../../lib/editorial-policy.js"
 import { dashboardAutomaticPolicy } from "../../../lib/publication-control.js"
@@ -11,6 +12,9 @@ import {
   draftIdentity,
   hasUnresolvedPublish,
   invalidateText,
+  invalidateMediaAttachment,
+  recordJointMediaReview,
+  fingerprint,
   projectDraft,
   recordHumanReview,
   reviewIsCurrent,
@@ -22,7 +26,7 @@ export const runtime = "nodejs"
 
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN
 const REPO = "andrewzp/theheat"
-const ACTIONS = ["approve", "reject", "edit", "review", "auto_approve", "cancel_auto_approve", "select_candidate", "bulk_reject_below"]
+const ACTIONS = ["approve", "reject", "edit", "review", "auto_approve", "cancel_auto_approve", "select_candidate", "bulk_reject_below", "attach_graphic", "remove_graphic"]
 
 function githubHeaders() {
   const headers = { Accept: "application/vnd.github.v3+json" }
@@ -111,7 +115,7 @@ export async function POST(request) {
   const authError = requireDashboardAuth(request)
   if (authError) return authError
   if (previewConfigured()) return acceptLocalCommand(request)
-  const { body, error } = await readJsonObject(request)
+  const { body, error } = await readJsonObject(request, { strict: true })
   if (error) return error
   const { action, draftId, editedText, delayMinutes, candidateRank, expectedRevision } = body
   if (!ACTIONS.includes(action)) return Response.json({ error: "Invalid action" }, { status: 400 })
@@ -156,15 +160,26 @@ export async function POST(request) {
     let minutes
     let checkedPolicySha = null
     let checkedAutomaticEpoch = null
-    const { draft: updatedDraft, state: updatedState, runtimeReport: updatedReport = null } = await updateDraftStore(draftId, (draft, state, { runtimeReport = null } = {}) => {
+    const { draft: updatedDraft, state: updatedState, runtimeReport: updatedReport = null } = await updateDraftStore(draftId, async (draft, state, { runtimeReport = null } = {}) => {
       assertExpected(draft, expectedRevision)
       assertMutable(draft, state)
       if (["review", "approve", "auto_approve"].includes(action)) assertSavedSourceTiming(draft)
       const editorialPolicy = dashboardEditorialPolicy(state, { runtimeReport })
-      if (action === "edit") {
-        invalidateText(draft, editedText)
-        draft.manual_override = true
-        draft.post_error = null
+      if (action === "attach_graphic") {
+        const descriptor = await prepareGistTemperatureMedia(request, draft, body.expectedMediaSha256)
+        invalidateMediaAttachment(draft, descriptor)
+      } else if (action === "remove_graphic") {
+        invalidateMediaAttachment(draft, null)
+      } else if (action === "edit") {
+        const previousRevision = draft.content_revision
+        try {
+          if (Object.hasOwn(body, "operator_claim_references")) invalidateText(draft, editedText, body.operator_claim_references)
+          else invalidateText(draft, editedText)
+        } catch (error) { fail(error.message, 422, "invalid_draft_edit") }
+        if (draft.content_revision !== previousRevision) {
+          draft.manual_override = true
+          draft.post_error = null
+        }
       } else if (action === "select_candidate") {
         const rank = Number(candidateRank)
         if (!Number.isInteger(rank) || rank < 1) fail("Invalid candidate rank", 400, "invalid_candidate")
@@ -188,12 +203,18 @@ export async function POST(request) {
         draft.status = "pending"
       } else if (action === "review") {
         assertPending(draft)
-        if (Object.hasOwn(draft, "media_attachment")) fail("Review the text and graphic together; text-only confirmation cannot approve attached media.", 409, "media_review_required")
+        const joint = Object.hasOwn(draft, "media_attachment")
+        if (joint) {
+          if (body.mediaReviewConfirmed !== true) fail("Review the text, image and full description together.", 409, "media_review_required")
+          const descriptor = await prepareGistTemperatureMedia(request, draft, body.expectedMediaSha256)
+          if (fingerprint(descriptor) !== fingerprint(draft.media_attachment)) fail("The attached graphic changed; preview it again.", 409, "media_changed")
+        }
         if (body.reviewConfirmed !== true) fail("Confirm that you checked this text against its source evidence.", 400, "review_confirmation_required")
         if (draft.revision_conflicts?.length) fail("Resolve the conflicting text with an edit before reviewing it.")
         if (!editorialPolicy.policy) fail(editorialPolicy.reason, 409, "editorial_policy_unverified")
         if (body.expectedPolicySha256 !== editorialPolicy.policy_sha256) fail("Editorial policy changed since your confirmation. Refresh and review again.", 409, "editorial_policy_changed")
-        recordHumanReview(draft, editorialPolicy.policy)
+        if (joint) recordJointMediaReview(draft, editorialPolicy.policy)
+        else recordHumanReview(draft, editorialPolicy.policy)
       } else if (action === "auto_approve") {
         const publication = dashboardAutomaticPolicy(state, { runtimeReport })
         if (!publication.enabled) fail(publication.reason, 409, "automatic_publication_paused")
@@ -243,7 +264,7 @@ export async function POST(request) {
 
     if (!updatedDraft) fail("Draft not found", 404, "draft_not_found")
     if (action !== "approve") {
-      const names = { edit: "edited", select_candidate: "selected_candidate", reject: "rejected", review: "reviewed", auto_approve: "auto_approved", cancel_auto_approve: "cancelled_auto_approve" }
+      const names = { edit: "edited", select_candidate: "selected_candidate", reject: "rejected", review: "reviewed", auto_approve: "auto_approved", cancel_auto_approve: "cancelled_auto_approve", attach_graphic: "graphic_attached", remove_graphic: "graphic_removed" }
       return Response.json({ ok: true, action: names[action], draft: projection(updatedDraft, updatedState, null, updatedReport), ...(autoApproveAt ? { autoApproveAt, minutes } : {}) })
     }
 

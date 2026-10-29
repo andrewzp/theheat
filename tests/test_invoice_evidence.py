@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from src.evaluation import invoice_evidence as evidence
+from src.evaluation import archive_usage, invoice_evidence as evidence
 
 FIXTURES = Path(__file__).parent / "fixtures/private_workflow"
 ITEMIZED = (FIXTURES / "billing-anthropic-itemized-invented.json").read_bytes()
@@ -116,7 +116,12 @@ def test_documents_dedupe_exact_repeats_and_quarantine_conflicts():
 
 
 def _usage(rows):
-    return {"attempts": rows, "sources": [], "denominators": {}, "calls": [], "token_totals": []}
+    # The archive_usage output shape (G9 adds identity reconciliation and the derived totals status).
+    sources, _, identity = archive_usage.reconcile_identities([])
+    unknown = archive_usage.token_totals_unknown_reasons(sources, rows)
+    return {"attempts": rows, "sources": sources, "identity_reconciliation": identity, "denominators": {},
+            "calls": [], "token_totals": [], "token_totals_unknown_reasons": unknown,
+            "token_totals_status": "incomplete" if unknown else "complete_for_retained_rows"}
 
 
 def _row(call, ids, *, at="2026-10-23T12:00:00.000Z", provider="anthropic", conflict=False, scope="scope-x"):

@@ -15,6 +15,8 @@ def run_gpm_imerg(
     print("[alerts] Checking GPM IMERG precipitation...")
     started = time.perf_counter()
     source_promoted = 0
+    # Observation only: the bounded trace rides the existing telemetry details.
+    trace = gpm_imerg.RainfallOpportunityTrace(run_id=(current_run or {}).get("id"))
     try:
         max_cities_raw = os.environ.get("GPM_IMERG_MAX_CITIES")
         max_cities = (
@@ -37,6 +39,7 @@ def run_gpm_imerg(
             cities=cities,
             max_cities=max_cities,
             max_workers=max_workers,
+            trace=trace,
         )
         events = gpm_imerg.detect_precip_records(readings, cast(dict, bot_state))
         for event in events:
@@ -100,6 +103,7 @@ def run_gpm_imerg(
             promoted=source_promoted,
             drafted=0,
             note=served,
+            details=_trace_details(trace),
         )
     except SourceSkipped as exc:
         print(f"[alerts] GPM IMERG skipped: {exc}")
@@ -110,6 +114,7 @@ def run_gpm_imerg(
             started,
             status="skipped",
             note=str(exc),
+            details=_trace_details(trace),
         )
     except Exception as exc:
         print(f"[alerts] GPM IMERG error: {exc}")
@@ -121,5 +126,15 @@ def run_gpm_imerg(
             started,
             status="failed",
             error=str(exc),
+            details=_trace_details(trace),
         )
     return
+
+
+def _trace_details(trace) -> dict:
+    """The trace export, or an explicit capture failure; never a fabricated trace."""
+    try:
+        return {"rainfall_opportunity": trace.export()}
+    except Exception:  # noqa: BLE001 - telemetry capture must not change the run
+        return {"rainfall_opportunity": {"schema": gpm_imerg.TRACE_SCHEMA, "trace_status": "incomplete",
+                                         "incomplete_reasons": ["export_failed"]}}

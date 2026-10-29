@@ -163,8 +163,8 @@ def test_complete_synthetic_private_workflow(journey):
     assert summary["status"] == "completed" and summary["promotion"] == "HOLD" and loaded == []
     report = json.loads((out / "diagnosis.json").read_bytes())
     statuses = {c["component"]: c["status"] for c in report["components"] if c["component"] != "archive"}
-    assert statuses == {"reconciliation": "verified", "copy_review": "verified", "copy_ratings": "verified",
-                        "retained_state": "verified"}
+    assert statuses == {"capture_identity": "verified", "reconciliation": "verified", "copy_review": "verified",
+                        "copy_ratings": "verified", "retained_state": "verified"}
     overview = report["overview"]
     assert overview["source"]["archives"] == 9 and overview["source"]["distinct_bundles"] == 2
     assert overview["checks"]["accepted"] == 3 and overview["checks"]["rejected"] == 4
@@ -236,8 +236,12 @@ def test_tampered_and_partial_inputs_hold_instead_of_reporting_clean(journey):
     archive_statuses = sorted(c["status"] for c in report["components"] if c["component"] == "archive")
     assert archive_statuses == ["complete", "incomplete", "invalid"]
     held = {c["component"]: c["status"] for c in report["components"] if c["component"] != "archive"}
-    assert held == {"reconciliation": "lineage_mismatch", "copy_review": "invalid", "retained_state": "absent"}
-    assert report["overview"]["spend"] == {"status": "absent"} and report["overview"]["preference"] == {"status": "absent"}
+    # The ratings bound to the edited pack are held with it, never shown as zero ratings.
+    assert held == {"capture_identity": "verified", "reconciliation": "lineage_mismatch", "copy_review": "invalid",
+                    "copy_ratings": "held", "retained_state": "absent"}
+    # Supplied but held components are labeled held, never absent and never zero (G9: was "absent").
+    assert report["overview"]["spend"] == {"status": "held", "component_status": "lineage_mismatch"}
+    assert report["overview"]["preference"] == {"status": "held", "component_status": "invalid"}
     assert report["overview"]["publication"] == {"status": "absent"}
     invalid_scope = next(c["scope_id"] for c in report["components"] if c.get("status") == "invalid"
                          and c["component"] == "archive")

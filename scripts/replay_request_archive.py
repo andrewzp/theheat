@@ -69,7 +69,9 @@ def main(argv: list[str] | None = None) -> int:
             _emit(replay.summary(archive))
         elif args.command == "lineage":
             _emit({"read_api_version": replay.READ_API_VERSION, "status": archive.status,
-                   "generations": replay.lineage(archive), "authority": "mechanical_evidence_only"})
+                   "generations": replay.lineage(archive), "authority": "mechanical_evidence_only",
+                   # Route families exist only in explicit v2 scopes; v1 output is unchanged.
+                   **({"routes": replay.route_lineage(archive)} if archive.schema == replay.SCHEMA_V2 else {})})
         else:
             outcome = replay.export_call(archive, args.call, args.output)
             _emit({"status": archive.status, "export": outcome, "call": args.call,

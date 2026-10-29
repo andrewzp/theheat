@@ -13,7 +13,7 @@ completeness of a historical run, billing, or that a call was charged.
 from __future__ import annotations
 
 import base64
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 import json
 import os
@@ -22,9 +22,10 @@ import re
 from typing import Any
 
 from src.two_bot.request_archive import (
-    ARTIFACTS, GENESIS, MANIFEST, MAX_RECORD_BYTES, MAX_SCOPE_CONTENT_BYTES, SCHEMA,
-    RequestArchiveRefused, canonical_json, read_private_file, require_private_directory,
-    sha256_hex, strict_json_loads, write_private_file_exclusive,
+    ARTIFACTS, GENESIS, MANIFEST, MAX_RECORD_BYTES, MAX_SCOPE_CONTENT_BYTES, PROVIDER_HOSTS, ROUTE_EVIDENCE_GAPS,
+    ROUTE_OUTCOMES, ROUTE_REASONS, ROUTES, SCHEMA, SCHEMA_V2, RequestArchiveRefused, _custom_ids, _route_binding,
+    _route_ids, canonical_json, jsonl_final_line_unparseable, read_private_file, require_private_directory, sha256_hex,
+    strict_json_loads, write_private_file_exclusive,
 )
 
 READ_API_VERSION = 1
@@ -36,6 +37,9 @@ _TEMPORARY = re.compile(r"\A\.tmp-[0-9a-f]{24}\Z")
 _KNOWN = frozenset({"scope_opened", "scope_closed", "scope_held", "generation_input", "candidate",
                     "revision_requested", "stage_outcome", "call_intent", "wire_request", "wire_response",
                     "call_result", "call_refused", "foreign_call_refused", "code_drift_observed", "terminal"})
+_ROUTE_KINDS = frozenset({"route_intent", "route_bound", "route_wire_request", "route_response", "route_result"})
+# One schema per manifest. v1 is verified exactly as before; v2 adds only route records.
+_SCHEMAS = {SCHEMA: _KNOWN, SCHEMA_V2: _KNOWN | _ROUTE_KINDS}
 
 
 class ArchiveInvalid(ValueError):
@@ -83,6 +87,35 @@ class CallRecord:
 
 
 @dataclass(frozen=True)
+class RouteRecord:
+    """One closed-family route operation exactly as retained (schema v2)."""
+    number: int
+    family: str
+    provider: str
+    method: str
+    expected_path: str
+    binding: dict
+    logical_request: Body
+    sent: bool
+    request: Body
+    request_observed: dict
+    status: int | None
+    response: Body
+    response_headers: dict
+    complete: bool | None
+    reason: str | None
+    response_observed: dict
+    result: dict | None
+    intent_seq: int
+    # Derived by the reader from the retained observations, never from a flag.
+    evidence_gap: str | None = None
+
+    @property
+    def outcome(self) -> str:
+        return "open_without_result" if self.result is None else str(self.result.get("outcome"))
+
+
+@dataclass(frozen=True)
 class VerifiedArchive:
     api_version: int
     directory: Path
@@ -102,6 +135,8 @@ class VerifiedArchive:
     refusals: tuple[dict, ...]
     drift: tuple[dict, ...]
     artifact_sizes: dict
+    schema: str = SCHEMA
+    routes: tuple[RouteRecord, ...] = ()
 
     def artifact(self, digest: str | None) -> bytes:
         """Return exact verified artifact bytes for a referenced digest."""
@@ -188,10 +223,11 @@ def load_archive(path: str | os.PathLike) -> VerifiedArchive:
     records: list[dict] = []
     sizes: dict[str, int | None] = {}
     try:
-        _verify_records(lines, records, sizes)
+        schema = _verify_records(lines, records, sizes)
         state = _assemble(records, sizes, problems)
         _verify_artifacts(artifacts_dir, sizes, state, problems)
         _verify_bindings(records, artifacts_dir)
+        state["routes"] = _verify_routes(state["routes"], artifacts_dir, problems)
     except ArchiveInvalid as exc:
         return _invalid(directory, str(exc), manifest_sha)
     status = "complete" if not problems else "incomplete"
@@ -199,7 +235,8 @@ def load_archive(path: str | os.PathLike) -> VerifiedArchive:
                            manifest_sha, tuple(records), state["opened"], state["closed"], state["held"],
                            tuple(state["calls"]), tuple(state["inputs"]), tuple(state["candidates"]),
                            tuple(state["outcomes"]), tuple(state["terminals"]), tuple(state["refusals"]),
-                           tuple(state["drift"]), {k: v for k, v in sizes.items() if v is not None})
+                           tuple(state["drift"]), {k: v for k, v in sizes.items() if v is not None},
+                           schema, tuple(state["routes"]))
 
 
 def _invalid(directory: Path, code: str, manifest_sha: str = "") -> VerifiedArchive:
@@ -207,8 +244,9 @@ def _invalid(directory: Path, code: str, manifest_sha: str = "") -> VerifiedArch
                            None, (), (), (), (), (), (), (), {})
 
 
-def _verify_records(lines: list[bytes], records: list[dict], sizes: dict) -> None:
+def _verify_records(lines: list[bytes], records: list[dict], sizes: dict) -> str:
     previous = GENESIS
+    schema = SCHEMA
     for index, line in enumerate(lines, start=1):
         if len(line) + 1 > MAX_RECORD_BYTES:
             raise ArchiveInvalid(f"record_over_limit:{index}")
@@ -222,30 +260,42 @@ def _verify_records(lines: list[bytes], records: list[dict], sizes: dict) -> Non
             raise ArchiveInvalid(f"record_unparseable:{index}") from None
         if type(record) is not dict or set(record) != {"schema", "seq", "prev", "type", "at", "data"}:
             raise ArchiveInvalid(f"record_shape:{index}")
-        if record["schema"] != SCHEMA:
+        if index == 1 and record["schema"] in _SCHEMAS:
+            schema = record["schema"]
+        if record["schema"] != schema:
             raise ArchiveInvalid(f"record_schema:{index}")
         if record["seq"] != index or type(record["seq"]) is not int:
             raise ArchiveInvalid(f"record_sequence:{index}")
         if record["prev"] != previous:
             raise ArchiveInvalid(f"record_chain:{index}")
-        if record["type"] not in _KNOWN or type(record["data"]) is not dict or not _is_aware(record["at"]):
+        if record["type"] not in _SCHEMAS[schema] or type(record["data"]) is not dict or not _is_aware(record["at"]):
             raise ArchiveInvalid(f"record_type:{index}")
         previous = sha256_hex(line)
         records.append(record)
+    return schema
 
 
 def _assemble(records: list[dict], sizes: dict, problems: list[str]) -> dict:
     state: dict[str, Any] = {"scope_id": None, "opened": None, "closed": None, "held": None, "calls": [],
                              "inputs": [], "candidates": [], "outcomes": [], "terminals": [],
-                             "refusals": [], "drift": []}
+                             "refusals": [], "drift": [], "routes": []}
     if not records or records[0]["type"] != "scope_opened":
         raise ArchiveInvalid("scope_opened_missing")
     calls: dict[int, dict] = {}
+    routes: dict[int, dict] = {}
     open_call: int | None = None
+    open_route: int | None = None
     for record in records:
         seq, kind, data = record["seq"], record["type"], record["data"]
         if state["closed"] is not None:
             raise ArchiveInvalid(f"record_after_close:{seq}")
+        if kind in _ROUTE_KINDS:
+            if open_call is not None:
+                raise ArchiveInvalid(f"route_during_call:{seq}")
+            open_route = _route_record(kind, data, seq, routes, open_route, sizes, problems)
+            continue
+        if kind == "call_intent" and open_route is not None:
+            raise ArchiveInvalid(f"call_during_route:{seq}")
         if kind == "scope_opened":
             if seq != 1 or type(data.get("scope_id")) is not str:
                 raise ArchiveInvalid(f"scope_opened_shape:{seq}")
@@ -334,6 +384,12 @@ def _assemble(records: list[dict], sizes: dict, problems: list[str]) -> dict:
             problems.append(f"call_without_result:{number}")
         elif call["result"].get("archival") != "complete":
             problems.append(f"call_archival_incomplete:{number}")
+    for number, route in sorted(routes.items()):
+        state["routes"].append(_route_view(number, route))
+        if route["result"] is None:
+            problems.append(f"route_without_result:{number}")
+        elif route["result"].get("archival") != "complete":
+            problems.append(f"route_archival_incomplete:{number}")
     if state["closed"] is None:
         problems.append("scope_not_sealed")
     else:
@@ -341,10 +397,326 @@ def _assemble(records: list[dict], sizes: dict, problems: list[str]) -> dict:
         attempts_total = sum(len(call.attempts) for call in state["calls"])
         if closed.get("calls") != len(state["calls"]) or closed.get("wire_attempts") != attempts_total:
             raise ArchiveInvalid("scope_closed_counts")
+        if routes or "routes" in closed:
+            if (closed.get("routes") != len(routes)
+                    or closed.get("route_wire_attempts") != sum(1 for r in routes.values() if r["wire"])):
+                raise ArchiveInvalid("scope_closed_route_counts")
     state["held"] = state["held"] or (state["closed"] or {}).get("held")
     if state["held"] is not None:
         problems.append(f"scope_held:{state['held']}")
     return state
+
+
+def _route_body(value: Any, sizes: dict, problems: list[str], seq: int, *, allowed: set) -> Body:
+    if type(value) is not dict or value.get("availability") not in allowed:
+        raise ArchiveInvalid(f"route_body:{seq}")
+    if value["availability"] == "captured":
+        return _body(value, sizes, problems, seq)
+    if value["availability"] == "not_retained_over_limit":
+        if (set(value) != {"availability", "bytes", "sha256"} or not _int(value["bytes"])
+                or type(value["sha256"]) is not str or not _HEX64.fullmatch(value["sha256"])):
+            raise ArchiveInvalid(f"route_body:{seq}")
+        return Body("not_retained_over_limit", None, value["bytes"])
+    if value["availability"] == "no_entity" and value != {"availability": "no_entity", "bytes": 0}:
+        raise ArchiveInvalid(f"route_body:{seq}")
+    if value["availability"] == "not_observed" and value != {"availability": "not_observed"}:
+        raise ArchiveInvalid(f"route_body:{seq}")
+    return Body(value["availability"], None, 0 if value["availability"] == "no_entity" else None)
+
+
+def _route_record(kind: str, data: dict, seq: int, routes: dict, open_route: int | None, sizes: dict,
+                  problems: list[str]) -> int | None:
+    """Strict sequence and shape of one closed-family route; returns the open route."""
+    if kind == "route_intent":
+        number = data.get("route")
+        family = data.get("family")
+        if open_route is not None or number != len(routes) + 1 or family not in ROUTES:
+            raise ArchiveInvalid(f"route_sequence:{seq}")
+        provider, method, pattern, _ = ROUTES[family]
+        binding = _route_binding(data.get("binding"))
+        if (set(data) != {"route", "family", "provider", "method", "expected_path", "binding", "logical_request",
+                          "recorded_before_execution"} or data["provider"] != provider or data["method"] != method
+                or type(data["expected_path"]) is not str or not pattern.fullmatch(data["expected_path"])
+                or binding is None or binding != data["binding"] or data["recorded_before_execution"] is not True):
+            raise ArchiveInvalid(f"route_intent_shape:{seq}")
+        logical = data["logical_request"]
+        if logical == {"availability": "unavailable", "reason": "not_applicable"} and method == "GET":
+            body = Body("unavailable", None, None, None, "not_applicable")
+        else:
+            body = _body(logical, sizes, problems, seq)
+        routes[number] = {"intent": data, "seq": seq, "binding": dict(binding), "logical": body,
+                          "wire": None, "response": None, "result": None}
+        return number
+    number = data.get("route")
+    if open_route is None or number != open_route:
+        raise ArchiveInvalid(f"route_reference:{seq}")
+    route = routes[number]
+    family = route["intent"]["family"]
+    provider, method, _, form = ROUTES[family]
+    if kind == "route_bound":
+        binding = _route_binding(data.get("binding"))
+        if (set(data) != {"route", "binding"} or not binding or binding != data["binding"] or route["wire"] is not None
+                or route["result"] is not None or set(binding) & set(route["binding"])):
+            raise ArchiveInvalid(f"route_bound_shape:{seq}")
+        route["binding"].update(binding)
+    elif kind == "route_wire_request":
+        if (route["wire"] is not None or set(data) != {"route", "attempt", "method", "scheme", "host", "path",
+                                                       "query_present", "content_type", "body", "observed",
+                                                       "recorded_before_send"}
+                or data["attempt"] != 1 or data["recorded_before_send"] is not True or data["method"] != method
+                or data["scheme"] != "https" or data["host"] != PROVIDER_HOSTS[provider]
+                or data["path"] != route["intent"]["expected_path"] or data["query_present"] is not False
+                or type(data["observed"]) is not dict):
+            raise ArchiveInvalid(f"route_wire_shape:{seq}")
+        body = _route_body(data["body"], sizes, problems, seq,
+                           allowed={"captured"} if method == "POST" else {"no_entity"})
+        if method == "POST" and data["body"].get("form") != "exact_request_entity":
+            raise ArchiveInvalid(f"route_wire_shape:{seq}")
+        if (family == "batch_submit") != ("custom_ids" in data["observed"]):
+            raise ArchiveInvalid(f"route_wire_shape:{seq}")
+        route["wire"] = {"data": data, "body": body}
+    elif kind == "route_response":
+        if (route["wire"] is None or route["response"] is not None
+                or set(data) != {"route", "attempt", "status", "headers", "complete", "reason", "observed", "body"}
+                or data["attempt"] != 1 or not (data["status"] is None or type(data["status"]) is int)
+                or type(data["complete"]) is not bool or data["reason"] not in ROUTE_REASONS
+                or type(data["headers"]) is not dict or type(data["observed"]) is not dict):
+            raise ArchiveInvalid(f"route_response_shape:{seq}")
+        body = _route_body(data["body"], sizes, problems, seq,
+                           allowed={"captured", "not_observed", "not_retained_over_limit"})
+        expected_form = form + ("" if data["complete"] else "_bounded_prefix")
+        if ((body.availability == "captured" and data["body"].get("form") != expected_form)
+                or (body.availability == "not_observed" and (data["complete"] or data["observed"]))):
+            raise ArchiveInvalid(f"route_response_shape:{seq}")
+        route["response"] = {"data": data, "body": body}
+    else:
+        sent = route["wire"] is not None
+        entity = route["response"]["body"].availability if route["response"] else None
+        expected = ("not_sent" if not sent else "response_observed"
+                    if entity in ("captured", "not_retained_over_limit") else "unknown")
+        # ``evidence_gap`` is absent from archives written before it existed; they are read, never rewritten.
+        if (set(data) - {"evidence_gap"} != {"route", "family", "outcome", "wire_attempts", "responses",
+                                             "physical_send_observed", "refusal", "disposition", "billing",
+                                             "provider_outcome", "archival"}
+                or not (data.get("evidence_gap") is None or data["evidence_gap"] in ROUTE_EVIDENCE_GAPS)
+                or data["family"] != family or data["outcome"] not in ROUTE_OUTCOMES
+                or data["wire_attempts"] != (1 if sent else 0) or data["responses"] != (1 if route["response"] else 0)
+                or data["physical_send_observed"] is not sent or data["billing"] != "unknown"
+                or data["provider_outcome"] != expected or data["archival"] not in ("complete", "incomplete")
+                or type(data["disposition"]) is not dict or (sent and data["refusal"] is not None)):
+            raise ArchiveInvalid(f"route_result_shape:{seq}")
+        route["result"] = data
+        return None
+    return open_route
+
+
+def _route_view(number: int, route: dict) -> RouteRecord:
+    intent, wire, response = route["intent"], route["wire"], route["response"]
+    return RouteRecord(
+        number, intent["family"], intent["provider"], intent["method"], intent["expected_path"],
+        dict(route["binding"]), route["logical"], wire is not None,
+        wire["body"] if wire else Body("not_sent"), dict(wire["data"]["observed"]) if wire else {},
+        response["data"]["status"] if response else None, response["body"] if response else Body("not_observed"),
+        dict(response["data"]["headers"]) if response else {},
+        response["data"]["complete"] if response else None, response["data"]["reason"] if response else None,
+        dict(response["data"]["observed"]) if response else {}, route["result"], route["seq"])
+
+
+def _verify_routes(routes: list[RouteRecord], directory: Path, problems: list[str]) -> list[RouteRecord]:
+    """Recompute every observed identity and evidence gap from the retained bytes themselves.
+
+    Hash integrity (``invalid``) and evidence completeness (``incomplete``) stay
+    separate: a hash-consistent archive whose recorded flags claim more than its
+    observations show is incomplete, whatever its ``route_result`` or seal says.
+    """
+    verified = []
+    for route in routes:
+        if route.request.availability == "captured" and route.request.artifact is not None:
+            try:
+                raw = read_private_file(directory / route.request.artifact, MAX_ARTIFACT_BYTES)
+            except (OSError, RequestArchiveRefused):
+                raise ArchiveInvalid("artifact_changed_during_validation") from None
+            if route.family == "batch_submit" and route.request_observed.get("custom_ids") != _custom_ids(raw):
+                raise ArchiveInvalid(f"route_custom_ids:{route.number}")
+        if route.response.availability == "captured" and route.response.artifact is not None:
+            try:
+                raw = read_private_file(directory / route.response.artifact, MAX_ARTIFACT_BYTES)
+            except (OSError, RequestArchiveRefused):
+                raise ArchiveInvalid("artifact_changed_during_validation") from None
+            if route.response_observed != _route_ids(route.family, route.response_headers, raw, bool(route.complete)):
+                raise ArchiveInvalid(f"route_response_ids:{route.number}")
+        gap = _evidence_gap(route, directory)
+        result = route.result or {}
+        if gap is not None:
+            problems.append(f"route_evidence_incomplete:{route.number}:{gap}")
+        if route.result is not None and ((gap is not None and result.get("archival") == "complete")
+                                         or ("evidence_gap" in result and result["evidence_gap"] != gap)):
+            problems.append(f"route_archival_flag_contradicted:{route.number}")
+        verified.append(replace(route, evidence_gap=gap))
+    return verified
+
+
+def _evidence_gap(route: RouteRecord, directory: Path) -> str | None:
+    """Why a sent route's retained entity is not complete evidence; None when it is.
+
+    A fully retained provider rejection (any status) is complete evidence.
+    """
+    if not route.sent:
+        return None
+    if route.complete is None:
+        return "entity_not_recorded"
+    if route.response.availability == "not_observed":
+        return "entity_not_observed"
+    if route.response.availability != "captured" or route.response.artifact is None:
+        return "entity_not_retained"
+    if not route.complete:
+        return "entity_bounded_prefix"
+    if route.family == "batch_results":
+        try:
+            raw = read_private_file(directory / route.response.artifact, MAX_ARTIFACT_BYTES)
+        except (OSError, RequestArchiveRefused):
+            raise ArchiveInvalid("artifact_changed_during_validation") from None
+        if jsonl_final_line_unparseable(raw):
+            return "results_final_line_unparseable"
+    return None
+
+
+# ------------------------------------------------------------ route lineage
+
+_RESULT_TYPES = frozenset({"succeeded", "errored", "canceled", "expired"})
+
+
+def _results_lines(raw: bytes, complete: bool) -> dict:
+    """Per-line JSONL dispositions; a cut final line never becomes a result."""
+    lines = raw.split(b"\n")
+    tail = lines.pop()
+    # A complete entity may end its final record without a newline; only an
+    # unterminated tail of an INCOMPLETE entity is a cut line.
+    cut = bool(tail) and not complete
+    if tail and complete:
+        lines.append(tail)
+    rows, observed_ids, invalid = [], [], 0
+    for line in lines:
+        try:
+            value = strict_json_loads(line, allow_floats=True)
+            custom = value.get("custom_id") if isinstance(value, dict) else None
+            # Identity is an observation even when the provider classification is malformed.
+            if type(custom) is str:
+                observed_ids.append(custom)
+            result = value.get("result") if isinstance(value, dict) else None
+            kind = result.get("type") if type(result) is dict else None
+            message = result.get("message") if type(result) is dict else None
+            if (type(custom) is not str or type(kind) is not str or kind not in _RESULT_TYPES
+                    or (kind == "succeeded" and type(message) is not dict)):
+                raise ValueError("result_shape")
+            rows.append({"custom_id": custom, "type": kind})
+        except (ValueError, UnicodeError, AttributeError):
+            invalid += 1
+    counts: dict[str, int] = {}
+    for custom in observed_ids:
+        counts[custom] = counts.get(custom, 0) + 1
+    return {"rows": rows, "observed_custom_ids": observed_ids, "invalid_lines": invalid, "final_line_cut": cut,
+            "duplicate_custom_ids": sorted(k for k, v in counts.items() if v > 1),
+            "status": ("invalid" if invalid else "partial" if cut or not complete else
+                       "empty" if not raw else "complete")}
+
+
+def route_lineage(archive: VerifiedArchive) -> dict:
+    """Submission → provider batch → metadata/results → custom IDs, as observed.
+
+    A link is ``observed_in_scope`` only when this archive retained both ends;
+    a durable authority status reference stays labeled as such, and anything
+    absent or changed is ``unverified``. Nothing is fetched or repaired.
+    """
+    submissions: dict[str, list[dict]] = {}
+    rows: list[dict] = []
+    for route in archive.routes:
+        result = route.result or {}
+        row: dict[str, Any] = {"route": route.number, "family": route.family, "outcome": route.outcome,
+                               "archival": result.get("archival"), "physical_send_observed": route.sent,
+                               "http_status": route.status, "entity": route.response.availability,
+                               "entity_complete": route.complete, "reason": route.reason,
+                               "evidence_gap": route.evidence_gap,
+                               "binding": {k: v for k, v in route.binding.items()}, "billing": "unknown"}
+        if route.family == "batch_submit":
+            batch = route.response_observed.get("provider_batch_id")
+            row.update(provider_batch_id=batch,
+                       custom_ids=(route.request_observed.get("custom_ids") or {}).get("values"),
+                       acknowledgment=("observed" if batch else "absent_or_invalid") if route.sent else "not_sent",
+                       completion_evidence="none", billable_usage_evidence="none")
+            if batch:
+                submissions.setdefault(batch, []).append(row)
+        elif route.family == "command_check":
+            # One generateContent check; no batch predecessor exists for it.
+            row.update({key: (route.binding.get(key) or {}).get("value") for key in ("check_set_id", "stage", "model")})
+            row["response_id"] = route.response_observed.get("response_body_responseId")
+        else:
+            path_batch = route.expected_path.split("/")[4]
+            bound = route.binding.get("provider_batch_id") or {}
+            predecessors = submissions.get(path_batch, [])
+            row["provider_batch_id"] = path_batch
+            row["predecessor"] = ("observed_in_scope" if len(predecessors) == 1 else
+                                  "conflicting_in_scope" if len(predecessors) > 1 else
+                                  "durable_status_reference" if bound.get("value") == path_batch
+                                  and bound.get("source") == "batch_results_status" else "unverified")
+            if route.family == "batch_metadata":
+                row.update(_returned_identity(archive, route, path_batch))
+            if route.family == "batch_results":
+                if route.response.availability != "captured" or route.response.artifact is None:
+                    row["results"] = {"status": "not_sent" if not route.sent else route.response.availability}
+                else:
+                    parsed = _results_lines(archive.artifact(route.response.artifact), bool(route.complete))
+                    known = set(predecessors[0]["custom_ids"] or []) if len(predecessors) == 1 else None
+                    ids = parsed["observed_custom_ids"]
+                    row["results"] = {
+                        "status": parsed["status"], "lines": len(parsed["rows"]),
+                        "invalid_lines": parsed["invalid_lines"], "final_line_cut": parsed["final_line_cut"],
+                        "observed_custom_ids": ids,
+                        "types": {kind: sum(1 for item in parsed["rows"] if item["type"] == kind)
+                                  for kind in sorted(_RESULT_TYPES)},
+                        "duplicate_custom_ids": parsed["duplicate_custom_ids"],
+                        "unknown_custom_ids": (sorted(set(ids) - known) if known is not None else None),
+                        "custom_id_join": ("observed_in_scope" if known is not None else "unverified"),
+                        "candidate_approval": "none"}
+        rows.append(row)
+    reused = sorted(batch for batch, items in submissions.items() if len(items) > 1)
+    metadata_ended = {r["provider_batch_id"] for r in rows if r["family"] == "batch_metadata"
+                      and r.get("processing_status") == "ended"}
+    fetched = {r["provider_batch_id"] for r in rows if r["family"] == "batch_results"}
+    for row in rows:
+        if row["family"] == "batch_metadata":
+            # A body naming another batch (or none) never certifies the requested one.
+            row["results_disposition"] = (
+                "unresolved" if row["batch_identity"] in ("missing", "invalid", "mismatched") else
+                "results_fetched" if row["provider_batch_id"] in fetched else
+                                          "absent" if row["provider_batch_id"] in metadata_ended else
+                                          "no_results_needed" if row.get("processing_status") else "unknown")
+    return {"read_api_version": READ_API_VERSION, "schema": archive.schema, "status": archive.status,
+            "routes": rows, "reused_provider_batch_ids": reused, "authority": "mechanical_evidence_only"}
+
+def _returned_identity(archive: VerifiedArchive, route: RouteRecord, requested: str) -> dict:
+    """Requested (canonical path) vs returned (complete body) batch ID, both kept as observed.
+
+    The status is attributed to the requested batch only when the complete
+    retained body names exactly that batch.
+    """
+    returned = route.response_observed.get("provider_batch_id")
+    status = route.response_observed.get("processing_status")
+    if not route.sent:
+        identity = "not_sent"
+    elif route.response.availability != "captured" or route.response.artifact is None or not route.complete:
+        identity = "unverified"
+    elif returned is not None:
+        identity = "matching" if returned == requested else "mismatched"
+    else:
+        raw = archive.artifact(route.response.artifact)  # a changed artifact still raises
+        try:
+            body = strict_json_loads(raw, allow_floats=True)
+        except (ValueError, UnicodeError):
+            body = None
+        identity = "invalid" if isinstance(body, dict) and "id" in body else "missing"
+    return {"requested_batch_id": requested, "returned_batch_id": returned, "batch_identity": identity,
+            "returned_processing_status": status, "processing_status": status if identity == "matching" else None}
 
 
 def _verify_bindings(records: list[dict], directory: Path) -> None:
@@ -541,7 +913,14 @@ def summary(archive: VerifiedArchive) -> dict:
                            "kill_stage": t.get("kill_stage")} for t in archive.terminals],
             "refusals": [{"type": r["type"], "reason": r.get("reason")} for r in archive.refusals],
             "code_drift": [d.get("path") for d in archive.drift],
-            "authority": "mechanical_evidence_only"}
+            "authority": "mechanical_evidence_only",
+            **({"schema": archive.schema,
+                "routes": [{"route": r.number, "family": r.family, "outcome": r.outcome,
+                            "archival": (r.result or {}).get("archival"), "physical_send_observed": r.sent,
+                            "provider_outcome": (r.result or {}).get("provider_outcome"),
+                            "entity": r.response.availability, "entity_complete": r.complete,
+                            "evidence_gap": r.evidence_gap, "billing": "unknown"} for r in archive.routes]}
+               if archive.schema == SCHEMA_V2 else {})}
 
 
 def lineage(archive: VerifiedArchive) -> list[dict]:

@@ -13,6 +13,7 @@ import time
 import httpx
 
 from src.commands.check_execution_journal import MAX_RESPONSE_BYTES
+from src.two_bot import request_archive
 
 SOCKET_TIMEOUT_SECONDS = 15
 READ_BUDGET_SECONDS = 90
@@ -80,6 +81,10 @@ class _CaptureClient(httpx.Client):
                 except Exception:
                     complete, reason = False, "cleanup_failed"
             self.observation = CheckObservation(bytes(data), status, complete, reason)
+            # Observation only, after cleanup: exactly the bounded raw bytes kept above.
+            request_archive.observe_route_response(
+                "command_check", status=status, headers=response.headers if response is not None else None,
+                data=bytes(data) if response is not None else None, complete=complete, reason=reason)
         if not complete:
             raise ValueError("incomplete_check_response")
         return httpx.Response(
@@ -109,6 +114,10 @@ class GoogleCheckTransport:
         self._http = _CaptureClient(model, transport=http_transport)
         self._used = False
         try:
+            # An explicit private capture scope only adds its request-only witness.
+            scope = request_archive.route_scope()
+            if scope is not None:
+                scope.observe_client(self._http)
             self._client = genai.Client(
                 vertexai=False,
                 api_key=api_key,

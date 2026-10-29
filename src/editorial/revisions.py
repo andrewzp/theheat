@@ -264,14 +264,21 @@ def _valid_delegation(value) -> bool:
 
 def review_is_current(draft: dict, *, policy=_CURRENT_POLICY) -> bool:
     # Text-only reviews cannot authorize an image or silently drop it at send.
-    if "media_attachment" in draft:
-        return False
+    media = "media_attachment" in draft
     binding = draft.get("review_binding")
+    if media:
+        try:
+            from src.media.gist_temperature_media import validate_descriptor
+            validate_descriptor(draft["media_attachment"], _two_bot(draft)["bundle"])
+            if not isinstance(binding, dict) or binding.get("kind") != "human_media" or binding.get("media_sha256") != fingerprint(draft["media_attachment"]):
+                return False
+        except (ValueError, KeyError, TypeError, UnicodeError, OSError):
+            return False
     if draft.get("revision_conflicts") or not isinstance(binding, dict) or not binding_matches(draft, binding):
         return False
     if not _policy_matches(binding, _editorial_policy(policy)):
         return False
-    if binding.get("kind") == "human":
+    if binding.get("kind") == "human" or (media and binding.get("kind") == "human_media"):
         return True
     if binding.get("kind") == "delegated":
         return _valid_delegation(binding.get("delegation"))
@@ -414,6 +421,27 @@ def record_human_review(draft: dict, *, at: str | None = None, policy=_CURRENT_P
     return draft
 
 
+def record_joint_media_review(draft: dict, *, at: str | None = None, policy=_CURRENT_POLICY) -> dict:
+    """Ordinary explicit manual joint review; never a scientific or model verdict."""
+    from src.media.gist_temperature_media import validate_descriptor
+    validate_descriptor(draft["media_attachment"], _two_bot(draft)["bundle"])
+    if draft.get("revision_conflicts"):
+        raise ValueError("Resolve the conflicting revision before reviewing")
+    text = draft.get("text")
+    if not isinstance(text, str) or not text.strip() or len(text) > 280:
+        raise ValueError("Invalid draft text")
+    text_hash(text)
+    policy = _editorial_policy(policy)
+    if policy is None:
+        raise ValueError("Editorial policy unverified")
+    draft["content_revision"] = max(1, draft_identity(draft)["content_revision"])
+    revoke_approval(draft)
+    draft["review_binding"] = {**draft_identity(draft), "kind": "human_media",
+        "reviewed_at": at if at is not None else _now(), "editorial_policy": deepcopy(policy),
+        "policy_sha256": fingerprint(policy), "media_sha256": fingerprint(draft["media_attachment"])}
+    return draft
+
+
 def record_delegated_review(draft: dict, *, authorization_sha256: str,
                             review_receipt_sha256: str, at: str | None = None,
                             policy=_CURRENT_POLICY) -> dict:
@@ -493,14 +521,42 @@ def revoke_approval(draft: dict) -> dict:
     return draft
 
 
-def invalidate_text(draft: dict, new_text: str, *, at: str | None = None) -> dict:
+_REFERENCES_OMITTED = object()
+
+
+def invalidate_text(draft: dict, new_text: str, *, at: str | None = None,
+                    operator_claim_references: Any = _REFERENCES_OMITTED) -> dict:
     if not isinstance(new_text, str) or not new_text.strip() or len(new_text) > 280:
         raise ValueError("Invalid draft text")
     text_hash(new_text)  # Reject malformed Unicode before changing durable fields.
-    if new_text == draft.get("text") and not draft.get("revision_conflicts"):
+    from src.editorial.operator_claim_references import build_operator_claim_references, operator_claim_kind_matches
+    review = draft.get("review_context")
+    if review is not None and not isinstance(review, dict):
+        raise ValueError("Invalid draft review context")
+    old_references = (review or {}).get("operator_claim_references", _REFERENCES_OMITTED)
+    if operator_claim_references is _REFERENCES_OMITTED:
+        references = old_references if new_text == draft.get("text") else _REFERENCES_OMITTED
+    else:
+        two = (review or {}).get("two_bot")
+        bundle = two.get("bundle") if isinstance(two, dict) else None
+        if operator_claim_references and (not isinstance(bundle, dict) or bundle.get("event_id") != draft.get("event_id") or not operator_claim_kind_matches(draft.get("type"), bundle.get("signal_kind"))):
+            raise ValueError("Saved source snapshot does not match this draft")
+        built = build_operator_claim_references(new_text, bundle, operator_claim_references)
+        references = built if built is not None else _REFERENCES_OMITTED
+    same_references = (references is old_references or
+                       (references is not _REFERENCES_OMITTED and old_references is not _REFERENCES_OMITTED and fingerprint(references) == fingerprint(old_references)))
+    if new_text == draft.get("text") and same_references and not draft.get("revision_conflicts"):
         return draft
     _invalidate_content(draft, at=at)
     draft["text"] = new_text
+    if references is _REFERENCES_OMITTED:
+        if isinstance(draft.get("review_context"), dict):
+            draft["review_context"].pop("operator_claim_references", None)
+    else:
+        draft.setdefault("review_context", {})
+        if draft["review_context"] is None:
+            draft["review_context"] = {}
+        draft["review_context"]["operator_claim_references"] = deepcopy(references)
     return draft
 
 
@@ -556,11 +612,14 @@ def _invalidate_content(draft: dict, *, at: str | None = None) -> dict:
 
 
 def project_draft(draft: dict, *, policy=_CURRENT_POLICY) -> dict:
+    from src.editorial.operator_claim_references import project_operator_claim_reference_history, project_operator_claim_references
     policy = _editorial_policy(policy)
     current = review_is_current(draft, policy=policy)
     return {
         **draft, "revision_identity": {**draft_identity(draft), "decision_revision": decision_revision(draft)},
-        "review_status": "conflict" if draft.get("revision_conflicts") else "media_review_required" if "media_attachment" in draft else "policy_unverified" if policy is None else "passed" if current else "needs_revalidation",
+        "operator_claim_reference_view": project_operator_claim_references(draft),
+        "operator_claim_reference_history": project_operator_claim_reference_history(draft),
+        "review_status": "conflict" if draft.get("revision_conflicts") else "media_review_required" if "media_attachment" in draft and not current else "policy_unverified" if policy is None else "passed" if current else "needs_revalidation",
         "review_kind": draft.get("review_binding", {}).get("kind") if current else None,
     }
 

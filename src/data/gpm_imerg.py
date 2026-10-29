@@ -12,10 +12,15 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, replace
 from src.data import places
 from datetime import date, datetime, timedelta, timezone
+import base64
+import functools
+import hashlib
 import io
+import json
 import math
 import os
 import re
+import threading
 from typing import Any
 
 import requests
@@ -148,6 +153,255 @@ class PrecipExtremeEvent:
     alert_threshold_mm: float | None = None
 
 
+# Actual rainfall-opportunity trace (P09a/P19). Observation only: it records what
+# the existing selection and fetch paths chose, attempted and returned, and never
+# requests data, changes selection or turns missing capture into a pass.
+TRACE_SCHEMA = "theheat.rainfall-opportunity-trace/v1"
+POPULATION_SCHEMA = "theheat.rainfall-population/v1"
+POPULATION_BASIS = "canonical_qualified_identity_keys_v1"
+MAX_TRACE_POPULATION = 4096
+MAX_TRACE_CANDIDATES = 32
+_GRID_TRACE_LEGS = {"datapool": "imerg_late_grid_datapool", "s3": "imerg_late_grid_s3"}
+_RUN_ID = re.compile(r"[A-Za-z0-9_.:-]{1,80}\Z")
+
+
+def _identity_sha256(keys: Sequence[str]) -> str:
+    return hashlib.sha256(json.dumps(list(keys), separators=(",", ":")).encode()).hexdigest()
+
+
+def opportunity_population(rows: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
+    """Canonical qualified watchlist identities that a detached trace audit binds."""
+    keys = [places.event_location_key(row["city"], row["country"], row["lat"], row["lon"])
+            for row in _qualified_watchlist(rows, canonical_order=True)]
+    return {"schema": POPULATION_SCHEMA, "basis": POPULATION_BASIS, "count": len(keys),
+            "sha256": _identity_sha256(keys), "members": keys}
+
+
+def _reading_key(reading: CityPrecipReading) -> str:
+    """Identity embedded by the fetch path itself: gpm_imerg_<key>_<date>."""
+    prefix, suffix = "gpm_imerg_", "_" + reading.date
+    if not (reading.event_id.startswith(prefix) and reading.event_id.endswith(suffix)):
+        raise ValueError("unexpected reading identity")
+    return reading.event_id[len(prefix):-len(suffix)]
+
+
+def _observed(method):
+    @functools.wraps(method)
+    def wrapper(self, *args, **kwargs):
+        try:
+            with self._lock:
+                method(self, *args, **kwargs)
+        except Exception:  # noqa: BLE001 - a capture defect must never change collection
+            self._capture_error = True
+    return wrapper
+
+
+class RainfallOpportunityTrace:
+    """Bounded record of one run's rainfall selection, attempts and readings."""
+
+    def __init__(self, *, run_id: str | None = None) -> None:
+        self._lock = threading.Lock()
+        self._capture_error = False
+        self._run_id = run_id if isinstance(run_id, str) and _RUN_ID.fullmatch(run_id) else None
+        self._doc: dict[str, Any] | None = None
+        self._keys: list[str] | None = None
+        self._legs: list[dict[str, Any]] = []
+        self._finished = False
+
+    def _leg(self, name: str, semantics: str) -> dict[str, Any]:
+        for entry in self._legs:
+            if entry["leg"] == name:
+                return entry
+        entry = {"leg": name, "population_semantics": semantics, "outcome": "not_finished"}
+        self._legs.append(entry)
+        return entry
+
+    @_observed
+    def begin(self, rows, *, today: date, product: str, max_cities, max_workers, target_date) -> None:
+        population: dict[str, Any] = {"basis": POPULATION_BASIS, "count": None, "sha256": None,
+                                      "within_trace_bound": False}
+        if rows is not None:
+            canonical = opportunity_population(rows)
+            population.update(count=canonical["count"], sha256=canonical["sha256"],
+                              within_trace_bound=canonical["count"] <= MAX_TRACE_POPULATION)
+            self._keys = canonical["members"]
+        self._doc = {
+            "selection_date_utc": today.isoformat(),
+            "requested_target_date": target_date.isoformat() if target_date is not None else None,
+            "product": product,
+            "configured": {"max_cities": max_cities if type(max_cities) is int else None,
+                           "max_workers": max_workers if type(max_workers) is int else None},
+            "population": population,
+            "primary_gate": None,
+        }
+
+    @_observed
+    def gate(self, code: str) -> None:
+        if self._doc is not None:
+            self._doc["primary_gate"] = code
+
+    @_observed
+    def grid_begin(self, source: str, *, start_date: date | None, max_lookback: int | None) -> None:
+        entry = self._leg(_GRID_TRACE_LEGS[source], "whole_population_one_download")
+        entry.update(walkback_start_date=start_date.isoformat() if start_date else None,
+                     max_lookback_days=max_lookback, candidates=[], candidates_omitted=0, downloads=0,
+                     data_date=None, inspection="not_reached")
+
+    @_observed
+    def grid_candidate(self, source: str, candidate: date, outcome: str) -> None:
+        # The scalar counts every attempt; the retained list is bounded and its
+        # omissions are counted, so a long walkback never falsifies the request count.
+        entry = self._leg(_GRID_TRACE_LEGS[source], "whole_population_one_download")
+        entry["downloads"] += 1
+        if len(entry["candidates"]) < MAX_TRACE_CANDIDATES:
+            entry["candidates"].append({"date": candidate.isoformat(), "outcome": outcome})
+        else:
+            entry["candidates_omitted"] += 1
+
+    @_observed
+    def grid_inspected(self, source: str, resolved: date, readings: Sequence[CityPrecipReading]) -> None:
+        entry = self._leg(_GRID_TRACE_LEGS[source], "whole_population_one_download")
+        entry.update(data_date=resolved.isoformat(), inspection="completed", readings=len(readings))
+        keys = self._keys
+        if keys is not None and len(keys) <= MAX_TRACE_POPULATION:
+            index = {key: position for position, key in enumerate(keys)}
+            bits = bytearray((len(keys) + 7) // 8)
+            for reading in readings:
+                position = index[_reading_key(reading)]
+                bits[position // 8] |= 1 << (position % 8)
+            entry["reading_bitmap"] = base64.b64encode(bytes(bits)).decode()
+            entry["missing_values"] = len(keys) - len(readings)
+
+    @_observed
+    def leg_result(self, leg: str, outcome: str, reason: str | None = None) -> None:
+        entry = next(item for item in self._legs if item["leg"] == leg)
+        entry["outcome"] = outcome
+        if reason is not None:
+            entry["reason"] = reason
+
+    @_observed
+    def probe(self, candidate: date, outcome: str, *, start_date: date, max_lookback: int) -> None:
+        entry = self._leg("imerg_late_opendap", "bounded_rotating_window")
+        probes = entry.setdefault("date_probes", [])
+        entry["date_probe_calls"] = entry.get("date_probe_calls", 0) + 1
+        entry.setdefault("date_probes_omitted", 0)
+        if len(probes) < MAX_TRACE_CANDIDATES:
+            probes.append({"date": candidate.isoformat(), "outcome": outcome})
+        else:
+            entry["date_probes_omitted"] += 1
+        entry.update(walkback_start_date=start_date.isoformat(), max_lookback_days=max_lookback)
+
+    @_observed
+    def window(self, leg: str, selected: Sequence[Mapping[str, Any]], *, scan_date: date, max_cities,
+               data_date: date) -> None:
+        keys = [places.event_location_key(row["city"], row["country"], row["lat"], row["lon"]) for row in selected]
+        entry = self._leg(leg, "bounded_rotating_window")
+        entry.update(scan_date=scan_date.isoformat(), max_cities=max_cities if type(max_cities) is int else None,
+                     window_size=len(keys), selection_sha256=_identity_sha256(keys), data_date=data_date.isoformat(),
+                     dispositions=["n"] * len(keys), failure_signatures={})
+
+    @_observed
+    def stale(self, leg: str, data_date: date) -> None:
+        semantics = "whole_population_one_download" if leg in _GRID_TRACE_LEGS.values() else "bounded_rotating_window"
+        entry = self._leg(leg, semantics)
+        entry.update(data_date=data_date.isoformat(), outcome="stale_data_date")
+
+    @_observed
+    def member(self, leg: str, index: int, code: str, exc: Exception | None = None) -> None:
+        entry = next(item for item in self._legs if item["leg"] == leg)
+        entry["dispositions"][index] = code
+        if exc is not None:
+            signatures = entry["failure_signatures"]
+            signature = _failure_signature(exc)
+            signature = signature if signature in signatures or len(signatures) < 8 else "other"
+            signatures[signature] = signatures.get(signature, 0) + 1
+
+    @_observed
+    def finish(self, outcome: str, readings: Sequence[CityPrecipReading] | None = None,
+               exc: BaseException | None = None) -> None:
+        if self._doc is None:
+            return
+        serving = None
+        if readings:
+            served = [item["leg"] for item in self._legs if item["outcome"] == "served"]
+            serving = "open_meteo_witness" if source_leg_of(readings) == "open_meteo" else (served[-1] if served else None)
+        self._doc.update(outcome=outcome, serving_leg=serving, readings=len(readings or ()),
+                         failure_class=type(exc).__name__ if exc is not None else None)
+        self._finished = True
+
+    def export(self) -> dict[str, Any]:
+        """A detached, bounded copy; incomplete capture is labelled, never truncated."""
+        reasons: list[str] = []
+        with self._lock:
+            doc = json.loads(json.dumps(self._doc)) if self._doc is not None else None
+            legs = json.loads(json.dumps(self._legs))
+            capture_error = self._capture_error
+            finished = self._finished
+        if doc is None:
+            return {"schema": TRACE_SCHEMA, "source_id": "gpm_imerg", "run_id": self._run_id,
+                    "trace_status": "incomplete", "incomplete_reasons": ["capture_not_started"]}
+        population = doc["population"]
+        if population["count"] is None:
+            reasons.append("population_not_captured")
+        elif not population["within_trace_bound"]:
+            reasons.append("population_exceeds_trace_bound")
+        counts = {"grid_downloads": 0, "opendap_date_probes": 0, "opendap_point_calls": 0,
+                  "witness_point_calls": 0}
+        low = high = 0
+        unmeasured: list[str] = []
+        for entry in legs:
+            if entry.get("candidates_omitted"):
+                reasons.append("grid_candidates_exceed_trace_bound")
+            if entry.get("date_probes_omitted"):
+                reasons.append("date_probes_exceed_trace_bound")
+            if "dispositions" in entry:
+                started = sum(code != "n" for code in entry["dispositions"])
+                pending = sum(code == "s" for code in entry["dispositions"])
+                entry["dispositions"] = "".join("p" if code == "s" else code for code in entry["dispositions"])
+                entry["member_calls"] = started
+                entry["in_flight_at_export"] = pending
+                if pending:
+                    reasons.append("in_flight_at_export")
+            if entry["leg"] in _GRID_TRACE_LEGS.values():
+                downloads = entry.get("downloads", 0)
+                counts["grid_downloads"] += downloads
+                if entry["leg"] == "imerg_late_grid_datapool":
+                    low += downloads
+                    high += downloads
+                elif downloads:
+                    unmeasured.append("s3_credential_and_object_requests")
+                if entry["inspection"] == "completed" and "reading_bitmap" not in entry:
+                    reasons.append("grid_membership_not_captured")
+            elif entry["leg"] == "imerg_late_opendap":
+                probes = entry.get("date_probe_calls", 0)
+                calls = entry.get("member_calls", 0)
+                counts["opendap_date_probes"] += probes
+                counts["opendap_point_calls"] += calls
+                low += probes + calls
+                high += probes + 2 * calls
+            elif entry["leg"] == "open_meteo_witness":
+                calls = entry.get("member_calls", 0)
+                counts["witness_point_calls"] += calls
+                low += calls
+                high += 6 * calls
+        if low:
+            # The HTTP client follows redirects; those requests are not counted,
+            # so ``max`` bounds the counted components only.
+            unmeasured.append("redirects_not_counted")
+        if capture_error:
+            reasons.append("capture_error")
+        if not finished:
+            reasons.append("not_finished")
+        return {
+            "schema": TRACE_SCHEMA, "source_id": "gpm_imerg", "run_id": self._run_id, **doc, "legs": legs,
+            "request_counts": {**counts, "http_requests": {"min": low, "max": high,
+                                                           "unmeasured_components": sorted(set(unmeasured))}},
+            "cost": {"amount": None, "status": "unattributed"},
+            "trace_status": "incomplete" if reasons else "complete",
+            "incomplete_reasons": sorted(set(reasons)),
+        }
+
+
 def load_cities(cities_path: str = "data/cities.csv") -> list[dict[str, str]]:
     return places.load_cities(cities_path)
 
@@ -223,6 +477,7 @@ def fetch_daily_precip(
     max_workers: int | None = DEFAULT_MAX_WORKERS,
     strict: bool = False,
     today: date | None = None,
+    trace: RainfallOpportunityTrace | None = None,
 ) -> list[CityPrecipReading]:
     """Fetch point daily precipitation for monitored cities (R-03 chained).
 
@@ -237,6 +492,11 @@ def fetch_daily_precip(
     # One sampling date for both legs even if the primary crosses midnight or
     # walks back to an older available grid. No durable cursor or extra request.
     today = today if today is not None else datetime.now(timezone.utc).date()
+    # A trace is passed on only when supplied, so untraced call shapes are unchanged.
+    observe: dict[str, Any] = {} if trace is None else {"trace": trace}
+    if trace is not None:
+        trace.begin(cities, today=today, product=product, max_cities=max_cities,
+                    max_workers=max_workers, target_date=target_date)
 
     def primary() -> list[CityPrecipReading]:
         return _fetch_daily_precip_primary(
@@ -247,19 +507,30 @@ def fetch_daily_precip(
             max_workers=max_workers,
             strict=strict,
             today=today,
+            **observe,
         )
 
     def witness() -> list[CityPrecipReading]:
-        return _fetch_precip_open_meteo(cities, max_cities=max_cities, today=today)
+        return _fetch_precip_open_meteo(cities, max_cities=max_cities, today=today, **observe)
 
     try:
-        return with_witness(
+        readings = with_witness(
             primary, witness, source_key="gpm_imerg", leg_label="open_meteo"
         )
+    except SourceSkipped as exc:
+        if trace is not None:
+            trace.finish("skipped", exc=exc)
+        raise
     except (SourceFetchError, requests.RequestException) as exc:
+        if trace is not None:
+            trace.finish("failed", exc=exc)
         if strict:
             raise SourceFetchError(f"GPM IMERG fetch failed: {exc}") from exc
         return []
+    if trace is not None:
+        served = "witness_served" if source_leg_of(readings) == "open_meteo" else "primary_served"
+        trace.finish(served if readings else "empty", readings)
+    return readings
 
 
 def _fetch_daily_precip_primary(
@@ -271,6 +542,7 @@ def _fetch_daily_precip_primary(
     max_workers: int | None = DEFAULT_MAX_WORKERS,
     strict: bool = False,
     today: date | None = None,
+    trace: RainfallOpportunityTrace | None = None,
 ) -> list[CityPrecipReading]:
     """Primary GESDISC-family daily precip fetch (grid chain then OPeNDAP).
 
@@ -279,9 +551,12 @@ def _fetch_daily_precip_primary(
     skip in non-strict mode; strict mode raises so smoke tests can fail loud.
     """
 
+    observe: dict[str, Any] = {} if trace is None else {"trace": trace}
     token = os.environ.get("EARTHDATA_TOKEN", "")
     if not token:
         print("[gpm_imerg] EARTHDATA_TOKEN not configured — skipping")
+        if trace is not None:
+            trace.gate("credential_not_configured")
         if strict:
             raise SourceSkipped("EARTHDATA_TOKEN is not configured")
         return []
@@ -290,6 +565,8 @@ def _fetch_daily_precip_primary(
     # opaque/future-dated token still needs the real endpoint to establish access.
     expiry = decode_jwt_exp(token)
     if expiry is not None and expiry <= datetime.now(timezone.utc):
+        if trace is not None:
+            trace.gate("credential_expired")
         raise SourceFetchError(
             f"EARTHDATA_TOKEN expired at {expiry.isoformat()}; renew the credential before GPM collection"
         )
@@ -310,6 +587,7 @@ def _fetch_daily_precip_primary(
                 max_cities=max_cities,
                 token=token,
                 today=today,
+                **observe,
             )
             print(
                 f"[gpm] grid source {grid_source} served "
@@ -337,10 +615,18 @@ def _fetch_daily_precip_primary(
             product=product,
             headers=headers,
             max_lookback=_max_lookback_days(),
+            **observe,
         )
-    assert_freshness(requested_date, "gpm_imerg", max_age_days=6, today=today)
+    try:
+        assert_freshness(requested_date, "gpm_imerg", max_age_days=6, today=today)
+    except SourceFetchError:
+        if trace is not None:
+            trace.stale("imerg_late_opendap", requested_date)
+        raise
     rows = cities if cities is not None else load_cities()
     selected = _network_watchlist(rows, max_cities, scan_date=today)
+    if trace is not None:
+        trace.window("imerg_late_opendap", selected, scan_date=today, max_cities=max_cities, data_date=requested_date)
     readings_by_index: list[CityPrecipReading | None] = [None] * len(selected)
     failures = 0
     first_failure_detail: str | None = None
@@ -348,6 +634,8 @@ def _fetch_daily_precip_primary(
     worker_count = _bounded_worker_count(max_workers, len(selected))
 
     def fetch_one(index: int, city: Mapping[str, Any]) -> tuple[int, CityPrecipReading | None]:
+        if trace is not None:
+            trace.member("imerg_late_opendap", index, "s")
         city_name = str(city["city"])
         country = str(city["country"])
         lat = float(city["lat"])
@@ -360,7 +648,11 @@ def _fetch_daily_precip_primary(
             headers=headers,
         )
         if mm_total is None:
+            if trace is not None:
+                trace.member("imerg_late_opendap", index, "u")
             return index, None
+        if trace is not None:
+            trace.member("imerg_late_opendap", index, "r")
         city_key = places.event_location_key(city_name, country, city["lat"], city["lon"])
         date_key = requested_date.isoformat()
         return index, CityPrecipReading(
@@ -409,6 +701,8 @@ def _fetch_daily_precip_primary(
         try:
             idx, reading = fetch_one(index, city)
         except (KeyError, TypeError, ValueError, requests.RequestException) as exc:
+            if trace is not None:
+                trace.member("imerg_late_opendap", index, "f", exc)
             handle_failure(exc)
             continue
         readings_by_index[idx] = reading
@@ -419,6 +713,8 @@ def _fetch_daily_precip_primary(
             try:
                 idx, reading = fetch_one(index, city)
             except (KeyError, TypeError, ValueError, requests.RequestException) as exc:
+                if trace is not None:
+                    trace.member("imerg_late_opendap", index, "f", exc)
                 handle_failure(exc)
                 continue
             readings_by_index[idx] = reading
@@ -433,6 +729,8 @@ def _fetch_daily_precip_primary(
                 try:
                     idx, reading = future.result()
                 except (KeyError, TypeError, ValueError, requests.RequestException) as exc:
+                    if trace is not None:
+                        trace.member("imerg_late_opendap", futures[future], "f", exc)
                     handle_failure(exc)
                     continue
                 readings_by_index[idx] = reading
@@ -449,6 +747,8 @@ def _fetch_daily_precip_primary(
             executor.shutdown(wait=False, cancel_futures=True)
 
     readings = [reading for reading in readings_by_index if reading is not None]
+    if trace is not None:
+        trace.leg_result("imerg_late_opendap", "served" if readings else "no_readings")
     if strict and not readings:
         detail = (
             f"; first error: {first_failure_detail}"
@@ -558,6 +858,7 @@ def _fetch_precip_open_meteo(
     *,
     max_cities: int | None = DEFAULT_CITY_LIMIT,
     today: date | None = None,
+    trace: RainfallOpportunityTrace | None = None,
 ) -> list[CityPrecipReading]:
     """Open-Meteo independent precip witness (R-03).
 
@@ -572,12 +873,24 @@ def _fetch_precip_open_meteo(
     target_date = today - timedelta(days=1)
     date_key = target_date.isoformat()
     readings: list[CityPrecipReading] = []
-    for city in selected:
+    if trace is not None:
+        trace.window("open_meteo_witness", selected, scan_date=today, max_cities=max_cities, data_date=target_date)
+    for index, city in enumerate(selected):
         city_name = str(city["city"])
         country = str(city["country"])
         lat = float(city["lat"])
         lon = float(city["lon"])
-        mm_total = _open_meteo_precip_with_agreement(lat, lon)
+        if trace is None:
+            mm_total = _open_meteo_precip_with_agreement(lat, lon)
+        else:
+            trace.member("open_meteo_witness", index, "s")
+            try:
+                mm_total = _open_meteo_precip_with_agreement(lat, lon)
+            except Exception as exc:
+                trace.member("open_meteo_witness", index, "f", exc)
+                trace.leg_result("open_meteo_witness", "failed")
+                raise
+            trace.member("open_meteo_witness", index, "o" if mm_total is None else "r")
         if mm_total is None:
             continue
         readings.append(CityPrecipReading(
@@ -590,7 +903,14 @@ def _fetch_precip_open_meteo(
             source_product="open_meteo",
             event_id=f"gpm_imerg_{places.event_location_key(city_name, country, city["lat"], city["lon"])}_{date_key}",
         ))
-    assert_freshness(date_key, "gpm_imerg", max_age_days=6, today=today)
+    try:
+        assert_freshness(date_key, "gpm_imerg", max_age_days=6, today=today)
+    except SourceFetchError:
+        if trace is not None:
+            trace.stale("open_meteo_witness", target_date)
+        raise
+    if trace is not None:
+        trace.leg_result("open_meteo_witness", "served" if readings else "no_readings")
     return tag_source_leg(readings, "open_meteo")
 
 
@@ -725,6 +1045,7 @@ def _resolve_available_date(
     product: str,
     headers: Mapping[str, str],
     max_lookback: int,
+    trace: RainfallOpportunityTrace | None = None,
 ) -> date:
     """Find the most recent date whose IMERG file is actually published.
 
@@ -756,17 +1077,26 @@ def _resolve_available_date(
             product=product,
             variable="precipitation",
         )
+        observed = {"start_date": start_date, "max_lookback": max_lookback}
         try:
             # bare-get: migrated in S-09 with GPM source-chain retry semantics.
             resp = requests.get(url, headers=request_headers, timeout=timeout_s)
             resp.raise_for_status()
+            if trace is not None:
+                trace.probe(candidate, "published", **observed)
             return candidate
         except requests.HTTPError as exc:
             status = exc.response.status_code if exc.response is not None else None
             if status == 404:
+                if trace is not None:
+                    trace.probe(candidate, "not_found", **observed)
                 continue
+            if trace is not None:
+                trace.probe(candidate, "error_stopped_walkback", **observed)
             return candidate
         except requests.RequestException:
+            if trace is not None:
+                trace.probe(candidate, "error_stopped_walkback", **observed)
             return candidate
     return oldest_candidate
 
@@ -907,6 +1237,7 @@ def _fetch_daily_precip_grid(
     max_cities: int | None,
     token: str,
     today: date | None = None,
+    trace: RainfallOpportunityTrace | None = None,
 ) -> list[CityPrecipReading]:
     """Download the daily IMERG grid once (via ``source``) and subset every
     qualified monitored city locally, independent of the per-city network cap.
@@ -915,12 +1246,23 @@ def _fetch_daily_precip_grid(
     """
     rows = cities if cities is not None else load_cities()
     selected = _qualified_watchlist(rows)
+    observe: dict[str, Any] = {} if trace is None else {"trace": trace}
+    leg = _GRID_TRACE_LEGS.get(source, "")
     try:
         if target_date is not None:
             resolved_date = target_date
-            grid_bytes = _fetch_grid_bytes(
-                source, target_date=resolved_date, product=product, token=token
-            )
+            if trace is not None:
+                trace.grid_begin(source, start_date=None, max_lookback=None)
+            try:
+                grid_bytes = _fetch_grid_bytes(
+                    source, target_date=resolved_date, product=product, token=token
+                )
+            except (_GridNotFound, _GridTransient) as exc:
+                if trace is not None:
+                    trace.grid_candidate(source, resolved_date, _grid_outcome(exc))
+                raise
+            if trace is not None:
+                trace.grid_candidate(source, resolved_date, "downloaded")
         else:
             resolved_date, grid_bytes = _fetch_grid_with_walkback(
                 source,
@@ -928,18 +1270,41 @@ def _fetch_daily_precip_grid(
                 product=product,
                 token=token,
                 max_lookback=_max_lookback_days(),
+                **observe,
             )
         readings = _subset_grid(
             grid_bytes, selected, resolved_date=resolved_date, product=product
         )
     except (_GridNotFound, _GridTransient, _GridParseError) as exc:
+        if trace is not None:
+            trace.leg_result(leg, "unavailable", _grid_outcome(exc))
         raise _GridFetchUnavailable(str(exc)) from exc
+    if trace is not None:
+        trace.grid_inspected(source, resolved_date, readings)
     if not readings:
+        if trace is not None:
+            trace.leg_result(leg, "unavailable", "zero_readings")
         raise _GridFetchUnavailable(
             f"0 city readings parsed from {source} grid for {resolved_date.isoformat()}"
         )
-    assert_freshness(resolved_date, "gpm_imerg", max_age_days=6, today=today)
+    try:
+        assert_freshness(resolved_date, "gpm_imerg", max_age_days=6, today=today)
+    except SourceFetchError:
+        if trace is not None:
+            trace.stale(leg, resolved_date)
+        raise
+    if trace is not None:
+        trace.leg_result(leg, "served")
     return readings
+
+
+def _grid_outcome(exc: Exception) -> str:
+    """Fixed trace label for a grid failure class; never its message."""
+    if isinstance(exc, _GridNotFound):
+        return "not_found"
+    if isinstance(exc, _GridTransient):
+        return "transient"
+    return "parse_error"
 
 
 def _fetch_grid_with_walkback(
@@ -949,6 +1314,7 @@ def _fetch_grid_with_walkback(
     product: str,
     token: str,
     max_lookback: int,
+    trace: RainfallOpportunityTrace | None = None,
 ) -> tuple[date, bytes]:
     """Walk back from ``start_date`` downloading the first published grid.
 
@@ -958,15 +1324,26 @@ def _fetch_grid_with_walkback(
     rather than masking an outage as 'no data'.
     """
     oldest_probed: date | None = None
+    if trace is not None:
+        trace.grid_begin(source, start_date=start_date, max_lookback=max_lookback)
     for offset in range(max(max_lookback, 0) + 1):
         candidate = start_date - timedelta(days=offset)
         oldest_probed = candidate
         try:
-            return candidate, _fetch_grid_bytes(
+            grid = _fetch_grid_bytes(
                 source, target_date=candidate, product=product, token=token
             )
         except _GridNotFound:
+            if trace is not None:
+                trace.grid_candidate(source, candidate, "not_found")
             continue
+        except _GridTransient:
+            if trace is not None:
+                trace.grid_candidate(source, candidate, "transient")
+            raise
+        if trace is not None:
+            trace.grid_candidate(source, candidate, "downloaded")
+        return candidate, grid
     raise _GridNotFound(
         f"no published {source} grid within {max(max_lookback, 0) + 1} days back "
         f"from {start_date.isoformat()}"

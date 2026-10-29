@@ -141,6 +141,8 @@ def _validate_payload(action: str, payload: Any, *, allow_legacy_review: bool = 
         required = (required - {"job_id", "custom_id"}) | {"origin_kind", "generation_id"}
     if action == "record_review" and allow_legacy_review and set(payload) == {"confirmed", "reason"}:
         required = {"confirmed", "reason"}  # Retained old intent must receive a terminal refusal, not wedge the journal.
+    if action == "edit_revision" and "operator_claim_references" in payload:
+        required = required | {"operator_claim_references"}
     if set(payload) != required:
         raise CommandError("invalid_payload", "Payload fields do not match the action")
     if action in SOURCE_ACTIONS:
@@ -206,6 +208,11 @@ def _validate_payload(action: str, payload: Any, *, allow_legacy_review: bool = 
             raise CommandError("invalid_state_version", "Supply the exact safe authority version")
     if "text" in payload:
         _string(payload["text"], "Draft text", 280)
+    if action == "edit_revision" and "operator_claim_references" in payload:
+        # Source existence and exact digests are resolved by the reducer against
+        # the immutable expected revision, never against caller-supplied facts.
+        if type(payload["operator_claim_references"]) is not list or len(payload["operator_claim_references"]) > 32:
+            raise CommandError("invalid_payload", "Supply at most 32 operator-selected references")
     if "reason" in payload:
         _string(payload["reason"], "Reason", 2000)
     if "expected_policy_sha256" in payload and (not isinstance(payload["expected_policy_sha256"], str) or not _HEX.fullmatch(payload["expected_policy_sha256"])):

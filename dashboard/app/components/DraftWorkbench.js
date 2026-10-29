@@ -4,6 +4,8 @@ import { useEffect, useId, useRef, useState } from "react"
 import { ForecastEvidence } from "./ForecastEvidence.js"
 import { NwsWarningEvidence } from "./NwsWarningEvidence.js"
 import { ClaimEvidence } from "./ClaimEvidence.js"
+import { OperatorClaimReferenceHistory, OperatorClaimReferences } from "./OperatorClaimReferences.js"
+import { operatorReferencesForDisplay } from "../../lib/operator-claim-reference-input.js"
 import { GraphicPreview } from "./GraphicPreview.js"
 import { EditorMedia } from "./EditorMedia.js"
 import { formatDuration, timeAgo } from "../../lib/format.js"
@@ -46,6 +48,7 @@ export function DraftWorkbench({
 }) {
   const [reviewConfirmedIdentity, setReviewConfirmedIdentity] = useState("")
   const [focusRequest, setFocusRequest] = useState(0)
+  const [referenceEdit, setReferenceEdit] = useState(null)
   const focusIntent = useRef(null)
   const editor = useRef(null)
   const editButton = useRef(null)
@@ -56,6 +59,11 @@ export function DraftWorkbench({
   const currentRevisionKey = revisionKey(selectedDraft?.revision_identity)
   const reviewKey = `${selectedDraft?.id}:${currentRevisionKey}:${selectedDraft?.editorial_policy?.policy_sha256 ?? "unverified"}`
   const editConflict = editingId === selectedDraft?.id && revisionKey(editingRevision) !== currentRevisionKey
+  const referenceEditKey = `${selectedDraft?.id}:${revisionKey(editingRevision)}`
+  const savedReferences = operatorReferencesForDisplay(selectedDraft)
+  const initialReferenceItems = editText === selectedDraft?.text && savedReferences.status === "saved"
+    ? savedReferences.items.map(item => ({ claim: item.claim, sources: item.sources.map(({ pointer }) => ({ pointer })) })) : []
+  const referenceItems = editConflict ? [] : referenceEdit?.key === referenceEditKey && referenceEdit.text === editText ? referenceEdit.items : initialReferenceItems
   const selectedDraftRun = findDraftRun(selectedDraft, botRuns)
   const selectedDraftSourceRun = findDraftSourceRun(selectedDraft, botRuns)
   const selectedCandidate =
@@ -210,7 +218,10 @@ export function DraftWorkbench({
                       disabled={!!pendingCommand}
                       className="draft-edit-area"
                       value={editText}
-                      onChange={(e) => setEditText(e.target.value)}
+                      onChange={(e) => {
+                        setEditText(e.target.value)
+                        setReferenceEdit({ key: referenceEditKey, text: e.target.value, items: [] })
+                      }}
                       rows={4}
                     />
                     <div id={`${editorId}-count`} className={`draft-chars ${draftTextLength(editText) > 280 ? "over" : ""}`}>
@@ -247,13 +258,19 @@ export function DraftWorkbench({
                 )}
 
                 <ClaimEvidence key={`claims:${reviewKey}:${editingId === selectedDraft.id}`} draft={selectedDraft} editing={editingId === selectedDraft.id} sourceHold={controls.sourceHold} />
+                <OperatorClaimReferences key={`operator-references:${reviewKey}:${referenceEditKey}:${editingId === selectedDraft.id}:${editText}`}
+                  draft={selectedDraft} text={editingId === selectedDraft.id ? editText : selectedDraft.text}
+                  editing={editingId === selectedDraft.id} items={referenceItems}
+                  disabled={!!draftAction || !!pendingCommand || editConflict || !controls.canEdit}
+                  onChange={items => setReferenceEdit({ key: referenceEditKey, text: editText, items })} />
+                <OperatorClaimReferenceHistory draft={selectedDraft} editing={editingId === selectedDraft.id} />
                 <ForecastEvidence key={reviewKey} draft={selectedDraft} />
                 <NwsWarningEvidence key={"nws:" + reviewKey} draft={selectedDraft} />
                 {selectedDraft.local_preview
                   ? <EditorMedia key={`media:${reviewKey}`} draft={selectedDraft} editing={editingId === selectedDraft.id} updating={!!draftAction || !!pendingCommand} submitCommand={submitLocalCommand} />
-                  : <GraphicPreview key={`graphic:${reviewKey}`} draft={selectedDraft} editing={editingId === selectedDraft.id} updating={draftAction === selectedDraft.id} />}
+                  : <GraphicPreview key={`graphic:${reviewKey}`} draft={selectedDraft} editing={editingId === selectedDraft.id} updating={draftAction === selectedDraft.id} onAction={(action, payload) => draftAct(selectedDraft.id, action, payload)} />}
 
-                {controls.canReview && editingId !== selectedDraft.id && (
+                {controls.canReview && !selectedDraft.media_attachment_sha256 && !selectedDraft.media_attachment && editingId !== selectedDraft.id && (
                   <div className="workbench-panel">
                     <h3>Review this version</h3>
                     <p>Previous checks do not cover this text. Check it against the saved source evidence. Recording your review permits manual approval; it does not run or replace model checks.</p>
@@ -371,7 +388,7 @@ export function DraftWorkbench({
                     <h3>Approval Policy</h3>
                     <div className="workbench-headline">
                       {selectedDraft.review_status === "media_review_required"
-                        ? (hasLocalMediaPanel(selectedDraft) ? "Use Text and graphic for joint review, required checks and local approval status. Publishing is unavailable." : "Review the text and attached graphic together before approval. Joint graphic review is not available here yet.")
+                        ? (hasLocalMediaPanel(selectedDraft) ? "Use Text and graphic for joint review, required checks and local approval status. Publishing is unavailable." : selectedDraft.media_attachment?.kind === "gist_temperature_comparator_v1" ? "Review the text, image and full description together in Graphic preview before approval." : "Review the text and attached graphic together before approval. Joint graphic review is not available here yet.")
                         : selectedDraft.review_status === "policy_unverified"
                         ? selectedDraft.editorial_policy?.reason
                         : controls.needsReview
@@ -485,7 +502,7 @@ export function DraftWorkbench({
                         type="button"
                         className="btn approve sm"
                         disabled={!!draftAction || !controls.canEdit || editConflict || !editText.trim() || draftTextLength(editText) > 280}
-                        onClick={() => draftAct(selectedDraft.id, "edit", { editedText: editText })}
+                        onClick={() => draftAct(selectedDraft.id, "edit", { editedText: editText, operator_claim_references: referenceItems })}
                       >
                         Save
                       </button>
@@ -513,6 +530,7 @@ export function DraftWorkbench({
                         disabled={!!draftAction || !controls.canEdit}
                         onClick={(event) => {
                           requestFocus("edit", event.currentTarget)
+                          setReferenceEdit(null)
                           startEditing(selectedDraft)
                         }}
                       >
