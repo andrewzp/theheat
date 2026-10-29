@@ -11,7 +11,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "dashboard/lib/gist-media.js": "e05b628810d2339fca4f0e309d48e49fe9696c8171d2ced170c6b6503293718a",
     "dashboard/lib/gist-temperature-media.js": "c8f71b873413952379252711473846120e822a01d8563ad6633e09620b9d83e5",
     "dashboard/lib/lossless-gist.js": "e6fb2965e0632a6d914fc8688cf664341a6386a4925ea0682a57430eef77241e",
-    "dashboard/lib/nhc-advisory-evidence.js": "11313c62eb71eb17d291312a8e694c3418897293b8566ce1d97e6051c8603c6e",
+    "dashboard/lib/nhc-advisory-evidence.js": "2119cb26dc8a3a6ff53ae871f321fbc98568f6b26e2e556ed54f5e8c2e76ccb6",
     "dashboard/lib/nhc-advisory-validation.js": "61ec764b695bc98f041efb938812dc67935ccdf76871b9f9a5a4e9a09adad3bd",
     "dashboard/lib/nws-source-timing.js": "3a7b4be177cc5d28be7a8150d7c6937b7c15f113c5475134254dba233df47975",
     "dashboard/lib/nws-warning-evidence.js": "eb98b1dec65d7cac93ea4e8a8b85045324a1aef52ada2834de924ae03a59b3e6",
@@ -229,5 +229,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "8c4887f395618e343dafd55f5843987dfa6a7a620713c7c34bab9f419e4434fe"
   },
   "schema_version": 1,
-  "source_sha256": "615904d156939c6689994cf19d8e8fa5d9e485c043213ef274255ab970427d53"
+  "source_sha256": "bf70c95eeb1f66c1b0a55c1b9e2a634175eec4c0dc30c3cb3e763684ccd48c18"
 }

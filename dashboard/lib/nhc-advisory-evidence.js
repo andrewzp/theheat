@@ -43,7 +43,7 @@ export function nhcAdvisoryForDisplay(draft) {
         || !Number.isSafeInteger(n.freshness_minutes) || n.freshness_minutes < 1 || n.freshness_minutes > 60) throw new Error("nomination")
     const advisoryUrl = `${ORIGIN}/text/MIATCP${n.bin}.shtml`
     if (raw.source_url !== advisoryUrl || record.source?.advisory_url !== advisoryUrl || record.source?.index_url !== NHC_INDEX_URL) throw new Error("url")
-    if (typeof bulletin !== "string" || !bulletin || bulletin.length > 16384 || /[^\n\x20-\x7e]/.test(bulletin)
+    if (typeof bulletin !== "string" || !bulletin || bulletin.length > 16384 || /[^\r\n\x20-\x7e]/.test(bulletin)
         || !/^[a-f0-9]{64}$/.test(record.bulletin_sha256)) throw new Error("bulletin")
     const t = record.times
     if (!exact(t, timeKeys) || t.upstream_expiry !== null || t.upstream_expiry_status !== NHC_UPSTREAM_EXPIRY_STATUS
