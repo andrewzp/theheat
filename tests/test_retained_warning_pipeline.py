@@ -2,18 +2,20 @@
 from copy import deepcopy
 from dataclasses import replace
 from datetime import timedelta
+from importlib import import_module
 from unittest.mock import Mock
 from typing import Any
 
 import pytest
 
 from src.editorial.official_warning import WarningHold
+from src.data.source_registry import CONTRACTS
 from src.editorial.scoring import EditorialScore
 from src.editorial.warning_runtime import (
     SuppliedWarning, WarningSource, current_warning_source, guard_warning_story, warning_source_scope,
 )
 from src.orchestrator import common
-from src.orchestrator.sources.official_warning import run_official_warning, run_official_warning_source
+from src.orchestrator.sources.official_warning import run_official_warning
 from src.orchestrator.triage_queue import _drain_and_write_triage_queue
 from src.orchestrator.two_bot_dispatch import _try_two_bot_draft
 from src.state import DEFAULT_STATE
@@ -83,10 +85,13 @@ def test_real_dispatch_pipeline_and_admission_make_one_pending_manual_draft(case
 
 
 def test_registered_source_runner_preserves_absence_and_queues_before_model_work(case):
+    contract = next(row for row in CONTRACTS if row.source_id == "official_warning")
+    path, name = contract.entry_point.split(":")
+    registered_runner = getattr(import_module(path.removesuffix(".py").replace("/", ".")), name)
     before = deepcopy(case["state"])
-    assert run_official_warning_source(case["state"], None) is None
+    assert registered_runner(case["state"], None) is None
     assert case["state"] == before and counts(case) == [0, 0, 0, 0]
-    assert run_official_warning_source(case["state"], None,
+    assert registered_runner(case["state"], None,
         source=case["source"], score=case["score"]) is None
     assert len(case["state"]["_triage_queue"]) == 1
     assert counts(case) == [0, 0, 0, 0]
