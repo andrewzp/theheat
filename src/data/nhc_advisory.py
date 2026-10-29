@@ -14,6 +14,13 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import UTC, datetime
+import base64
+import json
+import os
+from pathlib import Path
+import re
+import subprocess
+import sys
 import time
 
 from src.editorial.nhc_advisory import (
@@ -70,8 +77,8 @@ def _session():
     return session
 
 
-def _http_get(url: str, *, limit: int) -> tuple[int, dict, bytes]:
-    """One GET of a fixed URL: (status, lowercase headers, body). Network errors hold."""
+def _http_get_inprocess(url: str, *, limit: int) -> tuple[int, dict, bytes]:
+    """Child-only HTTP implementation; the parent enforces the total deadline."""
     import requests
     started = time.monotonic()
     try:
@@ -95,6 +102,78 @@ def _http_get(url: str, *, limit: int) -> tuple[int, dict, bytes]:
     except requests.Timeout:
         raise AdvisoryHold("nhc_advisory_source_slow") from None
     except (requests.RequestException, OSError):
+        raise AdvisoryHold("nhc_advisory_source_unavailable") from None
+
+
+def _product_url(product: str) -> str:
+    if product == "index":
+        return INDEX_URL
+    if re.fullmatch(r"(?:AT|EP)[1-5]", product):
+        return "https://www.nhc.noaa.gov/text/MIATCP" + product + ".shtml"
+    raise AdvisoryHold("nhc_advisory_nomination_invalid")
+
+
+def _read_child() -> None:
+    """One fixed-source read, no inherited provider credentials or exception text."""
+    try:
+        product, bound = sys.argv[2], int(sys.argv[3])
+        maximum = MAX_INDEX_BYTES if product == "index" else MAX_PAGE_BYTES
+        if not 0 < bound <= maximum:
+            raise AdvisoryHold("nhc_advisory_response_bound")
+        status, headers, body = _http_get_inprocess(_product_url(product), limit=bound)
+        retained_headers = {k: v for k, v in headers.items() if k in ("content-encoding", "content-length")}
+        if any(type(v) is not str or len(v) > 256 for v in retained_headers.values()):
+            raise AdvisoryHold("nhc_advisory_response_bound")
+        value = {"status": status, "headers": retained_headers, "body": base64.b64encode(body).decode("ascii")}
+    except AdvisoryHold as exc:
+        value = {"hold": exc.code}
+    except Exception:
+        value = {"hold": "nhc_advisory_source_unavailable"}
+    sys.stdout.write(json.dumps(value, ensure_ascii=True))
+
+
+def _http_get(url: str, *, limit: int) -> tuple[int, dict, bytes]:
+    """The 20-second total covers DNS, headers and even a buffered trickle.
+
+    subprocess.run kills and waits for only this owned one-read child on timeout.
+    No source retry, additional request allowance or new provider call is created.
+    """
+    product = "index" if url == INDEX_URL else url.removeprefix("https://www.nhc.noaa.gov/text/MIATCP").removesuffix(".shtml")
+    if _product_url(product) != url or type(limit) is not int or not 0 < limit <= (
+        MAX_INDEX_BYTES if product == "index" else MAX_PAGE_BYTES
+    ):
+        raise AdvisoryHold("nhc_advisory_nomination_invalid")
+    root = str(Path(__file__).resolve().parents[2])
+    command = [sys.executable, "-I", "-c",
+               "import sys;sys.path.insert(0,sys.argv[1]);from src.data.nhc_advisory import _read_child;_read_child()",
+               root, product, str(limit)]
+    clean_env = {"PATH": os.defpath, "LANG": "C", "LC_ALL": "C",
+                 "PYTHONNOUSERSITE": "1", "PYTHONDONTWRITEBYTECODE": "1"}
+    try:
+        result = subprocess.run(command, env=clean_env, cwd=root, stdin=subprocess.DEVNULL,
+                                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                                timeout=REQUEST_SECONDS, check=False)
+        if result.returncode != 0 or len(result.stdout) > 4 * ((limit + 2) // 3) + 2048:
+            raise AdvisoryHold("nhc_advisory_source_unavailable")
+        value = json.loads(result.stdout)
+        if set(value) == {"hold"} and value["hold"] in {
+            "nhc_advisory_source_slow", "nhc_advisory_source_unavailable", "nhc_advisory_response_bound"
+        }:
+            raise AdvisoryHold(value["hold"])
+        if (set(value) != {"status", "headers", "body"} or type(value["status"]) is not int
+                or not 100 <= value["status"] <= 599 or type(value["headers"]) is not dict
+                or set(value["headers"]) - {"content-encoding", "content-length"}
+                or any(type(v) is not str or len(v) > 256 for v in value["headers"].values())):
+            raise AdvisoryHold("nhc_advisory_source_unavailable")
+        body = base64.b64decode(value["body"], validate=True)
+        if len(body) > limit:
+            raise AdvisoryHold("nhc_advisory_response_bound")
+        return value["status"], value["headers"], body
+    except subprocess.TimeoutExpired:
+        raise AdvisoryHold("nhc_advisory_source_slow") from None
+    except AdvisoryHold:
+        raise
+    except (OSError, ValueError, KeyError, TypeError):
         raise AdvisoryHold("nhc_advisory_source_unavailable") from None
 
 

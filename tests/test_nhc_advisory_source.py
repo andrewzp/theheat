@@ -143,7 +143,7 @@ def install_session(monkeypatch, session):
 def test_real_transport_is_credential_free_single_attempt_without_redirects(monkeypatch):
     session = FakeSession(FakeResponse(chunks=(b"abc", b"def")))
     install_session(monkeypatch, session)
-    assert source._http_get(h.URL, limit=10) == (200, {}, b"abcdef")
+    assert source._http_get_inprocess(h.URL, limit=10) == (200, {}, b"abcdef")
     (url, kwargs, trust_env, max_redirects), = session.calls
     assert url == h.URL and trust_env is False and max_redirects == 0
     assert kwargs == {"headers": {"User-Agent": "(theheat-bot, contact@theheat.app)", "Accept-Encoding": "identity"},
@@ -159,7 +159,7 @@ def test_real_transport_is_credential_free_single_attempt_without_redirects(monk
 def test_transport_failures_are_named_holds_without_exception_text(monkeypatch, session, code):
     install_session(monkeypatch, session)
     with pytest.raises(AdvisoryHold) as raised:
-        source._http_get(h.URL, limit=10)
+        source._http_get_inprocess(h.URL, limit=10)
     assert raised.value.code == code and str(raised.value) == code
     assert raised.value.__cause__ is None and (raised.value.__context__ is None or raised.value.__suppress_context__)
 
@@ -168,7 +168,7 @@ def test_slow_stream_holds_instead_of_borrowing_time(monkeypatch):
     monkeypatch.setattr(source, "REQUEST_SECONDS", 0.05)
     install_session(monkeypatch, FakeSession(FakeResponse(chunks=(b"a", b"b", b"c"), delay=0.03)))
     with pytest.raises(AdvisoryHold) as raised:
-        source._http_get(h.URL, limit=100)
+        source._http_get_inprocess(h.URL, limit=100)
     assert raised.value.code == "nhc_advisory_source_slow"
 
 

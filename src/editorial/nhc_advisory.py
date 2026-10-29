@@ -219,6 +219,7 @@ def _lines(raw: bytes) -> list[tuple[int, int, str]]:
 def _issued(local: re.Match, summary: re.Match, wmo: re.Match) -> datetime:
     _require(local["tz"] in _ZONES and summary["tz"] == local["tz"] and summary["hhmm"] == local["hhmm"],
              "nhc_advisory_time_unsupported")
+    _require(summary["ampm"] == local["ampm"], "nhc_advisory_time_contradictory")
     hhmm = int(local["hhmm"])
     hour, minute = divmod(hhmm, 100)
     _require(1 <= hour <= 12 and minute < 60, "nhc_advisory_time_invalid")
@@ -240,12 +241,33 @@ def _issued(local: re.Match, summary: re.Match, wmo: re.Match) -> datetime:
     return issued
 
 
+_RAIN_MAP_REFERRAL = re.compile(
+    rb"For a complete depiction of forecast rainfall associated with [A-Za-z -]{1,60},\r?\n"
+    rb"please see the National Weather Service Storm Total Rainfall Graphic\r?\n"
+    rb"available at <a href=(?P<quote>['\"])(?P<url>https://www\.hurricanes\.gov/"
+    rb"graphics_(?P<bin>ep[1-5])\.shtml\?rainqpf\.)(?P=quote)>"
+    rb"(?P<label>hurricanes\.gov/graphics_ep[1-5]\.shtml\?rainqpf\.)</a>"
+)
+
+
 def parse_bulletin(raw: bytes) -> Bulletin:
     """Strict English TCP structure; unsupported or drifting formats hold."""
     _require(type(raw) is bytes and 0 < len(raw) <= MAX_BULLETIN_BYTES, "nhc_advisory_bulletin_bound")
     _require(all(32 <= b < 127 or b in (10, 13) for b in raw), "nhc_advisory_encoding_invalid")
-    # Markup or character references would make displayed text differ from bytes.
-    _require(b"<" not in raw and re.search(rb"&[A-Za-z#]", raw) is None, "nhc_advisory_markup_in_product")
+    # NHC inserts one inert rainfall-map reference outside its claim paragraphs.
+    # Recognize only that exact form; never strip/normalize the retained product,
+    # follow the link, or move any original byte offsets. Weather claims stay plain.
+    referrals = list(_RAIN_MAP_REFERRAL.finditer(raw))
+    _require(len(referrals) <= 1, "nhc_advisory_markup_in_product")
+    remainder = _RAIN_MAP_REFERRAL.sub(b"", raw)
+    _require(b"<" not in remainder and re.search(rb"&[A-Za-z#]", remainder) is None,
+             "nhc_advisory_markup_in_product")
+    for match in referrals:
+        _require(match["url"][len(b"https://www."):] == match["label"]
+                 and (match.start() == 0 or raw[match.start()-2:match.start()] == b"\n\n"
+                      or raw[match.start()-3:match.start()] == b"\n \n")
+                 and not raw[match.end():].split(b"\n", 1)[0].strip(),
+                 "nhc_advisory_markup_in_product")
     lines = [row for row in _lines(raw)]
     body = [row for row in lines if row[2].strip()]
     _require(len(body) >= 8, "nhc_advisory_partial_response")
@@ -262,6 +284,8 @@ def parse_bulletin(raw: bytes) -> Bulletin:
              and local is not None and local["mon"] in _MONTHS and local["dow"] in _DAYS,
              "nhc_advisory_format_drift")
     assert wmo is not None and awips is not None and title is not None and office is not None and local is not None
+    _require(all(match["bin"].decode().upper() == awips["basin"] + awips["n"] for match in referrals),
+             "nhc_advisory_markup_in_product")
     summaries = [re.fullmatch(r"SUMMARY OF (?P<hhmm>[0-9]{3,4}) (?P<ampm>AM|PM) (?P<tz>[A-Z]{3,4})\.\.\."
                               r"(?P<utc>[0-9]{4}) UTC\.\.\.INFORMATION", text) for _, _, text in body]
     found = [m for m in summaries if m is not None]
@@ -298,6 +322,9 @@ def parse_bulletin(raw: bytes) -> Bulletin:
             if re.search(r"\b(?:weaken(?:s|ed|ing)?|dissipat(?:e|es|ed|ing|ion))\b", sentence, re.IGNORECASE):
                 context.append((s_start, s_end))
     _require(office["atcf"][:2] == {"AT": "AL", "EP": "EP"}[awips["basin"]], "nhc_advisory_contradictory")
+    claim_spans = [*hazards.values(), *context]
+    _require(not any(match.start() < end and start < match.end()
+                     for match in referrals for start, end in claim_spans), "nhc_advisory_markup_in_product")
     return Bulletin(raw=raw, wmo_header=head[0], awips_id=head[1], title=head[3], storm_kind=title["kind"],
                     storm_name=title["name"], advisory=title["number"], atcf_id=office["atcf"], issued_at=iso(issued),
                     hazards=hazards, context=tuple(context))
