@@ -173,12 +173,16 @@ def _reconcile(args, evidence) -> int:
     markdown = evidence.render_markdown(report).encode("utf-8")
     written = [write_private_file_exclusive(output_dir, "reconciliation.json", data),
                write_private_file_exclusive(output_dir, "reconciliation.md", markdown)]
+    identity = report["inputs"]["identity_reconciliation"]
     degraded = bool(rejected) or any(a.status != "complete" for a in archives) or bool(
-        report["supplied_billing"]["quarantined"])
+        report["supplied_billing"]["quarantined"]) or identity["status"] != "consistent"
     _emit({"status": "completed_with_gaps" if degraded else "completed",
            "report_sha256": report["report_sha256"],
            "written": ["new" if w else "identical_existing" for w in written],
            "denominators": report["observed"]["denominators"],
+           "identity": {key: identity[key] for key in ("status", "supplied_inputs", "counted_captures",
+                                                       "duplicate_inputs", "quarantined_inputs")},
+           "token_totals_status": report["observed"]["token_totals_status"],
            "matches": len(report["reconciliation"]["matches"]),
            "unmatched_billing_items": len(report["reconciliation"]["unmatched_billing_items"]),
            "conflicting_matches": len(report["reconciliation"]["conflicting_matches"]),

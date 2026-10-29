@@ -10,6 +10,7 @@ from typing import Protocol
 
 from src.commands import batch_worker_journal as worker
 from src.commands.batch_result_journal import MAX_RESULT_BYTES
+from src.two_bot import request_archive
 from src.two_bot.batch_authority import BatchAuthority
 from src.two_bot.batch_transport import (
     ACK_LIMIT, LEASE_SECONDS, AnthropicBatchTransport, BatchDownload, BatchTransportError,
@@ -75,10 +76,34 @@ def _retain(authority, identity, grant, metadata, results, context, clock):
     return _review(authority, identity, receipt["receipt_id"], context, clock)
 
 
+def _observed(family, transport, identity, status, read):
+    """One explicit private route around one existing bounded GET; OFF is a plain call."""
+    scope = request_archive.route_scope()
+    if scope is None:
+        return read()
+    provider_id = status["provider_batch_id"]
+    entry = request_archive.route_entry
+    route = scope.begin_route(
+        family, client=getattr(transport, "_http", None),
+        expected_path=f"/v1/messages/batches/{provider_id}" + ("/results" if family == "batch_results" else ""),
+        binding=dict(job_id=entry(identity["job_id"], "batch_results_status"),
+                     grant_id=entry(status["grant_id"], "batch_results_status"),
+                     provider_batch_id=entry(provider_id, "batch_results_status"),
+                     submission_state=entry(status["state"], "batch_results_status")))
+    value = None
+    try:
+        value = read()
+        return value
+    finally:
+        route.finish("returned" if value is not None else "refused_before_send" if route.refusal else "raised",
+                     dict(complete=getattr(value, "complete", None), reason=getattr(value, "reason", None)))
+
+
 def _read_once(authority, identity, status, plan, context, clock, transport):
     provider_id = status["provider_batch_id"]
     try:
-        metadata = _download(transport.retrieve(provider_id), ACK_LIMIT)
+        metadata = _download(_observed("batch_metadata", transport, identity, status,
+                                       lambda: transport.retrieve(provider_id)), ACK_LIMIT)
     except Exception:
         return _report("read_failed", reason="batch_metadata_unavailable")
     if not metadata.complete or worker._ack_id(metadata.raw, plan["samples"]) != provider_id:
@@ -90,7 +115,8 @@ def _read_once(authority, identity, status, plan, context, clock, transport):
         # bounded result journal with repeated unchanged polling snapshots.
         return _report("pending")
     try:
-        results = _download(transport.results(provider_id), MAX_RESULT_BYTES)
+        results = _download(_observed("batch_results", transport, identity, status,
+                                      lambda: transport.results(provider_id)), MAX_RESULT_BYTES)
     except Exception:
         # Keep terminal metadata even when the result stream never opens.
         results = BatchDownload(b"", False)

@@ -217,6 +217,75 @@ weather truth, copy quality, approval or a model result.
   or a held scope. Absence of a wire observation is never proof of `not_sent`. Inspect it
   as it is. Missing historical inputs remain missing.
 - `invalid` means the bytes no longer verify. Keep the copy for diagnosis and
-  never treat it as evidence.
+  never treat it as evidence. An invalid copy exposes no scope identity, so a
+  consumer never counts it as a duplicate of a valid capture.
+- A capture is its scope ID plus manifest hash. Copying a scope directory
+  byte-for-byte keeps that identity, so every consumer counts the copy once.
+  Two exports with one scope ID and different manifests are a conflict that
+  consumers quarantine; neither is chosen. A malformed provider body inside an
+  intact scope is retained evidence, not a broken hash chain.
 - If the private directory's permissions are wrong, the tools refuse it. Fix
   the mode yourself (`chmod 700`/`600`) only if you know why it changed.
+
+## Route families (archive schema v2, explicit opt-in)
+
+A scope opened with `capture(<private root>, operation="...", routes=True)`
+writes `theheat.request-archive/v2`. A default `capture(...)` scope is v1,
+byte-for-byte as before, and never contains route records. A route scope only
+**observes**: it never enables a disabled lane, sends, retries or approves.
+
+| Family | Exact request | Response entity retained | Not evidence of |
+|---|---|---|---|
+| `batch_submit` | `POST https://api.anthropic.com/v1/messages/batches` | decoded ACK entity (≤ 65,536 bytes, the transport's own bound) | completion, usage or billing |
+| `batch_metadata` | `GET …/v1/messages/batches/<msgbatch id>` | decoded status entity (same bound) | a model generation |
+| `batch_results` | `GET …/v1/messages/batches/<msgbatch id>/results` | decoded JSONL entity as read (transport bound; over 2 MiB is not retained and holds the scope) | approval or a passed check |
+| `command_check` | `POST https://generativelanguage.googleapis.com/v1beta/models/<model>:generateContent` | raw identity-encoded entity (≤ 131,072 bytes) | a factual, safety or critic verdict |
+
+**What happens on each route operation:**
+- A `route_intent` is written BEFORE any lease or grant. It holds the logical request and identity bindings, each labeled with its source (for example `batch_registration`, `check_packet`, or `missing` when absent).
+- A grant, when one exists, is bound before the send (`route_bound`).
+- A request-only witness on the transport's own HTTP client records the exact outgoing entity (`route_wire_request`). It refuses any other method, host, path or query, and any second send.
+- One observation after the transport's EXISTING bounded reader records exactly the bytes that reader kept (`route_response`): its form, the `_bounded_prefix` when incomplete, status, allowlisted headers and reason. No response hook, prefetch, second read, extra GET or redirect is added.
+- `route_result` records the caller's fixed disposition, `billing: "unknown"` and `evidence_gap`.
+
+**Evidence completeness is separate from integrity.** A sent route is complete evidence only when its whole entity was retained:
+- A missing response record, an entity the SDK read itself (`entity_not_observed`), an entity over the retention limit, a bounded prefix (cut stream, mid-stream read error or late cleanup failure), or a results stream ending mid-record (`results_final_line_unparseable`) is an `evidence_gap`. The route is `archival: incomplete`, and so is the archive.
+- A fully retained provider rejection, at any status, is complete evidence.
+- An evidence gap does not hold the scope and never changes the authority's outcome or resend rules.
+- The strict reader derives each gap from the retained observations and bytes. It never trusts a `route_result` flag or the seal: a hash-consistent archive whose flags claim more is `incomplete` (`route_evidence_incomplete:N:<gap>`, `route_archival_flag_contradicted:N`). Archives written before `evidence_gap` existed are read the same way and never rewritten.
+
+**If capture fails:**
+- Before a send, the operation is refused. Before the grant, nothing is granted. After the grant, it is uncertain and never resubmitted.
+- After a real send, the scope is held. The authority's own outcome and resend rules are unchanged; an archive failure never becomes a result.
+
+**Offline inspection.** `replay_request_archive.py inspect|lineage <scope dir>` reads v2 strictly:
+- one schema per manifest;
+- exact route sequence, endpoints and forms;
+- custom IDs and provider IDs recomputed from the retained bytes.
+
+Lineage labels each join `observed_in_scope`, `durable_status_reference` or `unverified`, and keeps duplicate or unknown custom IDs and reused provider batch IDs visible.
+
+A metadata read keeps both its `requested_batch_id` (the canonical path) and the `returned_batch_id` from its complete body. `batch_identity` is `matching`, `mismatched`, `missing`, `invalid`, `unverified` (incomplete entity) or `not_sent`. Only a `matching` body supplies `processing_status`; otherwise the returned status stays in `returned_processing_status` and `results_disposition` is `unresolved`. A body naming batch B never certifies batch A as ended.
+
+**Still uncovered** (deliberately, not silently):
+- async clients;
+- SDK streaming or SSE;
+- any other provider path;
+- batch cancellation or listing;
+- requests outside the four families above.
+
+An unsupported transport inside a route scope is refused, never captured partially.
+
+### Copyable synthetic route walkthrough (invented, offline)
+
+`tests/test_archive_usage.py::test_route_family_walkthrough_from_sdk_evidence_to_usage_and_diagnosis`
+runs the whole chain with invented data and no provider:
+- **Scope A:** installed-SDK batch submission, then metadata and results joined in one scope.
+- **Scope B:** a later collection in another scope, with a durable status reference only and an interrupted results stream. Its `validate` and `lineage` exit `1` (`incomplete`, `route_evidence_incomplete:2:entity_bounded_prefix`): verified bytes, never a complete replay.
+- **Scope C:** one command check.
+- **Replay, usage and diagnosis:** a fresh-process `validate` and `lineage` with no credentials, then usage projection, then the existing diagnosis handoff.
+
+```
+python -m pytest tests/test_archive_usage.py -k route_family_walkthrough -q
+python scripts/replay_request_archive.py lineage /abs/private/root/scope-<id>
+```
