@@ -111,7 +111,8 @@ def reduce_command(state: dict, command: Command, principal: Principal, *, now: 
     for draft in drafts:
         action = command.action
         if action == "edit_revision":
-            invalidate_text(draft, payload["text"], at=at)
+            options = {"operator_claim_references": payload["operator_claim_references"]} if "operator_claim_references" in payload else {}
+            invalidate_text(draft, payload["text"], at=at, **options)
         elif action == "select_candidate":
             candidates = draft.get("candidates", [])
             if not isinstance(candidates, list):

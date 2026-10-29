@@ -111,7 +111,7 @@ export async function POST(request) {
   const authError = requireDashboardAuth(request)
   if (authError) return authError
   if (previewConfigured()) return acceptLocalCommand(request)
-  const { body, error } = await readJsonObject(request)
+  const { body, error } = await readJsonObject(request, { strict: true })
   if (error) return error
   const { action, draftId, editedText, delayMinutes, candidateRank, expectedRevision } = body
   if (!ACTIONS.includes(action)) return Response.json({ error: "Invalid action" }, { status: 400 })
@@ -162,9 +162,15 @@ export async function POST(request) {
       if (["review", "approve", "auto_approve"].includes(action)) assertSavedSourceTiming(draft)
       const editorialPolicy = dashboardEditorialPolicy(state, { runtimeReport })
       if (action === "edit") {
-        invalidateText(draft, editedText)
-        draft.manual_override = true
-        draft.post_error = null
+        const previousRevision = draft.content_revision
+        try {
+          if (Object.hasOwn(body, "operator_claim_references")) invalidateText(draft, editedText, body.operator_claim_references)
+          else invalidateText(draft, editedText)
+        } catch (error) { fail(error.message, 422, "invalid_draft_edit") }
+        if (draft.content_revision !== previousRevision) {
+          draft.manual_override = true
+          draft.post_error = null
+        }
       } else if (action === "select_candidate") {
         const rank = Number(candidateRank)
         if (!Number.isInteger(rank) || rank < 1) fail("Invalid candidate rank", 400, "invalid_candidate")

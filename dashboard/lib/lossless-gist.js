@@ -1,4 +1,5 @@
 import { isDeepStrictEqual } from "node:util"
+import { readOperatorClaimReferences } from "./operator-claim-references.js"
 
 // A storage boundary, not a source validator. Never repair or rehash evidence.
 const MAX_BYTES = 8 * 1024 * 1024
@@ -99,7 +100,7 @@ function draftNodes(document) {
 }
 
 // Ignore only decision/check fields that invalidateText intentionally removes.
-function protectedEvidence(draft) {
+function protectedEvidence(draft, { editableReferences = false } = {}) {
   const result = {}
   for (const key of ["event_id", "type", "tweet_date", "hot10_rows", "media_attachment"]) {
     if (own(draft, key)) result[key] = draft[key]
@@ -108,12 +109,32 @@ function protectedEvidence(draft) {
     const context = draft.review_context
     if (!object(context)) result.review_context = context
     else {
-      result.review_context = Object.fromEntries(Object.entries(context).filter(([key]) => key !== "two_bot"))
+      result.review_context = Object.fromEntries(Object.entries(context).filter(([key]) => key !== "two_bot" && !(editableReferences && key === "operator_claim_references")))
       if (object(context.two_bot) && own(context.two_bot, "bundle")) result.review_context.two_bot = { bundle: context.two_bot.bundle }
       else if (own(context, "two_bot") && !object(context.two_bot)) result.review_context.two_bot = context.two_bot
     }
   }
   return result
+}
+
+function referenceTransition(original, draft) {
+  const before = original.review_context, after = draft.review_context
+  const had = object(before) && own(before, "operator_claim_references"), has = object(after) && own(after, "operator_claim_references")
+  if (had === has && (!had || isDeepStrictEqual(before.operator_claim_references, after.operator_claim_references))) return
+  if (!object(before) || !object(after) || draft.content_revision !== (original.content_revision ?? 0) + 1
+    || draft.decision_revision !== (original.decision_revision ?? 0) + 1 || draft.status !== "pending"
+    || draft.approval_mode !== "manual"
+    || ["review_binding", "media_review_binding", "approval_binding", "publish_intent_id", "approved_at", "auto_approve_at", "auto_approve_requested_at", "publish_requested_at", "autoship_on_critic_pass"].some(key => own(draft, key))) fail()
+  if (object(after.two_bot) && Object.keys(after.two_bot).some(key => !["bundle", "signal_kind"].includes(key))) fail()
+  if (has && !readOperatorClaimReferences(draft.text, after.two_bot?.bundle, after.operator_claim_references)) fail()
+  const history = draft.revision_history, oldHistory = original.revision_history ?? []
+  // The existing state merger may sort/deduplicate snapshots and also retain
+  // the full former draft alongside invalidateText's compact snapshot.
+  if (!Array.isArray(oldHistory) || !Array.isArray(history) || history.length <= oldHistory.length
+    || !oldHistory.every(row => history.some(retained => isDeepStrictEqual(row, retained)))) fail()
+  if (!history.some(retained => object(retained) && retained.text === original.text
+    && retained.content_revision === (original.content_revision ?? 0)
+    && isDeepStrictEqual(retained.review_context, original.review_context))) fail()
 }
 
 function containsSource(draft) {
@@ -128,7 +149,8 @@ export function assertGistEvidenceUnchanged(document, drafts) {
     seen.add(draft.id)
     const original = originals.get(draft.id)
     if (original) {
-      if (!isDeepStrictEqual(protectedEvidence(draft), protectedEvidence(original.value))) fail()
+      if (!isDeepStrictEqual(protectedEvidence(draft, { editableReferences: true }), protectedEvidence(original.value, { editableReferences: true }))) fail()
+      referenceTransition(original.value, draft)
     } else if (containsSource(draft)) fail()
   }
 }

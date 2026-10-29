@@ -9,6 +9,7 @@ export function createDraftCommand(draft, action, payload = {}, now = new Date()
     : action === "select_candidate" ? { candidate_rank: payload.candidateRank,
       candidate_sha256: draft.candidates?.find((c) => c.rank === payload.candidateRank)?.command_sha256 }
     : { reason }
+  if (action === "edit" && Object.hasOwn(payload, "operator_claim_references")) data.operator_claim_references = structuredClone(payload.operator_claim_references)
   return { command_id: crypto.randomUUID(), action: names[action], requested_at: now.toISOString(),
     expires_at: new Date(now.getTime() + 3600000).toISOString(),
     targets: [{ draft_id: draft.id, ...(payload.expectedRevision || draft.revision_identity) }], payload: data }
