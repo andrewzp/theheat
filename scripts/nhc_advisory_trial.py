@@ -56,7 +56,7 @@ def binding() -> dict:
     value["cli_sha256"] = digest(Path(__file__).read_bytes())
     value["trial_entry_points"] = {name: digest((ROOT / name).read_bytes()) for name in (
         "scripts/claim_sample_trial.py", "scripts/package_sample_trial.py", "scripts/fresh_sample_trial.py",
-        WORKFLOW)}
+        "scripts/nhc_advisory_import.py", WORKFLOW)}
     value["source_code"] = {name: digest((ROOT / name).read_bytes()) for name in (
         "src/data/nhc_advisory.py", "src/editorial/nhc_advisory.py", "src/editorial/nhc_advisory_runtime.py",
         "src/two_bot/intern/nhc_advisory.py")}
