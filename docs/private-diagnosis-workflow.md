@@ -299,7 +299,7 @@ invented.
 
 ## Route families (v2 archives)
 
-When a supplied archive is v2, the JSON report gains a `routes` section, and the views (renderer v3) summarize its totals status, unknown reasons and result conflicts. v1-only reports have no route section.
+When a supplied archive is v2, the JSON report gains a `routes` section, and the views (renderer v4) summarize its totals status, unknown reasons and result conflicts. v1-only reports have no route section.
 
 For each archive, the section lists:
 - the families observed and not observed;
@@ -313,3 +313,18 @@ For each archive, the section lists:
 The same capture supplied twice is listed once (`identity_reconciliation`). The section also lists `result_conflicts`, each with every source scope, route and line, `route_totals_status` and `route_totals_unknown_reasons`. No conflicting line is chosen or counted, and a quarantined identity keeps the route totals incomplete.
 
 Weekly promotion stays HOLD. No route disposition is a root cause, a quality grade or an approval.
+
+## Malformed results and safe local views
+
+A fully retained provider result with a malformed classification or message is
+retained evidence, not a corrupt archive. The lineage reader marks the result
+invalid while retaining every observed custom ID, including duplicate IDs.
+Unknown classification never becomes an invented result type or zero usage.
+Diagnosis keeps conflicting result sources and incomplete usage totals visible.
+
+Markdown views serialize dynamic values in code spans whose delimiters exceed
+every backtick run in the value. Table separators, angle brackets and line
+controls have readable escaped representations; JSON preserves the exact value.
+The renderer identity is v4. A sealed report from an older renderer still has its
+component hashes checked, then reports `unverifiable_views`; it is never rewritten
+or resealed by verification.

@@ -595,21 +595,27 @@ def _results_lines(raw: bytes, complete: bool) -> dict:
     cut = bool(tail) and not complete
     if tail and complete:
         lines.append(tail)
-    rows, invalid = [], 0
+    rows, observed_ids, invalid = [], [], 0
     for line in lines:
         try:
             value = strict_json_loads(line, allow_floats=True)
             custom = value.get("custom_id") if isinstance(value, dict) else None
-            kind = (value.get("result") or {}).get("type") if isinstance(value, dict) else None
-            if type(custom) is not str or kind not in _RESULT_TYPES:
+            # Identity is an observation even when the provider classification is malformed.
+            if type(custom) is str:
+                observed_ids.append(custom)
+            result = value.get("result") if isinstance(value, dict) else None
+            kind = result.get("type") if type(result) is dict else None
+            message = result.get("message") if type(result) is dict else None
+            if (type(custom) is not str or type(kind) is not str or kind not in _RESULT_TYPES
+                    or (kind == "succeeded" and type(message) is not dict)):
                 raise ValueError("result_shape")
             rows.append({"custom_id": custom, "type": kind})
         except (ValueError, UnicodeError, AttributeError):
             invalid += 1
     counts: dict[str, int] = {}
-    for row in rows:
-        counts[row["custom_id"]] = counts.get(row["custom_id"], 0) + 1
-    return {"rows": rows, "invalid_lines": invalid, "final_line_cut": cut,
+    for custom in observed_ids:
+        counts[custom] = counts.get(custom, 0) + 1
+    return {"rows": rows, "observed_custom_ids": observed_ids, "invalid_lines": invalid, "final_line_cut": cut,
             "duplicate_custom_ids": sorted(k for k, v in counts.items() if v > 1),
             "status": ("invalid" if invalid else "partial" if cut or not complete else
                        "empty" if not raw else "complete")}
@@ -661,10 +667,11 @@ def route_lineage(archive: VerifiedArchive) -> dict:
                 else:
                     parsed = _results_lines(archive.artifact(route.response.artifact), bool(route.complete))
                     known = set(predecessors[0]["custom_ids"] or []) if len(predecessors) == 1 else None
-                    ids = [item["custom_id"] for item in parsed["rows"]]
+                    ids = parsed["observed_custom_ids"]
                     row["results"] = {
                         "status": parsed["status"], "lines": len(parsed["rows"]),
                         "invalid_lines": parsed["invalid_lines"], "final_line_cut": parsed["final_line_cut"],
+                        "observed_custom_ids": ids,
                         "types": {kind: sum(1 for item in parsed["rows"] if item["type"] == kind)
                                   for kind in sorted(_RESULT_TYPES)},
                         "duplicate_custom_ids": parsed["duplicate_custom_ids"],

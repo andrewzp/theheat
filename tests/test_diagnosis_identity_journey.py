@@ -176,7 +176,7 @@ def test_fresh_process_identity_journey_across_json_markdown_and_html(journey, r
     assert "totals_are_known_partial_subtotals" in summary["next_actions"]
     rendered = views(tmp_path / "d-routes")
     assert_views_agree(report, rendered)
-    assert "&lt;img src=x onerror=alert(1)&gt;\\|pipe" in rendered["md"]
+    assert r"\u003cimg src=x onerror=alert(1)\u003e\u007cpipe" in rendered["md"]
     assert "&lt;img src=x onerror=alert(1)&gt;|pipe" in rendered["html"]
 
     # Stale or mismatched optional components are held, labeled and never repaired.
@@ -195,7 +195,7 @@ def test_fresh_process_identity_journey_across_json_markdown_and_html(journey, r
     assert sealed.read_bytes() == sealed_bytes  # the older sealed component was read, never rewritten
     # No provider was called anywhere in the journey.
     assert sum(len(run.providers.physical) for run in runs.values()) == physical
-    assert diagnosis.VIEW_RENDERER.endswith("/v3")
+    assert diagnosis.VIEW_RENDERER.endswith("/v4")
 
 
 def test_mixed_v1_v2_reconciliation_with_scenario_and_aggregate_billing_reaches_diagnosis(journey, routes):

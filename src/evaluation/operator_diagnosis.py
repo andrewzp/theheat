@@ -18,6 +18,7 @@ from datetime import datetime
 import html
 import json
 import os
+import re
 from pathlib import Path
 import selectors
 import subprocess
@@ -35,7 +36,7 @@ from src.two_bot.request_archive_replay import VerifiedArchive, lineage, route_l
 SCHEMA = "theheat.private-diagnosis/v1"
 COMPONENTS = ("diagnosis.json", "diagnosis.md", "diagnosis.html")
 # Views are re-rendered during verification; a renderer change is a new version, not tampering.
-VIEW_RENDERER = "theheat.private-diagnosis-views/v3"
+VIEW_RENDERER = "theheat.private-diagnosis-views/v4"
 MARKER = "diagnosis.complete.json"
 MAX_READER_OUTPUT = 16 * 1024 * 1024
 MAX_REPORT_COMPONENT_BYTES = 64 * 1024 * 1024
@@ -761,9 +762,20 @@ def report_json(report: dict) -> bytes:
 # ----------------------------------------------------------------- views
 
 def _md(value: Any) -> str:
-    # Provider-supplied identifiers (for example a batch custom ID) stay inert text in any Markdown viewer.
+    """An inert inline code span, also safe inside a GFM table.
+
+    A delimiter longer than every input run prevents code-span breakout. Table
+    separators, raw HTML delimiters and line controls use readable escaped
+    representations because some viewers split tables before parsing spans.
+    JSON retains the exact original value; these escapes belong only to views.
+    """
     text = "—" if value is None else str(value)
-    return text.replace("|", "\\|").replace("\n", " ").replace("<", "&lt;").replace(">", "&gt;")
+    text = text.replace("\\", "\\\\")
+    for character, escaped in (("|", "\\u007c"), ("<", "\\u003c"), (">", "\\u003e"),
+                               ("\n", "\\n"), ("\r", "\\r"), ("\t", "\\t")):
+        text = text.replace(character, escaped)
+    delimiter = "`" * (max((len(run) for run in re.findall(r"`+", text)), default=0) + 1)
+    return f"{delimiter} {text} {delimiter}"
 
 
 def _view_value(value: Any) -> str:
@@ -772,11 +784,11 @@ def _view_value(value: Any) -> str:
 
 def render_markdown(report: dict) -> str:
     o = report["overview"]
-    lines = [f"# Private diagnosis ({report['report_sha256'][:12]})", "",
-             f"As of `{report['as_of']}`. Promotion: **HOLD**. No action here approves, replays, releases "
+    lines = [f"# Private diagnosis ({_md(report['report_sha256'][:12])})", "",
+             f"As of {_md(report['as_of'])}. Promotion: **HOLD**. No action here approves, replays, releases "
              "budget, posts or corrects.", "", "## Components", "", "| component | status | detail |", "|---|---|---|"]
     for component in report["components"]:
-        lines.append(f"| {component['component']} | {component['status']} | {_md(_component_detail(component))} |")
+        lines.append(f"| {_md(component['component'])} | {_md(component['status'])} | {_md(_component_detail(component))} |")
     if "identity_reconciliation" in report:  # Hand-built renderer fixtures may carry no identity data.
         lines += _identity_markdown(report["identity_reconciliation"], report["components"])
     lines += ["", "## Overview (separate denominators)", ""]
@@ -789,26 +801,26 @@ def render_markdown(report: dict) -> str:
     lines += ["", "## Candidates", "", "| candidate | archive · attempt · text sha256 | event | decision | dispositions "
               "| publication |", "|---|---|---|---|---|---|"]
     for c in report["candidates"]:
-        lines.append(f"| `{c['anchor']}` | {c['scope_id']} · {c.get('attempt')} · `{c['candidate_text_sha256']}` | "
-                     f"{_md(c['event_id'])} | {c['decision']} | "
-                     f"{_md(', '.join(c['dispositions']) or 'none')} | {c['publication']['status']} |")
+        lines.append(f"| {_md(c['anchor'])} | {_md(c['scope_id'])} · {_md(c.get('attempt'))} · {_md(c['candidate_text_sha256'])} | "
+                     f"{_md(c['event_id'])} | {_md(c['decision'])} | "
+                     f"{_md(', '.join(c['dispositions']) or 'none')} | {_md(c['publication']['status'])} |")
         if c["publication"]["status"] == "joined":
-            lines.append(f"\nPublication evidence for `{c['anchor']}`: {_md(_view_value(c['publication']))}\n")
+            lines.append(f"\nPublication evidence for {_md(c['anchor'])}: {_md(_view_value(c['publication']))}\n")
     lines += ["", "## Generations", "", "| scope | event | terminal | candidates | dispositions |", "|---|---|---|---|---|"]
     for g in report["generations"]:
         terminal = g["terminal"] if isinstance(g["terminal"], str) else (
             "accepted" if g["terminal"].get("accepted") else f"kill:{g['terminal'].get('kill_stage')}")
-        lines.append(f"| {g['scope_id']} | {_md(g['event_id'])} | {terminal} | {g['candidate_count']} | "
+        lines.append(f"| {_md(g['scope_id'])} | {_md(g['event_id'])} | {_md(terminal)} | {_md(g['candidate_count'])} | "
                      f"{_md(', '.join(g['dispositions']) or 'none')} |")
     if report["unjoined_posts"]:
         lines += ["", "## Posts not joined to an archived candidate", "", "| tweet | revision | context | reason |",
                   "|---|---|---|---|"]
-        lines += [f"| {p['tweet_id']} | {p['revision_status']} | {p['publication_context']} | {p['join']} |"
+        lines += [f"| {_md(p['tweet_id'])} | {_md(p['revision_status'])} | {_md(p['publication_context'])} | {_md(p['join'])} |"
                   for p in report["unjoined_posts"]]
-        lines += [f"\nOutcome evidence {p['tweet_id']}: {_md(_view_value(p))}" for p in report["unjoined_posts"]]
-    lines += ["", "## Next mechanical actions", ""] + ([f"- `{a['code']}`: {a['action']}"
+        lines += [f"\nOutcome evidence {_md(p['tweet_id'])}: {_md(_view_value(p))}" for p in report["unjoined_posts"]]
+    lines += ["", "## Next mechanical actions", ""] + ([f"- {_md(a['code'])}: {_md(a['action'])}"
                                                          for a in report.get("next_actions", [])] or ["- None."])
-    lines += ["", "## Limits", ""] + [f"- {item}" for item in report["limits"]]
+    lines += ["", "## Limits", ""] + [f"- {_md(item)}" for item in report["limits"]]
     return "\n".join(lines) + "\n"
 
 
@@ -826,16 +838,16 @@ def _input_cells(component: dict) -> tuple:
 
 def _identity_markdown(identity: dict, components: list[dict]) -> list[str]:
     lines = ["", "## Capture identity", "",
-             f"Rule `{identity['rule']}`: **{identity['status']}**. {identity['supplied_inputs']} archive arguments, "
-             f"{identity['counted_captures']} counted captures, {identity['duplicate_inputs']} repeated or copied "
-             f"arguments counted once, {identity['quarantined_inputs']} quarantined, {identity['invalid_inputs']} "
+             f"Rule {_md(identity['rule'])}: **{_md(identity['status'])}**. {_md(identity['supplied_inputs'])} archive arguments, "
+             f"{_md(identity['counted_captures'])} counted captures, {_md(identity['duplicate_inputs'])} repeated or copied "
+             f"arguments counted once, {_md(identity['quarantined_inputs'])} quarantined, {_md(identity['invalid_inputs'])} "
              "invalid. Quarantined and invalid inputs contribute to no count, total or join.", "",
              "| input | status | identity | scope | manifest sha256 | duplicate of / conflicts with |",
              "|---|---|---|---|---|---|"]
     lines += ["| " + " | ".join(_md(cell) for cell in _input_cells(c)) + " |"
               for c in components if c["component"] == "archive" and "identity" in c]
     for group in identity["conflict_groups"]:
-        lines.append(f"\nConflict `{group['scope_id']}`: inputs {_view_value(group['inputs'])} claim manifests "
+        lines.append(f"\nConflict {_md(group['scope_id'])}: inputs {_md(_view_value(group['inputs']))} claim manifests "
                      f"{_md(', '.join(group['manifest_sha256s']))}; none was chosen.")
     return lines
 
@@ -843,11 +855,11 @@ def _identity_markdown(identity: dict, components: list[dict]) -> list[str]:
 def _routes_markdown(routes: dict) -> list[str]:
     reasons = ", ".join(routes["route_totals_unknown_reasons"]) or "none"
     lines = ["", "## Route evidence", "",
-             f"Route totals: **{routes['route_totals_status']}** (unknown because: {reasons}). "
-             f"{len(routes['scopes'])} counted route scopes.", ""]
+             f"Route totals: **{_md(routes['route_totals_status'])}** (unknown because: {_md(reasons)}). "
+             f"{_md(len(routes['scopes']))} counted route scopes.", ""]
     for conflict in routes["result_conflicts"]:
         sources = ", ".join(f"{s['scope_id']} route {s['route']} line {s['line']}" for s in conflict["sources"])
-        lines.append(f"- Result conflict `{_md(conflict['custom_id'])}` in batch {_md(conflict['provider_batch_id'])}: "
+        lines.append(f"- Result conflict {_md(conflict['custom_id'])} in batch {_md(conflict['provider_batch_id'])}: "
                      f"{_md(sources)}; none counted.")
     return lines
 
