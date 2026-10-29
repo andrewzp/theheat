@@ -53,11 +53,12 @@ def test_every_wired_adapter_and_health_key_has_product_legs():
 
 def test_every_code_and_restriction_reference_names_a_real_module_symbol():
     references = [ref for leg in products.LEGS for ref in leg.code_refs]
-    references += [ref for _meaning, _basis, ref in products.RESTRICTIONS.values()]
+    references += [ref for _meaning, scope in products.RESTRICTIONS.values() if scope != products.ADVISORY
+                   for _selector, ref in scope]
     for ref in references:
         path, symbol = ref.split(":")
         assert symbol in _module_symbols(path), ref
-    assert {basis for _m, basis, _r in products.RESTRICTIONS.values()} == {"check", "advisory"}
+    assert products.ADVISORY in {scope for _m, scope in products.RESTRICTIONS.values()}
 
 
 def test_runtime_leg_labels_are_the_labels_the_actual_code_emits():
@@ -178,34 +179,35 @@ def test_model_witness_serving_is_never_reported_as_station_observation():
     (["firms.viirs_noaa21_nrt", "usgs_quakes.significant_day_feed", "nws_alerts.active_alerts"], 3),
 ])
 def test_mutation_product_count_is_never_source_count(ids, expected):
-    assert products.independent_source_count(ids) == expected
+    assert products.max_independent_source_count(ids) == expected
     assert len(ids) >= expected
     groups = products.corroboration_groups(ids)
     assert sorted(item for group in groups for item in group) == sorted(ids)
 
 
-def test_each_adapter_exports_one_independent_source_however_many_products():
+def test_each_adapter_is_at_most_one_source_however_many_products():
     document = products.product_contract_document()
     for adapter in document["adapters"]:
-        assert adapter["independent_source_count"] == 1
-        assert products.independent_source_count(adapter["product_ids"]) == 1
+        assert products.max_independent_source_count(adapter["product_ids"]) == 1
     assert sum(len(a["product_ids"]) for a in document["adapters"]) > len(document["adapters"])
     with pytest.raises(ValueError, match="source_product_identity"):
-        products.independent_source_count(["firms.not_a_leg"])
+        products.max_independent_source_count(["firms.not_a_leg"])
 
 
 def test_unlabelled_success_is_ambiguous_where_unlabelled_alternate_routes_exist():
     gpm = products.serving_disposition("gpm_imerg", status="success")
     assert gpm["primary_leg_served_this_run"] is None and gpm["alternate_served"] is None
-    assert gpm["reasons"] == ["unlabelled_serving_route_ambiguous"]
+    assert gpm["reasons"] == ["serving_leg_not_evidenced", "unlabelled_alternate_routes_exist"]
     firms = products.serving_disposition("firms", status="success")
     assert firms["primary_leg_served_this_run"] is True and firms["serving_product_ids"] == ["firms.viirs_noaa21_nrt"]
+    assert firms["reasons"] == ["unlabelled_success_sole_wired_primary"]
     for status in ("failed", "skipped"):
         result = products.serving_disposition("gpm_imerg", status=status)
         assert result["serving_product_ids"] == [] and result["primary_leg_served_this_run"] is False
         assert result["operational_recovery"] == "not_established"
     unknown = products.serving_disposition("firms", status="degraded", runtime_leg_label="mystery_leg")
     assert unknown["serving_product_ids"] == [] and unknown["reasons"] == ["unknown_serving_label"]
+    assert unknown["primary_leg_served_this_run"] is None
     with pytest.raises(ValueError, match="disposition_input"):
         products.serving_disposition("firms", status="green")
 
@@ -219,7 +221,8 @@ def test_export_grants_nothing_and_keeps_provider_terms_unknown():
         assert all(row[field] is None for field in products.UNKNOWN_FIELDS)
     assert {row["product_id"] for row in document["missing_work"]} == {
         "gpm_imerg.imerg_final_reference", "gdacs.map_api", "gdacs.reliefweb_witness", "firms.viirs_snpp_nrt"}
-    assert {row["field"] for row in document["unmet_criteria"]} == {*products.UNKNOWN_FIELDS, "current_availability"}
+    assert {row["field"] for row in document["unmet_criteria"]} == {*products.UNKNOWN_FIELDS, "current_availability",
+                                                                    "restriction_enforcement"}
     assert products.verify_product_contract_document(document) == document["contracts_sha256"]
     assert document == products.product_contract_document()
 
@@ -267,3 +270,255 @@ assert document['claim_permission_granted'] is False
 products.verify_product_contract_document(document)
 '''
     subprocess.run([sys.executable, "-c", code], cwd=ROOT, check=True, timeout=20)
+
+
+# G11-R1 repairs: counterexamples from the S1/S3 checkpoint review. Every fixture
+# below is invented test evidence, never proof that a source served or an event happened.
+
+def _rehashed(document):
+    body = {key: value for key, value in document.items() if key != "contracts_sha256"}
+    canonical = json.dumps(body, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)
+    return {**body, "contracts_sha256": hashlib.sha256(canonical.encode()).hexdigest()}
+
+
+def _function_names(path: str) -> set[str]:
+    tree = ast.parse((ROOT / path).read_text())
+    return {node.name for node in tree.body if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))}
+
+
+def _called_names(path: str, function: str) -> set[str]:
+    tree = ast.parse((ROOT / path).read_text())
+    body = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == function)
+    return {node.func.attr if isinstance(node.func, ast.Attribute) else getattr(node.func, "id", "")
+            for node in ast.walk(body) if isinstance(node, ast.Call)}
+
+
+def test_r1_status_alone_never_names_a_served_product():
+    """S1-R1: the CO2 cache fallback emits unlabelled degraded; AQ success can mean one lane."""
+    co2 = products.serving_disposition("co2", status="degraded")
+    assert co2["serving_product_ids"] == [] and co2["primary_leg_served_this_run"] is None
+    assert co2["observed_station_kind_only"] is not True and co2["alternate_served"] is None
+    aq = products.serving_disposition("air_quality", status="success")
+    assert aq["serving_product_ids"] == [] and aq["primary_leg_served_this_run"] is None
+    assert aq["observed_station_kind_only"] is not True
+    unknown = products.serving_disposition("firms", status="degraded", runtime_leg_label="mystery_leg")
+    assert unknown["serving_product_ids"] == [] and unknown["primary_leg_served_this_run"] is None
+
+
+def test_r1_actual_co2_runner_cache_fallback_is_retained_not_fresh_primary(monkeypatch):
+    from datetime import date, timedelta
+
+    from src.data import last_good
+    from src.data.co2 import CO2Reading
+    from src.orchestrator.sources import co2 as runner
+    from src.state import _fresh_state
+
+    bot_state, current_run = _fresh_state(), {"sources": []}
+    recent = (date.today() - timedelta(days=1)).isoformat()
+    last_good.write(bot_state, "co2", recent, {"date": recent, "ppm": 429.8}, captured_at=f"{recent}T00:00:00Z")
+
+    def unavailable(**_kwargs):
+        raise RuntimeError("invented upstream outage")
+
+    monkeypatch.setattr(runner.co2, "fetch_co2_data", unavailable)
+    runner.run_co2(bot_state, current_run)
+    entry = current_run["sources"][0]
+    assert entry["status"] == "degraded" and entry["error"].startswith("served last-good (")
+    cached = products.serving_disposition_from_run_entry(entry)
+    assert cached["serving_product_ids"] == ["co2.last_good_cache"]
+    assert cached["retained_not_fresh"] is True and cached["alternate_served"] is True
+    assert cached["primary_leg_served_this_run"] is False and cached["observed_station_kind_only"] is False
+    assert cached["operational_recovery"] == "not_established"
+
+    fresh_run = {"sources": []}
+    readings = [CO2Reading(date="2026-06-10", ppm=429.8, event_id="co2_2026-06-10_429")]
+    monkeypatch.setattr(runner.co2, "fetch_co2_data", lambda: readings)
+    monkeypatch.setattr(runner.co2, "detect_milestone", lambda _readings: None)
+    runner.run_co2(_fresh_state(), fresh_run)
+    fresh = products.serving_disposition_from_run_entry(fresh_run["sources"][0])
+    assert fresh["serving_product_ids"] == ["co2.mlo_daily"] and fresh["retained_not_fresh"] is False
+    assert fresh["primary_leg_served_this_run"] is True and fresh["observed_station_kind_only"] is True
+
+
+def _aq_summary(pm25, dust):
+    def lane(state):
+        enabled = state is not None
+        counts = {"complete": 3 if state in {"available", "partial"} else 0, "incomplete": 0,
+                  "missing": 0 if state != "partial" else 2, "invalid": 0, "unavailable_window": 0}
+        coverage = None if not enabled else counts["complete"] / 5
+        return dict(enabled=enabled, status=state or "disabled", requested=5 if enabled else 0,
+                    coverage=coverage, **counts)
+    return dict(schema_version=1, evidence_type="model_forecast", requested_cities=5, observed_cities=3,
+                result_shape="matched", received_slots=5, hazards={"pm25": lane(pm25), "dust": lane(dust)})
+
+
+@pytest.mark.parametrize("pm25,dust,served", [
+    ("available", None, ["air_quality.cams_pm25"]),
+    (None, "available", ["air_quality.cams_dust"]),
+    ("available", "partial", ["air_quality.cams_dust", "air_quality.cams_pm25"]),
+    ("available", "unavailable", ["air_quality.cams_pm25"]),
+])
+def test_r1_actual_aq_availability_names_only_enabled_served_lanes(pm25, dust, served):
+    from src.data.air_quality_availability import source_status
+
+    summary = _aq_summary(pm25, dust)
+    entry = {"source": "air_quality", "status": source_status(summary), "error": None, "note": None,
+             "details": {"aq_availability": summary, "pm25_enabled": pm25 is not None,
+                         "dust_enabled": dust is not None, "openaq_enabled": False}}
+    result = products.serving_disposition_from_run_entry(entry)
+    assert result["serving_product_ids"] == served
+    assert result["serving_data_kinds"] == ["forecast_model"] and result["observed_station_kind_only"] is False
+    explicit = products.serving_disposition("air_quality", status="success",
+                                            served_product_ids=["air_quality.cams_dust"])
+    assert explicit["serving_product_ids"] == ["air_quality.cams_dust"]
+    with pytest.raises(ValueError, match="disposition_input"):
+        products.serving_disposition("air_quality", status="success", served_product_ids=["firms.modis_nrt"])
+
+
+def test_r1_leaderboard_is_the_daily_max_forecast_shared_with_the_alert_adapter():
+    """S1-R2: fetch_city_forecast requests daily temperature_2m_max, timezone auto, one day."""
+    tree = ast.parse((ROOT / "src/data/open_meteo.py").read_text())
+    function = next(node for node in tree.body if isinstance(node, ast.FunctionDef)
+                    and node.name == "fetch_city_forecast")
+    params = next(kw.value for node in ast.walk(function) if isinstance(node, ast.Call)
+                  for kw in node.keywords if kw.arg == "params")
+    request = {key.value: value.value for key, value in zip(params.keys, params.values)
+               if isinstance(key, ast.Constant) and isinstance(value, ast.Constant)}
+    assert request["daily"] == "temperature_2m_max" and request["forecast_days"] == 1
+    assert request["timezone"] == "auto" and "current" not in request
+    assert "fetch_city_forecast" in _called_names("src/data/open_meteo.py", "fetch_all_city_temps")
+    leaderboard = [leg for leg in products.LEGS if leg.source_id == "leaderboard" and leg.provider == "open_meteo"]
+    assert len(leaderboard) == 1
+    leg, alert = leaderboard[0], BY_ID["open_meteo_extreme_signals.om_forecast"]
+    assert leg.data_kind == "forecast_model" and leg.upstream == alert.upstream
+    assert "current" not in (leg.product + leg.upstream + leg.product_id).lower()
+    assert "forecast" in leg.time_limit.lower() and "forecast_not_outcome" in leg.claim_restrictions
+    assert any(ref.endswith(":fetch_city_forecast") for ref in leg.code_refs)
+    # One shared daily forecast is one corroboration group, whatever the adapter IDs.
+    assert len(products.corroboration_groups([leg.product_id, alert.product_id])) == 1
+
+
+def test_r1_unknown_independence_is_reported_as_an_upper_bound_only():
+    document = products.product_contract_document()
+    assert document["source_independence"] == "not_established"
+    assert all("independent_source_count" not in adapter for adapter in document["adapters"])
+    shared = {tuple(group) for group in document["shared_upstream_groups"]}
+    assert ("leaderboard.om_forecast_daily_max", "open_meteo_extreme_signals.om_forecast") in shared
+    assert products.max_independent_source_count(["leaderboard.om_forecast_daily_max",
+                                                  "open_meteo_extreme_signals.om_forecast"]) == 1
+
+
+def _set_row(product_id, **change):
+    def mutate(document):
+        row = next(row for row in document["products"] if row["product_id"] == product_id)
+        row.update(change)
+    return mutate
+
+
+def _drop_row(product_id):
+    def mutate(document):
+        document["products"] = [row for row in document["products"] if row["product_id"] != product_id]
+    return mutate
+
+
+@pytest.mark.parametrize("mutate,code", [
+    (_set_row("open_meteo_extreme_signals.om_forecast", data_kind="observed_station"), "kind_provider"),
+    (_set_row("gpm_imerg.open_meteo_witness", data_kind="observed_station",
+              claim_restrictions=["record_needs_qualified_history"]), "kind_provider"),
+    (lambda d: d.update(products=[]), "source_product_(size|export)"),
+    (_drop_row("firms.noaa_hms"), "source_product_(export_inventory|export_adapters|enforcement_scope)"),
+    (_set_row("firms.noaa_hms", code_refs=["src/data/firms.py:invented_symbol"]), "export_inventory"),
+    (_set_row("firms.noaa_hms", health_keys="firms"), "export_row"),
+    (_set_row("firms.noaa_hms", surprise=True), "export_row"),
+    (_set_row("firms.noaa_hms", restriction_enforcement={}), "export_(row|enforcement)"),
+    (lambda d: d["restrictions"]["forecast_not_outcome"].update(meaning="Forecasts are outcomes."),
+     "export_restrictions"),
+    (lambda d: d["adapters"][0].update(product_ids=[]), "export_adapters"),
+    (lambda d: d.update(unmet_criteria=[]), "export_summary"),
+    (lambda d: d.update(missing_work=[]), "export_summary"),
+    (lambda d: d.update(registry_schema_version=99), "export_schema"),
+    (lambda d: d.update(source_independence="established"), "export_(schema|permission|summary)"),
+])
+def test_r1_rehashed_detached_export_is_decoded_not_just_hashed(mutate, code):
+    """S1-R3: the digest binds bytes, not truth."""
+    document = copy.deepcopy(products.product_contract_document())
+    mutate(document)
+    with pytest.raises(ValueError, match=code):
+        products.verify_product_contract_document(_rehashed(document))
+
+
+def test_r1_legitimate_detached_export_stays_readable_and_derives_its_own_summary():
+    document = products.product_contract_document()
+    reloaded = json.loads(json.dumps(document))
+    assert products.verify_product_contract_document(reloaded) == document["contracts_sha256"]
+    view = products.decode_product_contract_document(reloaded)
+    assert view["missing_work"] == document["missing_work"] and view["unmet_criteria"] == document["unmet_criteria"]
+    assert {row["field"] for row in view["unmet_criteria"]} >= {*products.UNKNOWN_FIELDS, "current_availability",
+                                                                "restriction_enforcement"}
+    with pytest.raises(ValueError, match="export_schema"):
+        products.decode_product_contract_document({**reloaded, "schema": "theheat.source-product-contracts/v9"})
+
+
+def test_r1_marine_compound_supply_called_by_the_runner_is_inventoried():
+    """S1-R4: run_synthesis calls both detectors; both derived legs are inventoried."""
+    called = _called_names("src/orchestrator/sources/synthesis.py", "run_synthesis")
+    assert {"detect_fire_drought_heat", "detect_marine_compound"} <= called
+    marine = [leg for leg in products.LEGS if any(ref.endswith(":detect_marine_compound") for ref in leg.code_refs)]
+    assert len(marine) == 1
+    leg = marine[0]
+    assert leg.source_id == "synthesis_fire_drought_heat" and leg.status == "wired"
+    assert leg.data_kind == "derived_combination" and leg.role == "primary"
+    assert {"crw_heat_stress_not_bleaching", "association_not_shared_footprint",
+            "co_occurrence_not_causation"} <= set(leg.claim_restrictions)
+    assert "independent" in leg.time_limit.lower() and "footprint" in leg.geographic_limit.lower()
+    overlap = [leg for leg in products.LEGS if any(ref.endswith(":detect_fire_drought_heat") for ref in leg.code_refs)]
+    assert len(overlap) == 1 and overlap[0].chain != leg.chain
+
+
+GHCN_HISTORY = "src/data/ghcn.py:record_comparison_qualified"
+
+
+def _applicable(document, row, code):
+    scoped = row.get("restriction_enforcement")
+    if scoped:
+        return scoped[code]
+    table = document["restrictions"][code]
+    return {"basis": table["basis"], "reference": table["reference"]}
+
+
+def test_r1_ghcn_history_qualification_is_not_claimed_for_other_station_products():
+    """S1-R5: Snow Today, OpenAQ, CO-OPS and CO2 are not enforced by a GHCN-only function."""
+    document = products.product_contract_document()
+    checked = []
+    for row in document["products"]:
+        if "record_needs_qualified_history" not in row["claim_restrictions"]:
+            continue
+        enforcement = _applicable(document, row, "record_needs_qualified_history")
+        if row["source_id"] != "open_meteo_extreme_signals":
+            checked.append(row["product_id"])
+            assert not (enforcement["basis"] == "check" and enforcement["reference"] == GHCN_HISTORY), row["product_id"]
+    assert {"co2.mlo_daily", "air_quality.openaq_pm25", "water_levels.coops_water_level",
+            "nsidc_snow.snow_today_swe"} <= set(checked)
+
+
+def test_r1_every_check_enforcement_is_a_scoped_function_and_the_rest_is_explicit():
+    document = products.product_contract_document()
+    unresolved = set()
+    for row in document["products"]:
+        for code in row["claim_restrictions"]:
+            enforcement = row["restriction_enforcement"][code]
+            assert enforcement["basis"] in {"check", "advisory", "unresolved"}
+            if enforcement["basis"] == "check":
+                path, symbol = enforcement["reference"].split(":")
+                assert symbol in _function_names(path), enforcement["reference"]  # a symbol is not enforcement
+            elif enforcement["basis"] == "unresolved":
+                assert enforcement["reference"] is None
+                unresolved.add(row["product_id"])
+    assert unresolved
+    listed = next(item for item in document["unmet_criteria"] if item["field"] == "restriction_enforcement")
+    assert set(listed["products"]) == unresolved
+    ghcn = BY_ID["open_meteo_extreme_signals.ghcn_daily"]
+    assert products.restriction_enforcement(ghcn)["record_needs_qualified_history"] == {
+        "basis": "check", "reference": GHCN_HISTORY}
+    assert products.restriction_enforcement(BY_ID["co2.mlo_daily"])["record_needs_qualified_history"] == {
+        "basis": "unresolved", "reference": None}

@@ -363,3 +363,27 @@ result = readiness.assess(value)
 assert result["global_recall"] is None
 '''
     subprocess.run([sys.executable, "-c", code], check=True, timeout=120)
+
+
+# G11-R1/R3 repairs (invented exports; never weather truth or human review).
+
+def _rehash_products(document):
+    body = {key: value for key, value in document.items() if key != "contracts_sha256"}
+    return {**body, "contracts_sha256": readiness.digest(body)}
+
+
+def test_r1_cleared_product_summaries_cannot_hide_null_required_evidence(parts):
+    """S3-R3: a rehashed export with cleared summaries never yields P17 unmet=[]."""
+    cleared = deepcopy(parts["products"][1])
+    cleared["unmet_criteria"], cleared["missing_work"] = [], []
+    value = {"schema_version": 1, "assessment_cutoff": CUTOFF,
+             "components": [{"component_type": "source_products", "export": _rehash_products(cleared)}]}
+    result = readiness.assess(value)
+    p17 = result["unmet_requirements"]["P17"]["unmet"]
+    assert p17 and "product_contracts_missing" not in p17
+    row = result["components"][0]
+    assert row["status"] == "unsupported" and row["reasons"] == ["source_product_export_summary"]
+    valid = readiness.assess(envelope(parts, "products"))
+    unmet = valid["unmet_requirements"]["P17"]["unmet"]
+    assert {"provider_cadence_unknown", "current_availability_unverified", "restriction_enforcement_unresolved",
+            "unresolved_or_retired_legs_remain"} <= set(unmet)

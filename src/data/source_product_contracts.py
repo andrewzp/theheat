@@ -77,47 +77,73 @@ PROVIDER_NAMESPACES = {
     "nasa_jpl_grace": "nasa_jpl", "nasa_ozone_watch": "nasa_ozone_watch", "grounded_search": "grounded_search",
     "reliefweb": "reliefweb", "theheat_retained": "theheat",
 }
-# Each restriction names its existing basis. "check" means an existing story or
-# telemetry check refuses or labels the case; "advisory" means only the accepted
-# registry claim limit states it. Neither is a new grant.
+# Each restriction is either advisory (only the accepted registry claim limit
+# states it) or enforced by named checks scoped to the products they actually
+# see. A product outside every scope keeps the restriction with enforcement
+# "unresolved": a symbol elsewhere in the code base is not enforcement. Neither
+# basis is a new grant.
 _ADVISORY = "src/data/source_registry.py:CONTRACTS"
-RESTRICTIONS = {
-    "not_station_observation": ("A model, reanalysis or satellite value is not a station measurement.", "check",
-                                "src/two_bot/scientific_claims.py:scientific_claim_failures"),
-    "forecast_not_outcome": ("A forecast or warning does not prove the forecast impact occurred.", "check",
-                             "src/two_bot/scientific_claims.py:scientific_claim_failures"),
-    "no_landfall_inference": ("Advisory positions and forecast points do not establish landfall.", "check",
-                              "src/two_bot/scientific_claims.py:scientific_claim_failures"),
+ADVISORY = "advisory"
+_CLAIMS = "src/two_bot/scientific_claims.py:scientific_claim_failures"
+_GHCN_HISTORY = "src/data/ghcn.py:record_comparison_qualified"
+# forecast_as_observation: bundles marked as forecast evidence, model fallback or air quality.
+_FORECAST_MARKED = ("open_meteo_extreme_signals.om_forecast", "ocean.marine_forecast", "air_quality.cams_pm25",
+                    "air_quality.cams_dust")
+_MODEL_FALLBACK = ("gpm_imerg.open_meteo_witness", "river_gauges.open_meteo_flood")
+_RUNNER = "src/orchestrator/sources/{0}.py:run_{0}"
+# Runners that record status "degraded" with the serving label for these legs.
+_LABELLED_DEGRADED = (
+    *((f"gdacs.subtype_witness_{name}", _RUNNER.format("gdacs")) for name in ("usgs", "nhc", "jtwc")),
+    ("copernicus_ems.frontend_api", _RUNNER.format("copernicus_ems")),
+    ("river_gauges.open_meteo_flood", _RUNNER.format("river_gauges")),
+    ("sea_ice.osi_saf_arctic", _RUNNER.format("sea_ice")), ("sea_ice.osi_saf_antarctic", _RUNNER.format("sea_ice")),
+    *((f"firms.{name}", _RUNNER.format("firms")) for name in ("viirs_noaa20_nrt", "modis_nrt", "noaa_hms")),
+    ("gpm_imerg.open_meteo_witness", _RUNNER.format("gpm_imerg")),
+    ("coral_dhw.crw_erddap", _RUNNER.format("coral_dhw")),
+    ("jtwc.plain_rss", "src/orchestrator/cyclones.py:_process_cyclone_source"),
+)
+# Runners that record a retained last-good serving as "degraded", never success.
+_CACHE_DEGRADED = tuple((source, _RUNNER.format(source)) for source in (
+    "co2", "enso", "sea_ice", "ozone_hole", "nsidc_snow", "climate_indices", "ice_mass"))
+RESTRICTIONS: dict[str, tuple[str, Any]] = {
+    "not_station_observation": ("A model, reanalysis or satellite value is not a station measurement.",
+                                tuple((selector, _CLAIMS) for selector in (*_FORECAST_MARKED, *_MODEL_FALLBACK))),
+    "forecast_not_outcome": ("A forecast or warning does not prove the forecast impact occurred.",
+                             tuple((selector, _CLAIMS) for selector in _FORECAST_MARKED)),
+    "no_landfall_inference": ("Advisory positions and forecast points do not establish landfall.",
+                              (("nhc", _CLAIMS), ("jtwc", _CLAIMS), ("gdacs", _CLAIMS))),
     "alternate_not_primary_recovery": ("An alternate or witness serving is degraded service, not primary recovery.",
-                                       "check", "src/data/_witness.py:degraded_via"),
-    "cache_not_current_availability": ("A retained last-good value is not current provider availability.", "check",
-                                       "src/data/last_good.py:read"),
-    "reference_not_reading": ("A baseline, threshold or climatology is comparison input, not a new reading.", "check",
-                              "src/data/world_thresholds.py:record_comparison_qualification"),
-    "record_needs_qualified_history": ("A record claim needs the existing qualified station history.", "check",
-                                       "src/data/ghcn.py:record_comparison_qualified"),
-    "threshold_not_record": ("A trigger threshold is not an archive record.", "check",
-                             "src/data/gpm_imerg.py:PrecipExtremeEvent"),
-    "ambiguous_episode_held": ("Conflicting current GDACS episodes stay held; no episode is chosen.", "check",
-                               "src/data/gdacs_intake.py:reconcile"),
-    "aq_window_contract": ("Air-quality windows must pass their model-window contract.", "check",
-                           "src/data/air_quality_evidence.py:bundle_failures"),
-    "crw_climatology_contract": ("CRW anomalies keep their product climatology and sample bounds.", "check",
-                                 "src/data/crw_contract.py:reference_climatology_failures"),
-    "thermal_receipt_contract": ("Thermal detections need a consistent source minute and receipt.", "check",
-                                 "src/data/fire_evidence.py:fire_bundle_failures"),
-    "reported_not_adjudicated": ("A reported area, alert or activation is not an adjudicated impact total.",
-                                 "advisory", _ADVISORY),
-    "detection_not_cause_or_area": ("A thermal detection is not burned area, cause or casualties.", "advisory",
-                                    _ADVISORY),
-    "index_not_local_incident": ("An index or series milestone is not a local incident.", "advisory", _ADVISORY),
-    "discovery_not_qualified": ("A discovery result is not a qualified candidate or event census.", "advisory",
-                                _ADVISORY),
-    "crw_heat_stress_not_bleaching": ("Coral heat stress is not observed bleaching or reef death.", "advisory",
-                                      _ADVISORY),
-    "co_occurrence_not_causation": ("A derived overlap does not establish causation.", "advisory", _ADVISORY),
-    "region_sample_not_census": ("Sampled points or regions are not complete geographic coverage.", "advisory",
-                                 _ADVISORY),
+                                       _LABELLED_DEGRADED),
+    "cache_not_current_availability": ("A retained last-good value is not current provider availability.",
+                                       _CACHE_DEGRADED),
+    "reference_not_reading": ("A baseline, threshold or climatology is comparison input, not a new reading.",
+                              (("open_meteo_extreme_signals.om_era5_archive",
+                                "src/data/world_thresholds.py:record_comparison_qualification"),
+                               ("open_meteo_extreme_signals.ghcn_station_history", _GHCN_HISTORY))),
+    "record_needs_qualified_history": ("A record claim needs a qualified history for that station product.",
+                                       (("open_meteo_extreme_signals.ghcn_daily", _GHCN_HISTORY),
+                                        ("open_meteo_extreme_signals.ghcn_station_history", _GHCN_HISTORY))),
+    "threshold_not_record": ("A trigger threshold is not an archive record.", (("gpm_imerg", _CLAIMS),)),
+    "ambiguous_episode_held": ("Conflicting current GDACS episodes stay held; no episode is chosen.",
+                               (("gdacs.georss", "src/data/gdacs_intake.py:reconcile"),)),
+    "aq_window_contract": ("Air-quality windows must pass their model-window contract.",
+                           tuple((selector, "src/data/air_quality_evidence.py:bundle_failures")
+                                 for selector in ("air_quality.cams_pm25", "air_quality.cams_dust"))),
+    "crw_climatology_contract": ("CRW anomalies keep their product climatology and sample bounds.",
+                                 (("ocean_sst_anomaly", "src/two_bot/evidence_contract.py:audit_story_bundle"),)),
+    "thermal_receipt_contract": ("Thermal detections need a consistent source minute and receipt.",
+                                 (("firms.viirs_noaa21_nrt", "src/data/fire_evidence.py:fire_bundle_failures"),)),
+    "association_not_shared_footprint": ("Paired products keep their own dates and footprints; a configured "
+                                         "association is not a shared footprint or simultaneous event.",
+                                         (("synthesis_fire_drought_heat.marine_compound",
+                                           "src/editorial/marine_evidence.py:claim_failures"),)),
+    "reported_not_adjudicated": ("A reported area, alert or activation is not an adjudicated impact total.", ADVISORY),
+    "detection_not_cause_or_area": ("A thermal detection is not burned area, cause or casualties.", ADVISORY),
+    "index_not_local_incident": ("An index or series milestone is not a local incident.", ADVISORY),
+    "discovery_not_qualified": ("A discovery result is not a qualified candidate or event census.", ADVISORY),
+    "crw_heat_stress_not_bleaching": ("Coral heat stress is not observed bleaching or reef death.", ADVISORY),
+    "co_occurrence_not_causation": ("A derived overlap does not establish causation.", ADVISORY),
+    "region_sample_not_census": ("Sampled points or regions are not complete geographic coverage.", ADVISORY),
 }
 _KIND_REQUIRES = {
     "forecast_model": {"not_station_observation"},
@@ -538,11 +564,23 @@ LEGS += (
     _single("synthesis_fire_drought_heat", "component_overlap", "theheat_retained", "theheat.fire_drought_heat_overlap",
             "derived_combination", "Fire/drought/heat overlap", "Overlaps among retained components.",
             "Component units", "Derived from component sources; not an independent feed.",
-            ("src/orchestrator/sources/synthesis.py:run_synthesis",)),
-    _single("leaderboard", "om_current", "open_meteo", "open_meteo.current_temperature", "forecast_model",
-            "Current model temperature", "Configured city sample.", "degrees C", "Open-Meteo current conditions.",
-            ("src/data/open_meteo.py:fetch_all_city_temps",), chain="leaderboard",
-            restrictions=("region_sample_not_census",)),
+            ("src/orchestrator/sources/synthesis.py:run_synthesis", "src/editorial/synthesis.py:detect_fire_drought_heat")),
+    # The same runner also pairs retained CRW DHW and regional SST anomaly components.
+    _single("synthesis_fire_drought_heat", "marine_compound", "theheat_retained", "theheat.crw_dhw_sst_marine_compound",
+            "derived_combination", "CRW DHW / regional SST anomaly pairing",
+            "Configured coral-region to SST-region association; not a shared measurement footprint.",
+            "degree heating weeks; degrees C anomaly",
+            "Pairs separately qualified retained CRW DHW and regional SST anomaly components; not an independent feed.",
+            ("src/editorial/synthesis.py:detect_marine_compound", "src/editorial/marine_evidence.py:select_component"),
+            chain="marine_compound",
+            restrictions=("crw_heat_stress_not_bleaching", "region_sample_not_census", "association_not_shared_footprint"),
+            time_limit="Each component keeps its own independent product date within the 14-day window; not simultaneous."),
+    _single("leaderboard", "om_forecast_daily_max", "open_meteo", "open_meteo.best_match_forecast_daily",
+            "forecast_model", "Best-match daily maximum temperature forecast", "Configured city sample.", "degrees C",
+            "Open-Meteo best-match daily forecast: temperature_2m_max, provider-local day, one forecast day.",
+            ("src/data/open_meteo.py:fetch_city_forecast", "src/data/open_meteo.py:fetch_all_city_temps"),
+            chain="leaderboard", restrictions=("forecast_not_outcome", "region_sample_not_census"),
+            time_limit="Forecast valid date in the provider-local day; not a current or measured temperature."),
     _single("leaderboard", "attributable_normals", "theheat_retained", "theheat.city_normals", "official_reference",
             "Attributable city normals", "Configured city sample.", "degrees C",
             "Repository normals with their product and period.", ("src/data/open_meteo.py:load_normals",),
@@ -616,18 +654,44 @@ def validate_legs(legs=LEGS, registry=REGISTRY_CONTRACTS) -> None:
         keys = {key for leg in legs if leg.source_id == row.source_id for key in leg.health_keys}
         if keys != set(row.health_keys):
             raise ValueError("source_product_health_key")
+    # A scoped check must name products that actually carry its restriction.
+    for code, (_meaning, enforcement) in RESTRICTIONS.items():
+        if enforcement == ADVISORY:
+            continue
+        if len({selector for selector, _ref in enforcement}) != len(enforcement):
+            raise ValueError("source_product_enforcement_scope")
+        for selector, ref in enforcement:
+            carriers = [leg for leg in legs if code in leg.claim_restrictions
+                        and selector in {leg.product_id, leg.source_id}]
+            if not carriers or not _CODE_REF.fullmatch(ref):
+                raise ValueError("source_product_enforcement_scope")
 
 
 def legs_by_id(legs=LEGS) -> dict[str, ProductLeg]:
     return {leg.product_id: leg for leg in legs}
 
 
+def restriction_enforcement(leg: ProductLeg) -> dict[str, dict[str, str | None]]:
+    """Per-product enforcement: a scoped check, advisory text, or explicitly unresolved."""
+    result: dict[str, dict[str, str | None]] = {}
+    for code in leg.claim_restrictions:
+        _meaning, enforcement = RESTRICTIONS[code]
+        if enforcement == ADVISORY:
+            result[code] = {"basis": "advisory", "reference": _ADVISORY}
+            continue
+        scoped = dict(enforcement)
+        ref = scoped.get(leg.product_id) or scoped.get(leg.source_id)
+        result[code] = {"basis": "check", "reference": ref} if ref else {"basis": "unresolved", "reference": None}
+    return result
+
+
 def corroboration_groups(product_ids, legs=LEGS) -> list[list[str]]:
-    """Group products that cannot corroborate one another.
+    """Group products that are known not to corroborate one another.
 
     Products of one adapter, or legs reading the same upstream product through
-    different adapters, form one group. The group count is the maximum number of
-    independent sources; product count is never a source count.
+    different adapters, form one group. Separate groups are not proven
+    independent: the group count is only an upper bound on independent sources,
+    and product count is never a source count.
     """
     index = legs_by_id(legs)
     ids = sorted(set(product_ids))
@@ -655,61 +719,181 @@ def corroboration_groups(product_ids, legs=LEGS) -> list[list[str]]:
     return sorted(groups.values())
 
 
-def independent_source_count(product_ids, legs=LEGS) -> int:
+def max_independent_source_count(product_ids, legs=LEGS) -> int:
+    """Upper bound only; independence between the remaining groups is not established."""
     return len(corroboration_groups(product_ids, legs))
 
 
+def shared_upstream_groups(legs=LEGS) -> list[list[str]]:
+    """Products of different adapters that read one upstream product."""
+    by_upstream: dict[str, list[ProductLeg]] = {}
+    for leg in legs:
+        by_upstream.setdefault(leg.upstream, []).append(leg)
+    return sorted(sorted(leg.product_id for leg in members) for members in by_upstream.values()
+                  if len({leg.source_id for leg in members}) > 1)
+
+
+_OBSERVED_STATUSES = frozenset({"success", "degraded", "partial_failure", "failed", "skipped"})
+
+
 def serving_disposition(source_id: str, *, status: str, runtime_leg_label: str | None = None,
-                        legs=LEGS) -> dict[str, Any]:
+                        served_product_ids=None, health_key: str | None = None, legs=LEGS) -> dict[str, Any]:
     """Describe what one observed source-run entry can and cannot show.
 
-    A workflow success, empty result, alternate response or static contract never
-    establishes operational recovery. An alternate serving is not primary recovery.
+    Status alone never identifies a served product: evidence is a runtime leg label
+    or explicit served product IDs. The one exception is an unlabelled success
+    when a single wired, unlabelled primary exists for the observed health key,
+    because runners record every labelled alternate or retained serving as
+    degraded. Anything else stays unknown (None). A workflow success, empty
+    result, alternate response or static contract never establishes operational
+    recovery, and an alternate or retained serving is not primary recovery.
     """
-    members = [leg for leg in legs if leg.source_id == source_id and leg.status != "retired"]
-    if not members or status not in {"success", "degraded", "partial_failure", "failed", "skipped"}:
+    members = [leg for leg in legs if leg.source_id == source_id and leg.status != "retired"
+               and (health_key is None or health_key in leg.health_keys)]
+    if not members or status not in _OBSERVED_STATUSES or (runtime_leg_label is not None
+                                                             and served_product_ids is not None):
         raise ValueError("source_product_disposition_input")
     served: list[ProductLeg] = []
     reasons: list[str] = []
-    primary_served: bool | None = False
-    alternate: bool | None = False
+    evidence = "none"
     if status in {"failed", "skipped"}:
+        if runtime_leg_label is not None or served_product_ids is not None:
+            raise ValueError("source_product_disposition_input")
         reasons.append(f"observed_{status}")
-    elif runtime_leg_label is None:
-        # An unlabelled entry names the primary, unless unlabelled alternate routes
-        # of the same product exist (for example GPM grid routes); then it is unknown.
-        served = [leg for leg in members if leg.role in {"primary", "alternate_route"} and leg.runtime_leg_label is None]
-        if any(leg.role == "alternate_route" for leg in served):
-            reasons.append("unlabelled_serving_route_ambiguous")
-            primary_served = alternate = None
-        else:
-            reasons.append("primary_label_observed")
-            primary_served = bool(served)
-    else:
-        served = [leg for leg in members if leg.runtime_leg_label == runtime_leg_label]
+    elif served_product_ids is not None:
+        ids = list(served_product_ids)
+        index = {leg.product_id: leg for leg in members}
+        if not ids or len(set(ids)) != len(ids) or any(type(item) is not str or item not in index for item in ids):
+            raise ValueError("source_product_disposition_input")
+        served, evidence = [index[item] for item in sorted(ids)], "served_product_ids"
+    elif runtime_leg_label is not None:
+        served, evidence = [leg for leg in members if leg.runtime_leg_label == runtime_leg_label], "runtime_leg_label"
         if not served:
             reasons.append("unknown_serving_label")
+    else:
+        candidates = [leg for leg in members if leg.role in {"primary", "alternate_route"} and leg.runtime_leg_label is None]
+        if status == "success" and len(candidates) == 1 and candidates[0].role == "primary" \
+                and candidates[0].status == "wired":
+            served, evidence = candidates, "sole_wired_unlabelled_primary"
+            reasons.append("unlabelled_success_sole_wired_primary")
+        else:
+            reasons.append("serving_leg_not_evidenced")
+            if any(leg.role == "alternate_route" for leg in candidates):
+                reasons.append("unlabelled_alternate_routes_exist")
+    nothing_served = status in {"failed", "skipped"}
+    primary_served: bool | None = False if nothing_served else None
+    alternate: bool | None = False if nothing_served else None
+    retained: bool | None = None
+    if served:
         alternate = any(leg.role in _SERVING_ROLES for leg in served)
+        has_primary = any(leg.role == "primary" for leg in served)
+        retained = any(leg.role == "cache" for leg in served)
         if alternate:
             reasons.append("alternate_served_primary_not_recovered")
-        primary_served = bool(served) and not alternate
+        if has_primary and alternate:
+            primary_served = None
+            reasons.append("mixed_chain_serving")
+        else:
+            primary_served = has_primary and not alternate
     kinds = sorted({leg.data_kind for leg in served})
+    station_only: bool | None = (bool(served) and kinds == ["observed_station"] and alternate is False) \
+        if served or nothing_served else None
     return {
         "source_id": source_id,
+        "health_key": health_key,
         "observed_status": status,
+        "evidence": evidence,
         "serving_product_ids": sorted(leg.product_id for leg in served),
+        "candidate_product_ids": sorted(leg.product_id for leg in members),
         "serving_roles": sorted({leg.role for leg in served}),
         "serving_data_kinds": kinds,
         "primary_leg_served_this_run": primary_served,
         "alternate_served": alternate,
-        "observed_station_kind_only": bool(served) and kinds == ["observed_station"] and alternate is False,
+        "retained_not_fresh": retained,
+        "observed_station_kind_only": station_only,
         "operational_recovery": "not_established",
         "reasons": reasons,
     }
 
 
+# Runner wording: _witness.degraded_via and the last-good fallbacks.
+_SERVED_VIA = re.compile(r"served via ([A-Za-z][A-Za-z0-9_]{0,63})(?![A-Za-z0-9_])")
+_SERVED_LAST_GOOD = "served last-good ("
+_AQ_LANES = (("pm25", "air_quality.cams_pm25"), ("dust", "air_quality.cams_dust"))
+
+
+def _aq_served(details: Any) -> list[str] | None:
+    """Enabled CAMS lanes with complete slots, from the runner's own availability summary."""
+    try:
+        hazards = details["aq_availability"]["hazards"]
+        served = []
+        for key, product_id in _AQ_LANES:
+            lane = hazards[key]
+            if type(lane.get("enabled")) is not bool or type(lane.get("complete")) is not int or lane["complete"] < 0:
+                return None
+            if lane["enabled"] and lane["complete"] > 0:
+                served.append(product_id)
+    except (KeyError, TypeError, AttributeError):
+        return None
+    return served or None
+
+
+def serving_disposition_from_run_entry(entry: Any, *, legs=LEGS, registry=REGISTRY_CONTRACTS) -> dict[str, Any]:
+    """Read serving evidence from one actual source-run entry, never from status alone."""
+    if type(entry) is not dict or type(entry.get("source")) is not str or type(entry.get("status")) is not str:
+        raise ValueError("source_product_disposition_input")
+    health_key = entry["source"]
+    source_id = next((row.source_id for row in registry if health_key in row.health_keys), None)
+    if source_id is None:
+        raise ValueError("source_product_disposition_input")
+    labels = set()
+    for field in ("error", "note"):
+        text = entry.get(field)
+        if isinstance(text, str):
+            if text.startswith(_SERVED_LAST_GOOD):
+                labels.add("last_good")
+            match = _SERVED_VIA.match(text)
+            if match:
+                labels.add(match.group(1))
+    if entry["status"] in {"failed", "skipped"} or len(labels) > 1:
+        result = serving_disposition(source_id, status=entry["status"], health_key=health_key, legs=legs)
+        if len(labels) > 1:
+            result["reasons"].append("conflicting_serving_labels")
+        return result
+    if labels:
+        return serving_disposition(source_id, status=entry["status"], runtime_leg_label=labels.pop(),
+                                   health_key=health_key, legs=legs)
+    served = _aq_served(entry.get("details")) if source_id == "air_quality" else None
+    return serving_disposition(source_id, status=entry["status"], served_product_ids=served,
+                               health_key=health_key, legs=legs)
+
+
 def _canonical(value) -> str:
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)
+
+
+def _missing_work(legs) -> list[dict[str, Any]]:
+    return [{"product_id": leg.product_id, "status": leg.status, "disposition": leg.disposition}
+            for leg in legs if leg.status in {"unresolved", "retired"}]
+
+
+def _unmet_criteria(legs) -> list[dict[str, Any]]:
+    """Requirements the rows themselves leave open; derived, never supplied."""
+    unmet: list[dict[str, Any]] = [
+        {"field": field, "products": "all", "status": "unknown",
+         "needs": "Exact current provider documentation or a measured record for that product."}
+        for field in UNKNOWN_FIELDS]
+    unmet.append({"field": "current_availability", "products": "all", "status": "unverified",
+                  "needs": "Observed qualified collection; static contracts cannot show it."})
+    unresolved = {leg.product_id: sorted(code for code, item in restriction_enforcement(leg).items()
+                                         if item["basis"] == "unresolved") for leg in legs}
+    unresolved = {product_id: codes for product_id, codes in unresolved.items() if codes}
+    if unresolved:
+        unmet.append({"field": "restriction_enforcement", "products": sorted(unresolved),
+                      "codes": sorted({code for codes in unresolved.values() for code in codes}),
+                      "status": "unresolved",
+                      "needs": "A product-specific automated check; advisory text or another product's check is not one."})
+    return unmet
 
 
 def product_contract_document(legs=LEGS, registry=REGISTRY_CONTRACTS) -> dict[str, Any]:
@@ -724,7 +908,6 @@ def product_contract_document(legs=LEGS, registry=REGISTRY_CONTRACTS) -> dict[st
             "health_keys": list(row.health_keys),
             "product_ids": [leg.product_id for leg in members],
             "chains": sorted({leg.chain for leg in members}),
-            "independent_source_count": 1,
             "unresolved_product_ids": [leg.product_id for leg in members if leg.status == "unresolved"],
             "retired_product_ids": [leg.product_id for leg in members if leg.status == "retired"],
         })
@@ -734,15 +917,15 @@ def product_contract_document(legs=LEGS, registry=REGISTRY_CONTRACTS) -> dict[st
         item.update({field: None for field in UNKNOWN_FIELDS})
         item["configured_collection_rule"] = next(r.collection_rule for r in registry if r.source_id == leg.source_id)
         item["claim_permission_granted"] = False
+        item["restriction_enforcement"] = restriction_enforcement(leg)
         rows.append(item)
-    missing = [{"product_id": leg.product_id, "status": leg.status, "disposition": leg.disposition}
-               for leg in legs if leg.status in {"unresolved", "retired"}]
-    # Fields the original contract asks for that this inventory cannot settle.
-    unmet = [{"field": field, "products": "all", "status": "unknown",
-              "needs": "Exact current provider documentation or a measured record for that product."}
-             for field in UNKNOWN_FIELDS]
-    unmet.append({"field": "current_availability", "products": "all", "status": "unverified",
-                  "needs": "Observed qualified collection; static contracts cannot show it."})
+    restrictions = {}
+    for code, (meaning, enforcement) in RESTRICTIONS.items():
+        advisory = enforcement == ADVISORY
+        restrictions[code] = {"meaning": meaning, "basis": "advisory" if advisory else "scoped_checks",
+                              "reference": _ADVISORY if advisory else None,
+                              "checks": [] if advisory else [{"applies_to": selector, "reference": ref}
+                                                             for selector, ref in enforcement]}
     body = {
         "schema": SCHEMA,
         "registry_schema_version": REGISTRY_SCHEMA_VERSION,
@@ -750,33 +933,107 @@ def product_contract_document(legs=LEGS, registry=REGISTRY_CONTRACTS) -> dict[st
         "claim_permission_granted": False,
         "current_availability": "unverified",
         "operational_recovery": "not_established",
+        "source_independence": "not_established",
         "coverage_denominator": None,
         "unknown_fields": list(UNKNOWN_FIELDS),
-        "restrictions": {code: {"meaning": meaning, "basis": basis, "reference": ref}
-                         for code, (meaning, basis, ref) in RESTRICTIONS.items()},
+        "restrictions": restrictions,
         "adapters": adapters,
         "products": rows,
-        "missing_work": missing,
-        "unmet_criteria": unmet,
+        "shared_upstream_groups": shared_upstream_groups(legs),
+        "missing_work": _missing_work(legs),
+        "unmet_criteria": _unmet_criteria(legs),
     }
     body = json.loads(_canonical(body))  # JSON-native: identical once detached and reloaded
     return {**body, "contracts_sha256": hashlib.sha256(_canonical(body).encode()).hexdigest()}
 
 
-def verify_product_contract_document(document: Any) -> str:
-    """Return the export identity after exact schema/digest validation."""
-    if not isinstance(document, dict) or document.get("schema") != SCHEMA:
+_LEG_FIELDS = tuple(ProductLeg.__dataclass_fields__)
+_TUPLE_FIELDS = frozenset({"health_keys", "claim_restrictions", "code_refs", "claim_permissions"})
+_ROW_KEYS = frozenset({*_LEG_FIELDS, *UNKNOWN_FIELDS, "configured_collection_rule", "claim_permission_granted",
+                       "restriction_enforcement"})
+_DOCUMENT_KEYS = frozenset({"schema", "registry_schema_version", "purpose", "claim_permission_granted",
+                            "current_availability", "operational_recovery", "source_independence",
+                            "coverage_denominator", "unknown_fields", "restrictions", "adapters", "products",
+                            "shared_upstream_groups", "missing_work", "unmet_criteria", "contracts_sha256"})
+
+
+def _decode_leg(row: Any) -> ProductLeg:
+    if type(row) is not dict or set(row) != _ROW_KEYS:
+        raise ValueError("source_product_export_row")
+    values: dict[str, Any] = {}
+    for field in _LEG_FIELDS:
+        value = row[field]
+        if field in _TUPLE_FIELDS:
+            if type(value) is not list or len(value) > 32 or any(type(item) is not str for item in value):
+                raise ValueError("source_product_export_row")
+            value = tuple(value)
+        elif field == "runtime_leg_label":
+            if value is not None and type(value) is not str:
+                raise ValueError("source_product_export_row")
+        elif type(value) is not str or len(value) > 300:
+            raise ValueError("source_product_export_row")
+        values[field] = value
+    if values["claim_permissions"] or row["claim_permission_granted"] is not False \
+            or any(row[field] is not None for field in UNKNOWN_FIELDS):
+        raise ValueError("source_product_export_permission")
+    if type(row["restriction_enforcement"]) is not dict or type(row["configured_collection_rule"]) is not str:
+        raise ValueError("source_product_export_row")
+    return ProductLeg(**values)
+
+
+def decode_product_contract_document(document: Any) -> dict[str, Any]:
+    """Validate a detached export's decoded rows, not just its digest.
+
+    The digest binds bytes, not truth. Rows must decode to the finite supported
+    inventory with valid kinds, parents, health keys, restrictions and scoped
+    enforcement, and every summary is recomputed from those rows. Unknown
+    versions or data are refused (held by the caller), never coerced.
+    """
+    if type(document) is not dict or document.get("schema") != SCHEMA or set(document) != _DOCUMENT_KEYS \
+            or document.get("registry_schema_version") != REGISTRY_SCHEMA_VERSION \
+            or type(document["registry_schema_version"]) is not int or document.get("purpose") != PURPOSE \
+            or document.get("unknown_fields") != list(UNKNOWN_FIELDS):
         raise ValueError("source_product_export_schema")
-    digest = document.get("contracts_sha256")
+    digest = document["contracts_sha256"]
     body = {key: value for key, value in document.items() if key != "contracts_sha256"}
-    if not isinstance(digest, str) or hashlib.sha256(_canonical(body).encode()).hexdigest() != digest:
+    try:
+        canonical = _canonical(body)
+    except (TypeError, ValueError, RecursionError):
+        raise ValueError("source_product_export_schema") from None
+    if type(digest) is not str or hashlib.sha256(canonical.encode()).hexdigest() != digest:
         raise ValueError("source_product_export_digest")
-    if document.get("claim_permission_granted") is not False or document.get("operational_recovery") != "not_established":
+    if document["claim_permission_granted"] is not False or document["operational_recovery"] != "not_established" \
+            or document["current_availability"] != "unverified" or document["coverage_denominator"] is not None \
+            or document["source_independence"] != "not_established":
         raise ValueError("source_product_export_permission")
-    products = document.get("products")
-    if not isinstance(products, list) or any(
-        not isinstance(row, dict) or row.get("claim_permission_granted") is not False or row.get("claim_permissions")
-        or any(row.get(field) is not None for field in UNKNOWN_FIELDS) for row in products
-    ):
-        raise ValueError("source_product_export_permission")
-    return digest
+    rows = document["products"]
+    if type(rows) is not list or len(rows) > 256:
+        raise ValueError("source_product_export_row")
+    legs = tuple(_decode_leg(row) for row in rows)
+    validate_legs(legs, REGISTRY_CONTRACTS)
+    if legs != LEGS:
+        raise ValueError("source_product_export_inventory")
+    expected = product_contract_document(legs)
+    if [row["restriction_enforcement"] for row in rows] != [row["restriction_enforcement"] for row in expected["products"]]:
+        raise ValueError("source_product_export_enforcement")
+    if rows != expected["products"]:
+        raise ValueError("source_product_export_row")
+    if document["restrictions"] != expected["restrictions"]:
+        raise ValueError("source_product_export_restrictions")
+    if document["adapters"] != expected["adapters"]:
+        raise ValueError("source_product_export_adapters")
+    for key in ("shared_upstream_groups", "missing_work", "unmet_criteria"):
+        if document[key] != expected[key]:
+            raise ValueError("source_product_export_summary")
+    return {
+        "contracts_sha256": digest,
+        "product_ids": sorted(leg.product_id for leg in legs),
+        "adapters": len(expected["adapters"]),
+        "missing_work": expected["missing_work"],
+        "unmet_criteria": expected["unmet_criteria"],
+    }
+
+
+def verify_product_contract_document(document: Any) -> str:
+    """Return the export identity after full decoded validation."""
+    return decode_product_contract_document(document)["contracts_sha256"]

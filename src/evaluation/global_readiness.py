@@ -113,16 +113,16 @@ def validate_envelope(value: Any) -> tuple[datetime, list[dict[str, Any]]]:
 # exact join keys; a refusal is retained as unsupported, never coerced.
 
 def _source_products(export, cutoff):
+    """Summaries come from the decoded rows, never from the export's own summary fields."""
     try:
-        identity = products.verify_product_contract_document(export)
+        view = products.decode_product_contract_document(export)
     except ValueError as exc:
         raise _Unsupported(str(exc)) from None
-    unmet = sorted(row["field"] for row in export.get("unmet_criteria", []) if isinstance(row, dict))
-    return ("contracts:" + identity, {
-        "product_ids": sorted(row["product_id"] for row in export["products"]),
-        "adapters": len(export["adapters"]),
-        "missing_work": sorted(row["product_id"] for row in export["missing_work"]),
-        "unknown_fields": unmet,
+    return ("contracts:" + view["contracts_sha256"], {
+        "product_ids": view["product_ids"],
+        "adapters": view["adapters"],
+        "missing_work": sorted(row["product_id"] for row in view["missing_work"]),
+        "unmet_codes": sorted(f"{row['field']}_{row['status']}" for row in view["unmet_criteria"]),
     }, [])
 
 
@@ -557,10 +557,13 @@ def _unmet(rows, joins, rainfall_audit):
 
     unmet: dict[str, dict[str, Any]] = {}
     contracts = _current(rows, "source_products")
-    p17 = ["product_contracts_missing"] if not contracts else [
-        f"{field}_unknown" for field in contracts[0]["facts"]["unknown_fields"]]
-    if contracts and contracts[0]["facts"]["missing_work"]:
-        p17.append("unresolved_or_retired_legs_remain")
+    supplied = any(row["component_type"] == "source_products" for row in rows)
+    if contracts:
+        p17 = list(contracts[0]["facts"]["unmet_codes"])
+        if contracts[0]["facts"]["missing_work"]:
+            p17.append("unresolved_or_retired_legs_remain")
+    else:
+        p17 = ["product_contracts_supplied_unusable" if supplied else "product_contracts_missing"]
     traces = [row for row in rows if row["component_type"] == "rainfall_opportunity" and row["facts"].get("kind") == "trace"]
     p09 = ["operational_recovery_not_established", "threshold_and_self_heal_recovery_no_supported_input"]
     if not traces:
