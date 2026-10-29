@@ -1,6 +1,6 @@
 import { isDeepStrictEqual } from "node:util"
 import { readOperatorClaimReferences } from "./operator-claim-references.js"
-import { validGistTemperatureMedia } from "./gist-temperature-media.js"
+import { validGistMedia } from "./gist-media.js"
 
 // A storage boundary, not a source validator. Never repair or rehash evidence.
 const MAX_BYTES = 8 * 1024 * 1024
@@ -144,7 +144,7 @@ function containsSource(draft) {
 
 function knownMediaTransition(before, after) {
   if (isDeepStrictEqual(before.media_attachment, after.media_attachment)) return false
-  if (own(after, "media_attachment") && !validGistTemperatureMedia(after)) return false
+  if (own(after, "media_attachment") && !validGistMedia(after)) return false
   if (!Number.isSafeInteger(before.content_revision ?? 0) || after.content_revision !== (before.content_revision ?? 0) + 1
       || !Number.isSafeInteger(before.decision_revision ?? 0) || after.decision_revision !== (before.decision_revision ?? 0) + 1
       || after.status !== "pending" || after.text !== before.text) return false

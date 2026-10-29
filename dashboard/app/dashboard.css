@@ -764,6 +764,20 @@ h1 span { color: #666; font-weight: 400; font-size: 14px; margin-left: 8px; }
   outline: 2px solid #ffb380; outline-offset: 3px; border-radius: 2px;
 }
 .graphic-preview details { border-top: 1px solid #383838; }
+.graphic-preview .btn, .temperature-media-controls .btn { min-height: 44px; }
+.temperature-media-controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.temperature-media-controls > p, .temperature-media-controls > .workbench-panel { flex-basis: 100%; }
+.graphic-kind { color: #f6c792; font-weight: 600; }
+.graphic-posting-window { color: #eee; border-left: 3px solid #f6c792; padding-left: 10px; }
+.graphic-full-size-open { justify-self: start; margin-top: 10px; }
+.graphic-full-size {
+  width: 100vw; max-width: 100vw; height: 100dvh; max-height: 100dvh; margin: 0; padding: 12px 0 24px;
+  border: 0; background: #050505; color: #eee; overflow-y: auto;
+}
+.graphic-full-size::backdrop { background: rgba(0, 0, 0, 0.85); }
+.graphic-full-size > .btn { margin-left: 16px; }
+.graphic-full-size img { display: block; width: 100%; max-width: 1200px; height: auto; margin: 12px auto 0; }
+.graphic-full-size button:focus-visible { outline: 2px solid #ffb380; outline-offset: 3px; border-radius: 2px; }
 .forecast-kind { color: #f6c792; font-size: 12px; }
 .forecast-fields { display: grid; gap: 10px; margin: 0; }
 .forecast-fields > div { min-width: 0; }

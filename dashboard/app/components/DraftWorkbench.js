@@ -7,6 +7,7 @@ import { ClaimEvidence } from "./ClaimEvidence.js"
 import { OperatorClaimReferenceHistory, OperatorClaimReferences } from "./OperatorClaimReferences.js"
 import { operatorReferencesForDisplay } from "../../lib/operator-claim-reference-input.js"
 import { GraphicPreview } from "./GraphicPreview.js"
+import { GIST_POST_IMAGE_KINDS } from "../../lib/graphic-preview.js"
 import { EditorMedia } from "./EditorMedia.js"
 import { formatDuration, timeAgo } from "../../lib/format.js"
 import { draftReviewControls, draftTextLength, manualReviewLabel, revisionKey } from "../../lib/draft-review-ui.js"
@@ -388,7 +389,7 @@ export function DraftWorkbench({
                     <h3>Approval Policy</h3>
                     <div className="workbench-headline">
                       {selectedDraft.review_status === "media_review_required"
-                        ? (hasLocalMediaPanel(selectedDraft) ? "Use Text and graphic for joint review, required checks and local approval status. Publishing is unavailable." : selectedDraft.media_attachment?.kind === "gist_temperature_comparator_v1" ? "Review the text, image and full description together in Graphic preview before approval." : "Review the text and attached graphic together before approval. Joint graphic review is not available here yet.")
+                        ? (hasLocalMediaPanel(selectedDraft) ? "Use Text and graphic for joint review, required checks and local approval status. Publishing is unavailable." : GIST_POST_IMAGE_KINDS.includes(selectedDraft.media_attachment?.kind) ? "Review the text, image and full description together in Graphic preview before approval." : "Review the text and attached graphic together before approval. Joint graphic review is not available here yet.")
                         : selectedDraft.review_status === "policy_unverified"
                         ? selectedDraft.editorial_policy?.reason
                         : controls.needsReview

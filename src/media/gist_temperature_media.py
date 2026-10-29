@@ -202,6 +202,16 @@ def prepare_media(bundle, *, synthetic=False):
     return {"descriptor": descriptor, "png": png, "title": chart_title("temperature_comparator", spec["evidence"])}
 
 
+def recheck_before_upload(draft, *, now=None):
+    """Use a fresh aware UTC clock; rendering or storage never refreshes source age."""
+    current = datetime.now(timezone.utc) if now is None else now
+    _require(isinstance(current, datetime) and current.utcoffset() is not None,
+             "current time must be timezone-aware")
+    observed = date.fromisoformat(draft["media_attachment"]["valid_date"])
+    _require(0 <= (current.astimezone(timezone.utc).date() - observed).days <= 4,
+             "source date is future or stale")
+
+
 def media_for_draft(draft, *, today=None):
     """Exact reviewed recipe only; any mismatch refuses before upload."""
     bundle = draft["review_context"]["two_bot"]["bundle"]
@@ -211,4 +221,7 @@ def media_for_draft(draft, *, today=None):
              "source date is future or stale")
     prepared = prepare_media(bundle)
     _require(prepared["descriptor"] == attached, "image, description or render profile changed; preview and review again")
+    # Explicit today remains an offline fixture override. Production always gets
+    # a new aware clock here and another immediately before the first upload.
+    recheck_before_upload(draft, now=None if today is None else datetime.combine(today, datetime.min.time(), timezone.utc))
     return prepared["png"], attached["alt_text"]

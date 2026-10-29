@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto"
-import { validGistTemperatureMedia } from "./gist-temperature-media.js"
+import { validGistMedia } from "./gist-media.js"
 import { validEditorialPolicy } from "./editorial-policy.js"
 import { configuredAutomaticPolicy } from "./publication-control.js"
 import { projectSavedClaimEvidence } from "./saved-claim-evidence.js"
@@ -109,7 +109,7 @@ function validDelegation(value) {
 export function reviewIsCurrent(draft, policy = null) {
   const media = Object.hasOwn(draft, "media_attachment")
   const binding = draft.review_binding
-  if (media && (!validGistTemperatureMedia(draft) || binding?.kind !== "human_media" || binding.media_sha256 !== fingerprint(draft.media_attachment))) return false
+  if (media && (!validGistMedia(draft) || binding?.kind !== "human_media" || binding.media_sha256 !== fingerprint(draft.media_attachment))) return false
   if (draft.revision_conflicts?.length || !bindingMatches(draft, binding)) return false
   if (!policyMatches(binding, policy)) return false
   if (binding.kind === "human" || (media && binding.kind === "human_media")) return true
@@ -178,7 +178,7 @@ export function recordHumanReview(draft, policy = null) {
 }
 
 export function recordJointMediaReview(draft, policy = null) {
-  if (!validGistTemperatureMedia(draft)) throw new Error("This graphic needs a new preview")
+  if (!validGistMedia(draft)) throw new Error("This graphic needs a new preview")
   if (draft.revision_conflicts?.length) throw new Error("Resolve the conflicting revision before reviewing")
   if (typeof draft.text !== "string" || !draft.text.trim() || [...draft.text].length > 280) throw new Error("Invalid draft text")
   textHash(draft.text)
@@ -297,7 +297,7 @@ export function projectDraft(draft, policy = null) {
       && binding.checks_sha256 === fingerprint(checks(value))
   } catch { /* An unverifiable historical analysis stays hidden. */ }
   return { ...draft, revision_identity: identity,
-    media_attachment_sha256: validGistTemperatureMedia(draft) ? fingerprint(draft.media_attachment) : null,
+    media_attachment_sha256: validGistMedia(draft) ? fingerprint(draft.media_attachment) : null,
     claim_evidence: projectSavedClaimEvidence(draft, { identity, analysisMatches }),
     operator_claim_reference_view: projectOperatorClaimReferences(draft, draftIdentity(draft)),
     operator_claim_reference_history: projectOperatorClaimReferenceHistory(draft),

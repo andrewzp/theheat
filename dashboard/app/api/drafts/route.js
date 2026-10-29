@@ -1,4 +1,4 @@
-import { prepareGistTemperatureMedia } from "../../../lib/gist-temperature-media.js"
+import { gistMediaCurrentness, prepareGistMedia } from "../../../lib/gist-media.js"
 import { acceptLocalCommand, localCommandRequest, localDraftProjection, previewConfigured, previewError } from "../../../lib/draft-command-client.js"
 import { dashboardEditorialPolicy } from "../../../lib/editorial-policy.js"
 import { dashboardAutomaticPolicy } from "../../../lib/publication-control.js"
@@ -41,6 +41,13 @@ function fail(message, status = 409, code = "revision_conflict") {
 function assertSavedSourceTiming(draft) {
   const timing = nwsSourceTiming(draft)
   if (timing.blocked) fail(timing.message, 409, "nws_source_review_required")
+}
+
+// New image families: explicit source recency at manual approval (the sender
+// rechecks before upload). Historical previews stay inspectable; nothing changes.
+function assertMediaCurrent(draft) {
+  const timing = gistMediaCurrentness(draft, Date.now())
+  if (timing) fail(`${timing.message}. This image cannot be approved for posting; the draft is unchanged.`, 409, timing.code)
 }
 
 function validIdentity(value) {
@@ -166,7 +173,7 @@ export async function POST(request) {
       if (["review", "approve", "auto_approve"].includes(action)) assertSavedSourceTiming(draft)
       const editorialPolicy = dashboardEditorialPolicy(state, { runtimeReport })
       if (action === "attach_graphic") {
-        const descriptor = await prepareGistTemperatureMedia(request, draft, body.expectedMediaSha256)
+        const descriptor = await prepareGistMedia(request, draft, body.expectedMediaSha256)
         invalidateMediaAttachment(draft, descriptor)
       } else if (action === "remove_graphic") {
         invalidateMediaAttachment(draft, null)
@@ -206,7 +213,7 @@ export async function POST(request) {
         const joint = Object.hasOwn(draft, "media_attachment")
         if (joint) {
           if (body.mediaReviewConfirmed !== true) fail("Review the text, image and full description together.", 409, "media_review_required")
-          const descriptor = await prepareGistTemperatureMedia(request, draft, body.expectedMediaSha256)
+          const descriptor = await prepareGistMedia(request, draft, body.expectedMediaSha256)
           if (fingerprint(descriptor) !== fingerprint(draft.media_attachment)) fail("The attached graphic changed; preview it again.", 409, "media_changed")
         }
         if (body.reviewConfirmed !== true) fail("Confirm that you checked this text against its source evidence.", 400, "review_confirmation_required")
@@ -235,6 +242,7 @@ export async function POST(request) {
       } else if (action === "approve") {
         assertPending(draft)
         assertReviewed(draft, editorialPolicy.policy)
+        assertMediaCurrent(draft)
         publishIntentId = crypto.randomUUID()
         revokeApproval(draft)
         authorizeDraft(draft, "manual", publishIntentId, null, editorialPolicy.policy)
@@ -252,6 +260,7 @@ export async function POST(request) {
         const latestDraft = latestState.drafts?.find(draft => draft.id === draftId)
         if (!latestDraft) fail("This draft is no longer available.", 409, "draft_not_found")
         assertSavedSourceTiming(latestDraft)
+        if (action === "approve") assertMediaCurrent(latestDraft)
         const current = dashboardEditorialPolicy(latestState, { runtimeReport })
         if (!current.policy || !checkedPolicySha || current.policy_sha256 !== checkedPolicySha) {
           fail("Editorial policy changed before this decision could be saved. Refresh and review again.", 409, "editorial_policy_changed")
