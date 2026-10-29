@@ -140,3 +140,17 @@ def test_repeat_reuses_and_a_changed_source_revokes_the_pending_draft(monkeypatc
     assert seen["sent"] == [] and draft["status"] == "pending" and "approval_binding" not in draft
     assert draft["review_context"]["nhc_advisory_source_hold"] == "nhc_advisory_current_source_changed"
     assert draft["post_error"] == "The NHC advisory changed; fresh source review is required."
+
+
+def test_the_bot_workflow_only_references_default_off_configuration():
+    from pathlib import Path
+    import yaml
+    bot = yaml.load((Path(__file__).resolve().parents[1] / ".github/workflows/bot.yml").read_text(),
+                    Loader=yaml.BaseLoader)
+    step = next(step for step in bot["jobs"]["run"]["steps"] if step.get("name") == "Run bot")
+    names = {name: value for name, value in step["env"].items() if "NHC_ADVISORY" in name}
+    assert names == {"THEHEAT_NHC_ADVISORY_ACQUISITION": "${{ vars.THEHEAT_NHC_ADVISORY_ACQUISITION || '0' }}",
+                     "THEHEAT_NHC_ADVISORY_NOMINATION": "${{ vars.THEHEAT_NHC_ADVISORY_NOMINATION }}"}
+    # The workflow default, with or without a nomination, is absent configuration.
+    for nomination in ("", json.dumps(h.nominated())):
+        assert not runner.configured({"THEHEAT_NHC_ADVISORY_ACQUISITION": "0", "THEHEAT_NHC_ADVISORY_NOMINATION": nomination})
