@@ -6,6 +6,7 @@
 // this module checks structure, the retained-source binding and code pins only.
 import { createHash } from "node:crypto"
 import manifest from "./graphic-runtime-manifest.json" with { type: "json" }
+import { EDITORIAL_POLICY_MANIFEST } from "./editorial-policy-manifest.js"
 import { draftIdentity, fingerprint } from "./draft-revisions.js"
 import { prepareGistTemperatureMedia, validGistTemperatureMedia } from "./gist-temperature-media.js"
 
@@ -169,7 +170,10 @@ function validDescription(d, derivation) {
     && Number.isSafeInteger(d.full_bytes) && d.full_bytes > 0 && d.full_bytes <= MAX_FULL_BYTES
 }
 
-const pinned = (value, paths) => exact(value, paths) && paths.every(path => isSHA(manifest.identity.files[path]) && value[path] === manifest.identity.files[path])
+// Store-backed modules are not packaged in the native preview runtime; their exact
+// source hashes come from the editorial policy manifest generated from the same tree.
+const pin = path => manifest.identity.files[path] ?? EDITORIAL_POLICY_MANIFEST.files[path]
+const pinned = (value, paths) => exact(value, paths) && paths.every(path => isSHA(pin(path)) && value[path] === pin(path))
 
 function validCrwMedia(draft, value) {
   const f = CRW_FAMILY, bundle = draft?.review_context?.two_bot?.bundle, raw = bundle?.raw_signal_dump

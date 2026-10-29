@@ -8,7 +8,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "dashboard/app/api/drafts/route.js": "460da3dcd752fa7340b2740457abe80562073d0f15ff49c8fcc87551305dc147",
     "dashboard/lib/draft-revisions.js": "5a67a9235beac0cebdae37c1991817137fa1e759d5e9f5e1f1b81a2ec1ad24d1",
     "dashboard/lib/editorial-policy.js": "1d4218b5f270c838cd503bd5fb1fd5385add684e8f37e2c4adf28bfbb0c5d2bc",
-    "dashboard/lib/gist-media.js": "fef8d9425c94f35c76a3ea43ce6ed8e22d670fff7354ea3e9834f4d19ef30289",
+    "dashboard/lib/gist-media.js": "e05b628810d2339fca4f0e309d48e49fe9696c8171d2ced170c6b6503293718a",
     "dashboard/lib/gist-temperature-media.js": "c8f71b873413952379252711473846120e822a01d8563ad6633e09620b9d83e5",
     "dashboard/lib/lossless-gist.js": "e6fb2965e0632a6d914fc8688cf664341a6386a4925ea0682a57430eef77241e",
     "dashboard/lib/nws-source-timing.js": "3a7b4be177cc5d28be7a8150d7c6937b7c15f113c5475134254dba233df47975",
@@ -215,5 +215,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "8c4887f395618e343dafd55f5843987dfa6a7a620713c7c34bab9f419e4434fe"
   },
   "schema_version": 1,
-  "source_sha256": "c8b9049197e76be017b0d2a29d5d95bb1e977ad020b3d1647a867330510a67ff"
+  "source_sha256": "cfba6909e9ddabb43c2073607769574882005a075ba02c34b4b2214e655f250a"
 }

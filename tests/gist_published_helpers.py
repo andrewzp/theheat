@@ -23,8 +23,25 @@ CLOCKS = {"radar": ("2026-06-08T12:03:00Z", "2026-06-08T12:15:00Z"),
           "cone": ("2026-09-15T04:00:00Z", "2026-09-15T09:00:00Z")}
 
 
+# An official-form CAP identifier, so the existing NWS display/timing gates read it.
+RADAR_ALERT_ID = "urn:oid:2.49.0.1.840.0.invented-radar-case"
+
+
+def radar_feature():
+    feature = radar_fixtures.feature()
+    feature["id"] = "https://api.weather.gov/alerts/" + RADAR_ALERT_ID
+    feature["properties"]["id"] = RADAR_ALERT_ID
+    return feature
+
+
 def radar_bundle(monkeypatch):
-    return story_bundle_snapshot(build_severe_weather_bundle(radar_fixtures.parsed(monkeypatch)[0]))
+    return story_bundle_snapshot(build_severe_weather_bundle(radar_fixtures.parsed(monkeypatch, radar_feature())[0]))
+
+
+def fake_nws_feed(monkeypatch):
+    """Explicit offline stand-in for the sender's live NWS lookup: the unchanged retained warning."""
+    from src.orchestrator import nws_publication
+    monkeypatch.setattr(nws_publication, "_active_feed", lambda: {"features": [radar_feature()]})
 
 
 def radar_inputs(*, synthetic=False):
