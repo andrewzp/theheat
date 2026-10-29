@@ -39,7 +39,8 @@ def test_sampled_cell_chart_binds_packet_bundle_and_exact_canonical_bytes(store,
         image.load()
         assert image.size == (1200, 1500) and image.mode == "RGB"
         assert canonical_png.is_canonical(png, image)
-        assert len(image.getcolors(1200 * 1500)) > 20  # A real diverging colour scale, not one fill.
+        colours = image.getcolors(1200 * 1500)
+        assert colours is not None and len(colours) > 20  # A real diverging colour scale, not one fill.
     assert descriptor["image"]["png_sha256"] == sha256(png).hexdigest() and len(png) <= 750_000
     assert crw.prepare_media(bundle, store, sha) == prepared
     text = prepared["delivery_text"]
@@ -75,7 +76,7 @@ def test_missing_packet_store_and_configuration_hold_explicitly(store, retained,
     assert other.value.code == "media_source_packet_missing"
     with pytest.raises(ValueError) as unconfigured:  # gist_assets.MediaStoreError
         gist_media.prepare_media(bundle, retained_input_sha256=sha)
-    assert unconfigured.value.code == "media_store_unavailable"
+    assert getattr(unconfigured.value, "code", None) == "media_store_unavailable"
     with pytest.raises(MediaWithheld) as required:
         gist_media.prepare_media(bundle, store=store)
     assert required.value.code == "media_retained_input_required"
@@ -150,7 +151,7 @@ def test_sender_rereads_the_packet_and_refuses_any_difference(store, retained, t
     assert mismatch.value.code == "media_render_mismatch"
     with pytest.raises(ValueError) as unconfigured:  # gist_assets.MediaStoreError
         gist_media.media_for_draft(draft, now=NOW)
-    assert unconfigured.value.code == "media_store_unavailable"
+    assert getattr(unconfigured.value, "code", None) == "media_store_unavailable"
 
 
 def test_invalid_packets_are_refused_before_retention(store, retained):

@@ -46,15 +46,11 @@ def _rgba(raw):
 
 
 @pytest.mark.parametrize("case", ["radar", "cone"])
-def test_exact_original_and_pixel_equivalent_canonical_derivative(case, store, request):
+def test_exact_original_and_pixel_equivalent_canonical_derivative(case, store, request, monkeypatch):
     bundle, original, manifest = request.getfixturevalue(case)
     now = RADAR_NOW if case == "radar" else CONE_NOW
-    trapped = socket.socket.connect
-    socket.socket.connect = lambda *a, **k: (_ for _ in ()).throw(AssertionError("network"))
-    try:
-        prepared = published.prepare_media(bundle, store, manifest, now=now)
-    finally:
-        socket.socket.connect = trapped
+    monkeypatch.setattr(socket.socket, "connect", lambda *a, **k: (_ for _ in ()).throw(AssertionError("network")))
+    prepared = published.prepare_media(bundle, store, manifest, now=now)
     descriptor, png = prepared["descriptor"], prepared["png"]
     assert prepared["original"] == original and descriptor["asset"]["original_sha256"] == sha256(original).hexdigest()
     assert descriptor["asset"]["derivative_sha256"] == sha256(png).hexdigest() != descriptor["asset"]["original_sha256"]
@@ -130,7 +126,7 @@ def test_missing_original_changed_bytes_and_unconfigured_store_hold(store, cone,
     assert changed.value.code == "media_asset_changed"
     with pytest.raises(ValueError) as unconfigured:
         gist_media.prepare_media(bundle, retained_input_sha256=manifest)
-    assert unconfigured.value.code == "media_store_unavailable"
+    assert getattr(unconfigured.value, "code", None) == "media_store_unavailable"
 
 
 def test_association_requires_the_drafts_own_storm_advisory_warning_and_point(store, cone, radar, monkeypatch):
@@ -219,7 +215,7 @@ def test_sender_reverifies_store_and_ceiling_and_returns_the_derivative(radar, s
     assert stale_upload.value.code == "media_published_stale"
     with pytest.raises(ValueError) as unconfigured:
         gist_media.media_for_draft(draft, now=RADAR_NOW)
-    assert unconfigured.value.code == "media_store_unavailable"
+    assert getattr(unconfigured.value, "code", None) == "media_store_unavailable"
 
 
 def _state(bundle, descriptor=None):

@@ -105,7 +105,7 @@ def test_old_profile_and_codec_mutations_refuse_without_upgrade(name, monkeypatc
     with pytest.raises(ValueError, match="render profile changed") as caught:
         module.validate_descriptor(_old_schema(descriptor), bundle)
     if module is hazard:
-        assert caught.value.code == "media_renderer_changed"
+        assert getattr(caught.value, "code", None) == "media_renderer_changed"
     changed = deepcopy(descriptor)
     changed["renderer"]["png_codec"] = "canonical-png-fixed-huffman-0"
     with pytest.raises(ValueError, match="render profile changed"):

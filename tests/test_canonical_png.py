@@ -50,7 +50,7 @@ def _unfilter(filtered, width, height, channels):
             else:
                 assert kind == 0
         rows.append(bytes(line))
-        previous = line
+        previous = bytes(line)
     assert index == len(filtered)
     return b"".join(rows)
 
