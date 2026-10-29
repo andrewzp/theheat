@@ -2,6 +2,12 @@
 
 Living plan for closing the gap between the bot's current voice quality and the **resumption bar** (majority A-grade rate per cycle). Refined daily by the autonomous grading agent (cron `0 15 * * *`), reviewed and implemented by the human operator.
 
+> **Oct 29: 0 fresh drafts — queue is an exact match to Oct 28's 15 graded drafts; no
+> re-grading, no active-proposal evidence updates.** Nothing has reached pending since Oct 17.
+> All 15 remain staleness bulk-reject candidates (12–22 days old); gist write still blocked
+> (invalid `gh` token), skipped. Operator: bulk-reject via dashboard and check the suppression
+> ledger / source health for the 12-day intake drought.
+>
 > **Oct 28: 15 fresh drafts, 0% A-rate (0 A / 2 B / 5 B- / 6 C+ / 2 D).** No documented cycles on
 > `main` between Jul 6 and today. Findings: P_tier +5 instances (cyclone threshold/advisory
 > jargon, VIIRS "top tier"); P_close 0 positive of 15; P_dust first partial counter-evidence
