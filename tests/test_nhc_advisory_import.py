@@ -5,53 +5,17 @@ import json
 
 import pytest
 
-from scripts import nhc_advisory_import as m, nhc_advisory_trial as trial
+from scripts import nhc_advisory_import as m
 from src.data import nhc_advisory as source
-from src.editorial.nhc_advisory import validate_capture
 from src.editorial.revisions import approval_is_current, review_is_current
-from src.two_bot.intern.nhc_advisory import build_nhc_advisory_bundle
 from tests import nhc_advisory_helpers as h
-from tests.nhc_advisory_pipeline_helpers import COPY, Transport
+from tests.nhc_advisory_import_helpers import CODE, FLAGS, SOURCE, encode, proposal, report
+from tests.nhc_advisory_pipeline_helpers import Transport
 
-TRIAL_ID = "0123456789abcdef0123456789abcdef"
-CODE = "a" * 40
-SOURCE = "b" * 64
 PAIR = [source.INDEX_URL, h.URL]
 # Lexical forms, Unicode and spacing must survive the insertion exactly.
 STATE = (b' {"drafts": [ {"id":"old","event_id":"other","text":"retained", "number":1.2000e+0,"negative":-0.0} ],'
          b' "publish_ledger":{},"posted_events":[],"opaque":{"x":3.14000},"unicode":"\\u03b1"}\n')
-FLAGS = {"THEHEAT_PRODUCTION_PAUSED": "1", "THEHEAT_WRITER_SAMPLES": "1",
-         **{k: "0" for k in ("THEHEAT_AUTOMATIC_PUBLICATION_ENABLED", "THEHEAT_AUTOSHIP_ON_CRITIC_PASS",
-                             "THEHEAT_CRITIC_REVISE_ENABLED", "THEHEAT_SELFHEAL_REPAIR_ENABLED")}}
-
-
-def report(captured=h.NOW, code=CODE):
-    policy = {"schema_version": 1, "execution_sha256": "c" * 64, "source_sha256": SOURCE,
-              "models": {"critic": "critic-model", "fact_check": "fact-model", "safety": "safety-model",
-                         "writer": "writer-model", "writer_provider": "anthropic"},
-              "flags": {"writer_samples": 1, "critic_enabled": True, "critic_revise_enabled": False,
-                        "safety_llm_enabled": True}}
-    return json.dumps({"schema_version": 1, "kind": "configuration_only", "collection_paused": True,
-                       "runtime_inventory": {"mode": "runtime_report", "git_sha": code,
-                                             "captured_at": captured.isoformat(), "editorial_policy": policy,
-                                             "flags": {"automatic_publication_enabled": False, "writer_samples": 1,
-                                                       "critic_enabled": True, "critic_revise_enabled": False},
-                                             "credentials_present": {"safety_gemini": True}}}).encode()
-
-
-def proposal(**draft_changes):
-    evidence = validate_capture(h.capture(), h.selected(), now=h.NOW)
-    bundle = build_nhc_advisory_bundle(evidence).to_dict()
-    plan = {"trial_id": TRIAL_ID, "nomination": h.nominated(),
-            "operator_recheck_deadline": evidence.deadline.strftime("%Y-%m-%dT%H:%M:%SZ")}
-    made = trial.proposal(plan, bundle, COPY, h.NOW)
-    made["plan_sha256"] = "d" * 64
-    made["draft"].update(draft_changes)
-    return made
-
-
-def encode(value) -> bytes:
-    return json.dumps(value, ensure_ascii=False).encode()
 
 
 class Gist:

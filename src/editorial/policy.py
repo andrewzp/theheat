@@ -53,6 +53,7 @@ POLICY_FILES = (
     "src/editorial/nhc_advisory_runtime.py", "src/orchestrator/sources/nhc_advisory.py", "src/data/nhc_advisory.py",
     "src/orchestrator/run_alerts.py",
     "dashboard/lib/official-warning-evidence.js", "dashboard/lib/official-warning-validation.js",
+    "dashboard/lib/nhc-advisory-evidence.js", "dashboard/lib/nhc-advisory-validation.js",
     "src/editorial/portfolio.py",
     "src/storage/retained_reports.py", "src/commands/postgres_report_development.py",
     "src/evaluation/coverage.py", "src/commands/postgres_coverage.py",

@@ -1,9 +1,13 @@
 import { nwsSourceTiming } from "./nws-source-timing.js"
 import { officialWarningTiming } from "./official-warning-evidence.js"
+import { nhcAdvisoryTiming } from "./nhc-advisory-evidence.js"
 
 function savedSourceTiming(draft, now) {
-  const nws = nwsSourceTiming(draft, now)
-  return nws.blocked ? nws : officialWarningTiming(draft, now)
+  for (const timing of [nwsSourceTiming, officialWarningTiming, nhcAdvisoryTiming]) {
+    const value = timing(draft, now)
+    if (value.blocked) return value
+  }
+  return { blocked: false }
 }
 
 // Browser-safe view decisions. Identities are computed by the server; the
