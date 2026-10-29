@@ -1,3 +1,13 @@
+## 0.9.109.44
+
+- Label invented temperature previews visibly in the PNG as well as its image
+  description. Select font layout explicitly and refuse labels outside the image.
+- Derive concise temperature image descriptions from the complete retained
+  comparison, preserving exact values, scope, coverage, dates and qualifications.
+  Refuse descriptions above the 1,000-character or 1,000-byte house limit rather
+  than truncating them. Changed render identities require fresh preview/review.
+- Preserve existing source qualification, delivery fences and publishing controls.
+
 ## 0.9.109.43
 
 - Connect retained GHCN station comparisons to colourful temperature PNGs in the

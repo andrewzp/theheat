@@ -8,7 +8,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "dashboard/app/api/drafts/route.js": "dd78a765a1854eca8d33d74a0ccda535c5d795e58f32e1ef5873c0c109939cdb",
     "dashboard/lib/draft-revisions.js": "a0c00ce18e1fcd23210a28128c0f05e70256fe776d16c386d881c4a0f2a109cf",
     "dashboard/lib/editorial-policy.js": "1d4218b5f270c838cd503bd5fb1fd5385add684e8f37e2c4adf28bfbb0c5d2bc",
-    "dashboard/lib/gist-temperature-media.js": "5cde408639a2b7ad74fb2145e4a42a56e204144d0270519f5e7525bee6903868",
+    "dashboard/lib/gist-temperature-media.js": "3586a5ee6b2ae27548cdf756a25f3a36cbfc38f63f025ac5e67947e9bfc18cab",
     "dashboard/lib/lossless-gist.js": "707c0d998c9e21f8b2dd01576105462ca61b998176bfbf62941006c97e207ecf",
     "dashboard/lib/nws-source-timing.js": "3a7b4be177cc5d28be7a8150d7c6937b7c15f113c5475134254dba233df47975",
     "dashboard/lib/nws-warning-evidence.js": "eb98b1dec65d7cac93ea4e8a8b85045324a1aef52ada2834de924ae03a59b3e6",
@@ -105,7 +105,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/media/evidence_graphic.py": "d9e0e487dba14f93d59a3a6289ce48064cd35eb35ea36d5bfd94403858bd3afa",
     "src/media/fire_graphic_adapter.py": "343acd087bcbf3f566837bcf2a1799187002a734641c947b599d6f9f025e9833",
     "src/media/fire_map_graphic_adapter.py": "083b3ca9c1473bf1458aa9a9d4bc1052c7128f40341d8c2f1bf086cd7c1713e7",
-    "src/media/gist_temperature_media.py": "ca51d19d054bc8e1c31a1bf61a31a589a91543e1ea5ddcad443ee42b628b2138",
+    "src/media/gist_temperature_media.py": "c02dad3c9b20fcdb1b41db6e86a34cc87a8529e4baaa6b36068e711e34028c6e",
     "src/media/joint_review.py": "6919888f4e2fcdcab9de8a69487dba0b31fa70a2cc792b402c1fada13e209b44",
     "src/media/maps/NOTICE.md": "f6ebf3caca500621c4b2c9f9fe9aad802099b82a4a1c21c479daf97d29aabac0",
     "src/media/maps/manifest.json": "1af072edc46ae3252bf6cf0edb43993986de262a2840b2cd4907eb4866f970e9",
@@ -208,5 +208,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "8c4887f395618e343dafd55f5843987dfa6a7a620713c7c34bab9f419e4434fe"
   },
   "schema_version": 1,
-  "source_sha256": "d6c233253e437df0ee96bf86fb06fc9da9b7225f751b63de2bdedecb4902a099"
+  "source_sha256": "4a7f00be799f2aa0b903f5b803d493dd2e3a10be22cb334c9280e01a36f7e4f9"
 }

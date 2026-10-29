@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
+from decimal import Decimal
 from hashlib import sha256
 from importlib.resources import files
 from io import BytesIO
@@ -13,7 +14,7 @@ from typing import cast
 from PIL import Image, ImageDraw, ImageFont, features, __version__ as pillow_version
 
 from src.editorial.revisions import fingerprint
-from src.media.evidence_graphic import HEIGHT, WIDTH, build_alt_text, chart_title
+from src.media.evidence_graphic import HEIGHT, WIDTH, chart_title
 from src.media.temperature_graphic_adapter import _StoredBundle, temperature_graphic_spec
 from src.two_bot.types import StoryBundle
 
@@ -23,6 +24,7 @@ KEYS = frozenset({"schema_version", "kind", "bundle_sha256", "source_revision_sh
 RENDER_KEYS = frozenset({"implementation_sha256", "font_sha256", "pillow", "freetype", "zlib", "width", "height"})
 SHA = re.compile(r"[a-f0-9]{64}\Z")
 MAX_DESCRIPTOR_BYTES = 16_384
+MAX_ALT_LENGTH = 1000  # House bound for both Unicode scalars and UTF-8 bytes.
 FONT = "fonts/DejaVuSansMono.ttf"
 
 
@@ -71,8 +73,42 @@ def validate_descriptor(value, bundle):
     _require(all(type(renderer[k]) is str and 0 < len(renderer[k]) <= 64 for k in ("pillow", "freetype", "zlib")), "unknown renderer profile")
     _require(renderer == renderer_identity(), "render profile changed; preview and review again")
     alt = value["alt_text"]
-    _require(type(alt) is str and 0 < len(alt) <= 10_000 and _hash(alt.encode("utf-8")) == value["alt_sha256"], "description changed")
+    _require(type(alt) is str and 0 < len(alt) <= MAX_ALT_LENGTH
+             and len(alt.encode("utf-8")) <= MAX_ALT_LENGTH
+             and _hash(alt.encode("utf-8")) == value["alt_sha256"], "description changed or exceeds delivery bound")
     return value
+
+
+def _axis(current, prior):
+    lower = math.floor(min(0, current, prior) / 5) * 5
+    upper = math.ceil(max(0, current, prior) / 5) * 5
+    _require(upper > lower, "invalid common scale")
+    return lower, upper
+
+
+def _alt_text(evidence):
+    """Exact source-derived chart description; never truncate to fit delivery."""
+    point, baseline = evidence["points"][0], evidence["baseline"]
+    prior = baseline["point"]
+    current, previous = Decimal(str(point["value"])), Decimal(str(prior["value"]))
+    lower, upper = _axis(point["value"], prior["value"])
+    variable = "maximum" if evidence["variable"] == "daily_maximum_temperature" else "minimum"
+    text = (("SYNTHETIC DEMONSTRATION; not actual weather. " if evidence["synthetic"] else "")
+            + f"NOAA GHCN-Daily station {evidence['station_id']}, {evidence['location']}. "
+            + f"Observed daily {variable}: {current:f}°C on {point['valid_date']}. "
+            + f"Comparator: {previous:f}°C on {prior['valid_date']}; {baseline['scope']}. "
+            + f"Archive interval {baseline['start']} through {baseline['cutoff']}; "
+            + f"latest accepted sample {baseline['accepted_sample_cutoff']}. "
+            + f"Full archive: {baseline['source_calendar_count']} source-calendar cells "
+            + f"({baseline['source_missing_count']} missing, {baseline['source_qc_rejected_count']} QC-rejected). "
+            + f"Difference {current - previous:+f}°C. "
+            + f"Bars share a linear {lower} to {upper}°C scale including zero. "
+            + "Dates are source-calendar days; reporting interval and timezone unknown. "
+            + "Accepted-sample comparison, not an official or unrestricted record. "
+            + f"Retrieved {evidence['evidence_as_of']}.")
+    _require(len(text) <= MAX_ALT_LENGTH and len(text.encode("utf-8")) <= MAX_ALT_LENGTH,
+             "complete description exceeds delivery bound")
+    return text
 
 
 def _png(spec):
@@ -82,7 +118,7 @@ def _png(spec):
     _require(all(type(x) in (int, float) and math.isfinite(x) for x in (current, prior)), "invalid values")
     font_bytes = files("src.media").joinpath(FONT).read_bytes()
     def font(size):
-        return ImageFont.truetype(BytesIO(font_bytes), size=size)
+        return ImageFont.truetype(BytesIO(font_bytes), size=size, layout_engine=ImageFont.Layout.BASIC)
     image = Image.new("RGB", (WIDTH, HEIGHT), "#0a0a0a")
     draw = ImageDraw.Draw(image)
     text, muted, grid = "#f4f4f5", "#b5b5bd", "#35353b"
@@ -91,6 +127,9 @@ def _png(spec):
     def line(value, y, size=44, colour=text):
         face = font(size)
         _require(draw.textlength(value, font=face) <= 1072, "label exceeds readable width")
+        box = draw.textbbox((64, y), value, font=face)
+        _require(0 <= box[0] <= box[2] <= WIDTH and 0 <= box[1] <= box[3] <= HEIGHT,
+                 "label exceeds image bounds")
         draw.text((64, y), value, font=face, fill=colour)
 
     def wrap(value, y, size=44, max_lines=3):
@@ -114,13 +153,12 @@ def _png(spec):
         _require(len(rendered) <= 12, "value precision exceeds display")
         return rendered + "°C"
 
-    line("THE HEAT · STATION CHECK", 40, 40, muted)
+    line("SYNTHETIC DATA · NOT REAL WEATHER" if evidence["synthetic"] else "THE HEAT · STATION CHECK", 40, 40, muted)
     wrap(evidence["location"], 112, 58, 2)
     line(point["valid_date"] + " · SOURCE-CALENDAR DAY", 278, 42, muted)
     line(number(current), 350, 150, accent)
     line("Observed daily " + ("high" if "maximum" in evidence["variable"] else "low"), 548, 48)
-    lo, hi = math.floor(min(0, current, prior) / 5) * 5, math.ceil(max(0, current, prior) / 5) * 5
-    _require(hi > lo, "invalid common scale")
+    lo, hi = _axis(current, prior)
     def x(value):
         return 64 + (value - lo) / (hi - lo) * 1072
     wrap(baseline["scope"], 610, 40, 2)
@@ -154,7 +192,7 @@ def prepare_media(bundle, *, synthetic=False):
     spec = temperature_graphic_spec("temperature_comparator", [cast(StoryBundle, _StoredBundle(bundle))],
         expected_bundle_sha256=[fingerprint(bundle)], synthetic=synthetic)
     png = _png(spec)
-    alt = build_alt_text("temperature_comparator", spec["evidence"])
+    alt = _alt_text(spec["evidence"])
     evidence = bundle["raw_signal_dump"]["evidence"]
     descriptor = {"schema_version": 1, "kind": KIND, "bundle_sha256": fingerprint(bundle),
         "source_revision_sha256": evidence["revision_id"], "baseline_revision_sha256": evidence["baseline"]["revision_id"],
