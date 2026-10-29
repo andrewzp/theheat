@@ -152,11 +152,11 @@ def review(journey, now):
     return result
 
 
-def sender(journey, inputs, now, **options):
+def sender(journey, inputs, now, *, extra_env_override=None, **options):
     env = {"THEHEAT_STATE_BACKEND": "gist", "GITHUB_TOKEN": "invented-not-a-real-token",
            "TWITTER_API_KEY": "invented", "TWITTER_API_SECRET": "invented", "TWITTER_ACCESS_TOKEN": "invented",
            "TWITTER_ACCESS_SECRET": "invented", "TWEET_TEXT": inputs["tweet_text"], "DRAFT_ID": inputs["draft_id"],
-           "PUBLISH_INTENT_ID": inputs["publish_intent_id"]}
+           "PUBLISH_INTENT_ID": inputs["publish_intent_id"], **(extra_env_override or {})}
     record, _ = child(journey, "module", "src.main", ["manual_tweet"], now, extra_env=env, **options)
     return record, json.loads((journey["dir"] / "gist/state.json").read_text())
 
@@ -239,3 +239,12 @@ def test_the_operator_deadline_passing_before_send_holds(journey):
     record, state = sender(journey, inputs, at(31))  # Capture at T0 + 30 minutes freshness.
     assert record["x"] == [] and record["nhc"] == [] and state["drafts"][0]["status"] == "pending"
     assert "nhc_advisory_operator_deadline_passed" in state["drafts"][0]["post_error"]
+
+
+def test_a_changed_runtime_policy_after_approval_sends_and_reads_nothing(journey):
+    pending_draft(journey)
+    inputs = review(journey, f"{at(6)[:-1]}.000Z")["dispatches"][0]["inputs"]
+    # A different deployed safety model is a different editorial policy than the one approved.
+    record, state = sender(journey, inputs, at(8), extra_env_override={"GEMINI_SAFETY_MODEL": "invented-changed-model"})
+    assert record["x"] == [] and record["nhc"] == [] and record["models"] == []
+    assert state["drafts"][0]["status"] == "approved" and state["publish_ledger"] == {}

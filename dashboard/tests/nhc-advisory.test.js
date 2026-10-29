@@ -143,3 +143,17 @@ test("the operator deadline passing before review refuses without writing", asyn
     assert.equal(t.raw(), before); assert.equal(t.patches.length, 0)
   })
 })
+
+test("automatic scheduling of a manual-only NHC advisory is refused without writing", async () => {
+  await withNhcGist(async t => {
+    const listed = (await t.list())[0]
+    let result = await t.post(body(t.get(), "review", { reviewConfirmed: true, expectedPolicySha256: listed.editorial_policy.policy_sha256 }))
+    assert.equal(result.status, 200, JSON.stringify(result.body))
+    const reviewed = (await t.list())[0]
+    assert.equal(draftReviewControls(reviewed, at).canSchedule, false)
+    const before = t.raw()
+    result = await t.post(body(t.get(), "auto_approve", { delayMinutes: 30 }))
+    assert.equal(result.status, 409); assert.equal(result.body.code, "automatic_publication_paused")
+    assert.equal(t.raw(), before); assert.equal(t.dispatches.length, 0)
+  })
+})
