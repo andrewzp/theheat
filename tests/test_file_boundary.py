@@ -70,3 +70,38 @@ def test_checked_parent_replaced_before_the_open_cannot_redirect_the_read(root, 
 
     monkeypatch.setattr(boundary, "_read_at", swap_then_read)
     assert boundary.read_regular(str(root / "a" / "target.json"), 64) == b'{"invented": "original"}'
+
+
+def test_writes_a_new_private_directory_with_exclusive_files(root):
+    target = root / "a" / "packet"
+    boundary.write_private_directory(str(target), {"one.json": b"{}\n", "two.txt": b"invented\n"})
+    assert sorted(p.name for p in target.iterdir()) == ["one.json", "two.txt"]
+    assert target.stat().st_mode & 0o777 == 0o700
+    assert all(p.stat().st_mode & 0o777 == 0o600 for p in target.iterdir())
+    with pytest.raises(FileExistsError):
+        boundary.write_private_directory(str(target), {"one.json": b"{}"})
+    for name in ("", ".", "..", "x/y"):
+        with pytest.raises(boundary.FileBoundaryError, match="invalid_path"):
+            boundary.write_private_directory(str(root / "a" / "other"), {name: b""})
+    assert not (root / "a" / "other").exists()
+
+
+def test_write_under_a_static_symlinked_parent_is_refused(root):
+    (root / "linked").symlink_to(root / "a")
+    with pytest.raises(boundary.FileBoundaryError, match="symlinked_path"):
+        boundary.write_private_directory(str(root / "linked" / "packet"), {"x": b""})
+    assert not (root / "a" / "packet").exists()
+
+
+def test_checked_parent_replaced_before_the_create_cannot_redirect_the_write(root, monkeypatch):
+    real_mkdir = os.mkdir
+
+    def swap_then_mkdir(path, *args, **kwargs):
+        os.rename(root / "a", root / "a-moved")
+        (root / "a").symlink_to(root / "evil")
+        return real_mkdir(path, *args, **kwargs)
+
+    monkeypatch.setattr(os, "mkdir", swap_then_mkdir)
+    boundary.write_private_directory(str(root / "a" / "packet"), {"x.json": b"{}"})
+    assert not (root / "evil" / "packet").exists()
+    assert (root / "a-moved" / "packet" / "x.json").read_bytes() == b"{}"

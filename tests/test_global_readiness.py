@@ -387,3 +387,266 @@ def test_r1_cleared_product_summaries_cannot_hide_null_required_evidence(parts):
     unmet = valid["unmet_requirements"]["P17"]["unmet"]
     assert {"provider_cadence_unknown", "current_availability_unverified", "restriction_enforcement_unresolved",
             "unresolved_or_retired_legs_remain"} <= set(unmet)
+
+
+def _components(*pairs):
+    return {"schema_version": 1, "assessment_cutoff": CUTOFF,
+            "components": [{"component_type": kind, "export": deepcopy(value)} for kind, value in pairs]}
+
+
+def test_r3_conflicting_capture_of_one_revision_keeps_the_lineage_ambiguous(parts):
+    """S3-R1: conflict-held A plus B must not make B current or exact."""
+    a = episode()
+    conflict = deepcopy(a)
+    conflict["source_assertion_refs"] = [hashlib.sha256(b"invented other assertion").hexdigest()]
+    b = episode(NEWER)
+    linked = report()
+    linked["related_story"]["episode_head"] = NEWER
+    planned = plan(NEWER)
+    pairs = [("physical_episode", a), ("physical_episode", conflict), ("physical_episode", b),
+             ("report_development", linked), ("portfolio", planned)]
+    outcomes = set()
+    for seed in range(6):
+        shuffled = list(pairs)
+        Random(seed).shuffle(shuffled)
+        result = readiness.assess(_components(*shuffled))
+        newer = next(row for row in result["components"] if row["identity"] == f"episode:{EPISODE}@{NEWER}")
+        assert newer["status"] == "held" and "revision_order_unknown" in newer["reasons"]
+        target = f"episode:{EPISODE}@{NEWER}"
+        episode_joins = {j["from"].split("#")[0].split(":")[0]: j["disposition"] for j in result["joins"]
+                         if j["relation"] == "physical_episode" and j["to"] == target}
+        assert episode_joins == {"report": "held_dependency", "portfolio": "held_dependency"}
+        outcomes.add(json.dumps(result, sort_keys=True))
+    assert len(outcomes) == 1
+
+
+@pytest.mark.parametrize("decision_ref", [None, "decision:invented-not-a-trusted-reference"])
+def test_r3_a_human_reviewed_translation_label_is_not_proof_of_review(parts, decision_ref):
+    """S3-R2: the caller's label and removed holds never clear a translation hold."""
+    thai = report(language="th", linked=False)
+    thai["claims"][0]["translation"].update(status="human_reviewed", text="Invented translation",
+                                            decision_ref=decision_ref)
+    for part in (thai, *thai["claims"]):
+        part["holds"] = [hold for hold in part["holds"] if hold != "translation_review_pending"]
+    result = readiness.assess(_components(("report_development", thai)))
+    subject = f"report:fixture:report1@{REPORT_SHA}#claim1"
+    assert result["evidence_states"]["untranslated"] == [subject]
+    questions = {(item["subject"], item["question"]) for item in result["human_review_packet"]["decisions_needed"]}
+    assert (subject, "translation_review_unverified") in questions
+    assert all(item["decision"] is None and item["decided_by"] is None
+               for item in result["human_review_packet"]["decisions_needed"])
+    english = report(linked=False)
+    clean = readiness.assess(_components(("report_development", english)))
+    assert clean["evidence_states"]["untranslated"] == []
+
+
+def test_r3_malformed_supplied_fields_are_bounded_holds_not_tracebacks(parts):
+    """S3-R4: holds containing a dictionary and a malformed rainfall field."""
+    bad_holds = report()
+    bad_holds["holds"].append({})
+    bad_claim = report(lineage="fixture:report3", sha="e" * 64)
+    bad_claim["claims"][0]["holds"].append(["nested"])
+    trace = deepcopy(parts["trace"][1])
+    trace["trace_status"] = []
+    result = readiness.assess(_components(("report_development", bad_holds), ("report_development", bad_claim),
+                                          ("rainfall_opportunity", trace), parts["episode"]))
+    unsupported = sorted((row["component_type"], row["reasons"][0]) for row in result["components"]
+                         if row["status"] == "unsupported")
+    assert unsupported == [("rainfall_opportunity", "trace_status"),
+                           ("report_development", "invalid_report_projection"),
+                           ("report_development", "invalid_report_projection")]
+    assert by_identity(result)[f"episode:{EPISODE}@{REVISION}"]["status"] == "current"
+
+
+def test_r3_deeply_nested_json_is_a_bounded_envelope_refusal(tmp_path):
+    raw = b"[" * 50000 + b"]" * 50000
+    with pytest.raises(readiness.ReadinessError, match="input_structure_bound"):
+        readiness.strict_loads(raw)
+    nested: list = []
+    for _ in range(500):
+        nested = [nested]
+    with pytest.raises(readiness.ReadinessError, match="input_structure_bound"):
+        readiness.assess({"schema_version": 1, "assessment_cutoff": CUTOFF,
+                          "components": [{"component_type": "portfolio", "export": nested}]})
+    source = tmp_path.resolve() / "deep.json"
+    source.write_bytes(raw)
+    done = subprocess.run([sys.executable, "scripts/summarize_global_readiness.py", "--input", str(source)],
+                          capture_output=True, text=True, timeout=60)
+    assert done.returncode == 2 and json.loads(done.stdout) == {"error": "input_structure_bound"}
+    assert "Traceback" not in done.stderr
+
+
+def test_r3_more_populations_than_one_audit_accepts_never_truncate_or_crash(parts):
+    """S3-R4: 65 distinct populations plus one trace in a valid envelope."""
+    rows = population(6)
+    others = [opportunity_population(population(2, label=f"Other{i}")) for i in range(65)]
+    value = _components(*(("rainfall_opportunity", pop) for pop in others), parts["trace"], parts["population"])
+    assert len(value["components"]) <= readiness.MAX_COMPONENTS
+    result = readiness.assess(value)
+    section = result["rainfall_opportunity"]
+    assert section["status"] == "audited" and section["populations_supplied"] == 66
+    assert section["populations_audited"] == [opportunity_population(rows)["sha256"]]
+    # More referenced populations than one audit accepts: held, never truncated. A valid
+    # 128-component envelope cannot reach 65 referenced populations, so the bound is lowered.
+    second = _grid_trace(population(2, label="Second"), date(2026, 6, 6), read={0}, run_id="run_alerts_second")
+    value = _components(parts["trace"], parts["population"], ("rainfall_opportunity", second),
+                        ("rainfall_opportunity", opportunity_population(population(2, label="Second"))))
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(readiness.rainfall, "MAX_AUDIT_POPULATIONS", 1)
+        held = readiness.assess(value)["rainfall_opportunity"]
+    assert held["status"] == "held" and held["reason"] == "audit_population_bound"
+    assert held["observed_complete_windows"] is None and held["global_recall"] is None
+    assert len(held["populations_audited"]) == 2
+
+
+def test_r3_supplied_conflicting_or_unsupported_is_never_reported_missing(parts):
+    """S3-R5: presence is separate from usability."""
+    rep = report()
+    other = deepcopy(rep)
+    other["original_language"] = "fr"
+    qualified = deepcopy(parts["coverage"][1])
+    qualified["reference_readiness"]["status"] = "qualified"
+    result = readiness.assess(_components(("report_development", rep), ("report_development", other),
+                                          ("coverage_assessment", qualified)))
+    states = result["evidence_states"]
+    assert "report_development" not in states["missing"] and "coverage_assessment" not in states["missing"]
+    assert states["component_presence"]["report_development"] == "supplied_conflicting"
+    assert states["component_presence"]["coverage_assessment"] == "supplied_unsupported"
+    assert states["component_presence"]["portfolio"] == "absent" and "portfolio" in states["missing"]
+    unmet = result["unmet_requirements"]
+    assert "report_development_supplied_conflicting" in unmet["P21"]["unmet"]
+    assert "report_development_missing" not in unmet["P21"]["unmet"]
+    assert "coverage_assessment_supplied_unsupported" in unmet["P22"]["unmet"]
+    assert "portfolio_missing" in unmet["P23"]["unmet"]
+    questions = {item["question"] for item in result["human_review_packet"]["decisions_needed"]}
+    assert "conflicting_exports_same_identity" in questions
+    assert "supplied_export_unsupported:invalid_coverage_assessment" in questions
+
+
+def _cli():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("summarize_global_readiness_cli",
+                                                  "scripts/summarize_global_readiness.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_r3_actual_encoded_outputs_are_bounded_before_anything_is_created(parts, tmp_path):
+    """S3-R6: the 500,000-character U+0800 language fits compact UTF-8 but not the written JSON."""
+    tmp_path = tmp_path.resolve()
+    wide = report(linked=False)
+    wide["original_language"] = "ࠀ" * 500_000
+    source = tmp_path / "wide.json"
+    source.write_text(json.dumps(_components(("report_development", wide))))
+    out = tmp_path / "wide-packet"
+    done = subprocess.run([sys.executable, "scripts/summarize_global_readiness.py", "--input", str(source),
+                           "--output-dir", str(out)], capture_output=True, text=True, timeout=120)
+    if done.returncode == 0:
+        for name in ("readiness.json", "review.txt"):
+            assert (out / name).stat().st_size <= readiness.MAX_OUTPUT_BYTES, name
+    else:
+        assert json.loads(done.stdout) == {"error": "output_too_large"} and not out.exists()
+    result = readiness.assess(_components(("report_development", wide)))
+    assert result["components"][0]["status"] == "unsupported"
+
+
+def test_r3_cli_refuses_an_oversized_written_body_without_creating_output(parts, tmp_path, monkeypatch, capsys):
+    tmp_path = tmp_path.resolve()
+    source = tmp_path / "envelope.json"
+    source.write_text(json.dumps(envelope(parts)))
+    result = readiness.assess(envelope(parts))
+    compact = len(json.dumps(result, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode())
+    written = len(json.dumps(result, sort_keys=True, ensure_ascii=True, indent=1).encode()) + 1
+    assert compact < written
+    cli = _cli()
+    monkeypatch.setattr(readiness, "MAX_OUTPUT_BYTES", compact + 1)  # compact fits, written JSON does not
+    out = tmp_path / "packet"
+    for argv in (["--input", str(source), "--output-dir", str(out)], ["--input", str(source)]):
+        assert cli.main(argv) == 2
+        assert json.loads(capsys.readouterr().out) == {"error": "output_too_large"}
+        assert not out.exists()
+
+
+@pytest.fixture
+def swap_root(tmp_path):
+    base = tmp_path.resolve()
+    for name in ("work", "evil"):
+        (base / name).mkdir()
+    good = {"schema_version": 1, "assessment_cutoff": CUTOFF, "components": []}
+    bad = {"schema_version": 1, "assessment_cutoff": "2026-01-01T00:00:00Z", "components": []}
+    (base / "work" / "envelope.json").write_text(json.dumps(good))
+    (base / "evil" / "envelope.json").write_text(json.dumps(bad))
+    return base
+
+
+def _swap(base):
+    import os
+    os.rename(base / "work", base / "work-moved")
+    (base / "work").symlink_to(base / "evil")
+
+
+def test_r3_parent_replaced_after_the_check_cannot_redirect_the_read(swap_root, monkeypatch, capsys):
+    """S3-R7: the input is opened relative to a held directory descriptor."""
+    import os
+    real_open = os.open
+    swapped = []
+
+    def open_then_swap(path, flags, *args, **kwargs):
+        if os.fspath(path).endswith("envelope.json") and not swapped:
+            swapped.append(True)
+            _swap(swap_root)
+        return real_open(path, flags, *args, **kwargs)
+
+    cli = _cli()
+    monkeypatch.setattr(os, "open", open_then_swap)
+    assert cli.main(["--input", str(swap_root / "work" / "envelope.json")]) == 0
+    assert swapped and json.loads(capsys.readouterr().out)["assessment_cutoff"] == CUTOFF
+
+
+def test_r3_parent_replaced_after_the_check_cannot_redirect_the_write(swap_root, monkeypatch, capsys):
+    """S3-R7: the private output directory is created relative to a held parent descriptor."""
+    import os
+    real_mkdir = os.mkdir
+    swapped = []
+
+    def mkdir_then_swap(path, *args, **kwargs):
+        if os.fspath(path).endswith("packet") and not swapped:
+            swapped.append(True)
+            _swap(swap_root)
+        return real_mkdir(path, *args, **kwargs)
+
+    cli = _cli()
+    monkeypatch.setattr(os, "mkdir", mkdir_then_swap)
+    source = swap_root / "evil" / "envelope.json"  # read from a separate, unswapped parent
+    source.rename(swap_root / "input.json")
+    assert cli.main(["--input", str(swap_root / "input.json"), "--output-dir", str(swap_root / "work" / "packet")]) == 0
+    capsys.readouterr()
+    assert swapped and not (swap_root / "evil" / "packet").exists()
+    written = swap_root / "work-moved" / "packet"
+    assert sorted(p.name for p in written.iterdir()) == ["readiness.json", "review.txt"]
+    assert oct(written.stat().st_mode & 0o777) == "0o700"
+    assert all(oct(p.stat().st_mode & 0o777) == "0o600" for p in written.iterdir())
+
+
+def test_r3_cli_refuses_fifo_static_symlinked_parents_and_collisions(tmp_path):
+    import os
+    base = tmp_path.resolve()
+    good = base / "good.json"
+    good.write_text(json.dumps({"schema_version": 1, "assessment_cutoff": CUTOFF, "components": []}))
+    fifo = base / "envelope.fifo"
+    os.mkfifo(fifo)
+    (base / "real").mkdir()
+    (base / "linked").symlink_to(base / "real")
+    script = "scripts/summarize_global_readiness.py"
+    cases = [(["--input", str(fifo)], "input_not_regular"),
+             (["--input", str(base)], "input_not_regular"),
+             (["--input", str(good), "--output-dir", str(base / "linked" / "packet")], "symlinked_path"),
+             (["--input", str(good), "--output-dir", str(good)], "FileExistsError")]
+    for argv, code in cases:
+        try:
+            done = subprocess.run([sys.executable, script, *argv], capture_output=True, text=True, timeout=20)
+        except subprocess.TimeoutExpired:
+            pytest.fail(f"readiness CLI blocked on {argv}")
+        assert done.returncode == 2 and json.loads(done.stdout) == {"error": code}, (argv, done.stdout)
+    assert not (base / "real" / "packet").exists()

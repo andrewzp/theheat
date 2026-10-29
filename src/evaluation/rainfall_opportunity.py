@@ -26,6 +26,7 @@ DEFAULT_CITY_LIMIT = 75
 MAX_NETWORK_CITIES = 75
 FRESH_MAX_AGE_DAYS = 6
 MAX_TRACES = 4096
+MAX_AUDIT_POPULATIONS = 64
 MAX_POPULATION = 4096
 MAX_TRACE_CANDIDATES = 32
 GRID_LEGS = frozenset({"imerg_late_grid_datapool", "imerg_late_grid_s3"})
@@ -396,7 +397,7 @@ def evaluate(traces: list[Any], populations: list[Any], *, start: date | None = 
              end: date | None = None) -> dict[str, Any]:
     """Audit detached traces against matching canonical populations."""
     _require(isinstance(traces, list) and len(traces) <= MAX_TRACES, "audit_trace_count")
-    _require(isinstance(populations, list) and len(populations) <= 64, "audit_population_count")
+    _require(isinstance(populations, list) and len(populations) <= MAX_AUDIT_POPULATIONS, "audit_population_count")
     known: dict[str, list[str]] = {}
     population_rows: list[dict[str, Any]] = []
     for document in populations:

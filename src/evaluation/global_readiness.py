@@ -86,6 +86,8 @@ def strict_loads(raw: bytes) -> Any:
         return json.loads(raw.decode("utf-8"), object_pairs_hook=pairs, parse_constant=nonfinite)
     except (UnicodeDecodeError, json.JSONDecodeError):
         raise ReadinessError("invalid_json") from None
+    except RecursionError:
+        raise ReadinessError("input_structure_bound") from None
 
 
 def validate_envelope(value: Any) -> tuple[datetime, list[dict[str, Any]]]:
@@ -104,9 +106,18 @@ def validate_envelope(value: Any) -> tuple[datetime, list[dict[str, Any]]]:
         _envelope_require(type(item["component_type"]) is str and len(item["component_type"]) <= 64, "component_keys")
     try:
         projection._canonical(value)
-    except projection.ProjectionError:
+    except (projection.ProjectionError, RecursionError):
         raise ReadinessError("input_structure_bound") from None
     return cutoff, components
+
+
+_HOLD = re.compile(r"[a-z][a-z0-9_]{0,63}\Z")
+
+
+def _hold_codes(value: Any) -> list[str]:
+    reports.require(type(value) is list and len(value) <= 64
+                    and all(type(item) is str and _HOLD.fullmatch(item) for item in value), "report_projection_holds")
+    return value
 
 
 # Per-type adapters over the existing codecs. Each returns identity, facts and
@@ -220,15 +231,28 @@ def _report(export, cutoff):
         reports.require(type(export["claims"]) is list and 1 <= len(export["claims"]) <= 32, "report_projection_claims")
         reports.require(export["generation_available"] is False and export["publication_enabled"] is False,
                         "report_projection_permission")
-        reports.require(export["development_status"] in {"not_opened", "evidence_review_required"}, "report_projection_status")
-        holds = export["holds"]
-        reports.require(type(holds) is list and "report_claims_not_promoted" in holds, "report_projection_holds")
+        reports.require(type(export["development_status"]) is str
+                        and export["development_status"] in {"not_opened", "evidence_review_required"},
+                        "report_projection_status")
+        holds = _hold_codes(export["holds"])
+        reports.require("report_claims_not_promoted" in holds, "report_projection_holds")
+        reports.text(export["original_language"], 35)
         claims = []
         for claim in export["claims"]:
             reports.require(type(claim) is dict and set(claim) == _CLAIM_KEYS, "report_projection_claim")
             reports.identifier(claim["claim_id"])
-            reports.require(claim["kind"] in reports.KINDS, "report_projection_claim")
-            reports.require(type(claim["translation"]) is dict and type(claim["holds"]) is list, "report_projection_claim")
+            reports.require(type(claim["kind"]) is str and claim["kind"] in reports.KINDS, "report_projection_claim")
+            reports.text(claim["original_language"], 35)
+            claim_holds = _hold_codes(claim["holds"])
+            translation = claim["translation"]
+            reports.fixed(translation, "text status decision_ref")
+            reports.require(type(translation["status"]) is str
+                            and translation["status"] in {"not_needed", "unreviewed", "human_reviewed"},
+                            "report_projection_claim")
+            if translation["status"] == "not_needed":
+                # The existing retained-report rule: only English needs no translation.
+                reports.require(claim["original_language"] == "en" and translation["text"] is None
+                                and translation["decision_ref"] is None, "report_projection_claim")
             reports.require(type(claim["times"]) is dict and set(claim["times"]) == reports.TIME_KEYS, "report_projection_claim")
             for value in claim["times"].values():
                 reports.timestamp(value)
@@ -244,8 +268,11 @@ def _report(export, cutoff):
                 anchors.append({key: anchor[key] for key in ("artifact_id", "content_sha256", "start", "end")})
             claims.append({"claim_id": claim["claim_id"], "kind": claim["kind"],
                            "original_language": claim["original_language"],
-                           "translation_status": claim["translation"].get("status"),
-                           "holds": sorted(claim["holds"]), "anchors": anchors,
+                           "translation_status": translation["status"],
+                           # A supplied "human_reviewed" label carries no trusted decision
+                           # this offline packet can verify; it never clears the hold.
+                           "translation_verified": False if translation["status"] != "not_needed" else None,
+                           "holds": sorted(claim_holds), "anchors": anchors,
                            # Original labels with their own precision; never normalised to one clock.
                            "times": {key: claim["times"][key] for key in sorted(claim["times"])}})
         story = export["related_story"]
@@ -392,9 +419,11 @@ def _hold_ambiguous_revisions(rows):
             return "contracts", "all"
         return None
 
+    # Conflict-held captures still identify a revision of the lineage: they count
+    # toward ambiguity even though they are not usable themselves.
     groups: dict[tuple[str, str], set[str]] = {}
     for row in rows:
-        if row["status"] in {"current", "held"} and key(row) is not None:
+        if row["status"] in {"current", "held", "conflict_held"} and key(row) is not None:
             groups.setdefault(key(row), set()).add(row["identity"])
     for row in rows:
         if row["status"] in {"current", "held"} and key(row) is not None and len(groups[key(row)]) > 1:
@@ -523,51 +552,90 @@ def _evidence_states(rows, joins):
             states["trace_incomplete"].append(label)
         if row["component_type"] == "report_development" and row["identity"]:
             for claim in row["facts"]["claims"]:
-                if claim["translation_status"] == "unreviewed" or "translation_review_pending" in claim["holds"]:
+                if claim["translation_verified"] is False or "translation_review_pending" in claim["holds"]:
                     states["untranslated"].append(f"{label}#{claim['claim_id']}")
         if row["component_type"] == "coverage_assessment" and row["identity"]:
             for unit in row["facts"]["units"]:
                 if "grouping_unresolved" in unit["holds"]:
                     states["grouping_unresolved"].append(f"{label}#{unit['unit_id']}")
-    present = {row["component_type"] for row in rows if row["status"] in {"current", "held"}}
-    states["missing"] = [kind for kind in COMPONENT_TYPES if kind not in present]
+    presence = component_presence(rows)
+    states["missing"] = [kind for kind in COMPONENT_TYPES if presence[kind] == "absent"]
     for join in joins:
         if join["disposition"] == "stale_binding":
             states["corrected_superseded"].append(f"{join['from']} -> {join['to']}")
         elif join["disposition"] in {"dependency_missing", "held_dependency"}:
             states["dependency_blocked"].append(f"{join['from']} -> {join['to'] or join['relation']}")
-    return {key: sorted(set(values)) for key, values in states.items()}
+    result: dict[str, Any] = {key: sorted(set(values)) for key, values in states.items()}
+    result["component_presence"] = presence
+    return result
+
+
+def component_presence(rows) -> dict[str, str]:
+    """Absent, supplied and usable, supplied but conflicting, or supplied but unsupported."""
+    presence = {}
+    for kind in COMPONENT_TYPES:
+        statuses = {row["status"] for row in rows if row["component_type"] == kind}
+        presence[kind] = ("absent" if not statuses else "supplied_usable" if statuses & {"current", "held"}
+                          else "supplied_conflicting" if "conflict_held" in statuses else "supplied_unsupported")
+    return presence
 
 
 def _rainfall_audit(rows):
-    """Measured opportunity over current traces only; a separate, labelled section."""
+    """Measured opportunity over current traces only; a separate, labelled section.
+
+    Only the populations the current traces name are audited; an unreferenced
+    population adds nothing. More referenced populations than one audit accepts
+    hold the section instead of truncating it.
+    """
     def current(kind):
-        return [row["_export"] for row in rows if row["component_type"] == "rainfall_opportunity"
+        return [row for row in rows if row["component_type"] == "rainfall_opportunity"
                 and row["facts"].get("kind") == kind and row["status"] == "current"]
     traces = current("trace")
-    return rainfall.evaluate(traces, current("population")) if traces else None
+    populations = current("population")
+    if not traces:
+        return None, None, len(populations), []
+    referenced = {row["facts"]["population_sha256"] for row in traces} - {None}
+    chosen = sorted((row for row in populations if row["identity"].split(":", 1)[1] in referenced),
+                    key=lambda row: row["identity"])
+    audited = [row["identity"].split(":", 1)[1] for row in chosen]
+    if len(chosen) > rainfall.MAX_AUDIT_POPULATIONS:
+        return None, "audit_population_bound", len(populations), audited
+    try:
+        return (rainfall.evaluate([row["_export"] for row in traces], [row["_export"] for row in chosen]), None,
+                len(populations), audited)
+    except rainfall.TraceError as exc:
+        return None, str(exc), len(populations), audited
 
 
 def _unmet(rows, joins, rainfall_audit):
-    def has(kind):
-        return any(row["component_type"] == kind and row["status"] in {"current", "held"} for row in rows)
+    presence = component_presence(rows)
+
+    def gap(kind, name=None):
+        """None when usable; otherwise absent versus supplied-but-unusable, never conflated."""
+        state = presence[kind]
+        if state == "supplied_usable":
+            return None
+        return f"{name or kind}_{'missing' if state == 'absent' else state}"
 
     def ids(kind):
         return sorted(row["identity"] for row in rows if row["component_type"] == kind and row["identity"])
 
+    def with_gap(codes, kind, name=None):
+        code = gap(kind, name)
+        return ([code] if code else []) + codes
+
     unmet: dict[str, dict[str, Any]] = {}
     contracts = _current(rows, "source_products")
-    supplied = any(row["component_type"] == "source_products" for row in rows)
     if contracts:
         p17 = list(contracts[0]["facts"]["unmet_codes"])
         if contracts[0]["facts"]["missing_work"]:
             p17.append("unresolved_or_retired_legs_remain")
     else:
-        p17 = ["product_contracts_supplied_unusable" if supplied else "product_contracts_missing"]
+        p17 = [gap("source_products", "product_contracts") or "product_contracts_held"]
     traces = [row for row in rows if row["component_type"] == "rainfall_opportunity" and row["facts"].get("kind") == "trace"]
     p09 = ["operational_recovery_not_established", "threshold_and_self_heal_recovery_no_supported_input"]
     if not traces:
-        p09.append("gpm_run_trace_missing")
+        p09.append(gap("rainfall_opportunity", "gpm_run_trace") or "gpm_run_trace_missing")
     elif not any(row["facts"]["outcome"] == "primary_served" for row in traces if row["status"] == "current"):
         p09.append("no_supplied_trace_with_primary_service")
     p19 = ["achieved_revisit_sla_null", "cost_unattributed", "qualified_fresh_source_supply_missing"]
@@ -575,27 +643,20 @@ def _unmet(rows, joins, rainfall_audit):
         p19.append("auditable_trace_window_missing")
     elif not rainfall_audit["observed_complete_windows"]:
         p19.append("no_observed_complete_window")
-    p18 = ["multi_hazard_independent_recall_missing", "hosted_workflow_acceptance_separate"]
-    if not has("scientific_supply"):
-        p18.insert(0, "scientific_supply_missing")
-    p20 = ["non_nhc_hazard_identity_missing", "cross_border_split_merge_rules_missing", "independent_event_benchmark_missing"]
-    if not has("physical_episode"):
-        p20.insert(0, "physical_episode_missing")
-    p21 = ["report_claims_not_promoted", "qualified_report_to_writer_contract_pending_review",
-           "multilingual_independent_recall_missing"]
-    if not has("report_development"):
-        p21.insert(0, "report_development_missing")
+    p18 = with_gap(["multi_hazard_independent_recall_missing", "hosted_workflow_acceptance_separate"],
+                   "scientific_supply")
+    p20 = with_gap(["non_nhc_hazard_identity_missing", "cross_border_split_merge_rules_missing",
+                    "independent_event_benchmark_missing"], "physical_episode")
+    p21 = with_gap(["report_claims_not_promoted", "qualified_report_to_writer_contract_pending_review",
+                    "multilingual_independent_recall_missing"], "report_development")
     if any(join["relation"] == "physical_episode" and join["from"].startswith("report:") and join["disposition"] != "exact"
            for join in joins):
         p21.append("report_episode_join_not_exact")
-    p22 = ["denominator_not_qualified", "independent_events_quiet_periods_missing", "scientific_labels_missing"]
-    if not has("coverage_assessment"):
-        p22.insert(0, "coverage_assessment_missing")
-    p23 = ["independent_human_ranking_missing", "spend_enforcement_separate_from_coverage",
-           "exceptional_event_policy_unreviewed"]
-    if not has("portfolio"):
-        p23.insert(0, "portfolio_missing")
-    elif any("not_human_calibrated" in row["reasons"] for row in rows if row["component_type"] == "portfolio"):
+    p22 = with_gap(["denominator_not_qualified", "independent_events_quiet_periods_missing", "scientific_labels_missing"],
+                   "coverage_assessment")
+    p23 = with_gap(["independent_human_ranking_missing", "spend_enforcement_separate_from_coverage",
+                    "exceptional_event_policy_unreviewed"], "portfolio")
+    if any("not_human_calibrated" in row["reasons"] for row in rows if row["component_type"] == "portfolio"):
         p23.append("not_human_calibrated")
     table = {
         "P09": (p09, ids("rainfall_opportunity")),
@@ -622,6 +683,16 @@ def _review_packet(rows):
     """Exact missing decisions and anchors; never a vote, label, translation or approval."""
     items = []
     for row in rows:
+        if row["status"] == "conflict_held":
+            items.append({"subject": row["identity"], "question": "conflicting_exports_same_identity",
+                          "source_anchors": [{"export_sha256": row["export_sha256"]}], "decision": None,
+                          "decided_by": None})
+            continue
+        if row["status"] == "unsupported":
+            items.append({"subject": f"{row['component_type']}:{row['export_sha256']}",
+                          "question": f"supplied_export_unsupported:{row['reasons'][0]}", "source_anchors": [],
+                          "decision": None, "decided_by": None})
+            continue
         if row["status"] not in {"current", "held"}:
             continue
         if row["component_type"] == "report_development":
@@ -629,6 +700,8 @@ def _review_packet(rows):
                 questions = set(claim["holds"]) | set(row["reasons"]) - {"report_claims_not_promoted"}
                 if claim["translation_status"] == "unreviewed":
                     questions.add("translation_review_pending")
+                elif claim["translation_status"] == "human_reviewed":
+                    questions.add("translation_review_unverified")
                 for question in sorted(questions):
                     items.append({"subject": f"{row['identity']}#{claim['claim_id']}", "question": question,
                                   "source_anchors": claim["anchors"], "decision": None, "decided_by": None})
@@ -656,7 +729,7 @@ def assess(envelope: Any) -> dict[str, Any]:
     cutoff, components = validate_envelope(envelope)
     rows = _decode_components(components, cutoff)
     joins = _joins(rows)
-    audit = _rainfall_audit(rows)
+    audit, audit_hold, populations_supplied, populations_audited = _rainfall_audit(rows)
     for row in rows:
         del row["_export"]
     result = {
@@ -672,13 +745,18 @@ def assess(envelope: Any) -> dict[str, Any]:
         "coverage_denominator": None,
         "recall_basis": "no_qualified_reference_eligibility",
         "provider_currentness": "not_established",
-        "rainfall_opportunity": None if audit is None else {
+        "rainfall_opportunity": None if audit is None and audit_hold is None else {
             "label": "measured_rainfall_opportunity_not_global_recall",
-            "observed_complete_windows": audit["observed_complete_windows"],
-            "opportunity_member_runs": audit["opportunity_member_runs"],
-            "request_counts": audit["request_counts"], "cost": audit["cost"],
+            "status": "held" if audit is None else "audited",
+            "reason": audit_hold,
+            "populations_supplied": populations_supplied,
+            "populations_audited": populations_audited,
+            "observed_complete_windows": None if audit is None else audit["observed_complete_windows"],
+            "opportunity_member_runs": None if audit is None else audit["opportunity_member_runs"],
+            "request_counts": None if audit is None else audit["request_counts"],
+            "cost": {"amount": None, "status": "unknown_unattributed"} if audit is None else audit["cost"],
             "achieved_revisit_sla": None, "global_recall": None,
-            "calendar_statuses": sorted({row["status"] for row in audit["calendar"]}),
+            "calendar_statuses": [] if audit is None else sorted({row["status"] for row in audit["calendar"]}),
         },
         "human_review_packet": _review_packet(rows),
         "limits": [
@@ -688,9 +766,20 @@ def assess(envelope: Any) -> dict[str, Any]:
             "Existing operator ordinal scores are uncalibrated judgments, not independent human ranking.",
         ],
     }
-    rendered = projection._canonical(result)
-    _envelope_require(len(rendered) <= MAX_OUTPUT_BYTES, "output_too_large")
-    return projection._decode(rendered)
+    decoded = projection._decode(projection._canonical(result))
+    encode_outputs(decoded)  # bound the bytes actually written or printed, not a compact form
+    return decoded
+
+
+def encode_outputs(result: dict[str, Any]) -> tuple[bytes, bytes]:
+    """The exact readiness.json / stdout and review.txt bytes, each bounded before any output exists."""
+    try:
+        body = (json.dumps(result, sort_keys=True, ensure_ascii=True, indent=1) + "\n").encode("ascii")
+        text = render_text(result).encode("ascii")
+    except (UnicodeEncodeError, RecursionError, TypeError, ValueError):
+        raise ReadinessError("output_not_encodable") from None
+    _envelope_require(len(body) <= MAX_OUTPUT_BYTES and len(text) <= MAX_OUTPUT_BYTES, "output_too_large")
+    return body, text
 
 
 def _inert(value: Any) -> str:
