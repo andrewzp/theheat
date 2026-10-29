@@ -50,6 +50,7 @@ POLICY_FILES = (
     "src/editorial/newsworthiness.py", "src/editorial/report_development.py",
     "src/editorial/official_warning.py", "src/editorial/nhc_advisory.py",
     "src/editorial/warning_runtime.py", "src/orchestrator/sources/official_warning.py",
+    "src/editorial/nhc_advisory_runtime.py", "src/orchestrator/sources/nhc_advisory.py", "src/data/nhc_advisory.py",
     "src/orchestrator/run_alerts.py",
     "dashboard/lib/official-warning-evidence.js", "dashboard/lib/official-warning-validation.js",
     "src/editorial/portfolio.py",

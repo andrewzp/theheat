@@ -103,6 +103,11 @@ def recommend_approval_policy(
             recommended_delay_minutes=None, can_auto_approve=False,
             reason="An attributed prospective warning requires manual source review.")
 
+    if tweet_type == "nhc_advisory":
+        return ApprovalPolicy(key="nhc_advisory_manual", mode="manual_only",
+            recommended_delay_minutes=None, can_auto_approve=False,
+            reason="An attributed NHC forecast advisory requires manual source review.")
+
     if tweet_type == "hot10":
         if is_good:
             return ApprovalPolicy(

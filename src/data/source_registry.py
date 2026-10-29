@@ -89,6 +89,17 @@ CONTRACTS = (
             collection="Only with an explicitly supplied WarningSource and EditorialScore; absent by default; no source fetch.",
             time_rule="Require coherent issue/capture/expiry times and an independently current matching source revision.",
             support=("src/editorial/official_warning.py", "src/editorial/warning_runtime.py", "src/two_bot/intern/warnings.py")),
+    _source("nhc_advisory", "nhc_advisory", "run_nhc_advisory_source",
+            "One explicitly nominated NHC public advisory (operator storm/advisory/hazard/place scope); not discovery.",
+            "official_warning",
+            "Exact CurrentStorms row and public-advisory bulletin bytes from the fixed www.nhc.noaa.gov products.",
+            "Attributed NHC forecast only; no observed impact, inferred landfall, population or record; upstream expiry unknown.",
+            collection="Only with THEHEAT_NHC_ADVISORY_ACQUISITION=1 and an explicit nomination; absent by default; "
+                       "two fixed requests per current read and at most 32 per command.",
+            time_rule="Issue non-future and at most 6 h old; operator recheck deadline at most 60 min after capture; "
+                      "a fresh index/advisory read must match at each spend, admission and send boundary.",
+            support=("src/data/nhc_advisory.py", "src/editorial/nhc_advisory.py",
+                     "src/editorial/nhc_advisory_runtime.py", "src/two_bot/intern/nhc_advisory.py")),
     SourceContract("nhc", ("nhc",), "adapter", "src/orchestrator/cyclones.py:_process_cyclone_source",
                    "NHC Atlantic and East Pacific active-storm products.", "official_warning",
                    "NHC active-storm entries and their advisory products.", _CYCLE, _DATED,

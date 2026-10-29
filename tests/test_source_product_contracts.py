@@ -43,10 +43,10 @@ def _mutated(target, /, **change):
 def test_every_wired_adapter_and_health_key_has_product_legs():
     document = products.product_contract_document()
     assert [row["source_id"] for row in document["adapters"]] == [row.source_id for row in CONTRACTS]
-    assert len(CONTRACTS) == 31
-    # Preserve all 30 accepted-base entries; supplied warnings are an explicit,
-    # default-absent adapter rather than a new autonomous provider feed.
-    assert len([row for row in CONTRACTS if row.source_id != "official_warning"]) == 30
+    assert len(CONTRACTS) == 32
+    # Preserve all 30 accepted-base entries; supplied warnings and the nominated
+    # NHC advisory are explicit, default-absent adapters, not autonomous feeds.
+    assert len([row for row in CONTRACTS if row.source_id not in ("official_warning", "nhc_advisory")]) == 30
     for row in CONTRACTS:
         legs = [leg for leg in products.LEGS if leg.source_id == row.source_id]
         assert legs and {key for leg in legs for key in leg.health_keys} == set(row.health_keys)

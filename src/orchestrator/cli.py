@@ -44,14 +44,19 @@ def main(dispatchers: dict[str, RunMode]) -> None:
         nonlocal bot_state
         bot_state = dispatchers[mode](bot_state, current_run=current_run)
 
-    if args.mode in ("alerts", "both"):
-        _run("alerts")
-    if args.mode in ("leaderboard", "both"):
-        _run("leaderboard")
-    if args.mode == "manual_tweet":
-        _run("manual_tweet")
-    if args.mode == "auto_publish_due":
-        _run("auto_publish_due")
+    # The nhc_advisory kind needs an independently refreshed current-source
+    # owner in this process (never reconstructed from saved labels alone). It
+    # reads nothing unless an nhc_advisory story or draft is actually handled.
+    from src.editorial.nhc_advisory_runtime import advisory_owner_scope
+    with advisory_owner_scope():
+        if args.mode in ("alerts", "both"):
+            _run("alerts")
+        if args.mode in ("leaderboard", "both"):
+            _run("leaderboard")
+        if args.mode == "manual_tweet":
+            _run("manual_tweet")
+        if args.mode == "auto_publish_due":
+            _run("auto_publish_due")
 
     if any(source.get("status") in {"failed", "partial_failure"} for source in current_run.get("sources", [])):
         final_status = "partial_failure"

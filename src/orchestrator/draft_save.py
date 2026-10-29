@@ -163,6 +163,16 @@ def save_draft(
             guard_warning_story(StoryBundle(**raw_bundle), candidate=tweet_text)
         except (WarningHold, TypeError, ValueError, AttributeError):
             return False
+    if tweet_type == "nhc_advisory":
+        # Admission re-reads the fixed NHC products; a changed source admits nothing.
+        from src.editorial.nhc_advisory_runtime import guard_advisory_story
+        from src.editorial.official_warning import WarningHold
+        from src.two_bot.types import StoryBundle
+        try:
+            raw_bundle = (review_context or {}).get("two_bot", {}).get("bundle")
+            guard_advisory_story(StoryBundle(**raw_bundle), candidate=tweet_text, live=True)
+        except (WarningHold, TypeError, ValueError, AttributeError):
+            return False
     # Plan before changing the caller: in particular, a later cooldown rejection
     # cannot delete the stronger candidate's still-pending predecessor.
     # These three existing cycle-only objects are neither publication history nor
@@ -224,6 +234,11 @@ def save_draft(
     if tweet_type == "official_warning":
         try:
             guard_warning_story(StoryBundle(**raw_bundle), candidate=tweet_text)
+        except (WarningHold, TypeError, ValueError, AttributeError):
+            return False
+    if tweet_type == "nhc_advisory":
+        try:
+            guard_advisory_story(StoryBundle(**raw_bundle), candidate=tweet_text)
         except (WarningHold, TypeError, ValueError, AttributeError):
             return False
     bot_state["drafts"] = plan.state["drafts"]

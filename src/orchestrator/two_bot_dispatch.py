@@ -85,8 +85,8 @@ def _try_two_bot_draft(
     dashboard surfaces it. These are *post-score* kills, distinct from
     the editorial-gate near-misses captured by ``_should_draft``.
     """
-    if (getattr(bundle, "signal_kind", None) == "official_warning"
-        or str(getattr(bundle, "event_id", "")).startswith("official_warning:")):
+    if (getattr(bundle, "signal_kind", None) in ("official_warning", "nhc_advisory")
+        or str(getattr(bundle, "event_id", "")).startswith(("official_warning:", "nhc_advisory:"))):
         from src.editorial.official_warning import WarningHold
         from src.editorial.warning_runtime import guard_warning_story
         try:

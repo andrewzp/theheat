@@ -245,6 +245,10 @@ def run_alerts(bot_state: BotState, current_run: dict | None = None, *, ghcn_sup
     # above; finalize freezes the complete funnel onto current_run AFTER the
     # cycle-cap prune, so cycle_cap reclassification is included.
     pending_callbacks: list = []
+    from src.orchestrator.sources.nhc_advisory import configured as nhc_advisory_configured, run_nhc_advisory_source
+    if nhc_advisory_configured():
+        # Explicit opt-in only; its owner/budget is installed by the CLI command.
+        SourceRunner("nhc_advisory", lambda: run_nhc_advisory_source(bot_state, current_run)).run()
     if warning_source is not None:
         from src.orchestrator.sources.official_warning import run_official_warning_source
         warning_runner = SourceRunner("official_warning", lambda: run_official_warning_source(

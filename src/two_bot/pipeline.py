@@ -30,6 +30,9 @@ from src.voice.safety import run_safety_pipeline
 
 
 _FORBIDDEN_CLAIM_SIGNAL_KINDS = ("regional_anomaly", "heat_records_cluster")
+# Story kinds that need an independently current source owner: one writer
+# sample, no revise loop and the required critic, at every attempt.
+_CURRENT_SOURCE_KINDS = ("official_warning", "nhc_advisory")
 
 
 def _forbidden_claim_violation(tweet: str, bundle: StoryBundle) -> str | None:
@@ -227,7 +230,7 @@ def _warning_boundary(bundle, record_kill, *, candidate=None) -> bool:
     from src.editorial.warning_runtime import guard_warning_generation_settings, guard_warning_story
     try:
         guard_warning_story(bundle, candidate=candidate)
-        if getattr(bundle, "signal_kind", None) == "official_warning":
+        if getattr(bundle, "signal_kind", None) in _CURRENT_SOURCE_KINDS:
             guard_warning_generation_settings()
         return True
     except WarningHold as exc:
@@ -428,7 +431,7 @@ def generate_draft(
         request_archive.note_generation_input(bundle.event_id, bundle.signal_kind, checked_bundle, memory_slice)
         if not _warning_boundary(bundle, _record_kill):
             return None
-        samples = 1 if bundle.signal_kind == "official_warning" else _writer_samples()
+        samples = 1 if bundle.signal_kind in _CURRENT_SOURCE_KINDS else _writer_samples()
         writer_results = _writer_sample_slate(bundle, memory_slice, samples)
         viable_results = [
             replace(result, tweet=format_source_link(result.tweet, bundle))
@@ -505,7 +508,7 @@ def generate_draft(
         critic_result = None
         if _critic_enabled() and slate_critic_result is None:
             shipped_recent = memory_slice.shipped_tweet_texts[:10]
-            revise_enabled = False if bundle.signal_kind == "official_warning" else _critic_revise_enabled()
+            revise_enabled = False if bundle.signal_kind in _CURRENT_SOURCE_KINDS else _critic_revise_enabled()
             critic_input = capture_stage_input(bundle, checked_bundle) if result_out is not None else None
             critic_attempt = 1
             critic_text = writer_result.tweet

@@ -85,9 +85,14 @@ def guard_warning_generation_settings() -> None:
         raise WarningHold("warning_requires_one_sample_no_revise_and_required_critic")
 
 
+def _advisory(bundle: object) -> bool:
+    from src.two_bot.intern.nhc_advisory import is_nhc_advisory
+    return is_nhc_advisory(bundle)
+
+
 def begin_warning_provider_scope(bundle: StoryBundle, captured: BundleCapture, *,
                                  generating: bool = True) -> Token:
-    return _PROVIDER_INPUT.set((captured, generating) if is_warning(bundle) else None)
+    return _PROVIDER_INPUT.set((captured, generating) if is_warning(bundle) or _advisory(bundle) else None)
 
 
 def end_warning_provider_scope(token: Token | None) -> None:
@@ -102,7 +107,12 @@ def guard_warning_provider_attempt() -> None:
         return
     captured, generating = bound
     # Use the immutable original capture, not a callback-mutated live bundle.
-    guard_warning_story(StoryBundle(**captured.payload()), generating=generating)
+    original = StoryBundle(**captured.payload())
+    if _advisory(original):
+        from src.editorial.nhc_advisory_runtime import guard_advisory_story
+        guard_advisory_story(original, generating=generating, live=True)
+    else:
+        guard_warning_story(original, generating=generating)
     if generating:
         guard_warning_generation_settings()
 
@@ -112,9 +122,9 @@ def warning_final_safety_scope(draft: dict | None) -> Iterator[None]:
     context = (draft or {}).get("review_context")
     two = context.get("two_bot") if isinstance(context, dict) else None
     raw = two.get("bundle") if isinstance(two, dict) else None
-    warning = ((draft or {}).get("type") == "official_warning"
-        or str((draft or {}).get("event_id", "")).startswith("official_warning:")
-        or (isinstance(raw, dict) and raw.get("signal_kind") == "official_warning"))
+    warning = ((draft or {}).get("type") in ("official_warning", "nhc_advisory")
+        or str((draft or {}).get("event_id", "")).startswith(("official_warning:", "nhc_advisory:"))
+        or (isinstance(raw, dict) and raw.get("signal_kind") in ("official_warning", "nhc_advisory")))
     bound = None
     if warning:
         if not isinstance(raw, dict):
@@ -136,6 +146,10 @@ def warning_final_safety_scope(draft: dict | None) -> Iterator[None]:
 def guard_warning_story(bundle: StoryBundle, *, candidate: str | None = None,
                         generating: bool = True) -> None:
     """Cheap current-input check, never a required model check or approval."""
+    if _advisory(bundle):
+        from src.editorial.nhc_advisory_runtime import guard_advisory_story
+        guard_advisory_story(bundle, candidate=candidate, generating=generating)
+        return
     if not is_warning(bundle):
         return
     if generating and os.environ.get("THEHEAT_PRODUCTION_PAUSED") == "1":
