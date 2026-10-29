@@ -282,4 +282,4 @@ def test_all_fourteen_workflow_groups_have_matching_parser_choices_and_original_
     expected = [("core", "all"), ("media", "all"), *(("postgres", str(i)) for i in range(12))]
     assert groups == expected and len(set(groups)) == 14
     assert options["--ci-postgres-shard"]["choices"] == ("all", *(str(i) for i in range(12)))
-    assert job["timeout-minutes"] == "35" and job["strategy"]["fail-fast"] == "false"
+    assert job["timeout-minutes"] == "45" and job["strategy"]["fail-fast"] == "false"

@@ -97,7 +97,7 @@ def test_required_offline_suite_and_own_production_smoke_gate_remain(workflow):
         "SQLite backend smoke", "Test dashboard", "Build dashboard",
     }
     assert any(step.get("name") == "Smoke gate" for step in run["steps"])
-    assert test["timeout-minutes"] == "35"
+    assert test["timeout-minutes"] == "45"
     assert run["timeout-minutes"] == "20"
 
 
