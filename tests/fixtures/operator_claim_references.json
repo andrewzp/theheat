@@ -1,0 +1,133 @@
+{
+  "text": "🌡 Invented 40°C: é / 40°C. <img src=x> اب",
+  "bundle": {
+    "event_id": "invented-reference",
+    "signal_kind": "temperature",
+    "where": "Invented place",
+    "when": "2032-01-02",
+    "current_facts": [
+      {
+        "label": "invented_forecast",
+        "value": 40,
+        "unit": "°C"
+      },
+      {
+        "label": "zero",
+        "value": 0,
+        "unit": ""
+      },
+      {
+        "label": "absent",
+        "value": null
+      },
+      {
+        "label": "flag",
+        "value": false
+      },
+      {
+        "label": "display_text",
+        "value": "<img src=x>",
+        "unit": null
+      }
+    ]
+  },
+  "items": [
+    {
+      "claim": {
+        "start": 11,
+        "end": 15,
+        "text": "40°C"
+      },
+      "sources": [
+        {
+          "pointer": "/current_facts/0"
+        },
+        {
+          "pointer": "/current_facts/1"
+        }
+      ]
+    },
+    {
+      "claim": {
+        "start": 17,
+        "end": 19,
+        "text": "é"
+      },
+      "sources": [
+        {
+          "pointer": "/current_facts/2"
+        },
+        {
+          "pointer": "/current_facts/3"
+        }
+      ]
+    },
+    {
+      "claim": {
+        "start": 28,
+        "end": 39,
+        "text": "<img src=x>"
+      },
+      "sources": [
+        {
+          "pointer": "/current_facts/4"
+        }
+      ]
+    }
+  ],
+  "saved": {
+    "schema_version": 1,
+    "origin": "operator_supplied",
+    "text_sha256": "b083bc6553e15501619e4a3be841612e290104713fc9cdd16e9be398688cc354",
+    "bundle_sha256": "af46bbcdebf9d11bb9bf213c939f690aafdcfc28c616ba00f24509b274cc50f6",
+    "items": [
+      {
+        "claim": {
+          "start": 11,
+          "end": 15,
+          "text": "40°C"
+        },
+        "sources": [
+          {
+            "pointer": "/current_facts/0",
+            "value_sha256": "af80d1a9c85230c41630da9798904ad95744e90f2b2dbcb47bc25e83aa1c0fe0"
+          },
+          {
+            "pointer": "/current_facts/1",
+            "value_sha256": "174be148a1613e8c3b09a748bd796ceb09372c411afe9431666adaa6377a311c"
+          }
+        ]
+      },
+      {
+        "claim": {
+          "start": 17,
+          "end": 19,
+          "text": "é"
+        },
+        "sources": [
+          {
+            "pointer": "/current_facts/2",
+            "value_sha256": "3ce84fa8df32d1ccab4d90097a776a217e5993bdeb2863d560c64ef7cd066b3f"
+          },
+          {
+            "pointer": "/current_facts/3",
+            "value_sha256": "c5989c8af438f6d7e9c5eb71bae49fa568fbc075a2574de8b4773c3710062dbd"
+          }
+        ]
+      },
+      {
+        "claim": {
+          "start": 28,
+          "end": 39,
+          "text": "<img src=x>"
+        },
+        "sources": [
+          {
+            "pointer": "/current_facts/4",
+            "value_sha256": "84b9fd982a0eb1abd67e3e101b0f3e80d30013bdd5898edcd0f97093cd808e13"
+          }
+        ]
+      }
+    ]
+  }
+}
