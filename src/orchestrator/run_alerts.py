@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from contextlib import nullcontext
+
 # ruff: noqa: F403,F405
 from src.orchestrator.common import *
 from src.orchestrator.finalize import _fire_surviving_draft_callbacks, _prune_weakest_cycle_drafts
@@ -35,7 +37,8 @@ from src.orchestrator.sources.synthesis import run_synthesis
 from src.orchestrator.sources.usgs_quakes import run_usgs_quakes
 
 
-def run_alerts(bot_state: BotState, current_run: dict | None = None, *, ghcn_supply=None) -> BotState:
+def run_alerts(bot_state: BotState, current_run: dict | None = None, *, ghcn_supply=None,
+               warning_source=None, warning_score=None) -> BotState:
     """Check all alert data sources and save drafts."""
     if ghcn_supply is not None:
         from src.storage.scientific_supply import ScientificSupplySession, require
@@ -242,9 +245,15 @@ def run_alerts(bot_state: BotState, current_run: dict | None = None, *, ghcn_sup
     # above; finalize freezes the complete funnel onto current_run AFTER the
     # cycle-cap prune, so cycle_cap reclassification is included.
     pending_callbacks: list = []
-    drafted = _drain_and_write_triage_queue(
-        bot_state, current_run, defer_callbacks=pending_callbacks, funnel_sink=funnel_sink
-    )
+    if warning_source is not None:
+        from src.orchestrator.sources.official_warning import run_official_warning
+        run_official_warning(bot_state, current_run, source=warning_source, score=warning_score)
+    from src.editorial.warning_runtime import WarningSource, warning_source_scope
+    warning_context = warning_source_scope(warning_source) if type(warning_source) is WarningSource else nullcontext()
+    with warning_context:
+        drafted = _drain_and_write_triage_queue(
+            bot_state, current_run, defer_callbacks=pending_callbacks, funnel_sink=funnel_sink
+        )
 
     pruned_event_ids: set = set()
     drafted = _prune_weakest_cycle_drafts(

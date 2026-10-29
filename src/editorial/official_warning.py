@@ -16,6 +16,7 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from src.commands.schema import CommandError, utc_datetime
+from src.two_bot.retry import NonRetryableError
 
 MAX_METADATA_BYTES = 128 * 1024
 MAX_ARTIFACT_BYTES = 8 * 1024 * 1024
@@ -28,7 +29,7 @@ _IDENTIFIER = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}")
 _SHA = re.compile(r"[a-f0-9]{64}")
 
 
-class WarningHold(ValueError):
+class WarningHold(NonRetryableError):
     """Stable reason only; never disclose source bytes or parser diagnostics."""
 
     def __init__(self, code: str):

@@ -6,7 +6,12 @@ import time
 from collections.abc import Callable
 from typing import TypeVar
 
+
 T = TypeVar("T")
+
+
+class NonRetryableError(ValueError):
+    """Explicit application preflight refusal, never another provider attempt."""
 
 
 class BudgetExhaustedError(RuntimeError):
@@ -85,7 +90,7 @@ def call_with_retries(
     for attempt in range(1, attempts + 1):
         try:
             return fn()
-        except BudgetExhaustedError:
+        except (BudgetExhaustedError, NonRetryableError):
             raise
         except Exception as exc:
             if _is_budget_exhausted(exc):

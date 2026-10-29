@@ -98,6 +98,11 @@ def recommend_approval_policy(
     is_strong = signal_total >= 72 and copy_total >= 72
     is_good = signal_total >= 66 and copy_total >= 68
 
+    if tweet_type == "official_warning":
+        return ApprovalPolicy(key="official_warning_manual", mode="manual_only",
+            recommended_delay_minutes=None, can_auto_approve=False,
+            reason="An attributed prospective warning requires manual source review.")
+
     if tweet_type == "hot10":
         if is_good:
             return ApprovalPolicy(

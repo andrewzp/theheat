@@ -34,7 +34,8 @@ def test_actual_bundle_passes_existing_audit_without_impacts_or_sensor_identity(
     assert all(row["source_url"] == metadata["source_url"]
                and row["content_sha256"] == sha(raw) for row in bundle.current_facts)
     evidence = bundle.raw_signal_dump["official_warning"]
-    assert evidence["source_utf8"].encode() == raw and evidence["metadata"] == metadata
+    assert evidence["source_utf8"].encode() == raw
+    assert evidence["metadata_utf8"].encode() == encode(metadata)
     assert evidence["assertion_kind"] == "attributed_warning_not_observation"
     assert "not_fresh_authentication" in evidence["acquisition_limit"]
     assert capture_bundle(bundle).payload() == bundle.to_dict()
@@ -51,7 +52,8 @@ def test_round_trip_preserves_exact_source_and_byte_anchors():
     encoded = json.dumps(build(metadata, raw).to_dict(), ensure_ascii=False, allow_nan=False)
     restored = json.loads(encoded)["raw_signal_dump"]["official_warning"]
     assert restored["source_utf8"].encode() == raw
-    for item in (restored["metadata"]["warning"], restored["metadata"]["place"]["anchor"]):
+    retained = json.loads(restored["metadata_utf8"])
+    for item in (retained["warning"], retained["place"]["anchor"]):
         assert raw[item["start"]:item["end"]] == item["text"].encode()
     assert encoded.count("INVENTED official bulletin") == 1
 

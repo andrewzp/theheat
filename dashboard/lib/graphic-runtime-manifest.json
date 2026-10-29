@@ -1,6 +1,6 @@
 {
   "identity": {
-    "archive_sha256": "e30e6091cfd6a37d0ec4944f117817f0d1c30d238f2c14475c6483eb0577ad98",
+    "archive_sha256": "c0dc9e5abfd5328a18ae6a6ecdd248319f8fb8604727c0b338b0ab9306e8f617",
     "deployment_files": {
       "api/graphic_preview.py": "f7521adcbd618f4b65b2a0de30ea62aaff4cdd36f2254e9af38bf68646d361ad",
       "api/graphic_reader_status.py": "5e9685d699625a4eea9d5be884b6e266939a0ad344a2997351ba79bd114407ba",
@@ -42,7 +42,7 @@
       "src/data/temperature_history.py": "c1369f662d76b2a788e49f30bdc00a57377f686e08bcefd0e958322e3ed33d84",
       "src/editorial/__init__.py": "ae88e85a4a7a2d49e32df9e41a7e424f8d61492db308742ece8f2fb6cac24896",
       "src/editorial/_util.py": "98efd5327d85052022b73cbee72931790a8457e7f133f0ff2bbd109cee5bfa05",
-      "src/editorial/approval.py": "7c74edff3e93cd2024522df5281dda73cef287c8b038f705f4e391ad8ebb89c3",
+      "src/editorial/approval.py": "2fd84d1b31dc81a4643d85a0d5e572f16c9e233fe0425e7f2eb80f7fc0b1e371",
       "src/editorial/candidates.py": "80d50c488f44fd879c137751701a306cfae78eb376c3da33b9b7f3150cf9270d",
       "src/editorial/marine_evidence.py": "7183f93f1068d75856063cf061a1dea8751bd4dd98cc1f1f34488bcf39296f5c",
       "src/editorial/operator_claim_references.py": "dbd11ac41b88e0019dde2f51b078c43cf8bd46966f1cb06e2adffc267f3bfbdc",
@@ -89,12 +89,12 @@
       "src/two_bot/types.py": "36ed2e6475a655f4112012486795702159ed546c3040e8ef1874b7a0b02a9035"
     },
     "format": "saved-source-svg-preview-v2",
-    "policy_source_sha256": "9b6924191d488f563323ab6ec3a26df0f8210a9f818129fc9c2716814289907a",
+    "policy_source_sha256": "e2aa7cad61b68d68e1a6cf84a4c5666392e270612097abbf1d922b6870ed607c",
     "resource_sources": {
       "src/data/registry/country_codes.json": "data/country_codes.json",
       "src/data/registry/place_registry.json": "data/place_registry.json"
     },
     "schema_version": 1
   },
-  "runtime_sha256": "42da21fdf311178054c195645feecda4217077ac8a7c3a5c24c5e32a4acde5c4"
+  "runtime_sha256": "7f858ce052248d2ae5d9543aeecd97579b3912219fc9a77b94ea63a8e62e29f6"
 }

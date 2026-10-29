@@ -85,6 +85,18 @@ def _try_two_bot_draft(
     dashboard surfaces it. These are *post-score* kills, distinct from
     the editorial-gate near-misses captured by ``_should_draft``.
     """
+    if (getattr(bundle, "signal_kind", None) == "official_warning"
+        or str(getattr(bundle, "event_id", "")).startswith("official_warning:")):
+        from src.editorial.official_warning import WarningHold
+        from src.editorial.warning_runtime import guard_warning_story
+        try:
+            if generation_client is not None:
+                raise WarningHold("warning_async_current_source_unsupported")
+            guard_warning_story(bundle)
+        except WarningHold as exc:
+            if result_out is not None:
+                result_out.update(kill_stage="warning_source", kill_reason=exc.code)
+            return False
     if generation_client is not None:
         from src.commands.schema import CommandError
         try:

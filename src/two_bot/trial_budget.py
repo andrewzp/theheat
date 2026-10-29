@@ -215,6 +215,8 @@ def anthropic_trial_options() -> dict:
 
 
 def provider_call(stage: str, provider: str, request: dict, send: Callable):
+    from src.editorial.warning_runtime import guard_warning_provider_attempt
+    guard_warning_provider_attempt()
     budget = current_trial()
     archive = _active_archive()
     if budget is None and archive is None:
@@ -225,6 +227,9 @@ def provider_call(stage: str, provider: str, request: dict, send: Callable):
     # Durable logical intent precedes execution; a refusal here sends nothing.
     recorder = archive.begin_call(stage, provider, bounded) if archive is not None else None
     try:
+        # Reservation/evidence work can outlive the source window. Recheck before
+        # handing off to the SDK; existing conservative outcome retention remains.
+        guard_warning_provider_attempt()
         response = send(**bounded)
     except BaseException as exc:
         if budget is not None:

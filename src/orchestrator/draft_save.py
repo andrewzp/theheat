@@ -154,6 +154,15 @@ def save_draft(
     from src.editorial.policy import current_editorial_policy
 
     clock = _utc_now()
+    if tweet_type == "official_warning":
+        from src.editorial.official_warning import WarningHold
+        from src.editorial.warning_runtime import guard_warning_story
+        from src.two_bot.types import StoryBundle
+        try:
+            raw_bundle = (review_context or {}).get("two_bot", {}).get("bundle")
+            guard_warning_story(StoryBundle(**raw_bundle), candidate=tweet_text)
+        except (WarningHold, TypeError, ValueError, AttributeError):
+            return False
     # Plan before changing the caller: in particular, a later cooldown rejection
     # cannot delete the stronger candidate's still-pending predecessor.
     # These three existing cycle-only objects are neither publication history nor
@@ -212,6 +221,11 @@ def save_draft(
         draft["approval_mode"] = "policy_auto"
         authorize_draft(draft, "auto", publication_epoch=publication_policy["epoch"])
 
+    if tweet_type == "official_warning":
+        try:
+            guard_warning_story(StoryBundle(**raw_bundle), candidate=tweet_text)
+        except (WarningHold, TypeError, ValueError, AttributeError):
+            return False
     bot_state["drafts"] = plan.state["drafts"]
     for decision in plan.suppressions:
         _record_save_rejection(bot_state=bot_state, **decision)

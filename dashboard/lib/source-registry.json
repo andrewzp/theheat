@@ -610,7 +610,7 @@
     "src/data/water_levels.py": "2b77738fe2e5f4a246b29691879726873a48622ee26e6ffcd35713f07c505ab3",
     "src/orchestrator/cyclones.py": "389c6441db0839763b6a9cd42146f75e3ab14d1179125d60a9c368eb1e03697d",
     "src/orchestrator/hot10.py": "6a6f77bf54e7fa0907d21454c460c0ea991f2dd32edf4d251be10989007bb9a1",
-    "src/orchestrator/run_alerts.py": "147fc41c4e87718d0e5601b291097739b829ab12be77d9577f96a4a6c05d4170",
+    "src/orchestrator/run_alerts.py": "208f7d56ece725ed7a7020d1ca2f75ce18a4cf2af03d0bc01750c34d1968953a",
     "src/orchestrator/sources/air_quality.py": "254d2a44d4bf534b19cf18ae49574ebc3616895e5fe6ef2399f1d46bc26f5d50",
     "src/orchestrator/sources/climate_indices.py": "e46485639d62d426b5d55b6f02191a47b0434bb31eb23e8f4a6bece33e980208",
     "src/orchestrator/sources/co2.py": "2ed59676536ab5ff9fc45d3116c91ffad10986a5a4380687a7191f2bd518d4a6",
@@ -640,5 +640,5 @@
     "src/orchestrator/sources/usgs_quakes.py": "8ce82d003a52235fb92750c9f1e5450a672ff942ab71268a78d77f2ac8aa5c05"
   },
   "evidence_scope": "Referenced local code inventory; not live/provider/transitive-source qualification.",
-  "registry_sha256": "a68357b33f6ffc511de7805c2792187ee14b76efefbf4d3601cc8c24babde532"
+  "registry_sha256": "ca8eab3dcd690cbb4f19583085870882df1f5ed979b147abb79b637bc6383b19"
 }

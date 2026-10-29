@@ -1,3 +1,16 @@
+## 0.9.109.47
+
+- Add a default-absent supplied official-warning lane through the existing queue,
+  writer, required checks and manual Gist review/X delivery. Keep warnings
+  attributed and prospective, retain their exact original evidence, and refuse
+  missing, changed or expired current-source inputs.
+- Show saved warning text, issuer and validity in the Workbench. Source/reference
+  edits require fresh review; a correctable text edit does not permanently mark
+  unchanged source evidence stale.
+- Recheck warning evidence before provider attempts, including retries, and before
+  final safety/delivery. Preserve normal retry bounds, uncertain-send handling and
+  the collection, generation and automatic publishing pauses.
+
 ## 0.9.109.46
 
 - Add source-derived PM2.5 forecast charts and MODIS/VIIRS thermal-detection maps

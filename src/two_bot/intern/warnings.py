@@ -42,7 +42,8 @@ def build_warning_bundle(
         current_facts=facts, country=packet["place"]["country"], raw_signal_dump={
             "source_name": issuer, "source_url": packet["source_url"],
             "official_warning": {
-                "metadata": packet, "source_utf8": source_bytes.decode("utf-8"),
+                "metadata_utf8": metadata_bytes.decode("utf-8"),
+                "source_utf8": source_bytes.decode("utf-8"),
                 "metadata_sha256": evidence.nomination.metadata_sha256,
                 "evidence_sha256": evidence.evidence_sha256,
                 "assertion_kind": "attributed_warning_not_observation",

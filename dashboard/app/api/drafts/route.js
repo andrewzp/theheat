@@ -6,6 +6,7 @@ import { readStateStore, readStateWithRuntimeReport, updateDraftStore } from "..
 import { requireDashboardAuth } from "../../../lib/auth.js"
 import { readJsonObject } from "../../../lib/request-json.js"
 import { nwsSourceTiming } from "../../../lib/nws-source-timing.js"
+import { officialWarningValidation } from "../../../lib/official-warning-validation.js"
 import {
   approvalIsCurrent,
   authorizeDraft,
@@ -41,6 +42,8 @@ function fail(message, status = 409, code = "revision_conflict") {
 function assertSavedSourceTiming(draft) {
   const timing = nwsSourceTiming(draft)
   if (timing.blocked) fail(timing.message, 409, "nws_source_review_required")
+  const warning = officialWarningValidation(draft)
+  if (warning.blocked) fail(warning.message, 409, "warning_source_review_required")
 }
 
 // New image families: explicit source recency at manual approval (the sender
