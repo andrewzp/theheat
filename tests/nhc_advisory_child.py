@@ -86,6 +86,13 @@ def main(config_path: str) -> None:
         raise AssertionError(f"unallowed invented-transport request: {method} {url}")
 
     requests.adapters.HTTPAdapter.send = send  # type: ignore[method-assign]
+    # The production adapter now owns a credential-free subprocess for its hard
+    # HTTP deadline. This invented journey explicitly replaces that transport
+    # boundary so a grandchild cannot escape this process's socket/SDK traps.
+    # The owned-process deadline has separate real-child tests; this journey
+    # still exercises the adapter's one-request HTTP implementation and guards.
+    from src.data import nhc_advisory as nhc_source
+    nhc_source._http_get = nhc_source._http_get_inprocess
 
     from google import genai
 
