@@ -4,6 +4,7 @@ import { useEffect, useId, useRef, useState } from "react"
 import { ForecastEvidence } from "./ForecastEvidence.js"
 import { NwsWarningEvidence } from "./NwsWarningEvidence.js"
 import { OfficialWarningEvidence } from "./OfficialWarningEvidence.js"
+import { NhcAdvisoryEvidence } from "./NhcAdvisoryEvidence.js"
 import { ClaimEvidence } from "./ClaimEvidence.js"
 import { OperatorClaimReferenceHistory, OperatorClaimReferences } from "./OperatorClaimReferences.js"
 import { operatorReferencesForDisplay } from "../../lib/operator-claim-reference-input.js"
@@ -269,6 +270,7 @@ export function DraftWorkbench({
                 <ForecastEvidence key={reviewKey} draft={selectedDraft} />
                 <NwsWarningEvidence key={"nws:" + reviewKey} draft={selectedDraft} />
                 <OfficialWarningEvidence key={"official-warning:" + reviewKey} draft={selectedDraft} />
+                <NhcAdvisoryEvidence key={"nhc-advisory:" + reviewKey} draft={selectedDraft} />
                 {selectedDraft.local_preview
                   ? <EditorMedia key={`media:${reviewKey}`} draft={selectedDraft} editing={editingId === selectedDraft.id} updating={!!draftAction || !!pendingCommand} submitCommand={submitLocalCommand} />
                   : <GraphicPreview key={`graphic:${reviewKey}`} draft={selectedDraft} editing={editingId === selectedDraft.id} updating={draftAction === selectedDraft.id} onAction={(action, payload) => draftAct(selectedDraft.id, action, payload)} />}

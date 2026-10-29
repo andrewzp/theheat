@@ -96,6 +96,8 @@ def test_prepare_is_free_bounded_and_never_mutates_state(env):
     assert plan["expires_at"] <= plan["operator_recheck_deadline"]
     assert (env["out"] / "page.bin").read_bytes() == h.page()  # Exact original HTTP bytes retained privately.
     assert all(stat.S_IMODE(p.stat().st_mode) == 0o600 for p in env["out"].iterdir())
+    # The packet binds the import operator too: changing it invalidates an approved packet.
+    assert "scripts/nhc_advisory_import.py" in plan["binding"]["trial_entry_points"]
 
 
 def test_retained_or_published_event_prepares_zero_candidates(env):

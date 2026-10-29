@@ -7,6 +7,7 @@ import { requireDashboardAuth } from "../../../lib/auth.js"
 import { readJsonObject } from "../../../lib/request-json.js"
 import { nwsSourceTiming } from "../../../lib/nws-source-timing.js"
 import { officialWarningValidation } from "../../../lib/official-warning-validation.js"
+import { nhcAdvisoryValidation } from "../../../lib/nhc-advisory-validation.js"
 import {
   approvalIsCurrent,
   authorizeDraft,
@@ -44,6 +45,8 @@ function assertSavedSourceTiming(draft) {
   if (timing.blocked) fail(timing.message, 409, "nws_source_review_required")
   const warning = officialWarningValidation(draft)
   if (warning.blocked) fail(warning.message, 409, "warning_source_review_required")
+  const advisory = nhcAdvisoryValidation(draft)
+  if (advisory.blocked) fail(advisory.message, 409, "nhc_advisory_source_review_required")
 }
 
 // New image families: explicit source recency at manual approval (the sender
