@@ -48,7 +48,7 @@ POLICY_FILES = (
     "src/storage/cyclone_supply.py", "src/storage/physical_events.py",
     "src/orchestrator/cyclone_episodes.py", "src/orchestrator/cyclones.py",
     "src/editorial/newsworthiness.py", "src/editorial/report_development.py",
-    "src/editorial/official_warning.py",
+    "src/editorial/official_warning.py", "src/editorial/nhc_advisory.py",
     "src/editorial/warning_runtime.py", "src/orchestrator/sources/official_warning.py",
     "src/orchestrator/run_alerts.py",
     "dashboard/lib/official-warning-evidence.js", "dashboard/lib/official-warning-validation.js",
