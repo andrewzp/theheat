@@ -33,8 +33,8 @@ def attach(draft, descriptor, *, at="2026-06-08T12:00:00Z"):
     return revisions.invalidate_media_attachment(draft, deepcopy(descriptor), at=at)
 
 
-def approve(draft, intent="invented-joint-intent"):
-    revisions.record_joint_media_review(draft)
+def approve(draft, intent="invented-joint-intent", attestations=None):
+    revisions.record_joint_media_review(draft, attestations=attestations)
     revisions.authorize_draft(draft, "manual", intent)
     draft.update(status="approved", approval_mode="manual", publish_intent_id=intent)
     assert revisions.review_is_current(draft)

@@ -197,14 +197,18 @@ for (const family of FAMILIES) {
   test(`${family}: a quote-reference-only edit revokes joint review but keeps text, source and image`, async () => {
     await withGist(family, async t => {
       await attach(t); const reviewed = await joint(t)
-      const items = [{ claim: { start: 0, end: 8, text: reviewed.text.slice(0, 8) }, sources: [{ pointer: "/current_facts/0" }] }]
-      const result = await t.post(body(reviewed, "edit", { editedText: reviewed.text, operator_claim_references: items }))
-      if (family === "pm25") {
-        // Existing limit: the retained PM2.5 grid fact is not a quotable scalar. Nothing changes.
-        assert.equal(result.status, 422, JSON.stringify(result.body))
+      // PM2.5's list-valued grid fact is referenced by one exact element (P31 gap closed).
+      const facts = reviewed.review_context.two_bot.bundle.current_facts
+      const grid = facts.findIndex(fact => Array.isArray(fact.value))
+      const sources = [{ pointer: "/current_facts/0" }, ...(grid >= 0 ? [{ pointer: `/current_facts/${grid}/value/1` }] : [])]
+      assert.equal(family !== "pm25" || grid >= 0, true)
+      if (grid >= 0) {
+        const whole = [{ claim: { start: 0, end: 8, text: reviewed.text.slice(0, 8) }, sources: [{ pointer: `/current_facts/${grid}` }] }]
+        assert.equal((await t.post(body(reviewed, "edit", { editedText: reviewed.text, operator_claim_references: whole }))).status, 422)
         assert.deepEqual(revision(t.get()), revision(reviewed)); assert.equal(reviewIsCurrent(t.get(), policy), true)
-        return
       }
+      const items = [{ claim: { start: 0, end: 8, text: reviewed.text.slice(0, 8) }, sources }]
+      const result = await t.post(body(reviewed, "edit", { editedText: reviewed.text, operator_claim_references: items }))
       assert.equal(result.status, 200, JSON.stringify(result.body))
       const edited = t.get()
       assert.equal(edited.text, reviewed.text)

@@ -19,8 +19,11 @@ const python = process.env.THEHEAT_TEST_PYTHON || "python3"
 const digest = bytes => createHash("sha256").update(bytes).digest("hex")
 const trap = "import json,sys,socket\nsocket.socket.connect=lambda *a,**k: (_ for _ in ()).throw(AssertionError('external connection trapped'))\n"
 const fixtureCode = trap + `
-from tests.gist_hazard_helpers import CLOCKS, saved_state
 value=json.load(sys.stdin)
+if value['family'] in ('crw','radar','cone'):
+    from tests.gist_store_helpers import CLOCKS, saved_state
+else:
+    from tests.gist_hazard_helpers import CLOCKS, saved_state
 state=saved_state(value['family'],runtime=value['runtime'])
 print(json.dumps(dict(raw_state=json.dumps(state,ensure_ascii=False),clocks=CLOCKS[value['family']],
   raw_bundle=json.dumps(state['drafts'][0]['review_context']['two_bot']['bundle'],ensure_ascii=False))))
@@ -35,7 +38,10 @@ sys.stdout.buffer.write(build_preview(value['request'],policy_sha=value['policy'
 export function pythonJSON(code, input) {
   const result = spawnSync(python, ["-c", code], { cwd: root, input: JSON.stringify(input), encoding: "utf8", timeout: 60000,
     env: { PATH: process.env.PATH, HOME: "/nonexistent-invented-gist-test", LC_ALL: "C", LANG: "C", NETRC: "/dev/null",
-      PYTHON_DOTENV_DISABLED: "1", PYTHONDONTWRITEBYTECODE: "1", NO_PROXY: "*", no_proxy: "*" } })
+      PYTHON_DOTENV_DISABLED: "1", PYTHONDONTWRITEBYTECODE: "1", NO_PROXY: "*", no_proxy: "*",
+      // The invented local media store for store-backed families (never a credential).
+      ...(process.env.THEHEAT_MEDIA_STORE ? { THEHEAT_MEDIA_STORE: process.env.THEHEAT_MEDIA_STORE } : {}) },
+    maxBuffer: 16 * 1024 * 1024 })
   assert.equal(result.status, 0, JSON.stringify({ stderr: result.stderr?.slice(-4000), signal: result.signal }))
   return JSON.parse(result.stdout)
 }
@@ -121,24 +127,28 @@ export async function withGist(family, run, options = {}) {
       const response = await route.GET(new Request("http://localhost:3000/api/drafts", { headers }))
       return (await response.json()).drafts
     }
-    const preview = draft => render({ draft_id: draft.id, expected_revision: revision(draft),
-      expected_policy_source_sha256: manifest.identity.policy_source_sha256, expected_preview_runtime_sha256: manifest.runtime_sha256, format: "png" })
+    const preview = (draft, retained = options.retainedInput) => render({ draft_id: draft.id, expected_revision: revision(draft),
+      expected_policy_source_sha256: manifest.identity.policy_source_sha256, expected_preview_runtime_sha256: manifest.runtime_sha256, format: "png",
+      ...(retained ? { retained_input_sha256: retained } : {}) })
     const at = value => {
       now = typeof value === "number" ? value : Date.parse(value)
       const next = new Date(now - 60000).toISOString()
       rawState = rawState.split(stamp).join(next); stamp = next
     }
     await run({ post, list, state, get, replaceState, raw: () => rawState, patches, previews, dispatches, preview, clock, at,
-      primary, secondary: `${primary}-secondary`, rawBundle: values.raw_bundle })
+      primary, secondary: `${primary}-secondary`, rawBundle: values.raw_bundle, retainedInput: options.retainedInput ?? null })
   } finally {
     globalThis.fetch = originalFetch; Date.now = originalNow
     for (const key of keys) { if (previous[key] === undefined) delete process.env[key]; else process.env[key] = previous[key] }
   }
 }
 
+const retainedBody = t => t.retainedInput ? { retainedInputSha256: t.retainedInput } : {}
+export const attestationsFor = preview => preview.schema_version === 5
+  ? { publishedAttestations: Object.fromEntries(preview.inspection.required_attestations.map(row => [row.name, true])) } : {}
 export async function attach(t, id = t.primary) {
   const original = t.get(id), preview = t.preview(original)
-  const result = await t.post(body(original, "attach_graphic", { expectedMediaSha256: preview.media_descriptor_sha256 }))
+  const result = await t.post(body(original, "attach_graphic", { expectedMediaSha256: preview.media_descriptor_sha256, ...retainedBody(t) }))
   assert.equal(result.status, 200, JSON.stringify(result.body))
   assert.equal(validGistMedia(t.get(id)), true)
   return { original, preview, attached: t.get(id) }
@@ -146,7 +156,7 @@ export async function attach(t, id = t.primary) {
 export async function joint(t, id = t.primary) {
   const current = t.get(id), preview = t.preview(current)
   const result = await t.post(body(current, "review", { reviewConfirmed: true, mediaReviewConfirmed: true,
-    expectedMediaSha256: preview.media_descriptor_sha256, expectedPolicySha256: fingerprint(policy) }))
+    expectedMediaSha256: preview.media_descriptor_sha256, expectedPolicySha256: fingerprint(policy), ...attestationsFor(preview) }))
   assert.equal(result.status, 200, JSON.stringify(result.body))
   return t.get(id)
 }

@@ -1,6 +1,6 @@
 // Server codec paired with src/editorial/operator_claim_references.py.
 import { draftIdentity, fingerprint, textHash } from "./draft-revisions.js"
-import { dense, exact, MAX_BYTES, MAX_ITEMS, operatorClaimKindMatches, retainedClaimFacts, validString, validateReferenceItems } from "./operator-claim-reference-input.js"
+import { dense, exact, MAX_BYTES, MAX_ITEMS, operatorClaimKindMatches, resolveReference, retainedClaimFacts, validString, validateReferenceItems } from "./operator-claim-reference-input.js"
 
 export function buildOperatorClaimReferences(text, bundle, items) {
   const checked = validateReferenceItems(text, bundle, items)
@@ -8,7 +8,7 @@ export function buildOperatorClaimReferences(text, bundle, items) {
   const facts = retainedClaimFacts(bundle)
   const result = { schema_version: 1, origin: "operator_supplied", text_sha256: textHash(text), bundle_sha256: fingerprint(bundle),
     items: checked.map(({ claim, sources }) => ({ claim, sources: sources.map(({ pointer }) => ({ pointer,
-      value_sha256: fingerprint(facts[Number(pointer.split("/").at(-1))]) })) })) }
+      value_sha256: fingerprint(resolveReference(facts, pointer, fingerprint).bound) })) })) }
   if (Buffer.byteLength(JSON.stringify(result), "utf8") > MAX_BYTES) throw new Error("Selected references exceed the 16 KiB limit; remove some references")
   return result
 }
@@ -34,10 +34,8 @@ export function projectOperatorClaimReferences(draft, identity = draftIdentity(d
     return { status: "unavailable", identity: { ...identity }, items: [] }
   const string = (v, max) => validString(v, max) ? v : null
   const evidence = bundle.evidence && typeof bundle.evidence === "object" && !Array.isArray(bundle.evidence) ? bundle.evidence : {}
-  return { status: "saved", identity: { ...identity }, items: value.items.map(item => ({ claim: item.claim, sources: item.sources.map(({ pointer }) => {
-    const row = bundle.current_facts[Number(pointer.split("/").at(-1))]
-    return { pointer, fact: { label: row.label, value: row.value, unit: row.unit ?? null } }
-  }) })), where: string(bundle.where, 512), when: string(bundle.when, 128), source_label: string(review.source, 80),
+  return { status: "saved", identity: { ...identity }, items: value.items.map(item => ({ claim: item.claim, sources: item.sources.map(({ pointer }) =>
+    ({ pointer, fact: resolveReference(bundle.current_facts, pointer).view })) })), where: string(bundle.where, 512), when: string(bundle.when, 128), source_label: string(review.source, 80),
     source_type: string(evidence.evidence_type, 80), scope: string(evidence.spatial_scope, 160), issued_at: string(evidence.issued_at, 128),
     valid_start: string(evidence.valid_start, 128), valid_end: string(evidence.valid_end, 128) }
 }

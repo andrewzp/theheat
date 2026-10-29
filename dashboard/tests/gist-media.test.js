@@ -8,7 +8,7 @@ import path from "node:path"
 import { pathToFileURL } from "node:url"
 import { policy } from "./helpers/review-policy.js"
 import { fingerprint, projectDraft, recordJointMediaReview, reviewIsCurrent } from "../lib/draft-revisions.js"
-import { GIST_HAZARD_KINDS, GIST_MEDIA_KINDS, gistMediaKind, validGistMedia } from "../lib/gist-media.js"
+import { GIST_HAZARD_KINDS, GIST_MEDIA_KINDS, GIST_STORE_KINDS, gistMediaKind, validGistMedia } from "../lib/gist-media.js"
 import { validGistTemperatureMedia } from "../lib/gist-temperature-media.js"
 
 const root = path.resolve(process.cwd(), "..")
@@ -41,7 +41,9 @@ function attachedDraft() {
 
 test("temperature stays enabled and its exact validator decides", () => {
   assert.equal(GIST_MEDIA_KINDS[0], "gist_temperature_comparator_v1")
-  assert.deepEqual(GIST_MEDIA_KINDS.slice(1), GIST_HAZARD_KINDS)
+  // Closed list: native hazard kinds, then exactly the three store-backed kinds.
+  assert.deepEqual(GIST_MEDIA_KINDS.slice(1), [...GIST_HAZARD_KINDS, ...GIST_STORE_KINDS])
+  assert.deepEqual(GIST_STORE_KINDS, ["gist_crw_anomaly_v1", "gist_published_radar_v1", "gist_published_chart_v1"])
   assert.ok(Object.isFrozen(GIST_MEDIA_KINDS))
   const draft = attachedDraft()
   assert.equal(gistMediaKind(draft.media_attachment), "gist_temperature_comparator_v1")
@@ -54,7 +56,8 @@ test("temperature stays enabled and its exact validator decides", () => {
 })
 
 const unknown = [
-  ...["gist_pm25_forecast_v1", "gist_modis_locator_v1", "gist_viirs_locator_v1"].map(kind => ({ kind, schema_version: 1 })),
+  ...["gist_pm25_forecast_v1", "gist_modis_locator_v1", "gist_viirs_locator_v1", "gist_crw_anomaly_v1",
+    "gist_published_radar_v1", "gist_published_chart_v1"].map(kind => ({ kind, schema_version: 1 })),
   { kind: "gist_temperature_comparator_v2" }, { kind: "postgres_editor_media_v1" }, { kind: "GIST_TEMPERATURE_COMPARATOR_V1" },
   { kind: ["gist_temperature_comparator_v1"] }, {}, null, false, "gist_temperature_comparator_v1", [],
 ]
@@ -62,7 +65,7 @@ for (const attachment of unknown) test(`unknown, malformed or not-yet-enabled at
   const draft = attachedDraft()
   draft.media_attachment = structuredClone(attachment)
   // An enabled kind name alone is never a recipe; the family validator refuses it.
-  assert.equal(gistMediaKind(attachment), GIST_HAZARD_KINDS.includes(attachment?.kind) ? attachment.kind : null)
+  assert.equal(gistMediaKind(attachment), [...GIST_HAZARD_KINDS, ...GIST_STORE_KINDS].includes(attachment?.kind) ? attachment.kind : null)
   assert.equal(validGistMedia(draft), false)
   assert.equal(reviewIsCurrent(draft, policy), false)
   assert.throws(() => recordJointMediaReview(draft, policy), /new preview/)
@@ -77,7 +80,7 @@ for (const attachment of unknown) test(`unknown, malformed or not-yet-enabled at
 test("the dispatcher survives either import order of its revision/temperature cycle", () => {
   for (const first of ["gist-temperature-media.js", "gist-media.js", "draft-revisions.js", "lossless-gist.js"]) {
     const url = pathToFileURL(path.join(process.cwd(), "lib", first)).href
-    const code = `await import(${JSON.stringify(url)}); const m = await import(${JSON.stringify(pathToFileURL(path.join(process.cwd(), "lib/gist-media.js")).href)}); if (m.GIST_MEDIA_KINDS[0] !== "gist_temperature_comparator_v1" || m.GIST_MEDIA_KINDS.length !== 1 + m.GIST_HAZARD_KINDS.length) process.exit(3)`
+    const code = `await import(${JSON.stringify(url)}); const m = await import(${JSON.stringify(pathToFileURL(path.join(process.cwd(), "lib/gist-media.js")).href)}); if (m.GIST_MEDIA_KINDS[0] !== "gist_temperature_comparator_v1" || m.GIST_MEDIA_KINDS.length !== 1 + m.GIST_HAZARD_KINDS.length + m.GIST_STORE_KINDS.length) process.exit(3)`
     const result = spawnSync(process.execPath, ["--input-type=module", "-e", code], { encoding: "utf8", timeout: 30000 })
     assert.equal(result.status, 0, `${first}: ${result.stderr}`)
   }

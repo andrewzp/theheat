@@ -23,7 +23,13 @@ REVISION_KEYS = {"content_revision", "text_sha256", "evidence_sha256", "decision
 
 
 def check_request(request, policy_sha, runtime_sha):
-    if not isinstance(request, dict) or set(request) not in (REQUEST_KEYS, REQUEST_KEYS | {"format"}) or ("format" in request and request["format"] != "png"):
+    # A retained-input identity (CRW source packet or published asset manifest) is
+    # only meaningful for the PNG post image; it is an exact SHA256, never a path/URL.
+    if (not isinstance(request, dict)
+            or set(request) not in (REQUEST_KEYS, REQUEST_KEYS | {"format"}, REQUEST_KEYS | {"format", "retained_input_sha256"})
+            or ("format" in request and request["format"] != "png")
+            or ("retained_input_sha256" in request and not (isinstance(request["retained_input_sha256"], str)
+                                                            and SHA.fullmatch(request["retained_input_sha256"])))):
         raise PreviewError("bad_request")
     draft_id, revision = request["draft_id"], request["expected_revision"]
     if (not isinstance(draft_id, str) or not 0 < len(draft_id) <= 200
@@ -113,8 +119,38 @@ def qualified_spec(bundle, *, synthetic=False, include_viirs=False, include_temp
     raise PreviewError("graphic_unavailable")
 
 
-def build_preview(request, *, policy_sha, runtime_sha, read_state, budget, synthetic=False):
+def _store_backed_result(request, prepared, policy_sha, runtime_sha, bundle):
+    """Schema 4 (CRW, a native chart) or schema 5 (published original + derivative)."""
+    from src.media.gist_media import posting_window
+    from src.media.gist_published_media import KINDS as PUBLISHED
+    descriptor = prepared["descriptor"]
+    common = {"draft_id": request["draft_id"], "revision_identity": deepcopy(request["expected_revision"]),
+              "policy_source_sha256": policy_sha, "preview_runtime_sha256": runtime_sha,
+              "media_kind": descriptor["kind"], "media_descriptor": descriptor,
+              "media_descriptor_sha256": fingerprint(descriptor),
+              "png_base64": base64.b64encode(prepared["png"]).decode("ascii"), "title": prepared["title"],
+              "delivery_text": prepared["delivery_text"], "expanded_description": prepared["full_text"],
+              "scope": prepared["scope"], "posting_window": posting_window(bundle, descriptor=descriptor),
+              "publication_approved": False, "attachment": False}
+    if descriptor["kind"] in PUBLISHED:
+        asset = descriptor["asset"]
+        return {"schema_version": 5, **common, "png_sha256": asset["derivative_sha256"],
+                "original_base64": base64.b64encode(prepared["original"]).decode("ascii"),
+                "original_sha256": asset["original_sha256"], "original_mime": asset["original_mime"],
+                "inspection": prepared["inspection"], "width": asset["width"], "height": asset["height"]}
+    source = descriptor["source"]
+    evidence_as_of = bundle["raw_signal_dump"]["provenance"]["retrieved_at"]
+    return {"schema_version": 4, **common, "png_sha256": descriptor["image"]["png_sha256"],
+            "source": "NOAA Coral Reef Watch · daily 5 km SST anomaly v3.1",
+            "source_context": {"kind": "crw_product_day", "product_date": source["product_date"],
+                               "retrieved_at": evidence_as_of, "valid_cells": source["valid_cells"],
+                               "total_cells": source["total_cells"]},
+            "width": 1200, "height": 1500}
+
+
+def build_preview(request, *, policy_sha, runtime_sha, read_state, budget, synthetic=False, store=None):
     check_request(request, policy_sha, runtime_sha)
+    store_backed = False
     try:
         budget.remaining()
         draft = _selected(read_state(), request)
@@ -122,14 +158,22 @@ def build_preview(request, *, policy_sha, runtime_sha, read_state, budget, synth
         bundle = deepcopy(draft["review_context"]["two_bot"]["bundle"])
         # Bound the full retained story before canonical hashing and validation.
         retained_bundle = _retained_bundle_json(bundle)
-        spec, source, context = qualified_spec(bundle, synthetic=synthetic, include_viirs=True,
-                                              include_temperature=True)
+        from src.media import gist_media
+        store_backed = request.get("format") == "png" and gist_media.needs_retained_input(bundle)
+        if store_backed:
+            spec = source = context = None
+        else:
+            if "retained_input_sha256" in request:
+                raise PreviewError("bad_request")
+            spec, source, context = qualified_spec(bundle, synthetic=synthetic, include_viirs=True,
+                                                  include_temperature=True)
         budget.remaining()
         if request.get("format") == "png":
-            from src.media.gist_media import prepare_media
-            prepared = prepare_media(bundle, synthetic=synthetic)
+            prepared = gist_media.prepare_media(bundle, synthetic=synthetic, store=store,
+                                                retained_input_sha256=request.get("retained_input_sha256"))
             rendered = None
         else:
+            assert spec is not None
             rendered = render_svg(**spec)
         budget.remaining()
         current = _selected(read_state(), request)
@@ -138,7 +182,9 @@ def build_preview(request, *, policy_sha, runtime_sha, read_state, budget, synth
                                          code="stale_preview") != retained_bundle):
             raise PreviewError("stale_preview")
         budget.remaining()
-        if request.get("format") == "png" and prepared["descriptor"]["kind"] != MEDIA_TEMPERATURE:
+        if store_backed:
+            result = _store_backed_result(request, prepared, policy_sha, runtime_sha, bundle)
+        elif request.get("format") == "png" and prepared["descriptor"]["kind"] != MEDIA_TEMPERATURE:
             # New families: the bounded description sent to X and the expanded
             # source description stay separate. Posting disclosure is display-only;
             # approval and the sender recheck source time independently.
@@ -157,6 +203,7 @@ def build_preview(request, *, policy_sha, runtime_sha, read_state, budget, synth
                 "publication_approved": False, "attachment": False}
         elif request.get("format") == "png":
             descriptor = prepared["descriptor"]
+            assert spec is not None
             result = {"schema_version": 3, "draft_id": request["draft_id"],
                 "revision_identity": deepcopy(request["expected_revision"]),
                 "policy_source_sha256": policy_sha, "preview_runtime_sha256": runtime_sha,
@@ -179,9 +226,11 @@ def build_preview(request, *, policy_sha, runtime_sha, read_state, budget, synth
                   "publication_approved": False, "attachment": False}
         body = json.dumps(result, ensure_ascii=False, separators=(",", ":"), allow_nan=False).encode("utf-8")
         if len(body) > MAX_RESPONSE:
-            raise PreviewError("graphic_unavailable")
+            raise PreviewError("media_hold", "media_preview_too_large") if store_backed else PreviewError("graphic_unavailable")
         return body
     except PreviewError:
         raise
     except (ValueError, KeyError, TypeError, AttributeError, UnicodeError, RecursionError, OverflowError) as exc:
-        raise PreviewError("graphic_unavailable") from exc
+        # Store-backed lanes name their closed operator outcome; native lanes keep their reply.
+        hold = getattr(exc, "code", None) if store_backed else None
+        raise PreviewError("media_hold", hold) if hold else PreviewError("graphic_unavailable") from exc

@@ -268,9 +268,12 @@ def review_is_current(draft: dict, *, policy=_CURRENT_POLICY) -> bool:
     binding = draft.get("review_binding")
     if media:
         try:
-            from src.media.gist_media import validate_descriptor
+            from src.media.gist_media import required_attestations, validate_descriptor
             validate_descriptor(draft["media_attachment"], _two_bot(draft)["bundle"])
             if not isinstance(binding, dict) or binding.get("kind") != "human_media" or binding.get("media_sha256") != fingerprint(draft["media_attachment"]):
+                return False
+            # Published originals also need the person's exact label/context/reuse attestations.
+            if binding.get("published_attestations") != _attestation_record(required_attestations(draft["media_attachment"])):
                 return False
         except (ValueError, KeyError, TypeError, UnicodeError, OSError):
             return False
@@ -421,10 +424,23 @@ def record_human_review(draft: dict, *, at: str | None = None, policy=_CURRENT_P
     return draft
 
 
-def record_joint_media_review(draft: dict, *, at: str | None = None, policy=_CURRENT_POLICY) -> dict:
-    """Ordinary explicit manual joint review; never a scientific or model verdict."""
-    from src.media.gist_media import validate_descriptor
+def _attestation_record(required):
+    return {"version": 1, "confirmed": list(required)} if required else None
+
+
+def record_joint_media_review(draft: dict, *, at: str | None = None, policy=_CURRENT_POLICY,
+                              attestations: dict | None = None) -> dict:
+    """Ordinary explicit manual joint review; never a scientific or model verdict.
+
+    Published originals require every named attestation explicitly true; nothing
+    defaults to confirmed and native kinds accept none.
+    """
+    from src.media.gist_media import required_attestations, validate_descriptor
     validate_descriptor(draft["media_attachment"], _two_bot(draft)["bundle"])
+    required = required_attestations(draft["media_attachment"])
+    supplied = attestations or {}
+    if not isinstance(supplied, dict) or set(supplied) != set(required) or any(v is not True for v in supplied.values()):
+        raise ValueError("Confirm every required published-image attestation")
     if draft.get("revision_conflicts"):
         raise ValueError("Resolve the conflicting revision before reviewing")
     text = draft.get("text")
@@ -439,6 +455,8 @@ def record_joint_media_review(draft: dict, *, at: str | None = None, policy=_CUR
     draft["review_binding"] = {**draft_identity(draft), "kind": "human_media",
         "reviewed_at": at if at is not None else _now(), "editorial_policy": deepcopy(policy),
         "policy_sha256": fingerprint(policy), "media_sha256": fingerprint(draft["media_attachment"])}
+    if required:
+        draft["review_binding"]["published_attestations"] = _attestation_record(required)
     return draft
 
 

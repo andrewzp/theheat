@@ -260,7 +260,10 @@ def _t4_fixture_receipt_observer(request):
 def pytest_delivery_budget_report(item, call):
     outcome = yield
     from tests.t4_delivery_diagnostics import append_budget_failure_section
-    append_budget_failure_section(item, outcome.get_result())
+    from tests.t4_grant_diagnostics import append_failure_section
+    report = outcome.get_result()
+    append_budget_failure_section(item, report)
+    append_failure_section(item, report)
 
 
 # PG2 process-death phase witness: only the exact parked-media node writes

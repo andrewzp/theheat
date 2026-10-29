@@ -276,11 +276,14 @@ elif operation in {"delivery_run", "delivery_refusals", "delivery_high_control"}
         from src.posting import delivery_transport
         from tests.t4_delivery_diagnostics import observe_callbacks
         from tests.t4_delivery_diagnostics import observe_budget_timing
+        from tests.t4_grant_diagnostics import observe_grant
         import time
-        with observe_budget_timing(delivery, delivery_transport, timer=lambda: time.perf_counter()) as budget_timing:
-            with observe_callbacks(delivery, delivery_transport) as diagnostic:
-                result = t4.child_delivery_run(authority, operators, cfg, identity, parameters)
-            diagnostic.emit(log, platform=parameters["platform"], stage=parameters["stage"], result=result)
+        with observe_grant(delivery) as grant:
+            with observe_budget_timing(delivery, delivery_transport, timer=lambda: time.perf_counter()) as budget_timing:
+                with observe_callbacks(delivery, delivery_transport) as diagnostic:
+                    result = t4.child_delivery_run(authority, operators, cfg, identity, parameters)
+                diagnostic.emit(log, platform=parameters["platform"], stage=parameters["stage"], result=result)
+        grant.emit(log)
         budget_timing.emit(log)
         log(dict(kind="delivery_stage", platform=parameters["platform"], stage=parameters["stage"], result=result))
     elif operation == "delivery_refusals":

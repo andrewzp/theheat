@@ -415,12 +415,26 @@ def test_two_selected_images_and_stale_approval_never_send(prepared, monkeypatch
     assert fake.posting.post_approved(stale, state_for(stale)) == "failed" and fake.calls == []
 
 
-def test_unavailable_quote_references_leave_the_reviewed_image_untouched(prepared):
-    # Existing limit: the retained PM2.5 grid fact is a list, so quote references are
-    # refused for these drafts. The refusal changes nothing, including joint review.
+def test_list_valued_grid_fact_takes_exact_element_references_and_revokes_review(prepared):
+    # P31 gap closed: the retained PM2.5 grid fact is a list; it is referenced only by an
+    # exact element (with the whole fact's fingerprint), never relabelled as a scalar.
+    from src.editorial.operator_claim_references import project_operator_claim_references
     draft = approve(attached(prepared))
-    before = deepcopy(draft)
-    items = [{"claim": {"start": 0, "end": 8, "text": PM25_TEXT[:8]}, "sources": [{"pointer": "/current_facts/0"}]}]
-    with pytest.raises(ValueError, match="source facts are unavailable"):
-        revisions.invalidate_text(draft, draft["text"], at="2026-06-08T12:55:00Z", operator_claim_references=items)
-    assert draft == before and revisions.approval_is_current(draft, "manual")
+    facts = draft["review_context"]["two_bot"]["bundle"]["current_facts"]
+    grid = next(i for i, fact in enumerate(facts) if fact["label"] == "source_grid_location")
+    for pointer in (f"/current_facts/{grid}", f"/current_facts/{grid}/value/2", "/current_facts/0/value/0"):
+        before = deepcopy(draft)
+        bad = [{"claim": {"start": 0, "end": 8, "text": PM25_TEXT[:8]}, "sources": [{"pointer": pointer}]}]
+        with pytest.raises(ValueError, match="exact element|missing or repeated"):
+            revisions.invalidate_text(draft, draft["text"], at="2026-06-08T12:55:00Z", operator_claim_references=bad)
+        assert draft == before and revisions.approval_is_current(draft, "manual")
+    items = [{"claim": {"start": 0, "end": 8, "text": PM25_TEXT[:8]},
+              "sources": [{"pointer": "/current_facts/0"}, {"pointer": f"/current_facts/{grid}/value/1"}]}]
+    revisions.invalidate_text(draft, draft["text"], at="2026-06-08T12:55:00Z", operator_claim_references=items)
+    # A reference edit is a real revision: joint review and approval are revoked; the image recipe stays.
+    assert not revisions.review_is_current(draft) and not revisions.approval_is_current(draft, "manual")
+    assert draft["media_attachment"] == prepared[1]["descriptor"]
+    view = project_operator_claim_references(draft)
+    assert view["status"] == "saved"
+    assert view["items"][0]["sources"][1]["fact"] == {"label": "source_grid_location[1]", "value": facts[grid]["value"][1],
+                                                      "unit": facts[grid].get("unit")}
