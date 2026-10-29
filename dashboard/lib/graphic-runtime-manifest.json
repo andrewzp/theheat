@@ -1,6 +1,6 @@
 {
   "identity": {
-    "archive_sha256": "56a9eedb8eefac91bedad3dd537f4e259f93e373314c0a78c50f113cd25da1e3",
+    "archive_sha256": "e1d6f54bf1ec5e25fe9be1f28e68f11ae35ca5cda87cfa89bbd40a54001158ef",
     "deployment_files": {
       "api/graphic_preview.py": "f7521adcbd618f4b65b2a0de30ea62aaff4cdd36f2254e9af38bf68646d361ad",
       "api/graphic_reader_status.py": "5e9685d699625a4eea9d5be884b6e266939a0ad344a2997351ba79bd114407ba",
@@ -11,9 +11,9 @@
       "src/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "src/dashboard_preview/__init__.py": "f3aba814268d4d4994c499bcb17b3c2aa8f788af61dd409e3d1b00aac9a96bba",
       "src/dashboard_preview/auth.py": "eafa95e1ed18c7e993fa13e016799d9e92f0ee843fe6d3f2843adf28579a8e21",
-      "src/dashboard_preview/errors.py": "2a6a5a87017b534f0b1b0ee9e317c7880cc10ef185734ad3a92827f7dd0152b7",
+      "src/dashboard_preview/errors.py": "00ecaa8b9b95ecc2623e66306f7b40717b4c87ba2531a2080a9060da87376754",
       "src/dashboard_preview/http.py": "dbcbf1e3b4f4f3fa4a231c6e1f80946e321c098e51f12543fee889490f9011ad",
-      "src/dashboard_preview/preview.py": "d1d37cfdfe56b053a37302c108c484ac42c82771fd0d5373454f1de824a688c5",
+      "src/dashboard_preview/preview.py": "b1ee2fa92a1c2d64a78a02b0630d690a1f318b451187d394382af566d97f07df",
       "src/dashboard_preview/reader.py": "6cd9c00c79810a3b1ed7a107dbce9b2687b5aaa9cd761c02dcfe8de8cd888d18",
       "src/dashboard_preview/reader_status.py": "1f3d9d42dabebe1218eacd7133bd2477f58c85b53a6e2a719658846fbc5e96bb",
       "src/data/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
@@ -47,7 +47,7 @@
       "src/editorial/marine_evidence.py": "7183f93f1068d75856063cf061a1dea8751bd4dd98cc1f1f34488bcf39296f5c",
       "src/editorial/operator_claim_references.py": "dbd11ac41b88e0019dde2f51b078c43cf8bd46966f1cb06e2adffc267f3bfbdc",
       "src/editorial/publication.py": "7fa23a8f51530dc7f128beacc23689f0df7a8c95b6888beb39afca4212f1a5fe",
-      "src/editorial/revisions.py": "d88d4c456f3bd5a3240f30b8d7c3ef3b8a97dc5bd8fc445596943379582a9209",
+      "src/editorial/revisions.py": "3bf102c60a4077e5ae1c58cd26af75ee674ac1daaab0feb655b7b04c1b7a2cf5",
       "src/editorial/scoring/__init__.py": "f969fa55020ff1a436f9bce87701b43f574a98f340f1d5345fd74a5410db0de4",
       "src/editorial/scoring/_shared.py": "ecfbe383674644f82223150fc3beb9761b0ec3942f31b93d245514721fee16f0",
       "src/editorial/scoring/air_quality.py": "973727e2037d76129d68283a0889e23fafc8034b993315fd35af3c6c894dd30b",
@@ -72,7 +72,7 @@
       "src/media/fonts/DejaVu-LICENSE.txt": "7a083b136e64d064794c3419751e5c7dd10d2f64c108fe5ba161eae5e5958a93",
       "src/media/fonts/DejaVuSansMono.ttf": "b4a6c3e4faab8773f4ff761d56451646409f29abedd68f05d38c2df667d3c582",
       "src/media/gist_hazard_media.py": "fa1d64cac31dbefeac3275f91e0cd1ba9fd768469339c5bbda37afc2cf880c9d",
-      "src/media/gist_media.py": "e6675a11e2cd3f8d46377b76b1232c2f6483bea1febdea6f36896f2fbba927c0",
+      "src/media/gist_media.py": "e304793ba63b2fe44014fc86ba76d499900f1b01dcd0a3b9bd3d0bc137657d9b",
       "src/media/gist_temperature_media.py": "fd512e53889e3d3ed848b088b960dd5bc08defaee4f8f7732c66f581dd6e5920",
       "src/media/maps/NOTICE.md": "f6ebf3caca500621c4b2c9f9fe9aad802099b82a4a1c21c479daf97d29aabac0",
       "src/media/maps/manifest.json": "1af072edc46ae3252bf6cf0edb43993986de262a2840b2cd4907eb4866f970e9",
@@ -90,12 +90,12 @@
       "src/two_bot/types.py": "36ed2e6475a655f4112012486795702159ed546c3040e8ef1874b7a0b02a9035"
     },
     "format": "saved-source-svg-preview-v2",
-    "policy_source_sha256": "0b62fdb02455b2c3bf0cd7d64b195cd599e129de1247cb61ee3342624db8972d",
+    "policy_source_sha256": "f11f5fe767fc22f12aa0edf68692df00807cbf767ae4c509f7f758ea6e50b43e",
     "resource_sources": {
       "src/data/registry/country_codes.json": "data/country_codes.json",
       "src/data/registry/place_registry.json": "data/place_registry.json"
     },
     "schema_version": 1
   },
-  "runtime_sha256": "03e2f2da8ad459d0f771cb8f452b60a24224daaf0d3288887cab7ecb256e20f0"
+  "runtime_sha256": "4d9888f52925b0df733930f15b48105bd2c7746e3af247838d4b5bf5305def49"
 }

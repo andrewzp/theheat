@@ -91,15 +91,42 @@ ERRORS = {
     "preview_busy": (429, "Another preview is being built. Try again in a moment."),
     "preview_unavailable": (503, "The preview is unavailable. Your draft has not changed; try again later."),
     "method_not_allowed": (405, "Use the preview button in the dashboard."),
+    "media_hold": (422, "This image is held. Your draft has not changed."),
+}
+# Closed operator outcomes for one image lane; fixed text only, never private input.
+MEDIA_HOLDS = {
+    "media_store_unavailable": "No media store is configured here for published or retained-source images; "
+                               "native charts are unaffected.",
+    "media_retained_input_required": "Select the retained source packet or published asset for this image.",
+    "media_source_packet_missing": "The retained CRW source packet is not in the media store. Retain it locally "
+                                   "first; nothing is fetched.",
+    "media_original_missing": "The published original is not in the media store. Retain it again; nothing is "
+                              "fetched.",
+    "media_asset_missing": "A retained asset is missing from the media store.",
+    "media_asset_changed": "Retained bytes no longer match their identity. Retain the asset again.",
+    "media_asset_invalid": "The retained asset is unsupported or incomplete: rights, labels, times or format "
+                           "are missing or changed.",
+    "media_context_mismatch": "The retained image is not for this draft's source (storm, advisory, warning, "
+                              "place or time).",
+    "media_source_unqualified": "The saved source cannot support this image.",
+    "media_source_future": "The retained source time is in the future.",
+    "media_unsupported": "This source has no reviewed image product.",
+    "media_renderer_changed": "The image profile changed; preview and review again.",
+    "media_preview_too_large": "This image is too large to preview and send here.",
+    "media_description_too_long": "The required image description does not fit the 1000-character limit; the "
+                                  "text draft is unchanged.",
 }
 
 
 class PreviewError(Exception):
-    def __init__(self, code):
+    def __init__(self, code, hold=None):
         self.code = code
         self._reader_stage: str | None = None
         self.status, message = ERRORS[code]
-        super().__init__(message)
+        self.hold = hold if code == "media_hold" and hold in MEDIA_HOLDS else None
+        if code == "media_hold" and self.hold is None:
+            self.code, (self.status, message) = "graphic_unavailable", ERRORS["graphic_unavailable"]
+        super().__init__(MEDIA_HOLDS[self.hold] if self.hold else message)
 
     def payload(self):
-        return {"code": self.code, "error": str(self)}
+        return {"code": self.code, "error": str(self), **({"hold": self.hold} if self.hold else {})}

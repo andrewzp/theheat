@@ -43,7 +43,9 @@ def test_dispatch_returns_the_deployed_temperature_bytes_and_recipe_unchanged(st
     assert routed["png"] == direct["png"] and routed["descriptor"] == direct["descriptor"]
     assert routed["title"] == direct["title"] and set(routed) == {"descriptor", "png", "title"}
     assert gist_media.validate_descriptor(direct["descriptor"], bundle) == direct["descriptor"]
-    assert gist_media.KINDS == frozenset({temperature.KIND, *hazard.KINDS})
+    # Closed set: P31-ALL adds exactly the CRW and the two published kinds, each with its full path.
+    assert gist_media.KINDS == frozenset({temperature.KIND, *hazard.KINDS, "gist_crw_anomaly_v1",
+                                          "gist_published_radar_v1", "gist_published_chart_v1"})
     assert temperature.KIND not in hazard.KINDS
     draft = attach(temperature_draft(station), direct["descriptor"])
     assert gist_media.media_for_draft(draft) == temperature.media_for_draft(draft) == (

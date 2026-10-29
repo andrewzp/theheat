@@ -23,6 +23,7 @@ POLICY_FILES = (
     "src/media/published_radar.py",
     "src/media/gist_temperature_media.py", "dashboard/lib/gist-temperature-media.js",
     "src/media/gist_media.py", "src/media/gist_hazard_media.py", "src/media/canonical_png.py",
+    "src/media/gist_crw_media.py", "src/media/gist_published_media.py", "src/media/gist_assets.py",
     "dashboard/lib/gist-media.js",
     "dashboard/lib/lossless-gist.js", "dashboard/lib/request-json.js",
     "src/editorial/operator_claim_references.py", "dashboard/lib/operator-claim-references.js",

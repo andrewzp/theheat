@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto"
-import { validGistMedia } from "./gist-media.js"
+import { requiredAttestations, validGistMedia } from "./gist-media.js"
 import { validEditorialPolicy } from "./editorial-policy.js"
 import { configuredAutomaticPolicy } from "./publication-control.js"
 import { projectSavedClaimEvidence } from "./saved-claim-evidence.js"
@@ -110,6 +110,8 @@ export function reviewIsCurrent(draft, policy = null) {
   const media = Object.hasOwn(draft, "media_attachment")
   const binding = draft.review_binding
   if (media && (!validGistMedia(draft) || binding?.kind !== "human_media" || binding.media_sha256 !== fingerprint(draft.media_attachment))) return false
+  // Published originals also need the person's exact label/context/reuse attestations.
+  if (media && JSON.stringify(binding.published_attestations ?? null) !== JSON.stringify(attestationRecord(requiredAttestations(draft.media_attachment)))) return false
   if (draft.revision_conflicts?.length || !bindingMatches(draft, binding)) return false
   if (!policyMatches(binding, policy)) return false
   if (binding.kind === "human" || (media && binding.kind === "human_media")) return true
@@ -177,8 +179,13 @@ export function recordHumanReview(draft, policy = null) {
   return draft
 }
 
-export function recordJointMediaReview(draft, policy = null) {
+const attestationRecord = required => required.length ? { version: 1, confirmed: [...required] } : null
+
+export function recordJointMediaReview(draft, policy = null, attestations = null) {
   if (!validGistMedia(draft)) throw new Error("This graphic needs a new preview")
+  const required = requiredAttestations(draft.media_attachment), supplied = attestations ?? {}
+  if (!supplied || typeof supplied !== "object" || Array.isArray(supplied) || Object.keys(supplied).length !== required.length
+      || !required.every(name => supplied[name] === true)) throw new Error("Confirm every required published-image attestation")
   if (draft.revision_conflicts?.length) throw new Error("Resolve the conflicting revision before reviewing")
   if (typeof draft.text !== "string" || !draft.text.trim() || [...draft.text].length > 280) throw new Error("Invalid draft text")
   textHash(draft.text)
@@ -187,6 +194,7 @@ export function recordJointMediaReview(draft, policy = null) {
   revokeApproval(draft)
   draft.review_binding = { ...draftIdentity(draft), kind: "human_media", reviewed_at: new Date().toISOString(),
     editorial_policy: structuredClone(policy), policy_sha256: fingerprint(policy), media_sha256: fingerprint(draft.media_attachment) }
+  if (required.length) draft.review_binding.published_attestations = attestationRecord(required)
   return draft
 }
 
