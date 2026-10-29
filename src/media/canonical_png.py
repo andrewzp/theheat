@@ -168,7 +168,8 @@ def inspect(raw, *, max_bytes, max_width=MAX_DIMENSION, max_height=MAX_DIMENSION
     """
     _require(type(raw) is bytes and 8 + 25 + 12 <= len(raw) <= max_bytes, "PNG size is outside its bound")
     _require(raw[:8] == SIGNATURE, "not a PNG")
-    position, kinds, header = 8, [], None
+    position, header = 8, None
+    kinds: list[bytes] = []
     while position < len(raw):
         _require(position + 12 <= len(raw), "truncated PNG chunk")
         length = struct.unpack(">I", raw[position:position + 4])[0]

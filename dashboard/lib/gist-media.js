@@ -16,18 +16,20 @@ const PM25 = "gist_pm25_forecast_v1"
 const MODIS = "gist_modis_locator_v1"
 const VIIRS = "gist_viirs_locator_v1"
 const FONT = "src/media/fonts/DejaVuSansMono.ttf"
+// Schema 2: canonical, host-independent PNG bytes (src/media/canonical_png.py).
+const CODEC_FILE = "src/media/canonical_png.py", PNG_CODEC = "canonical-png-fixed-huffman-1"
 const FAMILIES = Object.freeze({
   [PM25]: Object.freeze({ template: "pm25_forecast_day", templateVersion: "p31-pm25-forecast-1",
     adapterVersion: "p31-cams-pm25-1", derivation: "pm25_delivery_v1", signalKind: "air_quality_hazard",
     products: ["open-meteo-cams-air-quality-auto"],
-    files: ["src/media/gist_media.py", "src/media/gist_hazard_media.py", FONT, "src/media/evidence_graphic.py",
+    files: ["src/media/gist_media.py", "src/media/gist_hazard_media.py", CODEC_FILE, FONT, "src/media/evidence_graphic.py",
       "src/media/temperature_graphic_adapter.py", "src/media/air_quality_graphic_adapter.py",
       "src/data/air_quality_contract.py", "src/data/air_quality_evidence.py"],
     source: ["bundle_sha256", "evidence_sha256", "source_product", "window_sha256", "selected_record_sha256",
       "valid_date", "timezone", "valid_start", "valid_end", "requested_at", "retrieved_at"] }),
   [MODIS]: Object.freeze({ template: "modis_thermal_detection_map", templateVersion: "p31-modis-locator-2-social",
     adapterVersion: "p31-firms-modis-map-2", derivation: "modis_delivery_v1", signalKind: "fire", products: ["MODIS_NRT"],
-    files: ["src/media/gist_media.py", "src/media/gist_hazard_media.py", FONT, "src/media/evidence_graphic.py",
+    files: ["src/media/gist_media.py", "src/media/gist_hazard_media.py", CODEC_FILE, FONT, "src/media/evidence_graphic.py",
       "src/media/temperature_graphic_adapter.py", "src/media/fire_graphic_adapter.py", "src/media/fire_map_graphic_adapter.py",
       "src/data/fire_source_contract.py", "src/data/fire_evidence.py", "src/media/maps/ne_110m_land_v4_1_0.json",
       "src/media/maps/manifest.json"],
@@ -35,7 +37,7 @@ const FAMILIES = Object.freeze({
   [VIIRS]: Object.freeze({ template: "viirs_thermal_detection_map", templateVersion: "p31-viirs-locator-1",
     adapterVersion: "p31-firms-viirs-map-1", derivation: "viirs_delivery_v1", signalKind: "fire",
     products: ["VIIRS_NOAA20_NRT", "VIIRS_NOAA21_NRT"],
-    files: ["src/media/gist_media.py", "src/media/gist_hazard_media.py", FONT, "src/media/evidence_graphic.py",
+    files: ["src/media/gist_media.py", "src/media/gist_hazard_media.py", CODEC_FILE, FONT, "src/media/evidence_graphic.py",
       "src/media/temperature_graphic_adapter.py", "src/media/fire_graphic_adapter.py", "src/media/fire_map_graphic_adapter.py",
       "src/media/viirs_map_graphic_adapter.py", "src/data/fire_source_contract.py", "src/data/fire_evidence.py",
       "src/media/maps/ne_110m_land_v4_1_0.json", "src/media/maps/manifest.json"],
@@ -98,7 +100,7 @@ function sourceFields(kind, bundle) {
 function validHazardMedia(draft, value) {
   const family = FAMILIES[value.kind], bundle = draft?.review_context?.two_bot?.bundle
   const keys = ["schema_version", "kind", "template", "template_version", "adapter_version", "synthetic", "source", "renderer", "image", "description"]
-  if (!exact(value, keys) || value.schema_version !== 1 || value.template !== family.template
+  if (!exact(value, keys) || value.schema_version !== 2 || value.template !== family.template
       || value.template_version !== family.templateVersion || value.adapter_version !== family.adapterVersion
       || value.synthetic !== false || Buffer.byteLength(JSON.stringify(value), "utf8") > MAX_DESCRIPTOR_BYTES) return false
   if (Array.isArray(draft.hot10_rows) && draft.hot10_rows.length) return false
@@ -113,10 +115,10 @@ function validHazardMedia(draft, value) {
   const expected = sourceFields(value.kind, bundle)
   if (Object.keys(expected).some(key => JSON.stringify(expected[key]) !== JSON.stringify(source[key]))) return false
   const r = value.renderer, files = manifest.identity.files
-  if (!exact(r, ["version", "files", "pillow", "freetype", "zlib", "layout", "width", "height"])
-      || r.version !== "gist-hazard-png-1" || r.pillow !== "12.2.0" || r.layout !== "basic"
+  if (!exact(r, ["version", "files", "pillow", "freetype", "png_codec", "layout", "width", "height"])
+      || r.version !== "gist-hazard-png-2" || r.pillow !== "12.2.0" || r.layout !== "basic" || r.png_codec !== PNG_CODEC
       || r.width !== 1200 || r.height !== 1500
-      || ![r.freetype, r.zlib].every(v => typeof v === "string" && v.length > 0 && v.length <= 64)
+      || !(typeof r.freetype === "string" && r.freetype.length > 0 && r.freetype.length <= 64)
       || !exact(r.files, family.files) || !family.files.every(path => isSHA(files[path]) && r.files[path] === files[path])) return false
   const image = value.image
   if (!exact(image, ["mime_type", "png_sha256", "byte_count", "width", "height", "mode"]) || image.mime_type !== "image/png"

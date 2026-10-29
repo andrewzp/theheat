@@ -37,6 +37,25 @@ real revisions: they revoke the joint review and any approval. If the renderer o
 source no longer matches, preview again and use **Replace attached graphic** or
 **Remove graphic**; removal never needs a usable image.
 
+## Portable exact image bytes (recipe schema 2)
+
+The reviewed PNG bytes are what X receives, so they must be identical wherever the
+preview (dashboard) and the sender (scheduled bot) rebuild them. Every native family
+now writes its PNG with one small canonical serializer, `src/media/canonical_png.py`
+(profile `canonical-png-fixed-huffman-1`): only IHDR, one IDAT and IEND; a fixed
+per-row Sub/Up filter rule; one fixed-Huffman DEFLATE block. The host's zlib no longer
+chooses any byte, so its version is no longer part of the recipe. The codec source,
+fonts, Pillow/FreeType versions, layout and source bindings still are.
+
+Drawing, fonts, data and pixels are unchanged: every invented .46 test image decodes
+to exactly the same RGB pixels; only the compressed bytes differ (about 215–250 KB,
+under the 750,000-byte bound).
+
+A schema-1 attachment saved before this change is refused with "render profile
+changed; preview and review again". Preview it again, attach the new recipe and
+record a new joint review; nothing upgrades an old recipe or its approval silently.
+**Remove graphic** stays available for an old or broken attachment.
+
 ## Source time for approval and sending
 
 These are image-path rules, not provider-certified expiry times.

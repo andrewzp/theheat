@@ -8,8 +8,8 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "dashboard/app/api/drafts/route.js": "0e5f191b3e9f81917c90444b5e41075fb306eaf383f0d763d662febaf8430126",
     "dashboard/lib/draft-revisions.js": "5b62373cf2b49cf4326e62692f71f2e6b762787f498310562d6965441ecfd738",
     "dashboard/lib/editorial-policy.js": "1d4218b5f270c838cd503bd5fb1fd5385add684e8f37e2c4adf28bfbb0c5d2bc",
-    "dashboard/lib/gist-media.js": "297888e4eb6834defb122c428e4536814aa820ea25ce2e5697f9202afafb7d32",
-    "dashboard/lib/gist-temperature-media.js": "3586a5ee6b2ae27548cdf756a25f3a36cbfc38f63f025ac5e67947e9bfc18cab",
+    "dashboard/lib/gist-media.js": "929710e0c1ae18b0714b0a39e467f372b57f2b6371ad0b7d332132b9d079db46",
+    "dashboard/lib/gist-temperature-media.js": "c8f71b873413952379252711473846120e822a01d8563ad6633e09620b9d83e5",
     "dashboard/lib/lossless-gist.js": "e6fb2965e0632a6d914fc8688cf664341a6386a4925ea0682a57430eef77241e",
     "dashboard/lib/nws-source-timing.js": "3a7b4be177cc5d28be7a8150d7c6937b7c15f113c5475134254dba233df47975",
     "dashboard/lib/nws-warning-evidence.js": "eb98b1dec65d7cac93ea4e8a8b85045324a1aef52ada2834de924ae03a59b3e6",
@@ -93,7 +93,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/editorial/marine_evidence.py": "7183f93f1068d75856063cf061a1dea8751bd4dd98cc1f1f34488bcf39296f5c",
     "src/editorial/newsworthiness.py": "2df18f17c51f772b761609bf10dc1c5b7289d2b1f1e2ce6f3f9dd743dbe73236",
     "src/editorial/operator_claim_references.py": "dbd11ac41b88e0019dde2f51b078c43cf8bd46966f1cb06e2adffc267f3bfbdc",
-    "src/editorial/policy.py": "491d6023a549aac6cbfa96b55263d5bedc76236f250dea9186aebd5359bcc104",
+    "src/editorial/policy.py": "1e6bb694b03b7c6e0c30f6bf671f0d0767e0d87f313c2c09244fe952b8740165",
     "src/editorial/portfolio.py": "da6dd9a39fae1872c63fb2c54c1f973ce4417f5dc7204fb8e1e09d40fc440dc8",
     "src/editorial/report_development.py": "e2ed39a9ff957683c8befff0f3b99533fdc9d90d84af88220ed13f2bf1489995",
     "src/editorial/revisions.py": "d88d4c456f3bd5a3240f30b8d7c3ef3b8a97dc5bd8fc445596943379582a9209",
@@ -102,13 +102,14 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/evaluation/coverage.py": "3e1595ad6e65646ac1a83cdd0b95adcebc21bf3d32cd4073f5881d555c66b67e",
     "src/media/air_quality_graphic_adapter.py": "fb5a1e59526e64141f7aa745ac0f297b0edc159d2398f8e67d60c1ed18dd2aa7",
     "src/media/attachment.py": "119515f4136f9bfa35c9eb3dc2b6f4c9f5ba938cf70e9002d9ae7f9d7bdb8d12",
+    "src/media/canonical_png.py": "75e6a4c6d512e7f1c6b8c8b9fa616445dd08d203a6825d5d01e76adb3c74a636",
     "src/media/crw_graphic_adapter.py": "5503a2527f3bf32351685a5c2a54fc41a543dc387ae7005c101461237588f6e1",
     "src/media/evidence_graphic.py": "d9e0e487dba14f93d59a3a6289ce48064cd35eb35ea36d5bfd94403858bd3afa",
     "src/media/fire_graphic_adapter.py": "343acd087bcbf3f566837bcf2a1799187002a734641c947b599d6f9f025e9833",
     "src/media/fire_map_graphic_adapter.py": "083b3ca9c1473bf1458aa9a9d4bc1052c7128f40341d8c2f1bf086cd7c1713e7",
-    "src/media/gist_hazard_media.py": "a95ba51d768b67095f98b422b5d228abacf9a6b77f94ac7e5e63b5421d4e74c1",
+    "src/media/gist_hazard_media.py": "fa1d64cac31dbefeac3275f91e0cd1ba9fd768469339c5bbda37afc2cf880c9d",
     "src/media/gist_media.py": "e6675a11e2cd3f8d46377b76b1232c2f6483bea1febdea6f36896f2fbba927c0",
-    "src/media/gist_temperature_media.py": "8f16532221f230e0e17352640fb13460c58365724f03d6ed3a999da6252d84a8",
+    "src/media/gist_temperature_media.py": "fd512e53889e3d3ed848b088b960dd5bc08defaee4f8f7732c66f581dd6e5920",
     "src/media/joint_review.py": "6919888f4e2fcdcab9de8a69487dba0b31fa70a2cc792b402c1fada13e209b44",
     "src/media/maps/NOTICE.md": "f6ebf3caca500621c4b2c9f9fe9aad802099b82a4a1c21c479daf97d29aabac0",
     "src/media/maps/manifest.json": "1af072edc46ae3252bf6cf0edb43993986de262a2840b2cd4907eb4866f970e9",
@@ -211,5 +212,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "8c4887f395618e343dafd55f5843987dfa6a7a620713c7c34bab9f419e4434fe"
   },
   "schema_version": 1,
-  "source_sha256": "7e2c8419b1cc57501b3d424e7f42792860aeedcfcc546835b6faed757ce32e7f"
+  "source_sha256": "0b62fdb02455b2c3bf0cd7d64b195cd599e129de1247cb61ee3342624db8972d"
 }

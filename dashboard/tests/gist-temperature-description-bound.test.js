@@ -11,13 +11,14 @@ function fixture(alt) {
     station_id: "USC99000001", valid_date: "2026-09-08" }
   const bundle = { raw_signal_dump: { evidence: source } }
   return { review_context: { two_bot: { bundle } }, media_attachment: {
-    schema_version: 1, kind: "gist_temperature_comparator_v1", bundle_sha256: fingerprint(bundle),
+    schema_version: 2, kind: "gist_temperature_comparator_v1", bundle_sha256: fingerprint(bundle),
     source_revision_sha256: source.revision_id, baseline_revision_sha256: source.baseline.revision_id,
     station_id: source.station_id, valid_date: source.valid_date, png_sha256: "c".repeat(64),
     alt_text: alt, alt_sha256: hash(alt), renderer: {
       implementation_sha256: manifest.identity.files["src/media/gist_temperature_media.py"],
       font_sha256: manifest.identity.files["src/media/fonts/DejaVuSansMono.ttf"],
-      pillow: "12.2.0", freetype: "invented", zlib: "invented", width: 1200, height: 1500,
+      codec_sha256: manifest.identity.files["src/media/canonical_png.py"], png_codec: "canonical-png-fixed-huffman-1",
+      pillow: "12.2.0", freetype: "invented", width: 1200, height: 1500,
     },
   } }
 }

@@ -38,10 +38,11 @@ const png = Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk
 
 function responseValue() {
   const req = request(), files = manifest.identity.files, alt = "Invented full station comparison; source-calendar date; reporting interval unknown."
-  const descriptor = { schema_version: 1, kind: "gist_temperature_comparator_v1", bundle_sha256: "c".repeat(64),
+  const descriptor = { schema_version: 2, kind: "gist_temperature_comparator_v1", bundle_sha256: "c".repeat(64),
     source_revision_sha256: "d".repeat(64), baseline_revision_sha256: "f".repeat(64), station_id: "USW00000001", valid_date: "2026-10-28",
     renderer: { implementation_sha256: files["src/media/gist_temperature_media.py"], font_sha256: files["src/media/fonts/DejaVuSansMono.ttf"],
-      pillow: "12.2.0", freetype: "2.13.3", zlib: "1.2.13", width: 1200, height: 1500 },
+      codec_sha256: files["src/media/canonical_png.py"], png_codec: "canonical-png-fixed-huffman-1",
+      pillow: "12.2.0", freetype: "2.13.3", width: 1200, height: 1500 },
     png_sha256: hash(png), alt_text: alt, alt_sha256: hash(alt) }
   return { schema_version: 3, draft_id: req.draft_id, revision_identity: req.expected_revision,
     policy_source_sha256: req.expected_policy_source_sha256, preview_runtime_sha256: req.expected_preview_runtime_sha256,

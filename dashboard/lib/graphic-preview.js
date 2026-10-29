@@ -162,9 +162,11 @@ function pngBytes(base64) {
   return bytes
 }
 
+// Schema-2 recipes: canonical host-independent PNG bytes (src/media/canonical_png.py).
+const PNG_CODEC = "canonical-png-fixed-huffman-1"
 // Browser presentation guard paired with src/media/gist_hazard_media.py. Python
 // qualifies sources and renders; the dashboard route rechecks before any write.
-const HAZARD_FILES = ["src/media/gist_media.py", "src/media/gist_hazard_media.py", "src/media/fonts/DejaVuSansMono.ttf",
+const HAZARD_FILES = ["src/media/gist_media.py", "src/media/gist_hazard_media.py", "src/media/canonical_png.py", "src/media/fonts/DejaVuSansMono.ttf",
   "src/media/evidence_graphic.py", "src/media/temperature_graphic_adapter.py"]
 const HAZARD_MEDIA = {
   gist_pm25_forecast_v1: { template: "pm25_forecast_day", templateVersion: "p31-pm25-forecast-1",
@@ -238,11 +240,12 @@ async function validateHazardPNGResponse(value, request, manifest) {
       || [...value.delivery_text].length > MAX_DELIVERY_DESCRIPTION || encoder.encode(value.delivery_text).length > MAX_DELIVERY_DESCRIPTION
       || typeof value.expanded_description !== "string" || !value.expanded_description.isWellFormed()
       || !exactKeys(descriptor, ["schema_version", "kind", "template", "template_version", "adapter_version", "synthetic", "source", "renderer", "image", "description"])
-      || descriptor.schema_version !== 1 || descriptor.kind !== value.media_kind || descriptor.template !== family.template
+      || descriptor.schema_version !== 2 || descriptor.kind !== value.media_kind || descriptor.template !== family.template
       || descriptor.template_version !== family.templateVersion || descriptor.adapter_version !== family.adapterVersion
       || descriptor.synthetic !== false || encoder.encode(JSON.stringify(descriptor)).length > 16384
-      || !exactKeys(r, ["version", "files", "pillow", "freetype", "zlib", "layout", "width", "height"])
-      || r.version !== "gist-hazard-png-1" || r.pillow !== "12.2.0" || r.layout !== "basic" || r.width !== 1200 || r.height !== 1500
+      || !exactKeys(r, ["version", "files", "pillow", "freetype", "png_codec", "layout", "width", "height"])
+      || r.version !== "gist-hazard-png-2" || r.pillow !== "12.2.0" || r.layout !== "basic" || r.width !== 1200 || r.height !== 1500
+      || r.png_codec !== PNG_CODEC
       || !exactKeys(r.files, family.files) || !family.files.every(path => isSHA(files?.[path]) && r.files[path] === files[path])
       || !exactKeys(image, ["mime_type", "png_sha256", "byte_count", "width", "height", "mode"])
       || image.png_sha256 !== value.png_sha256 || !isSHA(value.png_sha256)
@@ -269,19 +272,21 @@ async function validatePNGResponse(value, request, manifest) {
       || !sourceContext(value, template)
       || ![value.title, value.alt_text, value.scope].every(text => typeof text === "string" && text.length > 0 && text.length <= 10000)
       || !isSHA(value.png_sha256) || !isSHA(value.media_descriptor_sha256)
-      || !exactKeys(descriptor, descriptorKeys) || descriptor.schema_version !== 1
+      || !exactKeys(descriptor, descriptorKeys) || descriptor.schema_version !== 2
       || descriptor.kind !== "gist_temperature_comparator_v1" || encoder.encode(JSON.stringify(descriptor)).length > 16384
       || ![descriptor.bundle_sha256, descriptor.source_revision_sha256, descriptor.baseline_revision_sha256,
         descriptor.png_sha256, descriptor.alt_sha256].every(isSHA)
       || descriptor.station_id !== value.source_context.station_id || descriptor.valid_date !== value.source_context.valid_date
       || descriptor.png_sha256 !== value.png_sha256 || descriptor.alt_text !== value.alt_text
-      || !exactKeys(renderer, ["implementation_sha256", "font_sha256", "pillow", "freetype", "zlib", "width", "height"])
+      || !exactKeys(renderer, ["implementation_sha256", "font_sha256", "codec_sha256", "png_codec", "pillow", "freetype", "width", "height"])
+      || renderer.png_codec !== PNG_CODEC || !isSHA(files?.["src/media/canonical_png.py"])
+      || renderer.codec_sha256 !== files["src/media/canonical_png.py"]
       || renderer.width !== 1200 || renderer.height !== 1500
       || !isSHA(files?.["src/media/gist_temperature_media.py"])
       || !isSHA(files?.["src/media/fonts/DejaVuSansMono.ttf"])
       || renderer.implementation_sha256 !== files["src/media/gist_temperature_media.py"]
       || renderer.font_sha256 !== files["src/media/fonts/DejaVuSansMono.ttf"]
-      || ![renderer.pillow, renderer.freetype, renderer.zlib].every(value => typeof value === "string" && value.length > 0 && value.length <= 64)
+      || ![renderer.pillow, renderer.freetype].every(value => typeof value === "string" && value.length > 0 && value.length <= 64)
       || await digestBytes(pngBytes(value.png_base64)) !== value.png_sha256
       || await digest(value.alt_text) !== descriptor.alt_sha256
       || await digest(JSON.stringify(bindingPayload(descriptor))) !== value.media_descriptor_sha256) throw new Error("invalid preview")

@@ -5,14 +5,15 @@ import { draftIdentity, fingerprint } from "./draft-revisions.js"
 export const GIST_TEMPERATURE_KIND = "gist_temperature_comparator_v1"
 const SHA = /^[a-f0-9]{64}$/
 const keys = ["schema_version", "kind", "bundle_sha256", "source_revision_sha256", "baseline_revision_sha256", "station_id", "valid_date", "renderer", "png_sha256", "alt_text", "alt_sha256"]
-const rendererKeys = ["implementation_sha256", "font_sha256", "pillow", "freetype", "zlib", "width", "height"]
+// Schema 2: canonical host-independent PNG bytes; the codec source replaces the zlib version.
+const rendererKeys = ["implementation_sha256", "font_sha256", "codec_sha256", "png_codec", "pillow", "freetype", "width", "height"]
 const exact = (x, names) => x && Object.getPrototypeOf(x) === Object.prototype && Object.keys(x).length === names.length && names.every(k => Object.hasOwn(x, k))
 const refusal = message => Object.assign(new Error(message), { status: 409, code: "graphic_recheck_required" })
 const digest = value => createHash("sha256").update(value).digest("hex")
 
 export function validGistTemperatureMedia(draft, value = draft?.media_attachment) {
   try {
-    if (!exact(value, keys) || value.schema_version !== 1 || value.kind !== GIST_TEMPERATURE_KIND
+    if (!exact(value, keys) || value.schema_version !== 2 || value.kind !== GIST_TEMPERATURE_KIND
         || Buffer.byteLength(JSON.stringify(value), "utf8") > 16384) return false
     if (!["bundle_sha256", "source_revision_sha256", "baseline_revision_sha256", "png_sha256", "alt_sha256"].every(k => typeof value[k] === "string" && SHA.test(value[k]))) return false
     const bundle = draft.review_context?.two_bot?.bundle, source = bundle?.raw_signal_dump?.evidence
@@ -24,7 +25,9 @@ export function validGistTemperatureMedia(draft, value = draft?.media_attachment
     return exact(r, rendererKeys) && r.width === 1200 && r.height === 1500 && r.pillow === "12.2.0"
       && r.implementation_sha256 === files["src/media/gist_temperature_media.py"] && SHA.test(r.implementation_sha256)
       && r.font_sha256 === files["src/media/fonts/DejaVuSansMono.ttf"] && SHA.test(r.font_sha256)
-      && [r.freetype, r.zlib].every(v => typeof v === "string" && v.length > 0 && v.length <= 64)
+      && r.codec_sha256 === files["src/media/canonical_png.py"] && SHA.test(r.codec_sha256)
+      && r.png_codec === "canonical-png-fixed-huffman-1"
+      && typeof r.freetype === "string" && r.freetype.length > 0 && r.freetype.length <= 64
       && typeof value.alt_text === "string" && value.alt_text.length > 0 && [...value.alt_text].length <= 1000
       && Buffer.byteLength(value.alt_text, "utf8") <= 1000
       && Buffer.from(value.alt_text).toString("utf8") === value.alt_text && digest(value.alt_text) === value.alt_sha256

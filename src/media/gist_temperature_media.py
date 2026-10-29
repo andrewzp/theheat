@@ -14,6 +14,7 @@ from typing import cast
 from PIL import Image, ImageDraw, ImageFont, features, __version__ as pillow_version
 
 from src.editorial.revisions import fingerprint
+from src.media import canonical_png
 from src.media.evidence_graphic import HEIGHT, WIDTH, chart_title
 from src.media.temperature_graphic_adapter import _StoredBundle, temperature_graphic_spec
 from src.two_bot.types import StoryBundle
@@ -21,7 +22,12 @@ from src.two_bot.types import StoryBundle
 KIND = "gist_temperature_comparator_v1"
 KEYS = frozenset({"schema_version", "kind", "bundle_sha256", "source_revision_sha256",
     "baseline_revision_sha256", "station_id", "valid_date", "renderer", "png_sha256", "alt_text", "alt_sha256"})
-RENDER_KEYS = frozenset({"implementation_sha256", "font_sha256", "pillow", "freetype", "zlib", "width", "height"})
+# Schema 2 (canonical PNG): bytes no longer depend on the host zlib, so the codec
+# source and profile replace the compressor version. Schema 1 recipes need a new
+# preview and joint review; nothing upgrades them silently.
+SCHEMA_VERSION = 2
+RENDER_KEYS = frozenset({"implementation_sha256", "font_sha256", "codec_sha256", "png_codec", "pillow",
+    "freetype", "width", "height"})
 SHA = re.compile(r"[a-f0-9]{64}\Z")
 MAX_DESCRIPTOR_BYTES = 16_384
 MAX_ALT_LENGTH = 1000  # House bound for both Unicode scalars and UTF-8 bytes.
@@ -40,16 +46,19 @@ def _hash(raw):
 def renderer_identity():
     root = files("src.media")
     return {"implementation_sha256": _hash(root.joinpath("gist_temperature_media.py").read_bytes()),
-        "font_sha256": _hash(root.joinpath(FONT).read_bytes()), "pillow": pillow_version,
-        "freetype": features.version("freetype2"), "zlib": features.version("zlib"),
-        "width": WIDTH, "height": HEIGHT}
+        "font_sha256": _hash(root.joinpath(FONT).read_bytes()),
+        "codec_sha256": _hash(root.joinpath("canonical_png.py").read_bytes()), "png_codec": canonical_png.PROFILE,
+        "pillow": pillow_version, "freetype": features.version("freetype2"), "width": WIDTH, "height": HEIGHT}
 
 
 def validate_descriptor(value, bundle):
     """Structure and current source binding only; transport also regenerates bytes."""
     _require(type(value) is dict and set(value) == KEYS, "unsupported attachment")
-    _require(type(value["schema_version"]) is int and value["schema_version"] == 1
-             and value["kind"] == KIND, "unsupported attachment")
+    _require(value["kind"] == KIND, "unsupported attachment")
+    _require(not (type(value["schema_version"]) is int and value["schema_version"] == 1),
+             "render profile changed; preview and review again")
+    _require(type(value["schema_version"]) is int and value["schema_version"] == SCHEMA_VERSION,
+             "unsupported attachment")
     encoded = json.dumps(value, ensure_ascii=False, allow_nan=False, sort_keys=True).encode("utf-8")
     _require(len(encoded) <= MAX_DESCRIPTOR_BYTES, "attachment too large")
     for key in ("bundle_sha256", "source_revision_sha256", "baseline_revision_sha256", "png_sha256", "alt_sha256"):
@@ -69,8 +78,9 @@ def validate_descriptor(value, bundle):
     _require(type(renderer) is dict and set(renderer) == RENDER_KEYS, "invalid renderer")
     _require(renderer["width"] == WIDTH and type(renderer["width"]) is int
              and renderer["height"] == HEIGHT and type(renderer["height"]) is int, "invalid dimensions")
-    _require(all(type(renderer[k]) is str and SHA.fullmatch(renderer[k]) for k in ("implementation_sha256", "font_sha256")), "invalid render digest")
-    _require(all(type(renderer[k]) is str and 0 < len(renderer[k]) <= 64 for k in ("pillow", "freetype", "zlib")), "unknown renderer profile")
+    _require(all(type(renderer[k]) is str and SHA.fullmatch(renderer[k])
+                 for k in ("implementation_sha256", "font_sha256", "codec_sha256")), "invalid render digest")
+    _require(all(type(renderer[k]) is str and 0 < len(renderer[k]) <= 64 for k in ("pillow", "freetype", "png_codec")), "unknown renderer profile")
     _require(renderer == renderer_identity(), "render profile changed; preview and review again")
     alt = value["alt_text"]
     _require(type(alt) is str and 0 < len(alt) <= MAX_ALT_LENGTH
@@ -179,10 +189,10 @@ def _png(spec):
     line("NOAA GHCN-Daily · " + evidence["station_id"], 1178, 42)
     line("Archive through " + baseline["cutoff"], 1236, 42, muted)
     wrap("Accepted station samples; not an official record. Reporting interval and timezone unknown.", 1300, 40, 3)
-    output = BytesIO()
-    image.save(output, format="PNG", optimize=False, compress_level=9)
-    body = output.getvalue()
-    _require(0 < len(body) <= 750_000, "PNG exceeds bound")
+    try:
+        body = canonical_png.encode_image(image, max_bytes=750_000)
+    except canonical_png.CanonicalPNGError as exc:
+        raise ValueError("Temperature image withheld: " + str(exc)) from None
     return body
 
 
@@ -194,7 +204,7 @@ def prepare_media(bundle, *, synthetic=False):
     png = _png(spec)
     alt = _alt_text(spec["evidence"])
     evidence = bundle["raw_signal_dump"]["evidence"]
-    descriptor = {"schema_version": 1, "kind": KIND, "bundle_sha256": fingerprint(bundle),
+    descriptor = {"schema_version": SCHEMA_VERSION, "kind": KIND, "bundle_sha256": fingerprint(bundle),
         "source_revision_sha256": evidence["revision_id"], "baseline_revision_sha256": evidence["baseline"]["revision_id"],
         "station_id": evidence["station_id"], "valid_date": evidence["valid_date"], "renderer": renderer_identity(),
         "png_sha256": _hash(png), "alt_text": alt, "alt_sha256": _hash(alt.encode("utf-8"))}

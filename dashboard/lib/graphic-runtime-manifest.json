@@ -1,6 +1,6 @@
 {
   "identity": {
-    "archive_sha256": "e30e6091cfd6a37d0ec4944f117817f0d1c30d238f2c14475c6483eb0577ad98",
+    "archive_sha256": "56a9eedb8eefac91bedad3dd537f4e259f93e373314c0a78c50f113cd25da1e3",
     "deployment_files": {
       "api/graphic_preview.py": "f7521adcbd618f4b65b2a0de30ea62aaff4cdd36f2254e9af38bf68646d361ad",
       "api/graphic_reader_status.py": "5e9685d699625a4eea9d5be884b6e266939a0ad344a2997351ba79bd114407ba",
@@ -64,15 +64,16 @@
       "src/editorial/thresholds.py": "a24fefb63fc25510cbe693151c2479c9384ab259ac90d4dfee59e64309f22afe",
       "src/media/__init__.py": "d0615ff3fdf26d152945f16b1c3434fb8968f94fe520064ef2c2639ee91583b1",
       "src/media/air_quality_graphic_adapter.py": "fb5a1e59526e64141f7aa745ac0f297b0edc159d2398f8e67d60c1ed18dd2aa7",
+      "src/media/canonical_png.py": "75e6a4c6d512e7f1c6b8c8b9fa616445dd08d203a6825d5d01e76adb3c74a636",
       "src/media/evidence_graphic.py": "d9e0e487dba14f93d59a3a6289ce48064cd35eb35ea36d5bfd94403858bd3afa",
       "src/media/evidence_graphic_render.py": "f5c2ab570e1cd9482c68b3f59b81b7ee1f8f923c7fd81e14cddb128bdd2b02b7",
       "src/media/fire_graphic_adapter.py": "343acd087bcbf3f566837bcf2a1799187002a734641c947b599d6f9f025e9833",
       "src/media/fire_map_graphic_adapter.py": "083b3ca9c1473bf1458aa9a9d4bc1052c7128f40341d8c2f1bf086cd7c1713e7",
       "src/media/fonts/DejaVu-LICENSE.txt": "7a083b136e64d064794c3419751e5c7dd10d2f64c108fe5ba161eae5e5958a93",
       "src/media/fonts/DejaVuSansMono.ttf": "b4a6c3e4faab8773f4ff761d56451646409f29abedd68f05d38c2df667d3c582",
-      "src/media/gist_hazard_media.py": "a95ba51d768b67095f98b422b5d228abacf9a6b77f94ac7e5e63b5421d4e74c1",
+      "src/media/gist_hazard_media.py": "fa1d64cac31dbefeac3275f91e0cd1ba9fd768469339c5bbda37afc2cf880c9d",
       "src/media/gist_media.py": "e6675a11e2cd3f8d46377b76b1232c2f6483bea1febdea6f36896f2fbba927c0",
-      "src/media/gist_temperature_media.py": "8f16532221f230e0e17352640fb13460c58365724f03d6ed3a999da6252d84a8",
+      "src/media/gist_temperature_media.py": "fd512e53889e3d3ed848b088b960dd5bc08defaee4f8f7732c66f581dd6e5920",
       "src/media/maps/NOTICE.md": "f6ebf3caca500621c4b2c9f9fe9aad802099b82a4a1c21c479daf97d29aabac0",
       "src/media/maps/manifest.json": "1af072edc46ae3252bf6cf0edb43993986de262a2840b2cd4907eb4866f970e9",
       "src/media/maps/ne_110m_land_v4_1_0.json": "a37b057aca4fc9714a0c24b5d6bc9778bb5845894646e4052383ea63fa3cd50d",
@@ -89,12 +90,12 @@
       "src/two_bot/types.py": "36ed2e6475a655f4112012486795702159ed546c3040e8ef1874b7a0b02a9035"
     },
     "format": "saved-source-svg-preview-v2",
-    "policy_source_sha256": "7e2c8419b1cc57501b3d424e7f42792860aeedcfcc546835b6faed757ce32e7f",
+    "policy_source_sha256": "0b62fdb02455b2c3bf0cd7d64b195cd599e129de1247cb61ee3342624db8972d",
     "resource_sources": {
       "src/data/registry/country_codes.json": "data/country_codes.json",
       "src/data/registry/place_registry.json": "data/place_registry.json"
     },
     "schema_version": 1
   },
-  "runtime_sha256": "8f5b8f77f825514be862e3f114b186de90a0a35a9dca0f8910b8793a29c1e462"
+  "runtime_sha256": "03e2f2da8ad459d0f771cb8f452b60a24224daaf0d3288887cab7ecb256e20f0"
 }
