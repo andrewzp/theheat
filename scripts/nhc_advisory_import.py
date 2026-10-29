@@ -369,6 +369,12 @@ def execute(proposal_raw: bytes, proposal_sha: str, *, expected_state_sha256: st
         durable(journal / (claim + ".attempt.json"), {"trial_id": trial_id, "draft_id": draft["id"],
                                                      "proposal_sha256": proposal_sha, "payload_sha256": sha(content),
                                                      "at": clock().isoformat(), "no_automatic_resend": True})
+        # Backups/fsync may consume the remaining freshness window. A durable
+        # attempt is not permission to PATCH after that window; expiry leaves
+        # this attempt consumed and the original state untouched.
+        final, _, _, _ = plan(proposal_raw, proposal_sha, second, new_flags, clock(), code_sha, source_sha)
+        if final != content:
+            fail("plan_changed")
         acknowledged = False
         try:
             patch(content)
@@ -422,9 +428,24 @@ class GitHub:
         files = {}
         for name in ("state.json", "runtime-inventory.json"):
             entry = (gist.get("files") or {}).get(name)
-            if not isinstance(entry, dict) or entry.get("truncated") is not False:
+            if not isinstance(entry, dict) or type(entry.get("truncated")) is not bool:
                 fail("gist_file_inventory_changed")
-            files[name] = entry["content"].encode()
+            if entry["truncated"]:
+                # The real state exceeds GitHub's inline-content threshold. Use
+                # its ordinary fixed-gist/fixed-file CLI raw read, as the trial
+                # workflow already does; never parse or splice the shortened JSON.
+                result = subprocess.run(["gh", "gist", "view", self.gist_id, "--raw", "--filename", name],
+                                        capture_output=True, timeout=60)
+                if result.returncode:
+                    fail("github_request_failed")
+                raw = result.stdout
+            else:
+                if type(entry.get("content")) is not str:
+                    fail("gist_file_inventory_changed")
+                raw = entry["content"].encode()
+            if len(raw) > MAX_BYTES:
+                fail("document_size")
+            files[name] = raw
         rows = json.loads(self._api([f"repos/{self.repository}/actions/variables?per_page=100"]))
         flags = {row["name"]: row["value"] for row in rows.get("variables", [])}
         return files, flags
