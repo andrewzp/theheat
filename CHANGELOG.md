@@ -1,3 +1,15 @@
+## 0.9.109.46
+
+- Add source-derived PM2.5 forecast charts and MODIS/VIIRS thermal-detection maps
+  to the Gist Workbench, with complete bounded image descriptions, exact joint
+  review and manual X delivery. Forecasts and satellite detections retain their
+  source qualifications; changed evidence invalidates approval.
+- Let operators inspect graphics at full size on mobile and return keyboard focus
+  to the preview. Replacing or removing an image creates a new draft revision.
+- Reconstruct attached images before recording a send attempt, then recheck source
+  freshness before upload. Rendering failures leave no attempt; uncertain delivery
+  still blocks a blind retry. Preserve the existing publishing controls.
+
 ## 0.9.109.45
 
 - Redistribute two expensive approval-regression cohorts across existing CI jobs,

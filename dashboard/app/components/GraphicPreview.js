@@ -3,9 +3,46 @@
 import React, { useEffect, useRef, useState } from "react"
 import manifest from "../../lib/graphic-runtime-manifest.json" with { type: "json" }
 import { createGraphicPreviewController, firePreviewSourceStatus, graphicRequest, graphicRequestKey,
-  isTemperaturePreviewType, temperaturePNGRequest, temperaturePreviewSourceStatus } from "../../lib/graphic-preview.js"
+  isTemperaturePreviewType, mediaPNGRequest, temperaturePNGRequest, temperaturePreviewSourceStatus } from "../../lib/graphic-preview.js"
 
 const h = React.createElement
+
+function PostingWindow({ window }) {
+  return window.status === "current"
+    ? h("p", { className: "graphic-posting-window" },
+      `Within its posting window when previewed (${window.checked_at.slice(0, 16).replace("T", " ")} UTC). Approval and sending check the source time again.`)
+    : h("p", { className: "graphic-posting-window", role: "note" },
+      `Not postable now: ${window.reason}. This historical preview stays available to inspect; approval and sending will refuse it.`)
+}
+
+// The inline card image is ~244 px wide on a 320 px phone. This opens the same
+// reviewed bytes at the full viewport width; Escape or the close button returns
+// focus to the opener.
+export function FullSizeImage({ url, alt, title }) {
+  const dialog = useRef(null), opener = useRef(null), closer = useRef(null)
+  const [open, setOpen] = useState(false)
+  useEffect(() => {
+    const node = dialog.current
+    if (!node) return undefined
+    // Escape and the close button both end here: one place restores focus.
+    const closed = () => { setOpen(false); opener.current?.focus() }
+    node.addEventListener("close", closed)
+    return () => { node.removeEventListener("close", closed); if (node.open) node.close() }
+  }, [])
+  const show = () => {
+    const node = dialog.current
+    if (!node || node.open) return
+    setOpen(true)
+    node.showModal()
+    closer.current?.focus()
+  }
+  return h(React.Fragment, null,
+    h("button", { type: "button", className: "btn sm graphic-full-size-open", ref: opener, "aria-haspopup": "dialog",
+      onClick: show }, "View full size"),
+    h("dialog", { ref: dialog, className: "graphic-full-size", "aria-label": `Full-size image: ${title}` },
+      h("button", { type: "button", className: "btn sm", ref: closer, onClick: () => dialog.current?.close() }, "Close full-size image"),
+      open && h("img", { src: url, alt, width: 1200, height: 1500 })))
+}
 
 export function GraphicPreviewFigure({ value, url }) {
   const context = value.source_context
@@ -14,8 +51,23 @@ export function GraphicPreviewFigure({ value, url }) {
     : context.kind === "ghcn_station_day"
       ? `Station ${context.station_id} · ${context.valid_date} source-calendar date · observed; reporting interval and timezone unknown`
     : `${context.acquired_at.slice(0, 16).replace("T", " ")} UTC (minute precision)`
+  if (value.schema_version === 4) return h("figure", { className: "graphic-preview-figure" },
+    h("img", { src: url, alt: value.delivery_text, width: value.width, height: value.height }),
+    h(FullSizeImage, { url, alt: value.delivery_text, title: value.title }),
+    h("figcaption", null,
+      h("strong", null, value.title),
+      h("p", { className: "graphic-kind" }, context.kind === "pm25_forecast_day" ? "Model forecast chart"
+        : context.kind === "viirs_acquisition" ? "NOAA-20/NOAA-21 VIIRS satellite detections" : "MODIS satellite detections"),
+      h("p", null, `${value.source} · ${timing}`),
+      context.kind === "pm25_forecast_day" && h("p", null,
+        `Forecast requested ${context.requested_at.slice(0, 16).replace("T", " ")} UTC; retrieved ${context.retrieved_at.slice(0, 16).replace("T", " ")} UTC. Retrieval is not a model run time, and a forecast never becomes an observation.`),
+      h("p", null, value.scope),
+      h(PostingWindow, { window: value.posting_window }),
+      h("div", { className: "graphic-full-description" }, h("strong", null, "Image description sent to X"), h("p", null, value.delivery_text)),
+      h("details", null, h("summary", null, "Expanded source details (not sent)"), h("p", null, value.expanded_description))))
   return h("figure", { className: "graphic-preview-figure" },
     h("img", { src: url, alt: value.alt_text, width: value.width, height: value.height }),
+    value.schema_version === 3 && h(FullSizeImage, { url, alt: value.alt_text, title: value.title }),
     h("figcaption", null,
       h("strong", null, value.title),
       h("p", null, `${value.source} · ${timing}`),
@@ -28,10 +80,12 @@ export function GraphicPreviewFigure({ value, url }) {
 
 const FIRE_LABELS = { modis: "MODIS", viirs: "NOAA-20/NOAA-21 VIIRS" }
 
-export function TemperatureMediaControls({ draft, preview, reviewConfirmed, onConfirm, onAction }) {
+// One set of attach/remove/joint-review controls for every Gist post-image family.
+export function MediaControls({ draft, preview, reviewConfirmed, onConfirm, onAction, held = false }) {
   const attached = draft.media_attachment_sha256
   const present = Object.hasOwn(draft, "media_attachment") || typeof attached === "string"
-  const ready = preview.status === "ready" && preview.value?.schema_version === 3
+  const ready = preview.status === "ready" && [3, 4].includes(preview.value?.schema_version)
+  const delivery = ready && preview.value.schema_version === 4
   const mediaSha = ready ? preview.value.media_descriptor_sha256 : null
   const matching = ready && typeof attached === "string" && /^[a-f0-9]{64}$/.test(attached) && attached === mediaSha
   const mutable = ["pending", "approved"].includes(draft.status) && !draft.publish_blocked
@@ -41,8 +95,12 @@ export function TemperatureMediaControls({ draft, preview, reviewConfirmed, onCo
   const expectedRevision = draft.revision_identity
   return h("div", { className: "temperature-media-controls" },
     present ? h(React.Fragment, null,
-      h("p", null, matching ? "This image and description are attached to the saved draft."
+      h("p", null, held ? "This draft has an attachment this dashboard cannot review or post. It stays held until you remove it."
+        : matching ? (delivery ? "This image and its X image description are attached to the saved draft."
+        : "This image and description are attached to the saved draft.")
         : "Build the current preview to inspect the attached image and description."),
+      ready && !matching && !held && h("button", { type: "button", className: "btn sm", disabled: !mutable || !onAction,
+        onClick: () => onAction?.("attach_graphic", { expectedRevision, expectedMediaSha256: mediaSha }) }, "Replace attached graphic"),
       h("button", { type: "button", className: "btn sm", disabled: !mutable || !onAction,
         onClick: () => onAction?.("remove_graphic", { expectedRevision }) }, "Remove graphic"))
       : ready && h("button", { type: "button", className: "btn sm", disabled: !mutable || !onAction,
@@ -50,16 +108,21 @@ export function TemperatureMediaControls({ draft, preview, reviewConfirmed, onCo
     canReview && h("div", { className: "workbench-panel", "aria-label": "Review text and attached graphic" },
       h("h3", null, "Review this text and graphic"),
       h("p", { className: "draft-text" }, draft.text),
-      h("p", null, "Check this exact text, the image above and its full description against the saved source evidence."),
+      h("p", null, delivery
+        ? "Check this exact text, the image above, the image description sent to X and the expanded source details against the saved source evidence."
+        : "Check this exact text, the image above and its full description against the saved source evidence."),
       h("label", null, h("input", { type: "checkbox", checked: reviewConfirmed, disabled: !onAction,
-        onChange: event => onConfirm(event.target.checked) }), " I checked the exact text, image and full graphic description."),
+        onChange: event => onConfirm(event.target.checked) }), delivery
+        ? " I checked the exact text, image, X image description and source details."
+        : " I checked the exact text, image and full graphic description."),
       h("button", { type: "button", className: "btn sm", disabled: !reviewConfirmed || !onAction,
         onClick: () => reviewConfirmed && onAction?.("review", { reviewConfirmed: true, mediaReviewConfirmed: true,
           expectedMediaSha256: mediaSha, expectedPolicySha256: draft.editorial_policy.policy_sha256,
           expectedRevision }) }, "Record joint review")))
 }
+export const TemperatureMediaControls = MediaControls
 
-function SavedPreview({ request, forecast, fireSource, temperature, draft, onAction }) {
+function SavedPreview({ request, family, fireSource, draft, onAction }) {
   const [preview, setPreview] = useState({ status: "idle" })
   const [reviewConfirmed, setReviewConfirmed] = useState(false)
   const controller = useRef(null)
@@ -72,39 +135,56 @@ function SavedPreview({ request, forecast, fireSource, temperature, draft, onAct
     return () => { instance.dispose(); controller.current = null }
   }, [])
   return h(React.Fragment, null,
-    h("p", null, forecast ? "Build a chart from the saved PM2.5 model forecast. No new source fetch or AI generation."
-      : temperature ? "Compare the saved observed station reading with its qualified archive samples. No new source fetch or AI generation."
+    h("p", null, draft.type === "air_quality_hazard"
+      ? "Build a chart from the saved PM2.5 model forecast. No new source fetch or AI generation."
+      : family === "temperature" ? "Compare the saved observed station reading with its qualified archive samples. No new source fetch or AI generation."
       : `Preview the saved ${FIRE_LABELS[fireSource]} detections. Source and display checks can still withhold the graphic. No new source fetch or AI generation.`),
     h("button", { type: "button", className: "btn sm", disabled: preview.status === "loading",
       onClick: () => controller.current?.start(request) }, preview.status === "ready" ? "Rebuild preview" : "Preview graphic"),
     h("div", { role: "status", "aria-live": "polite" },
       preview.status === "loading" ? "Building the saved-source preview…" : preview.status === "error" ? preview.message : ""),
     preview.status === "ready" && h(GraphicPreviewFigure, { value: preview.value, url: preview.url }),
-    temperature && h(TemperatureMediaControls, { draft, preview, reviewConfirmed, onConfirm: setReviewConfirmed, onAction }))
+    family && h(MediaControls, { draft, preview, reviewConfirmed, onConfirm: setReviewConfirmed, onAction }))
+}
+
+// Families with a complete reviewed Gist post-image path. Python independently
+// qualifies every retained row; this only chooses which request to offer.
+function postImageFamily(draft) {
+  if (isTemperaturePreviewType(draft?.type)) return "temperature"
+  if (draft?.type === "air_quality_hazard") return "pm25"
+  if (draft?.type === "fire" && ["modis", "viirs"].includes(firePreviewSourceStatus(draft))) return firePreviewSourceStatus(draft)
+  return null
 }
 
 export function GraphicPreview({ draft, editing = false, updating = false, onAction }) {
-  const temperature = isTemperaturePreviewType(draft?.type)
-  if (!["fire", "air_quality_hazard"].includes(draft?.type) && !temperature) return null
+  const family = postImageFamily(draft)
+  const present = Object.hasOwn(draft ?? {}, "media_attachment")
+  if (!["fire", "air_quality_hazard"].includes(draft?.type) && !family) {
+    // A present attachment on a draft without a reviewed image path stays removable.
+    return present && !editing && !updating ? h("section", { className: "graphic-preview", "aria-label": "Saved-source graphic preview" },
+      h("h3", null, "Saved-source preview"),
+      h(MediaControls, { draft, preview: { status: "idle" }, reviewConfirmed: false, onConfirm() {}, onAction, held: true })) : null
+  }
   const forecast = draft.type === "air_quality_hazard"
   const missingWindow = forecast && !draft.review_context?.two_bot?.bundle?.raw_signal_dump?.forecast_window
   const fireSource = draft.type === "fire" ? firePreviewSourceStatus(draft) : null
-  const temperatureSource = temperature ? temperaturePreviewSourceStatus(draft) : null
-  const request = temperature ? temperaturePNGRequest(draft, manifest) : graphicRequest(draft, manifest)
+  const temperatureSource = family === "temperature" ? temperaturePreviewSourceStatus(draft) : null
+  const request = family === "temperature" ? temperaturePNGRequest(draft, manifest)
+    : family ? mediaPNGRequest(draft, manifest) : graphicRequest(draft, manifest)
+  const sourceMissing = family === "temperature" ? temperatureSource !== "ghcn" : missingWindow || fireSource === "missing" || fireSource === "unsupported"
   return h("section", { className: "graphic-preview", "aria-label": "Saved-source graphic preview" },
     h("h3", null, "Saved-source preview"),
-    h("p", { className: "graphic-preview-note" }, temperature
-      ? `${Object.hasOwn(draft, "media_attachment") || draft.media_attachment_sha256 ? "A graphic is attached; review its current preview below." : "Preview only; not attached or approved."} Build the saved-source image, attach it, then review the text and graphic together.`
+    h("p", { className: "graphic-preview-note" }, family
+      ? `${present || draft.media_attachment_sha256 ? "A graphic is attached; review its current preview below." : "Preview only; not attached or approved."} Build the saved-source image, attach it, then review the text and graphic together.`
       : "Preview only; not attached or approved."),
     updating ? h("p", null, "Updating this draft. Build a new preview after it finishes.")
       : editing ? h("p", null, "Save or cancel your text edit before building a preview.")
       : !request ? h("p", null, "Refresh the saved draft and resolve any conflicting versions before previewing.")
         : missingWindow ? h("p", null, "The hourly forecast was not saved with this draft. A graphic is unavailable.")
-          : temperature && temperatureSource !== "ghcn" ? h("p", null, "Qualified observed GHCN station evidence was not retained with this draft. No comparison preview is available.")
+          : family === "temperature" && temperatureSource !== "ghcn" ? h("p", null, "Qualified observed GHCN station evidence was not retained with this draft. No comparison preview is available.")
           : fireSource === "missing" ? h("p", null, "Saved fire source receipts are missing or incomplete. No graphic preview is available for this draft.")
           : fireSource === "unsupported" ? h("p", null, "This fire preview supports MODIS or NOAA-20/NOAA-21 VIIRS receipts from one product only. The saved source set is unsupported; no preview is available.")
-          : h(SavedPreview, { key: `${draft.type}:${draft.status}:${graphicRequestKey(request)}`, request, forecast, fireSource, temperature, draft, onAction }),
-    temperature && Object.hasOwn(draft, "media_attachment") && !editing && !updating
-      && (!request || temperatureSource !== "ghcn")
-      && h(TemperatureMediaControls, { draft, preview: { status: "idle" }, reviewConfirmed: false, onConfirm() {}, onAction }))
+          : h(SavedPreview, { key: `${draft.type}:${draft.status}:${graphicRequestKey(request)}`, request, family, fireSource, draft, onAction }),
+    present && !editing && !updating && (!request || sourceMissing || !family)
+      && h(MediaControls, { draft, preview: { status: "idle" }, reviewConfirmed: false, onConfirm() {}, onAction, held: !family }))
 }

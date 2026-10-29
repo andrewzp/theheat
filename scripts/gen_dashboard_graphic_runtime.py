@@ -75,6 +75,8 @@ SOURCES = (
     'src/media/fonts/DejaVu-LICENSE.txt',
     'src/media/temperature_graphic_adapter.py',
     'src/media/gist_temperature_media.py',
+    'src/media/gist_media.py',
+    'src/media/gist_hazard_media.py',
     'src/media/viirs_map_graphic_adapter.py',
     'src/state_schema.py',
     'src/two_bot/__init__.py',

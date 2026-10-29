@@ -16,6 +16,7 @@ from src.media.viirs_map_graphic_adapter import PLATFORMS as VIIRS_PRODUCTS, vii
 from src.two_bot.types import StoryBundle
 
 MAX_RESPONSE = 1024 * 1024
+MEDIA_TEMPERATURE = "gist_temperature_comparator_v1"
 SHA = re.compile(r"[a-f0-9]{64}")
 REQUEST_KEYS = {"draft_id", "expected_revision", "expected_policy_source_sha256", "expected_preview_runtime_sha256"}
 REVISION_KEYS = {"content_revision", "text_sha256", "evidence_sha256", "decision_revision"}
@@ -125,7 +126,7 @@ def build_preview(request, *, policy_sha, runtime_sha, read_state, budget, synth
                                               include_temperature=True)
         budget.remaining()
         if request.get("format") == "png":
-            from src.media.gist_temperature_media import prepare_media
+            from src.media.gist_media import prepare_media
             prepared = prepare_media(bundle, synthetic=synthetic)
             rendered = None
         else:
@@ -137,7 +138,24 @@ def build_preview(request, *, policy_sha, runtime_sha, read_state, budget, synth
                                          code="stale_preview") != retained_bundle):
             raise PreviewError("stale_preview")
         budget.remaining()
-        if request.get("format") == "png":
+        if request.get("format") == "png" and prepared["descriptor"]["kind"] != MEDIA_TEMPERATURE:
+            # New families: the bounded description sent to X and the expanded
+            # source description stay separate. Posting disclosure is display-only;
+            # approval and the sender recheck source time independently.
+            from src.media.gist_media import posting_window
+            descriptor = prepared["descriptor"]
+            result = {"schema_version": 4, "draft_id": request["draft_id"],
+                "revision_identity": deepcopy(request["expected_revision"]),
+                "policy_source_sha256": policy_sha, "preview_runtime_sha256": runtime_sha,
+                "media_kind": descriptor["kind"], "media_descriptor": descriptor,
+                "media_descriptor_sha256": fingerprint(descriptor),
+                "png_base64": base64.b64encode(prepared["png"]).decode("ascii"),
+                "png_sha256": descriptor["image"]["png_sha256"], "title": prepared["title"],
+                "delivery_text": prepared["delivery_text"], "expanded_description": prepared["full_text"],
+                "scope": prepared["scope"], "source": source, "source_context": context,
+                "posting_window": posting_window(bundle), "width": 1200, "height": 1500,
+                "publication_approved": False, "attachment": False}
+        elif request.get("format") == "png":
             descriptor = prepared["descriptor"]
             result = {"schema_version": 3, "draft_id": request["draft_id"],
                 "revision_identity": deepcopy(request["expected_revision"]),

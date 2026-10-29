@@ -49,6 +49,13 @@ export function temperaturePNGRequest(draft, manifest) {
   return request ? { ...request, format: "png" } : null
 }
 
+// Any reviewed Gist post-image family requests the PNG recipe; Python selects
+// and qualifies the family from the retained source, never from this request.
+export function mediaPNGRequest(draft, manifest) {
+  const request = graphicRequest(draft, manifest)
+  return request ? { ...request, format: "png" } : null
+}
+
 export const graphicRequestKey = request => request ? canonical(request) : "unavailable"
 
 // Products with a reviewed preview template. Suomi NPP, HMS and any mix stay held.
@@ -155,6 +162,101 @@ function pngBytes(base64) {
   return bytes
 }
 
+// Browser presentation guard paired with src/media/gist_hazard_media.py. Python
+// qualifies sources and renders; the dashboard route rechecks before any write.
+const HAZARD_FILES = ["src/media/gist_media.py", "src/media/gist_hazard_media.py", "src/media/fonts/DejaVuSansMono.ttf",
+  "src/media/evidence_graphic.py", "src/media/temperature_graphic_adapter.py"]
+const HAZARD_MEDIA = {
+  gist_pm25_forecast_v1: { template: "pm25_forecast_day", templateVersion: "p31-pm25-forecast-1",
+    adapterVersion: "p31-cams-pm25-1", derivation: "pm25_delivery_v1",
+    files: [...HAZARD_FILES, "src/media/air_quality_graphic_adapter.py", "src/data/air_quality_contract.py", "src/data/air_quality_evidence.py"] },
+  gist_modis_locator_v1: { template: "modis_thermal_detection_map", templateVersion: "p31-modis-locator-2-social",
+    adapterVersion: "p31-firms-modis-map-2", derivation: "modis_delivery_v1",
+    files: [...HAZARD_FILES, "src/media/fire_graphic_adapter.py", "src/media/fire_map_graphic_adapter.py",
+      "src/data/fire_source_contract.py", "src/data/fire_evidence.py", "src/media/maps/ne_110m_land_v4_1_0.json", "src/media/maps/manifest.json"] },
+  gist_viirs_locator_v1: { template: "viirs_thermal_detection_map", templateVersion: "p31-viirs-locator-1",
+    adapterVersion: "p31-firms-viirs-map-1", derivation: "viirs_delivery_v1",
+    files: [...HAZARD_FILES, "src/media/fire_graphic_adapter.py", "src/media/fire_map_graphic_adapter.py",
+      "src/media/viirs_map_graphic_adapter.py", "src/data/fire_source_contract.py", "src/data/fire_evidence.py",
+      "src/media/maps/ne_110m_land_v4_1_0.json", "src/media/maps/manifest.json"] },
+}
+export const GIST_HAZARD_MEDIA_KINDS = Object.freeze(Object.keys(HAZARD_MEDIA))
+export const GIST_POST_IMAGE_KINDS = Object.freeze(["gist_temperature_comparator_v1", ...GIST_HAZARD_MEDIA_KINDS])
+export const MAX_DELIVERY_DESCRIPTION = 1000
+
+// Full port of editorial/revisions.py fingerprint (typed canonical JSON).
+function typed(value) {
+  if (value === null) return ["null"]
+  if (typeof value === "boolean") return ["boolean", value]
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) throw new Error("invalid number")
+    const bytes = new Uint8Array(8)
+    new DataView(bytes.buffer).setFloat64(0, value === 0 ? 0 : value, false)
+    return ["number", Array.from(bytes).map(byte => byte.toString(16).padStart(2, "0")).join("")]
+  }
+  if (typeof value === "string") {
+    if (!value.isWellFormed()) throw new Error("invalid Unicode")
+    return ["string", value]
+  }
+  if (Array.isArray(value)) return ["array", value.map(typed)]
+  if (value && Object.getPrototypeOf(value) === Object.prototype) {
+    const keys = Object.keys(value).sort((a, b) => {
+      const x = encoder.encode(a), y = encoder.encode(b)
+      for (let i = 0; i < Math.min(x.length, y.length); i++) if (x[i] !== y[i]) return x[i] - y[i]
+      return x.length - y.length
+    })
+    return ["object", keys.map(key => [typed(key)[1], typed(value[key])])]
+  }
+  throw new Error("invalid JSON data")
+}
+export const typedFingerprint = value => digest(JSON.stringify(typed(value)))
+
+const hazardKeys = ["schema_version", "draft_id", "revision_identity", "policy_source_sha256", "preview_runtime_sha256",
+  "media_kind", "media_descriptor", "media_descriptor_sha256", "png_base64", "png_sha256", "title", "delivery_text",
+  "expanded_description", "scope", "source", "source_context", "posting_window", "width", "height", "publication_approved", "attachment"]
+
+function postingWindow(value) {
+  return exactKeys(value, ["status", "code", "reason", "checked_at"]) && utcTimestamp(value.checked_at)
+    && (value.status === "current" ? value.code === null && value.reason === null
+      : value.status === "unavailable" && typeof value.code === "string" && /^media_[a-z_]{1,60}$/.test(value.code)
+        && typeof value.reason === "string" && value.reason.length > 0 && value.reason.length <= 200)
+}
+
+async function validateHazardPNGResponse(value, request, manifest) {
+  const descriptor = value?.media_descriptor, family = HAZARD_MEDIA[value?.media_kind]
+  const template = family ? templates[family.template] : null
+  const r = descriptor?.renderer, d = descriptor?.description, image = descriptor?.image, files = manifest?.identity?.files
+  if (!family || !exactKeys(value, hazardKeys) || value.schema_version !== 4 || value.draft_id !== request.draft_id
+      || canonical(value.revision_identity) !== canonical(request.expected_revision)
+      || value.policy_source_sha256 !== request.expected_policy_source_sha256
+      || value.preview_runtime_sha256 !== request.expected_preview_runtime_sha256
+      || value.publication_approved !== false || value.attachment !== false
+      || value.width !== 1200 || value.height !== 1500 || value.source !== template.source
+      || !sourceContext(value, template) || !postingWindow(value.posting_window)
+      || ![value.title, value.scope].every(text => typeof text === "string" && text.length > 0 && text.length <= 1000)
+      || typeof value.delivery_text !== "string" || !value.delivery_text.isWellFormed()
+      || [...value.delivery_text].length > MAX_DELIVERY_DESCRIPTION || encoder.encode(value.delivery_text).length > MAX_DELIVERY_DESCRIPTION
+      || typeof value.expanded_description !== "string" || !value.expanded_description.isWellFormed()
+      || !exactKeys(descriptor, ["schema_version", "kind", "template", "template_version", "adapter_version", "synthetic", "source", "renderer", "image", "description"])
+      || descriptor.schema_version !== 1 || descriptor.kind !== value.media_kind || descriptor.template !== family.template
+      || descriptor.template_version !== family.templateVersion || descriptor.adapter_version !== family.adapterVersion
+      || descriptor.synthetic !== false || encoder.encode(JSON.stringify(descriptor)).length > 16384
+      || !exactKeys(r, ["version", "files", "pillow", "freetype", "zlib", "layout", "width", "height"])
+      || r.version !== "gist-hazard-png-1" || r.pillow !== "12.2.0" || r.layout !== "basic" || r.width !== 1200 || r.height !== 1500
+      || !exactKeys(r.files, family.files) || !family.files.every(path => isSHA(files?.[path]) && r.files[path] === files[path])
+      || !exactKeys(image, ["mime_type", "png_sha256", "byte_count", "width", "height", "mode"])
+      || image.png_sha256 !== value.png_sha256 || !isSHA(value.png_sha256)
+      || !exactKeys(d, ["derivation", "delivery_text", "delivery_sha256", "delivery_scalars", "delivery_bytes", "full_sha256", "full_bytes"])
+      || d.derivation !== family.derivation || d.delivery_text !== value.delivery_text
+      || d.delivery_scalars !== [...value.delivery_text].length || d.delivery_bytes !== encoder.encode(value.delivery_text).length
+      || d.full_bytes !== encoder.encode(value.expanded_description).length) throw new Error("invalid preview")
+  const bytes = pngBytes(value.png_base64)
+  if (bytes.length !== image.byte_count || await digestBytes(bytes) !== value.png_sha256
+      || await digest(value.delivery_text) !== d.delivery_sha256 || await digest(value.expanded_description) !== d.full_sha256
+      || await typedFingerprint(descriptor) !== value.media_descriptor_sha256) throw new Error("invalid preview")
+  return value
+}
+
 async function validatePNGResponse(value, request, manifest) {
   const descriptor = value?.media_descriptor, renderer = descriptor?.renderer, files = manifest?.identity?.files
   const template = templates.temperature_comparator
@@ -187,6 +289,7 @@ async function validatePNGResponse(value, request, manifest) {
 }
 
 export async function validateGraphicResponse(value, request, manifest) {
+  if (request?.format === "png" && value?.schema_version === 4) return validateHazardPNGResponse(value, request, manifest)
   if (request?.format === "png") return validatePNGResponse(value, request, manifest)
   const r = value?.binding?.renderer, files = manifest.identity.files
   const template = Object.hasOwn(templates, value?.binding?.template) ? templates[value.binding.template] : null
@@ -277,8 +380,9 @@ export function createGraphicPreviewController({ manifest, onChange, fetcher = g
         if (!response.ok) { onChange({ status: "error", message: errors[response.status] || unavailable }); return }
         const value = await validateGraphicResponse(await readBounded(response), request, manifest)
         if (!valid() || controller.signal.aborted) return
-        const image = value.schema_version === 3 ? pngBytes(value.png_base64) : value.svg_utf8
-        url = createURL(new Blob([image], { type: value.schema_version === 3 ? "image/png" : "image/svg+xml" }))
+        const png = value.schema_version === 3 || value.schema_version === 4
+        const image = png ? pngBytes(value.png_base64) : value.svg_utf8
+        url = createURL(new Blob([image], { type: png ? "image/png" : "image/svg+xml" }))
         onChange({ status: "ready", value, url })
       } catch {
         if (valid()) onChange({ status: "error", message: unavailable })

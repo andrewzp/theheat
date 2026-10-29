@@ -261,6 +261,21 @@ def post_approved(draft_or_text: dict | str, bot_state: BotState) -> str:
         draft["post_error"] = "Event already published or has unresolved delivery evidence"
         _touch_draft(draft)
         return "failed"
+    if "media_attachment" in snapshot:
+        # Deterministic work is preflight, not an external-send attempt. Retain
+        # the original expected snapshots above for the later conditional write.
+        # An interruption here must leave no phantom submitted intent.
+        try:
+            from src.media.gist_media import media_for_draft
+            if snapshot.get("hot10_rows"):
+                raise ValueError("Only one explicitly selected image is allowed")
+            media_png, alt_text = media_for_draft(snapshot)
+        except (ValueError, KeyError, TypeError, OSError, UnicodeError) as exc:
+            draft["publish_outcome"] = "not_sent"
+            draft["post_error"] = "Graphic needs a new preview and joint review: " + str(exc)[:200]
+            draft.pop("autoship_attempted", None)
+            _touch_draft(draft)
+            return "failed"
     identity = draft_identity(snapshot)
     row = {
         **identity,
@@ -296,20 +311,7 @@ def post_approved(draft_or_text: dict | str, bot_state: BotState) -> str:
         print(f"[post] Failed to durably record current publish intent for {event_id}, aborting")
         return "failed"
 
-    if "media_attachment" in snapshot:
-        try:
-            from src.media.gist_temperature_media import media_for_draft
-            if snapshot.get("hot10_rows"):
-                raise ValueError("Only one explicitly selected image is allowed")
-            media_png, alt_text = media_for_draft(snapshot)
-        except (ValueError, KeyError, TypeError, OSError, UnicodeError) as exc:
-            row["phase"] = "not_sent"
-            draft["publish_outcome"] = "not_sent"
-            draft["post_error"] = "Graphic needs a new preview and joint review: " + str(exc)[:200]
-            draft.pop("autoship_attempted", None)
-            _touch_draft(draft)
-            return "failed"
-    else:
+    if "media_attachment" not in snapshot:
         media_png, alt_text = _hot10_media_for_draft(snapshot)
     source_hold = _current_nws_source(snapshot, live=True)
     if source_hold:
@@ -327,6 +329,19 @@ def post_approved(draft_or_text: dict | str, bot_state: BotState) -> str:
         draft.pop("autoship_attempted", None)
         _touch_draft(draft)
         return "failed"
+    if "media_attachment" in snapshot:
+        # Source time can expire during rendering, storage and checks; recheck it
+        # last, immediately before the first upload, including temperature.
+        try:
+            from src.media.gist_media import recheck_before_upload
+            recheck_before_upload(snapshot)
+        except (ValueError, KeyError, TypeError) as exc:
+            row["phase"] = "not_sent"
+            draft["publish_outcome"] = "not_sent"
+            draft["post_error"] = "Graphic source is no longer current; nothing sent: " + str(exc)[:200]
+            draft.pop("autoship_attempted", None)
+            _touch_draft(draft)
+            return "failed"
     try:
         result = post_tweet(tweet_text, media_png=media_png, alt_text=alt_text)
     except Exception as exc:  # A lost response must never authorize a blind retry.

@@ -268,7 +268,7 @@ def review_is_current(draft: dict, *, policy=_CURRENT_POLICY) -> bool:
     binding = draft.get("review_binding")
     if media:
         try:
-            from src.media.gist_temperature_media import validate_descriptor
+            from src.media.gist_media import validate_descriptor
             validate_descriptor(draft["media_attachment"], _two_bot(draft)["bundle"])
             if not isinstance(binding, dict) or binding.get("kind") != "human_media" or binding.get("media_sha256") != fingerprint(draft["media_attachment"]):
                 return False
@@ -423,7 +423,7 @@ def record_human_review(draft: dict, *, at: str | None = None, policy=_CURRENT_P
 
 def record_joint_media_review(draft: dict, *, at: str | None = None, policy=_CURRENT_POLICY) -> dict:
     """Ordinary explicit manual joint review; never a scientific or model verdict."""
-    from src.media.gist_temperature_media import validate_descriptor
+    from src.media.gist_media import validate_descriptor
     validate_descriptor(draft["media_attachment"], _two_bot(draft)["bundle"])
     if draft.get("revision_conflicts"):
         raise ValueError("Resolve the conflicting revision before reviewing")

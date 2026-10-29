@@ -191,7 +191,8 @@ def test_rehashed_but_invalid_attachment_or_source_refuses_before_upload(draft_f
     state = state_for(draft)
     assert posting.post_approved(draft, state) == "failed"
     assert fake_transport.calls == []
-    assert state["publish_ledger"][draft["event_id"]]["phase"] == draft["publish_outcome"] == "not_sent"
+    assert state["publish_ledger"] == {} and draft["publish_outcome"] == "not_sent"
+    fake_transport.storage.write_state.assert_not_called()
     assert "new preview and joint review" in draft["post_error"]
 
 
@@ -253,7 +254,9 @@ def test_render_failure_is_proven_not_sent_without_erasing_old_unknown(draft_fac
     monkeypatch.setattr(media, "prepare_media", MagicMock(side_effect=OSError("invented missing font asset")))
     state = state_for(draft)
     assert posting.post_approved(draft, state) == "failed"
-    assert state["publish_ledger"][draft["event_id"]]["phase"] == "not_sent"
+    # Rendering is preflight: strengthen the old phantom-attempt expectation.
+    assert state["publish_ledger"] == {} and "last_publish_attempt_at" not in draft
+    fake_transport.storage.write_state.assert_not_called()
     assert fake_transport.calls == []
     # An older uncertain attempt fences publication before another media attempt.
     state = state_for(draft_factory())
@@ -261,7 +264,7 @@ def test_render_failure_is_proven_not_sent_without_erasing_old_unknown(draft_fac
     state["publish_ledger"][state["drafts"][0]["event_id"]] = deepcopy(old)
     assert posting.post_approved(state["drafts"][0], state) == "failed"
     assert state["publish_ledger"][state["drafts"][0]["event_id"]] == old
-    assert len(fake_transport.persisted) == 1
+    assert len(fake_transport.persisted) == 0
 
 
 def test_two_selected_images_refuse_without_hot10_fallback(draft_factory, fake_transport, monkeypatch):
@@ -272,7 +275,8 @@ def test_two_selected_images_refuse_without_hot10_fallback(draft_factory, fake_t
     state = state_for(draft)
     assert posting.post_approved(draft, state) == "failed"
     assert "Only one explicitly selected image" in draft["post_error"]
-    assert state["publish_ledger"][draft["event_id"]]["phase"] == "not_sent"
+    assert state["publish_ledger"] == {} and "last_publish_attempt_at" not in draft
+    fake_transport.storage.write_state.assert_not_called()
     assert fake_transport.calls == []
 
 
