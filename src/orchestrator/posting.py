@@ -33,15 +33,20 @@ _DEFAULT_MIN_TWEET_SPACING_MIN = 15
 def _current_nws_source(draft, *, live):
     # The supplied-warning seam has no implicit URL lookup. Without its owner's
     # independently current input this family stops before paid safety/transport.
+    from src.editorial.nhc_advisory_runtime import current_advisory_source
     from src.editorial.warning_runtime import current_warning_source
-    return current_warning_source(draft) or _retained_nws_source(draft, live=live)
+    # An NHC advisory needs this process's own owner: static before intent,
+    # a fresh fixed read at the live boundaries (manual entry, after intent).
+    return (current_warning_source(draft) or current_advisory_source(draft, live=live)
+            or _retained_nws_source(draft, live=live))
 
 
 def _hold_nws_draft(draft: dict, reason: str) -> None:
     revoke_approval(draft)
     draft["status"] = "pending"
     draft["approval_mode"] = "manual"
-    source = "Official warning" if draft.get("type") == "official_warning" else "NWS warning"
+    source = {"official_warning": "Official warning", "nhc_advisory": "NHC advisory"}.get(
+        draft.get("type"), "NWS warning")
     draft["post_error"] = f"{source} needs fresh source review: {reason}"
     _touch_draft(draft)
 
