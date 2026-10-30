@@ -22,6 +22,20 @@ FALSE_COMPARISONS = [
     "Luma's forecast dust peak is not a daily mean, but is 44 times the WHO guideline, with PM10 forecast at 90 µg/m³.",
     "Luma's forecast dust peak, with PM10 forecast at 90 µg/m³, is 2,000 µg/m³ and 44 times the WHO guideline.",
 ]
+SHARED_SUBJECT_COMPARISONS = [
+    "Dust and PM10 average 2,000 µg/m³, 44 times the WHO 24-hour guideline.",
+    "Dust and PM10 cross the WHO guideline.",
+    "Dust or PM10 average 2,000 µg/m³, 44 times the WHO 24-hour guideline.",
+    "Dust plus PM10 average 2,000 µg/m³, 44 times the WHO 24-hour guideline.",
+    "Dust with PM10 average 2,000 µg/m³, 44 times the WHO 24-hour guideline.",
+    "Dust as well as PM10 average 2,000 µg/m³, 44 times the WHO 24-hour guideline.",
+    "Dust along with PM10 average 2,000 µg/m³, 44 times the WHO 24-hour guideline.",
+    "Dust, PM10 average 2,000 µg/m³, 44 times the WHO 24-hour guideline.",
+    "Dust/PM10 average 2,000 µg/m³, 44 times the WHO 24-hour guideline.",
+    '"Dust" and PM10 average 2,000 µg/m³, 44 times the WHO 24-hour guideline.',
+    "'Dust', PM10 cross the WHO guideline.",
+    "Dust, PM2.5 and PM10 average 2,000 µg/m³, 44 times the WHO 24-hour guideline.",
+]
 CONTROLS = [
     "Luma's forecast dust peak is 2,000 µg/m³.",
     "Luma's dust is forecast to peak near 2,000 µg/m³ (a peak, not a daily mean).",
@@ -30,6 +44,7 @@ CONTROLS = [
     "Luma's forecast dust peak is 2,000 µg/m³. PM10's forecast daily mean is 90 µg/m³, twice the WHO guideline.",
     "PM10 crosses the guideline as dust reaches 2,000 µg/m³.",
     "Dust is forecast at 2,000 µg/m³ while PM10 is forecast to average 90 µg/m³, twice the WHO 24-hour guideline.",
+    "Dust is forecast at 2,000 µg/m³ and PM10 is forecast to average 90 µg/m³, twice the WHO 24-hour guideline.",
     "Luma's forecast dust peak is 2,000 µg/m³, with PM10 listed in the legend.",
 ]
 
@@ -55,6 +70,15 @@ def test_pm10_elsewhere_never_exempts_the_dust_peak_comparison(consumer, text):
     before = deepcopy(source.to_dict())
     assert any(code.startswith(CODE) for code in _failures(consumer, text, source))
     assert source.to_dict() == before  # Exact source/window, units and evidence stay bound.
+
+
+@pytest.mark.parametrize("consumer", ["guard", "local-rejection"])
+@pytest.mark.parametrize("text", SHARED_SUBJECT_COMPARISONS)
+def test_a_coordinated_dust_subject_retains_its_shared_comparison(consumer, text):
+    source = _source()
+    before = deepcopy(source.to_dict())
+    assert any(code.startswith(CODE) for code in _failures(consumer, text, source))
+    assert source.to_dict() == before
 
 
 @pytest.mark.parametrize("consumer", ["guard", "local-rejection"])

@@ -60,12 +60,15 @@ _PM10_COMPARISON_SPAN = re.compile(
     r"(?:the\s+)?who\s+(?:24 hour\s+)?(?:guideline|limit|standard)s?\b)?"
     r"|cross(?:es|ed)?\s+(?:the\s+)?(?:who\s+(?:24 hour\s+)?)?(?:guideline|limit|standard)s?\b)"
 )
+_SHARED_DUST_SUBJECT = re.compile(
+    rf"\bdust\b(?:[\s,/'\"“”«»&():\[\]]+|\b(?:and|or|plus|with|as well as|along with)\b|\b{_AQ}\b)*$"
+)
 
 
 def dust_comparison_failures(tweet: str, bundle) -> list[str]:
     """A dust story's peak is never a 24-hour mean or a WHO-period comparison.
 
-Only an explicit PM10 comparison span may carry the existing co-reported PM10
+Only an independent PM10 comparison span may carry the existing co-reported PM10
 anchor; incidental mentions do not exempt the rest of a dust clause. Ambiguous
 mixed comparisons hold. An explicit negation ("a peak, not a daily mean") is not a comparison.
 """
@@ -77,7 +80,11 @@ mixed comparisons hold. An explicit negation ("a peak, not a daily mean") is not
         scan = _NEGATED_PERIOD.sub(" ", clause)
         # Remove only the recognized PM10 metric/comparison, never its trailing
         # clause or a dust comparison before/after a parenthetical PM10 mention.
-        scan = _PM10_COMPARISON_SPAN.sub(" ", scan)
+        # A coordinated dust/PM10 subject shares the predicate and comparison;
+        # retain it. A preceding independent dust predicate does not match.
+        scan = _PM10_COMPARISON_SPAN.sub(
+            lambda match: match.group() if _SHARED_DUST_SUBJECT.search(match.string[:match.start()]) else " ", scan,
+        )
         if _PERIOD_COMPARISON.search(scan):
             return ["dust_peak_comparison: a forecast dust peak cannot be compared with a 24-hour mean, "
                     "WHO period or multiple; only supplied PM10 carries the PM10 anchor"]
