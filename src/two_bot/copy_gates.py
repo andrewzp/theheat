@@ -181,8 +181,7 @@ def _danger_support(term: str, source: str) -> tuple[bool, bool]:
         normalized = normalize(sentence)
         for match in re.finditer(r"\b" + re.escape(wanted) + r"\b", normalized):
             prefix, suffix = normalized[:match.start()], normalized[match.end():]
-            denied = bool(re.search(r"\b(?:no|not|never|without)\s+(?:[a-z]+\s+){0,2}$", prefix)
-                          and not re.search(r"\bnot\s+only\s*$", prefix))
+            denied = bool(re.search(r"\b(?:no|not|never|without)\s+$", prefix))
             denied = denied or bool(re.match(r"\s+(?:[a-z]+\s+){0,3}(?:not|never)\s+expected\b", suffix))
             negated |= denied
             supported |= not denied

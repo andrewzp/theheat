@@ -164,7 +164,8 @@ def test_arbitrary_metadata_or_negated_warning_never_provides_danger_support(evi
 
 
 @pytest.mark.parametrize("warning", ["Dangerous surf can occur without warning.",
-    "Strong surf is expected. No evacuations ordered."])
+    "Strong surf is expected. No evacuations ordered.",
+    "No relief from dangerous surf until Friday."])
 def test_unrelated_negation_does_not_kill_current_warning_paraphrases(warning):
     bundle = replace(_bundle(), raw_signal_dump={"warning_text": warning})
     assert copy_gates.copy_rejection("Mali faces dangerous surf, the service warns.", bundle) is None
