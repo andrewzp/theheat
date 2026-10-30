@@ -257,3 +257,4 @@ def test_every_thread_boundary_in_src_propagates_or_is_a_declared_unjoined_data_
         assert "submit_in_context(" in text and ".submit(" not in text.replace("submit_in_context(", "")
     for name in data_pools:
         assert "provider_call" not in (root / name).read_text()
+
