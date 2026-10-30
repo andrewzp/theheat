@@ -142,3 +142,31 @@ def offline_world(monkeypatch):
         return fires(3)
     monkeypatch.setattr(firms, "fetch_fires", fetch_fires)
     return SimpleNamespace(spies=Spies().install(monkeypatch), connects=connects, fetches=fetches)
+
+
+OTHER_ALERT_RUNNERS = (
+    "run_extreme_signals", "run_fire_footprint", "run_co2", "run_methane", "run_nws_alerts", "run_gdacs",
+    "run_usgs_quakes", "run_copernicus_ems", "_process_cyclone_source", "run_sea_ice", "run_drought", "run_enso",
+    "run_climate_indices", "run_ocean", "run_ocean_sst", "run_ocean_sst_anomaly", "run_air_quality", "run_coral_dhw",
+    "run_water_levels", "run_river_gauges", "run_ice_mass", "run_gpm_imerg", "run_nsidc_snow", "run_ozone_hole",
+    "run_reanalysis_anomaly", "run_newsworthiness", "run_synthesis",
+)
+
+
+def isolate_firms(monkeypatch) -> None:
+    """Only the real FIRMS runner contributes; every other runner reports nothing.
+
+    Used only where a claim is about the run status a generation hold produces on
+    its own, so unavailable offline sources cannot make that status partial.
+    """
+    import importlib
+    alerts = importlib.import_module("src.orchestrator.run_alerts")
+    monkeypatch.setattr(alerts.open_meteo, "load_cities", lambda: [])
+    monkeypatch.setattr(alerts, "cities_to_state_map", lambda cities: {})
+    for name in OTHER_ALERT_RUNNERS:
+        monkeypatch.setattr(alerts, name, lambda *args, **kwargs: None)
+    # src.main re-syncs its own compatibility globals into the split modules on
+    # every dispatch, so the same names are replaced there too.
+    main = importlib.import_module("src.main")
+    for name in OTHER_ALERT_RUNNERS:
+        monkeypatch.setattr(main, name, lambda *args, **kwargs: None, raising=False)

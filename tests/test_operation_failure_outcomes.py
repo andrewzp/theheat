@@ -14,7 +14,7 @@ import sys
 import pytest
 
 from src.two_bot import pipeline, retry
-from tests.operation_budget_helpers import fresh_state, offline_world
+from tests.operation_budget_helpers import fresh_state, isolate_firms, offline_world
 
 
 @pytest.fixture
@@ -115,3 +115,34 @@ def test_unknown_billing_stays_unknown(world, monkeypatch):
     state, report = cli(monkeypatch)
     budget = state["source_health"]["budget"]["runs"][-1]
     assert budget["status"] != "success" and budget.get("error_class") == "accounting_coverage"
+
+
+def _ranking_fault(world, monkeypatch):
+    monkeypatch.setattr("src.orchestrator.triage.select_survivors",
+                        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("invented ranking fault")))
+
+
+def _provider_missing(world, monkeypatch):
+    monkeypatch.delenv("GEMINI_API_KEY")
+    monkeypatch.setattr("src.voice.safety.GEMINI_API_KEY", "")
+
+
+def _billing(world, monkeypatch):
+    def drained(bundle, memory, **kwargs):
+        world.spies.calls.append(("writer", bundle.event_id))
+        raise retry.BudgetExhaustedError("writer: provider billing exhausted: invented")
+    monkeypatch.setattr(pipeline.writer, "write_tweet", drained)
+
+
+@pytest.mark.parametrize("fault,status,hold", [
+    (None, "success", None), (_ranking_fault, "partial_failure", "triage"),
+    (_provider_missing, "partial_failure", "generation"), (_billing, "partial_failure", "generation"),
+], ids=["healthy", "ranking-fault", "provider-access", "billing"])
+def test_a_generation_hold_alone_makes_an_otherwise_healthy_run_partial(world, monkeypatch, fault, status, hold):
+    isolate_firms(monkeypatch)  # Only FIRMS runs, successfully: no source failure decides the status.
+    if fault is not None:
+        fault(world, monkeypatch)
+    state, report = cli(monkeypatch)
+    assert [entry["status"] for entry in report["sources"] if entry["source"] == "firms"] == ["success"]
+    assert report["status"] == status
+    assert (hold is None) == (row(report, "triage") is None and row(report, "generation") is None)
