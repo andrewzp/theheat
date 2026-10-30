@@ -1,6 +1,6 @@
 {
   "identity": {
-    "archive_sha256": "e0e3a40fcdf733a64cff1e65368150d6b4e6955bb2d9dc3dc0e59fcbfb48347d",
+    "archive_sha256": "7624b53afa448d229bf6fdb38a08a3c3addf24a35d5762fad2bff479cacf180b",
     "deployment_files": {
       "api/graphic_preview.py": "f7521adcbd618f4b65b2a0de30ea62aaff4cdd36f2254e9af38bf68646d361ad",
       "api/graphic_reader_status.py": "5e9685d699625a4eea9d5be884b6e266939a0ad344a2997351ba79bd114407ba",
@@ -42,7 +42,7 @@
       "src/data/temperature_history.py": "c1369f662d76b2a788e49f30bdc00a57377f686e08bcefd0e958322e3ed33d84",
       "src/editorial/__init__.py": "ae88e85a4a7a2d49e32df9e41a7e424f8d61492db308742ece8f2fb6cac24896",
       "src/editorial/_util.py": "98efd5327d85052022b73cbee72931790a8457e7f133f0ff2bbd109cee5bfa05",
-      "src/editorial/approval.py": "2fd84d1b31dc81a4643d85a0d5e572f16c9e233fe0425e7f2eb80f7fc0b1e371",
+      "src/editorial/approval.py": "8e2d1e9d19511b6070d4b974993182b9114b930dbeae19142d2f84c2c078c290",
       "src/editorial/candidates.py": "80d50c488f44fd879c137751701a306cfae78eb376c3da33b9b7f3150cf9270d",
       "src/editorial/marine_evidence.py": "7183f93f1068d75856063cf061a1dea8751bd4dd98cc1f1f34488bcf39296f5c",
       "src/editorial/operator_claim_references.py": "06cf74fbcc05a158bcead06568b0f61fc6a2c756c60084b661d4659a9be7bba3",
@@ -91,12 +91,12 @@
       "src/two_bot/types.py": "36ed2e6475a655f4112012486795702159ed546c3040e8ef1874b7a0b02a9035"
     },
     "format": "saved-source-svg-preview-v2",
-    "policy_source_sha256": "25c805a8115d4fdc697ef5b1b3891034e56c1e63231847b2b45bd35a4331de85",
+    "policy_source_sha256": "78464ef7c3a3afc59a7fbce71696e5e187e7dea481f11703386fbb69891e60a1",
     "resource_sources": {
       "src/data/registry/country_codes.json": "data/country_codes.json",
       "src/data/registry/place_registry.json": "data/place_registry.json"
     },
     "schema_version": 1
   },
-  "runtime_sha256": "e4a50d882d2016222d9decbc845edf22c1083f8be1fb1e6664efc16cc7d23268"
+  "runtime_sha256": "42ff645934d7e60a6ad44e0e64930fb14817618c4e014cb66f390c58b37ae76d"
 }

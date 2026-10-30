@@ -1,3 +1,19 @@
+## 0.9.109.48
+
+- Add an opt-in, explicitly nominated NHC public-advisory workflow through the
+  ordinary writer, required checks, pending review and manual X sender. Keep
+  forecast claims attributed and preserve upstream expiry as unknown, with a
+  separate operator freshness deadline. Automatic publishing remains paused.
+- Add a one-candidate finite advisory trial and lossless pending-only import,
+  with no retry/refill, no implicit review or posting, exact source bindings and
+  durable uncertain-write protection. Read complete Gist files when inline
+  content is truncated and recheck freshness immediately before admission.
+- Display the saved advisory and its claim anchors in the Workbench; edits and
+  source changes require fresh review. Re-read current official products before
+  provider attempts, admission and delivery. Enforce the total source-read
+  deadline and retain known inert map-reference markup without changing claim
+  bytes or offsets. Reject contradictory summary times and unsupported markup.
+
 ## 0.9.109.47
 
 - Encode native post graphics with a pinned portable PNG profile so reviewed

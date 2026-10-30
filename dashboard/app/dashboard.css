@@ -801,6 +801,7 @@ h1 span { color: #666; font-weight: 400; font-size: 14px; margin-left: 8px; }
 .claim-facts dd { margin: 0; color: #eee; white-space: pre-wrap; }
 .forecast-details { border-top: 1px solid #383838; }
 .nws-warning-text { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.6; }
+.nhc-bulletin-text { margin: 12px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font: 13px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; }
 .nws-warning-evidence .forecast-fields dd { overflow-wrap: anywhere; }
 .forecast-details > p, .forecast-details > a { display: block; margin-top: 12px; }
 .forecast-series-list { margin-top: 16px; }

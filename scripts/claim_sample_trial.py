@@ -6,18 +6,24 @@ import re
 import subprocess
 
 
-def claim(env, api):
+# The approved one-shot trial workflows and their run titles; nothing else is claimable.
+WORKFLOWS = {"fresh-sample-trial.yml": "Fresh sample ", "nhc-advisory-trial.yml": "NHC advisory sample "}
+
+
+def claim(env, api, *, workflow="fresh-sample-trial.yml"):
+    if workflow not in WORKFLOWS:
+        raise ValueError("sample_trial_workflow_unsupported")
     identity = env["TRIAL_ID"]
     if not re.fullmatch(r"[a-f0-9]{32}", identity) or env.get("GITHUB_RUN_ATTEMPT") != "1":
         raise ValueError("sample_trial_identity_or_attempt_invalid")
     approved = env.get("APPROVED_COMMIT_SHA", "")
     if not re.fullmatch(r"[a-f0-9]{40}", approved) or env.get("GITHUB_SHA") != approved:
         raise ValueError("sample_trial_release_changed")
-    payload = api(f"repos/{env['GITHUB_REPOSITORY']}/actions/workflows/fresh-sample-trial.yml/runs?event=workflow_dispatch&per_page=100")
+    payload = api(f"repos/{env['GITHUB_REPOSITORY']}/actions/workflows/{workflow}/runs?event=workflow_dispatch&per_page=100")
     if payload["total_count"] > 100:
         raise ValueError("sample_trial_history_window_exceeded")
     matching = [row["id"] for row in payload["workflow_runs"]
-                if row.get("display_title") == "Fresh sample " + identity]
+                if row.get("display_title") == WORKFLOWS[workflow] + identity]
     if not matching or min(matching) != int(env["GITHUB_RUN_ID"]):
         raise ValueError("sample_trial_already_claimed_or_not_observed")
 
@@ -25,5 +31,6 @@ def claim(env, api):
 if __name__ == "__main__":
     from package_sample_trial import validate_recipient
     validate_recipient(Path(os.environ["RUNNER_TEMP"]), os.environ["RECIPIENT_CERTIFICATE"])
-    claim(os.environ, lambda path: json.loads(subprocess.check_output(["gh", "api", path], timeout=30)))
+    claim(os.environ, lambda path: json.loads(subprocess.check_output(["gh", "api", path], timeout=30)),
+          workflow=os.environ.get("TRIAL_WORKFLOW", "fresh-sample-trial.yml"))
     print("First execution of approved trial ID; reruns and duplicates refused.")
