@@ -28,11 +28,12 @@ thresholds are accepted station samples before the cutoff, not certified records
 from __future__ import annotations
 
 from contextlib import closing
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 import gzip
 import hashlib
 import json
 import os
+import re
 import signal
 import threading
 from pathlib import Path
@@ -129,7 +130,8 @@ class _FetchDeadline(BaseException):
 
 def fetch_archive(dest: Path, *, session: Any, max_bytes: int, deadline_seconds: float, max_retries: int,
                   url: str = ARCHIVE_URL, clock: Callable[[], float] = time.monotonic,
-                  now: Callable[[], str] = _utc_now, chunk_size: int = 1024**2) -> dict[str, Any]:
+                  now: Callable[[], str] = _utc_now, chunk_size: int = 1024**2,
+                  expected_bytes: int | None = None) -> dict[str, Any]:
     """Owner CLI absolute deadline, including delayed headers and partial chunks.
 
     This POSIX main-thread boundary owns its timer. Unsupported hosts/threads or
@@ -148,7 +150,8 @@ def fetch_archive(dest: Path, *, session: Any, max_bytes: int, deadline_seconds:
     signal.setitimer(signal.ITIMER_REAL, deadline_seconds)
     try:
         return _fetch_archive(dest, session=session, max_bytes=max_bytes, deadline_seconds=deadline_seconds,
-                              max_retries=max_retries, url=url, clock=clock, now=now, chunk_size=chunk_size)
+                              max_retries=max_retries, url=url, clock=clock, now=now, chunk_size=chunk_size,
+                              expected_bytes=expected_bytes)
     except _FetchDeadline:
         part = dest.with_name(dest.name + ".part")
         return deps.result("thresholds", "incomplete", reasons=["deadline"],
@@ -160,14 +163,32 @@ def fetch_archive(dest: Path, *, session: Any, max_bytes: int, deadline_seconds:
 
 def _fetch_archive(dest: Path, *, session: Any, max_bytes: int, deadline_seconds: float, max_retries: int,
                   url: str = ARCHIVE_URL, clock: Callable[[], float] = time.monotonic,
-                  now: Callable[[], str] = _utc_now, chunk_size: int = 1024**2) -> dict[str, Any]:
-    """Resumable bounded download into ``dest``; refuses redirects and never overwrites ``dest``."""
+                  now: Callable[[], str] = _utc_now, chunk_size: int = 1024**2,
+                  expected_bytes: int | None = None) -> dict[str, Any]:
+    """Resumable bounded download into ``dest``; refuses redirects and never overwrites ``dest``.
+
+    A resumed range carries ``If-Range`` with the first response's validator, so
+    a file that changed on the server restarts from zero instead of splicing two
+    versions. ``expected_bytes`` pins the exact planned size: a different total is
+    refused and the bytes are kept aside as ``.rejected``, never promoted.
+    """
     if not 1 <= max_bytes <= MAX_ARCHIVE_BYTES or not 1 <= deadline_seconds <= 24 * 3600 or not 0 <= max_retries <= 5:
+        raise RebuildError("threshold_fetch_limit_invalid")
+    if expected_bytes is not None and not 1 <= expected_bytes <= max_bytes:
         raise RebuildError("threshold_fetch_limit_invalid")
     if dest.exists():
         raise RebuildError("threshold_archive_exists")
     part = dest.with_name(dest.name + ".part")
+    validator_path = dest.with_name(dest.name + ".part.validator.json")
     started, attempts, metadata = clock(), 0, {}
+    entity: dict[str, Any] = {}  # validators of the entity the retained bytes came from
+    if part.exists() and validator_path.exists():
+        try:
+            entity = json.loads(validator_path.read_bytes()[:4096])
+        except ValueError:
+            entity = {}
+    elif part.exists():
+        part.unlink()  # bytes without a validator cannot be resumed safely
     while True:
         offset = part.stat().st_size if part.exists() else 0
         if offset > max_bytes:
@@ -177,6 +198,9 @@ def _fetch_archive(dest: Path, *, session: Any, max_bytes: int, deadline_seconds
                                counters={"bytes": offset, "attempts": attempts})
         attempts += 1
         headers = {"Range": f"bytes={offset}-"} if offset else {}
+        validator = entity.get("ETag") or entity.get("Last-Modified")
+        if offset and validator:
+            headers["If-Range"] = validator
         response = None
         try:
             response = session.get(url, headers=headers, stream=True, allow_redirects=False,
@@ -197,6 +221,9 @@ def _fetch_archive(dest: Path, *, session: Any, max_bytes: int, deadline_seconds
                 return deps.result("thresholds", "incomplete", reasons=["byte_limit"],
                                    counters={"bytes": offset, "attempts": attempts})
             metadata = {key: response.headers.get(key) for key in ("Last-Modified", "ETag")}
+            if response.status_code == 200:
+                entity = dict(metadata)
+                _atomic_bytes(validator_path, _canonical(entity))
             written = offset
             with part.open("ab") as handle:
                 for chunk in response.iter_content(chunk_size=chunk_size):
@@ -222,7 +249,13 @@ def _fetch_archive(dest: Path, *, session: Any, max_bytes: int, deadline_seconds
             if response is not None and hasattr(response, "close"):
                 response.close()
     sha, size = _sha_file(part)
+    if expected_bytes is not None and size != expected_bytes:
+        os.replace(part, dest.with_name(dest.name + ".rejected"))
+        validator_path.unlink(missing_ok=True)
+        return deps.result("thresholds", "product_invalid", reasons=["archive_size_differs_from_plan"],
+                           counters={"bytes": size, "attempts": attempts})
     os.replace(part, dest)
+    validator_path.unlink(missing_ok=True)
     receipt = {"url": url, "name": dest.name, "sha256": sha, "bytes": size, "retrieved_at": now(),
                "last_modified": metadata.get("Last-Modified"), "etag": metadata.get("ETag"), "attempts": attempts}
     _atomic_bytes(dest.with_name(dest.name + ".receipt.json"), _canonical(receipt))
@@ -250,7 +283,7 @@ def _plan_identity(plan: dict[str, Any]) -> str:
 
 def build_plan(*, stations: Path, inventory: Path, countries: Path, archive: Path, snapshot_date: str,
                partitions: int, active_year_cutoff: int | None = None,
-               archive_receipt: Path | None = None) -> dict[str, Any]:
+               archive_receipt: Path | None = None, source_version: dict[str, Any] | None = None) -> dict[str, Any]:
     try:
         snapshot = date.fromisoformat(snapshot_date)
     except (TypeError, ValueError):
@@ -292,6 +325,12 @@ def build_plan(*, stations: Path, inventory: Path, countries: Path, archive: Pat
                         "station_ids_sha256": hashlib.sha256("\n".join(chunk).encode()).hexdigest()}
                        for i, chunk in enumerate(chunks)],
     }
+    if source_version is not None:
+        # The pinned GHCN-Daily version the inputs were fetched under (ghcnd-version.txt).
+        plan["source_version"] = {k: source_version.get(k) for k in (
+            "version", "update_started_at", "reprocessed_version", "text_sha256")}
+        if snapshot > date.fromisoformat(str(source_version.get("update_started_at", ""))[:10] or snapshot_date):
+            raise RebuildError("threshold_snapshot_after_source_version")
     plan["plan_sha256"] = _plan_identity(plan)
     return plan
 
@@ -504,6 +543,7 @@ def assemble(plan: dict[str, Any], *, paths: dict[str, Path], work_dir: Path, ou
     _atomic_bytes(out_dir / "station_thresholds.version",
                   "".join(f"{key}={value}\n" for key, value in manifest.items()).encode("ascii"))
     build = {"schema": BUILD_SCHEMA, "plan_sha256": plan["plan_sha256"], "inputs": plan["inputs"],
+             "source_version": plan.get("source_version"),
              "archive_retrieval": plan["archive_retrieval"], "snapshot_date": plan["snapshot_date"],
              "comparison_before": plan["comparison_before"], "snapshot_date_basis": plan["snapshot_date_basis"],
              "active_year_cutoff": plan["active_year_cutoff"], "qc_policy": plan["qc_policy"],
@@ -681,5 +721,298 @@ def upload_plan(verification: dict[str, Any], *, asset: Path, manifest_path: Pat
     }
 
 
-__all__ = ["ARCHIVE_URL", "BUILD_SCHEMA", "PLAN_SCHEMA", "RebuildError", "assemble", "build_partitions",
+# ---------------------------------------------------------------------------
+# primary-source input resolution: a byte-pinned, versioned fetch plan
+# ---------------------------------------------------------------------------
+
+FETCH_PLAN_SCHEMA = "theheat.threshold-fetch-plan/v1"
+INPUTS_SCHEMA = "theheat.threshold-inputs/v1"
+INSTALL_SCHEMA = "theheat.threshold-install/v1"
+BASE_URL = "https://www.ncei.noaa.gov/pub/data/ghcn/daily/"
+INPUT_ASSETS = {"version": "ghcnd-version.txt", "countries": "ghcnd-countries.txt",
+                "stations": "ghcnd-stations.txt", "inventory": "ghcnd-inventory.txt",
+                "archive": "ghcnd_all.tar.gz"}
+TEXT_ROLES = ("version", "countries", "stations", "inventory")
+UPDATE_LAG_DAYS = 4  # scripts.threshold_artifacts.pending_diff_dates default lag
+_LISTING_ROW = re.compile(
+    r'<td><a href="(?P<name>[A-Za-z0-9_.-]+)">(?P=name)</a></td>\s*'
+    r'<td align="right">(?P<modified>\d{4}-\d{2}-\d{2} \d{2}:\d{2})</td>\s*'
+    r'<td align="right">(?P<bytes>\d{1,13})</td>')
+_VERSION = re.compile(r"current version of GHCN Daily is (?P<version>\d+\.\d+-(?:upd|por)-(?P<stamp>\d{10}))")
+_POR = re.compile(r"last fully reprocessed version: (?P<por>\d+\.\d+-por-\d{10})")
+
+
+def parse_listing(html: bytes) -> dict[str, dict[str, Any]]:
+    """NCEI directory index rows -> name: {listing_modified, bytes}. Listing time is display metadata only."""
+    try:
+        text = html.decode("utf-8")
+    except UnicodeDecodeError:
+        raise RebuildError("threshold_listing_unreadable") from None
+    rows: dict[str, dict[str, Any]] = {}
+    for match in _LISTING_ROW.finditer(text):
+        if match["name"] in rows:
+            raise RebuildError("threshold_listing_ambiguous")
+        rows[match["name"]] = {"listing_modified": match["modified"], "bytes": int(match["bytes"])}
+    return rows
+
+
+def parse_version(raw: bytes) -> dict[str, Any]:
+    """``ghcnd-version.txt`` -> the exact dataset version pin and its update start."""
+    try:
+        text = raw.decode("ascii")
+    except UnicodeDecodeError:
+        raise RebuildError("threshold_version_unreadable") from None
+    match = _VERSION.search(text)
+    if not match:
+        raise RebuildError("threshold_version_unrecognized")
+    stamp = match["stamp"]
+    try:
+        started = datetime(int(stamp[:4]), int(stamp[4:6]), int(stamp[6:8]), int(stamp[8:10]), tzinfo=timezone.utc)
+    except ValueError:
+        raise RebuildError("threshold_version_unrecognized") from None
+    por = _POR.search(text)
+    return {"version": match["version"], "update_started_at": started.isoformat().replace("+00:00", "Z"),
+            "reprocessed_version": por["por"] if por else None,
+            "text_sha256": hashlib.sha256(raw).hexdigest(), "text_bytes": len(raw)}
+
+
+def resolve_fetch_plan(listing: Any, version: Any, *, base_url: str = BASE_URL,
+                       lag_days: int = UPDATE_LAG_DAYS) -> dict[str, Any]:
+    """Pin every input's exact size and the dataset version from the primary NOAA index.
+
+    ``listing``/``version`` are ``bounded_http.Response`` objects (their bytes and
+    retrieval receipts). The suggested snapshot leaves the incremental updater's
+    publication lag before the version's update start, so late reports are not
+    frozen into the baseline and the weekly refresh can continue from it.
+    """
+    if not base_url.endswith("/"):
+        raise RebuildError("threshold_base_url_invalid")
+    rows = parse_listing(listing.body)
+    pin = parse_version(version.body)
+    assets = {}
+    for role, name in INPUT_ASSETS.items():
+        row = rows.get(name)
+        if row is None:
+            raise RebuildError("threshold_listing_asset_missing")
+        limit = MAX_ARCHIVE_BYTES if role == "archive" else MAX_TEXT_BYTES
+        if not 1 <= row["bytes"] <= limit:
+            raise RebuildError("threshold_listing_asset_size_invalid")
+        assets[role] = {"name": name, "url": base_url + name, **row}
+    if assets["version"]["bytes"] != pin["text_bytes"]:
+        raise RebuildError("threshold_version_changed_during_resolve")
+    started = date.fromisoformat(pin["update_started_at"][:10])
+    plan: dict[str, Any] = {
+        "schema": FETCH_PLAN_SCHEMA, "source_product": "noaa-ghcn-daily-v2", "base_url": base_url,
+        "source_version": pin, "assets": assets,
+        "resolved_from": {"listing": listing.receipt(), "version": version.receipt()},
+        "suggested_snapshot_date": (started - timedelta(days=lag_days)).isoformat(),
+        "snapshot_rule": f"version update start date minus the {lag_days}-day publication lag",
+        "limits": {"text_transfer_bytes": sum(assets[r]["bytes"] for r in TEXT_ROLES) + 64 * 1024 * 8,
+                   "archive_bytes": assets["archive"]["bytes"]},
+        "reporting_limit": REPORTING_LIMIT,
+    }
+    plan["plan_sha256"] = _plan_identity(plan)
+    return plan
+
+
+def resolve_inputs(transport: Any, *, base_url: str = BASE_URL) -> dict[str, Any]:
+    """Two bounded GETs: the directory index and the version file. No data asset is read."""
+    listing = transport.get(base_url)
+    version = transport.get(base_url + INPUT_ASSETS["version"])
+    return resolve_fetch_plan(listing, version, base_url=base_url)
+
+
+def _check_fetch_plan(plan: Any) -> dict[str, Any]:
+    if not isinstance(plan, dict) or plan.get("schema") != FETCH_PLAN_SCHEMA \
+            or plan.get("plan_sha256") != _plan_identity(plan):
+        raise RebuildError("threshold_fetch_plan_invalid_or_altered")
+    return plan
+
+
+def fetch_inputs(plan: dict[str, Any], dest: Path, *, transport: Any, archive_session: Any,
+                 archive_deadline_seconds: float, max_retries: int,
+                 now: Callable[[], str] = _utc_now) -> dict[str, Any]:
+    """Fetch exactly the planned bytes into a new inputs directory, then bind them in one manifest.
+
+    The version file is read first and again after the archive, and both reads
+    must equal the pinned version text, so an input set never mixes two
+    GHCN-Daily versions. Text inputs go through the
+    owned bounded transport and must match the planned size before they are
+    written. The archive uses the range-resumable owner fetch with ``If-Range``
+    and the exact planned size. Existing different bytes are never overwritten;
+    the inputs manifest lands last, so a partial directory is never "inputs".
+    """
+    _check_fetch_plan(plan)
+    dest.mkdir(parents=True, exist_ok=True)
+    manifest_path = dest / "inputs-manifest.json"
+    if manifest_path.exists():
+        raise RebuildError("threshold_inputs_exist")
+    receipts: dict[str, Any] = {}
+    for role in TEXT_ROLES:
+        asset = plan["assets"][role]
+        target = dest / asset["name"]
+        response = transport.get(asset["url"])
+        if len(response.body) != asset["bytes"]:
+            raise RebuildError("threshold_asset_changed_since_plan")
+        if role == "version" and hashlib.sha256(response.body).hexdigest() != plan["source_version"]["text_sha256"]:
+            raise RebuildError("threshold_version_changed_since_plan")
+        if target.exists() and target.read_bytes() != response.body:
+            raise RebuildError("threshold_input_exists_with_other_bytes")
+        _atomic_bytes(target, response.body)
+        receipts[role] = {**response.receipt(), "name": asset["name"], "retrieved_at": now()}
+    archive = plan["assets"]["archive"]
+    archive_path = dest / archive["name"]
+    if archive_path.exists():
+        sha, size = _sha_file(archive_path)
+        prior = json.loads((dest / (archive["name"] + ".receipt.json")).read_bytes()[:65536]) \
+            if (dest / (archive["name"] + ".receipt.json")).exists() else {}
+        if size != archive["bytes"] or prior.get("sha256") != sha:
+            raise RebuildError("threshold_input_exists_with_other_bytes")
+        outcome = deps.result("thresholds", "ready", source=prior)
+    else:
+        outcome = fetch_archive(archive_path, session=archive_session, max_bytes=archive["bytes"],
+                                expected_bytes=archive["bytes"], deadline_seconds=archive_deadline_seconds,
+                                max_retries=max_retries, url=archive["url"], now=now)
+    if outcome["status"] != "ready":
+        return deps.result("thresholds", outcome["status"], reasons=outcome["reasons"],
+                           source={"fetch_plan_sha256": plan["plan_sha256"], "text_inputs": sorted(receipts)},
+                           counters={**outcome.get("counters", {}), "transport": transport.snapshot()})
+    receipts["archive"] = {**outcome["source"], "name": archive["name"]}
+    # The archive is regenerated with each dataset update: re-read the version pin after it,
+    # so an input set whose archive may belong to a later version is never bound.
+    closing_version = transport.get(plan["assets"]["version"]["url"])
+    if hashlib.sha256(closing_version.body).hexdigest() != plan["source_version"]["text_sha256"]:
+        return deps.result("thresholds", "product_invalid", reasons=["version_changed_during_fetch"],
+                           source={"fetch_plan_sha256": plan["plan_sha256"]},
+                           counters={"transport": transport.snapshot()})
+    document = {"schema": INPUTS_SCHEMA, "fetch_plan_sha256": plan["plan_sha256"],
+                "source_product": plan["source_product"], "source_version": plan["source_version"],
+                "suggested_snapshot_date": plan["suggested_snapshot_date"],
+                "inputs": {role: {"name": r["name"], "sha256": r["sha256"], "bytes": r["bytes"],
+                                  "url": r.get("url"), "last_modified": r.get("last_modified"),
+                                  "etag": r.get("etag"), "retrieved_at": r.get("retrieved_at")}
+                           for role, r in receipts.items()},
+                "completed_at": now()}
+    _atomic_bytes(manifest_path, _canonical(document))
+    return deps.result("thresholds", "ready", source={"fetch_plan_sha256": plan["plan_sha256"],
+                                                     "source_version": plan["source_version"]["version"]},
+                       product={"inputs_manifest": manifest_path.name,
+                                "inputs": {role: document["inputs"][role]["sha256"] for role in document["inputs"]}},
+                       counters={"transport": transport.snapshot()})
+
+
+def verify_inputs(dest: Path) -> dict[str, Any]:
+    """Re-hash every bound input; any change since the fetch refuses the input set."""
+    path = dest / "inputs-manifest.json"
+    if not path.is_file():
+        raise RebuildError("threshold_inputs_manifest_missing")
+    document = json.loads(path.read_bytes()[:1024 * 1024])
+    if not isinstance(document, dict) or document.get("schema") != INPUTS_SCHEMA:
+        raise RebuildError("threshold_inputs_manifest_invalid")
+    for role, entry in document["inputs"].items():
+        limit = MAX_ARCHIVE_BYTES if role == "archive" else MAX_TEXT_BYTES
+        if _identity(dest / entry["name"], limit) != {"name": entry["name"], "sha256": entry["sha256"],
+                                                      "bytes": entry["bytes"]}:
+            raise RebuildError(f"threshold_{role}_changed_since_fetch")
+    return document
+
+
+def package(inputs_dir: Path, *, work_dir: Path, out_dir: Path, partitions: int, deadline_seconds: float,
+            snapshot_date: str | None = None, release_assets: Any = None, installed_manifest: Path,
+            repo: str = DEFAULT_REPO) -> dict[str, Any]:
+    """Offline: verified inputs -> plan -> all partitions -> assembled package -> verification -> upload plan.
+
+    Every step is the existing reviewed one and is resumable: an identical plan is
+    reused, finished partitions are skipped, an assembled package from the same
+    plan is verified rather than rebuilt. Nothing is uploaded or installed.
+    """
+    document = verify_inputs(inputs_dir)
+    names = {role: inputs_dir / entry["name"] for role, entry in document["inputs"].items()}
+    paths = {"stations": names["stations"], "inventory": names["inventory"], "countries": names["countries"],
+             "archive": names["archive"]}
+    work_dir.mkdir(parents=True, exist_ok=True)
+    receipt_path = inputs_dir / (document["inputs"]["archive"]["name"] + ".receipt.json")
+    plan = build_plan(stations=paths["stations"], inventory=paths["inventory"], countries=paths["countries"],
+                      archive=paths["archive"], snapshot_date=snapshot_date or document["suggested_snapshot_date"],
+                      partitions=partitions, archive_receipt=receipt_path if receipt_path.exists() else None,
+                      source_version=document["source_version"])
+    plan_path = work_dir / "plan.json"
+    if plan_path.exists() and json.loads(plan_path.read_bytes()).get("plan_sha256") != plan["plan_sha256"]:
+        raise RebuildError("threshold_plan_output_exists")
+    _atomic_bytes(plan_path, json.dumps(plan, sort_keys=True, indent=2).encode() + b"\n")
+    built = build_partitions(plan, paths=paths, work_dir=work_dir, deadline_seconds=deadline_seconds)
+    if built["status"] != "ready":
+        return deps.result("thresholds", built["status"], reasons=built["reasons"],
+                           source={"plan_sha256": plan["plan_sha256"]}, counters=built["counters"])
+    build_path = out_dir / "build-manifest.json"
+    if build_path.exists():
+        build = json.loads(build_path.read_bytes()[: 4 * 1024**2])
+        if build.get("plan_sha256") != plan["plan_sha256"]:
+            raise RebuildError("threshold_output_exists")
+    else:
+        build = assemble(plan, paths=paths, work_dir=work_dir, out_dir=out_dir)
+    asset = out_dir / build["asset"]["name"]
+    verification = verify_package(out_dir / "station_thresholds.sqlite", out_dir / "station_thresholds.version",
+                                  asset=asset, build_manifest=build_path, release_assets=release_assets)
+    if verification["status"] != "ready":
+        return verification
+    steps = upload_plan(verification, asset=asset, manifest_path=out_dir / "station_thresholds.version",
+                        installed_manifest=installed_manifest, repo=repo)
+    install = ["python", "scripts/build_station_thresholds.py", "install-manifest",
+               "--manifest", str(out_dir / "station_thresholds.version"), "--build-manifest", str(build_path),
+               "--release-assets", "<saved gh api release JSON after upload>", "--installed", str(installed_manifest)]
+    return deps.result("thresholds", "ready", source={"plan_sha256": plan["plan_sha256"],
+                                                     "source_version": document["source_version"]["version"]},
+                       product={"verification": verification["product"], "upload_plan": steps,
+                                "install_command": install, "asset": build["asset"],
+                                "snapshot_date": plan["snapshot_date"]},
+                       observed=int(verification["source_health"]["metrics"]["observed"]),
+                       promoted=int(verification["product"]["coverage"].get("active_with_thresholds", 0)))
+
+
+def install_manifest(new_manifest: Path, installed: Path, *, build_manifest: Path, release_assets: Any,
+                     now: Callable[[], str] = _utc_now) -> dict[str, Any]:
+    """Replace the installed manifest only after the replacement qualifies remotely.
+
+    The new manifest must be a verified V2 package manifest bound by its build
+    manifest, and the operator-saved release metadata must show that exact asset
+    uploaded with its digest. The old manifest is kept beside the installed one
+    first, so the previous good input is never lost before its replacement works.
+    """
+    from scripts import threshold_artifacts as artifacts
+
+    fields = artifacts.read_manifest(new_manifest)
+    if fields.get("format") != "sqlite-gzip":
+        raise RebuildError("threshold_install_requires_v2_manifest")
+    build = json.loads(build_manifest.read_bytes()[: 4 * 1024**2])
+    if build.get("schema") != BUILD_SCHEMA or build.get("manifest") != fields:
+        raise RebuildError("threshold_build_manifest_mismatch")
+    name, sha, size = artifacts._asset(fields)
+    disposition = _release_disposition(release_assets, name, sha, size)
+    if disposition.get("state") != "asset_present_verified":
+        raise RebuildError("threshold_install_requires_verified_remote_asset")
+    raw = new_manifest.read_bytes()
+    previous = None
+    if installed.exists():
+        old = installed.read_bytes()
+        if old == raw:
+            return {"schema": INSTALL_SCHEMA, "status": "already_installed", "manifest_sha256": _sha_file(installed)[0]}
+        keep = installed.with_name(f"{installed.name}.previous-{hashlib.sha256(old).hexdigest()[:16]}")
+        if not keep.exists():
+            _atomic_bytes(keep, old)
+        previous = {"retained_copy": str(keep), "sha256": hashlib.sha256(old).hexdigest()}
+    _atomic_bytes(installed, raw)
+    return {"schema": INSTALL_SCHEMA, "status": "installed", "installed": str(installed),
+            "manifest_sha256": hashlib.sha256(raw).hexdigest(), "asset": name, "release_disposition": disposition,
+            "previous": previous, "installed_at": now(),
+            "next": ["git add -f data/station_thresholds.version",
+                     "commit; the next bot run's `python -m scripts.threshold_artifacts ensure` downloads and "
+                     "verifies the asset, setting THEHEAT_GHCN_THRESHOLD_VERIFICATION=success"],
+            "rollback": None if previous is None else f"copy {previous['retained_copy']} -> {installed}",
+            "scientific_qualification": "not_established_by_artifact_integrity"}
+
+
+__all__ = ["ARCHIVE_URL", "BASE_URL", "BUILD_SCHEMA", "FETCH_PLAN_SCHEMA", "INPUTS_SCHEMA", "PLAN_SCHEMA",
+           "RebuildError", "assemble", "build_partitions", "fetch_inputs", "install_manifest", "package",
+           "parse_listing", "parse_version", "resolve_fetch_plan", "resolve_inputs", "verify_inputs",
            "build_plan", "fetch_archive", "partition_state", "upload_plan", "verify_package"]

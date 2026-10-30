@@ -22,7 +22,7 @@ def gz(text: str) -> bytes:
 
 
 def _head(status: int, headers: dict[str, str]) -> bytes:
-    reason = {200: "OK", 302: "Found", 404: "Not Found", 403: "Forbidden", 503: "Service Unavailable"}.get(status, "X")
+    reason = {200: "OK", 206: "Partial Content", 302: "Found", 404: "Not Found", 403: "Forbidden", 503: "Service Unavailable"}.get(status, "X")
     lines = [f"HTTP/1.1 {status} {reason}"] + [f"{k}: {v}" for k, v in headers.items()] + ["Connection: close", "", ""]
     return "\r\n".join(lines).encode("latin-1")
 
@@ -79,6 +79,28 @@ def drip(total: int, interval: float, *, declared: int | None = None) -> Action:
     return act
 
 
+def truncated(body: bytes, cut: int, etag: str) -> Action:
+    """Declares the full length, sends ``cut`` bytes, then closes (a dropped transfer)."""
+    def act(fixture, conn, path):
+        fixture.send(conn, path, _head(200, {"Content-Length": str(len(body)), "ETag": etag}) + body[:cut])
+    return act
+
+
+def ranged(body: bytes, etag: str) -> Action:
+    """Honours ``Range`` only when ``If-Range`` still names this exact entity."""
+    def act(fixture, conn, path):
+        wanted = fixture.current_headers.get("range", "")
+        if wanted.startswith("bytes=") and fixture.current_headers.get("if-range") == etag:
+            start = int(wanted[6:].split("-")[0])
+            part = body[start:]
+            head = _head(206, {"Content-Length": str(len(part)), "ETag": etag,
+                               "Content-Range": f"bytes {start}-{len(body) - 1}/{len(body)}"})
+            fixture.send(conn, path, head + part)
+            return
+        fixture.send(conn, path, _head(200, {"Content-Length": str(len(body)), "ETag": etag}) + body)
+    return act
+
+
 class _Handler(socketserver.BaseRequestHandler):
     def handle(self):
         fixture: Fixture = self.server.fixture  # type: ignore[attr-defined]
@@ -93,9 +115,13 @@ class _Handler(socketserver.BaseRequestHandler):
                 data += chunk
         except OSError:
             return
-        request_line = data.split(b"\r\n", 1)[0].decode("latin-1")
-        path = request_line.split(" ")[1]
-        fixture.dispatch(conn, path)
+        head = data.split(b"\r\n\r\n", 1)[0].decode("latin-1").split("\r\n")
+        path = head[0].split(" ")[1]
+        headers = {}
+        for line in head[1:]:
+            name, _, value = line.partition(":")
+            headers[name.strip().lower()] = value.strip()
+        fixture.dispatch(conn, path, headers)
 
 
 class _Server(socketserver.ThreadingTCPServer):
@@ -107,6 +133,8 @@ class Fixture:
     def __init__(self) -> None:
         self.routes: dict[str, list[Action]] = {}
         self.requests: list[tuple[float, str]] = []
+        self.request_headers: list[dict[str, str]] = []
+        self.current_headers: dict[str, str] = {}
         self.client_gone: list[tuple[float, str]] = []
         self.lock = threading.Lock()
         self.server = _Server(("127.0.0.1", 0), _Handler)
@@ -122,9 +150,11 @@ class Fixture:
     def route(self, path: str, *actions: Action) -> None:
         self.routes[path] = list(actions)
 
-    def dispatch(self, conn: socket.socket, path: str) -> None:
+    def dispatch(self, conn: socket.socket, path: str, headers: dict[str, str] | None = None) -> None:
         with self.lock:
             self.requests.append((time.monotonic(), path))
+            self.current_headers = dict(headers or {})
+            self.request_headers.append(self.current_headers)
             queue = self.routes.get(path)
             if not queue:
                 action = status(404)
