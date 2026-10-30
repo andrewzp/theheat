@@ -49,7 +49,7 @@ test("the history view states coverage as output geography, not what was missed"
   assert.match(markup, /Logged coverage: heat · Fictionland, Atlantis/)
   assert.match(markup, /not a measure of what was missed/)
   const none = renderToStaticMarkup(React.createElement(PostOutcomeHistory, { outcomes: postOutcomes(fixture(undefined), { now }) }))
-  assert.match(none, /No coverage log row matches this post's event/)
+  assert.match(none, /No coverage log row matches this post(?:'|&#x27;)s event/)
   const malformed = renderToStaticMarkup(React.createElement(PostOutcomeHistory, { outcomes: postOutcomes(fixture({ rows: [] }), { now }) }))
   assert.match(malformed, /Coverage class and region are unknown/)
 })
