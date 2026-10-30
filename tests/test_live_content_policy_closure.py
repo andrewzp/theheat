@@ -25,6 +25,16 @@ OWNERS = (
     "src/editorial/automatic_text.py",
     "dashboard/lib/automatic-text.js",
     "src/orchestrator/hot10.py",
+    "src/data/air_quality_current.py",
+    "src/editorial/delegated_media_review.py",
+    "src/commands/delivery_reconciliation.py",
+    "dashboard/lib/delivery-reconciliation.js",
+    "dashboard/app/api/delivery-reconciliation/route.js",
+    "src/commands/job_authority.py",
+    "src/commands/writer_fencing.py",
+    "src/commands/recovery_provenance.py",
+    "src/commands/import_plan.py",
+    "src/evaluation/file_boundary.py",
 )
 
 
