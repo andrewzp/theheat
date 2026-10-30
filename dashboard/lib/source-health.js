@@ -5,6 +5,7 @@ import { coverageRow, draftStatusCounts, sourceOutcome } from "./live-content-st
 import { sourceIncidents } from "./source-incidents.js"
 import { selectionTrace } from "./selection-trace.js"
 import { rainfallReadiness } from "./rainfall-readiness.js"
+import { gpmAccessHealth } from "./source-access.js"
 
 const HEALTH_METRIC_TOTALS = [
   "total_duration_ms",
@@ -451,6 +452,7 @@ export function buildSourceHealthPayload(state, { runsLimit = 20, asOf = new Dat
     source.coverage_row = latest ? coverageRow(latest) : null
     source.incidents = sourceIncidents(state?.run_history, source.source)
     source.rainfall_readiness = rainfallReadiness(state?.run_history, source.source, { asOf: clock })
+    source.access_health = source.source === "gpm_imerg" ? gpmAccessHealth(state, { asOf: clock }) : null
     source.source_contract = sourceContract(source.source)
     source.history_time = {
       ...sourceHistoryTime(timingRows.get(source.source), { asOf: clock }),

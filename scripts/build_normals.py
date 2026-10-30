@@ -6,8 +6,11 @@ name-only CSV (``city,month,avg_high_c``) is refused by the loader and is
 reported as such; its values are never relabelled.
 
   plan          deterministic universe/missing inputs/dependency; no network
-  acquire       finite, resumable Meteostat fetch into a new candidate directory
-                (every limit is explicit; requires the isolated dependency)
+  acquire       finite, resumable Meteostat point-normals fetch into a new
+                candidate directory over the owned bounded transport: physical
+                request cap (incl. retries/redirects), received-byte and
+                decompressed-byte caps, absolute deadline; SIGINT/SIGTERM cancel
+                and leave completed partitions resumable. Standard library only.
   admit         candidate manifest + loader acceptance
   install-plan  comparison with the installed file and a retained rollback copy
   check-deps    isolated dependency compatibility (requirements-acquisition.txt)
@@ -22,7 +25,9 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+import signal
 import sys
+import threading
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -57,6 +62,8 @@ def main(argv: list[str] | None = None, *, provider_factory=None) -> int:
     for name, kind in (("--max-requests", int), ("--max-bytes", int), ("--deadline-seconds", float),
                        ("--max-retries", int)):
         acquire.add_argument(name, type=kind, required=True)
+    acquire.add_argument("--max-decoded-bytes", type=int,
+                         help="decompressed-byte cap (default 8x --max-bytes, at most 256 MiB)")
     admit = sub.add_parser("admit")
     admit.add_argument("--candidate", type=Path, required=True)
     install = sub.add_parser("install-plan")
@@ -83,18 +90,25 @@ def main(argv: list[str] | None = None, *, provider_factory=None) -> int:
             return _emit(normals.plan_result(document), args.result)
         if args.command == "acquire":
             document = normals.validate_plan(json.loads(args.plan.read_text(encoding="utf-8")))
-            limits = normals.Limits(args.max_requests, args.max_bytes, args.deadline_seconds, args.max_retries)
+            limits = normals.Limits(args.max_requests, args.max_bytes, args.deadline_seconds, args.max_retries,
+                                    args.max_decoded_bytes)
             check = deps.check("normals")
             forced = deps.dependency_status(check)
             if provider_factory is None and forced:
                 return _emit(deps.result("normals", forced, dependency=check,
                                          source={"plan_sha256": document["plan_sha256"]}), args.result)
-            provider = (provider_factory or normals.MeteostatProvider)()
+            provider = (provider_factory or normals.meteostat_normals.MeteostatBulkProvider)()
+            cancel = threading.Event()
+            previous = _cancel_on_sigterm(cancel)
             try:
-                outcome = normals.acquire(document, args.out_dir, provider, limits, installed_path=args.installed)
+                outcome = normals.acquire(document, args.out_dir, provider, limits, installed_path=args.installed,
+                                          cancel=cancel)
             except KeyboardInterrupt:
                 print(json.dumps({"status": "incomplete", "reasons": ["interrupted"]}))
                 return 130
+            finally:
+                if previous is not None:
+                    signal.signal(signal.SIGTERM, previous)
             outcome["dependency"] = check
             return _emit(outcome, args.result)
         if args.command == "admit":
@@ -107,6 +121,13 @@ def main(argv: list[str] | None = None, *, provider_factory=None) -> int:
         label = str(error) if isinstance(error, deps.AcquisitionError) else "normals_input_unavailable"
         print(json.dumps({"status": "refused", "error": label}))
         return 2
+
+
+def _cancel_on_sigterm(cancel: threading.Event):
+    """SIGTERM sets the transport's cancellation; the run stops within one poll interval."""
+    if threading.current_thread() is not threading.main_thread():
+        return None
+    return signal.signal(signal.SIGTERM, lambda _signum, _frame: cancel.set())
 
 
 def _months(text: str) -> list[int]:

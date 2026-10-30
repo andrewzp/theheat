@@ -186,9 +186,10 @@ def test_gdacs_rss_unqualified_wind_category_and_landfall_cost_no_checks(text, r
     assert all(not model.mock_calls for model in calls)
 
 
+# Fact-first invented wording: a source-led opener is now a free copy-gate rejection.
 @pytest.mark.parametrize("text", [
-    "GDACS reports a Red cyclone alert for India.",
-    "GDACS reports a cyclone alert; landfall remains possible.",
+    "India faces a Red GDACS cyclone alert.",
+    "India is under a GDACS cyclone alert; landfall remains possible.",
 ])
 def test_source_qualified_rss_alert_still_requires_all_model_checks(text, monkeypatch, calls):
     monkeypatch.setattr(pipeline.writer, "write_tweet",
@@ -207,7 +208,7 @@ def test_independent_cyclone_advisory_numeric_wind_reaches_required_checks(sourc
         basin="Synthetic basin", advisory_number="3", issued_at="2026-09-30T12:00:00Z", wind_kt=120,
         public_advisory_url="https://example.org/synthetic-advisory")
     bundle = build_global_disaster_bundle(_cyclone_to_gdacs_event(advisory))
-    text = f"{source.upper()} reports winds of 120 knots in its cyclone advisory."
+    text = f"Synthetic cyclone winds reach 120 knots in the {source.upper()} advisory."
     monkeypatch.setattr(pipeline.writer, "write_tweet",
                         Mock(return_value=WriterResult(text, None, "number", None, None, "fixture")))
     draft = pipeline.generate_draft(bundle, _state_with_memory())

@@ -81,4 +81,97 @@ def prepare(state: dict, discrepancies: Any, *, reader_flags: list[dict] | None 
             "note": "No correction, deletion, reply or message is prepared or sent automatically."}
 
 
-__all__ = ["SCHEMA", "prepare"]
+# P15/P00d join: a retained affected-claim finding (src/data/temperature_history.py)
+# whose current source contradicts a confirmed post becomes a discrepancy input.
+# The statement is assembled only from the finding's retained fields; nothing is
+# fetched or inferred, and the historical timing limits travel as uncertainty.
+CONTRADICTION_REASONS = {
+    "current_source_qc_or_value_revision": "reported_value_c",
+    "current_archive_comparator_changed": "reported_previous_c",
+}
+_NUMBER = re.compile(r"(?<![\d.])-?\d+(?:\.\d+)?(?=\s?\u00b0?\s?[CF]\b)")
+
+
+def _sentences(text: str) -> list[str]:
+    return [part for part in re.split(r"(?<=[.!?])\s+|\n+", text) if part.strip()]
+
+
+def _quoted_claim(text: str, value: Any) -> str | None:
+    """The single delivered sentence stating ``value`` in °C or its °F form, else None."""
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        return None
+    wanted = {round(float(value), 1), round(float(value) * 9 / 5 + 32, 1), round(float(value) * 9 / 5 + 32)}
+    hits = [sentence for sentence in _sentences(text)
+            if any(round(float(m.group(0)), 1) in wanted for m in _NUMBER.finditer(sentence))]
+    return hits[0].strip() if len(hits) == 1 else None
+
+
+def _statement(finding: dict) -> str:
+    claim, details = finding.get("claim") or {}, finding.get("details") or {}
+    where = f"{claim.get('station_id')} {claim.get('valid_date')} {claim.get('element')}"
+    if finding.get("reason") == "current_source_qc_or_value_revision":
+        return (f"Current GHCN-Daily record for {where}: value {details.get('current_value_c')} C, "
+                f"QFLAG '{details.get('current_qflag') or ''}', source accepted {details.get('source_accepted')}; "
+                f"the post used {claim.get('reported_value_c')} C.")
+    return (f"Current accepted GHCN-Daily comparator for {where} before {details.get('comparison_before')}: "
+            f"{details.get('current_accepted_comparator_c')} C; the post used {details.get('retained_comparator_c')} C.")
+
+
+def _uncertainty(finding: dict) -> str:
+    details = finding.get("details") or {}
+    parts = ["A current source revision does not establish that the post was wrong when published."]
+    if not finding.get("publication_time_qc_known") or details.get("publication_time_flag_timing") == "unknown":
+        parts.append("Publication-time QC status is unknown; when the flag was added is not established.")
+    if details.get("historical_revision_timing") == "not_established":
+        parts.append("When the comparator changed is not established.")
+    return " ".join(parts)
+
+
+def source_findings(state: dict) -> dict:
+    """Discrepancy inputs from retained contradicting findings on confirmed posts."""
+    raw_history = state.get("temperature_history")
+    history: dict[str, Any] = raw_history if isinstance(raw_history, dict) else {}
+    posts = _confirmed(state)
+    discrepancies: list[dict] = []
+    review_only: list[dict] = []
+    for finding_id, finding in sorted(history.items()):
+        if not isinstance(finding, dict) or finding.get("kind") != "affected_claim":
+            continue
+        raw_claim = finding.get("claim")
+        claim: dict[str, Any] = raw_claim if isinstance(raw_claim, dict) else {}
+        tweet_id = str(claim.get("tweet_id") or "")
+        post = posts.get(tweet_id)
+        field = CONTRADICTION_REASONS.get(str(finding.get("reason")))
+        if post is None or field is None:
+            if tweet_id:
+                review_only.append({"finding_id": finding_id, "tweet_id": tweet_id, "reason": finding.get("reason"),
+                                    "status": "review_only_not_a_contradiction" if post else "no_confirmed_post"})
+            continue
+        if claim.get("text_sha256") not in (None, post.get("text_sha256")):
+            review_only.append({"finding_id": finding_id, "tweet_id": tweet_id, "reason": finding.get("reason"),
+                                "status": "claim_text_differs_from_delivered_text"})
+            continue
+        discrepancies.append({
+            "tweet_id": tweet_id, "kind": "value", "claim": _quoted_claim(post["text"], claim.get(field)),
+            "source_evidence": {"artifact_sha256": finding.get("source_revision"),
+                                "retrieved_at": finding.get("retrieved_at"), "statement": _statement(finding)},
+            "uncertainty": _uncertainty(finding), "source_finding_id": finding_id,
+        })
+    return {"discrepancies": discrepancies[:MAX_DISCREPANCIES], "review_only_findings": review_only,
+            "truncated": max(0, len(discrepancies) - MAX_DISCREPANCIES)}
+
+
+def prepare_from_state(state: dict, supplied: Any = None, *, reader_flags: list[dict] | None = None) -> dict:
+    """Supplied discrepancies plus retained source findings, then the unchanged rules."""
+    derived = source_findings(state)
+    rows = list(supplied or []) if isinstance(supplied, list) or supplied is None else supplied
+    if not isinstance(rows, list):
+        raise ValueError("discrepancy_count")
+    combined = (rows + derived["discrepancies"])[:MAX_DISCREPANCIES]
+    result = prepare(state, combined, reader_flags=reader_flags)
+    return {**result, "source_findings": {"derived": len(derived["discrepancies"]),
+                                          "review_only": derived["review_only_findings"],
+                                          "truncated": derived["truncated"] + max(0, len(rows) + len(derived["discrepancies"]) - MAX_DISCREPANCIES)}}
+
+
+__all__ = ["SCHEMA", "prepare", "prepare_from_state", "source_findings"]

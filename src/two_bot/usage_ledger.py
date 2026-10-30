@@ -191,7 +191,10 @@ def record_response(stage: str, response: Any, model: str, provider: str) -> Non
         values = {}
     try:
         try:
-            observation = observe_response(stage, response, model, provider)
+            # The dispatch's own operation/attempt join, captured in this context at send time.
+            from src.two_bot.call_inventory import take_dispatch_attribution
+            observation = observe_response(stage, response, model, provider,
+                                           attribution=take_dispatch_attribution(stage))
         except Exception:
             # Capture must not suppress the pre-existing aggregate or retry a call.
             observation = None

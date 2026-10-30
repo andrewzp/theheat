@@ -20,6 +20,12 @@ Neither is a database-wide backup or a draft-state migration; nothing is deleted
   retain_gist_media.py export --target /absolute/new-dir --manifest SHA256 --crw-packet SHA256
   retain_gist_media.py restore --source /absolute/export-dir
   retain_gist_media.py plan --state /absolute/private-state.json
+  retain_gist_media.py readback --manifest SHA256 --crw-packet SHA256
+
+readback is the cross-host acceptance read: through the read-only store of THIS host
+(the PostgreSQL adapter first proves the role holds exactly SELECT on the artifact
+table) it re-reads each named identity and verifies every hash and relation. It
+prints the store kind, counts and identities only: never a DSN, host, user or bytes.
 
 plan reads a saved state snapshot (an owner-only local file; nothing is fetched) and
 lists every retained media item its drafts need, why (unresolved delivery, current
@@ -82,6 +88,9 @@ def main(argv=None, environ=None):
     exp.add_argument("--crw-packet", action="append", default=[], help="CRW packet artifact SHA256 (repeatable)")
     commands.add_parser("restore").add_argument("--source", required=True)
     commands.add_parser("plan").add_argument("--state", required=True)
+    back = commands.add_parser("readback")
+    back.add_argument("--manifest", action="append", default=[])
+    back.add_argument("--crw-packet", action="append", default=[])
     args = parser.parse_args(argv)
     env = dict(os.environ if environ is None else environ)
     if args.store:  # One explicit local store for this operator command (both capabilities).
@@ -114,6 +123,21 @@ def main(argv=None, environ=None):
         elif args.command == "restore":
             from src.media import gist_media_export as portable
             result = portable.restore(store, args.source)
+        elif args.command == "readback":
+            from src.media import gist_crw_media as crw, gist_published_media as published
+            if not args.manifest and not args.crw_packet:
+                raise SystemExit("readback needs at least one --manifest or --crw-packet identity")
+            read_items: list[dict] = []
+            for sha in args.manifest:
+                manifest, original, png = published.read(store, sha)
+                read_items.append({"kind": "published", "manifest_sha256": sha, "product": manifest["product"],
+                              "original_bytes": len(original), "derivative_bytes": len(png), "verified": True})
+            for sha in args.crw_packet:
+                packet = crw.load_packet(store, sha)
+                read_items.append({"kind": "crw_packet", "packet_artifact_sha256": sha,
+                              "packet_bytes": len(gist_assets.encode_document(packet)), "verified": True})
+            result = {"capability": "reader", "store_kind": type(store).__name__, "items": read_items,
+                      "credentials_printed": False, "publication_approved": False}
         elif args.command == "plan":
             from src.media import gist_media_export as portable
             result = portable.plan(store, _json(private_bytes(args.state, 32 * 1024 * 1024)))

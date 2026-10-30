@@ -5,6 +5,7 @@ import { ForecastEvidence } from "./ForecastEvidence.js"
 import { NwsWarningEvidence } from "./NwsWarningEvidence.js"
 import { OfficialWarningEvidence } from "./OfficialWarningEvidence.js"
 import { NhcAdvisoryEvidence } from "./NhcAdvisoryEvidence.js"
+import { ReportStatementEvidence } from "./ReportStatementEvidence.js"
 import { EpisodeJoins } from "./EpisodeJoins.js"
 import { ClaimEvidence } from "./ClaimEvidence.js"
 import { OperatorClaimReferenceHistory, OperatorClaimReferences } from "./OperatorClaimReferences.js"
@@ -14,6 +15,7 @@ import { GraphicPreview } from "./GraphicPreview.js"
 import { DeliveredGraphics } from "./DeliveredGraphics.js"
 import { GIST_POST_IMAGE_KINDS } from "../../lib/graphic-preview.js"
 import { EditorMedia } from "./EditorMedia.js"
+import { CopyNotes } from "./CopyNotes.js"
 import RecoveredRecord, { recoveryLabel } from "./RecoveredRecord.js"
 import { formatDuration, timeAgo } from "../../lib/format.js"
 import { draftReviewControls, draftTextLength, manualReviewLabel, revisionKey } from "../../lib/draft-review-ui.js"
@@ -228,7 +230,7 @@ export function DraftWorkbench({
                     <textarea
                       ref={editor}
                       id={editorId}
-                      aria-describedby={`${editorId}-count`}
+                      aria-describedby={`${editorId}-count ${editorId}-copy`}
                       disabled={!!pendingCommand}
                       className="draft-edit-area"
                       value={editText}
@@ -241,11 +243,13 @@ export function DraftWorkbench({
                     <div id={`${editorId}-count`} className={`draft-chars ${draftTextLength(editText) > 280 ? "over" : ""}`}>
                       {draftTextLength(editText)}/280
                     </div>
+                    <CopyNotes id={`${editorId}-copy`} text={editText} live />
                   </>
                 ) : (
                   <>
                     <div className="draft-text">{selectedDraft.text}</div>
                     <div className="draft-chars">{draftTextLength(selectedDraft.text)}/280</div>
+                    <CopyNotes key={`copy:${selectedDraft.id}`} id={`${editorId}-copy`} text={selectedDraft.text} />
                   </>
                 )}
 
@@ -284,6 +288,7 @@ export function DraftWorkbench({
                 <NwsWarningEvidence key={"nws:" + reviewKey} draft={selectedDraft} />
                 <OfficialWarningEvidence key={"official-warning:" + reviewKey} draft={selectedDraft} />
                 <NhcAdvisoryEvidence key={"nhc-advisory:" + reviewKey} draft={selectedDraft} />
+                <ReportStatementEvidence key={"report-statements:" + reviewKey} draft={selectedDraft} />
                 {!selectedDraft.local_preview && <EpisodeJoins key={"episode:" + reviewKey} draft={selectedDraft} onChanged={refreshCandidates} />}
                 {recovery && !allows("edit") ? null : selectedDraft.local_preview
                   ? <EditorMedia key={`media:${reviewKey}`} draft={selectedDraft} editing={editingId === selectedDraft.id} updating={!!draftAction || !!pendingCommand} submitCommand={submitLocalCommand} />
@@ -508,6 +513,7 @@ export function DraftWorkbench({
                             </button>}
                           </div>
                           <div className="candidate-text">{c.text}</div>
+                          <CopyNotes compact text={c.text} id={`${editorId}-alt-${c.rank}-copy`} />
                           {c.score?.reasons?.length > 0 && (
                             <div className="candidate-meta">{c.score.reasons.join(" · ")}</div>
                           )}

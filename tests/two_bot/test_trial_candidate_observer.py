@@ -60,7 +60,8 @@ def test_real_agency_opener_rejection_retains_exact_selected_text_before_paid_ch
     assert packet["authority"] == "diagnostic_only" and packet["checks_complete"] is False
     assert packet["human_reviewed"] is packet["approved"] is False
     assert os.stat(tmp_path / "candidate-1-text-1.json").st_mode & 0o777 == 0o600
-    assert json.loads((tmp_path / "candidate-1.json").read_text())["checks"]["kill_stage"] == "safety"
+    # The free copy gate now names the agency opener before the free safety regex would.
+    assert json.loads((tmp_path / "candidate-1.json").read_text())["checks"]["kill_stage"] == "copy_gate"
     assert not stages[2].called and not stages[3].called
     assert result["drafts_returned"] == result["paid_dispatch_reservations"] == result["posts"] == 0
     assert text not in capsys.readouterr().out

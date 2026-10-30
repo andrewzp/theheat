@@ -72,6 +72,15 @@ export function SourcesView({ sources, stats, trace = null }) {
               {trace.not_fetched_sources?.length ? `. Not fetched last run: ${trace.not_fetched_sources.join(", ")}` : ""}
             </p>
           )}
+          {trace?.source_gaps?.length > 0 && (
+            <ul className="source-history-note" data-testid="source-gaps" aria-label="Source gaps in the latest run">
+              {trace.source_gaps.map(gap => (
+                <li key={gap.source} data-gap-state={gap.state}>
+                  <strong>{gap.source}</strong>: {gap.reason}{gap.detail ? ` — ${gap.detail}` : ""}. Next: {gap.next_action}
+                </li>
+              ))}
+            </ul>
+          )}
           <p className="source-history-note">
             Up to {stats?.runs_analyzed ?? 0} retained runs per source; dates describe collection, not measurement.
             {stats?.unhealthy_count > 0 && (
@@ -146,6 +155,13 @@ export function SourcesView({ sources, stats, trace = null }) {
               </ul>
             )}
             <RainfallReadiness source={s.source} readiness={s.rainfall_readiness} />
+            {s.access_health && (
+              <div className="source-outcome" data-access-stage={s.access_health.stage} data-testid={`${s.source}-access-health`}>
+                <strong>Access and last good data</strong> — {s.access_health.public_text}
+                {s.access_health.backoff ? ` ${s.access_health.backoff.consecutive_refusals} consecutive refusal(s); no request inside the backoff.` : ""}
+                {" "}An empty or model-served feed is not current coverage.
+              </div>
+            )}
             {s.last_error && !s.served_via && (
               <div
                 className={`source-diagnostic ${sourceDiagnosticClass(s.health)}`}

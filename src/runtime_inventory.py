@@ -108,6 +108,8 @@ def collect_runtime_inventory(mode: str, *, now: datetime | None = None, bot_sta
             "hazard_episodes_enabled": os.environ.get("THEHEAT_HAZARD_EPISODES") == "1",
             "portfolio_selection_enabled": os.environ.get("THEHEAT_PORTFOLIO_SELECTION") == "1",
             "rainfall_regional_scan_enabled": os.environ.get("THEHEAT_RAINFALL_REGIONAL_SCAN") == "1",
+            "hms_previous_day_file_enabled": os.environ.get("THEHEAT_HMS_PREVIOUS_DAY_FILE") == "1",
+            "earthdata_refusal_backoff_enabled": os.environ.get("THEHEAT_EARTHDATA_REFUSAL_BACKOFF") == "1",
         },
         "credentials_present": {
             "anthropic": bool(os.environ.get("ANTHROPIC_API_KEY")),

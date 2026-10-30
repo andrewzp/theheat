@@ -6,8 +6,9 @@ a verified ``theheat_media_export_v1`` directory), protected target records (no
 delivered, unknown, submitted or legacy attempt and no posted draft may be lost
 or changed), active jobs (W13 ``job_recovery.inspect_jobs``) and receipt
 references (one post ID binds one event). Execution re-verifies the plan, then
-only appends: the backup becomes a retained domain snapshot through the W14.2
-importer and media closures go through the insert-only export restore. Current
+only appends: the backup becomes a retained ``origin='restore'`` domain snapshot
+through the W14.2 importer (idempotent per restore_id) and media closures go
+through the insert-only export restore. Current
 state, the backup file and the export directory are never replaced, overwritten
 or deleted, so rollback is verification that the prior current state is still
 exactly the state recorded in the plan.
@@ -135,7 +136,8 @@ def plan(authority: Any, backup: bytes, *, expected_sha256: str, restore_id: str
         refusals.extend({"code": "receipt_reference_conflict_with_target", "tweet_id": tweet}
                         for tweet in _receipt_conflicts(merged) if tweet not in _receipt_conflicts(backup_state))
     refusals.extend({"code": "active_job_present", "job": job} for job in _active_jobs(authority, now))
-    importer = import_plan.plan([(restore_id, backup)], authority=authority) if backup_state is not None else None
+    importer = (import_plan.plan([(restore_id, backup)], authority=authority, origin="restore")
+                if backup_state is not None else None)
     if importer is not None and not importer["executable"]:
         refusals.append({"code": "import_plan_not_executable"})
     return {
@@ -143,7 +145,7 @@ def plan(authority: Any, backup: bytes, *, expected_sha256: str, restore_id: str
         "target": {"version": version, "state_sha256": _state_sha(current), "environment": authority.environment},
         "media": media, "refusals": refusals, "executable": not refusals, "import_plan": importer,
         "steps": [] if refusals else [
-            {"step": "append_domain_snapshot", "import_id": restore_id, "replaces_current_state": False},
+            {"step": "append_domain_snapshot", "origin": "restore", "import_id": restore_id, "replaces_current_state": False},
             *([{"step": "insert_only_media_restore", "items": media["referenced"]}] if media["referenced"] else [])],
         "rollback": {"mode": "verify_prior_state_unchanged", "directory_replacement": False, "overwrite": False,
                      "prior_version": version, "prior_state_sha256": _state_sha(current)},

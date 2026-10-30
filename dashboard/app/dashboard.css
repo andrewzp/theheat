@@ -356,6 +356,15 @@ h1 span { color: #666; font-weight: 400; font-size: 14px; margin-left: 8px; }
 .draft-text { font-size: 15px; line-height: 1.5; color: #fff; margin-bottom: 10px; overflow-wrap: anywhere; }
 .draft-chars { font-size: 11px; color: #666; margin-bottom: 10px; }
 .draft-chars.over { color: #f87171; }
+.copy-notes { font-size: 13px; line-height: 1.45; color: #bbb; margin-bottom: 10px; overflow-wrap: anywhere; }
+.copy-notes ul { margin: 4px 0 0; padding-left: 18px; }
+.copy-notes li { margin-bottom: 4px; }
+.copy-notes-title { color: #fbbf24; margin: 0; }
+.copy-notes-empty { color: #777; margin: 0; }
+.copy-notes-excerpt { color: #ddd; }
+.supp-stage--copy-gate    { color: #fbbf24; border-color: #6b5a00; }
+.graphic-agreement { font-size: 13px; line-height: 1.45; color: #bbb; overflow-wrap: anywhere; }
+.graphic-agreement[data-status="unmatched"] { color: #fbbf24; }
 .draft-actions { display: flex; gap: 8px; }
 .draft-edit-area {
   width: 100%; background: #111; border: 1px solid #333; border-radius: 4px;

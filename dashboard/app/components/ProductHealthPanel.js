@@ -48,7 +48,7 @@ export function RecoveredPublished({ records }) {
     rows.map(record => h(RecoveredRecord, { key: record.draft_id ?? record.event_id, record })))
 }
 
-export function ProductHealthPanel({ health, config, deployment, stale = false, graphics = null, recovered = null }) {
+export function ProductHealthPanel({ health, config, deployment, codeRevision = null, stale = false, graphics = null, recovered = null }) {
   if (!health) return h("section", { className: "card full runtime-panel", "aria-label": "Operating status" },
     h("h2", null, "Operating status"),
     h("p", { className: "runtime-note" }, "Operating evidence is unavailable. Missing data does not mean the system is healthy."))
@@ -64,6 +64,9 @@ export function ProductHealthPanel({ health, config, deployment, stale = false, 
       : flags.automatic_publication_enabled === true ? "Automatic publication was enabled in the last bot report. Approvals must match its release epoch."
         : "Automatic publication state is unverified; scheduling is unavailable until the bot reports its release policy."),
     config?.report_kind === "configuration_only" ? h("p", { className: "runtime-note" }, "Configuration refreshed only. This did not collect stories, write drafts or verify provider access.") : null,
+    codeRevision ? h("p", { className: "runtime-note", "data-code-revision": codeRevision.status },
+      `Code revision · ${label(codeRevision.status)}: ${codeRevision.reason}`,
+      codeRevision.deployed_revision_pipeline_run?.at ? ` Last pipeline run on it: ${codeRevision.deployed_revision_pipeline_run.at}.` : "") : null,
     h("dl", { className: "runtime-milestones" },
       h(Milestone, { title: "Last nonempty source run", value: health.milestones?.source_observed }),
       h(Milestone, { title: "Last saved draft", value: health.milestones?.draft_created }),
@@ -75,7 +78,7 @@ export function ProductHealthPanel({ health, config, deployment, stale = false, 
         h("p", null, `${queue.waiting_count ?? "Unknown"} waiting · ${queue.unresolved_publish_count ?? "Unknown"} unresolved deliveries`),
         h("p", { className: "runtime-note" }, queue.oldest_waiting_at
           ? `Oldest waiting draft: ${age(queue.oldest_waiting_age_hours)}. Age alone never authorizes posting.`
-          : queue.waiting_count === 0 ? "No waiting drafts in retained state." : "Waiting draft age is unknown."),
+          : queue.waiting_count === 0 ? "No waiting drafts in retained state. An empty queue does not show that nothing worth covering happened worldwide." : "Waiting draft age is unknown."),
         queue.unknown_age_count > 0 ? h("p", { className: "runtime-note" }, `${queue.unknown_age_count} waiting drafts have unknown ages.`) : null),
       h("div", null,
         h("h3", null, `Writing pipeline · ${label(writer.status)}`),

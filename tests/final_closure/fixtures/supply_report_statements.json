@@ -1,0 +1,117 @@
+{
+ "draft": {
+  "event_id": "report_invented_ficta",
+  "id": "draft_invented_report",
+  "review_context": {
+   "two_bot": {
+    "bundle": {
+     "event_id": "report_invented_ficta",
+     "human_impact": [
+      {
+       "as_of": "2026-10-28",
+       "attribution": "Ficta Civil Protection",
+       "claim": "120 households were evacuated",
+       "claim_id": "c1",
+       "evidence_class": "attributed_report_statement",
+       "original_language": "en",
+       "report_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+       "retained_text_sha256": "073bd1493d687f52c173f58c1a7f63bb7c4fa4a464074554cc472b57cd6cf32c",
+       "retrieval_status": "full_text_retained",
+       "source_name": "Ficta Daily (invented)",
+       "target_bundle_sha256": "58301f66d2159a9eaa76f84dd2d88285c0fae57f4af41ace98d5a5ca323af287",
+       "translation": {
+        "independent_confirmation": false,
+        "original_language": "en",
+        "original_text": "120 households were evacuated",
+        "state": "source_language",
+        "translated_text": null,
+        "translation_identity": null,
+        "unresolved": []
+       },
+       "url": "https://example.invalid/ficta/flood",
+       "value": "120 households were evacuated"
+      },
+      {
+       "as_of": "2026-10-28",
+       "attribution": "Ficta municipality",
+       "claim": "Roads remain closed",
+       "claim_id": "c2",
+       "evidence_class": "attributed_report_statement",
+       "original_language": "es",
+       "report_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+       "retained_text_sha256": "073bd1493d687f52c173f58c1a7f63bb7c4fa4a464074554cc472b57cd6cf32c",
+       "retrieval_status": "full_text_retained",
+       "source_name": "Ficta Daily (invented)",
+       "target_bundle_sha256": "58301f66d2159a9eaa76f84dd2d88285c0fae57f4af41ace98d5a5ca323af287",
+       "translation": {
+        "independent_confirmation": false,
+        "original_language": "es",
+        "original_text": "Las carreteras siguen cerradas",
+        "state": "translation_human_reviewed",
+        "translated_text": "Roads remain closed",
+        "translation_identity": "editor-note-invented-7",
+        "unresolved": []
+       },
+       "url": "https://example.invalid/ficta/flood",
+       "value": "Las carreteras siguen cerradas"
+      }
+     ],
+     "signal_kind": "global_flood"
+    },
+    "cited_impact": true,
+    "human_impact": [
+     {
+      "as_of": "2026-10-28",
+      "attribution": "Ficta Civil Protection",
+      "claim": "120 households were evacuated",
+      "claim_id": "c1",
+      "evidence_class": "attributed_report_statement",
+      "original_language": "en",
+      "report_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "retained_text_sha256": "073bd1493d687f52c173f58c1a7f63bb7c4fa4a464074554cc472b57cd6cf32c",
+      "retrieval_status": "full_text_retained",
+      "source_name": "Ficta Daily (invented)",
+      "target_bundle_sha256": "58301f66d2159a9eaa76f84dd2d88285c0fae57f4af41ace98d5a5ca323af287",
+      "translation": {
+       "independent_confirmation": false,
+       "original_language": "en",
+       "original_text": "120 households were evacuated",
+       "state": "source_language",
+       "translated_text": null,
+       "translation_identity": null,
+       "unresolved": []
+      },
+      "url": "https://example.invalid/ficta/flood",
+      "value": "120 households were evacuated"
+     },
+     {
+      "as_of": "2026-10-28",
+      "attribution": "Ficta municipality",
+      "claim": "Roads remain closed",
+      "claim_id": "c2",
+      "evidence_class": "attributed_report_statement",
+      "original_language": "es",
+      "report_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "retained_text_sha256": "073bd1493d687f52c173f58c1a7f63bb7c4fa4a464074554cc472b57cd6cf32c",
+      "retrieval_status": "full_text_retained",
+      "source_name": "Ficta Daily (invented)",
+      "target_bundle_sha256": "58301f66d2159a9eaa76f84dd2d88285c0fae57f4af41ace98d5a5ca323af287",
+      "translation": {
+       "independent_confirmation": false,
+       "original_language": "es",
+       "original_text": "Las carreteras siguen cerradas",
+       "state": "translation_human_reviewed",
+       "translated_text": "Roads remain closed",
+       "translation_identity": "editor-note-invented-7",
+       "unresolved": []
+      },
+      "url": "https://example.invalid/ficta/flood",
+      "value": "Las carreteras siguen cerradas"
+     }
+    ]
+   }
+  },
+  "type": "global_flood"
+ },
+ "schema": "theheat.final-closure.supply-report-statements/v1"
+}

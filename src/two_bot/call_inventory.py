@@ -18,17 +18,38 @@ reservation proven unstarted may be released.
 reserve-before-egress semantics (used by news discovery). It is process-local:
 nothing here is a cross-process lock, an invoice ceiling or a hard financial
 cap. Gist state accounting is not transactional and is never labelled as one.
+
+Thread/task boundaries: joins live in ContextVars, which a new worker thread
+does not inherit. ``submit_in_context`` (and ``in_copied_context``) give each
+submitted callable its own copy of the submitting context, so a worker's
+physical calls join the same operation/attempt and see the same finite trial.
+A copy never revives a closed join: a call made after its operation/attempt
+closed (a timed-out worker that kept running) adds no row, is counted as
+``late_after_close`` on that join and on the process-wide unjoined counters,
+and stays spent. A join=True call with no operation at all is counted as
+``no_operation``. Neither is ever attributed by inference.
+
+Each dispatch also leaves a bounded, content-free attribution in its own
+context (``take_dispatch_attribution``) for the response's usage observation:
+operation code/path, attempt join id and the attempt's event id when the
+candidate key carries one. Absent joins stay explicitly ``unjoined``.
 """
 
 from __future__ import annotations
 
 from contextlib import contextmanager
+import contextvars
 from contextvars import ContextVar
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import hashlib
 import os
+import re
 import threading
-from typing import Any, Iterator, Mapping
+from typing import Any, Callable, Iterator, Mapping, TypeVar
+
+from src.two_bot.usage_observations import ATTRIBUTION_STATUSES, CONTRACT
+
+_T = TypeVar("_T")
 
 SPEND_CLASSES = ("discovery", "selection", "acquisition", "platform", "hosting", "maintenance", "evaluation")
 PRICING = ("estimate_partial", "unknown")
@@ -40,6 +61,37 @@ MAX_OPERATION_ROWS = 8
 
 class UndeclaredCallError(RuntimeError):
     """A physical call stage without a declaration; refused before egress."""
+
+
+class OperationCancelled(RuntimeError):
+    """The work's deadline passed; refused before egress, never counted as a call."""
+
+    def __init__(self, reason: str):
+        super().__init__(f"operation_cancelled:{reason}")
+        self.reason = reason
+
+
+class CancelToken:
+    """Cooperative cancellation for one unit of worker work (e.g. a timed-out source runner).
+
+    A Python thread cannot be killed safely; once cancelled, every later
+    ``consume`` in that work's context refuses before egress, so a worker that
+    outlives its deadline buys no further provider/data/platform/hosting call.
+    A request already in flight keeps its existing (unknown/spent) accounting.
+    """
+
+    def __init__(self, scope: str):
+        self.scope = scope
+        self.reason: str | None = None
+
+    @property
+    def cancelled(self) -> bool:
+        return self.reason is not None
+
+    def cancel(self, reason: str) -> None:
+        with _LOCK:
+            if self.reason is None:
+                self.reason = reason
 
 
 class BackgroundLaneDisabled(RuntimeError):
@@ -188,6 +240,13 @@ PATH_CEILINGS: dict[str, tuple[str, ...]] = {
 
 _LOCK = threading.Lock()
 _RUNTIME_COUNTS: dict[str, int] = {}
+# Physical calls that reached ``consume(join=True)`` without a live operation
+# join, by (stage, reason). Process-wide; visible in ``inventory()``.
+UNJOINED_REASONS = ("no_operation", "late_after_close")
+_UNJOINED: dict[tuple[str, str], int] = {}
+_CANCELLED: dict[str, int] = {}
+# Usage-observation attribution: shape owned by src.two_bot.usage_observations.
+_EVENT_ID = re.compile(CONTRACT["identifier_pattern"])
 
 
 def declaration(stage: str) -> CallDeclaration:
@@ -239,9 +298,19 @@ class _Join:
     rows: list
     overflow: int = 0
     closed: bool = False
+    event_id: str | None = None
+    late_after_close: int = 0
+    late_by_stage: dict = field(default_factory=dict)
+    _published: list = field(default_factory=list)
 
     def add(self, row: dict) -> dict | None:
+        """Called under ``_LOCK``. A closed join is never reused: the late call is counted only."""
         if self.closed:
+            self.late_after_close += 1
+            self.late_by_stage[row["stage"]] = self.late_by_stage.get(row["stage"], 0) + 1
+            for published in self._published:  # Rows already persisted with the run stay current.
+                published["late_after_close"] = self.late_after_close
+                published["late_by_stage"] = dict(self.late_by_stage)
             return None
         if len(self.rows) >= MAX_JOIN_ROWS:
             self.overflow += 1
@@ -262,6 +331,72 @@ class _Join:
 
 _OPERATION: ContextVar[_Join | None] = ContextVar("theheat_operation_join", default=None)
 _ATTEMPT: ContextVar[_Join | None] = ContextVar("theheat_attempt_join", default=None)
+# The latest dispatch in this context, for the usage observation of its response.
+_DISPATCH: ContextVar[tuple[str, dict] | None] = ContextVar("theheat_dispatch_attribution", default=None)
+# (allowance, stage): physical attempts counted exactly per context, never by process-wide deltas.
+_ALLOWANCE: ContextVar[tuple[Any, str] | None] = ContextVar("theheat_allowance_attempts", default=None)
+_CANCEL: ContextVar[CancelToken | None] = ContextVar("theheat_cancel_token", default=None)
+
+
+def run_cancellable(token: CancelToken, fn: Callable[..., _T], /, *args: Any, **kwargs: Any) -> _T:
+    """Run ``fn`` with ``token`` governing every later physical call in its context."""
+    saved = _CANCEL.set(token)
+    try:
+        return fn(*args, **kwargs)
+    finally:
+        _CANCEL.reset(saved)
+
+
+def submit_in_context(executor: Any, fn: Callable[..., _T], /, *args: Any, **kwargs: Any) -> Any:
+    """``executor.submit`` with a fresh copy of the submitting context per call.
+
+    Joins, the finite trial and other authority ContextVars follow the work.
+    One copy per submission: a Context can never be entered by two threads.
+    """
+    return executor.submit(contextvars.copy_context().run, fn, *args, **kwargs)
+
+
+def in_copied_context(fn: Callable[..., _T]) -> Callable[..., _T]:
+    """Bind ``fn`` to a copy of the current context (for ``threading.Thread`` targets)."""
+    context = contextvars.copy_context()
+
+    def run(*args: Any, **kwargs: Any) -> _T:
+        return context.run(fn, *args, **kwargs)
+    return run
+
+
+def _attribution(operation: _Join | None, attempt: _Join | None, late: bool) -> dict:
+    live_operation = operation if operation is not None and not operation.closed else None
+    live_attempt = attempt if attempt is not None and not attempt.closed else None
+    if live_attempt is not None:
+        status = "joined_attempt"
+    elif live_operation is not None:
+        status = "joined_operation"
+    else:
+        status = "late_after_close" if late else "unjoined"
+    return {"schema_version": 1, "status": status,
+            "operation": live_operation.name if live_operation is not None else None,
+            "path": live_operation.path if live_operation is not None else None,
+            "attempt": live_attempt.name if live_attempt is not None else None,
+            "event_id": live_attempt.event_id if live_attempt is not None else None}
+
+
+def unjoined_attribution() -> dict:
+    """The explicit absent attribution; never inferred from a neighbour."""
+    return _attribution(None, None, False)
+
+
+def take_dispatch_attribution(stage: str) -> dict:
+    """The attribution captured when this context dispatched ``stage``; consumed once.
+
+    A response whose stage does not match this context's latest dispatch is
+    explicitly unjoined rather than borrowed from another request.
+    """
+    found = _DISPATCH.get()
+    _DISPATCH.set(None)
+    if found is None or found[0] != stage:
+        return unjoined_attribution()
+    return dict(found[1])
 
 
 def consume(stage: str, *, provider: str | None = None, model: str | None = None,
@@ -275,20 +410,37 @@ def consume(stage: str, *, provider: str | None = None, model: str | None = None
     chosen = provider if provider is not None else found.providers[0]
     if chosen not in found.providers:
         raise UndeclaredCallError("undeclared_call_provider")
+    token = _CANCEL.get()
+    if token is not None and token.cancelled:
+        with _LOCK:
+            _CANCELLED[stage] = _CANCELLED.get(stage, 0) + 1
+        raise OperationCancelled(str(token.reason))
     if ARCHIVE_CAPTURE.get(stage) == "uncaptured_model":
         _refuse_uncaptured_in_open_archive()
+    allowance = _ALLOWANCE.get()
+    if allowance is not None and allowance[1] == stage:
+        allowance[0].attempt(stage)  # Exact for this context; raises if unreserved, before egress.
+    operation, attempt = (_OPERATION.get(), _ATTEMPT.get()) if join else (None, None)
     with _LOCK:
         _RUNTIME_COUNTS[stage] = _RUNTIME_COUNTS.get(stage, 0) + 1
         ordinal = _RUNTIME_COUNTS[stage]
         rows = []
-        for active in ((_OPERATION.get(), _ATTEMPT.get()) if join else ()):
+        late = False
+        for active in (operation, attempt):
             if active is not None:
+                late = late or active.closed
                 row = active.add({"stage": stage, "provider": chosen,
                                 "model": model if isinstance(model, str) and len(model) <= 80 else None,
                                 "spend_class": found.spend_class, "pricing": found.pricing,
                                 "outcome": "dispatched"})
                 if row is not None:
                     rows.append(row)
+        if join and (operation is None or operation.closed):
+            reason = "late_after_close" if late else "no_operation"
+            _UNJOINED[(stage, reason)] = _UNJOINED.get((stage, reason), 0) + 1
+        attribution = _attribution(operation, attempt, late)
+    if join:  # Only joinable (provider/platform) calls have a usage observation to attribute.
+        _DISPATCH.set((stage, attribution))
     return CallTicket(stage, chosen, model, ordinal, _rows=tuple(rows))
 
 
@@ -322,6 +474,17 @@ def runtime_counts() -> dict[str, int]:
         return dict(_RUNTIME_COUNTS)
 
 
+def unjoined_calls() -> dict:
+    """Process-wide physical calls with no live operation join; spent, never free."""
+    with _LOCK:
+        rows = sorted(_UNJOINED.items())
+    with _LOCK:
+        cancelled = sorted(_CANCELLED.items())
+    return {"by_stage": [{"stage": stage, "reason": reason, "physical_calls": n} for (stage, reason), n in rows],
+            "total": sum(n for _, n in rows), "scope": "process_local", "actual_cost_known": False,
+            "cancelled_before_egress": [{"stage": stage, "refused_calls": n} for stage, n in cancelled]}
+
+
 def inventory() -> dict:
     """The declared inventory joined to this process's consumed physical calls."""
     counts = runtime_counts()
@@ -329,6 +492,7 @@ def inventory() -> dict:
             "declarations": [{**d.public(), "consumed_physical_calls": counts.get(d.stage, 0)}
                              for d in DECLARATIONS.values()],
             "archive_capture": archive_coverage(), "background_lanes": dict(BACKGROUND_LANES), "operations": {k: list(v) for k, v in OPERATIONS.items()},
+            "unjoined_calls": unjoined_calls(),
             "ceilings": CEILING_KINDS, "path_ceilings": {k: list(v) for k, v in PATH_CEILINGS.items()}}
 
 
@@ -354,7 +518,9 @@ def open_attempt_join(key: str) -> tuple[_Join, Any]:
     stale = _ATTEMPT.get()
     if stale is not None:
         stale.closed = True
-    join = _Join("attempt", hashlib.sha256(key.encode("utf-8")).hexdigest()[:16], "ordinary", [])
+    event_id = key[len("event:"):] if isinstance(key, str) and key.startswith("event:") else None
+    join = _Join("attempt", hashlib.sha256(key.encode("utf-8")).hexdigest()[:16], "ordinary", [],
+                 event_id=event_id if event_id is not None and _EVENT_ID.fullmatch(event_id) else None)
     return join, _ATTEMPT.set(join)
 
 
@@ -389,6 +555,7 @@ class OperationAllowance:
         self.physical_attempts = {stage: 0 for stage in limits}
         self.refused = {stage: 0 for stage in limits}
         self.outcomes = {stage: {name: 0 for name in OUTCOMES[1:]} for stage in limits}
+        self.exact_cache_hits = {stage: 0 for stage in limits}
         self._lock = threading.Lock()
 
     def remaining(self, stage: str) -> int:
@@ -417,6 +584,25 @@ class OperationAllowance:
         with self._lock:
             self.outcomes[stage][outcome] += 1
 
+    def cache_hit(self, stage: str) -> None:
+        """An exact cached result reused instead of a call: no slot, no attempt, recorded."""
+        with self._lock:
+            self.exact_cache_hits[stage] += 1
+
+    @contextmanager
+    def attempts(self, stage: str) -> Iterator[None]:
+        """Count this context's physical ``consume`` calls of ``stage`` exactly.
+
+        Unlike a process-wide count delta, a concurrent thread's calls of the
+        same stage cannot be attributed here.
+        """
+        declaration(stage)
+        token = _ALLOWANCE.set((self, stage))
+        try:
+            yield
+        finally:
+            _ALLOWANCE.reset(token)
+
     def release_unstarted(self, stage: str, *, physical_attempts_before: int) -> None:
         with self._lock:
             if self.physical_attempts[stage] != physical_attempts_before or self.reserved[stage] < 1:
@@ -433,6 +619,7 @@ class OperationAllowance:
                                  "reserved": self.reserved[stage], "remaining": self.remaining(stage),
                                  "refused_before_egress": self.refused[stage],
                                  "physical_attempts": self.physical_attempts[stage],
+                                 "exact_cache_hits": self.exact_cache_hits[stage],
                                  "outcomes": dict(self.outcomes[stage])}
             return {"operation": self.operation, "scope": "one_operation_process_local",
                     "financial_cap": False, "actual_cost_known": False, "stages": stages}
@@ -468,6 +655,9 @@ def operation_cost_row(operation: str, path: str = "ordinary", *, join: _Join | 
     for summary in summaries:
         for name, stage_row in summary["stages"].items():
             another[name] = stage_row["remaining"] > 0
+    with _LOCK:
+        late = {"late_after_close": join.late_after_close if join is not None else 0,
+                "late_by_stage": dict(join.late_by_stage) if join is not None else {}}
     return {
         "schema_version": 1, "operation": operation, "path": path, "spend_class": spend_class, "source": source,
         "may_call": [{"stage": s, "spend_class": DECLARATIONS[s].spend_class, "pricing": DECLARATIONS[s].pricing}
@@ -478,7 +668,7 @@ def operation_cost_row(operation: str, path: str = "ordinary", *, join: _Join | 
             "held": budget["held"], "refusal": budget["refusal"], "joined_requests": budget.get("joined_requests", 0)},
         "allowances": summaries,
         "requests": {"total": len(rows) + overflow, "by_outcome": counts, "by_stage": stages,
-                     "interrupted": counts["dispatched"], "truncated": overflow > 0},
+                     "interrupted": counts["dispatched"], "truncated": overflow > 0, **late},
         "unpriced_requests": sum(1 for row in rows if row["pricing"] == "unknown") + overflow,
         "estimate_only_requests": sum(1 for row in rows if row["pricing"] == "estimate_partial"),
         "another_attempt_allowed": another,
@@ -486,18 +676,29 @@ def operation_cost_row(operation: str, path: str = "ordinary", *, join: _Join | 
     }
 
 
-def record_operation_cost(current_run: dict | None, row: dict) -> None:
-    """Append to the run row persisted with run history (newest last, bounded)."""
+def record_operation_cost(current_run: dict | None, row: dict, *, join: _Join | None = None) -> None:
+    """Append to the run row persisted with run history (newest last, bounded).
+
+    With ``join``, a worker that outlives the operation and still sends a
+    request updates this row's ``late_after_close`` count before the run is
+    saved; the late request itself is never added to the closed join.
+    """
     if not isinstance(current_run, dict):
         return
     rows = current_run.setdefault("operation_costs", [])
     if isinstance(rows, list):
         rows.append(row)
         del rows[:-MAX_OPERATION_ROWS]
+        requests = row.get("requests") if isinstance(row, dict) else None
+        if join is not None and isinstance(requests, dict):
+            with _LOCK:
+                join._published.append(requests)
 
 
-__all__ = ["BACKGROUND_LANES", "BackgroundLaneDisabled", "CEILING_KINDS", "CallDeclaration", "CallTicket",
-           "DECLARATIONS", "consume_provider_stage", "OPERATIONS", "OperationAllowance", "PATH_CEILINGS", "UndeclaredCallError",
-           "background_lane_enabled", "close_attempt_join", "consume", "current_attempt_join", "declaration",
-           "inventory", "open_attempt_join", "operation_cost_row", "operation_scope", "record_operation_cost",
-           "require_background_lane", "runtime_counts"]
+__all__ = ["ATTRIBUTION_STATUSES", "BACKGROUND_LANES", "BackgroundLaneDisabled", "CEILING_KINDS", "CallDeclaration",
+           "CallTicket", "CancelToken", "OperationCancelled", "run_cancellable", "DECLARATIONS", "consume_provider_stage", "OPERATIONS", "OperationAllowance", "PATH_CEILINGS",
+           "UNJOINED_REASONS", "UndeclaredCallError", "background_lane_enabled", "close_attempt_join", "consume",
+           "current_attempt_join", "declaration", "in_copied_context", "inventory", "open_attempt_join",
+           "operation_cost_row", "operation_scope", "record_operation_cost", "require_background_lane",
+           "runtime_counts", "submit_in_context", "take_dispatch_attribution", "unjoined_attribution",
+           "unjoined_calls"]

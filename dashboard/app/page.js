@@ -565,7 +565,7 @@ export default function Dashboard() {
 
         {!loading && ["dashboard", "health"].includes(activeTab) && (
           <>
-          <ProductHealthPanel health={data?.productHealth} config={modelConfig} deployment={data?.deployment} stale={Boolean(refreshError)} graphics={data?.graphicAvailability} recovered={data?.recoveredPublished} />
+          <ProductHealthPanel health={data?.productHealth} config={modelConfig} deployment={data?.deployment} codeRevision={data?.codeRevision} stale={Boolean(refreshError)} graphics={data?.graphicAvailability} recovered={data?.recoveredPublished} />
           <CostPanel evidence={data?.costEvidence} stale={Boolean(refreshError)} loading={loading} localEvidence={data?.localCostEvidence} />
           <DeliveryReconciliation />
           </>

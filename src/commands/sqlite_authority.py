@@ -9,10 +9,12 @@ from __future__ import annotations
 from collections.abc import Callable
 from contextlib import closing
 from datetime import UTC, datetime, timedelta
+import hashlib
 import json
 import os
 from pathlib import Path
 import sqlite3
+import tempfile
 from typing import Any
 
 from src.commands import batch_journal, batch_worker_journal, batch_result_journal, check_journal, check_execution_journal, domain_journal, spend_journal
@@ -143,14 +145,35 @@ class SQLiteAuthority:
                 connection.rollback()
                 raise
 
-    def import_snapshot(self, raw: bytes, *, import_id: str, now: datetime | None = None) -> dict:
-        """Passive evidence import; never replace current state or grant approval."""
+    def migrate_domain(self) -> dict:
+        """Explicit operator migration of the local domain journal (v1 -> v2 origins)."""
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                self._check_environment(connection)
+                self._check_tables(connection)
+                report = domain_journal.upgrade(connection)
+                connection.commit()
+                return report
+            except BaseException:
+                connection.rollback()
+                raise
+
+    def import_snapshot(self, raw: bytes, *, import_id: str, now: datetime | None = None,
+                        origin: str = "import") -> dict:
+        """Passive evidence import; never replace current state or grant approval.
+
+        ``origin="restore"`` retains a verified backup (``restore_plan``) under
+        its own explicit origin; both stay read-only history for later commands.
+        """
+        if origin not in ("import", "restore"):
+            raise domain_journal.DomainJournalError("Unsupported snapshot origin for an import")
         state = domain_journal.parse_snapshot(raw)
         with closing(self._connect()) as connection:
             connection.execute("BEGIN IMMEDIATE")
             try:
                 self._check_environment(connection)
-                report = domain_journal.record_snapshot(connection, state, origin="import",
+                report = domain_journal.record_snapshot(connection, state, origin=origin,
                     origin_id=import_id, raw=raw, recorded_at=utc_text(now or datetime.now(UTC)))
                 connection.commit()
                 return report
@@ -513,6 +536,9 @@ class SQLiteAuthority:
             try:
                 self._check_environment(connection)
                 self._check_tables(connection)
+                version, state = connection.execute("SELECT version,state_json FROM authority_state WHERE singleton=1").fetchone()
+                if isinstance(request, dict) and isinstance(request.get("event_id"), str):
+                    delivery_reconciliation.hold_recovered_history(self, json.loads(state), request["event_id"])
                 result = delivery_reconciliation.apply(connection, request, actor=principal.subject, role=principal.role,
                                                        now=utc_text(now or datetime.now(UTC)))
                 if before_commit is not None:
@@ -522,6 +548,77 @@ class SQLiteAuthority:
             except BaseException:
                 connection.rollback()
                 raise
+
+    def backup(self, target: str | Path) -> dict:
+        """Consistent online copy of this disposable authority to a new private file.
+
+        Uses SQLite's backup API under a read transaction, refuses an existing
+        target, then verifies the copy (environment, journal schemas, integrity
+        and foreign keys) before reporting its sha256. The source is unchanged.
+        """
+        destination = Path(target)
+        if not destination.is_absolute():
+            raise CommandError("backup_path_invalid", "Supply an absolute backup path")
+        descriptor = os.open(destination, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        os.close(descriptor)
+        try:
+            with closing(self._connect()) as source, closing(sqlite3.connect(destination, isolation_level=None)) as copy:
+                self._check_environment(source)
+                source.execute("BEGIN")
+                source.backup(copy)
+                source.rollback()
+            report = SQLiteAuthority(destination, environment=self.environment).verify_backup()
+        except BaseException:
+            destination.unlink(missing_ok=True)
+            raise
+        return report
+
+    def verify_backup(self, *, expected_sha256: str | None = None) -> dict:
+        """Verify a standalone artifact, inspecting exactly the bytes we hash.
+
+        A live WAL/journal is not a standalone backup. Inspect an immutable private
+        copy of the captured bytes, never a later WAL-aware view of the source.
+        """
+        def require_standalone() -> None:
+            for suffix in ("-wal", "-journal"):
+                sidecar = Path(self.path + suffix)
+                if sidecar.exists() and sidecar.stat().st_size:
+                    raise CommandError("backup_sidecar_present", "Verify a standalone backup, not an active journal")
+        require_standalone()
+        raw = Path(self.path).read_bytes()
+        require_standalone()
+        digest = hashlib.sha256(raw).hexdigest()
+        if expected_sha256 is not None and digest != expected_sha256:
+            raise CommandError("backup_artifact_changed", "Backup bytes differ from the recorded sha256")
+        with tempfile.TemporaryDirectory(prefix="theheat-backup-verify-") as directory:
+            frozen = Path(directory) / "captured.sqlite"
+            frozen.write_bytes(raw)
+            frozen.chmod(0o600)
+            return self._verify_backup_bytes(frozen, raw, digest)
+
+    def _verify_backup_bytes(self, frozen: Path, raw: bytes, digest: str) -> dict:
+        uri = frozen.as_uri() + "?mode=ro&immutable=1"
+        with closing(sqlite3.connect(uri, uri=True, isolation_level=None)) as connection:
+            connection.row_factory = sqlite3.Row
+            connection.execute("PRAGMA query_only=ON")
+            connection.execute("BEGIN")
+            self._check_environment(connection)
+            self._check_tables(connection)
+            if connection.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
+                raise CommandError("backup_integrity_failed", "The backup failed SQLite integrity checking")
+            if connection.execute("PRAGMA foreign_key_check").fetchall():
+                raise CommandError("backup_integrity_failed", "The backup has broken journal relationships")
+            domain = domain_journal.inspect(connection)
+            version = connection.execute("SELECT version FROM authority_state WHERE singleton=1").fetchone()[0]
+            events = [row[0] for row in connection.execute("SELECT event FROM command_events")]
+        return {"path": self.path, "sha256": digest, "bytes": len(raw), "environment": self.environment,
+                "state_version": version, "accepted": events.count("accepted"), "completed": events.count("completed"),
+                "pending": events.count("accepted") - events.count("completed"),
+                "domain_counts": domain["counts"], "verified": True, "production_authority": False}
+
+    def delivery_reconciliation_view(self) -> dict:
+        """Read-only inspection of every publish attempt in the current state."""
+        return delivery_reconciliation.inspect(self.read()[1])
 
     def read(self) -> tuple[int, dict]:
         with closing(self._connect()) as connection:

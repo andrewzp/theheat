@@ -453,6 +453,10 @@ jobs:
           THEHEAT_HAZARD_EPISODES: ${{ vars.THEHEAT_HAZARD_EPISODES || '0' }}
           THEHEAT_PORTFOLIO_SELECTION: ${{ vars.THEHEAT_PORTFOLIO_SELECTION || '0' }}
           THEHEAT_RAINFALL_REGIONAL_SCAN: ${{ vars.THEHEAT_RAINFALL_REGIONAL_SCAN || '0' }}
+          # Source repairs (final closure A3) — each default OFF; exactly '1' enables. Off keeps
+          # today's single current-day HMS read and today's GPM attempt on every scheduled run.
+          THEHEAT_HMS_PREVIOUS_DAY_FILE: ${{ vars.THEHEAT_HMS_PREVIOUS_DAY_FILE || '0' }}
+          THEHEAT_EARTHDATA_REFUSAL_BACKOFF: ${{ vars.THEHEAT_EARTHDATA_REFUSAL_BACKOFF || '0' }}
           # Throughput Initiative (2026-06-16). All default "0"/safe in code;
           # production controls them via repo variables. Activate in order
           # A->B->C->D per docs/2026-06-16_throughput-activation-runbook.md.

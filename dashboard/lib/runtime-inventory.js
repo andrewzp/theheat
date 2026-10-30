@@ -13,7 +13,7 @@ const FLAG_KEYS = [
   "pm25_forecast_auto_text_enabled", "dust_forecast_auto_text_enabled",
   "nhc_advisory_auto_text_enabled", "official_warning_auto_text_enabled", "nws_warning_auto_text_enabled",
   "regional_observed_enabled", "rainfall_window_provenance_enabled", "hazard_episodes_enabled", "portfolio_selection_enabled",
-  "rainfall_regional_scan_enabled",
+  "rainfall_regional_scan_enabled", "hms_previous_day_file_enabled", "earthdata_refusal_backoff_enabled",
 ]
 const CREDENTIAL_KEYS = ["anthropic", "gemini", "safety_gemini", "twitter", "bluesky", "nasa_firms", "earthdata", "github_state"]
 
@@ -87,6 +87,45 @@ export function dashboardDeployment(env = process.env) {
     // Conflicting valid declarations remain unknown, never borrowed from a bot.
     git_sha: platform && declared && platform !== declared ? null : platform || declared,
     environment: text(env.VERCEL_ENV) || "local / unknown",
+  }
+}
+
+// Three separate facts: the code this dashboard deployment serves, the code the
+// bot last reported, and whether any retained pipeline run (not a configuration-
+// only report) ran the deployed revision. A deployment never implies a run.
+export function codeRevisionEvidence(state = {}, { deployment = null, runtimeReport = null, now = Date.now() } = {}) {
+  const reportRun = runtimeReport === null ? null : configurationReportRun(runtimeReport)
+  const history = [...(Array.isArray(state?.run_history) ? state.run_history : []), ...(reportRun ? [reportRun] : [])]
+  const latestInvocation = history.filter(run => Number.isFinite(timestamp(run?.started_at)))
+    .sort((a, b) => timestamp(b.started_at) - timestamp(a.started_at))[0]
+  const runs = history
+    .flatMap((run) => {
+      const snapshot = run?.runtime_inventory
+      const started = timestamp(run?.started_at)
+      const captured = timestamp(snapshot?.captured_at)
+      if (!snapshot || snapshot.schema_version !== 1 || !Number.isFinite(started) || !Number.isFinite(captured)
+          || captured > now || started > now || captured < started) return []
+      return [{ git_sha: sha(snapshot.git_sha)?.toLowerCase() ?? null, captured, run_id: text(run.id || run.run_id),
+        kind: run.configuration_only ? "configuration_only" : "bot_run" }]
+    })
+    .sort((a, b) => b.captured - a.captured)
+  const dashboard = sha(deployment?.git_sha)?.toLowerCase() ?? null
+  const latest = runs.find(run => run.captured >= timestamp(latestInvocation?.started_at)) ?? null
+  const pipeline = dashboard ? runs.find((run) => run.git_sha === dashboard && run.kind === "bot_run") ?? null : null
+  const iso = (value) => new Date(value).toISOString()
+  const status = !dashboard || !latest?.git_sha ? "unknown" : latest.git_sha === dashboard ? "matches" : "differs"
+  return {
+    status,
+    dashboard_git_sha: dashboard,
+    last_report: latest ? { git_sha: latest.git_sha, captured_at: iso(latest.captured), kind: latest.kind, run_id: latest.run_id } : null,
+    deployed_revision_pipeline_run: pipeline ? { status: "observed", at: iso(pipeline.captured), run_id: pipeline.run_id }
+      : { status: dashboard ? "not_observed" : "unknown", at: null, run_id: null },
+    reason: status === "unknown"
+      ? "The deployed or bot-reported code revision is unknown; they cannot be compared."
+      : status === "differs"
+        ? "The bot last reported different code than this dashboard deployment. Deployment does not show that the bot has run the deployed code."
+        : pipeline ? "The bot has reported a pipeline run on the deployed code revision."
+          : "The bot reported the deployed code revision, but no retained pipeline run on it is recorded.",
   }
 }
 

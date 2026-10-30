@@ -21,7 +21,7 @@ from tests.two_bot.test_candidate_derivation import packet
 
 CODE = "unsupported_air_quality_causation:"
 CAUSAL = "CAMS forecasts dust at 2,000 μg/m³ in Luma, pushing PM10 to a daily mean of 90 μg/m³."
-FACTUAL = "CAMS forecasts a PM10 daily mean of 90 μg/m³ in Luma, twice the WHO 24-hour guideline."
+FACTUAL = "Luma's PM10 daily mean is forecast at 90 μg/m³, twice the WHO 24-hour guideline (CAMS)."  # Fact-first: a source-led opener is a copy-gate rejection.
 
 
 def bundle(kind="dust_event"):

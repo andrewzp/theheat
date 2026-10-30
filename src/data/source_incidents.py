@@ -40,6 +40,7 @@ OUTCOMES: dict[str, str] = {
     "access_refused": "Provider refused access (HTTP 401/403 or a credential refusal body).",
     "access_expired": "Local credential expiry gate; no provider request was sent.",
     "access_not_configured": "No credential configured; no provider request was sent.",
+    "access_backoff": "The provider refused this same credential recently; no request was sent inside its backoff.",
     "rate_limited": "HTTP 429 from the provider.",
     "provider_error": "HTTP 5xx from the provider.",
     "transport_failure": "Timeout, DNS or connection failure before a provider answer.",
@@ -48,7 +49,7 @@ OUTCOMES: dict[str, str] = {
 }
 QUALIFIED = frozenset({"qualified"})
 REACHABLE_UNQUALIFIED = frozenset({"empty_success", "stale_product", "malformed"})
-ACCESS_HOLDS = frozenset({"access_refused", "access_expired", "access_not_configured"})
+ACCESS_HOLDS = frozenset({"access_refused", "access_expired", "access_not_configured", "access_backoff"})
 FAILURES = frozenset(OUTCOMES) - QUALIFIED - {"not_attempted"}
 
 NEXT_ACTIONS: dict[str, str] = {
@@ -57,6 +58,7 @@ NEXT_ACTIONS: dict[str, str] = {
     "access_refused": "Owner: confirm the account/key for this provider; no credential search is performed.",
     "access_expired": "Owner: renew the expired credential in the production secret store.",
     "access_not_configured": "Owner: configure the credential if this source should run; skipped otherwise.",
+    "access_backoff": "Owner: check the account/key that was refused; a renewed credential is tried at the next run.",
     "malformed": "Inspect the retained parser contract; a provider answer that is not the product is not recovery.",
     "empty_success": "Reachable but no product rows: wait for a qualified run; this is not recovery or 'no events'.",
     "stale_product": "Reachable but stale: wait for a current product day.",
@@ -322,9 +324,10 @@ def gpm_attempts(trace_export: Any) -> list[dict[str, Any]]:
     product = trace_export.get("product") if type(trace_export.get("product")) is str else "late"
     window = f"{_GPM_WINDOW}_{product}" if _TOKEN.fullmatch(f"{_GPM_WINDOW}_{product}") else _GPM_WINDOW
     rows: list[dict[str, Any]] = []
-    if gate in {"credential_expired", "credential_not_configured"}:
+    if gate in {"credential_expired", "credential_not_configured", "credential_refused_backoff"}:
         product_id, region, parser = _GPM_LEGS["imerg_late_opendap"]
-        outcome = "access_expired" if gate == "credential_expired" else "access_not_configured"
+        outcome = {"credential_expired": "access_expired", "credential_not_configured": "access_not_configured",
+                   "credential_refused_backoff": "access_backoff"}[str(gate)]
         rows.append(attempt(product_id, outcome, window=window, region=region, parser_contract=parser))
     for leg in trace_export.get("legs") or []:
         if not isinstance(leg, Mapping) or leg.get("leg") not in _GPM_LEGS:

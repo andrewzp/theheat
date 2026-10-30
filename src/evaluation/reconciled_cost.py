@@ -12,6 +12,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from src.two_bot.call_inventory import DECLARATIONS as _DECLARED
+
 MAX_RUNS = 20
 MAX_ROWS_PER_RUN = 8
 
@@ -24,9 +26,11 @@ def operation_observations(state: Any) -> dict:
     """Aggregate retained operation joins without trusting free text; bounded."""
     runs = state.get("run_history") if isinstance(state, dict) else None
     by_spend: dict[str, int] = {}
+    by_stage: dict[str, int] = {}
     out: dict[str, Any] = {"source": "run_history_operation_costs", "operations": 0, "requests": 0, "interrupted": 0,
            "unknown_or_malformed": 0, "unpriced_requests": 0, "estimate_only_requests": 0,
-           "truncated_operations": 0, "by_spend_class": by_spend, "invalid_rows": 0}
+           "truncated_operations": 0, "late_after_close": 0, "by_spend_class": by_spend, "by_stage": by_stage,
+           "invalid_rows": 0}
     for run in (runs if isinstance(runs, list) else [])[:MAX_RUNS]:
         rows = run.get("operation_costs") if isinstance(run, dict) else None
         for row in (rows if isinstance(rows, list) else [])[-MAX_ROWS_PER_RUN:]:
@@ -45,6 +49,15 @@ def operation_observations(state: Any) -> dict:
             out["truncated_operations"] += requests.get("truncated") is True
             spend = str(row["spend_class"]) if row.get("spend_class") in ("discovery", "selection") else "other"
             by_spend[spend] = by_spend.get(spend, 0) + _count(requests.get("total"))
+            # Late requests after an operation closed are spent and unjoined; counted, never dropped.
+            out["late_after_close"] += _count(requests.get("late_after_close"))
+            stages = requests.get("by_stage")
+            for stage, stage_row in (stages.items() if isinstance(stages, dict) else ()):
+                if stage in _DECLARED and isinstance(stage_row, dict):
+                    by_stage[stage] = by_stage.get(stage, 0) + _count(stage_row.get("requests"))
+    # Exact inputs for observed stages that have no price table or invoice import.
+    from src.two_bot.cost_inputs import missing_price_inputs
+    out["missing_price_inputs"] = missing_price_inputs(by_stage)
     return out
 
 
@@ -78,6 +91,10 @@ def discrepancies(report: dict) -> list[dict]:
         add("production_unknown_or_malformed_requests", _count(observed.get("unknown_or_malformed")))
         add("production_unpriced_requests", _count(observed.get("unpriced_requests")))
         add("production_operation_rows_truncated", _count(observed.get("truncated_operations")))
+        add("production_requests_after_operation_closed", _count(observed.get("late_after_close")))
+        missing = observed.get("missing_price_inputs")
+        add("production_requests_missing_price_input",
+            sum(_count(row.get("requests")) for row in missing if isinstance(row, dict)) if isinstance(missing, list) else 0)
     return rows
 
 

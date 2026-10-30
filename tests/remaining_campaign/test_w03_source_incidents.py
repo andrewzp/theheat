@@ -136,6 +136,7 @@ def test_firms_runner_incident_journey_reaches_run_history_and_projection(offlin
     outcomes = [(a["product_id"], a["outcome"]) for a in entry["details"]["incident"]["attempts"]]
     assert outcomes == [("firms.viirs_noaa21_nrt", "provider_error"), ("firms.viirs_noaa20_nrt", "provider_error"),
                         ("firms.modis_nrt", "provider_error"), ("firms.noaa_hms", "endpoint_missing")]
+    assert bot_state["source_health"]["firms"]["runs"][-1]["error_class"] == "endpoint_missing"  # not "auth"
     # The fixed public text names neither the key nor the URL.
     assert INVENTED_KEY not in json.dumps(bot_state["source_health"]) + json.dumps(bot_state["run_history"])
 

@@ -4,7 +4,7 @@ import csv
 import io
 import os
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 import requests
@@ -263,9 +263,14 @@ _HMS_PARSER = "fire_source_contract.hms_text"
 
 def _read_leg(
     url: str, product: str, *, product_id: str, window: str, region: str, parser: str,
-    attempts: list[dict[str, Any]] | None,
+    attempts: list[dict[str, Any]] | None, unpublished_outcome: str | None = None,
 ) -> list[FireSourceRow]:
-    """Fetch and validate one leg, recording its classified outcome when asked."""
+    """Fetch and validate one leg, recording its classified outcome when asked.
+
+    ``unpublished_outcome`` names what an HTTP 404/410 means for a dated product
+    file that may legitimately not exist yet (``granule_missing``), instead of a
+    missing endpoint.
+    """
     def note(outcome: str, *, status: int | None = None, rows: int | None = None) -> None:
         if attempts is not None:
             attempts.append(source_incidents.attempt(
@@ -275,7 +280,10 @@ def _read_leg(
     try:
         resp = fetch_with_retry(url, timeout=30)
     except Exception as exc:
-        note(source_incidents.classify_exception(exc), status=source_incidents.http_status_of(exc))
+        outcome = source_incidents.classify_exception(exc)
+        if unpublished_outcome is not None and outcome == "endpoint_missing":
+            outcome = unpublished_outcome
+        note(outcome, status=source_incidents.http_status_of(exc))
         raise
     text = resp.text
     raw_status = getattr(resp, "status_code", None)
@@ -316,14 +324,49 @@ def _in_north_america(lat: float, lon: float) -> bool:
     return lat_min <= lat <= lat_max and lon_min <= lon <= lon_max
 
 
-def _fetch_fires_hms(frp_min: float, *, attempts: list[dict[str, Any]] | None = None) -> list[FireEvent]:
-    """Read NOAA's dated file, retaining each row's own UTC acquisition minute."""
-    requested_day = datetime.now(UTC).date()
-    url = f"{HMS_FIRE_URL}/{requested_day:%Y}/{requested_day:%m}/hms_fire{requested_day:%Y%m%d}.txt"
-    rows = _read_leg(url, HMS_PRODUCT, product_id="firms.noaa_hms", window="current_utc_day_file",
-                     region="north_america", parser=_HMS_PARSER, attempts=attempts)
-    return [_event(row, url, leg="noaa_hms") for row in rows
-            if row.frp is not None and row.frp >= frp_min and _in_north_america(row.lat, row.lon)]
+# A3 (default OFF): read the previous UTC day's HMS file once when the current day's
+# file is not yet published. Exactly "1" enables; off keeps the single current-day read.
+HMS_PREVIOUS_DAY_FLAG = "THEHEAT_HMS_PREVIOUS_DAY_FILE"
+
+
+def _hms_url(day: date) -> str:
+    return f"{HMS_FIRE_URL}/{day:%Y}/{day:%m}/hms_fire{day:%Y%m%d}.txt"
+
+
+def _fetch_fires_hms(frp_min: float, *, attempts: list[dict[str, Any]] | None = None,
+                     today: date | None = None) -> list[FireEvent]:
+    """Read NOAA's dated file, retaining each row's own UTC acquisition minute.
+
+    HMS publishes one accumulating file per UTC day: it first appears during
+    that day's analysis and is finalised the next morning (NOAA HMS Text index,
+    read 2026-10-30: ``hms_fire20261029.txt`` last modified 2026-10-30 10:04).
+    Early in a UTC day the current file therefore does not exist yet; the
+    2026-10-30 02:53Z production failure was exactly that 404. A missing current
+    file is recorded as ``granule_missing`` and the previous UTC day's file is
+    read once (two requests at most). Its rows keep their own acquisition times
+    and the existing two-day freshness rule; a missing previous file is a real
+    ``endpoint_missing``. This is the same product, not a second witness.
+    """
+    current = today or datetime.now(UTC).date()
+    if os.environ.get(HMS_PREVIOUS_DAY_FLAG) != "1":
+        url = _hms_url(current)
+        rows = _read_leg(url, HMS_PRODUCT, product_id="firms.noaa_hms", window="current_utc_day_file",
+                         region="north_america", parser=_HMS_PARSER, attempts=attempts)
+        return [_event(row, url, leg="noaa_hms") for row in rows
+                if row.frp is not None and row.frp >= frp_min and _in_north_america(row.lat, row.lon)]
+    for offset, window in ((0, "current_utc_day_file"), (1, "previous_utc_day_file")):
+        url = _hms_url(current - timedelta(days=offset))
+        try:
+            rows = _read_leg(url, HMS_PRODUCT, product_id="firms.noaa_hms", window=window, region="north_america",
+                             parser=_HMS_PARSER, attempts=attempts,
+                             unpublished_outcome="granule_missing" if offset == 0 else None)
+        except requests.HTTPError as exc:
+            if offset == 0 and source_incidents.http_status_of(exc) in (404, 410):
+                continue
+            raise
+        return [_event(row, url, leg="noaa_hms") for row in rows
+                if row.frp is not None and row.frp >= frp_min and _in_north_america(row.lat, row.lon)]
+    return []  # unreachable: the previous-day leg returns or raises
 
 
 # Ordered list of bounding boxes used to reverse-geocode a FIRMS fire

@@ -10,6 +10,7 @@ from dataclasses import dataclass
 
 from src.orchestrator.suppression import _suppression_context
 from src.orchestrator.telemetry import _record_source_run
+from src.two_bot.call_inventory import CancelToken, run_cancellable, submit_in_context
 from src.state_schema import BotState
 
 MAX_WORKERS = 6
@@ -133,10 +134,15 @@ def _run_one_with_budget(
 
     executor = ThreadPoolExecutor(max_workers=1)
     started_at = time.perf_counter()
-    future = executor.submit(_run_with_context, bot_state, current_run, runner)
+    token = CancelToken(runner.source)
+    # A copy of this context per runner: operation/attempt joins and a finite
+    # trial follow the work; a closed join is never revived (call_inventory).
+    future = submit_in_context(executor, run_cancellable, token, _run_with_context, bot_state, current_run, runner)
     try:
         _await_with_budget(future, started_at, budget_seconds)
     except TimeoutError:
+        # The thread cannot be killed; it can buy no further call after its deadline.
+        token.cancel("runner_budget_exceeded")
         _record_budget_timeout(bot_state, current_run, runner, budget_seconds, started_at)
     except Exception as exc:
         _record_unhandled_failure(bot_state, current_run, runner, started_at, exc)
@@ -158,8 +164,9 @@ def run_stage1_sources(
     """Run Stage 1 source runners.
 
     Synthesis-component writers run in a serial sub-batch first. Other sources
-    dispatch concurrently. A timed-out runner is recorded as failed but its
-    worker thread is not cancelled.
+    dispatch concurrently. A timed-out runner is recorded as failed; its
+    worker thread cannot be killed, but every later physical call it attempts
+    is refused before egress (call_inventory.CancelToken).
     """
     for runner in serial_runners:
         _run_one_with_budget(
@@ -169,7 +176,7 @@ def run_stage1_sources(
             budget_seconds=budget_seconds,
         )
 
-    dispatch: list[tuple[SourceRunner, Future[None], float]] = []
+    dispatch: list[tuple[SourceRunner, Future[None], float, CancelToken]] = []
     executor = ThreadPoolExecutor(max_workers=max_workers)
     try:
         for runner in concurrent_runners:
@@ -177,13 +184,16 @@ def run_stage1_sources(
                 _record_breaker_skip(bot_state, current_run, runner)
                 continue
             started_at = time.perf_counter()
-            future = executor.submit(_run_with_context, bot_state, current_run, runner)
-            dispatch.append((runner, future, started_at))
+            token = CancelToken(runner.source)
+            future = submit_in_context(executor, run_cancellable, token, _run_with_context, bot_state, current_run,
+                                       runner)
+            dispatch.append((runner, future, started_at, token))
 
-        for runner, future, started_at in dispatch:
+        for runner, future, started_at, token in dispatch:
             try:
                 _await_with_budget(future, started_at, budget_seconds)
             except TimeoutError:
+                token.cancel("runner_budget_exceeded")
                 _record_budget_timeout(bot_state, current_run, runner, budget_seconds, started_at)
             except Exception as exc:
                 _record_unhandled_failure(bot_state, current_run, runner, started_at, exc)

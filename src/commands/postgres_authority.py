@@ -632,6 +632,22 @@ class PostgresCommandAuthority:
         return runner(ScopedAuthority(), refs["job_id"], current_context=job["context"], owner=owner,
             clock=clock, enabled=True, transport_factory=guarded_transport, **({"refresh": refresh} if operation == "collect" else {}))
 
+    def delivery_reconciliation(self, request: dict, principal: Principal, *, now: datetime | None = None,
+                                before_commit: Callable[[], None] | None = None) -> dict:
+        """Confirm/cancel one publish attempt against operator receipt evidence.
+
+        Same rules as the SQLite adapter; never sends, never permits a retry,
+        and is not a production-Gist path (``delivery_reconciliation.apply_postgres``).
+        """
+        from src.commands import delivery_reconciliation
+        return delivery_reconciliation.apply_postgres(self, request, actor=principal.subject, role=principal.role,
+                                                      now=utc_text(_clock(now)), before_commit=before_commit)
+
+    def delivery_reconciliation_view(self) -> dict:
+        """Read-only inspection of every publish attempt in the current state."""
+        from src.commands import delivery_reconciliation
+        return delivery_reconciliation.inspect(self.read()[1])
+
     def initialize(self, initial_state: dict, *, runtime_role: str) -> None:
         encoded, fields = p._snapshot(initial_state)
         # Separate schema provisioning may commit first; no authority exists yet.

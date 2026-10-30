@@ -217,9 +217,11 @@ def _writer_sample_slate(
         raise TrialStopped("trial_requires_one_writer_sample")
     if samples <= 1:
         return [writer.write_tweet(bundle, memory_slice)]
+    from src.two_bot.call_inventory import submit_in_context
     with ThreadPoolExecutor(max_workers=samples) as executor:
+        # Each sample joins the same candidate attempt/operation (own context copy).
         futures = [
-            executor.submit(writer.write_tweet, bundle, memory_slice)
+            submit_in_context(executor, writer.write_tweet, bundle, memory_slice)
             for _ in range(samples)
         ]
         return [future.result() for future in futures]
@@ -276,6 +278,15 @@ def _check_safety_honesty_fact(
     fact_origin = "local_precheck"
     fact_result = fact_check.local_rejection(tweet, [], bundle, state)
     if fact_result is None:
+        # Free deterministic copy rules (Andrew's editorial direction) reject an
+        # unmistakable sterile/padded shape before any paid check. None is no pass.
+        from src.two_bot.copy_gates import copy_rejection
+        copy_hit = copy_rejection(tweet, bundle)
+        if copy_hit is not None:
+            if mark_stage is not None:
+                mark_stage("copy_gate", "kill")
+            record_kill("copy_gate", copy_hit)
+            return None
         safety_input = (capture_stage_input(bundle, generation_input)
                         if result_out is not None and generation_input is not None else None)
         if not _warning_boundary(bundle, record_kill, candidate=tweet):

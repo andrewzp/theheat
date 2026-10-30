@@ -38,7 +38,7 @@ async function boundedBody(body, maxBytes, signal) {
 
 export async function localCommandRequest(request, path, { method = "GET", raw } = {}) {
   const config = configuration(request)
-  if (!/^\/(?:state|generation|reports|coverage|commands(?:\/[a-f0-9-]{36}(?:\/abandon)?)?|drafts\/[A-Za-z0-9_.:-]{1,200}\/media(?:\/[a-f0-9]{64}\/(?:preview\.png|original\.gif)|\/delivery\/[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12})?)$/.test(path)) fail("invalid_command_route", 400)
+  if (!/^\/(?:state|generation|reports|coverage|delivery-reconciliation|commands(?:\/[a-f0-9-]{36}(?:\/abandon)?)?|drafts\/[A-Za-z0-9_.:-]{1,200}\/media(?:\/[a-f0-9]{64}\/(?:preview\.png|original\.gif)|\/delivery\/[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12})?)$/.test(path)) fail("invalid_command_route", 400)
   const history = path.includes("/media/delivery/")
   if (history && (method !== "GET" || raw !== undefined)) fail("invalid_command_route", 400)
   const controller = new AbortController()
@@ -97,6 +97,27 @@ export async function acceptLocalCommand(request, expectedAction = null, recover
     // identity/action. Next must never silently normalize a hostile request.
     const path = recoveryId === null ? "/commands" : `/commands/${recoveryId}/abandon`
     const { status, payload } = await localCommandRequest(request, path, { method: "POST", raw })
+    return Response.json(payload, { status, headers })
+  } catch (error) { return previewError(error) }
+}
+
+// Delivery reconciliation through the local command authority (SQLite or
+// PostgreSQL adapter behind the Python ingress). Same origin, JSON, 16 KiB.
+export async function forwardLocalReconciliation(request) {
+  try {
+    const config = configuration(request)
+    if (request.method === "GET") {
+      const { status, payload } = await localCommandRequest(request, "/delivery-reconciliation")
+      return Response.json(payload, { status, headers })
+    }
+    if (request.headers.get("origin") !== config.origin) fail("local_preview_origin_refused", 403)
+    if (request.headers.get("content-type") !== "application/json") fail("json_required", 415)
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 5000)
+    let raw
+    try { raw = await boundedBody(request.body, 16 * 1024, controller.signal) }
+    finally { clearTimeout(timer) }
+    const { status, payload } = await localCommandRequest(request, "/delivery-reconciliation", { method: "POST", raw })
     return Response.json(payload, { status, headers })
   } catch (error) { return previewError(error) }
 }

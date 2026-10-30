@@ -3,13 +3,19 @@
 from __future__ import annotations
 
 # ruff: noqa: F403,F405
-from src.data import source_incidents
+from datetime import datetime, timezone
+
+from src.credentials import decode_jwt_exp
+from src.data import source_access, source_incidents
 from src.data._witness import degraded_via
 from src.orchestrator.common import *
 
 # W06.2 (default off): rotate the per-city legs through bounded blocks of the watchlist.
 SCAN_FLAG = "THEHEAT_RAINFALL_REGIONAL_SCAN"
 SCAN_DEADLINE_S = 900.0
+# A3 (default OFF): after a provider refusal of the same Earthdata credential, skip GPM requests on
+# the bounded 6 h / 24 h / 72 h schedule. Exactly "1" enables; refusals are recorded either way.
+REFUSAL_BACKOFF_FLAG = "THEHEAT_EARTHDATA_REFUSAL_BACKOFF"
 
 
 def scan_blocks(cities: list[dict], block: int) -> tuple[list[str], list[list[int]]]:
@@ -24,7 +30,7 @@ def scan_blocks(cities: list[dict], block: int) -> tuple[list[str], list[list[in
 
 
 def _scanned_fetch(bot_state: BotState, cities: list[dict], *, max_cities: int, max_workers: int, trace,
-                   scan: dict) -> list:
+                   scan: dict, access: dict | None = None) -> list:
     """One existing GPM call per run, ordered so the cursor's block gets the capped per-city legs.
 
     Grid downloads still inspect the whole watchlist; only the per-city order rotates. The
@@ -44,7 +50,7 @@ def _scanned_fetch(bot_state: BotState, cities: list[dict], *, max_cities: int, 
         try:
             rows = _fetch_strict(gpm_imerg.fetch_daily_precip, cities=[cities[j] for j in order],
                                  max_cities=max_cities, max_workers=max_workers, trace=trace,
-                                 network_selection=[cities[j] for j in chosen])
+                                 network_selection=[cities[j] for j in chosen], **(access or {}))
         except Exception as exc:
             errors.append(exc)
             raise
@@ -71,10 +77,28 @@ def run_gpm_imerg(
     trace = gpm_imerg.RainfallOpportunityTrace(run_id=(current_run or {}).get("id"))
     packet_holds: list[dict] = []  # W06.6: named packets stopped before paid generation
     scan: dict = {}  # W06.2: the bounded regional scan, when THEHEAT_RAINFALL_REGIONAL_SCAN is "1"
+    # A3: bounded backoff after a provider refusal of this exact credential (its expiry claim,
+    # never its value). An expired credential is already stopped locally inside the fetch.
+    token = os.environ.get("EARTHDATA_TOKEN", "")
+    expiry = decode_jwt_exp(token) if token else None
+    credential_expires_at = source_access.credential_identity(expiry, configured=bool(token))["expires_at"]
+    now = datetime.now(timezone.utc)
+    backoff = (source_access.refusal_backoff(bot_state.get("run_history"), credential_expires_at=credential_expires_at,
+                                             now=now)
+               if token and os.environ.get(REFUSAL_BACKOFF_FLAG) == "1" else None)
+    access = {"access_backoff": backoff} if backoff else {}
 
     def details() -> dict:
-        return {**_trace_details(trace), **({"rainfall_packet_holds": packet_holds} if packet_holds else {}),
-                **({"rainfall_scan": dict(scan)} if scan else {})}
+        out = {**_trace_details(trace), **({"rainfall_packet_holds": packet_holds} if packet_holds else {}),
+               **({"rainfall_scan": dict(scan)} if scan else {})}
+        incident = out.get("incident")
+        attempts = incident.get("attempts") if isinstance(incident, dict) else None
+        record = source_access.run_record(credential_expires_at=credential_expires_at,
+                                          attempts=attempts if isinstance(attempts, list) else [],
+                                          backoff=backoff, now=now)
+        if record is not None:  # present only after a refusal or during backoff: normal rows unchanged
+            out["earthdata_access"] = record
+        return out
     try:
         max_cities_raw = os.environ.get("GPM_IMERG_MAX_CITIES")
         max_cities = (
@@ -94,7 +118,7 @@ def run_gpm_imerg(
             raise ValueError("GPM_IMERG_MAX_WORKERS must be >= 1")
         if os.environ.get(SCAN_FLAG) == "1" and cities:
             readings = _scanned_fetch(bot_state, cities, max_cities=max_cities, max_workers=max_workers,
-                                      trace=trace, scan=scan)
+                                      trace=trace, scan=scan, access=access)
         else:
             readings = _fetch_strict(
                 gpm_imerg.fetch_daily_precip,
@@ -102,6 +126,7 @@ def run_gpm_imerg(
                 max_cities=max_cities,
                 max_workers=max_workers,
                 trace=trace,
+                **access,
             )
         events = gpm_imerg.detect_precip_records(readings, cast(dict, bot_state))
         for event in events:

@@ -164,7 +164,8 @@ any connection. Each operation uses one short transaction (5 s connect, 10 s
 statement, 20 s transaction) and closes its connection. The PostgreSQL table is
 `theheat_media.artifacts` (migration 009); the reader role needs only `SELECT`, the
 writer only `SELECT, INSERT`. Provisioning the database, roles and secrets is a
-separate operator step this code does not perform.
+separate operator step this code does not perform; the exact procedure, cross-host
+readback acceptance and rollback are in [MEDIA_STORE_SETUP.md](MEDIA_STORE_SETUP.md).
 
 ### Collector retention (CRW, default off)
 
@@ -194,7 +195,11 @@ python scripts/retain_gist_media.py export --target /absolute/new-dir \
   --manifest SHA256 --crw-packet SHA256
 python scripts/retain_gist_media.py restore --source /absolute/export-dir
 python scripts/retain_gist_media.py plan --state /absolute/private-state.json
+python scripts/retain_gist_media.py readback --manifest SHA256 --crw-packet SHA256
 ```
+
+`readback` re-reads named identities through this host's read-only store and prints
+only kinds, identities and counts; run on each host it is the cross-host acceptance read.
 
 `plan` reads an owner-only local copy of the saved state (nothing is fetched) and lists
 every retained item its drafts need, why (unresolved delivery, current joint review or

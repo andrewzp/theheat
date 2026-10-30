@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, MutableMapping, Sequence
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from src.two_bot.call_inventory import submit_in_context
 from dataclasses import dataclass, replace
 from src.data import places
 from datetime import date, datetime, timedelta, timezone
@@ -485,6 +486,7 @@ def fetch_daily_precip(
     today: date | None = None,
     trace: RainfallOpportunityTrace | None = None,
     network_selection: list[Mapping[str, Any]] | None = None,
+    access_backoff: Mapping[str, Any] | None = None,
 ) -> list[CityPrecipReading]:
     """Fetch point daily precipitation for monitored cities (R-03 chained).
 
@@ -507,6 +509,8 @@ def fetch_daily_precip(
         trace.begin(cities, today=today, product=product, max_cities=max_cities,
                     max_workers=max_workers, target_date=target_date)
 
+    primary_extra: dict[str, Any] = {"access_backoff": access_backoff} if access_backoff else {}
+
     def primary() -> list[CityPrecipReading]:
         return _fetch_daily_precip_primary(
             cities,
@@ -517,6 +521,7 @@ def fetch_daily_precip(
             strict=strict,
             today=today,
             **observe,
+            **primary_extra,
         )
 
     def witness() -> list[CityPrecipReading]:
@@ -553,6 +558,7 @@ def _fetch_daily_precip_primary(
     today: date | None = None,
     trace: RainfallOpportunityTrace | None = None,
     network_selection: list[Mapping[str, Any]] | None = None,
+    access_backoff: Mapping[str, Any] | None = None,
 ) -> list[CityPrecipReading]:
     """Primary GESDISC-family daily precip fetch (grid chain then OPeNDAP).
 
@@ -579,6 +585,16 @@ def _fetch_daily_precip_primary(
             trace.gate("credential_expired")
         raise SourceFetchError(
             f"EARTHDATA_TOKEN expired at {expiry.isoformat()}; renew the credential before GPM collection"
+        )
+    # A refused credential is retried only on the bounded schedule in
+    # src.data.source_access; until then no request is sent.
+    if access_backoff:
+        if trace is not None:
+            trace.gate("credential_refused_backoff")
+        raise SourceFetchError(
+            "Earthdata refused this credential at "
+            f"{access_backoff.get('refused_at')}; next attempt after {access_backoff.get('next_attempt_after')} "
+            "unless the credential is renewed (no request sent)"
         )
 
     # Grid sources download the daily file once and subset locally. On any
@@ -732,7 +748,7 @@ def _fetch_daily_precip_primary(
         executor = ThreadPoolExecutor(max_workers=min(worker_count, len(remaining)))
         try:
             futures = {
-                executor.submit(fetch_one, index, city): index
+                submit_in_context(executor, fetch_one, index, city): index
                 for index, city in remaining
             }
             for future in as_completed(futures):

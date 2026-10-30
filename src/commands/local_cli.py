@@ -47,6 +47,11 @@ def main(argv: list[str] | None = None) -> int:
     importer = actions.add_parser("import")
     importer.add_argument("--state", required=True, help="Private snapshot retained as evidence; does not change current state")
     importer.add_argument("--import-id", required=True, help="Stable identity for idempotent replay of these exact bytes")
+    actions.add_parser("domain-migrate", help="Explicit v1->v2 domain journal migration (reconciliation/restore origins)")
+    backup_parser = actions.add_parser("backup", help="Consistent verified copy of this authority to a new private file")
+    backup_parser.add_argument("--output", required=True, help="Absolute path; must not exist")
+    verify_backup = actions.add_parser("verify-backup", help="Read-only verification of a backup before restart")
+    verify_backup.add_argument("--expected-sha256", required=True)
     domain = actions.add_parser("domain-status")
     domain.add_argument("--verify", action="store_true", help="Verify retained artifact hashes and foreign keys")
     domain.add_argument("--projection-record", action="append", default=[], metavar="FILE",
@@ -93,6 +98,13 @@ def main(argv: list[str] | None = None) -> int:
             output = {"initialized": True, "environment": args.environment}
         elif args.action == "import":
             output = store.import_snapshot(Path(args.state).read_bytes(), import_id=args.import_id)
+        elif args.action == "domain-migrate":
+            output = store.migrate_domain()
+        elif args.action == "backup":
+            output = store.backup(args.output)
+        elif args.action == "verify-backup":
+            # Restart = run this CLI with --database pointing at a verified copy.
+            output = store.verify_backup(expected_sha256=args.expected_sha256)
         elif args.action == "domain-status":
             if args.projection_record:
                 records = read_packets(args.projection_record)

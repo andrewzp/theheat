@@ -232,40 +232,77 @@ def classify_world_status(metrics: dict, *, prev_cached_count: int) -> str:
     return "success"
 
 
-def read_cache() -> dict:
-    if not GIST_ID or not GITHUB_TOKEN:
-        return {}
+class CacheUnreadable(RuntimeError):
+    """The remote cache exists or may exist but could not be read exactly."""
+
+
+def _gist_request() -> None:
+    # Declared hosting request (unknown price, never free), counted per physical call.
+    from src.two_bot.call_inventory import consume
+    consume("gist_state", join=False)
+
+
+def _read_remote() -> dict:
+    """Strict read: an absent file is empty; any failure or invalid content raises."""
     try:
+        _gist_request()
         resp = requests.get(
             f"https://api.github.com/gists/{GIST_ID}", headers=_headers(), timeout=15
         )
         resp.raise_for_status()
-        meta = resp.json().get("files", {}).get(WORLD_CACHE_FILENAME)
-        if not meta:
+        envelope = resp.json()
+        if not isinstance(envelope, dict) or not isinstance(envelope.get("files"), dict):
+            raise CacheUnreadable("gist_files_invalid")
+        if WORLD_CACHE_FILENAME not in envelope["files"]:
             return {}
+        meta = envelope["files"][WORLD_CACHE_FILENAME]
+        if not isinstance(meta, dict) or not meta:
+            raise CacheUnreadable("cache_metadata_invalid")
         if meta.get("truncated"):
+            _gist_request()
             raw = requests.get(meta["raw_url"], headers=_headers(), timeout=30)
             raw.raise_for_status()
             content = raw.text
         else:
             content = meta["content"]
         data = json.loads(content)
-        if not isinstance(data, dict):
-            return {}
-        # Preserve original unattributed rows in idempotent quarantine; never guess geography.
-        return migrate_cache(data)
-    except (requests.RequestException, ValueError, KeyError):
+    except (requests.RequestException, ValueError, KeyError, TypeError, AttributeError) as exc:
+        raise CacheUnreadable(type(exc).__name__) from None
+    if not isinstance(data, dict):
+        raise CacheUnreadable("cache_not_object")
+    # Preserve original unattributed rows in idempotent quarantine; never guess geography.
+    return migrate_cache(data)
+
+
+def read_cache() -> dict:
+    if not GIST_ID or not GITHUB_TOKEN:
+        return {}
+    try:
+        return _read_remote()
+    except CacheUnreadable:
         return {}
 
 
 def write_cache(cache: dict) -> bool:
+    """Merge into the remote cache read immediately before the PATCH.
+
+    An unreadable remote cache is never treated as empty: the write is refused
+    rather than replacing retained thresholds with this run's subset. The Gist
+    GET->PATCH window remains (nontransactional); see writer_fencing.
+    """
     if not GIST_ID or not GITHUB_TOKEN:
         return False
     try:
-        merged = merge_caches(read_cache(), cache)
+        current = _read_remote()
+    except CacheUnreadable as exc:
+        print(f"[world_cache] write refused: remote cache unreadable ({exc}); retained cache unchanged")
+        return False
+    try:
+        merged = merge_caches(current, cache)
         payload = json.dumps(merged, separators=(",", ":"))
         if len(payload) > STATE_SIZE_WARNING_BYTES:
             print(f"[world_cache] WARNING size {len(payload)}B approaching gist inline cliff")
+        _gist_request()
         resp = requests.patch(
             f"https://api.github.com/gists/{GIST_ID}",
             headers=_headers(),

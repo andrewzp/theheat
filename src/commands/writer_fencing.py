@@ -20,7 +20,7 @@ import sys
 from src.commands.command_roles import RoleError
 
 KINDS = ("source", "editor", "archive", "batch", "check", "maintenance", "metrics", "sender")
-STORES = ("gist_state", "request_archive_files", "command_authority", "x_platform", "bluesky_platform")
+STORES = ("gist_state", "feedback_gist", "request_archive_files", "command_authority", "x_platform", "bluesky_platform")
 TARGETS = ("command_authority_sqlite", "command_authority_postgres")
 
 
@@ -43,6 +43,20 @@ WRITERS: tuple[Writer, ...] = (
            "expected_revision_get_then_patch", False),
     Writer("dashboard_state", "editor", "dashboard/lib/state-store.js:writeStateStore", "gist_state",
            "get_then_patch", False),
+    Writer("dashboard_reconciliation", "editor", "dashboard/lib/state-store.js:reconcileDeliveryStore", "gist_state",
+           "final_read_decision_then_patch_exact_flag", False),
+    Writer("bot_run_final_save", "source", "src.orchestrator.cli:main", "gist_state",
+           "via_write_state_revision_aware_merge", False),
+    Writer("publish_intent", "sender", "src.orchestrator.posting:post_approved", "gist_state",
+           "via_write_state_expected_draft_and_ledger", False),
+    Writer("reject_all_drafts", "maintenance", "scripts/reject_all_drafts.py:reject_all_pending", "gist_state",
+           "via_write_state_manual_typed_confirmation", False),
+    Writer("world_threshold_cache", "source", "src.orchestrator.world_cache:write_cache", "gist_state",
+           "strict_final_read_merge_then_patch", False),
+    Writer("runtime_report", "maintenance", "scripts/runtime_report.py:publish_report", "gist_state",
+           "manual_paused_run_id_check_get_then_patch", False),
+    Writer("post_feedback", "editor", "dashboard/lib/post-feedback.js:savePostFeedback", "feedback_gist",
+           "separate_private_gist_create_only_file", False),
     Writer("metrics", "metrics", "src.orchestrator.hot10:_run_twitter_metrics", "gist_state", "via_write_state", False),
     Writer("request_archive", "archive", "src.two_bot.request_archive:write_private_file_exclusive",
            "request_archive_files", "exclusive_create_content_addressed", True),
@@ -76,9 +90,9 @@ def compatibility(target: str) -> dict:
         raise RoleError("unknown_cutover_target", "Unknown backend cutover target")
     blockers = []
     for writer in WRITERS:
-        if writer.store == "gist_state":
+        if writer.store in {"gist_state", "feedback_gist"}:
             blockers.append({"writer": writer.name, "code": "gist_writer_not_rerouted",
-                             "reason": "Writes the production Gist; GET-then-PATCH cannot be fenced"})
+                             "reason": "Writes a Gist; GET-then-PATCH cannot be fenced"})
         elif not writer.fenced and writer.store in {"x_platform", "bluesky_platform"}:
             blockers.append({"writer": writer.name, "code": "platform_sender_unfenced",
                              "reason": "Sends to a platform without a durable owner fence"})

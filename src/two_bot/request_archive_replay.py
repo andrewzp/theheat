@@ -230,6 +230,11 @@ def load_archive(path: str | os.PathLike) -> VerifiedArchive:
         state["routes"] = _verify_routes(state["routes"], artifacts_dir, problems)
     except ArchiveInvalid as exc:
         return _invalid(directory, str(exc), manifest_sha)
+    # A capture's directory is named by its own scope at creation. A copy kept
+    # under another scope's name is not that capture: refusing it keeps lineage,
+    # receipts and duplicate/conflict reconciliation bound to one identity.
+    if state["scope_id"] is not None and state["scope_id"] != directory.name:
+        return _invalid(directory, "scope_directory_identity_mismatch", manifest_sha)
     status = "complete" if not problems else "incomplete"
     return VerifiedArchive(READ_API_VERSION, directory, state["scope_id"], status, tuple(problems),
                            manifest_sha, tuple(records), state["opened"], state["closed"], state["held"],

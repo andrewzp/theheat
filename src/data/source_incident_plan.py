@@ -9,11 +9,12 @@ repair, paid self-heal or background activation happens here.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from datetime import datetime, timezone
 import re
 from typing import Any
 from urllib.parse import urlsplit
 
-from src.data import firms, source_incidents
+from src.data import firms, source_access, source_incidents
 from src.data.source_product_contracts import legs_by_id
 
 SCHEMA = "theheat.source-incident-plan/v1"
@@ -83,7 +84,7 @@ def _endpoint_action(row: Mapping[str, Any], confirmations: Mapping[str, Mapping
 
 
 def build_plan(state: Mapping[str, Any], *, confirmations: Sequence[Mapping[str, Any]] = (),
-               attestations: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
+               attestations: Sequence[Mapping[str, Any]] = (), now: datetime | None = None) -> dict[str, Any]:
     """Exact next action per open product incident, from retained inputs only."""
     confirmed = {doc["product_id"]: doc for doc in (validate_endpoint_confirmation(d) for d in confirmations)}
     attested = [source_incidents.validate_access_attestation(doc) for doc in attestations]
@@ -113,6 +114,9 @@ def build_plan(state: Mapping[str, Any], *, confirmations: Sequence[Mapping[str,
         "schema": SCHEMA, "network": "not_used", "credential_enumeration": "not_performed",
         "incidents": incidents, "recovery": source_incidents.recovery_summary(incidents),
         "actions": actions, "earthdata_hold": hold, "self_heal": SELF_HEAL,
+        # Credential state, refusal backoff and last-good GPM data age (no request is sent).
+        "gpm_access": source_access.gpm_access_health(state if isinstance(state, Mapping) else {},
+                                                      now=now or datetime.now(timezone.utc)),
         "scope": "retained_run_history_only_not_current_availability",
     }
 

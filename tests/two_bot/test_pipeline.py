@@ -698,11 +698,13 @@ def test_generate_draft_returns_none_on_writer_kill(mock_writer, mock_extract, m
     assert not mock_extract.called
 
 
-@pytest.mark.parametrize("tweet", [
-    "Conakry, Guinea: hottest May.",
-    "Conakry, Guinea could face life-threatening winds, the weather service warns.",
+@pytest.mark.parametrize("tweet,free_copy_rejection", [
+    ("Conakry, Guinea: hottest May.", False),
+    # Danger wording absent from the source is now rejected by the free copy gate first.
+    ("Conakry, Guinea could face life-threatening winds, the weather service warns.", True),
 ])
-def test_generate_draft_returns_none_on_fact_check_fail(mock_writer, mock_extract, mock_fact_check, tweet):
+def test_generate_draft_returns_none_on_fact_check_fail(mock_writer, mock_extract, mock_fact_check, tweet,
+                                                        free_copy_rejection):
     mock_writer.return_value = WriterResult(
         tweet=tweet,
         kill_reason=None,
@@ -718,10 +720,15 @@ def test_generate_draft_returns_none_on_fact_check_fail(mock_writer, mock_extrac
     )
     state = _state_with_memory()
 
-    result = generate_draft(_monthly_high_bundle(), state)
+    outcome: dict = {}
+    result = generate_draft(_monthly_high_bundle(), state, result_out=outcome)
 
     assert result is None
-    mock_fact_check.assert_called_once()
+    if free_copy_rejection:
+        assert outcome["kill_stage"] == "copy_gate" and outcome["kill_reason"].startswith("invented_danger")
+        mock_fact_check.assert_not_called()
+    else:
+        mock_fact_check.assert_called_once()
     # Critically, memory is NOT written when fact-check fails — even though
     # the writer succeeded. record_shipped only fires on the full happy path.
     assert state["memory"]["shipped_tweets"] == []

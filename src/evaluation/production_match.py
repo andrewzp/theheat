@@ -31,7 +31,7 @@ _HAZARDS = (
     ("snow", ("snow", "blizzard")),
     ("severe_weather", ("severe", "tornado", "nws", "warning")),
 )
-CHECK_STAGES = {"safety", "honesty_gate", "evidence_contract", "fact_check", "critic"}
+CHECK_STAGES = {"safety", "honesty_gate", "copy_gate", "evidence_contract", "fact_check", "critic"}
 BUDGET_STAGES = {"budget_exhausted", "triage_cap", "billing_cycle_abort"}
 FAILED_SOURCE = {"error", "failed", "unavailable", "access_expired", "timeout"}
 

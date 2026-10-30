@@ -139,6 +139,7 @@ POLICY_FILES = (
     "src/media/hot10_graphic_adapter.py",
     "src/media/maps/ne_110m_land_v4_1_0.json", "src/media/maps/manifest.json", "src/media/maps/NOTICE.md",
     "src/two_bot/call_inventory.py", "src/two_bot/engine_boundary.py",
+    "src/two_bot/copy_gates.py",
 )
 MODEL_KEYS = {"writer", "writer_provider", "fact_check", "critic", "safety"}
 FLAG_KEYS = {"critic_enabled", "critic_revise_enabled", "writer_samples", "safety_llm_enabled"}

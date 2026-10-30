@@ -36,9 +36,17 @@ function allowanceRows(raw) {
       const outcomes = Object.fromEntries(OUTCOMES.slice(1).map((name) => [name, count(row.outcomes[name]) ? row.outcomes[name] : 0]))
       return [{stage, limit: row.limit, reserved: row.reserved, remaining: row.remaining,
         refused_before_egress: row.refused_before_egress, physical_attempts: row.physical_attempts, outcomes,
+        // Exact cached results reused instead of a call; older rows did not record them.
+        exact_cache_hits: count(row.exact_cache_hits) ? row.exact_cache_hits : null,
         pricing: pick(row.pricing, PRICING) || "unknown", spend_class: pick(row.spend_class, SPEND)}]
     })
   })
+}
+
+function lateRows(raw) {
+  if (!object(raw)) return []
+  return Object.entries(raw).filter(([stage, n]) => STAGE.test(stage) && count(n)).slice(0, 16)
+    .map(([stage, requests]) => ({stage, requests}))
 }
 
 export function projectOperationCost(row) {
@@ -59,7 +67,10 @@ export function projectOperationCost(row) {
     requests: {total: count(requests.total) ? requests.total : null,
       by_outcome: Object.fromEntries(OUTCOMES.map((name) => [name, count(byOutcome[name]) ? byOutcome[name] : 0])),
       by_stage: stageRows(requests.by_stage), interrupted: count(requests.interrupted) ? requests.interrupted : 0,
-      truncated: requests.truncated === true},
+      truncated: requests.truncated === true,
+      // Requests a worker sent after this operation closed: spent, never joined. Absent on older rows.
+      late_after_close: count(requests.late_after_close) ? requests.late_after_close : null,
+      late_by_stage: lateRows(requests.late_by_stage)},
     unpriced_requests: count(row.unpriced_requests) ? row.unpriced_requests : null,
     estimate_only_requests: count(row.estimate_only_requests) ? row.estimate_only_requests : null,
     another_attempt_allowed: Object.fromEntries(Object.entries(another).filter(([k, v]) => STAGE.test(k) && typeof v === "boolean").slice(0, 8)),
