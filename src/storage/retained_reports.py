@@ -390,10 +390,16 @@ class RetainedNewsReportLane:
     captured_at: str
 
     def __call__(self, result):
-        from dataclasses import asdict
+        from dataclasses import fields
         from src.data.newsworthiness import NewsRetrievalResult
         require(type(self.session) is RetainedReportSession and type(result) is NewsRetrievalResult,
                 "explicit_retained_news_result_required")
+        # Freeze returned metadata before storage. The live allowance/lock is
+        # shared execution authority, not a serializable or cloneable artifact.
+        snapshot = {field.name: getattr(result, field.name) for field in fields(result) if field.name != "allowance"}
+        snapshot["allowance"] = result.allowance.summary()
+        raw = p._canonical(snapshot)
+        snapshot = p._decode(raw)
         self.session._validate()
         require(type(self.assignments) is tuple and len(self.assignments) <= 16, "report_configuration_bound")
         utc_datetime(self.captured_at)
@@ -402,16 +408,15 @@ class RetainedNewsReportLane:
         for row in self.assignments:
             fixed(row, "event_index event_sha256 lineage_id expected_head operation_id")
             index = row["event_index"]
-            require(type(index) is int and 0 <= index < len(result.events), "report_result_changed")
-            require(digest(result.events[index]) == sha(row["event_sha256"]), "report_result_changed")
+            require(type(index) is int and 0 <= index < len(snapshot["events"]), "report_result_changed")
+            require(digest(snapshot["events"][index]) == sha(row["event_sha256"]), "report_result_changed")
             require(row["lineage_id"] not in seen, "report_configuration_invalid")
             seen.add(row["lineage_id"])
-            value = legacy_news_document(result.events[index], lineage_id=row["lineage_id"], captured_at=self.captured_at)
+            value = legacy_news_document(snapshot["events"][index], lineage_id=row["lineage_id"], captured_at=self.captured_at)
             value["previous_report_sha256"] = row["expected_head"]
             documents.append((row, value))
         # Retain the exact already-returned result including verification usage;
         # no guessed source URL/acquisition time for this aggregate artifact.
-        raw = p._canonical(asdict(result))
         artifact = self.session.retain_artifact(raw, declared_sha256=p._sha(raw), metadata=dict(
             media_type="application/json", source_url=None, retrieved_at=None, original_artifact_id=None,
             extraction=None))

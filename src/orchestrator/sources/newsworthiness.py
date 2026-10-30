@@ -13,7 +13,6 @@ this IS a source row the sentinel watches like any other.
 
 from __future__ import annotations
 
-from copy import deepcopy
 import os
 import time
 from typing import TYPE_CHECKING, overload
@@ -68,7 +67,9 @@ def run_newsworthiness(bot_state: BotState, current_run: dict | None, *, retenti
         try:
             if type(retention_observer) is not RetainedNewsReportLane:
                 raise ValueError("explicit_retained_news_lane_required")
-            retained = retention_observer(deepcopy(result))
+            # This exact trusted lane immediately snapshots JSON metadata; the
+            # live allowance owns a lock and must never be copied as authority.
+            retained = retention_observer(result)
         except Exception:  # noqa: BLE001 — no report storage failure may stop source health.
             retained = {"status": "retention_unavailable", "generation_available": False, "publication_enabled": False}
     state.record_news_events(bot_state, result.events)
