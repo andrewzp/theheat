@@ -1033,3 +1033,15 @@ h1 span { color: #666; font-weight: 400; font-size: 14px; margin-left: 8px; }
 .post-feedback a { color: #ff8c42; }
 .post-feedback a:focus-visible { outline: 2px solid #ff8c42; outline-offset: 3px; }
 .post-feedback button { min-height: 44px; }
+.credential-banner {
+  font-size: 12px; line-height: 1.55; padding: 10px 12px; margin: -4px 0 16px;
+  border: 1px solid #5a4500; border-radius: 4px; background: rgba(255, 190, 0, 0.06); color: #f0c94a;
+  display: grid; gap: 8px; min-width: 0;
+}
+.credential-banner.urgent { color: #ff4d00; border-color: #5a1500; background: rgba(255, 77, 0, 0.06); }
+.credential-banner p, .credential-banner ol { margin: 0; }
+.credential-banner ol { padding-left: 18px; display: grid; gap: 4px; color: #ccc; }
+.credential-banner a { color: inherit; }
+.credential-banner-command { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.credential-banner-command code { overflow-wrap: anywhere; color: #eee; }
+.credential-banner-note { color: #888; }

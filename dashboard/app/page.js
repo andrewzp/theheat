@@ -16,6 +16,7 @@ import { RunsTable } from "./components/RunsTable.js"
 import { SourcesView } from "./components/SourcesView.js"
 import { SourceHealthContent } from "./health/page.js"
 import { ProductHealthPanel } from "./components/ProductHealthPanel.js"
+import { CredentialReminderBanner } from "./components/CredentialReminderBanner.js"
 import { CostPanel } from "./components/CostPanel.js"
 import DeliveryReconciliation from "./components/DeliveryReconciliation.js"
 import { COST_SCENARIO } from "../lib/usage-cost-contract.js"
@@ -562,6 +563,8 @@ export default function Dashboard() {
             state read failed: {stateError}
           </div>
         )}
+
+        <CredentialReminderBanner credentialExpiry={credentialExpiry} nowMs={Date.now()} />
 
         {!loading && ["dashboard", "health"].includes(activeTab) && (
           <>

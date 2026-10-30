@@ -43,3 +43,30 @@ export function credentialRows(credentialExpiry = {}, now = Date.now()) {
     })
     .sort((a, b) => (a.daysLeft ?? Infinity) - (b.daysLeft ?? Infinity))
 }
+
+// How to renew each tracked credential. The banner never shows a token: only its
+// expiry date (written by the bot) and where to renew it. Add one entry per new
+// tracked credential alongside src/credentials.py TRACKED_CREDENTIALS.
+export const CREDENTIAL_RENEWAL = {
+  EARTHDATA_TOKEN: {
+    lifetimeDays: 60,
+    renewUrl: "https://urs.earthdata.nasa.gov/",
+    renewLabel: "Open Earthdata",
+    steps: "Sign in at Earthdata, open Generate Token, click the Generate Token button, then Show Token and copy it.",
+    command: "gh secret set EARTHDATA_TOKEN --repo andrewzp/theheat",
+    impact: "GPM satellite rainfall stops while it is expired.",
+  },
+}
+
+// Credentials that need renewing now: within the warning window or already
+// expired, soonest first. Unparseable dates stay on the card as unknown and are
+// not turned into a reminder.
+export function credentialReminders(credentialExpiry = {}, now = Date.now()) {
+  return credentialRows(credentialExpiry, now)
+    .filter((row) => row.daysLeft !== null && row.daysLeft <= CRED_WARN_DAYS)
+    .map((row) => ({
+      ...row,
+      urgency: row.daysLeft < 0 ? "expired" : row.daysLeft <= CRED_CRIT_DAYS ? "critical" : "soon",
+      renewal: CREDENTIAL_RENEWAL[row.name] ?? null,
+    }))
+}
