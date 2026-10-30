@@ -63,8 +63,11 @@ def install_fake_x(monkeypatch):
 
     def upload(*, filename, file, **options):
         assert result.persisted, "an intent must be durable before the first upload"
-        saved, _expected = result.persisted[-1]
-        assert saved["publish_ledger"][saved["drafts"][0]["event_id"]]["phase"] == "submitted"
+        saved, expected = result.persisted[-1]
+        requested = expected["expected_draft"]
+        submitted = next(draft for draft in saved["drafts"] if draft["id"] == requested["id"])
+        assert submitted["event_id"] == requested["event_id"]
+        assert saved["publish_ledger"][submitted["event_id"]]["phase"] == "submitted"
         result.calls.append(("upload", file.read(), filename))
         if result.failure == "upload":
             raise TimeoutError("invented upload response lost")

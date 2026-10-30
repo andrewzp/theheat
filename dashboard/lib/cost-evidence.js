@@ -1,12 +1,13 @@
 import { summarizeUsage } from "./usage-ledger.js"
 import { projectUsageCost } from "./usage-cost-scenario.js"
+import { recentOperationCosts } from "./operation-costs.js"
 
 // Browser contract: totals/counts only. No row identities, provider content,
 // arbitrary labels, monthly projections or configured budget presented as a cap.
 export function buildCostEvidence(state, { scenario, now = Date.now() } = {}) {
   const result = {
     schema_version: 1, actual_bill_available: false, budget_enforced: false,
-    recorded: {status: "unavailable"}, scenario: {status: "unavailable"},
+    recorded: {status: "unavailable"}, scenario: {status: "unavailable"}, operations: [],
   }
   if (!state) return result
   try {
@@ -17,8 +18,13 @@ export function buildCostEvidence(state, { scenario, now = Date.now() } = {}) {
       priced_calls: summary.priced_calls, unpriced_calls: summary.unpriced_calls,
       missing_usage_calls: summary.missing_usage_calls, legacy_calls: summary.legacy_calls,
       inconsistent_rows: summary.inconsistent_rows, excluded_rows: summary.excluded_rows,
+      spend_classes: summary.spend_classes,
     }
   } catch { result.recorded = {status: "unavailable", error: "recorded_usage_unavailable"} }
+  try {
+    // Decision-point joins persisted with each run; interrupted requests stay visible.
+    result.operations = recentOperationCosts(state)
+  } catch { result.operations = [] }
   try {
     if (scenario == null) { result.scenario = {status: "not_requested"}; return result }
     const report = projectUsageCost(state.llm_usage_observations, {scenario})

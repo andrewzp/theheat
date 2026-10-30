@@ -1,5 +1,7 @@
 import React from "react"
 import PostOutcomeHistory from "./PostOutcomeHistory.js"
+import RecoveredRecord from "./RecoveredRecord.js"
+import { LANE_TEXT } from "../../lib/graphic-availability.js"
 
 const h = React.createElement
 function label(value) { return value ? String(value).replaceAll("_", " ") : "unknown" }
@@ -19,7 +21,34 @@ function Milestone({ title, value }) {
       : "Unknown"))
 }
 
-export function ProductHealthPanel({ health, config, deployment, stale = false }) {
+// W10.6: each post-image family's requirement and the input missing on this deployment.
+export function GraphicFamilies({ graphics }) {
+  const families = Array.isArray(graphics?.families) ? graphics.families : []
+  const store = graphics?.store
+  return h("details", { className: "runtime-details", "aria-label": "Post-image families" },
+    h("summary", { style: { minHeight: 44 } }, `Post-image families · ${families.filter(row => row.status === "missing_input").length} need an input here`),
+    h("p", { className: "runtime-note" }, !store ? "The media store setting is not reported. Native charts do not need it."
+      : store.configured ? `Media store setting present (${store.backend}). Access is checked only by a preview or the sender; this is not hosted, cross-host or native rendering proof.`
+        : "No usable media store setting here. Native charts and text posts are unaffected; retained and published images stay held."),
+    !families.length ? h("p", { className: "runtime-note" }, "Family requirements are unavailable.")
+      : h("ul", { style: { overflowWrap: "anywhere", paddingLeft: 18 } }, families.map(row => h("li", { key: row.family, "data-graphic-family": row.family, "data-graphic-status": row.status },
+        h("strong", null, row.label), ` — ${LANE_TEXT[row.lane] || row.lane}. `,
+        row.missing ? `Missing here: ${row.missing}.` : row.status === "store_configured_unverified" ? "Store setting present; access unverified." : "Available from the saved source.",
+        h("span", { className: "runtime-note", style: { display: "block" } }, `Needs: ${row.needs.join("; ")}.`)))),
+    h("p", { className: "runtime-note" }, "Replacing or recovering an image is a new revision: it revokes the joint review and any approval."))
+}
+
+// W14.6: delivered records whose provenance is imported/restored/superseded (local preview only).
+// Read-only history beside, never inside, the post outcome list; empty renders nothing.
+export function RecoveredPublished({ records }) {
+  const rows = Array.isArray(records) ? records.filter(Boolean) : []
+  if (!rows.length) return null
+  return h("section", { "aria-label": "Recovered published history" },
+    h("h3", null, "Recovered published history"),
+    rows.map(record => h(RecoveredRecord, { key: record.draft_id ?? record.event_id, record })))
+}
+
+export function ProductHealthPanel({ health, config, deployment, stale = false, graphics = null, recovered = null }) {
   if (!health) return h("section", { className: "card full runtime-panel", "aria-label": "Operating status" },
     h("h2", null, "Operating status"),
     h("p", { className: "runtime-note" }, "Operating evidence is unavailable. Missing data does not mean the system is healthy."))
@@ -63,6 +92,8 @@ export function ProductHealthPanel({ health, config, deployment, stale = false }
           : `Retained metrics: ${label(metrics.status)}. Missing samples are not zero engagement.`),
         metrics.collector_unseen_receipt_count > 0 ? h("p", { className: "runtime-note" }, `${metrics.collector_unseen_receipt_count} retained receipts are outside the collector's current selection path.`) : null)),
     h(PostOutcomeHistory, { outcomes: health.post_outcomes }),
+    h(RecoveredPublished, { records: recovered }),
+    h(GraphicFamilies, { graphics }),
     h("details", { className: "runtime-details" },
       h("summary", null, `Bot settings and evidence · ${label(config?.status)}`),
       h("p", { className: "runtime-note" }, config?.reason || "The bot has not recorded its runtime settings yet."),

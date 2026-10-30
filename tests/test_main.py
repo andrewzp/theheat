@@ -1636,52 +1636,47 @@ class TestRunAlerts:
 
 
 class TestRunLeaderboard:
+    @staticmethod
+    def _qualified(mock_om, tmp_path):
+        """Invented catalogue cities with the real adapter's evidence and loader's normals.
+
+        The ranking itself is hot10_contract.qualify (the module mock's legacy
+        compute_anomalies/rank_hot10 are no longer the production ranking).
+        """
+        from tests.live_content_harness import qualified_inputs
+
+        cities, normals, temps = qualified_inputs(tmp_path, datetime.now(timezone.utc))
+        mock_om.load_cities.return_value = cities
+        mock_om.load_normals.return_value = normals
+        mock_om.fetch_all_city_temps.return_value = temps
+
     @patch("src.main.save_draft")
     @patch("src.main._try_two_bot_draft")
     @patch("src.main.open_meteo")
     @patch("src.main.state")
-    def test_computes_anomalies_and_drafts(self, mock_state, mock_om, mock_two_bot, mock_draft, synthetic_bundle_provenance):
-        """Hot 10 leaderboard: ported from voice gen to two-bot writer
-        on 2026-05-04. The voice generator's `generate_tweet` is no
-        longer reached for the hot10 category."""
-        mock_om.load_cities.return_value = [
-            {"city": "Phoenix", "country": "US", "lat": "33.45", "lon": "-112.07"}
-        ]
-        mock_om.load_normals.return_value = {"Phoenix": {4: 30.0}}
-        mock_om.fetch_all_city_temps.return_value = [
-            CityTemp("Phoenix", "US", 33.45, -112.07, 45.0),
-        ]
-        mock_om.compute_anomalies.return_value = [
-            CityTemp("Phoenix", "US", 33.45, -112.07, 45.0, 30.0, 15.0, signal_date=date(2026, 5, 4)),
-        ]
-        mock_om.rank_hot10.return_value = [
-            CityTemp("Phoenix", "US", 33.45, -112.07, 45.0, 30.0, 15.0, signal_date=date(2026, 5, 4)),
-        ]
+    def test_qualifies_and_drafts(self, mock_state, mock_om, mock_two_bot, mock_draft, tmp_path):
+        """Hot 10 is ranked by the qualification contract, then drafted by the two-bot writer."""
+        self._qualified(mock_om, tmp_path)
         mock_two_bot.return_value = True
         mock_state.update_streaks.return_value = {}
 
         state = _fresh_state()
         result = run_leaderboard(state)
 
-        mock_om.compute_anomalies.assert_called_once()
-        mock_om.rank_hot10.assert_called_once()
+        mock_om.compute_anomalies.assert_not_called()
+        mock_om.rank_hot10.assert_not_called()
         mock_two_bot.assert_called_once()
+        bundle = mock_two_bot.call_args.args[0]
+        assert bundle.raw_signal_dump["schema"] == "theheat.hot10-bulletin/v1"
+        assert len(bundle.raw_signal_dump["cities"]) == 10
         assert result is not None
 
     @patch("src.main.save_draft")
     @patch("src.main._try_two_bot_draft")
     @patch("src.main.open_meteo")
     @patch("src.main.state")
-    def test_persists_compact_hot10_rows(self, mock_state, mock_om, mock_two_bot, mock_draft, synthetic_bundle_provenance):
-        ranked = [
-            CityTemp(f"City {idx}", "US", 0.0, 0.0, 30.0 + idx, 25.0, 10.0 - idx, signal_date=date(2026, 5, 4))
-            for idx in range(1, 11)
-        ]
-        mock_om.load_cities.return_value = []
-        mock_om.load_normals.return_value = {}
-        mock_om.fetch_all_city_temps.return_value = ranked
-        mock_om.compute_anomalies.return_value = ranked
-        mock_om.rank_hot10.return_value = ranked
+    def test_persists_compact_hot10_rows(self, mock_state, mock_om, mock_two_bot, mock_draft, tmp_path):
+        self._qualified(mock_om, tmp_path)
         mock_state.update_streaks.return_value = {}
         captured = {}
 
@@ -1698,10 +1693,10 @@ class TestRunLeaderboard:
         assert len(rows) == 10
         assert rows[0] == {
             "rank": 1,
-            "city": "City 1",
-            "country": "US",
-            "anomaly_c": 9.0,
-            "temp_high_c": 31.0,
+            "city": "Riyadh",
+            "country": "Saudi Arabia",
+            "anomaly_c": 9.2,
+            "temp_high_c": 39.2,
         }
         assert set(rows[0]) == {"rank", "city", "country", "anomaly_c", "temp_high_c"}
         assert "normal_high_c" not in rows[0]
@@ -1743,18 +1738,8 @@ class TestRunLeaderboard:
     @patch("src.main.save_draft")
     @patch("src.main.open_meteo")
     @patch("src.main.state")
-    def test_updates_state_with_hot10(self, mock_state, mock_om, mock_draft):
-        mock_om.load_cities.return_value = []
-        mock_om.load_normals.return_value = {}
-        mock_om.fetch_all_city_temps.return_value = [
-            CityTemp("Miami", "US", 25.76, -80.19, 38.0),
-        ]
-        mock_om.compute_anomalies.return_value = [
-            CityTemp("Miami", "US", 25.76, -80.19, 38.0, 30.0, 8.0),
-        ]
-        mock_om.rank_hot10.return_value = [
-            CityTemp("Miami", "US", 25.76, -80.19, 38.0, 30.0, 8.0),
-        ]
+    def test_updates_state_with_hot10(self, mock_state, mock_om, mock_draft, tmp_path):
+        self._qualified(mock_om, tmp_path)
         mock_draft.return_value = True
         mock_state.update_streaks.return_value = {}
 
@@ -1762,7 +1747,7 @@ class TestRunLeaderboard:
         result = run_leaderboard(state)
 
         assert "last_hot10" in result
-        assert "Miami" in result["last_hot10"]["cities"]
+        assert result["last_hot10"]["cities"][0] == "Riyadh" and len(result["last_hot10"]["place_ids"]) == 10
 
 
 class TestTwitterMetricsIngestion:

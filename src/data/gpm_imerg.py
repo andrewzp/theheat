@@ -443,6 +443,7 @@ def _qualified_watchlist(
 
 def _network_watchlist(
     rows: Iterable[Mapping[str, Any]], max_cities: int | None, *, scan_date: date | None = None,
+    selection: list[Mapping[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     """Rotate a bounded canonical window once per UTC date, independent of CSV order.
 
@@ -459,6 +460,11 @@ def _network_watchlist(
     if type(scan_date) is not date:
         raise ValueError("scan_date must be a UTC calendar date")
     qualified = _qualified_watchlist(rows, canonical_order=True)
+    if selection is not None:
+        chosen = _qualified_watchlist(selection, canonical_order=False)
+        if len(chosen) != len(selection) or len(chosen) > limit or any(row not in qualified for row in chosen):
+            raise ValueError("rainfall_network_selection_invalid")
+        return chosen
     count = len(qualified)
     if not count or not limit:
         return []
@@ -478,6 +484,7 @@ def fetch_daily_precip(
     strict: bool = False,
     today: date | None = None,
     trace: RainfallOpportunityTrace | None = None,
+    network_selection: list[Mapping[str, Any]] | None = None,
 ) -> list[CityPrecipReading]:
     """Fetch point daily precipitation for monitored cities (R-03 chained).
 
@@ -494,6 +501,8 @@ def fetch_daily_precip(
     today = today if today is not None else datetime.now(timezone.utc).date()
     # A trace is passed on only when supplied, so untraced call shapes are unchanged.
     observe: dict[str, Any] = {} if trace is None else {"trace": trace}
+    if network_selection is not None:
+        observe["network_selection"] = network_selection
     if trace is not None:
         trace.begin(cities, today=today, product=product, max_cities=max_cities,
                     max_workers=max_workers, target_date=target_date)
@@ -543,6 +552,7 @@ def _fetch_daily_precip_primary(
     strict: bool = False,
     today: date | None = None,
     trace: RainfallOpportunityTrace | None = None,
+    network_selection: list[Mapping[str, Any]] | None = None,
 ) -> list[CityPrecipReading]:
     """Primary GESDISC-family daily precip fetch (grid chain then OPeNDAP).
 
@@ -624,7 +634,7 @@ def _fetch_daily_precip_primary(
             trace.stale("imerg_late_opendap", requested_date)
         raise
     rows = cities if cities is not None else load_cities()
-    selected = _network_watchlist(rows, max_cities, scan_date=today)
+    selected = _network_watchlist(rows, max_cities, scan_date=today, selection=network_selection)
     if trace is not None:
         trace.window("imerg_late_opendap", selected, scan_date=today, max_cities=max_cities, data_date=requested_date)
     readings_by_index: list[CityPrecipReading | None] = [None] * len(selected)
@@ -859,6 +869,7 @@ def _fetch_precip_open_meteo(
     max_cities: int | None = DEFAULT_CITY_LIMIT,
     today: date | None = None,
     trace: RainfallOpportunityTrace | None = None,
+    network_selection: list[Mapping[str, Any]] | None = None,
 ) -> list[CityPrecipReading]:
     """Open-Meteo independent precip witness (R-03).
 
@@ -869,7 +880,7 @@ def _fetch_precip_open_meteo(
     the thresholding; this only supplies the daily readings."""
     rows = cities if cities is not None else load_cities()
     today = today if today is not None else datetime.now(timezone.utc).date()
-    selected = _network_watchlist(rows, max_cities, scan_date=today)
+    selected = _network_watchlist(rows, max_cities, scan_date=today, selection=network_selection)
     target_date = today - timedelta(days=1)
     date_key = target_date.isoformat()
     readings: list[CityPrecipReading] = []

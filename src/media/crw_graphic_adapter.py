@@ -12,16 +12,11 @@ import json
 import math
 
 from src.data import crw_contract as source
-from src.data.ocean_sst_anomaly import (
-    REGION_REGISTRY,
-    RegionalSSTAnomalyEvent,
-    _build_url,
-    _detect_tier,
-)
+from src.data.crw_regions import REGION_REGISTRY, RegionalSSTAnomalyEvent, _build_url, _detect_tier
 from src.data.source_status import SourceFetchError
 from src.editorial.revisions import fingerprint
 from src.media.temperature_graphic_adapter import _StoredBundle, story_bundle_snapshot
-from src.two_bot.intern.marine import (
+from src.two_bot.intern.marine_crw import (
     build_regional_sst_anomaly_bundle,
     legacy_regional_sst_anomaly_snapshot,
 )

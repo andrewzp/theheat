@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 # ruff: noqa: F403,F405
+from src.data import source_incidents
 from src.data._witness import degraded_via
 from src.data.fire_identity import legacy_history_reason
 from src.data.fire_source_contract import source_name, validate_event
+from src.editorial import hazard_episodes
 from src.orchestrator.common import *
 
 
@@ -13,8 +15,9 @@ def run_firms(bot_state: BotState, current_run: dict | None) -> None:
     # 2. Wildfire alerts via NASA FIRMS
     print("[alerts] Checking wildfires...")
     firms_start = time.perf_counter()
+    attempts: list[dict] = []
     try:
-        fires = _fetch_strict(firms.fetch_fires)
+        fires = _fetch_firms_with_attempts(attempts)
         eligible = []
         holds: dict[str, int] = {}
         for fire in fires:
@@ -67,6 +70,11 @@ def run_firms(bot_state: BotState, current_run: dict | None) -> None:
                     print(f"[news_boost] firms boost error (continuing): {boost_exc!r}")
             if not _should_draft(score, fire.event_id):
                 continue
+            # W07 (THEHEAT_HAZARD_EPISODES, default off): bind the source-day cell episode.
+            episode = hazard_episodes.admit(bot_state, hazard_episodes.firms_assertion(fire), source="firms",
+                                            event_id=fire.event_id, score=score, summary=fire.nearest_city)
+            if not episode.allowed:
+                continue
             source_promoted += 1
             # Record synthesis component as soon as editorial gate passes:
             syn_state = lat_lon_to_state(fire.lat, fire.lon)
@@ -98,6 +106,7 @@ def run_firms(bot_state: BotState, current_run: dict | None) -> None:
                     _fact("Fire radiative power", f"{fire.frp:.0f} MW"),
                 ],
             )
+            hazard_episodes.bind(review_context, episode)
             from src.two_bot.intern import build_fire_bundle
 
             fire_bundle = build_fire_bundle(fire)
@@ -119,19 +128,39 @@ def run_firms(bot_state: BotState, current_run: dict | None) -> None:
             current_run, bot_state, "firms", firms_start,
             status="degraded" if served else "success",
             observed=len(fires), promoted=source_promoted, drafted=0,
-            note=served,
+            note=served, details=_incident_details(attempts),
         )
     except SourceSkipped as e:
         print(f"[alerts] FIRMS skipped: {e}")
         _record_source_run(
             current_run, bot_state, "firms", firms_start,
-            status="skipped", note=str(e),
+            status="skipped", note=str(e), details=_incident_details(attempts),
         )
     except Exception as e:
         print(f"[alerts] FIRMS error: {e}")
         state.log_error(bot_state, "firms", str(e))
         _record_source_run(
             current_run, bot_state, "firms", firms_start,
-            status="failed", error=str(e)
+            status="failed", error=str(e), details=_incident_details(attempts),
         )
     return
+
+
+def _fetch_firms_with_attempts(attempts: list[dict]):
+    """Strict fetch with a per-leg attempt sink; older test doubles take no sink."""
+    try:
+        return _fetch_strict(firms.fetch_fires, attempts=attempts)
+    except TypeError as exc:
+        if "unexpected keyword argument 'attempts'" not in str(exc):
+            raise
+        return _fetch_strict(firms.fetch_fires)
+
+
+def _incident_details(attempts: list[dict]) -> dict | None:
+    """Product-level incident payload for run history; absent when no leg was reached."""
+    if not attempts:
+        return None
+    try:
+        return {"incident": source_incidents.run_incident("firms", attempts)}
+    except ValueError:  # telemetry capture must never change the run outcome
+        return None

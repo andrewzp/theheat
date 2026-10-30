@@ -1,3 +1,28 @@
+## 0.9.109.50
+
+- Tighten short-copy prompts, preserve explicit unsupported-consequence findings,
+  and validate freshness for every ranked forecast row. Add qualified Hot10
+  graphics and exact selected-row evidence references.
+- Add independently controlled warning and regional-source paths, rainfall
+  provenance and scan tools, retained episode/report links and portfolio
+  selection. New source and automatic-text controls default off; source access,
+  qualified artifacts and required checks remain necessary.
+- Complete shared-media and delivered-image inspection across native charts,
+  retained published radar/cone products and historical edits. Preserve original
+  bytes, descriptions, receipt identity and explicit joint-review requirements.
+- Bind service operations and recovery commands to their existing authority,
+  retain cross-engine purchase identity after source replacement, and keep local
+  deterministic checks outside paid-provider call allowances.
+- Reconcile exact late delivery receipts after approval withdrawal and recheck
+  the final observed state before a Gist write. Preserve unknown-send fences and
+  Gist's nontransactional limitations. Bind passive imports to exact required
+  evidence files without inheriting publication approval.
+- Capture news requests through the existing private SDK archive, retain batch
+  and check response lineage, and distinguish incomplete evidence, estimated
+  usage and unknown invoice charges. Retain news metadata without copying its
+  live spending allowance. Add actionable source/job/outcome views and
+  offline operating/recovery tools without enabling new background jobs.
+
 ## 0.9.109.49
 
 - Hold ranking errors, malformed selections and invalid candidate limits before

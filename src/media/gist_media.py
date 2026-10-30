@@ -19,11 +19,15 @@ from datetime import datetime, timezone
 from src.media import gist_hazard_media as hazard, gist_temperature_media as temperature
 
 TEMPERATURE = temperature.KIND
+HOT10 = hazard.HOT10
 # Literal mirrors of gist_crw_media.KIND and gist_published_media.KINDS/product_for.
 CRW = "gist_crw_anomaly_v1"
 PUBLISHED = frozenset({"gist_published_radar_v1", "gist_published_chart_v1"})
 STORE_KINDS = frozenset({CRW, *PUBLISHED})
 KINDS = frozenset({TEMPERATURE, *hazard.KINDS, *STORE_KINDS})
+# Rendered here from retained source only (no store input, no published product):
+# the only kinds a trusted delegated joint review may cover.
+NATIVE_KINDS = frozenset({TEMPERATURE, *hazard.KINDS})
 _CYCLONE_SIGNALS = frozenset({"cyclone_rapid_intensification", "cyclone_tier_crossing", "cyclone_landfall",
                               "cyclone_land_threat", "cyclone_basin_record"})
 

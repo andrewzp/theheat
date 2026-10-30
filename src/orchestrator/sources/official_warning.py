@@ -66,8 +66,14 @@ def run_official_warning(bot_state: BotState, current_run: dict | None, *,
             return {"status": "reused", "promoted": 0}
         if bundle.event_id in bot_state.get("posted_events", []):
             return {"status": "reused", "promoted": 0}
+        from src.editorial import warning_automatic
+        payload = capture_bundle(bundle).payload()
+        fence = warning_automatic.runner_fence("official_warning", payload, bot_state)
+        if fence is not None:
+            raise WarningHold(fence)
         context = {"source": bundle.raw_signal_dump["source_name"], "source_key": "official_warning",
-            "headline": f"Official warning for {bundle.where}", "facts": bundle.current_facts}
+            "headline": f"Official warning for {bundle.where}", "facts": bundle.current_facts,
+            "warning_consequence_brief": warning_automatic.consequence_brief("official_warning", payload)}
         # One nominated packet, including exact repeats in the same live queue.
         with _TRIAGE_QUEUE_LOCK:
             queue = cast(dict, bot_state).get("_triage_queue", [])

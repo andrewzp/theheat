@@ -436,6 +436,13 @@ def generate_draft(
         samples = 1 if bundle.signal_kind in _CURRENT_SOURCE_KINDS else _writer_samples()
         if result_out is not None:
             result_out["writer_started"] = True  # Set before the first paid writer call.
+        # An opt-in air-quality forecast re-reads its one city/window here. A hold
+        # keeps this candidate's slot, so it cannot buy another city or a refill.
+        from src.data.air_quality_current import generation_hold
+        air_quality_hold = generation_hold(bundle)
+        if air_quality_hold is not None:
+            _record_kill("air_quality_source", air_quality_hold)
+            return None
         writer_results = _writer_sample_slate(bundle, memory_slice, samples)
         viable_results = [
             replace(result, tweet=format_source_link(result.tweet, bundle))

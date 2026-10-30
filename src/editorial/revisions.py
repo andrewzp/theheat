@@ -268,9 +268,16 @@ def review_is_current(draft: dict, *, policy=_CURRENT_POLICY) -> bool:
     binding = draft.get("review_binding")
     if media:
         try:
-            from src.media.gist_media import required_attestations, validate_descriptor
+            from src.media.gist_media import NATIVE_KINDS, kind_of, required_attestations, validate_descriptor
             validate_descriptor(draft["media_attachment"], _two_bot(draft)["bundle"])
-            if not isinstance(binding, dict) or binding.get("kind") != "human_media" or binding.get("media_sha256") != fingerprint(draft["media_attachment"]):
+            if not isinstance(binding, dict) or binding.get("kind") not in ("human_media", "delegated_media") \
+                    or binding.get("media_sha256") != fingerprint(draft["media_attachment"]):
+                return False
+            # A delegated joint review covers only a native image with no published-product attestation.
+            if binding.get("kind") == "delegated_media" and (
+                    kind_of(draft["media_attachment"]) not in NATIVE_KINDS
+                    or required_attestations(draft["media_attachment"])
+                    or not _valid_delegation(binding.get("delegation"))):
                 return False
             # Published originals also need the person's exact label/context/reuse attestations.
             if binding.get("published_attestations") != _attestation_record(required_attestations(draft["media_attachment"])):
@@ -281,7 +288,7 @@ def review_is_current(draft: dict, *, policy=_CURRENT_POLICY) -> bool:
         return False
     if not _policy_matches(binding, _editorial_policy(policy)):
         return False
-    if binding.get("kind") == "human" or (media and binding.get("kind") == "human_media"):
+    if binding.get("kind") == "human" or (media and binding.get("kind") in ("human_media", "delegated_media")):
         return True
     if binding.get("kind") == "delegated":
         return _valid_delegation(binding.get("delegation"))
@@ -308,7 +315,7 @@ def approval_is_current(draft: dict, mode: str | None = None, *, policy=_CURRENT
     except ValueError:
         return False
     try:
-        if (draft["review_binding"].get("kind") == "delegated" or "review_binding_sha256" in binding) and (
+        if (draft["review_binding"].get("kind") in ("delegated", "delegated_media") or "review_binding_sha256" in binding) and (
             binding.get("review_binding_sha256") != fingerprint(draft["review_binding"])
         ):
             return False
@@ -480,6 +487,34 @@ def record_delegated_review(draft: dict, *, authorization_sha256: str,
     return draft
 
 
+def record_delegated_joint_media_review(draft: dict, *, authorization_sha256: str, review_receipt_sha256: str,
+                                        at: str | None = None, policy=_CURRENT_POLICY) -> dict:
+    """Trusted operator only: an explicitly delegated joint text+native-image review.
+
+    Never ``human``/``human_media``, a scientist verdict or a rating. It binds the
+    exact text, native PNG/alt recipe, retained source and policy for one manual
+    post. Published products with attestations and store-backed images stay
+    human-held; a delegated review never authorizes automatic publication. The
+    caller (src.editorial.delegated_media_review) verifies both retained references.
+    """
+    from src.media.gist_media import NATIVE_KINDS, kind_of, required_attestations
+
+    delegation = {"scope": "one_manual_post", "reviewer": "codex",
+                  "authorization_sha256": authorization_sha256,
+                  "review_receipt_sha256": review_receipt_sha256}
+    if not _valid_delegation(delegation):
+        raise ValueError("Explicit delegated review provenance is required")
+    if "media_attachment" not in draft:
+        raise ValueError("A delegated joint review needs an attached native image")
+    attachment = draft["media_attachment"]
+    if kind_of(attachment) not in NATIVE_KINDS or required_attestations(attachment):
+        raise ValueError("Published or store-backed images need an ordinary human joint review")
+    # Reuse the ordinary joint review's descriptor, text, conflict and policy checks.
+    record_joint_media_review(draft, at=at, policy=policy)
+    draft["review_binding"].update(kind="delegated_media", delegation=delegation)
+    return draft
+
+
 def authorize_draft(draft: dict, mode: str, intent_id: str | None = None, *, publication_epoch: str | None = None) -> dict:
     if not review_is_current(draft):
         raise ValueError("This revision needs revalidation")
@@ -518,7 +553,7 @@ def bind_reviewed_revision(draft: dict, mode: str, *, at: str,
         "mode": mode, "authorized_at": at,
         "editorial_policy": deepcopy(policy), "policy_sha256": fingerprint(policy),
     }
-    if draft["review_binding"].get("kind") == "delegated":
+    if draft["review_binding"].get("kind") in ("delegated", "delegated_media"):
         draft["approval_binding"]["review_binding_sha256"] = fingerprint(draft["review_binding"])
     if mode == "auto":
         draft["approval_binding"]["publication_epoch"] = publication_epoch

@@ -1,10 +1,11 @@
 "use client"
 
 import React, { useId, useRef, useState } from "react"
-import { operatorClaimKindMatches, operatorReferencesForDisplay, quoteFromSelection, referenceChoices, resolveReference, retainedClaimFacts, validateReferenceItems } from "../../lib/operator-claim-reference-input.js"
+import { factValueText, operatorClaimKindMatches, operatorReferencesForDisplay, quoteFromSelection, referenceChoices, resolveReference, retainedClaimFacts, unavailableFactReason, validateReferenceItems } from "../../lib/operator-claim-reference-input.js"
 
 const h = React.createElement
-const factText = fact => `${fact.label.replaceAll("_", " ")}: ${fact.value === null ? "Not supplied" : String(fact.value)}${fact.unit ? ` ${fact.unit}` : ""}`
+// A ranked row (flat record) reads as its named fields, e.g. "ranking[2]: rank 3 · city …".
+const factText = fact => `${fact.label.replaceAll("_", " ")}: ${factValueText(fact.value)}${fact.unit ? ` ${fact.unit}` : ""}`
 const disclaimer = "These connections were selected by an operator. They do not establish scientific support, source authenticity or independent verification."
 
 // Mount with key=draft id + editing revision; parent owns the edit transaction.
@@ -18,7 +19,11 @@ export function OperatorClaimReferences({ draft, text = draft?.text ?? "", items
   try {
     if (bundle?.event_id !== draft?.event_id || !operatorClaimKindMatches(draft?.type, bundle?.signal_kind)) throw new Error("The source snapshot does not match this draft. Refresh before adding references.")
     facts = retainedClaimFacts(bundle)
-  } catch (error) { sourceProblem = error.message }
+  } catch (error) {
+    // Name the exact saved fact that cannot be referenced instead of a generic refusal.
+    const reason = bundle?.event_id === draft?.event_id && operatorClaimKindMatches(draft?.type, bundle?.signal_kind) ? unavailableFactReason(bundle) : null
+    sourceProblem = reason ? `${error.message}. ${reason}` : error.message
+  }
   const view = operatorReferencesForDisplay(draft)
   const change = next => {
     try {

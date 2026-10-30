@@ -78,7 +78,9 @@ class CandidateBudget:
     attempts: int = 0  # Consumed slots: writer started, or a handoff not proven pre-writer.
     refused_before_writer: int = 0
     held: int = 0
+    joined_requests: int = 0  # Physical model requests joined to settled attempts.
     _keys: dict[str, str] = field(default_factory=dict)
+    _joins: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def for_operation(cls, operation: str, environ: Any = None) -> "CandidateBudget":
@@ -121,12 +123,24 @@ class CandidateBudget:
             return False
         self._keys[key] = "reserved"
         self.attempts += 1
+        # Join every physical model request until settle (call_inventory).
+        from src.two_bot.call_inventory import open_attempt_join
+        self._joins[key] = open_attempt_join(key)
         return True
 
     def settle(self, key: str, *, writer_started: bool) -> None:
         """A started (or unproven) attempt keeps its slot; a proven pre-writer refusal returns it."""
         if self._keys.get(key) != "reserved":
             raise ValueError("candidate_budget_unreserved")
+        joined = self._joins.pop(key, None)
+        if joined is not None:
+            from src.two_bot.call_inventory import close_attempt_join
+            close_attempt_join(*joined)
+            dispatched = joined[0].dispatched()
+            self.joined_requests += dispatched
+            # A dispatched request (returned, malformed, timed out or unknown)
+            # can never be refunded, whatever the pipeline report says.
+            writer_started = writer_started or dispatched > 0
         if writer_started:
             self._keys[key] = "attempted"
             return
@@ -140,7 +154,7 @@ class CandidateBudget:
     def summary(self) -> dict:
         return {"operation": self.operation, "limit": self.limit, "attempts": self.attempts,
                 "refused_before_writer": self.refused_before_writer, "held": self.held,
-                "refusal": self.refusal}
+                "refusal": self.refusal, "joined_requests": self.joined_requests}
 
 
 def writer_started(drafted: bool, result: dict) -> bool:

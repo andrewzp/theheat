@@ -294,6 +294,9 @@ class CriticResult:
     verdict: str = ""
     revise_instruction: str | None = None
     selected_index: int | None = None
+    # Soft craft details (C2): never a verdict, factual pass or human rating.
+    quality: dict[str, str] | None = None
+    quality_note: str | None = None
 
     def __post_init__(self) -> None:
         if not self.verdict:
@@ -357,4 +360,9 @@ class CriticResult:
         }
         if self.selected_index is not None:
             payload["selected_index"] = self.selected_index
+        # Omitted when absent so legacy critic records serialize byte-identically.
+        if self.quality is not None:
+            payload["quality"] = dict(self.quality)
+        if self.quality_note is not None:
+            payload["quality_note"] = self.quality_note
         return payload

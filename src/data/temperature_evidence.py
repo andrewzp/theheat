@@ -184,6 +184,8 @@ def project_story_evidence(bundle) -> None:
             bundle.headline_metric["label"] = bundle.headline_metric["label"].replace(
                 "observed", "forecast"
             )
+    elif evidence.get("evidence_type") == "observed" and _regional_observed(evidence):
+        bundle.current_facts.append({"label": "claim_limit", "value": REGIONAL_OBSERVED_CLAIM_LIMIT})
     elif evidence.get("evidence_type") == "observed":
         bundle.current_facts.append(
             {
@@ -191,6 +193,20 @@ def project_story_evidence(bundle) -> None:
                 "value": "A source-accepted station daily value within the supplied archive/QC scope. For record comparisons, state available/accepted GHCN archive scope and the verified variable cutoff; missing and QC-rejected cells are exclusions, not complete observed history. Unknown reporting intervals and later source revisions are not publication-time certainty.",
             }
         )
+
+
+REGIONAL_OBSERVED_CLAIM_LIMIT = (
+    "National-service observed station value for its source reporting day (not an exact UTC day). "
+    "Without a scoped comparator warrant only value or absolute-band wording is supported: no record, "
+    "national-record or official-record claim. One named station is not national or regional coverage."
+)
+
+
+def _regional_observed(evidence: dict) -> bool:
+    """Observed station evidence from a non-GHCN product (W05 national-service adapters)."""
+    product = str(evidence.get("source_product", "")).lower()
+    return evidence.get("domain") == "temperature" and evidence.get("evidence_type") == "observed" \
+        and bool(product) and "ghcn" not in product and product != "sampled-temperature-network"
 
 
 def temperature_aggregate_failures(bundle) -> list[str]:
@@ -222,6 +238,16 @@ def temperature_aggregate_failures(bundle) -> list[str]:
 
 
 def temperature_claim_failures(tweet: str, bundle) -> list[str]:
+    """Temperature claim floor, plus the Hot10 bulletin's own copy limits."""
+    failures = _temperature_claim_failures(tweet, bundle)
+    if getattr(bundle, "signal_kind", None) == "hot10":
+        from src.two_bot.hot10_claims import claim_failures
+
+        failures = sorted(set(failures) | set(claim_failures(tweet, bundle)))
+    return failures
+
+
+def _temperature_claim_failures(tweet: str, bundle) -> list[str]:
     """Narrow deterministic containment of the audited forecast-to-observed error.
 
     This is a hard floor, not a replacement for full claim extraction (P05/P07).
@@ -258,6 +284,11 @@ def temperature_claim_failures(tweet: str, bundle) -> list[str]:
         if (re.search(r"\b(?:national record|official record|country.wide record|nationwide record)\b", tweet, re.I)
             or not re.search(r"\bsampled\b.{0,35}\b(?:network|stations|cities|locations)\b", tweet, re.I)):
             return ["temperature evidence: sampled-network comparison must name the sampled network and cannot certify an official national record"]
+    if _regional_observed(evidence) and record_words:
+        warrant = evidence.get("comparison_warrant")
+        if not isinstance(warrant, dict) or warrant.get("claim_scope") != "record":
+            return ["temperature evidence: a national-service observed value without a scoped comparator warrant "
+                    "supports value or absolute-band wording only, not a record"]
     member_products = [str((row.get("evidence") or {}).get("source_product", "")).lower() for row in baseline.get("members", []) if isinstance(row, dict)]
     ghcn = "ghcn" in str(evidence.get("source_product", "")).lower() or (sampled and bool(member_products) and all("ghcn" in product for product in member_products))
     if evidence.get("evidence_type") == "observed" and ghcn and record_words:

@@ -1,5 +1,6 @@
 import { bindingMatches, draftIdentity, fingerprint, textHash } from "./draft-revisions.js"
 import { parseGistDocument } from "./lossless-gist.js"
+import { postOutcomes } from "./post-outcomes.js"
 
 const PREFIX = "editorial-feedback-"
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
@@ -9,6 +10,13 @@ const object = v => v && Object.getPrototypeOf(v) === Object.prototype
 const exact = (v, keys) => object(v) && Object.keys(v).length === keys.length && keys.every(k => Object.hasOwn(v, k))
 const TARGET_KEYS = ["draft_id", "tweet_id", "posted_at", "text", "content_revision", "text_sha256", "evidence_sha256", "intent_id"]
 const INPUT_KEYS = ["request_id", "target", "punch", "clarity", "economy", "note", "own_rating"]
+// W15.3: optional human feedback on one exact draft or posted revision (copy or graphic).
+// It is a separate category from automated model checks, editor edits and source evidence;
+// a blank form saves nothing and missing feedback is never a negative score.
+export const REVISION_TAGS = ["concise", "useful", "confusing", "incorrect"]
+const REVISION_KEYS = ["request_id", "target", "subject", "tags", "note"]
+const REVISION_TARGET_KEYS = ["draft_id", "status", "tweet_id", "content_revision", "text_sha256", "evidence_sha256", "graphic_sha256"]
+const REVISION_STATUSES = new Set(["pending", "approved", "posted"])
 
 export class FeedbackError extends Error {
   constructor(code, status = 503, diagnostic = null) {
@@ -67,10 +75,49 @@ export function feedbackInput(value) {
   return structuredClone(value)
 }
 
+export function revisionTarget(draft, state) {
+  try {
+    if (!object(draft) || typeof draft.id !== "string" || !draft.id || draft.id.length > 200 || !REVISION_STATUSES.has(draft.status) ||
+        typeof draft.text !== "string" || !draft.text.trim() || draft.revision_conflicts?.length) return null
+    let tweet_id = null
+    if (draft.status === "posted") {
+      const posted = feedbackTarget(draft, state)
+      if (!posted) return null
+      tweet_id = posted.tweet_id
+    }
+    const media = Object.hasOwn(draft, "media_attachment") && object(draft.media_attachment) ? fingerprint(draft.media_attachment) : null
+    return { draft_id:draft.id, status:draft.status, tweet_id, ...draftIdentity(draft), graphic_sha256:media }
+  } catch { return null }
+}
+
+export function revisionFeedbackInput(value) {
+  if (!exact(value, REVISION_KEYS) || !UUID.test(value.request_id) || !exact(value.target, REVISION_TARGET_KEYS) ||
+      !["copy", "graphic"].includes(value.subject) || !Array.isArray(value.tags) || !value.tags.length ||
+      value.tags.length > REVISION_TAGS.length || new Set(value.tags).size !== value.tags.length ||
+      !value.tags.every(tag => REVISION_TAGS.includes(tag)) || typeof value.note !== "string" || [...value.note].length > 500 ||
+      Buffer.from(value.note, "utf8").toString("utf8") !== value.note) fail("invalid_feedback", 400)
+  const target = value.target
+  if (typeof target.draft_id !== "string" || !target.draft_id || target.draft_id.length > 200 || !REVISION_STATUSES.has(target.status) ||
+      (target.status === "posted" ? typeof target.tweet_id !== "string" || !/^[0-9]{1,30}$/.test(target.tweet_id) : target.tweet_id !== null) ||
+      !Number.isSafeInteger(target.content_revision) || target.content_revision < 0 ||
+      !/^[a-f0-9]{64}$/.test(target.text_sha256) || !/^[a-f0-9]{64}$/.test(target.evidence_sha256) ||
+      (target.graphic_sha256 !== null && !/^[a-f0-9]{64}$/.test(target.graphic_sha256)) ||
+      (value.subject === "graphic" && target.graphic_sha256 === null)) fail("invalid_feedback", 400)
+  return structuredClone(value)
+}
+
+const isRevision = value => object(value) && Object.hasOwn(value, "subject")
 function filename(id) { return `${PREFIX}${id}.json` }
-function recordInput(record) { return Object.fromEntries(INPUT_KEYS.map(k => [k, record[k]])) }
+function recordInput(record) { return Object.fromEntries((isRevision(record) ? REVISION_KEYS : INPUT_KEYS).map(k => [k, record[k]])) }
 export function feedbackRecord(value) {
   const record = structuredClone(value)
+  if (isRevision(record)) {
+    try { revisionFeedbackInput(recordInput(record)) } catch { fail("feedback_store_unavailable") }
+    if (!exact(record, [...REVISION_KEYS, "schema_version", "kind", "category", "received_at"]) || record.schema_version !== 2 ||
+        record.kind !== "dashboard_revision_feedback" || record.category !== "human_feedback" ||
+        typeof record.received_at !== "string" || !Number.isFinite(Date.parse(record.received_at))) fail("feedback_store_unavailable")
+    return record
+  }
   try { feedbackInput(recordInput(record)) } catch { fail("feedback_store_unavailable") }
   if (!exact(record, [...INPUT_KEYS, "schema_version", "kind", "received_at"]) || record.schema_version !== 1 ||
       record.kind !== "dashboard_editorial_opinion" ||
@@ -165,19 +212,37 @@ function currentTargets(state) {
     .sort((a, b) => Date.parse(b.posted_at) - Date.parse(a.posted_at))
 }
 
+/** Tag counts per exact revision; absent feedback is "none_recorded", never a low score. */
+export function revisionFeedbackSummary(records) {
+  const tags = Object.fromEntries(REVISION_TAGS.map(tag => [tag, 0]))
+  const subjects = { copy:0, graphic:0 }
+  for (const record of records) { subjects[record.subject]++; for (const tag of record.tags) tags[tag]++ }
+  return { status:records.length ? "recorded" : "none_recorded", records:records.length, subjects, tags, category:"human_feedback" }
+}
+
 export async function readPostFeedback(requestId = null) {
   if (requestId !== null && !UUID.test(requestId)) fail("invalid_feedback", 400)
   const { state, records, recordCount } = await load(requestId)
   const targets = currentTargets(state)
-  const posts = targets.map(target => ({ target, ratings:records.filter(r => fingerprint(r.target) === fingerprint(target))
+  const opinions = records.filter(r => !isRevision(r)), notes = records.filter(isRevision)
+  const posts = targets.map(target => ({ target, ratings:opinions.filter(r => fingerprint(r.target) === fingerprint(target))
     .sort((a, b) => b.received_at.localeCompare(a.received_at) || b.request_id.localeCompare(a.request_id)) }))
-  return { posts, remaining:Math.max(0, LIMIT - recordCount),
+  const revisions = state.drafts.map(d => revisionTarget(d, state)).filter(Boolean).slice(0, 200).map(target => {
+    const feedback = notes.filter(r => fingerprint(r.target) === fingerprint(target))
+      .sort((a, b) => b.received_at.localeCompare(a.received_at) || b.request_id.localeCompare(a.request_id))
+    return { target, feedback, summary:revisionFeedbackSummary(feedback) }
+  })
+  // W15.6: the same two reads also give the published outcome history with this feedback joined in.
+  let outcomes = null
+  try { outcomes = postOutcomes(state, { feedbackRecords:records }) } catch { outcomes = null }
+  return { posts, revisions, outcomes, remaining:Math.max(0, LIMIT - recordCount),
     request:requestId ? records.find(r => r.request_id === requestId) || null : null,
     kind:"dashboard_editorial_opinion", archive_complete:recordCount <= READ_LIMIT, independent_human_benchmark:false }
 }
 
 export async function savePostFeedback(value) {
-  const input = feedbackInput(value)
+  const revision = isRevision(value)
+  const input = revision ? revisionFeedbackInput(value) : feedbackInput(value)
   const { state, records, recordCount } = await load(input.request_id)
   const existing = records.find(r => r.request_id === input.request_id)
   if (existing) {
@@ -185,8 +250,11 @@ export async function savePostFeedback(value) {
     return { record:existing, already_saved:true }
   }
   if (recordCount >= LIMIT) fail("feedback_capacity", 409)
-  if (!currentTargets(state).some(target => fingerprint(target) === fingerprint(input.target))) fail("post_changed", 409)
-  const record = { ...input, schema_version:1, kind:"dashboard_editorial_opinion", received_at:new Date().toISOString() }
+  const current = revision ? state.drafts.map(d => revisionTarget(d, state)).filter(Boolean) : currentTargets(state)
+  if (!current.some(target => fingerprint(target) === fingerprint(input.target))) fail("post_changed", 409)
+  const record = revision
+    ? { ...input, schema_version:2, kind:"dashboard_revision_feedback", category:"human_feedback", received_at:new Date().toISOString() }
+    : { ...input, schema_version:1, kind:"dashboard_editorial_opinion", received_at:new Date().toISOString() }
   // Auxiliary immutable UUID file in the secret feedback archive only. No state.json rewrite or review/approval
   // command. Separate IDs do not overwrite one shared feedback list. Gist is
   // still not transactional; do not retry an uncertain PATCH automatically.

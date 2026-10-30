@@ -29,6 +29,9 @@ _ENTITY_SENTENCE_BOUNDARY = re.compile(
     + "|".join(sorted(_OPENERS, key=lambda value: (-len(value), value)))
     + r")(?=[ \t]+[a-zà-öø-ÿ])"
 )
+_INITIAL_ARTICLE_ACRONYM = re.compile(
+    r"\A(?P<article>A|An)[ \t]+[A-Z]{2,10}[ \t]+(?=[a-z]+\b)"
+)
 
 
 def valid_date(value: Any) -> bool:
@@ -250,6 +253,11 @@ def _entity_sentence_scan(visible: str, original: str) -> str:
     if any(char in original for char in "\"'‘’“”«»‹›\r\n"):
         return visible
     chars = list(visible)
+    # Separate only the initial article; the full acronym and remainder stay material.
+    article = _INITIAL_ARTICLE_ACRONYM.match(visible)
+    if article is not None:
+        start, end = article.span("article")
+        chars[start:end] = " " * (end - start)
     for match in _ENTITY_SENTENCE_BOUNDARY.finditer(visible):
         period = match.start("period")
         if visible[match.start():period].lower() not in _PERIOD_ABBREVIATIONS:

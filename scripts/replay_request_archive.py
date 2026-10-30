@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Offline inspection of private request archives; there is no send mode.
 
-Commands validate, inspect, lineage, compare and export read only the retained
-scope files. None of them generates text, calls a model, opens a URL, reads
+Commands validate, inspect, lineage, reparse, compare and export read only the
+retained scope files; reparse runs the real stage parsers on retained responses.
+None of them generates text, calls a model, opens a URL, reads
 Gist/DB state, executes archive content or alters archive bytes. Default
 stdout is a content-free JSON summary; exact content goes only to a new
 explicitly named owner-only file via ``export``.
@@ -33,7 +34,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="replay_request_archive", description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     commands = parser.add_subparsers(dest="command", required=True)
-    for name in ("validate", "inspect", "lineage"):
+    for name in ("validate", "inspect", "lineage", "reparse"):
         command = commands.add_parser(name)
         command.add_argument("archive", help="absolute path of one scope-<id> directory")
     command = commands.add_parser("compare")
@@ -72,6 +73,10 @@ def main(argv: list[str] | None = None) -> int:
                    "generations": replay.lineage(archive), "authority": "mechanical_evidence_only",
                    # Route families exist only in explicit v2 scopes; v1 output is unchanged.
                    **({"routes": replay.route_lineage(archive)} if archive.schema == replay.SCHEMA_V2 else {})})
+        elif args.command == "reparse":
+            # Real production parsers on retained bytes only; no model/source I/O.
+            from src.two_bot.archive_reparse import reparse_archive
+            _emit(reparse_archive(archive))
         else:
             outcome = replay.export_call(archive, args.call, args.output)
             _emit({"status": archive.status, "export": outcome, "call": args.call,

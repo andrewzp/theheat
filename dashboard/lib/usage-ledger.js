@@ -94,27 +94,40 @@ export function mergeUsageLedgers(base, incoming) {
   return result
 }
 
+// Discovery (news search/verification) is reported apart from candidate selection.
+export const SPEND_CLASS_STAGES = Object.freeze({discovery: ["newsworthiness_search", "newsworthiness_verify"],
+  selection: ["writer", "fact_check", "critic", "safety"]})
+const CLASS_FIELDS = ["recorded_calls", "priced_calls", "unpriced_calls", "legacy_calls"]
+const spendClass = (key) => {
+  const stage = typeof key === "string" ? key.split("|", 1)[0] : ""
+  return Object.keys(SPEND_CLASS_STAGES).find((name) => SPEND_CLASS_STAGES[name].includes(stage)) || "other"
+}
+
 export function summarizeUsage(state, { now = Date.now(), roundAmounts = true } = {}) {
   const today = new Date(now).toISOString().slice(0, 10), prefix = today.slice(0, 8)
   const ledger = object(state?.llm_usage) ? state.llm_usage : {}
   let recorded = 0, priced = 0, legacyUsd = 0, calls = 0, pricedCalls = 0, unpricedCalls = 0, missingUsage = 0, legacyCalls = 0
   let rowCount = 0, legacyRows = 0, inconsistent = 0, excluded = 0
+  const classes = Object.fromEntries([...Object.keys(SPEND_CLASS_STAGES), "other"].map((name) => [name, Object.fromEntries(CLASS_FIELDS.map((f) => [f, 0]))]))
   for (const [day, bucket] of Object.entries(ledger)) {
     if (!validUsageDay(day) || !day.startsWith(prefix) || day > today) continue
     if (!object(bucket)) { excluded += 1; continue }
-    for (const agg of Object.values(bucket)) {
+    for (const [key, agg] of Object.entries(bucket)) {
       if (!object(agg) || !money(agg.usd)) { excluded += 1; continue }
       rowCount += 1; recorded += agg.usd
       if (!count(agg.calls) || evidenceInconsistent(agg)) { inconsistent += 1; continue }
       calls += agg.calls
+      const spend = classes[spendClass(key)]
+      spend.recorded_calls += agg.calls
       if (!COVERAGE_FIELDS.some((field) => Object.hasOwn(agg, field))) {
-        legacyRows += 1; legacyCalls += agg.calls; legacyUsd += agg.usd; continue
+        legacyRows += 1; legacyCalls += agg.calls; spend.legacy_calls += agg.calls; legacyUsd += agg.usd; continue
       }
       if (!validCoverage(agg) || agg.priced_calls + agg.unpriced_calls > agg.calls
           || agg.missing_usage_calls > agg.unpriced_calls || agg.priced_usd > agg.usd + 0.000001
           || (agg.priced_calls === 0 && agg.priced_usd > 0)) { inconsistent += 1; continue }
       priced += agg.priced_usd; pricedCalls += agg.priced_calls; unpricedCalls += agg.unpriced_calls; missingUsage += agg.missing_usage_calls
       const oldCalls = agg.calls - agg.priced_calls - agg.unpriced_calls, oldUsd = Math.max(0, agg.usd - agg.priced_usd)
+      spend.priced_calls += agg.priced_calls; spend.unpriced_calls += agg.unpriced_calls; spend.legacy_calls += oldCalls
       legacyCalls += oldCalls; legacyUsd += oldUsd; legacyRows += Number(oldCalls > 0 || oldUsd > 0)
     }
   }
@@ -144,6 +157,6 @@ export function summarizeUsage(state, { now = Date.now(), roundAmounts = true } 
       "Coverage keeps up to 32 original cumulative snapshots per day/model; conflicts or overflow make the subtotal unknown.",
       "The unchanged price table was last documented as checked on 2026-07-13; historical values are never repriced by this reader."
 ],
-    budget_enforced: false, usage_observation_window: summarizeUsageObservations(state?.llm_usage_observations),
+    budget_enforced: false, spend_classes: available ? classes : null, usage_observation_window: summarizeUsageObservations(state?.llm_usage_observations),
   }
 }

@@ -25,7 +25,12 @@ def test_actual_sealed_adapter_preserves_compact_full_projection_and_refusals(tm
         names = packaged.namelist()
         assert "src/two_bot/ghcn_claim_contract.py" in names
         assert "src/two_bot/ghcn_claim_view.py" not in names
-        assert not any(name.startswith(("src/commands/", "src/storage/", "src/orchestrator/")) for name in names)
+        # The store-backed media closure (P31-SHARED D3) needs exactly these command helpers:
+        # time/principal parsing and the read of retained-artifact journal rows. No other
+        # command, storage or orchestration module may enter the sealed preview runtime.
+        store_closure = {"src/commands/__init__.py", "src/commands/schema.py", "src/commands/domain_journal.py"}
+        assert not any(name.startswith(("src/commands/", "src/storage/", "src/orchestrator/"))
+                       for name in names if name not in store_closure)
         for name in names:
             assert sha256(packaged.read(name)).hexdigest() == manifest["identity"]["files"][name]
         packaged.extractall(extracted)

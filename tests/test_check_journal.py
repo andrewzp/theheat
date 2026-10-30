@@ -133,6 +133,34 @@ def test_full_check_sequence_retains_exact_inputs_without_draft_approval_or_sett
     assert money["intent_count"] == 4 and money["totals"]["held_micro_usd"] == 75
 
 
+def test_role_adapter_four_real_stages_use_three_provider_slots(case):
+    from src.commands.job_authority import RoleBoundAuthority, ServiceIdentity
+    from src.two_bot.call_inventory import OperationAllowance
+
+    allowance = OperationAllowance("required_checks", {"local_required_check": 3})
+    original_store = case["store"]
+    case["store"] = RoleBoundAuthority(original_store, ServiceIdentity("checker", "worker-one"), allowance=allowance)
+    for stage in checks.STAGES:
+        finish(case, start(case, stage))
+    assert status(case)["required_checks_completed"]
+    row = allowance.summary()["stages"]["local_required_check"]
+    assert row["reserved"] == row["physical_attempts"] == row["outcomes"]["returned"] == 3
+    assert start(case, "critic")[0]["dispatch_granted"] is False
+    assert allowance.summary()["stages"]["local_required_check"] == row
+
+
+def test_role_adapter_local_journal_accepts_zero_provider_slots(case):
+    from src.commands.job_authority import RoleBoundAuthority, ServiceIdentity
+    from src.two_bot.call_inventory import OperationAllowance
+
+    allowance = OperationAllowance("required_checks", {"local_required_check": 0})
+    case["store"] = RoleBoundAuthority(case["store"], ServiceIdentity("checker", "worker-one"), allowance=allowance)
+    finish(case, start(case))
+    assert status(case)["stages"]["deterministic"] == "passed"
+    row = allowance.summary()["stages"]["local_required_check"]
+    assert row["reserved"] == row["physical_attempts"] == 0
+
+
 def test_idempotent_intake_and_repeated_reads_do_not_consume_review_capacity(case):
     store = case["store"]
     before = workers.snapshot(store)

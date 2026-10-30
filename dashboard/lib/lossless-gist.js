@@ -110,7 +110,7 @@ function protectedEvidence(draft, { editableReferences = false } = {}) {
     const context = draft.review_context
     if (!object(context)) result.review_context = context
     else {
-      result.review_context = Object.fromEntries(Object.entries(context).filter(([key]) => key !== "two_bot" && !(editableReferences && key === "operator_claim_references")))
+      result.review_context = Object.fromEntries(Object.entries(context).filter(([key]) => key !== "two_bot" && !(editableReferences && (key === "operator_claim_references" || key === "physical_episode"))))
       if (object(context.two_bot) && own(context.two_bot, "bundle")) result.review_context.two_bot = { bundle: context.two_bot.bundle }
       else if (own(context, "two_bot") && !object(context.two_bot)) result.review_context.two_bot = context.two_bot
     }
@@ -136,6 +136,44 @@ function referenceTransition(original, draft) {
   if (!history.some(retained => object(retained) && retained.text === original.text
     && retained.content_revision === (original.content_revision ?? 0)
     && isDeepStrictEqual(retained.review_context, original.review_context))) fail()
+}
+
+// W07 editor corrections of a draft's physical-episode binding (lib/hazard-episodes.js):
+// exactly one appended history entry and only its own effect, with the same invalidation
+// and retained previous context as an operator-reference edit. Anything else is refused.
+const EPISODE_EFFECT = { remove_join: ["report_joins"], split: ["episode_id", "split_from", "report_joins", "relationships"],
+  supersede: ["episode_status", "superseded_by"] }
+function episodeTransition(original, draft) {
+  const before = object(original.review_context) ? original.review_context.physical_episode : undefined
+  const after = object(draft.review_context) ? draft.review_context.physical_episode : undefined
+  if (isDeepStrictEqual(before, after)) return
+  if (!object(before) || !object(after) || draft.content_revision !== (original.content_revision ?? 0) + 1
+    || draft.decision_revision !== (original.decision_revision ?? 0) + 1 || draft.status !== "pending"
+    || draft.approval_mode !== "manual" || draft.text !== original.text
+    || ["review_binding", "media_review_binding", "approval_binding", "publish_intent_id", "approved_at", "auto_approve_at", "auto_approve_requested_at", "publish_requested_at", "autoship_on_critic_pass"].some(key => own(draft, key))) fail()
+  const history = draft.revision_history, oldHistory = original.revision_history ?? []
+  if (!Array.isArray(oldHistory) || !Array.isArray(history) || history.length <= oldHistory.length
+    || !oldHistory.every(row => history.some(retained => isDeepStrictEqual(row, retained)))
+    || !history.some(retained => object(retained) && retained.content_revision === (original.content_revision ?? 0)
+      && isDeepStrictEqual(retained.review_context, original.review_context))) fail()
+  const oldLog = Array.isArray(before.history) ? before.history : [], newLog = Array.isArray(after.history) ? after.history : []
+  const entry = newLog.length === oldLog.length + 1 && isDeepStrictEqual(newLog.slice(0, -1), oldLog) ? newLog.at(-1) : null
+  const changed = EPISODE_EFFECT[entry?.action]
+  if (!changed) fail()
+  const rest = value => Object.fromEntries(Object.entries(value).filter(([key]) => key !== "history" && !changed.includes(key)))
+  if (!isDeepStrictEqual(rest(before), rest(after))) fail()
+  if (entry.action === "remove_join") {
+    const oldJoins = Array.isArray(before.report_joins) ? before.report_joins : [], newJoins = after.report_joins
+    if (!Array.isArray(newJoins) || newJoins.length !== oldJoins.length) fail()
+    const flipped = newJoins.filter((row, index) => !isDeepStrictEqual(row, oldJoins[index]))
+    const index = newJoins.indexOf(flipped[0])
+    const { removed_at: _at, removed_by: _by, ...kept } = flipped[0] ?? {}
+    if (flipped.length !== 1 || flipped[0].join_id !== entry.join_id || oldJoins[index].removed === true
+      || !isDeepStrictEqual({ ...kept, removed: false }, { ...oldJoins[index], removed: false }) || flipped[0].removed !== true) fail()
+  } else if (entry.action === "split") {
+    if (after.split_from !== before.episode_id || after.episode_id === before.episode_id || entry.to_episode !== after.episode_id
+      || !isDeepStrictEqual(after.report_joins, []) || !isDeepStrictEqual(after.relationships, [])) fail()
+  } else if (after.episode_status !== "superseded" || typeof after.superseded_by !== "string" || entry.superseded_by !== after.superseded_by) fail()
 }
 
 function containsSource(draft) {
@@ -173,6 +211,7 @@ export function assertGistEvidenceUnchanged(document, drafts) {
       if (!isDeepStrictEqual(protectedEvidence(draft, { editableReferences: true }), protectedEvidence(original.value, { editableReferences: true }))
           && !knownMediaTransition(original.value, draft)) fail()
       referenceTransition(original.value, draft)
+      episodeTransition(original.value, draft)
     } else if (containsSource(draft)) fail()
   }
 }

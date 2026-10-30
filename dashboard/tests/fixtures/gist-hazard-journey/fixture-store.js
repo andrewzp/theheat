@@ -9,13 +9,25 @@ const python = process.env.THEHEAT_TEST_PYTHON || "python3"
 const SENTINEL = "2000-01-01T00:00:00.000Z"
 const trap = "import json,sys,socket\nsocket.socket.connect=lambda *a,**k: (_ for _ in ()).throw(AssertionError('external connection trapped'))\n"
 const fixtureCode = trap + `
-from tests.gist_hazard_helpers import CLOCKS, saved_state
+import contextlib
+from tests.gist_hazard_helpers import (CLOCKS, HOT10_MIXED, HOT10_MIXED_CAPTURE, HOT10_MIXED_CLOCK, delivered_hot10_draft,
+    hot10_bundle, saved_state)
 value=json.load(sys.stdin)
 drafts=[]
-for family in ('pm25','modis','viirs'):
+for family in ('pm25','modis','viirs','hot10'):
     drafts.append(saved_state(family)['drafts'][0])
+# Long names, both signs and two local days; and an earlier Hot10 post delivered through the real sender.
+mixed=saved_state('hot10', bundle=hot10_bundle(HOT10_MIXED, now=HOT10_MIXED_CAPTURE, sampled=640))['drafts'][0]
+mixed.update(id='invented-hot10-mixed', text='Invented mixed-day Hot 10 forecast: departures run both above and below normal.')
+from src.editorial import revisions
+mixed.pop('review_binding', None); revisions.initialize_revision(mixed); mixed.update(content_revision=1, decision_revision=0)
+drafts.append(mixed)
 state={'drafts':drafts,'publish_ledger':{},'errors':[],'unrelated':{'preserve':True},'run_history':[value['runtime']]}
-print(json.dumps(dict(raw=json.dumps(state,ensure_ascii=False),clocks={k:list(v) for k,v in CLOCKS.items()})))
+with contextlib.redirect_stdout(sys.stderr):
+    delivered_hot10_draft(state)
+clocks={k:list(v) for k,v in CLOCKS.items()}
+clocks['hot10-mixed']=[HOT10_MIXED_CLOCK,'2026-10-30T05:00:00Z']
+print(json.dumps(dict(raw=json.dumps(state,ensure_ascii=False),clocks=clocks)))
 `
 const renderCode = trap + `
 from freezegun import freeze_time

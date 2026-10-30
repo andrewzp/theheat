@@ -81,7 +81,10 @@ class Principal:
 
 
 def authorize(principal: Principal, action: str) -> None:
-    if principal.role == "viewer" or (action in {"approve_revision", "schedule_revision", "approve_media_revision"} and principal.role != "publisher"):
+    # The binding role/command map is the single decision; it reproduces the
+    # prior viewer/editor/publisher rule exactly and adds nothing for service roles.
+    from src.commands.command_roles import operator_allowed
+    if not operator_allowed(principal.role, action):
         raise CommandError("forbidden", "This operator does not currently have permission for the action")
 
 

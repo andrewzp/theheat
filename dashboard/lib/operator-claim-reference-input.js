@@ -1,6 +1,8 @@
 // Browser-safe quote/fact validation. No checks, review or source fetching.
-export const MAX_ITEMS = 32, MAX_FACTS = 64, MAX_LIST = 64, MAX_BYTES = 16384
+export const MAX_ITEMS = 32, MAX_FACTS = 64, MAX_LIST = 64, MAX_BYTES = 16384, MAX_RECORD_FIELDS = 16
 // A scalar fact is referenced whole; a list-valued fact only by one exact element.
+// An element is a scalar or one flat record of scalars (e.g. one ranked Hot10 row);
+// an empty list is retained but offers nothing to reference.
 const POINTER = /^\/current_facts\/(0|[1-9][0-9]?)(?:\/value\/(0|[1-9][0-9]?))?$/
 export const exact = (value, keys) => value && Object.getPrototypeOf(value) === Object.prototype
   && Object.keys(value).length === keys.length && keys.every(key => Object.hasOwn(value, key))
@@ -17,14 +19,44 @@ export function operatorClaimKindMatches(draftType, bundleKind) {
     && (draftType === bundleKind || (Object.hasOwn(kindAliases, draftType) && kindAliases[draftType] === bundleKind))
 }
 const scalar = value => value === null || typeof value === "boolean" || (typeof value === "number" && Number.isFinite(value)) || validString(value, 2048)
+const FIELD = /^[a-z][a-z0-9_]{0,63}$/
+// Paired with _record: one flat row of named scalars, never nested.
+export const isRecord = value => !!value && Object.getPrototypeOf(value) === Object.prototype
+  && Object.keys(value).length >= 1 && Object.keys(value).length <= MAX_RECORD_FIELDS
+  && Object.entries(value).every(([key, field]) => FIELD.test(key) && scalar(field))
+const validFactValue = value => scalar(value) || (dense(value, MAX_LIST) && value.every(item => scalar(item) || isRecord(item)))
+const validFact = row => row && Object.getPrototypeOf(row) === Object.prototype
+  && validString(row.label, 160) && Object.hasOwn(row, "value") && validFactValue(row.value)
+  && (row.unit == null || row.unit === "" || validString(row.unit, 80))
 export function retainedClaimFacts(bundle) {
   const facts = bundle?.current_facts
-  const valid = value => scalar(value) || (dense(value, MAX_LIST) && value.length > 0 && value.every(scalar))
-  if (!dense(facts, MAX_FACTS) || !facts.every(row => row && Object.getPrototypeOf(row) === Object.prototype
-    && validString(row.label, 160) && Object.hasOwn(row, "value") && valid(row.value)
-    && (row.unit == null || row.unit === "" || validString(row.unit, 80))))
+  if (!dense(facts, MAX_FACTS) || !facts.every(validFact))
     throw new Error("Saved source facts are unavailable; refresh before linking a quote")
   return facts
+}
+// Why references are unavailable, in operator terms (display only; validation stays above).
+export function unavailableFactReason(bundle) {
+  const facts = bundle?.current_facts
+  if (!Array.isArray(facts) || !facts.length) return "This draft saved no structured source facts."
+  if (!dense(facts, MAX_FACTS)) return `This draft saved more than ${MAX_FACTS} source facts; references are limited to ${MAX_FACTS}.`
+  const index = facts.findIndex(row => !validFact(row))
+  if (index < 0) return null
+  const row = facts[index], name = validString(row?.label, 160) ? row.label.replaceAll("_", " ") : `fact ${index + 1}`
+  if (Array.isArray(row?.value) && row.value.length > MAX_LIST) return `Saved fact “${name}” has more than ${MAX_LIST} entries, so it cannot be referenced.`
+  if (Array.isArray(row?.value)) return `Saved fact “${name}” has entries that are not plain values or flat rows, so it cannot be referenced.`
+  return `Saved fact “${name}” is not a plain value, so it cannot be referenced.`
+}
+// Deep equality for a referenced value (scalar or flat record), in saved key order.
+export function sameFactValue(a, b) {
+  if (isRecord(a) || isRecord(b)) return isRecord(a) && isRecord(b) && Object.keys(a).length === Object.keys(b).length
+    && Object.keys(a).every(key => Object.hasOwn(b, key) && a[key] === b[key])
+  return a === b
+}
+// One plain-language line for a referenced value; a record lists every named field.
+export function factValueText(value) {
+  if (value === null) return "Not supplied"
+  if (isRecord(value)) return Object.entries(value).map(([key, field]) => `${key.replaceAll("_", " ")} ${field === null ? "not supplied" : String(field)}`).join(" · ")
+  return String(value)
 }
 // Paired with resolve_reference: the exact fact (or list element) and the value its digest binds.
 export function resolveReference(facts, pointer, fingerprint = null) {
@@ -102,7 +134,7 @@ export function operatorReferencesForDisplay(draft) {
       return { claim: item.claim, sources: item.sources.map(source => {
         if (!exact(source, ["pointer", "fact"]) || !exact(source.fact, ["label", "value", "unit"])) throw new Error("Unavailable fact")
         const current = resolveReference(bundle.current_facts, source.pointer).view
-        if (source.fact.label !== current.label || source.fact.value !== current.value || source.fact.unit !== current.unit) throw new Error("Source changed")
+        if (source.fact.label !== current.label || !sameFactValue(source.fact.value, current.value) || source.fact.unit !== current.unit) throw new Error("Source changed")
         return { pointer: source.pointer }
       }) }
     })

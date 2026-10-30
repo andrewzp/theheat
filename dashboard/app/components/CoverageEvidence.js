@@ -17,6 +17,22 @@ export function coverageCommand(view, now = new Date()) {
     payload: Object.fromEntries(["set_id", "expected_set_sha256", "expected_state_version", "expected_policy_sha256"].map(key => [key, view[key]])) }
 }
 
+const matchLabels = { matched: "Matched production records", ambiguous: "More than one production event matches — not counted as found or missed",
+  near_match: "No match; the closest records differ as shown", unobserved: "No production record observed for this reference", unmatched: "No match" }
+const checkWords = { alias: "event identity", hazard: "hazard type", place: "place", window: "time window" }
+
+// W15.2: why a reference did or did not match, from the exact rows that decided it.
+export function MatchEvidence({ match }) {
+  const rows = [...(match.matched || []), ...(match.near || [])]
+  return h("details", null, h("summary", null, matchLabels[match.status] || words(match.status)),
+    h("p", { className: "runtime-note" }, `Rule: ${match.rule}.`),
+    h("ul", null, ...rows.map(row => h("li", { key: `${row.kind}-${row.id}`, style: { overflowWrap: "anywhere" } },
+      `${words(row.kind)} ${row.id}${row.event_id ? ` (${row.event_id})` : ""}: `,
+      Object.entries(row.evidence).map(([key, value]) => `${checkWords[key] || key} ${value === true ? "agrees" : value === false ? "differs" : "unknown"}`).join(", "),
+      row.difference ? ` — ${words(row.difference)}` : ""))),
+    match.source_failures?.length ? h("p", { className: "runtime-note" }, `Source runs that failed in the window: ${match.source_failures.join(", ")}.`) : null)
+}
+
 export function CoverageAssessment({ assessment, onOpenReport }) {
   if (!assessment) return h("p", null, "No saved assessment is available. The reference evidence still needs review.")
   return h("div", null,
@@ -26,6 +42,7 @@ export function CoverageAssessment({ assessment, onOpenReport }) {
       h("h3", null, unit.source_label),
       h("p", null, `Reference review: ${words(unit.reference_state)}.`),
       h("p", null, `Evidence still needed: ${(unit.holds || []).map(words).join("; ") || "Reference qualification"}.`),
+      unit.match_evidence && h(MatchEvidence, { match: unit.match_evidence }),
       ...(unit.report_refs || []).map(report => h("button", { key: report.lineage_id, type: "button", className: "btn",
         style: { minHeight: 44 }, disabled: !onOpenReport, onClick: () => onOpenReport?.(report.lineage_id) }, "Open evidence")),
       h("details", null, h("summary", null, "Retained workflow evidence"),

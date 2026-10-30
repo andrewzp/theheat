@@ -68,6 +68,8 @@ def consume_media_once(authority, resolve_principal, *, command_id=None, now=Non
             if command.action != "prepare_media_revision":
                 raise CommandError("not_native_preparation", "Use the ordinary local consumer")
             actor = domain.resolve(resolve_principal, command.actor_subject)
+            from src.commands.recovery_provenance import require_current
+            require_current(authority, command, state)
             draft, value = domain.command_inputs(authority, c, state, command, actor, current_editorial_policy(), at,
                                                  ghcn=ghcn, version=version)
             checkpoint = fingerprint(dict(target=domain._identity(draft), inputs=value))

@@ -7,6 +7,7 @@ import { DatabaseSync } from "node:sqlite"
 import { parseGistDocument, stringifyGistDocument, assertGistEvidenceUnchanged, gistDraftNumericIdentity } from "./lossless-gist.js"
 import { STATE_DEFAULTS, METADATA_JSON_KEYS, DRAFT_RETENTION } from "./state-contract.js"
 import { decisionRevision, draftIdentity, fingerprint, mergePassiveMaps, passiveComparisonValue, normalizePassiveSnapshots } from "./draft-revisions.js"
+import { decideReconciliation } from "./delivery-reconciliation.js"
 
 // Durable fields are generated from Python; this legacy dashboard-only queue
 // remains readable for older local fixtures, but the Python bot no longer uses it.
@@ -935,6 +936,68 @@ export async function writeStateStore(state) {
   if (Object.hasOwn(state, "drafts")) assertGistEvidenceUnchanged(latest.document, state.drafts)
   const merged = mergeState(latest.state, state)
   await writeGistState(merged, latest.document)
+}
+
+function reconciliationSnapshot(state, eventId) {
+  return fingerprint({ row: state.publish_ledger?.[eventId] ?? null,
+    drafts: (state.drafts || []).filter(draft => (draft?.event_id || draft?.id) === eventId) })
+}
+
+function reconciliationNumericSnapshot({ state, document }, eventId) {
+  const draft = state.drafts.find(candidate => (candidate?.event_id || candidate?.id) === eventId)
+  return fingerprint({ draft: gistDraftNumericIdentity(document, draft.id),
+    // Pin the complete attempt bytes as well: its numeric spellings are evidence.
+    attempt: document.children.get("publish_ledger")?.children.get(eventId)?.raw ?? null })
+}
+
+// Reconcile on the actual snapshot used for persistence, never a stale patch.
+// Gist still has a GET-to-PATCH race; these checks are not a transaction.
+export async function reconcileDeliveryStore(request, { actor, at }) {
+  if (previewConfigured()) throw new Error("Local preview requires a domain command")
+  if (configuredBackend() === "sqlite") {
+    const db = connectDb()
+    try {
+      await bootstrapSqliteFromGist(db)
+      db.exec("BEGIN IMMEDIATE")
+      try {
+        const state = readSqliteState(db)
+        const { state: updated, result } = decideReconciliation(state, request, { actor, at })
+        if (result.status === "applied") {
+          db.prepare("INSERT INTO metadata (key, value_json) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value_json=excluded.value_json")
+            .run("publish_ledger", JSON.stringify(updated.publish_ledger))
+          if (request.action === "cancel") {
+            const index = updated.drafts.findIndex(draft => (draft.event_id || draft.id) === request.event_id)
+            upsertSqliteDraft(db, updated.drafts[index].id, updated.drafts[index], index)
+          }
+        }
+        db.exec("COMMIT")
+        return result
+      } catch (error) {
+        db.exec("ROLLBACK")
+        throw error
+      }
+    } finally {
+      db.close()
+    }
+  }
+  const initial = await readGistState({ preserveNumbers: true })
+  const { result: proposed } = decideReconciliation(initial.state, request, { actor, at })
+  if (proposed.status !== "applied") return proposed
+  const expected = reconciliationSnapshot(initial.state, request.event_id)
+  const numeric = reconciliationNumericSnapshot(initial, request.event_id)
+  const check = snapshot => {
+    if (reconciliationSnapshot(snapshot.state, request.event_id) !== expected
+      || reconciliationNumericSnapshot(snapshot, request.event_id) !== numeric) throw revisionConflict()
+  }
+  // Keep all three existing observations, binding numeric evidence from the first.
+  const observed = await readGistState({ preserveNumbers: true })
+  check(observed)
+  const latest = await readGistState({ preserveNumbers: true })
+  check(latest)
+  // Includes cross-event receipt ownership that may have changed independently.
+  const { state: updated, result } = decideReconciliation(latest.state, request, { actor, at })
+  if (result.status === "applied") await writeGistState(updated, latest.document)
+  return result
 }
 
 function revisionConflict() {

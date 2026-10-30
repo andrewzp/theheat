@@ -5,12 +5,16 @@ import { ForecastEvidence } from "./ForecastEvidence.js"
 import { NwsWarningEvidence } from "./NwsWarningEvidence.js"
 import { OfficialWarningEvidence } from "./OfficialWarningEvidence.js"
 import { NhcAdvisoryEvidence } from "./NhcAdvisoryEvidence.js"
+import { EpisodeJoins } from "./EpisodeJoins.js"
 import { ClaimEvidence } from "./ClaimEvidence.js"
 import { OperatorClaimReferenceHistory, OperatorClaimReferences } from "./OperatorClaimReferences.js"
+import { RECOVERY_NOTE, publicationAttemptLines } from "../../lib/publication-recovery.js"
 import { operatorReferencesForDisplay } from "../../lib/operator-claim-reference-input.js"
 import { GraphicPreview } from "./GraphicPreview.js"
+import { DeliveredGraphics } from "./DeliveredGraphics.js"
 import { GIST_POST_IMAGE_KINDS } from "../../lib/graphic-preview.js"
 import { EditorMedia } from "./EditorMedia.js"
+import RecoveredRecord, { recoveryLabel } from "./RecoveredRecord.js"
 import { formatDuration, timeAgo } from "../../lib/format.js"
 import { draftReviewControls, draftTextLength, manualReviewLabel, revisionKey } from "../../lib/draft-review-ui.js"
 import {
@@ -48,6 +52,8 @@ export function DraftWorkbench({
   retryLocalCommand,
   submitLocalCommand,
   botRuns,
+  mediaStore = null,
+  loadDelivered,
 }) {
   const [reviewConfirmedIdentity, setReviewConfirmedIdentity] = useState("")
   const [focusRequest, setFocusRequest] = useState(0)
@@ -59,6 +65,9 @@ export function DraftWorkbench({
   const editorId = useId()
   const selectedDraft = drafts.find((d) => d.id === selectedDraftId) || drafts[0] || null
   const controls = draftReviewControls(selectedDraft)
+  // W14.6: an imported/restored/superseded record offers only the actions its projection keeps.
+  const recovery = selectedDraft?.recovery || null
+  const allows = action => !recovery || recovery.actions.includes(action)
   const currentRevisionKey = revisionKey(selectedDraft?.revision_identity)
   const reviewKey = `${selectedDraft?.id}:${currentRevisionKey}:${selectedDraft?.editorial_policy?.policy_sha256 ?? "unverified"}`
   const editConflict = editingId === selectedDraft?.id && revisionKey(editingRevision) !== currentRevisionKey
@@ -164,7 +173,7 @@ export function DraftWorkbench({
                 <div className="queue-text">{clipText(draft.text, 118)}</div>
                 <div className="queue-meta">
                   <span>{timeAgo(draft.created_at)}</span>
-                  <span>{draft.publish_blocked ? "publication needs reconciliation" : draftReviewControls(draft).sourceHold ? "source update needed" : draft.review_status === "media_review_required" ? (hasLocalMediaPanel(draft) ? "Text and graphic status" : "graphic review needed") : draft.review_status === "policy_unverified" ? "editorial policy unverified" : draft.review_status !== "passed" ? "review needed" : draft.status === "approved" ? (draft.local_preview ? "local intent parked" : "awaiting publication") : manualReviewLabel(draft) || policySummary(draft)}</span>
+                  <span>{recoveryLabel(draft.recovery) || (draft.publish_blocked ? "publication needs reconciliation" : draftReviewControls(draft).sourceHold ? "source update needed" : draft.review_status === "media_review_required" ? (hasLocalMediaPanel(draft) ? "Text and graphic status" : "graphic review needed") : draft.review_status === "policy_unverified" ? "editorial policy unverified" : draft.review_status !== "passed" ? "review needed" : draft.status === "approved" ? (draft.local_preview ? "local intent parked" : "awaiting publication") : manualReviewLabel(draft) || policySummary(draft))}</span>
                 </div>
               </button>
             ))}
@@ -184,7 +193,7 @@ export function DraftWorkbench({
 
                 <div className="draft-status-row">
                   <span className="workbench-pill">
-                    {selectedDraft.publish_blocked ? "publication needs reconciliation" : controls.sourceHold ? "source update needed" : selectedDraft.review_status === "media_review_required" ? (hasLocalMediaPanel(selectedDraft) ? "Text and graphic status" : "graphic review needed") : selectedDraft.review_status === "policy_unverified" ? "editorial policy unverified" : controls.conflict ? "conflicting versions" : controls.needsReview ? "review needed" : selectedDraft.status === "approved" ? (selectedDraft.local_preview ? "local intent parked" : "awaiting publication") : manualReviewLabel(selectedDraft) || "model checks current"}
+                    {recoveryLabel(recovery) || (selectedDraft.publish_blocked ? "publication needs reconciliation" : controls.sourceHold ? "source update needed" : selectedDraft.review_status === "media_review_required" ? (hasLocalMediaPanel(selectedDraft) ? "Text and graphic status" : "graphic review needed") : selectedDraft.review_status === "policy_unverified" ? "editorial policy unverified" : controls.conflict ? "conflicting versions" : controls.needsReview ? "review needed" : selectedDraft.status === "approved" ? (selectedDraft.local_preview ? "local intent parked" : "awaiting publication") : manualReviewLabel(selectedDraft) || "model checks current")}
                   </span>
                   <span className="workbench-pill">
                     signal {selectedDraft.score?.total ?? "—"}
@@ -210,6 +219,8 @@ export function DraftWorkbench({
                     <span className="workbench-pill">{selectedDraft.review_context.run_mode}</span>
                   )}
                 </div>
+
+                <RecoveredRecord record={recovery} />
 
                 {editingId === selectedDraft.id ? (
                   <>
@@ -251,6 +262,8 @@ export function DraftWorkbench({
                 {selectedDraft.publish_blocked && (
                   <div className="draft-feedback error" role="alert">
                     A publication attempt needs reconciliation. Editing and approval are paused until its outcome is known.
+                    {publicationAttemptLines(selectedDraft.publish_attempt).map((line) => <p key={line} style={{ margin: "6px 0 0" }}>{line}</p>)}
+                    <p style={{ margin: "6px 0 0" }}>{RECOVERY_NOTE}</p>
                   </div>
                 )}
 
@@ -271,11 +284,12 @@ export function DraftWorkbench({
                 <NwsWarningEvidence key={"nws:" + reviewKey} draft={selectedDraft} />
                 <OfficialWarningEvidence key={"official-warning:" + reviewKey} draft={selectedDraft} />
                 <NhcAdvisoryEvidence key={"nhc-advisory:" + reviewKey} draft={selectedDraft} />
-                {selectedDraft.local_preview
+                {!selectedDraft.local_preview && <EpisodeJoins key={"episode:" + reviewKey} draft={selectedDraft} onChanged={refreshCandidates} />}
+                {recovery && !allows("edit") ? null : selectedDraft.local_preview
                   ? <EditorMedia key={`media:${reviewKey}`} draft={selectedDraft} editing={editingId === selectedDraft.id} updating={!!draftAction || !!pendingCommand} submitCommand={submitLocalCommand} />
-                  : <GraphicPreview key={`graphic:${reviewKey}`} draft={selectedDraft} editing={editingId === selectedDraft.id} updating={draftAction === selectedDraft.id} onAction={(action, payload) => draftAct(selectedDraft.id, action, payload)} />}
+                  : <GraphicPreview key={`graphic:${reviewKey}`} draft={selectedDraft} mediaStore={mediaStore} editing={editingId === selectedDraft.id} updating={draftAction === selectedDraft.id} onAction={(action, payload) => draftAct(selectedDraft.id, action, payload)} />}
 
-                {controls.canReview && !selectedDraft.media_attachment_sha256 && !selectedDraft.media_attachment && editingId !== selectedDraft.id && (
+                {controls.canReview && !selectedDraft.media_attachment_sha256 && !selectedDraft.media_attachment && allows("review") && editingId !== selectedDraft.id && (
                   <div className="workbench-panel">
                     <h3>Review this version</h3>
                     <p>Previous checks do not cover this text. Check it against the saved source evidence. Recording your review permits manual approval; it does not run or replace model checks.</p>
@@ -400,6 +414,8 @@ export function DraftWorkbench({
                         ? "This version needs review before approval."
                         : selectedDraft.review_kind === "delegated"
                         ? "Assistant reviewed under your explicit authorization. Manual posting only; this is not a human rating or current model checks."
+                        : selectedDraft.review_kind === "delegated_media"
+                        ? "Assistant reviewed this text, native graphic and description together under your explicit authorization. One manual post only; never automatic, a human rating or a scientific verdict."
                         : selectedDraft.review_kind === "human"
                         ? (selectedDraft.local_preview ? "Human review permits local approval. Nothing will be published." : "Human review permits manual posting. Automatic scheduling requires current model checks.")
                         : selectedDraft.approval_policy?.mode === "armed_auto"
@@ -480,7 +496,7 @@ export function DraftWorkbench({
                             <span>
                               alt #{c.rank} · {c.score?.total == null ? "score unavailable" : `copy ${c.score.total}`} · {c.source}
                             </span>
-                            <button
+                            {allows("edit") && <button
                               type="button"
                               className="btn sm"
                               disabled={!!draftAction || !controls.canEdit || editingId === selectedDraft.id}
@@ -489,7 +505,7 @@ export function DraftWorkbench({
                               }
                             >
                               Use This
-                            </button>
+                            </button>}
                           </div>
                           <div className="candidate-text">{c.text}</div>
                           {c.score?.reasons?.length > 0 && (
@@ -500,8 +516,8 @@ export function DraftWorkbench({
                   </div>
                 )}
 
-                <div className="draft-actions">
-                  {editingId === selectedDraft.id ? (
+                {(allows("edit") || allows("approve")) && <div className="draft-actions">
+                  {editingId === selectedDraft.id && allows("edit") ? (
                     <>
                       <button
                         type="button"
@@ -520,14 +536,15 @@ export function DraftWorkbench({
                     </>
                   ) : (
                     <>
-                      <button
+                      {allows("approve") && <button
                         type="button"
                         className="btn approve sm"
                         disabled={!!draftAction || !controls.canApprove}
                         onClick={() => draftAct(selectedDraft.id, "approve")}
                       >
                         {draftAction === selectedDraft.id ? "..." : selectedDraft.local_preview ? "Approve locally" : "Approve + Post"}
-                      </button>
+                      </button>}
+                      {allows("edit") && <>
                       <button
                         ref={editButton}
                         type="button"
@@ -576,13 +593,15 @@ export function DraftWorkbench({
                           Auto {delayLabel(selectedDraft.approval_policy?.recommended_delay_minutes || 30)}
                         </button>
                       )}
+                      </>}
                     </>
                   )}
-                </div>
+                </div>}
                 {pendingCommand && pendingCommand.draftId === selectedDraft.id && (
                   <div className="draft-actions" aria-label="Pending local command">
                     <button className="btn sm" type="button" onClick={checkLocalCommand}>Check result</button>
                     <button className="btn sm" type="button" onClick={retryLocalCommand}>Retry same action</button>
+                    <p className="text-muted" style={{ flexBasis: "100%", margin: 0 }}>Retry resubmits this exact command identity; it cannot start a second paid request or a second publication.</p>
                   </div>
                 )}
                 {draftFeedback && (!draftFeedback.draftId || draftFeedback.draftId === selectedDraft.id) && (
@@ -598,6 +617,9 @@ export function DraftWorkbench({
         <div className="draft-empty">
           No drafts waiting. Trigger a run on the Pipeline tab or try a writing preview.
         </div>
+      )}
+      {!localRole && !drafts.some(draft => draft.local_preview) && (
+        <DeliveredGraphics refreshKey={drafts} {...(loadDelivered ? { load: loadDelivered } : {})} />
       )}
     </div>
   )

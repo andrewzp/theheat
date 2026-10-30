@@ -24,7 +24,7 @@ from tests.stage_revision_check_helpers import assert_protocol
 from tests import test_postgres_delivery as radar_delivery
 from tests import test_postgres_candidate_admission as candidate
 from tests.local_delivery_helpers import fixture_server
-from tests.parked_media_phase_witness import body_phase
+from tests.parked_media_phase_witness import body_phase, fault_phase
 from tests.radar_editor_helpers import radar_case as radar_case
 from tests.test_postgres_delivery import admitted as admitted
 from tests.test_postgres_preview_command_ingress import ORIGIN
@@ -205,82 +205,83 @@ def test_compact_owned_get_real_proofs_fresh_operations_and_restored_faults(
                 if boundary == "description":
                     faults += ["late_reviewer", "late_publisher"]
                 for fault in faults:
-                    armed: list[str] = []
-                    revoked: list[bool] = []
-                    elapsed = [0.0]
-                    start = case["inspection_at"]
-                    original_verify = stages._verify_prefix
-                    original_description = delivery._description_preflight
-                    original_state = authority._state
-                    original_loader = authority.generation_configuration
-                    original_configuration = Path(case["config"]["generation"]).read_bytes()
-                    with monkeypatch.context() as patch:
-                        patch.setattr(editor, "_passive_monotonic", lambda: elapsed[0])
+                    with fault_phase(boundary, fault):
+                        armed: list[str] = []
+                        revoked: list[bool] = []
+                        elapsed = [0.0]
+                        start = case["inspection_at"]
+                        original_verify = stages._verify_prefix
+                        original_description = delivery._description_preflight
+                        original_state = authority._state
+                        original_loader = authority.generation_configuration
+                        original_configuration = Path(case["config"]["generation"]).read_bytes()
+                        with monkeypatch.context() as patch:
+                            patch.setattr(editor, "_passive_monotonic", lambda: elapsed[0])
 
-                        def drift():
-                            if armed:
-                                return
-                            armed.append(fault)
-                            if fault == "policy":
-                                patch.setenv("THEHEAT_WRITER_SAMPLES", "3")
-                            elif fault == "source":
-                                # Actual owner-only configuration file, reread by production.
-                                changed = json.loads(original_configuration)
-                                changed["current_inputs"] = []
-                                Path(case["config"]["generation"]).write_text(json.dumps(changed))
-                            elif fault == "profile":
-                                changed = deepcopy(authority.editor_media_configuration)
-                                changed["scratch"] += "-changed"
-                                patch.setattr(authority, "editor_media_configuration", changed)
-                            elif fault == "expiry":
-                                elapsed[0] = (critic_expiry - start).total_seconds()
+                            def drift():
+                                if armed:
+                                    return
+                                armed.append(fault)
+                                if fault == "policy":
+                                    patch.setenv("THEHEAT_WRITER_SAMPLES", "3")
+                                elif fault == "source":
+                                    # Actual owner-only configuration file, reread by production.
+                                    changed = json.loads(original_configuration)
+                                    changed["current_inputs"] = []
+                                    Path(case["config"]["generation"]).write_text(json.dumps(changed))
+                                elif fault == "profile":
+                                    changed = deepcopy(authority.editor_media_configuration)
+                                    changed["scratch"] += "-changed"
+                                    patch.setattr(authority, "editor_media_configuration", changed)
+                                elif fault == "expiry":
+                                    elapsed[0] = (critic_expiry - start).total_seconds()
 
-                        def verified(*args, **kwargs):
-                            result = original_verify(*args, **kwargs)
-                            if kwargs.get("length") in (None, 4):
+                            def verified(*args, **kwargs):
+                                result = original_verify(*args, **kwargs)
+                                if kwargs.get("length") in (None, 4):
+                                    drift()
+                                return result
+
+                            def described(*args, **kwargs):
+                                result = original_description(*args, **kwargs)
                                 drift()
-                            return result
+                                return result
 
-                        def described(*args, **kwargs):
-                            result = original_description(*args, **kwargs)
-                            drift()
-                            return result
+                            def resolver(subject):
+                                denied = armed and targets.get(fault) == subject
+                                late = revoked and targets.get(fault.removeprefix("late_")) == subject
+                                return None if denied or late else resolve(subject)
 
-                        def resolver(subject):
-                            denied = armed and targets.get(fault) == subject
-                            late = revoked and targets.get(fault.removeprefix("late_")) == subject
-                            return None if denied or late else resolve(subject)
+                            def load_after_description():
+                                value = original_loader()
+                                if armed and fault.startswith("late_"):
+                                    revoked.append(True)
+                                return value
 
-                        def load_after_description():
-                            value = original_loader()
-                            if armed and fault.startswith("late_"):
-                                revoked.append(True)
-                            return value
+                            def state_after_callback(c, *, lock=False):
+                                version, state = original_state(c, lock=lock)
+                                if armed and fault == "state":
+                                    state = deepcopy(state)
+                                    state["drafts"] = [dict(row, text=row["text"] + " Changed callback state.")
+                                        if row.get("id") == case["draft_id"] else row for row in state["drafts"]]
+                                return version, state
 
-                        def state_after_callback(c, *, lock=False):
-                            version, state = original_state(c, lock=lock)
-                            if armed and fault == "state":
-                                state = deepcopy(state)
-                                state["drafts"] = [dict(row, text=row["text"] + " Changed callback state.")
-                                    if row.get("id") == case["draft_id"] else row for row in state["drafts"]]
-                            return version, state
-
-                        patch.setattr(authority, "_state", state_after_callback)
-                        patch.setattr(authority, "generation_configuration", load_after_description)
-                        patch.setattr(stages, "_verify_prefix", verified) if boundary == "proof" else patch.setattr(
-                            delivery, "_description_preflight", described)
-                        try:
-                            refused = read_current(case, resolve=resolver, at=start)
-                            assert armed == [fault], (boundary, fault)
-                            assert not refused["parked"], (boundary, fault, refused)
-                            assert current_intent(refused, path["intent"])["current"] is False, (boundary, fault, refused)
-                            if fault in targets or fault.startswith("late_"):
-                                assert current_intent(refused, path["intent"])["reason"] == "forbidden"
-                                if fault in {"reviewer", "late_reviewer"}:
-                                    assert refused["review_current"] is False
-                        finally:
-                            Path(case["config"]["generation"]).write_bytes(original_configuration)
-                    assert_passive(case, path, before, history)
+                            patch.setattr(authority, "_state", state_after_callback)
+                            patch.setattr(authority, "generation_configuration", load_after_description)
+                            patch.setattr(stages, "_verify_prefix", verified) if boundary == "proof" else patch.setattr(
+                                delivery, "_description_preflight", described)
+                            try:
+                                refused = read_current(case, resolve=resolver, at=start)
+                                assert armed == [fault], (boundary, fault)
+                                assert not refused["parked"], (boundary, fault, refused)
+                                assert current_intent(refused, path["intent"])["current"] is False, (boundary, fault, refused)
+                                if fault in targets or fault.startswith("late_"):
+                                    assert current_intent(refused, path["intent"])["reason"] == "forbidden"
+                                    if fault in {"reviewer", "late_reviewer"}:
+                                        assert refused["review_current"] is False
+                            finally:
+                                Path(case["config"]["generation"]).write_bytes(original_configuration)
+                        assert_passive(case, path, before, history)
 
         with body_phase("body_refusal_order"):
             # REPAIR-1 I1: inspection capture cannot reorder the original source

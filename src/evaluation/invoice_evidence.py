@@ -439,7 +439,7 @@ def build_report(*, as_of: datetime, usage: dict, documents: list[dict], rejecte
                  input_files: list[dict]) -> dict:
     collected = collect_documents(documents)
     joined = reconcile(usage, collected, bindings, scenario)
-    report = {
+    report: dict[str, Any] = {
         "schema": REPORT_SCHEMA, "as_of": as_of.isoformat(),
         "inputs": {"files": sorted(input_files, key=lambda f: (f["role"], f["sha256"])),
                    "archives": usage["sources"], "identity_reconciliation": usage["identity_reconciliation"],
@@ -468,6 +468,11 @@ def build_report(*, as_of: datetime, usage: dict, documents: list[dict], rejecte
                       "grants_approval": False, "billing_truth": "operator_supplied_assertion"},
         "limitations": list(REPORT_LIMITS),
     }
+    from src.evaluation.reconciled_cost import discrepancies
+    # Read before any total: each listed gap makes reconciled totals unreliable.
+    gaps = discrepancies(report)
+    report["discrepancies"] = gaps
+    report["totals_reliable"] = not gaps
     report["report_sha256"] = _report_identity(report)
     return report
 
@@ -494,8 +499,14 @@ def render_markdown(report: dict) -> str:
     lines = [f"# Private archive reconciliation ({report['report_sha256'][:12]})", "",
              f"As of `{report['as_of']}`. Report sha256 `{report['report_sha256']}`.", "",
              "Evidence classes stay separate: observed attempts, parsed usage, a named price scenario, "
-             "operator-supplied billing and identifier matches. None certifies another.", "",
-             "## Inputs", "", "| role | sha256 | bytes |", "|---|---|---|"]
+             "operator-supplied billing and identifier matches. None certifies another.", ""]
+    gaps = report.get("discrepancies")
+    if gaps is not None:
+        lines += ["## Coverage and discrepancies (read before any total)", "",
+                  "Totals below are " + ("not reliable: every listed gap remains open." if gaps
+                                         else "limited to the supplied evidence; actual cost stays unknown."), ""]
+        lines += ([f"- `{_cell(g['code'])}`: {_cell(g['count'])}" for g in gaps] or ["- none listed"]) + [""]
+    lines += ["## Inputs", "", "| role | sha256 | bytes |", "|---|---|---|"]
     lines += [f"| {_cell(f['role'])} | `{f['sha256']}` | {f['bytes']} |" for f in report["inputs"]["files"]]
     lines += ["", "| archive scope | status | problems |", "|---|---|---|"]
     lines += [f"| {_cell(a['scope_id'])} | {a['status']} | {_cell(', '.join(a['problems']) or 'none')} |"

@@ -3,8 +3,60 @@
 from __future__ import annotations
 
 # ruff: noqa: F403,F405
+from src.data import source_incidents
 from src.data._witness import degraded_via
 from src.orchestrator.common import *
+
+# W06.2 (default off): rotate the per-city legs through bounded blocks of the watchlist.
+SCAN_FLAG = "THEHEAT_RAINFALL_REGIONAL_SCAN"
+SCAN_DEADLINE_S = 900.0
+
+
+def scan_blocks(cities: list[dict], block: int) -> tuple[list[str], list[list[int]]]:
+    """Stable named blocks of the watchlist; a changed watchlist is a new region set (cursor 0)."""
+    import hashlib
+
+    keys = ["|".join(str(c.get(k, "")) for k in ("city", "country", "lat", "lon")) for c in cities]
+    blocks = [list(range(i, min(i + block, len(cities)))) for i in range(0, len(cities), block)]
+    names = [f"block-{n + 1:03d}-" + hashlib.sha256("\n".join(keys[j] for j in idx).encode()).hexdigest()[:12]
+             for n, idx in enumerate(blocks)]
+    return names, blocks
+
+
+def _scanned_fetch(bot_state: BotState, cities: list[dict], *, max_cities: int, max_workers: int, trace,
+                   scan: dict) -> list:
+    """One existing GPM call per run, ordered so the cursor's block gets the capped per-city legs.
+
+    Grid downloads still inspect the whole watchlist; only the per-city order rotates. The
+    checkpoint is the retained run's details.rainfall_scan (an existing seam). A failed
+    region advances the cursor too, then the failure reaches the runner's usual status.
+    """
+    from src.data import rainfall_supply
+
+    names, blocks = scan_blocks(cities, min(max_cities, gpm_imerg.MAX_NETWORK_CITIES))
+    cursor = rainfall_supply.cursor_from_history(bot_state.get("run_history"), "gpm_imerg", names)
+    readings: list = []
+    errors: list[BaseException] = []
+
+    def fetch(region: str) -> dict:
+        chosen = blocks[names.index(region)]
+        order = chosen + [j for j in range(len(cities)) if j not in set(chosen)]
+        try:
+            rows = _fetch_strict(gpm_imerg.fetch_daily_precip, cities=[cities[j] for j in order],
+                                 max_cities=max_cities, max_workers=max_workers, trace=trace,
+                                 network_selection=[cities[j] for j in chosen])
+        except Exception as exc:
+            errors.append(exc)
+            raise
+        readings.extend(rows)
+        outcome = "model_fallback" if degraded_via(rows) else "qualified" if rows else "empty_success"
+        return {"outcome": outcome, "readings": len(rows), "calls": 1}
+
+    scan.update(rainfall_supply.scan_regions(names, fetch, cursor=cursor, max_regions=1, max_calls=1,
+                                             deadline_s=SCAN_DEADLINE_S))
+    if errors:
+        raise errors[0]
+    return readings
 
 
 def run_gpm_imerg(
@@ -17,6 +69,12 @@ def run_gpm_imerg(
     source_promoted = 0
     # Observation only: the bounded trace rides the existing telemetry details.
     trace = gpm_imerg.RainfallOpportunityTrace(run_id=(current_run or {}).get("id"))
+    packet_holds: list[dict] = []  # W06.6: named packets stopped before paid generation
+    scan: dict = {}  # W06.2: the bounded regional scan, when THEHEAT_RAINFALL_REGIONAL_SCAN is "1"
+
+    def details() -> dict:
+        return {**_trace_details(trace), **({"rainfall_packet_holds": packet_holds} if packet_holds else {}),
+                **({"rainfall_scan": dict(scan)} if scan else {})}
     try:
         max_cities_raw = os.environ.get("GPM_IMERG_MAX_CITIES")
         max_cities = (
@@ -34,13 +92,17 @@ def run_gpm_imerg(
         )
         if max_workers < 1:
             raise ValueError("GPM_IMERG_MAX_WORKERS must be >= 1")
-        readings = _fetch_strict(
-            gpm_imerg.fetch_daily_precip,
-            cities=cities,
-            max_cities=max_cities,
-            max_workers=max_workers,
-            trace=trace,
-        )
+        if os.environ.get(SCAN_FLAG) == "1" and cities:
+            readings = _scanned_fetch(bot_state, cities, max_cities=max_cities, max_workers=max_workers,
+                                      trace=trace, scan=scan)
+        else:
+            readings = _fetch_strict(
+                gpm_imerg.fetch_daily_precip,
+                cities=cities,
+                max_cities=max_cities,
+                max_workers=max_workers,
+                trace=trace,
+            )
         events = gpm_imerg.detect_precip_records(readings, cast(dict, bot_state))
         for event in events:
             if state.is_duplicate(bot_state, event.event_id):
@@ -73,8 +135,15 @@ def run_gpm_imerg(
                 ],
             )
             from src.two_bot.intern import build_precipitation_bundle
+            from src.data.rainfall_supply import packet_ready
 
             bundle = build_precipitation_bundle(event)
+            # W06: an incomplete window/footprint packet stops before any paid generation.
+            incomplete = packet_ready(bundle)
+            if incomplete:
+                print(f"[gpm_imerg] rainfall packet incomplete, not enqueued: {','.join(incomplete)}")
+                packet_holds.append({"event_id": event.event_id, "location": event.location, "holds": incomplete})
+                continue
             _enqueue_story_candidate(
                 bot_state,
                 bundle=bundle,
@@ -103,7 +172,7 @@ def run_gpm_imerg(
             promoted=source_promoted,
             drafted=0,
             note=served,
-            details=_trace_details(trace),
+            details=details(),
         )
     except SourceSkipped as exc:
         print(f"[alerts] GPM IMERG skipped: {exc}")
@@ -114,7 +183,7 @@ def run_gpm_imerg(
             started,
             status="skipped",
             note=str(exc),
-            details=_trace_details(trace),
+            details=details(),
         )
     except Exception as exc:
         print(f"[alerts] GPM IMERG error: {exc}")
@@ -126,7 +195,7 @@ def run_gpm_imerg(
             started,
             status="failed",
             error=str(exc),
-            details=_trace_details(trace),
+            details=details(),
         )
     return
 
@@ -134,7 +203,15 @@ def run_gpm_imerg(
 def _trace_details(trace) -> dict:
     """The trace export, or an explicit capture failure; never a fabricated trace."""
     try:
-        return {"rainfall_opportunity": trace.export()}
+        details = {"rainfall_opportunity": trace.export()}
     except Exception:  # noqa: BLE001 - telemetry capture must not change the run
         return {"rainfall_opportunity": {"schema": gpm_imerg.TRACE_SCHEMA, "trace_status": "incomplete",
                                          "incomplete_reasons": ["export_failed"]}}
+    try:
+        # W03: product-level incident identity derived from the same trace, no new capture.
+        attempts = source_incidents.gpm_attempts(details["rainfall_opportunity"])
+        if attempts:
+            details["incident"] = source_incidents.run_incident("gpm_imerg", attempts)
+    except ValueError:
+        pass
+    return details

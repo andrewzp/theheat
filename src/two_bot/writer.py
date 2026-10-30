@@ -161,6 +161,10 @@ def build_writer_user_prompt(
     prompt = WRITER_USER_PROMPT_TEMPLATE.format(
         bundle_json=_bundle_json(bundle), memory_json=_memory_json(memory),
     )
+    from src.editorial.warning_automatic import writer_consequence_view
+    consequence = writer_consequence_view(bundle)
+    if consequence is not None:
+        prompt += "\n\nqualified_warning_consequence_view: " + json.dumps(consequence, sort_keys=True)
     if getattr(bundle, "related_signals", None):
         prompt = f"{prompt}\n\n{MULTISIGNAL_GUIDANCE}"
     if getattr(bundle, "human_impact", None):

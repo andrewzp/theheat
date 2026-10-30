@@ -40,6 +40,17 @@ test("bot inventory projects actual models and typed allowlisted flags without s
   assert.equal(JSON.stringify(result).includes("do-not-project"), false)
 })
 
+test("automatic forecast switches are observed independently without borrowing missing settings", () => {
+  for (const key of ["pm25_forecast_auto_text_enabled", "dust_forecast_auto_text_enabled"]) {
+    const snapshot = run()
+    snapshot.runtime_inventory.flags[key] = true
+    const result = buildRuntimeConfig({ run_history: [snapshot] }, { now })
+    const other = key === "pm25_forecast_auto_text_enabled" ? "dust_forecast_auto_text_enabled" : "pm25_forecast_auto_text_enabled"
+    assert.equal(result.flags[key], true)
+    assert.equal(Object.hasOwn(result.flags, other), false)
+  }
+})
+
 test("stale, newer missing, unsupported and future reports cannot look current", () => {
   assert.equal(buildRuntimeConfig({ run_history: [run("2026-09-08T02:00:00Z")] }, { now }).status, "stale")
   assert.equal(buildRuntimeConfig({ run_history: [run(), { started_at: "2026-09-09T02:30:00Z" }] }, { now }).writer_model, null)

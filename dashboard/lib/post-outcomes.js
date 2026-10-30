@@ -124,7 +124,36 @@ function observation(raw, kind, key, tweetId, now) {
 }
 
 /** Receipt identity and historical text are independent of today's draft text. */
-export function postOutcomes(rawState, { now = Date.now() } = {}) {
+// W15.6: what is still unknown about a delivered post, named rather than implied.
+function evidenceNeeded(row) {
+  const needed = []
+  if (row.revision_status !== "recorded") needed.push("published_revision")
+  if (row.publication_context?.status !== "recorded") needed.push("published_type_and_source")
+  if (!row.observations.length) needed.push("metric_observation")
+  else if (!row.observations.some(item => item.age_status === "recorded")) needed.push("platform_creation_time")
+  return needed
+}
+
+// Optional supplied joins. Absent inputs are "not_loaded", distinct from "none recorded".
+function feedbackFor(tweetId, records) {
+  if (!Array.isArray(records)) return { status: "not_loaded" }
+  const mine = records.filter(r => object(r) && object(r.target) && r.target.tweet_id === tweetId)
+  const opinions = mine.filter(r => r.kind === "dashboard_editorial_opinion").length
+  const tags = Object.fromEntries(["concise", "useful", "confusing", "incorrect"].map(tag => [tag, 0]))
+  for (const r of mine) if (r.kind === "dashboard_revision_feedback" && Array.isArray(r.tags)) for (const tag of r.tags) if (Object.hasOwn(tags, tag)) tags[tag]++
+  return { status: mine.length ? "recorded" : "none_recorded", editorial_opinions: opinions, revision_tags: tags, category: "human_feedback" }
+}
+function correctionsFor(tweetId, report) {
+  if (!object(report) || !Array.isArray(report.candidates)) return { status: "not_loaded" }
+  const candidates = report.candidates.filter(c => object(c) && c.tweet_id === tweetId && c.automatic_correction === false && c.deletion === false)
+    .map(c => ({ claim: c.claim, kind: c.kind, uncertainty: c.uncertainty, source_retrieved_at: c.source_evidence?.retrieved_at ?? null,
+      source_statement: c.source_evidence?.statement ?? null, action: "editor_review_only" }))
+  const incomplete = (Array.isArray(report.incomplete) ? report.incomplete : []).filter(r => object(r) && r.tweet_id === tweetId)
+    .map(r => (Array.isArray(r.needed) ? r.needed : []))
+  return { status: candidates.length ? "candidates" : incomplete.length ? "evidence_needed" : "none_supplied", candidates, incomplete }
+}
+
+export function postOutcomes(rawState, { now = Date.now(), feedbackRecords = null, correctionReport = null } = {}) {
   const clock = now instanceof Date ? now.getTime() : now
   if (!Number.isFinite(clock) || !Number.isFinite(new Date(clock).getTime())) throw new TypeError("Outcome history requires a valid clock")
   const state = object(rawState) ? rawState : {}
@@ -215,7 +244,12 @@ export function postOutcomes(rawState, { now = Date.now() } = {}) {
       published_text_sha256: hash, text: hash ? post.texts.get(hash) ?? null : null, observations,
       publication_context: publicationContext(receipts.get(tweet_id), contexts, conflict),
       writer_context: conflict ? { status: "conflict", variants: writerContext.variants } : writerContext,
-      history_status: observations.length ? "retained" : row ? "unreadable_or_empty" : "not_retained" })
+      history_status: observations.length ? "retained" : row ? "unreadable_or_empty" : "not_retained",
+      retained_text_versions: post.texts.size })
+    const last = results.at(-1)
+    last.evidence_needed = evidenceNeeded(last)
+    last.feedback = feedbackFor(tweet_id, feedbackRecords)
+    last.corrections = correctionsFor(tweet_id, correctionReport)
   }
   results.sort((a, b) => a.tweet_id.localeCompare(b.tweet_id))
   return { status: results.length ? "retained" : inventoryKnown ? "no_retained_receipts" : "unknown", posts: results }

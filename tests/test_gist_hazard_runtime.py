@@ -48,7 +48,7 @@ def _request(state):
             "expected_revision": {**draft_identity(draft), "decision_revision": decision_revision(draft)}}
 
 
-@pytest.mark.parametrize("family", ["pm25", "modis", "viirs"])
+@pytest.mark.parametrize("family", ["pm25", "modis", "viirs", "hot10"])
 def test_packaged_runtime_renders_exact_bytes_and_descriptions_from_an_unrelated_directory(family, tmp_path):
     deploy = tmp_path / "deploy"
     for name in (*DEPLOYMENT_FILES, "graphic-runtime.zip", "lib/graphic-runtime-manifest.json"):

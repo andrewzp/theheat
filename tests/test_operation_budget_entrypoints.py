@@ -9,7 +9,7 @@ invented in-memory store. Nothing reaches a source, model, Gist or X.
 """
 from __future__ import annotations
 
-from datetime import date
+from datetime import UTC, date, datetime, timedelta
 import importlib
 import socket
 import sys
@@ -133,46 +133,54 @@ def test_a_green_cli_run_with_unavailable_sources_is_reported_partial(world, mon
     assert report["failure_count"] >= 1 and len(world.spies.writer_events()) == 1
 
 
-def _leaderboard_inputs(monkeypatch, *, stray=False):
-    ranked = [CityTemp(f"Invented City {i}", "ZZ", 10.0 + i, 20.0 + i, 40.0 - i, 30.0, 10.0 - i,
-                       signal_date=date(2026, 10, 29)) for i in range(10)]
-    monkeypatch.setattr(hot10_mod.open_meteo, "load_cities", lambda: [])
-    monkeypatch.setattr(hot10_mod.open_meteo, "load_normals", lambda: {})
+def _leaderboard_inputs(monkeypatch, tmp_path=None, *, stray=False):
+    """Unqualified legacy rows (no adapter evidence or normals) by default; with
+    ``tmp_path``, invented catalogue cities carrying the real adapter's evidence."""
+    cities: list[dict]
+    normals: dict
+    if tmp_path is None:
+        ranked = [CityTemp(f"Invented City {i}", "ZZ", 10.0 + i, 20.0 + i, 40.0 - i, 30.0, 10.0 - i,
+                           signal_date=date(2026, 10, 29)) for i in range(10)]
+        cities, normals = [], {}
+    else:
+        from tests.live_content_harness import qualified_inputs
+        cities, normals, ranked = qualified_inputs(tmp_path, datetime.now(UTC))
+    monkeypatch.setattr(hot10_mod.open_meteo, "load_cities", lambda: cities)
+    monkeypatch.setattr(hot10_mod.open_meteo, "load_normals", lambda: normals)
     monkeypatch.setattr(hot10_mod.open_meteo, "fetch_all_city_temps", lambda cities: ranked)
-    monkeypatch.setattr(hot10_mod.open_meteo, "compute_anomalies", lambda temps, normals: ranked)
-    monkeypatch.setattr(hot10_mod.open_meteo, "rank_hot10", lambda temps: ranked)
     if stray:
         real = hot10_mod._enqueue_story_candidate
 
         def enqueue_with_stray(state, **kwargs):
-            # An invented second, distinct Hot10 candidate sharing this operation's queue.
+            # An invented second, distinct qualified Hot10 candidate sharing this operation's queue.
             from src.two_bot.intern import build_hot10_bundle
-            stray_bundle = build_hot10_bundle(kwargs["bundle"].raw_signal_dump["cities"], changes=[],
-                                              event_id="hot10_2026-10-28")
-            assert real(state, **{**kwargs, "bundle": stray_bundle, "event_id": "hot10_2026-10-28"})
+            raw = kwargs["bundle"].raw_signal_dump
+            stray_id = "hot10_" + (date.fromisoformat(kwargs["event_id"][6:]) - timedelta(days=1)).isoformat()
+            stray_bundle = build_hot10_bundle(raw["cities"], changes=[], event_id=stray_id, universe=raw["universe"])
+            assert real(state, **{**kwargs, "bundle": stray_bundle, "event_id": stray_id})
             return real(state, **kwargs)
         monkeypatch.setattr(hot10_mod, "_enqueue_story_candidate", enqueue_with_stray)
 
 
-@pytest.mark.usefixtures("synthetic_bundle_provenance")
-def test_hot10_is_one_operation_with_at_most_one_writer_attempt(world, monkeypatch):
-    # The repo's opt-in routing fixture supplies source identity: a real Hot10
-    # bundle is otherwise refused at the source boundary (missing_provenance).
+def test_hot10_is_one_operation_with_at_most_one_writer_attempt(world, monkeypatch, tmp_path):
+    # Qualified inputs carry the Open-Meteo adapter's own provenance; no routing fixture.
     monkeypatch.setenv("THEHEAT_MAX_DRAFTS_PER_CYCLE", "5")
-    _leaderboard_inputs(monkeypatch, stray=True)
+    _leaderboard_inputs(monkeypatch, tmp_path, stray=True)
     state, run = fresh_state(), {"id": "run-o3", "sources": []}
     hot10_mod.run_leaderboard(state, run)
     assert len(world.spies.writer_events()) == 1  # Never a ten-post or multi-candidate loop.
     assert len(cuts(state, "global_cap=1")) == 1  # The second Hot10 candidate is held visibly.
 
 
-def test_hot10_without_source_identity_is_refused_before_any_writer(world, monkeypatch):
+def test_hot10_without_qualified_provenance_is_held_before_any_writer(world, monkeypatch):
+    # Rows without adapter evidence or attributable normals never become a bulletin.
     _leaderboard_inputs(monkeypatch)
-    state, run = fresh_state(), {"id": "run-o3", "sources": []}
+    state = fresh_state()
+    run: dict = {"id": "run-o3", "sources": []}
     hot10_mod.run_leaderboard(state, run)
     assert world.spies.calls == [] and state["drafts"] == []
-    assert any(row.get("stage") == "evidence_contract" and row.get("event_id", "").startswith("hot10_")
-               for row in state["suppressions"])
+    source = next(row for row in run["sources"] if row["source"] == "leaderboard")
+    assert source["status"] == "degraded" and source["note"].startswith("hot10_short_slate: 0 of 10")
 
 
 def test_both_mode_is_two_named_operations(world, monkeypatch):
@@ -183,7 +191,7 @@ def test_both_mode_is_two_named_operations(world, monkeypatch):
     monkeypatch.setattr(sys, "argv", ["src.main", "both"])
     importlib.import_module("src.main").main()
     # alerts (N=1) writes one candidate; the leaderboard is its own operation
-    # (maximum 1) whose current Hot10 bundle is refused before any writer call.
+    # (maximum 1) whose unqualified Hot10 slate is held before any writer call.
     assert len(world.spies.writer_events()) == 1 and not world.spies.writer_events()[0].startswith("hot10_")
     report = saved[-1]["run_history"][0]
     assert report["mode"] == "both" and report["drafted_count"] == 1

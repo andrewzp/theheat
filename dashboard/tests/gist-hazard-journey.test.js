@@ -199,3 +199,201 @@ test("owned hazard PNG preview, full-size view, attach, joint review, edits, app
     writeFileSync(config.result, JSON.stringify(report, null, 2) + "\n", { flag: "wx" })
   }
 })
+
+// W01: the Hot10 family through the same owned app, actual handlers and genuine Python PNG.
+test("owned Hot10 table: ten readable rows, states, attach, re-review, approval refusal, delivered snapshot at 1280/390/320", {
+  skip: !process.env.THEHEAT_GIST_HAZARD_JOURNEY_CONFIG && "Run the new owned hazard journey launcher",
+}, async () => {
+  const config = JSON.parse(readFileSync(process.env.THEHEAT_GIST_HAZARD_JOURNEY_CONFIG, "utf8"))
+  const { chromium } = await import(pathToFileURL(config.playwright).href)
+  const browser = await chromium.launch({ executablePath: config.chromium, headless: true,
+    args: ["--disable-background-networking", "--disable-component-update", "--no-first-run"] })
+  const report = { scope: "invented_hot10_journey", actual_handlers: true, actual_python_png: true,
+    mocked: ["Gist in-memory transport", "fixture-only preview HTTP boundary", "explicit invented clock", "recorded workflow dispatch",
+      "seeded earlier delivery through the real sender with fake X SDK factories"],
+    source_or_platform_calls: 0, publication_calls: 0, widths: [], steps: [], errors: [], console: [], refused_requests: [] }
+  const hot10 = { queue: "Invented Hot 10 forecast", mixed: "Invented mixed-day Hot 10 forecast" }
+  try {
+    for (const width of [1280, 390, 320]) {
+      const context = await browser.newContext({ viewport: { width, height: 900 } })
+      const page = await context.newPage()
+      page.on("pageerror", error => report.errors.push(String(error)))
+      // Expected refusals (409 approval, 422 preview) log resource errors; they are recorded, not failures.
+      page.on("console", message => { if (message.type() === "error") report.console.push(message.text()) })
+      await context.route("**/*", route => {
+        const url = new URL(route.request().url())
+        if (url.origin !== config.origin) { report.refused_requests.push(url.href); return route.abort() }
+        return route.continue()
+      })
+      const control = async () => (await (await page.request.get(`${config.origin}/api/fixture-control`)).json())
+      const command = async data => assert.ok((await page.request.post(`${config.origin}/api/fixture-control`, { data })).ok())
+      const saved = async id => (await control()).state.drafts.find(d => d.id === id)
+      await command({ action: "reset" })
+      await command({ action: "clock", family: "hot10", when: "current" })
+      await page.goto(config.origin, { waitUntil: "networkidle" })
+      const panel = page.getByRole("region", { name: "Saved-source graphic preview", exact: true })
+      const press = async locator => { await locator.focus(); await page.keyboard.press("Enter") }
+      const act = async locator => {
+        const marker = page.locator("#journey-actions")
+        const before = Number(await marker.getAttribute("data-count"))
+        await press(locator)
+        await page.waitForFunction(n => Number(document.querySelector("#journey-actions").dataset.count) > n, before)
+        return { ok: (await marker.getAttribute("data-ok")) === "true", code: await marker.getAttribute("data-code") }
+      }
+      const select = async text => {
+        await press(page.locator(".queue-item", { hasText: text }))
+        await page.locator(".queue-item.selected", { hasText: text }).waitFor()
+      }
+      const state = async () => panel.locator("[data-graphic-state]").last().getAttribute("data-graphic-state")
+      const preview = async () => {
+        await press(panel.getByRole("button", { name: /^(Preview graphic|Rebuild preview)$/ }))
+        await panel.locator(".graphic-preview-figure > img").waitFor()
+        await page.waitForFunction(() => { const image = document.querySelector(".graphic-preview-figure > img"); return image?.complete && image.naturalWidth === 1200 && image.naturalHeight === 1500 })
+      }
+      // Rows are readable text at this width: ten list items, none wider than the panel.
+      const rows = async () => page.evaluate(() => {
+        const list = document.querySelector(".graphic-preview .hot10-preview-rows ol")
+        const items = [...list.querySelectorAll("li")]
+        return { count: items.length, overflow: items.some(li => li.scrollWidth > li.clientWidth + 1 || li.getBoundingClientRect().right > innerWidth + 1),
+          minFont: Math.min(...items.map(li => parseFloat(getComputedStyle(li).fontSize))), text: list.innerText }
+      })
+      const row = { width }
+      await select(hot10.queue)
+      assert.equal(await state(), "none")
+      await preview()
+      const text = await panel.innerText()
+      assert.match(text, /Forecast departure table \(sampled cities\)/); assert.match(text, /Image description sent to X/)
+      assert.match(text, /Preview only:/); assert.equal(await state(), "preview")
+      const listed = await rows()
+      assert.equal(listed.count, 10); assert.equal(listed.overflow, false); assert.ok(listed.minFont >= 12, JSON.stringify(listed))
+      assert.match(listed.text, /Riyadh, Saudi Arabia \+9\.2 °C vs normal/)
+      await page.screenshot({ path: `${config.screens}/${width}-hot10-preview.png`, fullPage: true })
+
+      // Attach: the image stays attached through a text edit, which needs a new joint review.
+      const before = await saved("invented-hot10")
+      assert.equal((await act(panel.getByRole("button", { name: "Attach graphic", exact: true }))).ok, true)
+      await panel.getByRole("button", { name: "Remove graphic", exact: true }).waitFor()
+      const attached = await saved("invented-hot10")
+      assert.equal(attached.media_attachment.kind, "gist_hot10_bulletin_v1"); assert.equal(attached.content_revision, before.content_revision + 1)
+      assert.ok(attached.hot10_rows.length === 10, "the legacy rows stay beside the family image")
+      await preview()
+      assert.equal(await state(), "needs_review")
+      const review = async () => {
+        await preview()
+        const checkbox = panel.getByRole("checkbox", { name: /I checked the exact text, image, X image description and source details/ })
+        const record = panel.getByRole("button", { name: "Record joint review", exact: true })
+        assert.equal(await record.isDisabled(), true)
+        await checkbox.focus(); await page.keyboard.press("Space")
+        assert.equal(await checkbox.isChecked(), true); assert.equal(await record.isDisabled(), false)
+        const result = await act(record)
+        assert.equal(result.ok, true, JSON.stringify(result))
+        await page.locator(".queue-item.selected", { hasText: "text and graphic reviewed" }).waitFor()
+        await preview()
+        assert.equal(await state(), "attached")
+        return saved("invented-hot10")
+      }
+      await review()
+      await press(page.getByRole("button", { name: "Edit", exact: true }))
+      const field = page.getByLabel("Edit draft text", { exact: true })
+      await field.focus(); await page.keyboard.press("ControlOrMeta+A"); await page.keyboard.insertText(attached.text + " Revised.")
+      assert.equal((await act(page.getByRole("button", { name: "Save", exact: true }))).ok, true)
+      await page.getByRole("button", { name: "Edit", exact: true }).waitFor()
+      const edited = await saved("invented-hot10")
+      assert.equal(edited.review_binding, undefined); assert.deepEqual(edited.media_attachment, attached.media_attachment)
+      await preview()
+      assert.equal(await state(), "needs_review")
+      await page.screenshot({ path: `${config.screens}/${width}-hot10-needs-review.png`, fullPage: true })
+
+      // W09.1: link a quote to one exact ranked row through the real editor, keyboard only.
+      await press(page.getByRole("button", { name: "Edit", exact: true }))
+      const quoteField = page.getByLabel("Select a quote from the current draft", { exact: true })
+      // Same keyboard selection as the owned claim-reference journey: the whole draft, then Tab to the button.
+      await quoteField.focus(); await page.keyboard.press("ControlOrMeta+A")
+      await page.keyboard.press("Tab")
+      assert.equal(await page.evaluate(() => document.activeElement?.textContent), "Use selected quote")
+      await page.keyboard.press("Enter")
+      const rankedRow = page.getByRole("checkbox", { name: /^ranking\[0\]: rank 1 · city / })
+      await rankedRow.focus(); await page.keyboard.press("Space")
+      assert.equal(await rankedRow.isChecked(), true)
+      await press(page.getByRole("button", { name: "Add reference", exact: true }))
+      assert.equal((await act(page.getByRole("button", { name: "Save", exact: true }))).ok, true)
+      await page.getByRole("button", { name: "Edit", exact: true }).waitFor()
+      const linked = await saved("invented-hot10")
+      assert.equal(linked.text, edited.text); assert.deepEqual(linked.media_attachment, attached.media_attachment)
+      assert.deepEqual(linked.review_context.operator_claim_references.items.map(item => item.sources.map(source => source.pointer)),
+        [[`/current_facts/${linked.review_context.two_bot.bundle.current_facts.findIndex(fact => fact.label === "ranking")}/value/0`]])
+      await page.getByText(/^ranking\[0\]: rank 1 · city /).first().waitFor()
+      report.steps.push({ width, step: "hot10_row_reference_saved" })
+      await page.screenshot({ path: `${config.screens}/${width}-hot10-row-reference.png`, fullPage: true })
+      const reviewed = await review()
+
+      // A ranked local day over: approval refused without a write; current again: one dispatch.
+      await command({ action: "clock", family: "hot10", when: "expired" })
+      const writes = (await control()).writes
+      const refused = await act(page.getByRole("button", { name: "Approve + Post", exact: true }))
+      assert.equal(refused.ok, false); assert.equal(refused.code, "media_hot10_local_day_over")
+      assert.equal((await control()).writes, writes); assert.equal((await control()).dispatches.length, 0)
+      await command({ action: "clock", family: "hot10", when: "current" })
+      assert.equal((await act(page.getByRole("button", { name: "Approve + Post", exact: true }))).ok, true)
+      const approved = await saved("invented-hot10"), dispatches = (await control()).dispatches
+      assert.equal(approved.status, "approved"); assert.equal(dispatches.length, 1)
+      assert.deepEqual(dispatches[0].inputs, { mode: "manual_tweet", tweet_text: reviewed.text, draft_id: "invented-hot10", publish_intent_id: approved.publish_intent_id })
+
+      // Long names, both signs and two local days stay readable.
+      await command({ action: "clock", family: "hot10-mixed", when: "current" })
+      await select(hot10.mixed)
+      await preview()
+      const mixed = await rows()
+      assert.equal(mixed.count, 10); assert.equal(mixed.overflow, false)
+      assert.match(mixed.text, /Santiago de los Caballeros, Dominican Republic \+9\.4 °C vs normal/)
+      assert.match(mixed.text, /Kinshasa, DR Congo −8\.0 °C vs normal/); assert.match(mixed.text, /2026-10-30 \(Africa\/Lubumbashi\)/)
+      assert.match(await panel.innerText(), /each row shows its own local day/)
+      await page.screenshot({ path: `${config.screens}/${width}-hot10-mixed.png`, fullPage: true })
+
+      // The earlier delivered post: its exact PNG, posted text and X description, read-only.
+      const delivered = page.getByRole("region", { name: "Delivered graphics", exact: true })
+      await delivered.getByText("X post invented-x-receipt-invented-hot10-delivered").waitFor()
+      const inspect = delivered.getByRole("button", { name: "Inspect delivered graphic", exact: true })
+      assert.equal(await inspect.isDisabled(), false)
+      await press(inspect)
+      await page.waitForFunction(() => {
+        const region = document.querySelector(".delivered-graphics")
+        return region?.querySelector(".graphic-preview-figure > img") || region?.querySelector("[role=status]")?.textContent.trim()
+      })
+      const status = (await delivered.locator("[role=status]").last().textContent()).trim()
+      assert.ok(!status || /Rebuilding/.test(status), status)
+      await delivered.locator(".graphic-preview-figure > img").waitFor()
+      await page.waitForFunction(() => { const image = document.querySelector(".delivered-graphics .graphic-preview-figure > img"); return image?.complete && image.naturalWidth === 1200 })
+      const shown = await delivered.innerText()
+      const posted = (await control()).state.drafts.find(d => d.id === "invented-hot10-delivered")
+      assert.ok(shown.includes(posted.text)); assert.ok(shown.includes(posted.media_attachment.image.png_sha256))
+      assert.ok(shown.includes(posted.media_attachment.description.delivery_text.slice(0, 60)))
+      await delivered.locator(".graphic-preview-figure").scrollIntoViewIfNeeded()
+      await page.screenshot({ path: `${config.screens}/${width}-hot10-delivered.png`, fullPage: true })
+      // Last: a refused preview of the mixed draft writes nothing and leaves its text reviewable.
+      const mixedWrites = (await control()).writes
+      await command({ action: "refuse_preview" })
+      await press(panel.getByRole("button", { name: "Rebuild preview", exact: true }))
+      await panel.getByRole("status").filter({ hasText: /saved source or display limits cannot support/i }).waitFor()
+      assert.equal(await state(), "unavailable"); assert.match(await panel.innerText(), /the text draft is unchanged and can still be reviewed on its own/)
+      assert.equal((await control()).writes, mixedWrites)
+      const overflow = await page.evaluate(() => ({ page: document.documentElement.scrollWidth, viewport: innerWidth }))
+      assert.ok(overflow.page <= overflow.viewport + 1, JSON.stringify(overflow))
+      const final = await control()
+      assert.deepEqual(final.refused, []); assert.ok(!JSON.stringify(final.state).includes("iVBORw0KGgo"))
+      report.widths.push({ ...row, passed: true, writes: final.writes, previews: final.previews, overflow })
+      await context.close()
+    }
+    assert.deepEqual(report.errors, []); assert.deepEqual(report.refused_requests, [])
+  } catch (error) {
+    report.failure = String(error)
+    for (const context of browser.contexts()) for (const page of context.pages()) {
+      writeFileSync(`${config.screens}/hot10-failure.txt`, await page.locator("body").innerText())
+      await page.screenshot({ path: `${config.screens}/hot10-failure.png`, fullPage: true })
+    }
+    throw error
+  } finally {
+    await browser.close()
+    writeFileSync(config.result.replace(/\.json$/, "-hot10.json"), JSON.stringify(report, null, 2) + "\n", { flag: "wx" })
+  }
+})

@@ -770,6 +770,16 @@ h1 span { color: #666; font-weight: 400; font-size: 14px; margin-left: 8px; }
 .graphic-kind { color: #f6c792; font-weight: 600; }
 .graphic-posting-window { color: #eee; border-left: 3px solid #f6c792; padding-left: 10px; }
 .graphic-full-size-open { justify-self: start; margin-top: 10px; }
+.graphic-state { color: #eee; border-left: 3px solid #8ab4f8; padding-left: 10px; overflow-wrap: anywhere; }
+.hot10-preview-rows { display: grid; gap: 8px; min-width: 0; overflow-wrap: anywhere; }
+.hot10-preview-rows ol { margin: 0; padding-left: 2.2em; display: grid; gap: 6px; }
+.hot10-preview-rows li { line-height: 1.5; }
+.hot10-warm { color: #fdba74; font-variant-numeric: tabular-nums; }
+.hot10-cool { color: #93c5fd; font-variant-numeric: tabular-nums; }
+.hot10-row-detail { color: #c8ccd4; }
+.delivered-graphics { margin-top: 16px; min-width: 0; overflow-wrap: anywhere; }
+.delivered-graphics-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; min-width: 0; overflow-wrap: anywhere; }
+.delivered-graphics-list li { border-top: 1px solid #383838; padding-top: 10px; display: grid; gap: 6px; }
 .graphic-full-size {
   width: 100vw; max-width: 100vw; height: 100dvh; max-height: 100dvh; margin: 0; padding: 12px 0 24px;
   border: 0; background: #050505; color: #eee; overflow-y: auto;

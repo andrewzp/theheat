@@ -1,0 +1,735 @@
+{
+ "cases": [
+  {
+   "name": "confirm_matching_receipt",
+   "steps": [
+    {
+     "expect": {
+      "row": {
+       "phase": "confirmed",
+       "text": "Invented Fenwick Hollow reached 41 C.",
+       "tweet_id": "1900000000000000901"
+      },
+      "status": "applied"
+     },
+     "request": {
+      "action": "confirm",
+      "event_id": "w14-ev-unknown",
+      "expected_decision_revision": 2,
+      "expected_evidence_sha256": "c1ec0e8a7617bbee39d9f3e3284959f21293196477364cc334079dcf24afa193",
+      "intent_id": "w14-intent-unknown",
+      "reason": "Invented operator check",
+      "receipt": {
+       "created_at": "2026-10-30T10:00:03Z",
+       "text": "Invented Fenwick Hollow reached 41 C.",
+       "tweet_id": "1900000000000000901"
+      },
+      "reconciliation_id": "w14-r1"
+     }
+    }
+   ]
+  },
+  {
+   "name": "repeat_is_unchanged_and_reused_id_refused",
+   "steps": [
+    {
+     "expect": {
+      "status": "applied"
+     },
+     "request": {
+      "action": "confirm",
+      "event_id": "w14-ev-unknown",
+      "expected_decision_revision": 2,
+      "expected_evidence_sha256": "c1ec0e8a7617bbee39d9f3e3284959f21293196477364cc334079dcf24afa193",
+      "intent_id": "w14-intent-unknown",
+      "reason": "Invented operator check",
+      "receipt": {
+       "created_at": "2026-10-30T10:00:03Z",
+       "text": "Invented Fenwick Hollow reached 41 C.",
+       "tweet_id": "1900000000000000901"
+      },
+      "reconciliation_id": "w14-r1"
+     }
+    },
+    {
+     "expect": {
+      "status": "unchanged"
+     },
+     "request": {
+      "action": "confirm",
+      "event_id": "w14-ev-unknown",
+      "expected_decision_revision": 2,
+      "expected_evidence_sha256": "c1ec0e8a7617bbee39d9f3e3284959f21293196477364cc334079dcf24afa193",
+      "intent_id": "w14-intent-unknown",
+      "reason": "Invented operator check",
+      "receipt": {
+       "created_at": "2026-10-30T10:00:03Z",
+       "text": "Invented Fenwick Hollow reached 41 C.",
+       "tweet_id": "1900000000000000901"
+      },
+      "reconciliation_id": "w14-r1"
+     }
+    },
+    {
+     "expect": {
+      "code": "reconciliation_id_reused"
+     },
+     "request": {
+      "action": "confirm",
+      "event_id": "w14-ev-unknown",
+      "expected_decision_revision": 2,
+      "expected_evidence_sha256": "c1ec0e8a7617bbee39d9f3e3284959f21293196477364cc334079dcf24afa193",
+      "intent_id": "w14-intent-unknown",
+      "reason": "Different request",
+      "receipt": {
+       "created_at": "2026-10-30T10:00:03Z",
+       "text": "Invented Fenwick Hollow reached 41 C.",
+       "tweet_id": "1900000000000000901"
+      },
+      "reconciliation_id": "w14-r1"
+     }
+    }
+   ]
+  },
+  {
+   "name": "unrelated_text",
+   "steps": [
+    {
+     "expect": {
+      "code": "receipt_text_mismatch"
+     },
+     "request": {
+      "action": "confirm",
+      "event_id": "w14-ev-unknown",
+      "expected_decision_revision": 2,
+      "expected_evidence_sha256": "c1ec0e8a7617bbee39d9f3e3284959f21293196477364cc334079dcf24afa193",
+      "intent_id": "w14-intent-unknown",
+      "reason": "Invented operator check",
+      "receipt": {
+       "created_at": "2026-10-30T10:00:03Z",
+       "text": "Invented other post.",
+       "tweet_id": "1900000000000000901"
+      },
+      "reconciliation_id": "w14-r2"
+     }
+    }
+   ]
+  },
+  {
+   "name": "unrelated_tweet_bound_elsewhere",
+   "steps": [
+    {
+     "expect": {
+      "code": "receipt_bound_elsewhere"
+     },
+     "request": {
+      "action": "confirm",
+      "event_id": "w14-ev-unknown",
+      "expected_decision_revision": 2,
+      "expected_evidence_sha256": "c1ec0e8a7617bbee39d9f3e3284959f21293196477364cc334079dcf24afa193",
+      "intent_id": "w14-intent-unknown",
+      "reason": "Invented operator check",
+      "receipt": {
+       "created_at": "2026-10-30T10:00:03Z",
+       "text": "Invented Fenwick Hollow reached 41 C.",
+       "tweet_id": "1900000000000000777"
+      },
+      "reconciliation_id": "w14-r3"
+     }
+    }
+   ]
+  },
+  {
+   "name": "receipt_predates_attempt",
+   "steps": [
+    {
+     "expect": {
+      "code": "receipt_predates_attempt"
+     },
+     "request": {
+      "action": "confirm",
+      "event_id": "w14-ev-unknown",
+      "expected_decision_revision": 2,
+      "expected_evidence_sha256": "c1ec0e8a7617bbee39d9f3e3284959f21293196477364cc334079dcf24afa193",
+      "intent_id": "w14-intent-unknown",
+      "reason": "Invented operator check",
+      "receipt": {
+       "created_at": "2026-10-30T09:59:59Z",
+       "text": "Invented Fenwick Hollow reached 41 C.",
+       "tweet_id": "1900000000000000901"
+      },
+      "reconciliation_id": "w14-r4"
+     }
+    }
+   ]
+  },
+  {
+   "name": "stale_decision_revision",
+   "steps": [
+    {
+     "expect": {
+      "code": "stale_decision_revision"
+     },
+     "request": {
+      "action": "confirm",
+      "event_id": "w14-ev-unknown",
+      "expected_decision_revision": 1,
+      "expected_evidence_sha256": "c1ec0e8a7617bbee39d9f3e3284959f21293196477364cc334079dcf24afa193",
+      "intent_id": "w14-intent-unknown",
+      "reason": "Invented operator check",
+      "receipt": {
+       "created_at": "2026-10-30T10:00:03Z",
+       "text": "Invented Fenwick Hollow reached 41 C.",
+       "tweet_id": "1900000000000000901"
+      },
+      "reconciliation_id": "w14-r5"
+     }
+    }
+   ]
+  },
+  {
+   "name": "altered_source_snapshot",
+   "steps": [
+    {
+     "expect": {
+      "code": "source_snapshot_changed"
+     },
+     "request": {
+      "action": "confirm",
+      "event_id": "w14-ev-altered",
+      "expected_decision_revision": 2,
+      "expected_evidence_sha256": "b823500512f9bf29511938ef2db0cc51b0d3379ef39ef7e9726dcbdab8ed390b",
+      "intent_id": "w14-intent-altered",
+      "reason": "Invented operator check",
+      "receipt": {
+       "created_at": "2026-10-30T10:00:03Z",
+       "text": "Invented Quill Ford reached 42 C.",
+       "tweet_id": "1900000000000000901"
+      },
+      "reconciliation_id": "w14-r6"
+     }
+    }
+   ]
+  },
+  {
+   "name": "wrong_expected_snapshot",
+   "steps": [
+    {
+     "expect": {
+      "code": "source_snapshot_changed"
+     },
+     "request": {
+      "action": "confirm",
+      "event_id": "w14-ev-unknown",
+      "expected_decision_revision": 2,
+      "expected_evidence_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "intent_id": "w14-intent-unknown",
+      "reason": "Invented operator check",
+      "receipt": {
+       "created_at": "2026-10-30T10:00:03Z",
+       "text": "Invented Fenwick Hollow reached 41 C.",
+       "tweet_id": "1900000000000000901"
+      },
+      "reconciliation_id": "w14-r7"
+     }
+    }
+   ]
+  },
+  {
+   "name": "no_receipt_unknown_stays_unknown",
+   "steps": [
+    {
+     "expect": {
+      "code": "receipt_required"
+     },
+     "request": {
+      "action": "confirm",
+      "event_id": "w14-ev-unknown",
+      "expected_decision_revision": 2,
+      "expected_evidence_sha256": "c1ec0e8a7617bbee39d9f3e3284959f21293196477364cc334079dcf24afa193",
+      "intent_id": "w14-intent-unknown",
+      "reason": "Invented operator check",
+      "reconciliation_id": "w14-r8"
+     }
+    }
+   ]
+  },
+  {
+   "name": "other_intent",
+   "steps": [
+    {
+     "expect": {
+      "code": "attempt_mismatch"
+     },
+     "request": {
+      "action": "confirm",
+      "event_id": "w14-ev-unknown",
+      "expected_decision_revision": 2,
+      "expected_evidence_sha256": "c1ec0e8a7617bbee39d9f3e3284959f21293196477364cc334079dcf24afa193",
+      "intent_id": "w14-intent-other",
+      "reason": "Invented operator check",
+      "receipt": {
+       "created_at": "2026-10-30T10:00:03Z",
+       "text": "Invented Fenwick Hollow reached 41 C.",
+       "tweet_id": "1900000000000000901"
+      },
+      "reconciliation_id": "w14-r9"
+     }
+    }
+   ]
+  },
+  {
+   "name": "media_alt_mismatch",
+   "steps": [
+    {
+     "expect": {
+      "code": "receipt_media_mismatch"
+     },
+     "request": {
+      "action": "confirm",
+      "event_id": "w14-ev-media",
+      "expected_decision_revision": 2,
+      "expected_evidence_sha256": "c5bf73c1097f3a6b642cabc9e6977e1a0dcf0b3e4b5a211f7527b34ca9872b1f",
+      "intent_id": "w14-intent-media",
+      "reason": "Invented operator check",
+      "receipt": {
+       "alt_text": "Invented other description.",
+       "created_at": "2026-10-30T10:00:03Z",
+       "text": "Invented Marrow Flats chart of daily highs.",
+       "tweet_id": "1900000000000000901"
+      },
+      "reconciliation_id": "w14-r10"
+     }
+    }
+   ]
+  },
+  {
+   "name": "media_alt_match",
+   "steps": [
+    {
+     "expect": {
+      "row": {
+       "phase": "confirmed",
+       "reconciliation": {
+        "png_receipt_verification": "not_available_from_platform"
+       }
+      },
+      "status": "applied"
+     },
+     "request": {
+      "action": "confirm",
+      "event_id": "w14-ev-media",
+      "expected_decision_revision": 2,
+      "expected_evidence_sha256": "c5bf73c1097f3a6b642cabc9e6977e1a0dcf0b3e4b5a211f7527b34ca9872b1f",
+      "intent_id": "w14-intent-media",
+      "reason": "Invented operator check",
+      "receipt": {
+       "alt_text": "Invented chart: Marrow Flats daily highs.",
+       "created_at": "2026-10-30T10:00:03Z",
+       "text": "Invented Marrow Flats chart of daily highs.",
+       "tweet_id": "1900000000000000901"
+      },
+      "reconciliation_id": "w14-r11"
+     }
+    }
+   ]
+  },
+  {
+   "name": "not_sent_cannot_be_confirmed",
+   "steps": [
+    {
+     "expect": {
+      "code": "attempt_proven_not_sent"
+     },
+     "request": {
+      "action": "confirm",
+      "event_id": "w14-ev-notsent",
+      "expected_decision_revision": 2,
+      "expected_evidence_sha256": "5799fbac587575f331f082b5dbc2beb1e139e3bcfa5d77d9a16a301fd5dd6236",
+      "intent_id": "w14-intent-notsent",
+      "reason": "Invented operator check",
+      "receipt": {
+       "created_at": "2026-10-30T10:00:03Z",
+       "text": "Invented Tarn Reach reached 39 C.",
+       "tweet_id": "1900000000000000901"
+      },
+      "reconciliation_id": "w14-r12"
+     }
+    }
+   ]
+  },
+  {
+   "name": "delivered_content_cannot_be_cancelled",
+   "steps": [
+    {
+     "expect": {
+      "code": "delivered_content_retained"
+     },
+     "request": {
+      "action": "cancel",
+      "event_id": "w14-ev-confirmed",
+      "expected_decision_revision": 2,
+      "expected_evidence_sha256": "270a46598a28fa0e5011e95a489a5d4868f6076554b3f20f165999dac144b4f6",
+      "intent_id": "w14-intent-confirmed",
+      "reason": "Invented operator check",
+      "reconciliation_id": "w14-r13"
+     }
+    }
+   ]
+  },
+  {
+   "name": "cancel_unknown_keeps_evidence",
+   "steps": [
+    {
+     "expect": {
+      "draft_status": "rejected",
+      "row": {
+       "phase": "unknown",
+       "text": "Invented Fenwick Hollow reached 41 C.",
+       "tweet_id": null
+      },
+      "status": "applied"
+     },
+     "request": {
+      "action": "cancel",
+      "event_id": "w14-ev-unknown",
+      "expected_decision_revision": 2,
+      "expected_evidence_sha256": "c1ec0e8a7617bbee39d9f3e3284959f21293196477364cc334079dcf24afa193",
+      "intent_id": "w14-intent-unknown",
+      "reason": "Invented operator check",
+      "reconciliation_id": "w14-r14"
+     }
+    }
+   ]
+  },
+  {
+   "name": "conflicts_require_review",
+   "steps": [
+    {
+     "expect": {
+      "code": "attempt_conflicts_require_review"
+     },
+     "request": {
+      "action": "confirm",
+      "event_id": "w14-ev-conflict",
+      "expected_decision_revision": 2,
+      "expected_evidence_sha256": "41ea7b78e436dee2792b08b65016d097d8ea82c65d6a7718cb8e457849fd8ec5",
+      "intent_id": "w14-intent-conflict",
+      "reason": "Invented operator check",
+      "receipt": {
+       "created_at": "2026-10-30T10:00:03Z",
+       "text": "Invented Ostler Gap reached 40 C.",
+       "tweet_id": "1900000000000000901"
+      },
+      "reconciliation_id": "w14-r15"
+     }
+    }
+   ]
+  },
+  {
+   "name": "withdraw_unknown_then_confirm_late_receipt_without_retry",
+   "steps": [
+    {
+     "expect": {
+      "draft_status": "rejected",
+      "row": {
+       "phase": "unknown",
+       "text": "Invented Fenwick Hollow reached 41 C.",
+       "tweet_id": null
+      },
+      "status": "applied"
+     },
+     "request": {
+      "action": "cancel",
+      "event_id": "w14-ev-unknown",
+      "expected_decision_revision": 2,
+      "expected_evidence_sha256": "c1ec0e8a7617bbee39d9f3e3284959f21293196477364cc334079dcf24afa193",
+      "intent_id": "w14-intent-unknown",
+      "reason": "Invented operator check",
+      "reconciliation_id": "w14-r14"
+     }
+    },
+    {
+     "expect": {
+      "row": {
+       "phase": "confirmed",
+       "text": "Invented Fenwick Hollow reached 41 C.",
+       "tweet_id": "1900000000000000901",
+       "operator_cancellation": {
+        "reconciliation_id": "w14-r14",
+        "reason": "Invented operator check"
+       }
+      },
+      "status": "applied",
+      "draft_status": "rejected"
+     },
+     "request": {
+      "action": "confirm",
+      "event_id": "w14-ev-unknown",
+      "expected_decision_revision": 3,
+      "expected_evidence_sha256": "c1ec0e8a7617bbee39d9f3e3284959f21293196477364cc334079dcf24afa193",
+      "intent_id": "w14-intent-unknown",
+      "reason": "Invented operator check",
+      "receipt": {
+       "created_at": "2026-10-30T10:00:03Z",
+       "text": "Invented Fenwick Hollow reached 41 C.",
+       "tweet_id": "1900000000000000901"
+      },
+      "reconciliation_id": "w14-late-receipt"
+     }
+    },
+    {
+     "expect": {
+      "status": "unchanged"
+     },
+     "request": {
+      "action": "confirm",
+      "event_id": "w14-ev-unknown",
+      "expected_decision_revision": 3,
+      "expected_evidence_sha256": "c1ec0e8a7617bbee39d9f3e3284959f21293196477364cc334079dcf24afa193",
+      "intent_id": "w14-intent-unknown",
+      "reason": "Invented operator check",
+      "receipt": {
+       "created_at": "2026-10-30T10:00:03Z",
+       "text": "Invented Fenwick Hollow reached 41 C.",
+       "tweet_id": "1900000000000000901"
+      },
+      "reconciliation_id": "w14-late-receipt"
+     }
+    },
+    {
+     "expect": {
+      "code": "delivered_content_retained"
+     },
+     "request": {
+      "action": "cancel",
+      "event_id": "w14-ev-unknown",
+      "expected_decision_revision": 3,
+      "expected_evidence_sha256": "c1ec0e8a7617bbee39d9f3e3284959f21293196477364cc334079dcf24afa193",
+      "intent_id": "w14-intent-unknown",
+      "reason": "Invented operator check",
+      "reconciliation_id": "w14-cancel-delivered"
+     }
+    }
+   ]
+  }
+ ],
+ "description": "W14.4 shared reconciliation vectors; invented places and identifiers only.",
+ "state": {
+  "drafts": [
+   {
+    "content_revision": 1,
+    "decision_revision": 2,
+    "event_id": "w14-ev-unknown",
+    "id": "w14-d-unknown",
+    "review_context": {
+     "two_bot": {
+      "bundle": {
+       "current_facts": [
+        {
+         "label": "place",
+         "value": "Unknown"
+        }
+       ],
+       "event_id": "w14-ev-unknown",
+       "signal_kind": "monthly_high"
+      }
+     }
+    },
+    "status": "approved",
+    "text": "Invented Fenwick Hollow reached 41 C.",
+    "type": "monthly_high"
+   },
+   {
+    "content_revision": 1,
+    "decision_revision": 2,
+    "event_id": "w14-ev-media",
+    "id": "w14-d-media",
+    "review_context": {
+     "two_bot": {
+      "bundle": {
+       "current_facts": [
+        {
+         "label": "place",
+         "value": "Media"
+        }
+       ],
+       "event_id": "w14-ev-media",
+       "signal_kind": "monthly_high"
+      }
+     }
+    },
+    "status": "approved",
+    "text": "Invented Marrow Flats chart of daily highs.",
+    "type": "monthly_high"
+   },
+   {
+    "content_revision": 1,
+    "decision_revision": 2,
+    "event_id": "w14-ev-notsent",
+    "id": "w14-d-notsent",
+    "review_context": {
+     "two_bot": {
+      "bundle": {
+       "current_facts": [
+        {
+         "label": "place",
+         "value": "Notsent"
+        }
+       ],
+       "event_id": "w14-ev-notsent",
+       "signal_kind": "monthly_high"
+      }
+     }
+    },
+    "status": "approved",
+    "text": "Invented Tarn Reach reached 39 C.",
+    "type": "monthly_high"
+   },
+   {
+    "content_revision": 1,
+    "decision_revision": 2,
+    "event_id": "w14-ev-confirmed",
+    "id": "w14-d-confirmed",
+    "review_context": {
+     "two_bot": {
+      "bundle": {
+       "current_facts": [
+        {
+         "label": "place",
+         "value": "Confirmed"
+        }
+       ],
+       "event_id": "w14-ev-confirmed",
+       "signal_kind": "monthly_high"
+      }
+     }
+    },
+    "status": "posted",
+    "text": "Invented Brindle Cove reached 38 C.",
+    "tweet_id": "1900000000000000777",
+    "type": "monthly_high"
+   },
+   {
+    "content_revision": 1,
+    "decision_revision": 2,
+    "event_id": "w14-ev-conflict",
+    "id": "w14-d-conflict",
+    "review_context": {
+     "two_bot": {
+      "bundle": {
+       "current_facts": [
+        {
+         "label": "place",
+         "value": "Conflict"
+        }
+       ],
+       "event_id": "w14-ev-conflict",
+       "signal_kind": "monthly_high"
+      }
+     }
+    },
+    "status": "approved",
+    "text": "Invented Ostler Gap reached 40 C.",
+    "type": "monthly_high"
+   },
+   {
+    "content_revision": 1,
+    "decision_revision": 2,
+    "event_id": "w14-ev-altered",
+    "id": "w14-d-altered",
+    "review_context": {
+     "two_bot": {
+      "bundle": {
+       "current_facts": [
+        {
+         "label": "place",
+         "value": "Altered after the attempt"
+        }
+       ],
+       "event_id": "w14-ev-altered",
+       "signal_kind": "monthly_high"
+      }
+     }
+    },
+    "status": "approved",
+    "text": "Invented Quill Ford reached 42 C.",
+    "type": "monthly_high"
+   }
+  ],
+  "publish_ledger": {
+   "w14-ev-altered": {
+    "at": "2026-10-30T10:00:00Z",
+    "content_revision": 1,
+    "evidence_sha256": "b823500512f9bf29511938ef2db0cc51b0d3379ef39ef7e9726dcbdab8ed390b",
+    "intent_id": "w14-intent-altered",
+    "phase": "unknown",
+    "text": "Invented Quill Ford reached 42 C.",
+    "text_sha256": "81546d75e93cc2f93207946d1444d83bd0f3a39a3a2546bac0341ed76b55b963",
+    "tweet_id": null
+   },
+   "w14-ev-confirmed": {
+    "at": "2026-10-30T10:00:00Z",
+    "confirmed_at": "2026-10-30T10:00:05Z",
+    "content_revision": 1,
+    "evidence_sha256": "270a46598a28fa0e5011e95a489a5d4868f6076554b3f20f165999dac144b4f6",
+    "intent_id": "w14-intent-confirmed",
+    "phase": "confirmed",
+    "text": "Invented Brindle Cove reached 38 C.",
+    "text_sha256": "b4a093815916fb2a8a5cc2d9805bcb565abf347958937d7e53a08b01d71d976b",
+    "tweet_id": "1900000000000000777"
+   },
+   "w14-ev-conflict": {
+    "at": "2026-10-30T10:00:00Z",
+    "attempt_conflicts": [
+     {
+      "intent_id": "w14-intent-other",
+      "phase": "unknown"
+     }
+    ],
+    "content_revision": 1,
+    "evidence_sha256": "41ea7b78e436dee2792b08b65016d097d8ea82c65d6a7718cb8e457849fd8ec5",
+    "intent_id": "w14-intent-conflict",
+    "phase": "unknown",
+    "text": "Invented Ostler Gap reached 40 C.",
+    "text_sha256": "527d4213a4e2e1b68ed0e7ad0b002cf0e7674dc217963cbff15c40d98cc00507",
+    "tweet_id": null
+   },
+   "w14-ev-media": {
+    "at": "2026-10-30T10:00:00Z",
+    "content_revision": 1,
+    "delivery_identity": {
+     "alt_sha256": "ea0169bfcad8a36bf3cedf331ab70276dbc65f7e90c384668e10764bf366a368",
+     "png_sha256": "20c733b0307a20e3f4c008a3390d535833817d9a019fafb9b1fb93b29aa28042",
+     "text_sha256": "876317b4726512f95b875483a5e03fe35dc0d1269d58ca14b12a266cba4b1d5a"
+    },
+    "evidence_sha256": "c5bf73c1097f3a6b642cabc9e6977e1a0dcf0b3e4b5a211f7527b34ca9872b1f",
+    "intent_id": "w14-intent-media",
+    "phase": "unknown",
+    "text": "Invented Marrow Flats chart of daily highs.",
+    "text_sha256": "876317b4726512f95b875483a5e03fe35dc0d1269d58ca14b12a266cba4b1d5a",
+    "tweet_id": null
+   },
+   "w14-ev-notsent": {
+    "at": "2026-10-30T10:00:00Z",
+    "content_revision": 1,
+    "evidence_sha256": "5799fbac587575f331f082b5dbc2beb1e139e3bcfa5d77d9a16a301fd5dd6236",
+    "intent_id": "w14-intent-notsent",
+    "phase": "not_sent",
+    "text": "Invented Tarn Reach reached 39 C.",
+    "text_sha256": "d1cf8c0c21b7191c7cb9755f3380020c6bfad0ddc34c3b5c6c6899c81c7a7690",
+    "tweet_id": null
+   },
+   "w14-ev-unknown": {
+    "at": "2026-10-30T10:00:00Z",
+    "content_revision": 1,
+    "evidence_sha256": "c1ec0e8a7617bbee39d9f3e3284959f21293196477364cc334079dcf24afa193",
+    "intent_id": "w14-intent-unknown",
+    "phase": "unknown",
+    "text": "Invented Fenwick Hollow reached 41 C.",
+    "text_sha256": "03cff007668a51a0443c711ff2de9f400345af59869eea4c5fd5fdb3f4488af0",
+    "tweet_id": null
+   }
+  }
+ }
+}

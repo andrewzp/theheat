@@ -112,6 +112,7 @@ jobs:
           INPUT_RI_CURRENT_WIND_KT: ${{ inputs.ri_current_wind_kt }}
           INPUT_RECORD_LABEL: ${{ inputs.record_label }}
           INPUT_RECORD_SCOPE: ${{ inputs.record_scope }}
+          THEHEAT_PAID_EVALUATION_ENABLED: ${{ vars.THEHEAT_PAID_EVALUATION_ENABLED }}
         # `|| true`: a clean kill is informative, not a job failure — this is
         # the voice-iteration tool (reganom-dryrun semantics), NOT a flip
         # gate; we want drafts + verdicts in the log however many ship.

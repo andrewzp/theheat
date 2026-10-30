@@ -150,7 +150,8 @@ def test_the_bot_workflow_only_references_default_off_configuration():
     step = next(step for step in bot["jobs"]["run"]["steps"] if step.get("name") == "Run bot")
     names = {name: value for name, value in step["env"].items() if "NHC_ADVISORY" in name}
     assert names == {"THEHEAT_NHC_ADVISORY_ACQUISITION": "${{ vars.THEHEAT_NHC_ADVISORY_ACQUISITION || '0' }}",
-                     "THEHEAT_NHC_ADVISORY_NOMINATION": "${{ vars.THEHEAT_NHC_ADVISORY_NOMINATION }}"}
+                     "THEHEAT_NHC_ADVISORY_NOMINATION": "${{ vars.THEHEAT_NHC_ADVISORY_NOMINATION }}",
+                     "THEHEAT_NHC_ADVISORY_AUTO_TEXT": "${{ vars.THEHEAT_NHC_ADVISORY_AUTO_TEXT || '0' }}"}
     # The workflow default, with or without a nomination, is absent configuration.
     for nomination in ("", json.dumps(h.nominated())):
         assert not runner.configured({"THEHEAT_NHC_ADVISORY_ACQUISITION": "0", "THEHEAT_NHC_ADVISORY_NOMINATION": nomination})

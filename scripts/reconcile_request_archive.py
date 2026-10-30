@@ -71,6 +71,11 @@ def main(argv: list[str] | None = None) -> int:
     rec.add_argument("--scenario", help="explicit named price scenario, e.g. google-standard-paid-2026-10-02")
     rec.add_argument("--as-of", required=True, help="aware ISO time; the only clock used")
     rec.add_argument("--output-dir", required=True, help="existing absolute 0700 directory")
+    imported = commands.add_parser("import-export")
+    imported.add_argument("export", help="owner-supplied provider export (CSV) held locally")
+    imported.add_argument("--profile", required=True, help="theheat.billing-export-profile/v1 JSON")
+    imported.add_argument("--document-id", required=True)
+    imported.add_argument("--output", required=True, help="absolute NEW .json file in a 0700 directory")
     inspect = commands.add_parser("inspect")
     inspect.add_argument("report")
     export = commands.add_parser("export")
@@ -89,6 +94,18 @@ def main(argv: list[str] | None = None) -> int:
                    "items": len(parsed["items"]), "totals": parsed["totals"], "document_check": parsed["document_check"],
                    "coverage": parsed["coverage"], "evidence_sha256": parsed["evidence_sha256"],
                    "file_sha256": parsed["file_sha256"]})
+            return 0
+        if args.command == "import-export":
+            from src.evaluation.invoice_import import import_export
+            output = args.output
+            if not os.path.isabs(output) or not output.endswith(".json"):
+                _emit({"error": "import_requires_absolute_json_path"})
+                return 64
+            data, summary = import_export(_read(args.export), _read(args.profile), document_id=args.document_id)
+            directory = require_private_directory(os.path.dirname(output), create=False)
+            written = write_private_file_exclusive(directory, os.path.basename(output), data)
+            _emit({"status": "written" if written else "identical_existing", **summary,
+                   "next": "reconcile --billing-with-document <output> <export>"})
             return 0
         if args.command in ("inspect", "export"):
             report = evidence.verify_report(strict_json_loads(_read(args.report, 64 * 1024 * 1024),
@@ -162,8 +179,10 @@ def _reconcile(args, evidence) -> int:
         state = strict_json_loads(data, allow_floats=True)
         if type(state) is not dict:
             raise ValueError("state_not_object")
+        from src.evaluation.reconciled_cost import operation_observations
         state_summary = {"source": "explicit_retained_state_file_read_only",
-                         **summarize_usage(state, now=as_of)}
+                         **summarize_usage(state, now=as_of),
+                         "operation_observations": operation_observations(state)}
     usage = archive_usage.archive_usage(archives)
     scenario = archive_usage.priced_scenario(usage, args.scenario) if args.scenario else None
     report = evidence.build_report(as_of=as_of, usage=usage, documents=documents, rejected_billing=rejected,

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 # ruff: noqa: F403,F405
+from src.editorial import hazard_episodes
 from src.orchestrator.common import *
 
 
@@ -18,6 +19,11 @@ def run_nws_alerts(bot_state: BotState, current_run: dict | None) -> None:
                 continue
             score = score_severe_weather(alert.event_type, alert.severity)
             if not _should_draft(score, alert.event_id):
+                continue
+            # W07 (THEHEAT_HAZARD_EPISODES, default off): the warning's CAP ID is its episode.
+            episode = hazard_episodes.admit(bot_state, hazard_episodes.nws_assertion(alert), source="nws_alerts",
+                                            event_id=alert.event_id, score=score, summary=alert.area)
+            if not episode.allowed:
                 continue
             source_promoted += 1
             review_context = _review_context(
@@ -36,6 +42,7 @@ def run_nws_alerts(bot_state: BotState, current_run: dict | None) -> None:
                     _fact("Radar hold", ", ".join((alert.source_evidence or {}).get("reasons", [])) or "—"),
                 ],
             )
+            hazard_episodes.bind(review_context, episode)
             # Severe weather: ported to two-bot writer 2026-05-03.
             # Event-scoped repetition now flows through the two-bot
             # memory slice as ``recent_tweets_same_event``.

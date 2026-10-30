@@ -384,6 +384,11 @@ def test_run_alerts_wires_copernicus_flood_bundle(monkeypatch, synthetic_bundle_
         )
 
     monkeypatch.setattr(main, "_try_two_bot_draft", fake_try_two_bot)
+    # src.main copies its globals into each split module on dispatch; register those
+    # owners too so teardown restores every one (otherwise the fake writer leaks).
+    for module in main._SYNC_MODULES:
+        if hasattr(module, "_try_two_bot_draft"):
+            monkeypatch.setattr(module, "_try_two_bot_draft", fake_try_two_bot)
     bot_state = deepcopy(DEFAULT_STATE)
     current_run = {"id": "run_1", "sources": []}
 

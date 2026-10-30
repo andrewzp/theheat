@@ -12,6 +12,7 @@ from src.commands import postgres_report_development as domain
 from src.commands.schema import Principal
 from src.editorial.policy import current_editorial_policy
 from src.editorial.report_development import prepare_report_development, resolve_story_context
+from src.state_schema import BotState
 from src.orchestrator.cyclone_episodes import prepare_episode_requests
 from src.storage import postgres_projection as p
 from src.storage.retained_reports import (ARTIFACT, OPERATION, REVISION, ReportError,
@@ -331,17 +332,21 @@ def test_actual_news_source_observer_uses_returned_result_without_extra_calls(re
     from src.storage.retained_reports import RetainedNewsReportLane
     event = dict(kind="fire", headline="Invented retained news", window_start="2026-10-11", confidence="verified",
         impact=[dict(claim="reported effects", value=4, source_name="Invented agency", url="https://example.test/news", as_of="unknown")])
-    returned = NewsRetrievalResult(events=[event], verify_calls=1, verify_fetches=1)
     calls = []
     monkeypatch.setenv("THEHEAT_NEWSWORTHINESS_ENABLED", "1")
-    monkeypatch.setattr(runner, "fetch_news_events", lambda: calls.append("fetch") or deepcopy(returned))
+    def fetch():
+        calls.append("fetch")
+        # Each invented retrieval owns its own allowance; never copy its lock.
+        return NewsRetrievalResult(events=[deepcopy(event)], verify_calls=1, verify_fetches=1)
+    monkeypatch.setattr(runner, "fetch_news_events", fetch)
     monkeypatch.setattr(runner.time, "perf_counter", lambda: 1.0)
     class Clock(datetime):
         @classmethod
         def now(cls, tz=None):
             return NOW
     monkeypatch.setattr(runner.state, "datetime", Clock)
-    baseline, observed = {}, {}
+    baseline: BotState = {}
+    observed: BotState = {}
     assert runner.run_newsworthiness(baseline, None) is None
     session = RetainedReportSession(repository[1])
     lane = RetainedNewsReportLane(session, (dict(event_index=0, event_sha256=digest(event) if mode != "mismatch" else "a"*64,
@@ -350,6 +355,7 @@ def test_actual_news_source_observer_uses_returned_result_without_extra_calls(re
         monkeypatch.setattr(RetainedNewsReportLane, "__call__", lambda *a: (_ for _ in ()).throw(OSError("invented storage outage")))
     result = runner.run_newsworthiness(observed, None, retention_observer=lane)
     assert observed == baseline and calls == ["fetch", "fetch"]
+    assert result is not None
     if mode != "retained":
         assert result["status"] == "retention_unavailable"
         return
@@ -360,12 +366,14 @@ def test_actual_news_source_observer_uses_returned_result_without_extra_calls(re
     assert all(value is None for value in document["claims"][0]["times"].values())
     artifact = session.read_artifact(result["retrieval_artifact_id"])
     import json
-    assert json.loads(artifact[2])["verify_calls"] == 1
+    retained_result = json.loads(artifact[2])
+    assert retained_result["verify_calls"] == 1
+    assert retained_result["allowance"]["operation"] == "news_discovery"
     authority, config = authority_fixture(repository[1], report["report_sha256"])
     config["current_reports"][0]["lineage_id"] = report["lineage_id"]
     command = command_fixture(report["report_sha256"])
     command.payload["lineage_id"] = report["lineage_id"]
     with repository[1]._connection(writing=True) as c:
-        result = domain.prepare(authority, c, {}, command, Principal("fixture-editor", "editor", "fixture-session"),
+        development = domain.prepare(authority, c, {}, command, Principal("fixture-editor", "editor", "fixture-session"),
             now=NOW, editorial_policy=current_editorial_policy())
-    assert result.outcome["status"] == "evidence_review_required" and not result.outcome["provider_request_created"]
+    assert development.outcome["status"] == "evidence_review_required" and not development.outcome["provider_request_created"]

@@ -67,6 +67,10 @@ PROVIDER_KINDS = {
     # This names the actual supplied-packet input, never its upstream issuer or
     # an authenticated provider. Nomination/currentness remain story boundaries.
     "nominated_input": frozenset({"official_warning"}),
+    # W05 national services: only owner-supplied retained packets; access unverified.
+    "aemet": frozenset({"observed_station"}),
+    "imd": frozenset({"observed_station"}),
+    "saws": frozenset({"observed_station"}),
 }
 # Upstream product keys are namespaced by their provider, so a leg cannot borrow
 # another provider's product (or kind) by relabelling.
@@ -79,6 +83,7 @@ PROVIDER_NAMESPACES = {
     "noaa_coops": "noaa_coops", "usgs_nwis": "usgs_nwis", "noaa_nwps": "noaa_nwps", "nasa_gesdisc": "nasa_gesdisc",
     "nasa_jpl_grace": "nasa_jpl", "nasa_ozone_watch": "nasa_ozone_watch", "grounded_search": "grounded_search",
     "reliefweb": "reliefweb", "theheat_retained": "theheat", "nominated_input": "theheat_supplied",
+    "aemet": "aemet", "imd": "imd", "saws": "saws",
 }
 # Each restriction is either advisory (only the accepted registry claim limit
 # states it) or enforced by named checks scoped to the products they actually
@@ -125,7 +130,9 @@ RESTRICTIONS: dict[str, tuple[str, Any]] = {
                                ("open_meteo_extreme_signals.ghcn_station_history", _GHCN_HISTORY))),
     "record_needs_qualified_history": ("A record claim needs a qualified history for that station product.",
                                        (("open_meteo_extreme_signals.ghcn_daily", _GHCN_HISTORY),
-                                        ("open_meteo_extreme_signals.ghcn_station_history", _GHCN_HISTORY))),
+                                        ("open_meteo_extreme_signals.ghcn_station_history", _GHCN_HISTORY),
+                                        ("regional_observed",
+                                         "src/data/temperature_evidence.py:temperature_claim_failures"))),
     "threshold_not_record": ("A trigger threshold is not an archive record.", (("gpm_imerg", _CLAIMS),)),
     "ambiguous_episode_held": ("Conflicting current GDACS episodes stay held; no episode is chosen.",
                                (("gdacs.georss", "src/data/gdacs_intake.py:reconcile"),)),
@@ -615,6 +622,21 @@ LEGS += (
             "Attributable city normals", "Configured city sample.", "degrees C",
             "Repository normals with their product and period.", ("src/data/open_meteo.py:load_normals",),
             chain="leaderboard", role="reference"),
+    _leg("regional_observed", "aemet_daily", "aemet", "primary", "aemet", "aemet.opendata_climatological_daily", "observed_station",
+         "AEMET OpenData daily climatological values", "Named stations in owner-supplied packets; Spain.",
+         "Source reporting day; not a UTC interval.", "degrees C", "Owner-supplied retained packet with its access contract.",
+         ("record_needs_qualified_history",), ("src/data/regional_observations.py:parse_packet",), status="conditional",
+         disposition="Default off; owner-supplied packets only; provider access and terms unverified."),
+    _leg("regional_observed", "imd_daily", "imd", "primary", "imd", "imd.station_daily", "observed_station",
+         "IMD station daily values under an owner schema contract", "Named stations in owner-supplied packets; India.",
+         "Source reporting day; not a UTC interval.", "degrees C", "Owner-supplied retained packet with its access contract.",
+         ("record_needs_qualified_history",), ("src/data/regional_observations.py:parse_packet",), status="conditional",
+         disposition="Default off; owner-supplied packets only; provider access and terms unverified."),
+    _leg("regional_observed", "saws_daily", "saws", "primary", "saws", "saws.station_daily", "observed_station",
+         "SAWS station daily values under an owner schema contract", "Named stations in owner-supplied packets; South Africa.",
+         "Source reporting day; not a UTC interval.", "degrees C", "Owner-supplied retained packet with its access contract.",
+         ("record_needs_qualified_history",), ("src/data/regional_observations.py:parse_packet",), status="conditional",
+         disposition="Default off; owner-supplied packets only; provider access and terms unverified."),
 )
 
 

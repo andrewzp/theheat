@@ -25,10 +25,12 @@ import unicodedata
 from PIL import Image, ImageColor, ImageDraw, ImageFont, features, __version__ as pillow_version
 
 from src.data import air_quality_contract, fire_source_contract
+from src.data.temperature_evidence import FORECAST_PRODUCT as HOT10_PRODUCT
+from src.editorial import hot10_contract
 from src.editorial.revisions import fingerprint
 from src.media.evidence_graphic import HEIGHT, WIDTH, build_alt_text, chart_title
 from src.media import air_quality_graphic_adapter as pm25_adapter, canonical_png, fire_map_graphic_adapter as locator
-from src.media import viirs_map_graphic_adapter as viirs_adapter
+from src.media import hot10_graphic_adapter as hot10_adapter, viirs_map_graphic_adapter as viirs_adapter
 from src.media.temperature_graphic_adapter import _StoredBundle
 
 # Schema 2 / renderer 2: canonical PNG bytes (canonical_png.py) replace the host
@@ -38,6 +40,7 @@ RENDERER_VERSION = "gist-hazard-png-2"
 PM25 = "gist_pm25_forecast_v1"
 MODIS = "gist_modis_locator_v1"
 VIIRS = "gist_viirs_locator_v1"
+HOT10 = "gist_hot10_bulletin_v1"
 MAX_DESCRIPTOR_BYTES = 16_384
 MAX_PNG_BYTES = 750_000
 # Existing conservative house limit, both Unicode scalars and UTF-8 bytes. This
@@ -83,9 +86,19 @@ FAMILIES = {
                "src/data/fire_evidence.py", "src/media/maps/ne_110m_land_v4_1_0.json",
                "src/media/maps/manifest.json"),
     ),
+    # The qualified Hot10 bulletin: ten ranked forecast-vs-normal rows, rendered only
+    # from the retained rows the contract validates (never re-ranked or refetched).
+    HOT10: dict(
+        template=hot10_adapter.TEMPLATE, template_version=hot10_adapter.TEMPLATE_VERSION,
+        adapter_version=hot10_adapter.ADAPTER_VERSION, derivation="hot10_delivery_v1",
+        signal_kind="hot10", products=(HOT10_PRODUCT,),
+        files=("src/media/gist_media.py", "src/media/gist_hazard_media.py", "src/media/canonical_png.py", FONT,
+               "src/media/evidence_graphic.py", "src/media/hot10_graphic_adapter.py",
+               "src/editorial/hot10_contract.py", "src/data/temperature_evidence.py"),
+    ),
 }
 # Bundle signals this module owns; any other signal keeps the temperature path.
-SIGNALS = frozenset({"air_quality_hazard", "fire"})
+SIGNALS = frozenset({"air_quality_hazard", "fire", "hot10"})
 KINDS = frozenset(FAMILIES)
 _TOP_KEYS = frozenset({"schema_version", "kind", "template", "template_version", "adapter_version",
                        "synthetic", "source", "renderer", "image", "description"})
@@ -95,6 +108,8 @@ _SOURCE_KEYS = {
                      "requested_at", "retrieved_at"}),
     MODIS: frozenset({"bundle_sha256", "evidence_sha256", "source_product", "receipt_sha256", "acquired_at"}),
     VIIRS: frozenset({"bundle_sha256", "evidence_sha256", "source_product", "receipt_sha256", "acquired_at"}),
+    HOT10: frozenset({"bundle_sha256", "evidence_sha256", "source_product", "baseline_product", "rows_sha256",
+                      "local_days"}),
 }
 _RENDERER_KEYS = frozenset({"version", "files", "pillow", "freetype", "png_codec", "layout", "width", "height"})
 _IMAGE_KEYS = frozenset({"mime_type", "png_sha256", "byte_count", "width", "height", "mode"})
@@ -157,13 +172,14 @@ def family_for(bundle):
     """
     signal = _bundle_signal(bundle)
     product = None
-    if signal == "fire":
+    if signal in ("fire", "hot10"):
         try:
-            product = bundle["raw_signal_dump"]["acquisition_provenance"]["source_product"]
+            raw = bundle["raw_signal_dump"]
+            product = raw["acquisition_provenance"]["source_product"] if signal == "fire" else raw["source_product"]
         except (KeyError, TypeError):
             return None
     for kind, family in FAMILIES.items():
-        if signal == family["signal_kind"] and (signal != "fire" or product in family["products"]):
+        if signal == family["signal_kind"] and (signal not in ("fire", "hot10") or product in family["products"]):
             return kind
     return None
 
@@ -178,6 +194,12 @@ def _spec(kind, bundle, synthetic):
         adapter = locator.fire_map_graphic_spec if kind == MODIS else viirs_adapter.viirs_map_graphic_spec
         return adapter(_StoredBundle(bundle), expected_bundle_sha256=fingerprint(bundle),
                        expected_receipt_sha256=[fingerprint(r) for r in _receipts(bundle)], synthetic=synthetic)
+    if kind == HOT10:
+        try:
+            return hot10_adapter.hot10_graphic_spec(bundle, expected_bundle_sha256=fingerprint(bundle),
+                                                    synthetic=synthetic)
+        except hot10_adapter.Hot10GraphicRefused as exc:
+            raise MediaWithheld(exc.code, str(exc).removeprefix("Hot 10 image withheld: ")) from None
     raise MediaWithheld("media_unsupported", "unsupported attachment")
 
 
@@ -193,6 +215,12 @@ def _source_fields(kind, bundle, evidence_sha256):
         return {"bundle_sha256": fingerprint(bundle), "evidence_sha256": evidence_sha256,
                 "source_product": receipts[0]["source_product"],
                 "receipt_sha256": [fingerprint(r) for r in receipts], "acquired_at": receipts[0]["acquired_at"]}
+    if kind == HOT10:
+        raw = bundle["raw_signal_dump"]
+        return {"bundle_sha256": fingerprint(bundle), "evidence_sha256": evidence_sha256,
+                "source_product": raw["source_product"], "baseline_product": raw["evidence"]["baseline_product"],
+                "rows_sha256": fingerprint([row["row_fingerprint"] for row in raw["cities"]]),
+                "local_days": ",".join(raw["universe"]["local_days"])}
     raise MediaWithheld("media_unsupported", "unsupported attachment")
 
 
@@ -266,10 +294,41 @@ def _map_delivery(evidence):
     )
 
 
+_MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+
+
+def _short_day(value):
+    """'2026-10-30' -> 'Oct 30': the per-row local day when the slate spans dates."""
+    return f"{_MONTHS[int(value[5:7]) - 1]} {int(value[8:10])}"
+
+
+def _hot10_delivery(evidence):
+    """What the image shows, for every ranked row, plus its scope; never truncated.
+
+    Rank, place and signed departure for all ten rows, and each row's local day
+    when the slate spans more than one date. Forecast and normal values stay in
+    the expanded details and the editor; the image does not draw them.
+    """
+    days = evidence["local_days"]
+    multi = len(days) > 1
+    rows = "; ".join(
+        f"{row['rank']} {row['city']}, {row['country']} {hot10_adapter.signed(row['departure_c'], minus='-')}"
+        + (f" ({_short_day(row['valid_date'])})" if multi else "") for row in evidence["rows"])
+    return (
+        ("SYNTHETIC; not real weather. " if evidence["synthetic"] else "")
+        + "Hot 10 chart: each city's forecast daily high minus its point monthly normal, in °C, ranked. "
+        + f"Open-Meteo forecasts, Meteostat normals; {evidence['qualified_cities']} qualified of "
+        + f"{evidence['sampled_cities']} sampled cities; local day{'s' if multi else ''} {', '.join(days)}. "
+        + "Warm bands above normal, cool below, on one scale. "
+        + f"{rows}. Not observations, records or the world's hottest places."
+    )
+
+
 def delivery_text(kind, evidence):
     """Versioned deterministic source projection; refuses rather than shortens."""
     _require(kind in FAMILIES, "media_unsupported", "unsupported attachment")
-    text = _pm25_delivery(evidence) if kind == PM25 else _map_delivery(evidence)
+    text = (_pm25_delivery(evidence) if kind == PM25 else _hot10_delivery(evidence) if kind == HOT10
+            else _map_delivery(evidence))
     try:
         raw = text.encode("utf-8", errors="strict")
     except UnicodeError:
@@ -590,6 +649,64 @@ def _render_map(evidence):
     return canvas.png()
 
 
+HOT10_WARM_BAND, HOT10_COOL_BAND, HOT10_WARM, HOT10_COOL = "#7c2d12", "#1e3a8a", "#fb923c", "#60a5fa"
+
+
+def _render_hot10(evidence):
+    """Ten ranked rows as a departure table on one common °C scale.
+
+    Each row is a band from the shared zero edge (warm above its normal, cool
+    below) with the rank, place, signed departure and, when the slate spans more
+    than one local date, the row's own local day written over it: meaning never
+    rests on colour alone. Every label is measured; a name that does not fit at
+    the readable minimum refuses the image instead of shrinking or eliding it.
+    """
+    rows, days = evidence["rows"], evidence["local_days"]
+    _require(len(rows) == hot10_contract.SIZE, "media_source_invalid", "ten ranked rows required")
+    values = [row["departure_c"] for row in rows]
+    _require(all(type(v) in (int, float) and math.isfinite(v) for v in values), "media_source_invalid",
+             "nonfinite departure")
+    canvas = _Canvas("#0b1220")
+    canvas.text((64, 64), "THEHEAT", size=42, fill=MUTED)
+    if evidence["synthetic"]:
+        canvas.text((1136, 64), "SYNTHETIC DATA", size=42, fill=WARM, anchor="rs")
+    canvas.text((64, 128), "Hot 10: forecast high vs normal", size=56, fill=INK)
+    canvas.text((64, 184), f"{evidence['qualified_cities']} of {evidence['sampled_cities']} sampled cities · "
+                "not records", size=42, fill=MUTED)
+    left, right, inset = 136, 1136, 148
+    positive, negative = max(0.0, *values), max(0.0, *(-v for v in values))
+    span = (positive + negative) or 1.0
+    zero = left + (right - left) * negative / span
+    multi = len(days) > 1
+    top, pitch = 254, 110
+    # Bands first, every one from the shared zero edge; every label is then drawn over them.
+    for index, value in enumerate(values):
+        y = top + index * pitch
+        if value:
+            length = max(6.0, (right - left) * abs(value) / span)
+            band = (zero, y - 38, zero + length, y + 64) if value > 0 else (zero - length, y - 38, zero, y + 64)
+            canvas.draw.rectangle(band, fill=HOT10_WARM_BAND if value > 0 else HOT10_COOL_BAND)
+    for index, row in enumerate(rows):
+        y, value = top + index * pitch, row["departure_c"]
+        canvas.text((112, y), str(row["rank"]), size=42, fill=MUTED, anchor="rs", maxwidth=80)
+        figure = canvas.text((right, y), hot10_adapter.signed(value) + " °C", size=42,
+                             fill=HOT10_WARM if value > 0 else HOT10_COOL if value < 0 else INK, anchor="rs")
+        canvas.text((inset, y), row["city"], size=42, fill=INK, maxwidth=figure[0] - 24 - inset)
+        country = canvas.text((inset, y + 54), row["country"], size=42, fill=MUTED)
+        if multi:
+            canvas.text((right, y + 54), _short_day(row["valid_date"]), size=42, fill=MUTED, anchor="rs",
+                        maxwidth=right - country[2] - 24)
+    legend = 1362
+    for x, colour, label in ((64, HOT10_WARM_BAND, "above normal"), (470, HOT10_COOL_BAND, "below normal")):
+        canvas.draw.rectangle((x, legend - 32, x + 48, legend + 4), fill=colour, outline=MUTED, width=2)
+        canvas.text((x + 60, legend), label, size=42, fill=INK)
+    canvas.text((64, 1412), ("Local day " + days[0]) if not multi else
+                ("Local days " + (", ".join(days) if len(days) == 2 else f"{days[0]} to {days[-1]}")),
+                size=42, fill=MUTED)
+    canvas.text((64, 1462), "Open-Meteo forecast · Meteostat normals", size=42, fill=MUTED)
+    return canvas.png()
+
+
 # ------------------------------------------------------------------- recipes
 
 def prepare_media(bundle, *, synthetic=False):
@@ -605,8 +722,8 @@ def prepare_media(bundle, *, synthetic=False):
         raise MediaWithheld("media_source_unqualified", str(exc)[:200] or "unqualified source") from exc
     template, evidence = spec["template"], spec["evidence"]
     _require(template == FAMILIES[kind]["template"], "media_unsupported", "unexpected template")
-    png = _render_pm25(evidence) if kind == PM25 else _render_map(evidence)
-    full = build_alt_text(template, evidence)
+    png = _render_pm25(evidence) if kind == PM25 else _render_hot10(evidence) if kind == HOT10 else _render_map(evidence)
+    full = hot10_adapter.full_description(evidence) if kind == HOT10 else build_alt_text(template, evidence)
     full_raw = _text_identity(full, "media_description_unicode")
     _require(0 < len(full_raw) <= MAX_FULL_DESCRIPTION_BYTES, "media_description_too_long", "full description bound")
     delivery = delivery_text(kind, evidence)
@@ -626,7 +743,8 @@ def prepare_media(bundle, *, synthetic=False):
     }
     if not synthetic:
         validate_descriptor(descriptor, bundle)
-    return {"kind": kind, "descriptor": descriptor, "png": png, "title": chart_title(template, evidence),
+    title = hot10_adapter.TITLE if kind == HOT10 else chart_title(template, evidence)
+    return {"kind": kind, "descriptor": descriptor, "png": png, "title": title,
             "delivery_text": delivery, "full_text": full, "scope": evidence["scope"]}
 
 
@@ -661,7 +779,8 @@ def validate_descriptor(value, bundle):
     _require(_exact(source, _SOURCE_KEYS[kind]) and all(type(source[k]) is str for k in source if k != "receipt_sha256")
              and all(_is_sha(source[k]) for k in source if k.endswith("_sha256") and k != "receipt_sha256")
              and type(receipts) is list and len(receipts) <= 4 and all(_is_sha(v) for v in receipts)
-             and (("receipt_sha256" in source) == (family["signal_kind"] == "fire")) and (receipts or kind == PM25),
+             and (("receipt_sha256" in source) == (family["signal_kind"] == "fire"))
+             and (bool(receipts) or family["signal_kind"] != "fire"),
              "media_descriptor_invalid", "invalid source binding")
     _require(source["source_product"] in family["products"], "media_source_changed", "source product changed")
     try:
@@ -742,7 +861,21 @@ def currentness(kind, bundle, now=None):
         if any(result != "fresh" for result in results):
             return ("media_detection_stale", "a detection is older than the 0-2 UTC source-day window")
         return None
+    if kind == HOT10:
+        # The contract's own final-boundary rule over every ranked row; never repaired here.
+        hold = hot10_contract.current_hold(bundle, current)
+        if hold is None:
+            return None
+        return _HOT10_HOLDS.get(hold, ("media_source_unqualified", "the retained Hot 10 bulletin is not qualified"))
     return ("media_unsupported", "unsupported attachment")
+
+
+_HOT10_HOLDS = {
+    "hot10_local_day_over": ("media_hot10_local_day_over", "a ranked city's forecast local day has ended"),
+    "hot10_not_yet_valid": ("media_hot10_not_yet_valid", "a ranked city's forecast day has not started or its "
+                            "capture is in the future"),
+    "hot10_capture_stale": ("media_hot10_capture_stale", "a ranked forecast was captured more than 12 hours ago"),
+}
 
 
 def recheck_before_upload(draft, *, now=None):
@@ -757,7 +890,10 @@ def media_for_draft(draft, *, now=None):
     """Exact reviewed recipe only: rebuild PNG and both descriptions, refuse any difference."""
     bundle = draft["review_context"]["two_bot"]["bundle"]
     attached = validate_descriptor(draft["media_attachment"], bundle)
-    _require(not draft.get("hot10_rows"), "media_two_images", "only one explicitly selected image is allowed")
+    # The legacy Hot10 card never attaches beside a selected image; the Hot10 family
+    # is that bulletin's own image, so its compact legacy rows are not a second one.
+    _require(not draft.get("hot10_rows") or attached["kind"] == HOT10, "media_two_images",
+             "only one explicitly selected image is allowed")
     reason = currentness(attached["kind"], bundle, now)
     if reason:
         raise MediaWithheld(*reason)

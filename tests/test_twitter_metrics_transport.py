@@ -74,6 +74,7 @@ def client(monkeypatch, adapter):
     (403, tweepy.Forbidden), (429, tweepy.TooManyRequests), (503, tweepy.TwitterServerError),
     (302, tweepy.HTTPException)])
 def test_actual_sdk_uses_configured_oauth_one_bounded_attempt_and_closes(monkeypatch, status, error):
+    monkeypatch.setenv("THEHEAT_METRICS_ENABLED", "1")  # The lane is exact opt-in at fetch_metrics.
     adapter = OfflineAdapter(status)
     client(monkeypatch, adapter)
     if error:

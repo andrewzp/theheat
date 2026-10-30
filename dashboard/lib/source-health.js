@@ -1,6 +1,10 @@
 import { sourceHistoryTime } from "./source-history-time.js"
 
 import { sourceContract, sourceInventory } from "./source-registry.js"
+import { coverageRow, draftStatusCounts, sourceOutcome } from "./live-content-status.js"
+import { sourceIncidents } from "./source-incidents.js"
+import { selectionTrace } from "./selection-trace.js"
+import { rainfallReadiness } from "./rainfall-readiness.js"
 
 const HEALTH_METRIC_TOTALS = [
   "total_duration_ms",
@@ -435,7 +439,18 @@ export function buildSourceHealthPayload(state, { runsLimit = 20, asOf = new Dat
     }
   }
   const clock = sourceHistoryTime([], { asOf }).as_of
+  // The newest retained row per source carries its plain outcome and coverage denominators.
+  const latestRows = new Map()
+  for (const run of Array.isArray(state?.run_history) ? state.run_history : []) {
+    for (const row of Array.isArray(run?.sources) ? run.sources : []) if (row?.source && !latestRows.has(row.source)) latestRows.set(row.source, row)
+  }
+  const rejections = Array.isArray(state?.suppressions) ? state.suppressions.slice(-200) : []
   for (const source of rawSources) {
+    const latest = latestRows.get(source.source)
+    source.outcome = sourceOutcome(latest ?? null, rejections)
+    source.coverage_row = latest ? coverageRow(latest) : null
+    source.incidents = sourceIncidents(state?.run_history, source.source)
+    source.rainfall_readiness = rainfallReadiness(state?.run_history, source.source, { asOf: clock })
     source.source_contract = sourceContract(source.source)
     source.history_time = {
       ...sourceHistoryTime(timingRows.get(source.source), { asOf: clock }),
@@ -467,5 +482,7 @@ export function buildSourceHealthPayload(state, { runsLimit = 20, asOf = new Dat
     coverage: coverageWatch(state?.coverage_log, state?.run_history, new Date(clock)),
     writer: writerWatch(state?.suppressions, state?.run_history, new Date(clock)),
     queue: queueWatch(state?.drafts, new Date(clock)),
+    drafts: draftStatusCounts(state),
+    selection_trace: selectionTrace(state),
   }
 }

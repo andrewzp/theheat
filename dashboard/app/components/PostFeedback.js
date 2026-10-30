@@ -1,5 +1,6 @@
 "use client"
 import React, { useEffect, useState } from "react"
+import PostOutcomeHistory from "./PostOutcomeHistory.js"
 const h = React.createElement
 const STORAGE = "theheat.editorial-feedback.pending.v1"
 const copy = {
@@ -8,8 +9,34 @@ const copy = {
   feedback_capacity:"The feedback archive is full. Your existing ratings are preserved.",
 }
 const message = code => copy[code] || "Feedback is unavailable right now. Your post and publishing settings are unchanged."
-const sameInput = (a, b) => ["request_id", "punch", "clarity", "economy", "note", "own_rating"].every(k => a?.[k] === b?.[k]) &&
+const sameInput = (a, b) => (Object.hasOwn(a || {}, "subject")
+  ? ["request_id", "subject", "note"].every(k => a?.[k] === b?.[k]) && JSON.stringify(a?.tags) === JSON.stringify(b?.tags)
+  : ["request_id", "punch", "clarity", "economy", "note", "own_rating"].every(k => a?.[k] === b?.[k])) &&
   a?.target && b?.target && Object.keys(a.target).every(k => a.target[k] === b.target[k])
+const TAGS = [["concise", "Concise"], ["useful", "Useful"], ["confusing", "Confusing"], ["incorrect", "Looks incorrect"]]
+
+// W15.3: optional tags on one exact draft or posted revision. Nothing is required; leaving it blank saves nothing.
+export function RevisionFeedbackForm({revision, blocked, busy, onSave}) {
+  const [subject, setSubject] = useState("copy")
+  const [tags, setTags] = useState([])
+  const [note, setNote] = useState("")
+  const hasGraphic = revision.target.graphic_sha256 !== null
+  const s = revision.summary
+  const canSave = tags.length > 0 && !blocked && (subject === "copy" || hasGraphic)
+  return h("form", {className:"revision-feedback", onSubmit:e => {e.preventDefault(); if (canSave) onSave({request_id:crypto.randomUUID(),
+    target:revision.target, subject, tags:TAGS.map(([k]) => k).filter(k => tags.includes(k)), note})}},
+    h("p", {className:"runtime-note"}, `${revision.target.status === "posted" ? "Posted" : "Draft"} revision ${revision.target.content_revision}` +
+      (s.status === "recorded" ? ` · ${s.records} saved: ${TAGS.map(([k, l]) => s.tags[k] ? `${l.toLowerCase()} ${s.tags[k]}` : null).filter(Boolean).join(", ")}` : " · no feedback yet")),
+    h("fieldset", {disabled:blocked}, h("legend", null, "Optional feedback on this exact version"),
+      h("div", {role:"radiogroup", "aria-label":"What are you commenting on?"}, ...[["copy", "The words"], ["graphic", "The graphic"]].map(([key, label]) =>
+        h("label", {key}, h("input", {type:"radio", name:`subject-${revision.target.draft_id}`, value:key, checked:subject === key,
+          disabled:key === "graphic" && !hasGraphic, onChange:() => setSubject(key)}), label))),
+      h("div", {className:"revision-feedback-tags"}, ...TAGS.map(([key, label]) => h("label", {key}, h("input", {type:"checkbox", checked:tags.includes(key),
+        onChange:e => setTags(list => e.target.checked ? [...list, key] : list.filter(k => k !== key))}), label))),
+      h("label", null, "Why? (optional)", h("textarea", {value:note, maxLength:500, rows:2, onChange:e => setNote(e.target.value)})),
+      h("p", {className:"runtime-note"}, "This is your opinion. It does not check facts, change the draft, approve or correct anything."),
+      h("button", {type:"submit", className:"btn", disabled:!canSave}, busy ? "Saving…" : "Save feedback")))
+}
 
 function RatingForm({post, blocked, busy, onSave}) {
   const [scores, setScores] = useState({punch:"", clarity:"", economy:""})
@@ -56,6 +83,8 @@ export default function PostFeedback({enabled = true}) {
     return () => {clearTimeout(timer); controller.abort()}
   }, [enabled, serial])
   const post = data?.posts.find(p => p.target.draft_id === selected)
+  const [revisionId, setRevisionId] = useState("")
+  const revision = data?.revisions?.find(r => r.target.draft_id === revisionId) || data?.revisions?.[0]
   function clearPending() {sessionStorage.removeItem(STORAGE); setPending(null)}
   async function save(value) {
     if (busy || pending) return
@@ -73,7 +102,8 @@ export default function PostFeedback({enabled = true}) {
         if ([400,401,403,409].includes(r.status)) {clearPending(); throw new Error(message(result.code))}
         throw new Error(copy.feedback_write_uncertain)
       }
-      clearPending(); setNotice("Editorial feedback saved. Publishing settings are unchanged."); setSerial(n => n+1)
+      clearPending(); setNotice(Object.hasOwn(value, "subject") ? "Feedback saved. The draft and publishing settings are unchanged."
+        : "Editorial feedback saved. Publishing settings are unchanged."); setSerial(n => n+1)
     } catch (e) {setError(e.message || copy.feedback_write_uncertain)}
     finally {setBusy(false)}
   }
@@ -102,5 +132,13 @@ export default function PostFeedback({enabled = true}) {
           ...data.posts.map(p => h("option", {key:p.target.draft_id,value:p.target.draft_id}, `${p.target.text.slice(0,75)}${p.target.text.length > 75 ? "…" : ""}`)))),
         data.remaining === 0 && h("p", {role:"status"}, copy.feedback_capacity),
         post && h(RatingForm, {key:JSON.stringify([post.target, post.ratings[0]?.request_id]),post,busy,blocked:busy || !!pending || !ready || data.remaining === 0,onSave:save})),
+      data && data.revisions?.length > 0 && h("section", {"aria-label":"Feedback on drafts and posts"},
+        h("h3", null, "Feedback on a draft or post"),
+        h("label", null, "Version", h("select", {value:revision?.target.draft_id || "", disabled:busy, onChange:e => {setRevisionId(e.target.value); setNotice("")}},
+          ...data.revisions.map(r => h("option", {key:r.target.draft_id, value:r.target.draft_id}, `${r.target.status} · ${r.target.draft_id}`)))),
+        revision && h(RevisionFeedbackForm, {key:JSON.stringify([revision.target, revision.summary.records]), revision, busy,
+          blocked:busy || !!pending || !ready || data.remaining === 0, onSave:save})),
+      data?.outcomes && h("section", {"aria-label":"Published outcomes with your feedback"},
+        h("h3", null, "Published outcomes with your feedback"), h(PostOutcomeHistory, {outcomes:data.outcomes})),
       h("button", {className:"btn sm",type:"button",disabled:busy,onClick:() => setSerial(n => n+1)}, "Refresh feedback")))
 }

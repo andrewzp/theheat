@@ -8,6 +8,7 @@ import { createHash } from "node:crypto"
 import manifest from "./graphic-runtime-manifest.json" with { type: "json" }
 import { EDITORIAL_POLICY_MANIFEST } from "./editorial-policy-manifest.js"
 import { draftIdentity, fingerprint } from "./draft-revisions.js"
+import { retainedPacketReference } from "./graphic-preview.js"
 import { prepareGistTemperatureMedia, validGistTemperatureMedia } from "./gist-temperature-media.js"
 
 // Literals, not imports: an import cycle with draft-revisions.js must never
@@ -16,6 +17,7 @@ const TEMPERATURE = "gist_temperature_comparator_v1"
 const PM25 = "gist_pm25_forecast_v1"
 const MODIS = "gist_modis_locator_v1"
 const VIIRS = "gist_viirs_locator_v1"
+const HOT10 = "gist_hot10_bulletin_v1"
 const FONT = "src/media/fonts/DejaVuSansMono.ttf"
 // Schema 2: canonical, host-independent PNG bytes (src/media/canonical_png.py).
 const CODEC_FILE = "src/media/canonical_png.py", PNG_CODEC = "canonical-png-fixed-huffman-1"
@@ -43,9 +45,16 @@ const FAMILIES = Object.freeze({
       "src/media/viirs_map_graphic_adapter.py", "src/data/fire_source_contract.py", "src/data/fire_evidence.py",
       "src/media/maps/ne_110m_land_v4_1_0.json", "src/media/maps/manifest.json"],
     source: ["bundle_sha256", "evidence_sha256", "source_product", "receipt_sha256", "acquired_at"] }),
+  // The qualified Hot10 bulletin (src/editorial/hot10_contract.py), rendered from its retained rows only.
+  [HOT10]: Object.freeze({ template: "hot10_departure_table", templateVersion: "w01-hot10-table-1",
+    adapterVersion: "w01-hot10-bulletin-1", derivation: "hot10_delivery_v1", signalKind: "hot10",
+    products: ["openmeteo-best-match-forecast-daily-v1"],
+    files: ["src/media/gist_media.py", "src/media/gist_hazard_media.py", CODEC_FILE, FONT, "src/media/evidence_graphic.py",
+      "src/media/hot10_graphic_adapter.py", "src/editorial/hot10_contract.py", "src/data/temperature_evidence.py"],
+    source: ["bundle_sha256", "evidence_sha256", "source_product", "baseline_product", "rows_sha256", "local_days"] }),
 })
 // Bundle signals the hazard families own; any other signal keeps the temperature path.
-const SIGNALS = ["air_quality_hazard", "fire"]
+const SIGNALS = ["air_quality_hazard", "fire", "hot10"]
 // Store-backed kinds (src/media/gist_crw_media.py, gist_published_media.py): Gist keeps
 // only the exact SHA256 of a retained CRW source packet or published asset manifest.
 const CRW = "gist_crw_anomaly_v1", RADAR = "gist_published_radar_v1", CHART = "gist_published_chart_v1"
@@ -53,7 +62,7 @@ const CRW_FAMILY = Object.freeze({ template: "crw_sampled_cells", templateVersio
   adapterVersions: ["p31-crw-erddap-1", "p31-crw-erddap-2"], derivation: "crw_delivery_v1", version: "gist-crw-png-1",
   files: ["src/media/gist_media.py", "src/media/gist_crw_media.py", "src/media/gist_hazard_media.py", CODEC_FILE,
     "src/media/gist_assets.py", FONT, "src/media/crw_graphic_adapter.py", "src/data/crw_contract.py",
-    "src/data/ocean_sst_anomaly.py", "src/two_bot/intern/marine.py", "src/media/temperature_graphic_adapter.py"],
+    "src/data/crw_regions.py", "src/two_bot/intern/marine_crw.py", "src/media/temperature_graphic_adapter.py"],
   source: ["bundle_sha256", "evidence_sha256", "packet_artifact_sha256", "packet_sha256", "region_slug",
     "product_date", "valid_cells", "total_cells"] })
 const PUBLISHED_FILES = ["src/media/gist_media.py", "src/media/gist_published_media.py", CODEC_FILE,
@@ -71,6 +80,9 @@ const CYCLONE_SIGNALS = ["cyclone_rapid_intensification", "cyclone_tier_crossing
 export const GIST_STORE_KINDS = Object.freeze([CRW, RADAR, CHART])
 export const GIST_MEDIA_KINDS = Object.freeze([TEMPERATURE, ...Object.keys(FAMILIES), ...GIST_STORE_KINDS])
 export const GIST_HAZARD_KINDS = Object.freeze(Object.keys(FAMILIES))
+// Paired with gist_media.NATIVE_KINDS: rendered from retained source only, the
+// only kinds a trusted delegated joint review may cover.
+export const GIST_NATIVE_KINDS = Object.freeze([TEMPERATURE, ...Object.keys(FAMILIES)])
 export const MAX_DELIVERY = 1000
 const MAX_DESCRIPTOR_BYTES = 16384, MAX_PNG_BYTES = 750000, MAX_FULL_BYTES = 100000
 const SHA = /^[a-f0-9]{64}$/
@@ -91,9 +103,10 @@ export const gistHazardClaims = bundle => plain(bundle) && SIGNALS.includes(bund
 // primary product decide. A MODIS receipt is never reinterpreted as VIIRS.
 export function gistHazardFamilyFor(bundle) {
   if (!gistHazardClaims(bundle)) return null
-  const product = bundle.signal_kind === "fire" ? bundle.raw_signal_dump?.acquisition_provenance?.source_product : null
+  const product = bundle.signal_kind === "fire" ? bundle.raw_signal_dump?.acquisition_provenance?.source_product
+    : bundle.signal_kind === "hot10" ? bundle.raw_signal_dump?.source_product : null
   return Object.keys(FAMILIES).find(kind => bundle.signal_kind === FAMILIES[kind].signalKind
-    && (bundle.signal_kind !== "fire" || FAMILIES[kind].products.includes(product))) ?? null
+    && (!["fire", "hot10"].includes(bundle.signal_kind) || FAMILIES[kind].products.includes(product))) ?? null
 }
 
 function receipts(bundle) {
@@ -118,6 +131,10 @@ function sourceFields(kind, bundle) {
     return { bundle_sha256: fingerprint(bundle), source_product: rows[0].source_product,
       receipt_sha256: rows.map(row => fingerprint(row)), acquired_at: rows[0].acquired_at }
   }
+  if (kind === HOT10) {
+    return { bundle_sha256: fingerprint(bundle), source_product: raw.source_product, baseline_product: raw.evidence.baseline_product,
+      rows_sha256: fingerprint(raw.cities.map(row => row.row_fingerprint)), local_days: raw.universe.local_days.join(",") }
+  }
   throw new Error("unsupported attachment")
 }
 
@@ -127,7 +144,8 @@ function validHazardMedia(draft, value) {
   if (!exact(value, keys) || value.schema_version !== 2 || value.template !== family.template
       || value.template_version !== family.templateVersion || value.adapter_version !== family.adapterVersion
       || value.synthetic !== false || Buffer.byteLength(JSON.stringify(value), "utf8") > MAX_DESCRIPTOR_BYTES) return false
-  if (Array.isArray(draft.hot10_rows) && draft.hot10_rows.length) return false
+  // The legacy Hot10 card is never a second image; the Hot10 family is that bulletin's own image.
+  if (value.kind !== HOT10 && Array.isArray(draft.hot10_rows) && draft.hot10_rows.length) return false
   if (!plain(bundle) || bundle.signal_kind !== family.signalKind) return false
   const source = value.source
   const fire = family.signalKind === "fire", list = source?.receipt_sha256
@@ -187,6 +205,10 @@ function validCrwMedia(draft, value) {
       || !Number.isSafeInteger(s.valid_cells) || !Number.isSafeInteger(s.total_cells) || s.valid_cells < 10
       || s.valid_cells > s.total_cells || s.total_cells > 20000 || s.bundle_sha256 !== fingerprint(bundle)
       || s.region_slug !== raw?.region_slug || s.product_date !== raw?.date) return false
+  // A collector-retained packet reference binds the only acceptable packet (paired with Python).
+  const reference = retainedPacketReference(draft)
+  if (reference && (reference.invalid || s.packet_artifact_sha256 !== reference.artifact_sha256
+      || s.packet_sha256 !== reference.packet_sha256)) return false
   const r = value.renderer
   if (!exact(r, ["version", "files", "pillow", "freetype", "png_codec", "layout", "width", "height"]) || r.version !== f.version
       || r.pillow !== "12.2.0" || r.png_codec !== PNG_CODEC || r.layout !== "basic" || r.width !== 1200 || r.height !== 1500
@@ -297,6 +319,22 @@ export function gistMediaCurrentness(draft, nowMs = Date.now()) {
     if (now < start) return { code: "media_forecast_not_started", message: "The forecast day has not started" }
     if (now >= end) return { code: "media_forecast_ended", message: "The forecast day has ended" }
     if (now - requested > 24 * 3600 * 1000000) return { code: "media_forecast_request_old", message: "The forecast was requested more than 24 hours ago" }
+    return null
+  }
+  if (kind === HOT10) {
+    // Paired with hot10_contract.current_hold over every ranked row: local day current,
+    // capture not in the future (5 minutes tolerance) and at most 12 hours old.
+    const rows = bundle?.raw_signal_dump?.cities
+    if (!Array.isArray(rows) || rows.length !== 10) return { code: "media_source_unqualified", message: "The retained Hot 10 bulletin is not qualified" }
+    for (const row of rows) {
+      const [start, end, retrieved] = ["valid_start", "valid_end", "retrieved_at"].map(key => micros(row?.[key]))
+      if (start === null || end === null || retrieved === null || start >= end)
+        return { code: "media_source_unqualified", message: "The retained Hot 10 bulletin is not qualified" }
+      if (now >= end) return { code: "media_hot10_local_day_over", message: "A ranked city's forecast local day has ended" }
+      if (now < start || retrieved > now + 5 * 60 * 1000000)
+        return { code: "media_hot10_not_yet_valid", message: "A ranked city's forecast day has not started or its capture is in the future" }
+      if (now - retrieved > 12 * 3600 * 1000000) return { code: "media_hot10_capture_stale", message: "A ranked forecast was captured more than 12 hours ago" }
+    }
     return null
   }
   if (FAMILIES[kind]?.signalKind === "fire") {

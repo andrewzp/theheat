@@ -61,7 +61,7 @@ def reference_climatology_failures(bundle: Any) -> list[str]:
     if not isinstance(history, dict) or "reference_climatology" not in history:
         return []
     try:
-        from src.data.ocean_sst_anomaly import RegionalSSTAnomalyEvent
+        from src.data.crw_regions import RegionalSSTAnomalyEvent
 
         if bundle.signal_kind != "regional_sst_anomaly":
             raise ValueError
@@ -292,7 +292,7 @@ def qualified_provenance(event: Any) -> bool:
         return False
     try:
         from urllib.parse import urlsplit
-        from src.data.ocean_sst_anomaly import REGION_REGISTRY, _build_url
+        from src.data.crw_regions import REGION_REGISTRY, _build_url
 
         region = next((r for r in REGION_REGISTRY if r.slug == event.region_slug), None)
         if region is None or event.region_display_name != region.display_name:

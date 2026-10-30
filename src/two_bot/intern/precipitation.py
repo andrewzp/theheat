@@ -12,7 +12,19 @@ from src.two_bot.types import StoryBundle
 from ._shared import _climate_context_facts
 
 
+RAINFALL_PROVENANCE_FLAG = "THEHEAT_RAINFALL_WINDOW_PROVENANCE"
+
+
+def rainfall_window_failures(window: dict[str, Any]) -> list[str]:
+    from src.data.rainfall_supply import window_failures
+
+    return window_failures(window)
+
+
 def build_precipitation_bundle(event: PrecipExtremeEvent) -> StoryBundle:
+    from src.data.rainfall_supply import window_evidence
+
+    window = window_evidence(event)
     where = event.location if not event.country or event.location == event.country else (
         f"{event.location}, {event.country}"
     )
@@ -81,10 +93,35 @@ def build_precipitation_bundle(event: PrecipExtremeEvent) -> StoryBundle:
             "value": round(event.mm_total, 1),
             "unit": "mm",
         },
-        current_facts=facts,
+        current_facts=[*facts, *_window_facts(window)],
         historical_context=historical_context,
-        raw_signal_dump=asdict(event),
+        raw_signal_dump={**asdict(event), "rainfall_window": window},
     )
+
+
+def _window_facts(window: dict[str, Any]) -> list[dict[str, Any]]:
+    """W06: the accumulation window and footprint reach the brief and checks explicitly."""
+    raw_footprint = window.get("footprint")
+    footprint: dict[str, Any] = raw_footprint if isinstance(raw_footprint, dict) else {}
+    rows: list[dict[str, Any]] = [
+        {"label": "accumulation_window_utc",
+         "value": f"{window.get('accumulation_start')} to {window.get('accumulation_end')}"},
+        {"label": "footprint", "value": footprint.get("kind")},
+        {"label": "rainfall_scope_limit", "value": window.get("limit")},
+        {"label": "product_version", "value": window.get("product_version")},
+        # Retrieval time is not carried on the event: it stays unknown (absent), never invented.
+        *([{"label": "retrieved_at", "value": window["retrieved_at"]}] if window.get("retrieved_at") else []),
+    ]
+    # The requested product is real source identity; supplying it lets a complete
+    # packet pass the existing provenance gate. Default off (exact "1"): until Root
+    # enables it, rainfall candidates stay withheld at admission exactly as today.
+    import os
+
+    if os.environ.get(RAINFALL_PROVENANCE_FLAG) == "1" and not rainfall_window_failures(window):
+        version = window.get("product_version")
+        rows.append({"label": "source_product",
+                     "value": f"{window['source_product']} {version}" if version else window["source_product"]})
+    return rows
 
 
 def build_snow_extreme_bundle(event: SnowExtremeEvent) -> StoryBundle:

@@ -129,6 +129,24 @@ def _format_candidate_drafts_block(candidate_drafts: list[str]) -> str:
     return "\n".join(lines)
 
 
+QUALITY_VALUES = {
+    "focus": ("single", "diffuse"), "repetition": ("none", "repetitive"), "jargon": ("plain", "jargon"),
+    "length": ("ok", "long"), "consequence": ("supported", "none", "unsupported"),
+}
+
+
+def _quality_details(parsed: dict) -> tuple[dict[str, str] | None, str | None]:
+    """Soft craft details. Malformed details are dropped, never a verdict change."""
+    quality = parsed.get("quality")
+    if not (isinstance(quality, dict) and set(quality) == set(QUALITY_VALUES)
+            and all(quality[key] in values for key, values in QUALITY_VALUES.items())):
+        quality = None
+    note = parsed.get("quality_note")
+    if not (isinstance(note, str) and note.strip() and len(note.strip()) <= 200):
+        note = None
+    return (dict(quality) if quality is not None else None), (note.strip() if note is not None else None)
+
+
 def _parse_critic_result(
     raw: str,
     *,
@@ -151,12 +169,22 @@ def _parse_critic_result(
         raise ValueError(f"Critic returned invalid JSON ({model_response_diagnostic(raw)})") from exc
     if not isinstance(parsed, dict):
         raise ValueError("Critic response must be a JSON object")
+    # A hard defect cannot disappear when unrelated optional craft details drop.
+    raw_quality = parsed.get("quality")
+    unsupported_consequence = isinstance(raw_quality, dict) and raw_quality.get("consequence") == "unsupported"
     if "verdict" not in parsed:
         if not isinstance(parsed.get("passed"), bool):
             raise ValueError("Critic response must include boolean passed")
         passed = parsed["passed"]
         kill_reason_raw = parsed.get("kill_reason")
         if passed:
+            if unsupported_consequence:
+                quality, quality_note = _quality_details(parsed)
+                return CriticResult(
+                    passed=False,
+                    kill_reason="unsupported_claim: the critic's own detail marks the consequence unsupported",
+                    raw_response=raw, verdict="KILL", quality=quality, quality_note=quality_note,
+                )
             return CriticResult(passed=True, kill_reason=None, raw_response=raw)
         if not isinstance(kill_reason_raw, str) or not kill_reason_raw.strip():
             raise ValueError("Critic response with passed=false must include kill_reason")
@@ -184,6 +212,17 @@ def _parse_critic_result(
         if selected is not None and not 0 <= selected < slate_size:
             raise ValueError("Critic response selected_index out of bounds")
 
+    quality, quality_note = _quality_details(parsed)
+    if verdict == "PASS" and unsupported_consequence:
+        # The critic's own detail names a hard defect: fail closed, no extra model call.
+        return CriticResult(
+            passed=False,
+            kill_reason="unsupported_claim: the critic's own detail marks the consequence unsupported",
+            raw_response=raw,
+            verdict="KILL",
+            quality=quality,
+            quality_note=quality_note,
+        )
     if verdict == "PASS":
         return CriticResult(
             passed=True,
@@ -191,6 +230,8 @@ def _parse_critic_result(
             raw_response=raw,
             verdict="PASS",
             selected_index=selected,
+            quality=quality,
+            quality_note=quality_note,
         )
     if verdict == "KILL":
         kill_reason_raw = parsed.get("kill_reason")
@@ -201,6 +242,8 @@ def _parse_critic_result(
             kill_reason=kill_reason_raw.strip(),
             raw_response=raw,
             verdict="KILL",
+            quality=quality,
+            quality_note=quality_note,
         )
     if verdict == "REVISE":
         if not allow_revise:

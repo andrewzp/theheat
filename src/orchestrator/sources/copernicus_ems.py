@@ -4,6 +4,7 @@ from __future__ import annotations
 
 # ruff: noqa: F403,F405
 from src.data._witness import degraded_via
+from src.editorial import hazard_episodes
 from src.orchestrator.common import *
 
 
@@ -29,6 +30,12 @@ def run_copernicus_ems(bot_state: BotState, current_run: dict | None) -> None:
             )
             if not _should_draft(score, activation.event_id, summary=activation.name):
                 continue
+            # W07 (THEHEAT_HAZARD_EPISODES, default off): a tier-only repeat buys no writer.
+            episode = hazard_episodes.admit(bot_state, hazard_episodes.copernicus_assertion(activation),
+                                            source="copernicus_ems", event_id=activation.event_id, score=score,
+                                            summary=activation.name)
+            if not episode.allowed:
+                continue
             source_promoted += 1
             review_context = _review_context(
                 source="Copernicus EMS Rapid Mapping",
@@ -45,6 +52,7 @@ def run_copernicus_ems(bot_state: BotState, current_run: dict | None) -> None:
                     _fact("Copernicus URL", activation.copernicus_url),
                 ],
             )
+            hazard_episodes.bind(review_context, episode)
             from src.two_bot.intern import build_global_flood_bundle
 
             flood_bundle = build_global_flood_bundle(activation)

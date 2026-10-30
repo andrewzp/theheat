@@ -32,8 +32,16 @@ set auto-load off
 set debuginfod enabled off
 python
 import gdb, re
+# Preserve the core's initially selected faulting thread before switching frames.
+try:
+    faulting = gdb.selected_thread()
+except Exception:
+    faulting = None
+threads = gdb.selected_inferior().threads()[:16]
+fault_index = next((index for index, thread in enumerate(threads) if faulting is not None and thread == faulting), None)
 print('OBSERVED_SIGNAL ' + str(int(gdb.parse_and_eval('$_siginfo.si_signo'))))
-for index, thread in enumerate(gdb.selected_inferior().threads()[:16]):
+print('FAULTING_THREAD ' + (str(fault_index) if fault_index is not None else 'unavailable'))
+for index, thread in enumerate(threads):
     thread.switch()
     frame = gdb.newest_frame()
     for depth in range(32):
@@ -61,9 +69,11 @@ def _debugger_frames(stdout: bytes) -> list[str]:
         line = raw.decode("ascii", errors="replace")
         if re.fullmatch(r"OBSERVED_SIGNAL (?:[1-9]|[1-5][0-9]|6[0-4])", line):
             accepted.append(line)
+        elif re.fullmatch(r"FAULTING_THREAD (?:[0-9]|1[0-5]|unavailable)", line):
+            accepted.append(line)
         elif re.fullmatch(r"FRAME (?:[0-9]|1[0-5]) (?:[0-9]|[12][0-9]|3[01]) [A-Za-z0-9_:<>.~$?+\-]{1,120}", line):
             accepted.append(line)
-    return accepted[:513]
+    return accepted[:514]  # Signal + faulting-thread marker + the unchanged 16 * 32 frame maximum.
 
 
 def _observe(directory: Path, pid: int, executable: str, debugger: str) -> None:

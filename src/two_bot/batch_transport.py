@@ -68,6 +68,9 @@ class AnthropicBatchTransport:
     def submit(self, requests: list[dict]) -> bytes:
         from anthropic.types.messages.batch_create_params import Request
 
+        from src.two_bot.call_inventory import consume
+        # Declared batch purchase; the durable batch authority owns its outcome.
+        consume("batch_writer", provider="anthropic", join=False)
         started = _monotonic()
         chunks = []
         size = 0

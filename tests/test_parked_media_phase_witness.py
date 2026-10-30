@@ -130,7 +130,7 @@ def invented_modules(log):
 
 def test_published_protocol_is_fixed_ascii_and_bounded():
     assert w.PREFIX == "THEHEAT-PG2-WITNESS/1"
-    assert len(w.PHASES) == len(set(w.PHASES)) == 27 + len(w.BODY_PHASES) == 47
+    assert len(w.PHASES) == len(set(w.PHASES)) == 27 + len(w.BODY_PHASES) + len(w.FAULT_PHASES) == 65
     assert set(w.BODY_PHASES) <= set(w.PHASES)
     assert set(w.FIXTURE_PHASES.values()) | set(w.WORKER_PHASES.values()) <= set(w.PHASES)
     assert {phase for *_, phase in w.TARGETS} <= set(w.PHASES)
@@ -971,7 +971,7 @@ def render(events):
 
 def strip_spans(tree):
     """Remove ONLY the body_phase import and exact body_phase(...) with-wrappers."""
-    removed: dict[str, Any] = {"imports": 0, "spans": []}
+    removed: dict[str, Any] = {"imports": 0, "spans": [], "fault_spans": 0}
 
     def is_span(statement):
         if not isinstance(statement, ast.With) or len(statement.items) != 1:
@@ -981,12 +981,23 @@ def strip_spans(tree):
                 and call.func.id == "body_phase" and len(call.args) == 1 and not call.keywords
                 and isinstance(call.args[0], ast.Constant) and call.args[0].value in w.BODY_PHASES)
 
+    def is_fault_span(statement):
+        if not isinstance(statement, ast.With) or len(statement.items) != 1:
+            return False
+        item = statement.items[0]
+        expected = ast.parse("fault_phase(boundary, fault)", mode="eval").body
+        return item.optional_vars is None and ast.dump(item.context_expr) == ast.dump(expected)
+
     def flatten(body):
         out = []
         for statement in body:
             if (isinstance(statement, ast.ImportFrom) and statement.module == "tests.parked_media_phase_witness"
-                    and [alias.name for alias in statement.names] == ["body_phase"]):
+                    and [alias.name for alias in statement.names] == ["body_phase", "fault_phase"]):
                 removed["imports"] += 1
+                continue
+            if is_fault_span(statement):
+                removed["fault_spans"] += 1
+                out.extend(flatten(statement.body))
                 continue
             if is_span(statement):
                 removed["spans"].append(statement.items[0].context_expr.args[0].value)
@@ -1011,6 +1022,7 @@ def restore_isolated_standalone_proof(tree):
     assert len(helpers) == 1
     helper = helpers[0]
     signature = ast.parse('def standalone_delivery_proof(case, path, monkeypatch): pass').body[0]
+    assert isinstance(signature, ast.FunctionDef)
     assert ast.dump(helper.args) == ast.dump(signature.args)
     assert helper.returns is None and not helper.decorator_list and helper.type_comment is None
     setup = ast.parse('authority, resolve = case["authority"], case["operators"].resolve').body[0]
@@ -1061,7 +1073,7 @@ def test_standalone_worker_timestamp_uses_the_existing_utc_contract(microsecond)
 @pytest.mark.skipif(sys.version_info[:2] != (3, 12), reason="the pinned AST digest is Python 3.12 ast.dump output")
 def test_target_test_is_the_original_after_removing_only_the_diagnostic_spans():
     tree, removed = strip_spans(ast.parse(TARGET_FILE.read_text(encoding="utf-8")))
-    assert removed == {"imports": 1, "spans": EXPECTED_SPANS}
+    assert removed == {"imports": 1, "spans": EXPECTED_SPANS, "fault_spans": 1}
     assert set(EXPECTED_SPANS) == set(w.BODY_PHASES)
     # The original four owner-corruption connections inherited autocommit=True,
     # so SET LOCAL expired before each write. Reverse ONLY the reviewed explicit
@@ -1194,12 +1206,62 @@ def test_a_full_body_sequence_fits_the_fixed_budget_with_room_to_spare():
         (witness.enter if event[0] == "+" else witness.exit)(event[1:])
     for name in EXPECTED_SPANS:
         witness.enter(name)
+        if name == "body_fault_matrix":
+            for phase in w.FAULT_PHASES.values():
+                witness.enter(phase)
+                witness.exit(phase)
+        if name == "body_standalone":
+            # The existing standalone proof's worker_other wrapper remains real.
+            witness.enter("worker_other")
+            witness.exit("worker_other")
         witness.exit(name)
     for name in ("ready_body",):
         witness.exit(name)
     for event in ("+ready_cleanup", "-ready_cleanup", "-call", "+teardown", "-teardown", "-protocol"):
         (witness.enter if event[0] == "+" else witness.exit)(event[1:])
-    assert not witness.stopped and witness.lines_written == 81 + 2 * 21 + 7 == 130
+    assert not witness.stopped and witness.lines_written == 81 + 2 * 21 + 2 + 2 * 18 + 7 == 168
     assert witness.lines_written <= w.MAX_LINES - 1 and witness.bytes_written <= w.MAX_BYTES
     assert max(map(len, lines.lines)) <= w.MAX_LINE_BYTES
     assert w.parse(lines.text())["status"] == "complete"
+
+
+def test_fault_iterations_are_closed_words_and_each_operation_runs_once():
+    faults = ["reviewer", "requester", "publisher", "policy", "source", "profile", "state", "expiry"]
+    expected = [("proof", fault) for fault in faults] + [("description", fault) for fault in faults + [
+        "late_reviewer", "late_publisher"]]
+    assert list(w.FAULT_PHASES) == expected and len(set(w.FAULT_PHASES.values())) == 18
+    lines, calls = Lines(), []
+    with active(lines):
+        with w.body_phase("body_fault_matrix"):
+            for boundary, fault in expected:
+                with w.fault_phase(boundary, fault):
+                    calls.append((boundary, fault))
+    assert calls == expected
+    assert lines.events() == [("ENTER", "body_fault_matrix"), *[
+        pair for key in expected for pair in (("ENTER", w.FAULT_PHASES[key]), ("EXIT", w.FAULT_PHASES[key]))],
+        ("EXIT", "body_fault_matrix")]
+
+
+@pytest.mark.parametrize("failure", [ValueError, KeyboardInterrupt])
+def test_fault_span_keeps_exception_identity_and_names_open_iteration(failure):
+    lines = Lines()
+    error = failure("SECRET-CANARY")
+    with pytest.raises(failure) as seen, active(lines):
+        with w.body_phase("body_fault_matrix"):
+            with w.fault_phase("description", "late_publisher"):
+                raise error
+    assert seen.value is error
+    assert lines.events()[-2:] == [("ERROR", "fault_desc_late_publisher"), ("ERROR", "body_fault_matrix")]
+    assert "SECRET-CANARY" not in lines.text()
+    prefix = render(["+protocol", "+body_fault_matrix", "+fault_desc_late_publisher"])
+    assert w.parse(prefix)["open"] == ["protocol", "body_fault_matrix", "fault_desc_late_publisher"]
+
+
+def test_fault_span_is_inert_when_unselected_and_unknown_values_fail_only_witness():
+    assert w.fault_phase("proof", "reviewer") is w.NULL
+    for boundary, fault in [("proof", "late_reviewer"), ("bad", "policy"), ([], "policy"), ("proof", None)]:
+        lines, called = Lines(), []
+        with active(lines):
+            with w.fault_phase(boundary, fault):
+                called.append(True)
+        assert called == [True] and lines.events() == [("INVALID", "malformed")]

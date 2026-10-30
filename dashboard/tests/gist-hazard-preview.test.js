@@ -83,10 +83,11 @@ for (const family of FAMILIES) {
     const { current, historical } = fixture(family)
     const html = render(React.createElement(GraphicPreviewFigure, { value: current, url: "blob:invented" }))
     assert.match(html, /<strong>Image description sent to X<\/strong>/)
-    assert.ok(html.includes(current.delivery_text.replaceAll("&", "&amp;")))
+    const escaped = current.delivery_text.replaceAll("&", "&amp;").replaceAll("'", "&#x27;")
+    assert.ok(html.includes(escaped))
     assert.match(html, /<details><summary>Expanded source details \(not sent\)<\/summary>/)
     assert.match(html, /Within its posting window when previewed/)
-    assert.ok(html.includes(`alt="${current.delivery_text.replaceAll("&", "&amp;")}"`))
+    assert.ok(html.includes(`alt="${escaped}"`))
     const old = render(React.createElement(GraphicPreviewFigure, { value: historical, url: "blob:invented" }))
     assert.match(old, /Not postable now: /)
     assert.match(old, /historical preview stays available to inspect; approval and sending will refuse it/)
@@ -147,7 +148,7 @@ for (const family of FAMILIES) {
     assert.match(html, /<button type="button" class="btn sm graphic-full-size-open" aria-haspopup="dialog">View full size<\/button>/)
     assert.match(html, /<dialog class="graphic-full-size" aria-label="Full-size image: [^"]+"><button type="button" class="btn sm">Close full-size image<\/button><\/dialog>/)
     assert.equal(html.match(/<img /g).length, 1)
-    assert.match(html, /(Model forecast chart|MODIS satellite detections|NOAA-20\/NOAA-21 VIIRS satellite detections)/)
+    assert.match(html, /(Model forecast chart|MODIS satellite detections|NOAA-20\/NOAA-21 VIIRS satellite detections|Forecast departure table \(sampled cities\))/)
   })
 
   test(`${family}: a stale or mismatched attachment offers replacement, never a review`, () => {

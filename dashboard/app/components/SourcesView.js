@@ -3,6 +3,7 @@
 import { formatDuration, timeAgo } from "../../lib/format.js"
 import { SourceHistoryDates, SourceHistorySnapshot } from "./SourceHistoryTime.js"
 import { SourceContractDetails } from "./SourceContractDetails.js"
+import { RainfallReadiness } from "./RainfallReadiness.js"
 import {
   sourceDiagnosticClass,
   sourceDiagnosticLabel,
@@ -45,7 +46,7 @@ function TroubleshootingLog({ source }) {
   )
 }
 
-export function SourcesView({ sources, stats }) {
+export function SourcesView({ sources, stats, trace = null }) {
   if (!sources || sources.length === 0) {
     return (
       <div className="card full">
@@ -64,6 +65,13 @@ export function SourcesView({ sources, stats }) {
             A successful run does not establish current data or event coverage.
           </p>
           <SourceHistorySnapshot asOf={stats?.as_of} />
+          {trace?.counts && (
+            <p className="source-history-note" data-testid="selection-trace">
+              Coverage to selection (retained only; not recall):{" "}
+              {Object.entries(trace.counts).map(([key, n]) => `${key.replaceAll("_", " ")} ${n}`).join(" · ")}
+              {trace.not_fetched_sources?.length ? `. Not fetched last run: ${trace.not_fetched_sources.join(", ")}` : ""}
+            </p>
+          )}
           <p className="source-history-note">
             Up to {stats?.runs_analyzed ?? 0} retained runs per source; dates describe collection, not measurement.
             {stats?.unhealthy_count > 0 && (
@@ -117,6 +125,27 @@ export function SourcesView({ sources, stats }) {
             <span className="source-num" data-label="Latency">{s.avg_duration_ms != null ? formatDuration(s.avg_duration_ms) : "—"}</span>
             <div className="source-time"><SourceHistoryDates timing={s.history_time} /></div>
             <SourceContractDetails contract={s.source_contract} />
+            {s.outcome && s.outcome.state !== "unknown" && (
+              <div className="source-outcome" data-outcome={s.outcome.state}>
+                <strong>{s.outcome.label}</strong>{s.outcome.detail ? ` — ${s.outcome.detail}` : ""}. Next: {s.outcome.next_action}
+                {s.coverage_row?.universe?.checked != null && (
+                  <span> Checked {s.coverage_row.universe.usable ?? "unknown"} of {s.coverage_row.universe.checked} {s.coverage_row.universe.label}; not global recall.</span>
+                )}
+              </div>
+            )}
+            {Array.isArray(s.incidents) && s.incidents.some(row => row.state !== "qualified") && (
+              <ul className="source-incidents" aria-label={`${s.source} product incidents`}>
+                {s.incidents.filter(row => row.state !== "qualified").map(row => (
+                  <li key={row.key} data-incident-state={row.state}>
+                    <strong>{row.product_id}</strong> ({row.region}, {row.window}): {row.label}
+                    {row.text ? ` — ${row.text}` : ""}
+                    {row.first_failure ? ` First retained failure ${timeAgo(row.first_failure)}; ${row.failures} failed attempt(s).` : ""}
+                    {row.recovered_at ? ` Recovered ${timeAgo(row.recovered_at)} by a qualified result.` : ""}
+                  </li>
+                ))}
+              </ul>
+            )}
+            <RainfallReadiness source={s.source} readiness={s.rainfall_readiness} />
             {s.last_error && !s.served_via && (
               <div
                 className={`source-diagnostic ${sourceDiagnosticClass(s.health)}`}

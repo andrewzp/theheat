@@ -137,6 +137,9 @@ class GoogleCheckTransport:
         if self._used:
             raise ValueError("check_transport_already_used")
         self._used = True
+        from src.two_bot.call_inventory import consume
+        # Declared local check; its bounded observation carries the outcome.
+        consume("local_required_check", provider="google", join=False)
         try:
             self._client.models.generate_content(**request)
         except Exception:

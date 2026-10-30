@@ -38,3 +38,12 @@ def varied_inputs(slug="caribbean", *, base=3.2, spread=1.6, hole_every=7, day=D
 
 
 CLOCK = "2026-06-16T13:00:00Z"
+
+
+def collected_inputs(slug="caribbean"):
+    """varied_inputs whose event carries the collector's exact retained-packet reference."""
+    from dataclasses import replace
+    from src.media import crw_capture
+    bundle, packet = varied_inputs(slug)
+    event = replace(RegionalSSTAnomalyEvent(**bundle["raw_signal_dump"]), retained_packet=crw_capture.reference(packet))
+    return story_bundle_snapshot(build_regional_sst_anomaly_bundle(event)), packet

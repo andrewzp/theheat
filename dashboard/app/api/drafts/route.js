@@ -1,4 +1,5 @@
 import { gistMediaCurrentness, prepareGistMedia, requiredAttestations } from "../../../lib/gist-media.js"
+import { HOLD_MESSAGES, automaticTextHold } from "../../../lib/automatic-text.js"
 import { acceptLocalCommand, localCommandRequest, localDraftProjection, previewConfigured, previewError } from "../../../lib/draft-command-client.js"
 import { dashboardEditorialPolicy } from "../../../lib/editorial-policy.js"
 import { dashboardAutomaticPolicy } from "../../../lib/publication-control.js"
@@ -8,6 +9,7 @@ import { readJsonObject } from "../../../lib/request-json.js"
 import { nwsSourceTiming } from "../../../lib/nws-source-timing.js"
 import { officialWarningValidation } from "../../../lib/official-warning-validation.js"
 import { nhcAdvisoryValidation } from "../../../lib/nhc-advisory-validation.js"
+import { publicationAttempt } from "../../../lib/publication-recovery.js"
 import {
   approvalIsCurrent,
   authorizeDraft,
@@ -89,15 +91,41 @@ function assertReviewed(draft, policy, modelOnly = false) {
 function projection(draft, state, local = null, runtimeReport = null) {
   if (local) return localDraftProjection(draft, state, local)
   try {
-    return { ...projectDraft(draft, dashboardEditorialPolicy(state, { runtimeReport }).policy), editorial_policy: dashboardEditorialPolicy(state, { runtimeReport }), automatic_publication: dashboardAutomaticPolicy(state, { runtimeReport }), publish_blocked: hasUnresolvedPublish(draft, state) }
+    return { ...projectDraft(draft, dashboardEditorialPolicy(state, { runtimeReport }).policy), editorial_policy: dashboardEditorialPolicy(state, { runtimeReport }), automatic_publication: dashboardAutomaticPolicy(state, { runtimeReport }), publish_blocked: hasUnresolvedPublish(draft, state),
+      publish_attempt: hasUnresolvedPublish(draft, state) ? publicationAttempt(draft, state) : null }
   } catch (error) {
     return { ...draft, text: typeof draft.text === "string" ? draft.text : "[Invalid draft text]", revision_identity: null, review_status: "conflict", review_kind: null, publish_blocked: true, review_error: error.message }
   }
 }
 
+// Delivered posts whose confirmed receipt names a native image, newest first. Read-only:
+// the Python preview rebuilds and verifies the exact delivered snapshot on request.
+function deliveredGraphics(state, runtimeReport) {
+  const ledger = state.publish_ledger && typeof state.publish_ledger === "object" ? state.publish_ledger : {}
+  const hasMedia = draft => Object.hasOwn(draft, "media_attachment")
+    || (Array.isArray(draft.revision_history) && draft.revision_history.some(row => row && Object.hasOwn(row, "media_attachment")))
+  return (state.drafts || []).flatMap(draft => {
+    const row = draft && ledger[draft.event_id]
+    if (!row || row.phase !== "confirmed" || typeof row.tweet_id !== "string" || !row.tweet_id || !hasMedia(draft)
+        || (draft.tweet_id !== row.tweet_id && !String(draft.post_error ?? "").startsWith("A prior revision was published"))) return []
+    const confirmed = typeof row.confirmed_at === "string" ? row.confirmed_at : typeof row.at === "string" ? row.at : null
+    return [{ ...projection(draft, state, null, runtimeReport), delivered: { tweet_id: row.tweet_id, confirmed_at: confirmed,
+      text: typeof row.text === "string" ? row.text : null } }]
+  }).sort((a, b) => String(b.delivered.confirmed_at).localeCompare(String(a.delivered.confirmed_at))).slice(0, 20)
+}
+
 export async function GET(request) {
   const authError = requireDashboardAuth(request)
   if (authError) return authError
+  if (new URL(request.url).searchParams.get("delivered") === "1") {
+    try {
+      if (previewConfigured()) return Response.json({ delivered: [], local_preview: true }, { headers: { "Cache-Control": "private, no-store" } })
+      const { state, runtimeReport } = await readStateWithRuntimeReport()
+      return Response.json({ delivered: deliveredGraphics(state, runtimeReport) }, { headers: { "Cache-Control": "private, no-store" } })
+    } catch (error) {
+      return Response.json({ delivered: [], error: error.message }, { status: 500 })
+    }
+  }
   try {
     if (previewConfigured() && new URL(request.url).searchParams.has("commandId")) {
       const id = new URL(request.url).searchParams.get("commandId")
@@ -241,6 +269,11 @@ export async function POST(request) {
         checkedAutomaticEpoch = publication.epoch
         assertPending(draft)
         assertReviewed(draft, editorialPolicy.policy, true)
+        const textHold = automaticTextHold(draft.text)
+        if (textHold) fail(HOLD_MESSAGES[textHold], 409, textHold)
+        if (["air_quality_hazard", "dust_event"].includes(draft.type)) {
+          fail("Air-quality forecasts are armed only by their own current-source check, never from the dashboard.", 409, "air_quality_auto_owner")
+        }
         const policy = draft.approval_policy || {}
         if (policy.can_auto_approve === false) fail("This draft type requires manual approval", 400, "manual_only")
         minutes = Number(delayMinutes ?? policy.recommended_delay_minutes ?? 30)

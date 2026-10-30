@@ -173,6 +173,16 @@ def save_draft(
             guard_advisory_story(StoryBundle(**raw_bundle), candidate=tweet_text, live=True)
         except (WarningHold, TypeError, ValueError, AttributeError):
             return False
+    air_quality_admission = None
+    if tweet_type in ("air_quality_hazard", "dust_event"):
+        from src.data import air_quality_current
+        # Enabled kinds only: one re-read of the retained city/window. A changed
+        # source invalidates the checked copy; it is never saved with old evidence.
+        air_quality_admission = air_quality_current.admission_hold(
+            tweet_type, (review_context or {}).get("two_bot", {}).get("bundle"), clock)
+        if air_quality_admission == "air_quality_source_changed":
+            print("[draft] Not saved: air-quality forecast changed after its checks")
+            return False
     # Plan before changing the caller: in particular, a later cooldown rejection
     # cannot delete the stronger candidate's still-pending predecessor.
     # These three existing cycle-only objects are neither publication history nor
@@ -195,7 +205,26 @@ def save_draft(
     history_status = legacy_publication_status(bot_state, event_id)
 
     publication_policy = automatic_publication_policy(bot_state)
-    if (
+    # The hard automatic TEXT cap applies to both arming paths below. A longer
+    # complete draft is saved for ordinary manual review, never shortened.
+    from src.editorial.automatic_text import automatic_text_hold
+    text_hold = automatic_text_hold(tweet_text)
+    source_hold = air_quality_admission
+    if source_hold is None and tweet_type in ("air_quality_hazard", "dust_event"):
+        from src.data import air_quality_current
+        if air_quality_current.auto_text_enabled(tweet_type):
+            source_hold = air_quality_current.auto_text_hold(draft, planning_state, clock, live=False)
+    if source_hold is None and tweet_type in ("official_warning", "nhc_advisory", "severe_weather"):
+        from src.editorial import warning_automatic
+        if warning_automatic.auto_text_enabled(tweet_type):
+            # Admission already re-read the family's current source; these are the
+            # text-only, qualified-copy and episode/update rules for automatic text.
+            source_hold = warning_automatic.auto_text_hold(draft, planning_state, clock)
+    if text_hold is not None:
+        draft["automatic_text_hold"] = text_hold  # Save-time record; send recomputes from the text.
+    elif source_hold is not None:
+        draft["automatic_source_hold"] = source_hold  # Manual review stays available.
+    elif (
         publication_policy["enabled"]
         and not citation.forced
         and history_status != "ambiguous"

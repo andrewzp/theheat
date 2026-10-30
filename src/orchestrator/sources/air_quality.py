@@ -46,10 +46,13 @@ def _should_emit_tier(
     event_date: str,
     event_id: str,
 ) -> bool:
+    from src.data.air_quality_current import episode_unresolved
+
     last_tier, last_date = _get_city_tier(bot_state, tier_key, city_slug)
     return (
         (last_date != event_date or tier > last_tier)
         and not state.is_duplicate(bot_state, event_id)
+        and not episode_unresolved(bot_state, event_id)
     )
 
 

@@ -8,6 +8,7 @@ from unittest.mock import MagicMock
 
 def test_fetch_metrics_batches_by_100(monkeypatch):
     from src.data import twitter_metrics
+    monkeypatch.setenv("THEHEAT_METRICS_ENABLED", "1")  # The lane is exact opt-in at fetch_metrics.
 
     calls = []
     mock_client = MagicMock()
@@ -49,6 +50,7 @@ def test_fetch_metrics_batches_by_100(monkeypatch):
 
 def test_missing_malformed_and_unrequested_metrics_are_not_invented(monkeypatch):
     from src.data import twitter_metrics
+    monkeypatch.setenv("THEHEAT_METRICS_ENABLED", "1")  # The lane is exact opt-in at fetch_metrics.
     mock_client = MagicMock()
     mock_client.get_tweets.return_value = SimpleNamespace(data=[
         {"id": "1", "public_metrics": {"like_count": 0, "impression_count": 21}},

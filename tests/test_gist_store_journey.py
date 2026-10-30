@@ -236,7 +236,7 @@ print(json.dumps({"replies": out, "loaded": loaded}))
 
 
 def test_sealed_runtime_names_the_store_hold_and_keeps_native_previews(tmp_path):
-    """The deployed native runtime does not package store-backed modules; it holds those lanes."""
+    """With no store configured, the deployed runtime holds store lanes without loading their modules."""
     from scripts.gen_dashboard_graphic_runtime import DEPLOYMENT_FILES
     from src.editorial.revisions import decision_revision, draft_identity
     from tests.gist_hazard_helpers import saved_state as native_state

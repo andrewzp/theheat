@@ -38,8 +38,8 @@ def collect_runtime_inventory(mode: str, *, now: datetime | None = None, bot_sta
     Imports are local to avoid a CLI/common-module import cycle.
     """
     from src import state
-    from src.data import firms, gpm_imerg, twitter_metrics
-    from src.editorial import approval, newsworthiness
+    from src.data import air_quality_current, firms, gpm_imerg, twitter_metrics
+    from src.editorial import approval, newsworthiness, warning_automatic
     from src.editorial.publication import automatic_publication_policy
     from src.orchestrator import caps, funnel, hot10, scheduler, triage_queue
     from src.orchestrator.sources import air_quality, open_meteo
@@ -99,7 +99,15 @@ def collect_runtime_inventory(mode: str, *, now: datetime | None = None, bot_sta
             "gpm_source": gpm_imerg._gpm_source(),
             "aq_pm25_enabled": air_quality._enabled("THEHEAT_AQ_PM25_ENABLED"),
             "aq_dust_enabled": air_quality._enabled("THEHEAT_AQ_DUST_ENABLED"),
+            "pm25_forecast_auto_text_enabled": air_quality_current.auto_text_enabled("air_quality_hazard"),
+            "dust_forecast_auto_text_enabled": air_quality_current.auto_text_enabled("dust_event"),
             "wetbulb_enabled": os.environ.get("THEHEAT_WETBULB_ENABLED", "1") == "1",
+            **warning_automatic.inventory_flags(),
+            "regional_observed_enabled": os.environ.get("THEHEAT_REGIONAL_OBSERVED") == "1",
+            "rainfall_window_provenance_enabled": os.environ.get("THEHEAT_RAINFALL_WINDOW_PROVENANCE") == "1",
+            "hazard_episodes_enabled": os.environ.get("THEHEAT_HAZARD_EPISODES") == "1",
+            "portfolio_selection_enabled": os.environ.get("THEHEAT_PORTFOLIO_SELECTION") == "1",
+            "rainfall_regional_scan_enabled": os.environ.get("THEHEAT_RAINFALL_REGIONAL_SCAN") == "1",
         },
         "credentials_present": {
             "anthropic": bool(os.environ.get("ANTHROPIC_API_KEY")),

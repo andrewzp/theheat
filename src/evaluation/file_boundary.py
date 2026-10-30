@@ -7,7 +7,7 @@ regular-file-only and bounded, so a FIFO without a writer or a device is refused
 promptly. Output goes into a new private directory created relative to its held
 parent descriptor, with exclusive 0600 files; an existing path is never reused.
 Follows the accepted descriptor pattern in src/media/review_package.py; only the
-rainfall and readiness tools use this module.
+rainfall, readiness and passive import-planning tools use this module.
 """
 
 from __future__ import annotations

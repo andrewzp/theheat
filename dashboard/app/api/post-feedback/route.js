@@ -1,4 +1,4 @@
-import { requireDashboardAuth } from "../../../lib/auth.js"
+import { mutationOriginError, requireDashboardAuth } from "../../../lib/auth.js"
 import { previewConfigured } from "../../../lib/local-preview-boundary.js"
 import { FeedbackError, feedbackDiagnostic, readPostFeedback, savePostFeedback } from "../../../lib/post-feedback.js"
 
@@ -46,7 +46,9 @@ export async function POST(request) {
   if (unavailable()) return response({code:"feedback_gist_only"}, 503)
   // Require the browser's exact same-origin signal even with Basic authentication.
   // Proxy/forwarded headers cannot grant another origin access to this write.
-  if (request.headers.get("origin") !== new URL(request.url).origin ||
+  // The Origin header is required here (not optional as for other callers); the host comparison is the
+  // shared loopback-aware rule, so a page opened at 127.0.0.1 matches its canonicalized localhost URL.
+  if (request.headers.get("origin") === null || mutationOriginError(request) ||
       (request.headers.get("sec-fetch-site") && request.headers.get("sec-fetch-site") !== "same-origin")) return response({code:"feedback_origin_refused"}, 403)
   try { return response(await savePostFeedback(await input(request))) }
   catch (error) { return errorResponse(error) }

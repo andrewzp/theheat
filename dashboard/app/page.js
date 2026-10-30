@@ -17,6 +17,7 @@ import { SourcesView } from "./components/SourcesView.js"
 import { SourceHealthContent } from "./health/page.js"
 import { ProductHealthPanel } from "./components/ProductHealthPanel.js"
 import { CostPanel } from "./components/CostPanel.js"
+import DeliveryReconciliation from "./components/DeliveryReconciliation.js"
 import { COST_SCENARIO } from "../lib/usage-cost-contract.js"
 import { SuppressedView } from "./components/SuppressedView.js"
 import { hot10IsStale, hot10StaleDays, timeAgo, todayTweetCount } from "../lib/format.js"
@@ -57,6 +58,7 @@ export default function Dashboard() {
 
   const [sources, setSources] = useState([])
   const [sourcesStats, setSourcesStats] = useState(null)
+  const [selectionTrace, setSelectionTrace] = useState(null)
 
   // Model config
   const [modelConfig, setModelConfig] = useState(null)
@@ -114,6 +116,8 @@ export default function Dashboard() {
         costEvidence: payload.costEvidence,
         localCostEvidence: payload.localCostEvidence,
         deployment: payload.deployment,
+        graphicAvailability: payload.graphicAvailability,
+        recoveredPublished: payload.recoveredPublished || [],
       })
       // Keep held warnings behind usable review items while retaining the
       // desk's newest-first order within each group.
@@ -123,6 +127,7 @@ export default function Dashboard() {
       setModelConfig(payload.config || null)
       setSources(payload.sourceHealth?.sources || [])
       setSourcesStats(payload.sourceHealth?.stats || null)
+      setSelectionTrace(payload.sourceHealth?.selection_trace || null)
       setLastUpdated(new Date().toISOString())
       dashboardResult = { ok: true, local_preview: payload.local_preview === true, operator_subject: payload.operator_subject,
         collectionReady: !payload.stateError && payload.stateBackend === "gist" && payload.local_preview !== true }
@@ -560,8 +565,9 @@ export default function Dashboard() {
 
         {!loading && ["dashboard", "health"].includes(activeTab) && (
           <>
-          <ProductHealthPanel health={data?.productHealth} config={modelConfig} deployment={data?.deployment} stale={Boolean(refreshError)} />
+          <ProductHealthPanel health={data?.productHealth} config={modelConfig} deployment={data?.deployment} stale={Boolean(refreshError)} graphics={data?.graphicAvailability} recovered={data?.recoveredPublished} />
           <CostPanel evidence={data?.costEvidence} stale={Boolean(refreshError)} loading={loading} localEvidence={data?.localCostEvidence} />
+          <DeliveryReconciliation />
           </>
         )}
 
@@ -578,7 +584,7 @@ export default function Dashboard() {
           />
         ) : activeTab === "sources" ? (
           <>
-            <SourcesView sources={sources} stats={sourcesStats} />
+            <SourcesView sources={sources} stats={sourcesStats} trace={selectionTrace} />
             {data?.local_preview && <>
               <CoverageEvidence readOnly={data?.operator_role === "viewer"} onOpenReport={setCoverageReport} />
               <ReportsForReview readOnly={data?.operator_role === "viewer"} selectedLineage={coverageReport} onSelectionConsumed={clearCoverageReport} />
@@ -620,6 +626,7 @@ export default function Dashboard() {
             checkLocalCommand={checkLocalCommand}
             retryLocalCommand={() => pendingCommand && submitLocalCommand(pendingCommand)}
             botRuns={runHistory}
+            mediaStore={data?.graphicAvailability?.store ?? null}
           />
         ) : (
           <>

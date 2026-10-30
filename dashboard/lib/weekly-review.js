@@ -1,8 +1,9 @@
-import { feedbackRecord, feedbackTarget } from "./post-feedback.js"
+import { feedbackRecord, feedbackTarget, revisionFeedbackSummary } from "./post-feedback.js"
 import { fingerprint, textHash } from "./draft-revisions.js"
 import { summarizeUsage } from "./usage-ledger.js"
 import { buildProductHealth } from "./product-health.js"
 import { reportTimestamp } from "./runtime-report.js"
+import { coverageRow, sourceOutcome } from "./live-content-status.js"
 
 const DAY = 86400000
 const object = value => value && Object.getPrototypeOf(value) === Object.prototype
@@ -20,7 +21,79 @@ function unique(rows, key) {
   return {rows:[...values].filter(([id]) => !conflicts.has(id)).map(([,row]) => row),conflicts:conflicts.size,duplicates:rows.length-values.size}
 }
 
-export function buildWeeklyReview({state, feedbackRecords = null, asOf}) {
+const CHECK_STAGES = ["writer", "safety", "fact_check", "critic", "honesty_gate", "evidence_contract"]
+const OWNER_STATES = new Set(["access_expired"]), INPUT_STATES = new Set(["baseline_unavailable", "unqualified_input"])
+
+// W16.1: joins retained source outcomes, stage failures, post-age samples and supplied cost reconciliation.
+function weeklyEvidence(state, posts, inWindow, costReconciliation) {
+  const latestRun = Array.isArray(state.run_history) ? state.run_history.find(run => object(run) && Array.isArray(run.sources)) : null
+  const sources = latestRun ? latestRun.sources.filter(object).map(row => {
+    const outcome = sourceOutcome(row, Array.isArray(state.suppressions) ? state.suppressions.slice(-200) : [])
+    const coverage = coverageRow(row)
+    return { source: String(row.source || "unknown"), state: outcome.state, label: outcome.label, next_action: outcome.next_action,
+      detail: outcome.detail, observed: coverage.observed, promoted: coverage.promoted, drafted: coverage.drafted,
+      universe_checked: coverage.universe.checked, universe_usable: coverage.universe.usable }
+  }) : null
+  const failures = Object.fromEntries(CHECK_STAGES.map(stage => [stage, 0]))
+  let otherHolds = 0
+  for (const row of Array.isArray(state.suppressions) ? state.suppressions : []) {
+    if (!object(row) || !inWindow(time(row.ts))) continue
+    if (Object.hasOwn(failures, row.stage)) failures[row.stage]++
+    else otherHolds++
+  }
+  const metrics = object(state.tweet_metrics) ? state.tweet_metrics : {}
+  const postAge = posts.map(post => {
+    const samples = Object.values(object(metrics[post.tweet_id]?.samples) ? metrics[post.tweet_id].samples : {}).filter(object)
+    const aged = samples.filter(sample => Number.isFinite(sample.post_age_seconds))
+      .sort((a, b) => a.post_age_seconds - b.post_age_seconds)
+    const at = hours => aged.filter(sample => sample.post_age_seconds <= hours * 3600).at(-1) ?? null
+    const pick = sample => sample === null ? null : { post_age_hours: Math.round(sample.post_age_seconds / 360) / 10,
+      counts: object(sample.counts) ? Object.fromEntries(Object.entries(sample.counts).map(([k, v]) => [k, Number.isInteger(v) ? v : null])) : null }
+    return { tweet_id: post.tweet_id, samples: aged.length, within_24h: pick(at(24)), within_72h: pick(at(72)),
+      status: aged.length ? "observed_samples" : "unavailable" }
+  })
+  const reconciliation = object(costReconciliation) ? {
+    status: "supplied", coverage: costReconciliation.coverage ?? null, discrepancies: costReconciliation.discrepancies ?? null,
+    reconciled_total_usd: Number.isFinite(costReconciliation.reconciled_total_usd) ? costReconciliation.reconciled_total_usd : null,
+    unmatched_charges: costReconciliation.unmatched_charges ?? null } : { status: "unavailable", reconciled_total_usd: null }
+  return { scope: "Joins of supplied retained evidence only; missing inputs stay unavailable, never zero.",
+    source_outcomes: sources === null ? { status: "unavailable", rows: null } : { status: "latest_retained_run", started_at: latestRun.started_at ?? null, rows: sources },
+    stage_failures: { counts: failures, other_holds: otherHolds, scope: "Suppressions timestamped inside the window; one row per recorded kill, not unique events." },
+    post_age_outcomes: { posts: postAge, metrics_available: postAge.some(row => row.status === "observed_samples"),
+      scope: "Latest supplied sample at or before each post age; unavailable metrics are not zero reach." },
+    cost_reconciliation: reconciliation }
+}
+
+// W16.2: one specific supported issue, its evidence, impact and a bounded proposed change. Never applied.
+function improvementSelection(evidence, posts) {
+  const rows = evidence.source_outcomes.rows || []
+  const owner = rows.filter(row => OWNER_STATES.has(row.state))
+  if (owner.length) return { kind: "owner_action", issue: owner.map(row => `${row.source}: ${row.label}`).join("; "),
+    evidence: owner.map(row => ({ source: row.source, state: row.state, detail: row.detail })),
+    impact: "These sources supply nothing until the owner restores access.", proposed_change: owner[0].next_action }
+  const input = rows.filter(row => INPUT_STATES.has(row.state))
+  if (input.length) return { kind: "source_uncertainty", issue: input.map(row => `${row.source}: ${row.label}`).join("; "),
+    evidence: input.map(row => ({ source: row.source, state: row.state, observed: row.observed })),
+    impact: "Qualified comparison inputs are missing, so these candidates hold before writing.", proposed_change: input[0].next_action }
+  const [stage, count] = Object.entries(evidence.stage_failures.counts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]
+  if (count >= 3) return { kind: "local_repair", issue: `${count} candidates were rejected at ${stage} this week.`,
+    evidence: [{ stage, count, posts_delivered: posts.length }],
+    impact: "Paid writer attempts end without a draft.",
+    proposed_change: `Inspect the ${stage} rejection reasons on the retained suppressions and repair the specific brief, qualifier or source contract that fails; no prompt, model, flag or budget change follows automatically.` }
+  return { kind: "none", issue: null, evidence: [], impact: null,
+    proposed_change: "No supported issue in the supplied evidence; do not force an experiment." }
+}
+
+// W15.6: supplied correction candidates (theheat_evaluation.py correction-candidates) are listed for review only.
+function correctionSummary(report) {
+  if (!object(report) || !Array.isArray(report.candidates)) return { status: "not_supplied" }
+  const candidates = report.candidates.filter(c => object(c) && c.automatic_correction === false && c.deletion === false)
+  return { status: "supplied", review_only: true, candidates: candidates.length,
+    posts: [...new Set(candidates.map(c => String(c.tweet_id)))].sort(), kinds: [...new Set(candidates.map(c => String(c.kind)))].sort(),
+    incomplete: Array.isArray(report.incomplete) ? report.incomplete.length : 0 }
+}
+
+export function buildWeeklyReview({state, feedbackRecords = null, asOf, costReconciliation = null, correctionReport = null}) {
   const end = time(asOf)
   if (!object(state) || !Array.isArray(state.drafts) || state.drafts.length > 1024 || end === null ||
       (feedbackRecords !== null && (!Array.isArray(feedbackRecords) || feedbackRecords.length > 1000))) fail()
@@ -46,8 +119,11 @@ export function buildWeeklyReview({state, feedbackRecords = null, asOf}) {
   const targets=allTargets.filter(({target})=>claims.get(target.tweet_id)?.size===1)
   const weekly=targets.filter(({target})=>inWindow(time(target.posted_at)))
   const targetMap=new Map(targets.map(({target})=>[fingerprint(target),target]))
-  const opinionRows=(feedbackRecords||[]).filter(row=>object(row)&&typeof row.request_id==="string")
-  issues.invalid_opinions=(feedbackRecords||[]).length-opinionRows.length
+  // W15.3 revision feedback is a separate human-feedback category, never a punch/clarity/economy opinion.
+  const revisionRows=(feedbackRecords||[]).filter(row=>object(row)&&row.kind==="dashboard_revision_feedback")
+  const opinionRows=(feedbackRecords||[]).filter(row=>object(row)&&typeof row.request_id==="string"&&row.kind!=="dashboard_revision_feedback")
+  issues.invalid_opinions=(feedbackRecords||[]).length-opinionRows.length-revisionRows.length
+  const revisionValid=[];for(const row of revisionRows){try{revisionValid.push(feedbackRecord(row))}catch{issues.invalid_opinions++}}
   const opinions=unique(opinionRows,"request_id");issues.duplicate_opinion_ids=opinions.duplicates;issues.conflicting_opinion_ids=opinions.conflicts
   const validOpinions=[]
   for(const row of opinions.rows){try{validOpinions.push(feedbackRecord(row))}catch{issues.invalid_opinions++}}
@@ -72,7 +148,9 @@ export function buildWeeklyReview({state, feedbackRecords = null, asOf}) {
   const lengths=posts.map(p=>p.characters).sort((a,b)=>a-b),n=lengths.length
   const cost=summarizeUsage(state,{now:end}),health=buildProductHealth(state,{now:end})
   const costKeys=["coverage","pricing_coverage","known_cost_usd","legacy_estimate_usd","recorded_estimate_usd","recorded_calls","priced_calls","unpriced_calls","missing_usage_calls","legacy_calls","inconsistent_rows","excluded_rows"]
+  const evidence=weeklyEvidence(state,posts,inWindow,costReconciliation)
   const report={schema_version:1,kind:"weekly_retained_outcome_review",reader_contract:"retained_weekly_v1",as_of:new Date(end).toISOString(),
+    evidence,corrections:correctionSummary(correctionReport),improvement:{...improvementSelection(evidence,posts),automatic_changes:false,publication_authorized:false},
     window:{start:new Date(start).toISOString(),end:new Date(end).toISOString(),end_exclusive:true,hours:168},
     input_semantic_sha256:{state:fingerprint(state),feedback:feedbackRecords===null?null:fingerprint(feedbackRecords)},
     delivery:{scope:"Exact matching current draft and confirmed ledger receipts in supplied state; not independent public-page verification or complete account history.",
@@ -82,6 +160,8 @@ export function buildWeeklyReview({state, feedbackRecords = null, asOf}) {
     copy:{scope:"Descriptive lengths of qualifying retained posts; brevity is not quality or factual correctness.",count:n,min_characters:n?lengths[0]:null,max_characters:n?lengths[n-1]:null,
       median_characters:n?(lengths[Math.floor((n-1)/2)]+lengths[Math.floor(n/2)])/2:null,
       manual_or_edited:posts.filter(p=>p.authorship==="manual_or_edited").length,verified_model_authorship:null,unverified_authorship:posts.filter(p=>p.authorship==="unverified").length},
+    revision_feedback:feedbackRecords===null?{status:"unavailable"}:
+      {...revisionFeedbackSummary(revisionValid),note:"Optional human feedback on exact revisions; absence is not a negative score."},
     editorial_feedback:{status:feedbackRecords===null?"unavailable":"supplied_records_only",records_in_window:feedbackRecords===null?null:selected.length,
       posts_with_latest_opinion:feedbackRecords===null?null:latest.size,
       new_weekly_posts_with_opinion:feedbackRecords===null?null:posts.filter(p=>p.editorial_opinion!==null).length,
@@ -109,6 +189,9 @@ export function weeklyReviewMarkdown(report){
   return `# TheHeat retained weekly outcome review\n\n${report.window.start} to ${report.window.end} (end exclusive).\n\n`+
     `| Retained outcome | Result |\n| --- | --- |\n| Exact receipt-bound posts | ${report.delivery.count} |\n| Median characters (descriptive only) | ${show(report.copy.median_characters)} |\n| Manual or edited posts | ${report.copy.manual_or_edited} |\n| Verified model authorship | ${show(report.copy.verified_model_authorship)} |\n| Explicit opinions in supplied window | ${show(report.editorial_feedback.records_in_window)} |\n| Feedback availability | ${report.editorial_feedback.status} |\n| Comparable engagement lift | Unknown |\n| Weekly all-in cost and cost per post | Unknown |\n\n`+
     `Cost context is a separate month-to-date retained estimate (${report.cost_context.month}), not a weekly bill. Known priced subtotal: ${show(report.cost_context.known_cost_usd)} USD; unpriced responses: ${show(report.cost_context.unpriced_calls)}. Provider invoice and complete monthly cap are unverified.\n\n`+
+    (report.corrections?.status === "supplied" ? `Correction candidates for editor review (none applied): ${report.corrections.candidates} across ${report.corrections.posts.length} post(s); ${report.corrections.incomplete} supplied discrepancy record(s) still need evidence.\n\n` : "")+
+    `Improvement focus (${report.improvement.kind}): ${report.improvement.issue ?? "none supported"}. ${report.improvement.proposed_change}\n\n`+
+    `Sources in the latest retained run: ${report.evidence.source_outcomes.rows ? report.evidence.source_outcomes.rows.length : "Unknown"}; post-age metrics ${report.evidence.post_age_outcomes.metrics_available ? "partly available" : "unavailable"}; cost reconciliation ${report.evidence.cost_reconciliation.status}.\n\n`+
     `Promotion: **HOLD**. ${report.decision.reasons.join(" ")}\n\n${report.decision.next_step}\n\n`+
     `Missing telemetry is unknown, not zero. Saved receipts are not independent public-page verification; retained history is incomplete. No raw tweet or note text is reproduced. Report ${report.report_id}.\n`
 }

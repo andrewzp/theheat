@@ -89,7 +89,8 @@ class Spies:
             return WriterResult(None, "Explicit invented offline writer kill.", "", None, None, "Offline fixture.")
         text = {
             "official_warning": "Invented Warning Agency warns: dangerous winds are possible tonight on Example Island.",
-            "hot10": "Invented City 0 tops today's Hot 10, running 10.0C above its normal high.",
+            "hot10": ("Riyadh's forecast high of 39.2°C runs 9.2°C above its monthly normal, the largest departure "
+                      "among 14 sampled cities."),
         }.get(bundle.signal_kind, f"NASA satellites recorded a strong thermal detection near {bundle.where}.")
         return WriterResult(text, None, "number", None, None, "Explicit invented offline model response.")
 

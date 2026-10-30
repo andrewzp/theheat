@@ -59,6 +59,7 @@ CODE_IDENTITY_FILES = (
     "src/two_bot/bundle_capture.py", "src/two_bot/retry.py", "src/two_bot/json_utils.py",
     "src/two_bot/source_links.py", "src/two_bot/strict_contract.py", "src/two_bot/trial_budget.py",
     "src/two_bot/request_archive.py", "src/two_bot/prompts/writer_prompt.py",
+    "src/data/newsworthiness.py",
     "src/two_bot/prompts/fact_check_prompt.py", "src/two_bot/prompts/critic_prompt.py",
 )
 # Additional running sources observed only by route-family (v2) scopes.

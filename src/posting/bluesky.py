@@ -9,8 +9,21 @@ BLUESKY_HANDLE = os.environ.get("BLUESKY_HANDLE", "")
 BLUESKY_APP_PASSWORD = os.environ.get("BLUESKY_APP_PASSWORD", "")
 
 
+def _declared(send):
+    """Each Bluesky phase consumes the declared platform stage before egress."""
+    from src.two_bot.call_inventory import consume
+    ticket = consume("bluesky_publish", provider="bluesky")
+    try:
+        response = send()
+    except BaseException:
+        ticket.settle("unknown")
+        raise
+    ticket.settle("returned")
+    return response
+
+
 def upload_png(client, png: bytes):
-    return client.upload_blob(png)
+    return _declared(lambda: client.upload_blob(png))
 
 
 def image_record(text, alt, blob, created_at):
@@ -21,8 +34,8 @@ def image_record(text, alt, blob, created_at):
 
 def create_post(client, text, *, record=None, actor=None):
     if record is None:
-        return client.send_post(text=text)
-    return client.app.bsky.feed.post.create(repo=actor, record=record)
+        return _declared(lambda: client.send_post(text=text))
+    return _declared(lambda: client.app.bsky.feed.post.create(repo=actor, record=record))
 
 
 def post_to_bluesky(text: str) -> dict | None:

@@ -5,6 +5,7 @@ from __future__ import annotations
 # ruff: noqa: F403,F405
 from src.data import gdacs_intake
 from src.data._witness import degraded_via
+from src.editorial import hazard_episodes
 from src.orchestrator.common import *
 
 # Per-capture admission dispositions. For every fetched event exactly one holds:
@@ -37,6 +38,12 @@ def run_gdacs(bot_state: BotState, current_run: dict | None) -> None:
             if not _should_draft(score, disaster.event_id):
                 intake["score_withheld"] += 1
                 continue
+            # W07 (THEHEAT_HAZARD_EPISODES, default off): a repeat poll without new facts buys no writer.
+            episode = hazard_episodes.admit(bot_state, hazard_episodes.gdacs_assertion(disaster), source="gdacs",
+                                            event_id=disaster.event_id, score=score, summary=disaster.name)
+            if not episode.allowed:
+                intake["queue_refused"] += 1
+                continue
             review_context = _review_context(
                 source="GDACS",
                 source_key="gdacs",
@@ -49,6 +56,7 @@ def run_gdacs(bot_state: BotState, current_run: dict | None) -> None:
                     _fact("Name", disaster.name),
                 ],
             )
+            hazard_episodes.bind(review_context, episode)
             # Event-scoped repetition now flows through the two-bot
             # memory slice as ``recent_tweets_same_event``.
             from src.two_bot.intern import build_global_disaster_bundle

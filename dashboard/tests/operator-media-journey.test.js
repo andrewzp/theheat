@@ -9,7 +9,9 @@ import { join } from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
 import { crc32, deflateSync } from "node:zlib"
 import manifest from "../lib/graphic-runtime-manifest.json" with { type: "json" }
-import { graphicRequest } from "../lib/graphic-preview.js"
+import { graphicRequest, mediaPNGRequest, validateGraphicResponse } from "../lib/graphic-preview.js"
+import { validGistMedia } from "../lib/gist-media.js"
+import { episodeView } from "../lib/hazard-episodes.js"
 import { boundRetainedMediaBlob, jointConfirmations } from "../lib/editor-media.js"
 import { fingerprint, initializeRevision, policy, projectDraft } from "./helpers/review-policy.js"
 import { JOURNEY_TIMEOUT_MS, READY_PATH, options as launcherOptions, startOwned, superviseJourney, waitOwnedReady }
@@ -32,7 +34,8 @@ const unavailable = "The preview is unavailable. Your draft has not changed; try
 // Invented drafts: display fixtures only, never qualified source evidence.
 function sourceDraft(id, { product = "MODIS_NRT", related = [], raw, local = false, role = "publisher", text } = {}) {
   const bundle = { event_id: `invented:${id}`, signal_kind: "fire", where: `${LONG} ${id}`, when: "2032-01-02",
-    raw_signal_dump: raw ?? { source_product: product, acquisition_provenance: { source_product: product } }, related_signals: related }
+    raw_signal_dump: raw ?? { source_product: product, acquisition_provenance: { source_product: product,
+      acquired_at: TEMPLATES[product]?.context.acquired_at } }, related_signals: related }
   const draft = { id, type: "fire", event_id: bundle.event_id, status: "pending", created_at: "2032-01-01T00:00:00Z",
     // Long but breakable tweet text: unbroken tokens stay in place/source/description fields.
     text: text ?? `Invented ${id}: saved thermal detections near an invented place. ${"This invented sentence is long, ordinary and breakable. ".repeat(4)}No physical incident claim.`,
@@ -47,22 +50,40 @@ const changePolicy = (draft) => ({ ...structuredClone(draft), editorial_policy: 
 
 const TEMPLATES = {
   MODIS_NRT: { template: "modis_thermal_detection_map", version: "p31-modis-locator-2-social", source: "NASA FIRMS · MODIS",
-    adapter: "src/media/fire_map_graphic_adapter.py", context: { kind: "modis_acquisition", acquired_at: "2032-02-29T23:59:00Z" } },
+    kind: "gist_modis_locator_v1", adapterVersion: "p31-firms-modis-map-2", derivation: "modis_delivery_v1",
+    context: { kind: "modis_acquisition", acquired_at: "2032-02-29T23:59:00Z" } },
   VIIRS_NOAA20_NRT: { template: "viirs_thermal_detection_map", version: "p31-viirs-locator-1", source: "NASA FIRMS · VIIRS",
-    adapter: "src/media/viirs_map_graphic_adapter.py", context: { kind: "viirs_acquisition", acquired_at: "2032-02-29T23:58:00Z" } },
+    kind: "gist_viirs_locator_v1", adapterVersion: "p31-firms-viirs-map-1", derivation: "viirs_delivery_v1",
+    context: { kind: "viirs_acquisition", acquired_at: "2032-02-29T23:58:00Z" } },
 }
+const NATIVE_FIRE_FILES = ["src/media/gist_media.py", "src/media/gist_hazard_media.py", "src/media/canonical_png.py",
+  "src/media/fonts/DejaVuSansMono.ttf", "src/media/evidence_graphic.py", "src/media/temperature_graphic_adapter.py",
+  "src/media/fire_graphic_adapter.py", "src/media/fire_map_graphic_adapter.py", "src/data/fire_source_contract.py",
+  "src/data/fire_evidence.py", "src/media/maps/ne_110m_land_v4_1_0.json", "src/media/maps/manifest.json"]
 function previewValue(draft, product = "MODIS_NRT") {
-  const request = graphicRequest(draft, manifest), files = manifest.identity.files, template = TEMPLATES[product]
-  const binding = { template: template.template, template_version: template.version, source_evidence_sha256: hash(`source:${draft.id}`),
-    renderer: { library: "ReportLab", version: "4.4.9", format: "svg", schema_version: 1, width: 1200, height: 1500,
-      implementation_sha256: files["src/media/evidence_graphic_render.py"], contract_sha256: files["src/media/evidence_graphic.py"],
-      adapter_sha256: files[template.adapter], font_sha256: files["src/media/fonts/DejaVuSansMono.ttf"] } }
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1500" viewBox="0 0 1200 1500"><title>${draft.id}</title><rect width="1200" height="1500" fill="#334"/></svg>`
-  return { schema_version: 2, draft_id: request.draft_id, revision_identity: request.expected_revision,
+  const request = mediaPNGRequest(draft, manifest), files = manifest.identity.files, template = TEMPLATES[product]
+  const bundle = draft.review_context.two_bot.bundle, receipt = bundle.raw_signal_dump.acquisition_provenance
+  const paths = [...NATIVE_FIRE_FILES, ...(template.kind === "gist_viirs_locator_v1" ? ["src/media/viirs_map_graphic_adapter.py"] : [])]
+  const delivery = `Invented delivery description for ${draft.id}: saved satellite detections only; ${LONG}.`
+  const full = `Invented complete graphic description for ${draft.id}: ${LONG}. Saved detections only.`
+  // A structurally bound invented response, not Python qualification or a rendered-source proof.
+  const descriptor = { schema_version: 2, kind: template.kind, template: template.template, template_version: template.version,
+    adapter_version: template.adapterVersion, synthetic: false,
+    source: { bundle_sha256: fingerprint(bundle), evidence_sha256: request.expected_revision.evidence_sha256,
+      source_product: product, receipt_sha256: [receipt, ...bundle.related_signals.map(row => row.acquisition_evidence)].map(fingerprint),
+      acquired_at: receipt.acquired_at },
+    renderer: { version: "gist-hazard-png-2", files: Object.fromEntries(paths.map(path => [path, files[path]])),
+      pillow: "12.2.0", freetype: "invented-fixture", png_codec: "canonical-png-fixed-huffman-1", layout: "basic", width: 1200, height: 1500 },
+    image: { mime_type: "image/png", png_sha256: hash(PREVIEW_PNG), byte_count: PREVIEW_PNG.length, width: 1200, height: 1500, mode: "RGB" },
+    description: { derivation: template.derivation, delivery_text: delivery, delivery_sha256: hash(delivery),
+      delivery_scalars: [...delivery].length, delivery_bytes: Buffer.byteLength(delivery), full_sha256: hash(full), full_bytes: Buffer.byteLength(full) } }
+  return { schema_version: 4, draft_id: request.draft_id, revision_identity: request.expected_revision,
     policy_source_sha256: request.expected_policy_source_sha256, preview_runtime_sha256: request.expected_preview_runtime_sha256,
     publication_approved: false, attachment: false, width: 1200, height: 1500, source: template.source, source_context: template.context,
-    title: `Invented preview title for ${draft.id} ${LONG}`, alt_text: `Invented complete graphic description for ${draft.id}: ${LONG}. Saved detections only.`,
-    scope: `Invented scope for ${draft.id}; ${LONG}`, svg_utf8: svg, svg_sha256: hash(svg), binding, cache_key: fingerprint(binding) }
+    title: `Invented preview title for ${draft.id} ${LONG}`, delivery_text: delivery, expanded_description: full,
+    scope: `Invented scope for ${draft.id}; ${LONG}`, png_base64: PREVIEW_PNG.toString("base64"), png_sha256: hash(PREVIEW_PNG),
+    media_kind: template.kind, media_descriptor: descriptor, media_descriptor_sha256: fingerprint(descriptor),
+    posting_window: { status: "current", code: null, reason: null, checked_at: "2032-02-29T23:59:00Z" } }
 }
 
 // Minimal truecolor PNG with exact IHDR dimensions.
@@ -79,6 +100,7 @@ function png(width, height, rgb) {
     chunk("IDAT", deflateSync(Buffer.concat(Array.from({ length: height }, () => row)))), chunk("IEND", Buffer.alloc(0))])
 }
 const IMAGE = png(120, 150, [40, 90, 160]), CHANGED = png(120, 150, [160, 40, 40])
+const PREVIEW_PNG = png(1200, 1500, [40, 90, 160])
 const proposal = (n = 1) => hash(`invented-proposal-${n}`)
 function mediaView(draft, overrides = {}, image = IMAGE, n = 1) {
   const packet = { schema_version: 1, packet_sha256: hash(`invented-packet-${n}`), media: { mime_type: "image/png",
@@ -334,6 +356,23 @@ test("an acknowledged delayed handler observes cleanup after a fast journey", as
 })
 
 // Ordinary Node: the bound loader itself, with an invented response and no browser.
+test("invented PNG fixtures satisfy the actual preview and descriptor contracts", async () => {
+  for (const product of ["MODIS_NRT", "VIIRS_NOAA20_NRT"]) {
+    const draft = sourceDraft(`png-fixture-${product}`, { product }), value = previewValue(draft, product)
+    const request = mediaPNGRequest(draft, manifest)
+    assert.equal(value.schema_version, 4)
+    assert.equal(await validateGraphicResponse(value, request, manifest), value)
+    assert.equal(validGistMedia({ ...draft, media_attachment: value.media_descriptor }), true)
+    for (const change of [bad => { bad.schema_version = 2 }, bad => { bad.media_descriptor.synthetic = true },
+      bad => { bad.media_descriptor.renderer.files["src/media/gist_hazard_media.py"] = "0".repeat(64) },
+      bad => { bad.png_base64 = CHANGED.toString("base64") }]) {
+      const bad = structuredClone(value)
+      change(bad)
+      await assert.rejects(validateGraphicResponse(bad, request, manifest))
+    }
+  }
+})
+
 test("joint review image must be the exact packet-bound PNG bytes, size and dimensions", async (t) => {
   const original = globalThis.fetch
   t.after(() => { globalThis.fetch = original })
@@ -406,6 +445,14 @@ test("mounted operator media journey with invented API replies", {
         }
         assert.ok(++evidence.api_reads <= 600, "bounded API reads")
         if (url.pathname === "/api/operator-journey/scenario") return await json(route, 200, { name, drafts: api.drafts, selected: api.selected })
+        if (url.pathname === "/api/episodes" && JSON.stringify([...url.searchParams.keys()]) === '["draftId"]') {
+          const view = episodeView({ drafts: api.drafts }, url.searchParams.get("draftId"))
+          assert.ok(view && !view.bound && !view.editable, "only the fixture's unbound episode read is supported")
+          return await json(route, 200, view)
+        }
+        if (url.pathname === "/api/drafts" && url.searchParams.toString() === "delivered=1") {
+          return await json(route, 200, { delivered: [] })
+        }
         if (url.pathname === "/api/editor-media") {
           const draftId = url.searchParams.get("draftId"), wanted = url.searchParams.get("proposal")
           if (wanted) {
@@ -471,7 +518,7 @@ test("mounted operator media journey with invented API replies", {
   const previewMissing = sourceDraft("preview-missing", { raw: { source_product: "MODIS_NRT" } })
   const previewMixed = sourceDraft("preview-mixed", { related: [{ signal_kind: "fire", acquisition_evidence: { source_product: "VIIRS_NOAA20_NRT" } }] })
   const previews = [previewA, previewB, previewMissing, previewMixed]
-  const figureTitle = (page) => page.locator(".graphic-preview-figure figcaption strong")
+  const figureTitle = (page) => page.locator(".graphic-preview-figure figcaption > strong")
   const previewStatus = (page) => page.locator(".graphic-preview [role=status]")
   const previewButton = (page) => page.getByRole("button", { name: /^(Preview graphic|Rebuild preview)$/ })
   const sideEffects = async (journal) => (await journal()).calls.filter((call) => ["draftAct", "submitLocalCommand"].includes(call.name))
@@ -489,7 +536,7 @@ test("mounted operator media journey with invented API replies", {
       held.release(); await h.settle(4)
       assert.equal(await h.page.getByText("Invented preview title for preview-a", { exact: false }).count(), 0)
       const urls = await h.liveImages()
-      assert.deepEqual(urls.record.urls.map((row) => row.type), ["image/svg+xml"])
+      assert.deepEqual(urls.record.urls.map((row) => row.type), ["image/png"])
       // A late failure for A cannot put its error or controls on B either.
       const failing = deferred()
       h.api.previews.get("preview-a").push({ status: 500, value: { code: "invented" }, hold: failing })
@@ -545,7 +592,7 @@ test("mounted operator media journey with invented API replies", {
       await figureTitle(h.page).getByText("Invented preview title for preview-b", { exact: false }).waitFor()
       const record = await h.journal()
       assert.ok(record.calls.some((call) => call.kind === "transport_signal_ignored"))
-      assert.deepEqual(record.urls.map((row) => row.type), ["image/svg+xml"])
+      assert.deepEqual(record.urls.map((row) => row.type), ["image/png"])
     }, { transport: "abort-ignoring" }))
 
     await t.test("preview states, edit/update transitions and manual retry without automatic retry or side effects", () => scenario("preview-states", { drafts: previews, selected: "preview-a" }, async (h) => {
@@ -827,7 +874,8 @@ test("mounted operator media journey with invented API replies", {
         } }, async (h) => {
         const problems = []
         await previewButton(h.page).click(); await figureTitle(h.page).waitFor()
-        await h.page.locator(".graphic-preview details summary").focus(); await h.page.keyboard.press("Enter")
+        await h.page.locator(".graphic-preview-figure details summary").filter({ hasText: "Expanded source details (not sent)" }).focus()
+        await h.page.keyboard.press("Enter")
         await h.page.getByText(/^Invented complete graphic description for preview-a:/).waitFor()
         const summaryFocus = await h.page.evaluate(() => {
           const element = document.activeElement, style = getComputedStyle(element)

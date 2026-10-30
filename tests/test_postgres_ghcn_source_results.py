@@ -136,6 +136,41 @@ def test_two_consumers_single_result_and_second_command_idempotency(configured):
     assert case['authority'].read()==before
 
 
+@pytest.mark.parametrize('fault', ['rejection', 'retained_approval'])
+def test_verified_source_transition_fault_rolls_back_domain_and_state(configured, monkeypatch, fault):
+    """CI only: the real source replay does not grant arbitrary draft mutations."""
+    case = configured
+    run_id = retained(case)
+    identity = enroll(case, run_id)
+    before = case['authority'].read()
+    original = domain.prepare
+
+    def escaping(*args, **kwargs):
+        transition = original(*args, **kwargs)
+        affected = transition.state['drafts'][0]
+        assert affected['id'] in transition.outcome['changed_draft_ids']
+        assert affected['status'] == 'pending'
+        if fault == 'rejection':
+            affected['status'] = 'rejected'
+        else:
+            affected['approval_binding'] = deepcopy(before[1]['drafts'][0]['approval_binding'])
+        return transition
+
+    monkeypatch.setattr(domain, 'prepare', escaping)
+    with pytest.raises(RuntimeError, match='transition_not_allowed'):
+        case['authority'].consume(case['operators'].resolve, command_id=identity)
+    assert case['authority'].read() == before
+    assert case['authority'].result(identity) is None
+    with case['authority'].projections._connection() as connection:
+        assert shared.optional(connection, inputs.RESULT, 'run:' + run_id) is None
+    monkeypatch.setattr(domain, 'prepare', original)
+    result = case['authority'].consume(case['operators'].resolve, command_id=identity)
+    assert result['status'] == 'applied'
+    affected = case['authority'].read()[1]['drafts'][0]
+    assert affected['status'] == 'pending' and 'approval_binding' not in affected
+    assert affected['text'] == before[1]['drafts'][0]['text']
+
+
 def test_real_edit_during_acquisition_rejects_stale_effects(configured):
     case=configured
     run_id=retained(case)

@@ -6,6 +6,7 @@ from pathlib import Path
 import subprocess
 import sys
 import types
+from typing import Any
 
 import pytest
 import yaml
@@ -288,16 +289,16 @@ def test_debugger_program_bounds_every_field_without_arguments(monkeypatch, caps
     program = observer.GDB_PROGRAM.split("python\n", 1)[1].rsplit("\nend", 1)[0]
     exec(program, {})
     lines = capsys.readouterr().out.splitlines()
-    assert len(lines) == 513 and lines[0] == "OBSERVED_SIGNAL 11"
+    assert len(lines) == 514 and lines[:2] == ["OBSERVED_SIGNAL 11", "FAULTING_THREAD unavailable"]
     assert lines[-1] == "FRAME 15 31 unknown"
-    assert all(line.endswith("unknown") for line in lines[1:])
+    assert all(line.endswith("unknown") for line in lines[2:])
 
 
 def test_log_grammar_refuses_values_addresses_paths_and_partial_records():
     data = b"FRAME 0 0 okay\nFRAME 0 1 token=private\nFRAME 0 2 /tmp/path\n0xdeadbeef\n"
     assert observer._debugger_frames(data) == ["FRAME 0 0 okay"]
     assert observer._debugger_frames(b"FRAME 0 0 partial") == []
-    assert len(observer._debugger_frames(b"FRAME 0 0 okay\n" * 10000)) == 513
+    assert len(observer._debugger_frames(b"FRAME 0 0 okay\n" * 10000)) == 514
 
 
 def test_ci_guard_prevents_any_local_replay(monkeypatch, capsys):
@@ -356,3 +357,53 @@ def test_unselected_postgres_shards_cannot_record_a_crash_identity(facade, capsy
     assert observer.finish(directory, "skipped") == 0
     assert not directory.exists()
     assert rows(capsys)[-1]["test_outcome"] == "skipped"
+
+
+@pytest.mark.parametrize("selected", [0, 2, 15, 16, None, "unavailable"])
+def test_gdb_program_preserves_initial_faulting_thread_before_switching(monkeypatch, capsys, selected):
+    """Execute only the observer's Python against invented GDB objects, never GDB/core/native code."""
+    calls = []
+    active = [selected]
+
+    class Thread:
+        def __init__(self, index):
+            self.index = index
+        def switch(self):
+            calls.append(("switch", self.index))
+            active[0] = self.index
+
+    threads = [Thread(i) for i in range(17)]
+    def selected_thread():
+        calls.append(("selected", active[0]))
+        if selected == "unavailable":
+            raise ValueError("INVENTED_PRIVATE_VALUE")
+        return None if selected is None else threads[selected]
+
+    gdb: Any = types.ModuleType("gdb")
+    gdb.selected_thread = selected_thread
+    gdb.selected_inferior = lambda: types.SimpleNamespace(threads=lambda: threads)
+    gdb.parse_and_eval = lambda expression: 11
+    gdb.newest_frame = lambda: types.SimpleNamespace(name=lambda: "invented_frame", older=lambda: None)
+    monkeypatch.setitem(sys.modules, "gdb", gdb)
+    program = observer.GDB_PROGRAM.split("\npython\n", 1)[1].rsplit("\nend", 1)[0]
+    exec(compile(program, "invented-observer", "exec"), {})
+    raw = capsys.readouterr().out
+    expected = "unavailable" if selected in (None, 16, "unavailable") else str(selected)
+    assert f"FAULTING_THREAD {expected}" in raw.splitlines()
+    assert calls[0] == ("selected", selected)
+    assert [call for call in calls if call[0] == "switch"] == [("switch", i) for i in range(16)]
+    assert "INVENTED_PRIVATE_VALUE" not in raw
+    records = observer._debugger_frames(raw.encode())
+    assert records == raw.splitlines() and len(records) == 18
+
+
+def test_faulting_thread_record_is_closed_bounded_and_never_leaks_raw_debugger_output():
+    accepted = ["FAULTING_THREAD 0", "FAULTING_THREAD 15", "FAULTING_THREAD unavailable"]
+    rejected = ["FAULTING_THREAD -1", "FAULTING_THREAD 16", "FAULTING_THREAD 00", "FAULTING_THREAD 0 private",
+                "FAULTING_THREAD 0xDEADBEEF", "FAULTING_THREAD /private/core", "FAULTING_THREAD unavailable private"]
+    assert observer._debugger_frames(("\n".join([*accepted, *rejected]) + "\n").encode()) == accepted
+    assert observer._debugger_frames(b"FAULTING_THREAD 1") == []
+    full = ["OBSERVED_SIGNAL 11", "FAULTING_THREAD 15", *[
+        f"FRAME {thread} {depth} function" for thread in range(16) for depth in range(32)]]
+    assert len(full) == 514
+    assert observer._debugger_frames(("\n".join(full + ["FRAME 0 0 excess"]) + "\n").encode()) == full

@@ -176,6 +176,14 @@ def main() -> int:
                    help="control run: same bundle with NO human_impact attached")
     p.add_argument("--samples", type=int, default=3, help="number of candidate drafts")
     args = p.parse_args()
+    from src.two_bot.call_inventory import BackgroundLaneDisabled, require_background_lane
+    try:
+        # Paid evaluation is exact opt-in at this real call boundary, before any
+        # provider client exists; the workflow job gate remains separate.
+        require_background_lane("paid_evaluation")
+    except BackgroundLaneDisabled:
+        print("paid evaluation disabled: THEHEAT_PAID_EVALUATION_ENABLED is not 1; no provider call made")
+        return 2
 
     bundle = _build_bundle(args)
 

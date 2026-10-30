@@ -13,6 +13,9 @@ const FAMILIES = {
     input: "Retained published radar asset (SHA256)", natural: 600, published: true },
   cone: { kind: "gist_published_chart_v1", queue: "Invented hurricane forecast cone", label: "Published NHC forecast cone",
     input: "Retained published forecast cone (SHA256)", natural: 897, published: true },
+  // The collector retained this draft's exact packet; the Workbench selects it by default.
+  crw_collected: { kind: "gist_crw_anomaly_v1", queue: "Invented collector-retained Caribbean", label: "Satellite-analysis anomaly chart",
+    input: "Retained CRW source packet (SHA256)", natural: 1200, published: false, collected: true },
 }
 
 test("owned retained-asset preview, inspection, attach, attested review, approval, edits and holds at 1280/390/320", {
@@ -75,8 +78,23 @@ test("owned retained-asset preview, inspection, attach, attested review, approva
         const id = `invented-${family}`, spec = FAMILIES[family]
         await clock(family, "current")
         await select(family)
-        assert.equal(await panel.getByRole("button", { name: "Preview graphic", exact: true }).isDisabled(), true)
-        await enter(family, retained[family])
+        assert.equal(await panel.getByRole("button", { name: "Preview graphic", exact: true }).isDisabled(), !spec.collected)
+        if (spec.collected) {
+          // Default selection is the draft's own collected packet; nothing typed, no newest/region lookup.
+          assert.equal(await panel.getByLabel(spec.input, { exact: true }).inputValue(), retained[family])
+          assert.match(await panel.innerText(), /Selected from the packet the collector retained for this draft/)
+        } else {
+          if (spec.published) {
+            // W10.3: a pasted web address is named and refused before any request; Preview stays disabled.
+            await enter(family, "https://www.nhc.noaa.gov/invented/AL052026_5day_cone_with_line_and_wind.png")
+            await panel.locator("[data-retained-input-refusal='url']").waitFor()
+            assert.match(await panel.locator("[data-retained-input-refusal='url']").innerText(), /never fetched/)
+            assert.equal(await panel.getByRole("button", { name: "Preview graphic", exact: true }).isDisabled(), true)
+            // W10.6: the picker names this family's lane and requirements.
+            assert.match(await panel.locator(`[data-graphic-family='${family}'] summary`).innerText(), /unaltered published image retained in the media store/)
+          }
+          await enter(family, retained[family])
+        }
         await preview(family)
         const text = await panel.innerText()
         assert.match(text, /Image description sent to X/); assert.match(text, /Expanded source details \(not sent\)/)
@@ -151,6 +169,20 @@ test("owned retained-asset preview, inspection, attach, attested review, approva
           assert.equal(approved.status, "approved"); assert.equal(dispatches.length, 1)
           assert.deepEqual(dispatches[0].inputs, { mode: "manual_tweet", tweet_text: reviewed.text, draft_id: id, publish_intent_id: approved.publish_intent_id })
           result.expired_approval_refused = true; result.approved_dispatches = 1
+        } else if (family === "crw_collected") {
+          // Any other valid packet is a named hold with no write; then the attached graphic is removed.
+          const writes = (await control()).writes
+          assert.notEqual(retained.crw_other, retained[family])
+          await enter(family, retained.crw_other)
+          await press(panel.getByRole("button", { name: "Preview graphic", exact: true }))
+          await panel.getByRole("status").filter({ hasText: /not the CRW source packet retained for this draft/ }).waitFor()
+          assert.equal(await panel.locator(".graphic-preview-figure > img").count(), 0)
+          assert.equal((await control()).writes, writes)
+          assert.equal((await act(panel.getByRole("button", { name: "Remove graphic", exact: true }))).ok, true)
+          await panel.getByRole("button", { name: "Remove graphic", exact: true }).waitFor({ state: "detached" })
+          assert.equal((await saved(id)).media_attachment, undefined)
+          await page.screenshot({ path: `${config.screens}/${width}-${family}-removed.png`, fullPage: true })
+          result.default_selected = true; result.other_packet_refused = true; result.removed = true
         } else if (family === "crw") {
           // A retained packet that is not in the store is a named hold; nothing is written or fetched.
           const writes = (await control()).writes

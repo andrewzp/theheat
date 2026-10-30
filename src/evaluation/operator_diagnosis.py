@@ -709,7 +709,12 @@ def _overview(sources, identity, components, candidates, generations, reconcilia
         # Derived from the report's retained rows by the shared rule; a supplied label never decides it.
         unknown = archive_usage.token_totals_unknown_reasons(reconciliation["inputs"]["archives"],
                                                              reconciliation["usage_attempts"])
-        spend = {"status": "verified", **reconciliation["observed"]["denominators"],
+        gaps = reconciliation.get("discrepancies")
+        spend = {"status": "verified",
+                 # Coverage first: a pre-discrepancy report stays explicitly unassessed.
+                 "discrepancies": gaps if isinstance(gaps, list) else None,
+                 "totals_reliable": (not gaps) if isinstance(gaps, list) else None,
+                 **reconciliation["observed"]["denominators"],
                  "token_totals_status": "incomplete" if unknown else "complete_for_retained_rows",
                  "token_totals_unknown_reasons": unknown,
                  "billing_matches": len(rec["matches"]), "unmatched_billing_items": len(rec["unmatched_billing_items"]),

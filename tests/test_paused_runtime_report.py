@@ -127,6 +127,20 @@ def test_existing_evidence_is_not_blindly_overwritten(case):
     assert calls == ["GET"]
 
 
+def test_new_source_controls_are_mirrored_without_activating_a_source_lane():
+    controls = {"THEHEAT_PM25_FORECAST_AUTO_TEXT", "THEHEAT_DUST_FORECAST_AUTO_TEXT",
+        "THEHEAT_NHC_ADVISORY_AUTO_TEXT", "THEHEAT_OFFICIAL_WARNING_AUTO_TEXT", "THEHEAT_NWS_WARNING_AUTO_TEXT",
+        "THEHEAT_REGIONAL_OBSERVED", "THEHEAT_RAINFALL_WINDOW_PROVENANCE", "THEHEAT_HAZARD_EPISODES",
+        "THEHEAT_PORTFOLIO_SELECTION", "THEHEAT_RAINFALL_REGIONAL_SCAN"}
+    rendered = yaml.load(workflow.render(), Loader=yaml.BaseLoader)
+    generated = rendered["jobs"]["report"]["steps"][-1]
+    bot = yaml.load((ROOT / ".github/workflows/bot.yml").read_text(), Loader=yaml.BaseLoader)
+    normal = next(s["env"] for s in bot["jobs"]["run"]["steps"] if s.get("name") == "Run bot")
+    assert controls <= generated["env"].keys()
+    assert all(generated["env"][key] == normal[key] for key in controls)
+    assert generated["run"] == "python scripts/runtime_report.py"
+
+
 def test_workflow_profile_parity_and_no_posting_or_source_lane():
     generated = workflow.render()
     assert (ROOT / ".github/workflows/runtime-report.yml").read_text() == generated

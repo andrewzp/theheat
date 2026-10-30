@@ -33,6 +33,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from src.data._http import fetch_with_retry
+from src.two_bot.call_inventory import OperationAllowance, runtime_counts
 
 NEWS_KINDS = ("fire", "heat_mortality")
 MAX_NEWS_EVENTS = 10
@@ -73,6 +74,9 @@ class NewsRetrievalResult:
     verify_fetch_budget_skips: int = 0
     verify_fetch_failures: int = 0
     verify_errors: int = 0
+    # Discovery allowance for this retrieval: reserved strictly before egress,
+    # physical attempts counted, unknown/malformed outcomes kept spent.
+    allowance: OperationAllowance = field(default_factory=lambda: news_discovery_allowance())
 
     def verification_usage(self) -> dict:
         return {"model_calls": self.verify_calls, "model_call_limit": MAX_VERIFY_CALLS,
@@ -80,7 +84,32 @@ class NewsRetrievalResult:
                 "page_fetches": self.verify_fetches, "page_fetch_limit": MAX_VERIFY_FETCHES,
                 "page_budget_skips": self.verify_fetch_budget_skips,
                 "page_failures": self.verify_fetch_failures, "model_errors": self.verify_errors,
-                "scope": "one_news_retrieval", "account_spending_cap": False}
+                "scope": "one_news_retrieval", "account_spending_cap": False,
+                "spend_class": "discovery", "allowance": self.allowance.summary()}
+
+
+def news_discovery_allowance() -> OperationAllowance:
+    """The existing limits as one discovery allowance; never changed here."""
+    return OperationAllowance("news_discovery", {"newsworthiness_search": 1,
+                                                 "newsworthiness_verify": MAX_VERIFY_CALLS,
+                                                 "news_verification_page": MAX_VERIFY_FETCHES})
+
+
+def _counted(allowance: OperationAllowance, stage: str, call, *args):
+    """Run one reserved model call; join physical attempts and keep its outcome."""
+    before = runtime_counts().get(stage, 0)
+    try:
+        raw = call(*args)
+    except Exception:
+        attempts = runtime_counts().get(stage, 0) - before
+        for _ in range(max(attempts, 0)):
+            allowance.attempt(stage)
+        # Egress started: unknown (possibly billed). Otherwise refused before egress.
+        allowance.settle(stage, "unknown" if attempts > 0 else "unavailable")
+        raise
+    for _ in range(max(runtime_counts().get(stage, 0) - before, 0)):
+        allowance.attempt(stage)
+    return raw
 
 
 def _utc_iso(now: datetime) -> str:
@@ -216,17 +245,14 @@ def _call_grounded_search(now: datetime) -> str:
     from google.genai import types as genai_types
 
     from src.config import CHEAP_MODEL
+    from src.two_bot.trial_budget import google_trial_options, provider_call
 
     client = genai.Client(
-        api_key=api_key, http_options=genai_types.HttpOptions(timeout=90000, retry_options=genai_types.HttpRetryOptions(attempts=1))
+        api_key=api_key, http_options=genai_types.HttpOptions(timeout=90000, retry_options=genai_types.HttpRetryOptions(attempts=1), **google_trial_options())
     )
-    response = client.models.generate_content(
-        model=CHEAP_MODEL,
-        contents=GROUNDED_PROMPT,
-        config=genai_types.GenerateContentConfig(
-            tools=[genai_types.Tool(google_search=genai_types.GoogleSearch())],
-        ),
-    )
+    response = provider_call("newsworthiness_search", "google", dict(model=CHEAP_MODEL,
+        contents=GROUNDED_PROMPT, config=genai_types.GenerateContentConfig(
+            tools=[genai_types.Tool(google_search=genai_types.GoogleSearch())])), client.models.generate_content)
     from src.two_bot.usage_ledger import record_response
     record_response("newsworthiness_search", response, CHEAP_MODEL, "google")
     return response.text or "[]"
@@ -303,7 +329,7 @@ def _verify_grounded(events: list[dict], result: NewsRetrievalResult) -> list[di
     page_cache: dict[str, str] = {}
     failed_urls: set[str] = set()
     verdict_cache: dict[str, bool] = {}
-    calls = fetches = 0
+    allowance = result.allowance
     while pending:
         index, entries = pending.popleft()
         entry = next(entries, None)
@@ -315,23 +341,25 @@ def _verify_grounded(events: list[dict], result: NewsRetrievalResult) -> list[di
         if url in failed_urls:
             continue
         if url not in page_cache:
-            if calls >= MAX_VERIFY_CALLS:
+            if allowance.remaining("newsworthiness_verify") < 1:
                 result.verify_budget_skips += 1
                 continue  # Do not fetch a page we have no budget to verify.
-            if fetches >= MAX_VERIFY_FETCHES:
+            if not allowance.reserve("news_verification_page"):
                 result.verify_fetch_budget_skips += 1
                 continue
-            fetches += 1
             result.verify_fetches += 1
             try:
-                page = fetch_with_retry(url, timeout=VERIFY_FETCH_TIMEOUT_S)
+                page = fetch_with_retry(url, timeout=VERIFY_FETCH_TIMEOUT_S, call_stage="news_verification_page",
+                                        on_attempt=lambda: allowance.attempt("news_verification_page"))
                 page.raise_for_status()
                 page_cache[url] = page.text[:8000]
             except Exception as exc:
                 failed_urls.add(url)
                 result.verify_fetch_failures += 1
+                allowance.settle("news_verification_page", "unavailable")
                 result.notes.append(f"verification page unavailable: {type(exc).__name__}")
                 continue
+            allowance.settle("news_verification_page", "returned")
         try:
             claim, value = str(entry.get("claim")), entry.get("value")
             key = json.dumps([entry, events[index].get("place"), events[index].get("window_start"),
@@ -341,15 +369,19 @@ def _verify_grounded(events: list[dict], result: NewsRetrievalResult) -> list[di
                 supported = verdict_cache[key]
                 result.verify_cache_hits += 1
             else:
-                if calls >= MAX_VERIFY_CALLS:
+                if not allowance.reserve("newsworthiness_verify"):
                     result.verify_budget_skips += 1
-                    continue
-                calls += 1
+                    continue  # Stop before another paid verification.
                 result.verify_calls += 1  # Failed requests consume the allowance too.
-                raw = _call_verify_flash(claim, value, page_cache[url])
-                verdict = loads_model_json(raw)
-                if not isinstance(verdict, dict) or type(verdict.get("supported")) is not bool:
-                    raise ValueError("Verification did not return an explicit boolean")
+                raw = _counted(allowance, "newsworthiness_verify", _call_verify_flash, claim, value, page_cache[url])
+                try:
+                    verdict = loads_model_json(raw)
+                    if not isinstance(verdict, dict) or type(verdict.get("supported")) is not bool:
+                        raise ValueError("Verification did not return an explicit boolean")
+                except Exception:
+                    allowance.settle("newsworthiness_verify", "malformed")
+                    raise
+                allowance.settle("newsworthiness_verify", "returned")
                 supported = verdict["supported"]
                 verdict_cache[key] = supported
             if supported:
@@ -383,16 +415,13 @@ def _call_verify_flash(claim: str, value: Any, page_text: str) -> str:
     from google.genai import types as genai_types
 
     from src.config import CHEAP_MODEL
+    from src.two_bot.trial_budget import google_trial_options, provider_call
 
     client = genai.Client(
-        api_key=api_key, http_options=genai_types.HttpOptions(timeout=90000, retry_options=genai_types.HttpRetryOptions(attempts=1))
+        api_key=api_key, http_options=genai_types.HttpOptions(timeout=90000, retry_options=genai_types.HttpRetryOptions(attempts=1), **google_trial_options())
     )
-    response = client.models.generate_content(
-        model=CHEAP_MODEL,
-        contents=VERIFY_PROMPT_TEMPLATE.format(
-            claim=claim, value=value, page_text=page_text
-        ),
-    )
+    response = provider_call("newsworthiness_verify", "google", dict(model=CHEAP_MODEL,
+        contents=VERIFY_PROMPT_TEMPLATE.format(claim=claim, value=value, page_text=page_text)), client.models.generate_content)
     from src.two_bot.usage_ledger import record_response
     record_response("newsworthiness_verify", response, CHEAP_MODEL, "google")
     return response.text or "{}"
@@ -416,8 +445,15 @@ def fetch_news_events(
     result = NewsRetrievalResult()
     raw: list[dict] = []
     for leg_name, leg in (("nifc", _fetch_nifc_events), ("grounded_search", _grounded_leg)):
+        if leg_name == "grounded_search" and not result.allowance.reserve("newsworthiness_search"):
+            result.notes.append("grounded_search leg skipped: discovery allowance exhausted")
+            continue
         try:
-            raw.extend(leg(now))
+            if leg_name == "grounded_search":
+                raw.extend(_counted(result.allowance, "newsworthiness_search", leg, now))
+                result.allowance.settle("newsworthiness_search", "returned")
+            else:
+                raw.extend(leg(now))
         except Exception as exc:  # noqa: BLE001 — a leg failure must not kill the lane
             if strict:
                 raise

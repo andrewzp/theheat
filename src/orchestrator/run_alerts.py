@@ -31,6 +31,7 @@ from src.orchestrator.sources.ozone_hole import run_ozone_hole
 from src.orchestrator.sources.open_meteo import run_extreme_signals
 from src.orchestrator.sources.newsworthiness import run_newsworthiness
 from src.orchestrator.sources.reanalysis_anomaly import run_reanalysis_anomaly
+from src.orchestrator.sources.regional_observed import run_regional_observed
 from src.orchestrator.sources.river_gauges import run_river_gauges
 from src.orchestrator.sources.sea_ice import run_sea_ice
 from src.orchestrator.sources.synthesis import run_synthesis
@@ -173,6 +174,8 @@ def run_alerts(bot_state: BotState, current_run: dict | None = None, *, ghcn_sup
                     health_sources=("ice_mass_greenland", "ice_mass_antarctica"),
                 ),
                 SourceRunner("gpm_imerg", lambda: run_gpm_imerg(bot_state, current_run, cities)),
+                # W05: owner-supplied observed packets; returns at once unless its flag is exactly "1".
+                SourceRunner("regional_observed", lambda: run_regional_observed(bot_state, current_run)),
                 SourceRunner("nsidc_snow", lambda: run_nsidc_snow(bot_state, current_run)),
                 SourceRunner("ozone_hole", lambda: run_ozone_hole(bot_state, current_run)),
                 SourceRunner("reanalysis_anomaly", lambda: run_reanalysis_anomaly(bot_state, current_run)),
@@ -229,6 +232,7 @@ def run_alerts(bot_state: BotState, current_run: dict | None = None, *, ghcn_sup
         run_river_gauges(bot_state, current_run)
         run_ice_mass(bot_state, current_run)
         run_gpm_imerg(bot_state, current_run, cities)
+        run_regional_observed(bot_state, current_run)
         run_nsidc_snow(bot_state, current_run)
         run_ozone_hole(bot_state, current_run)
         run_reanalysis_anomaly(bot_state, current_run)
@@ -259,11 +263,18 @@ def run_alerts(bot_state: BotState, current_run: dict | None = None, *, ghcn_sup
     # One attempt budget for this whole alerts operation (every drain, refill
     # included); a later independent operation starts with its own.
     from src.orchestrator.candidate_budget import CandidateBudget
-    with warning_context:
-        drafted = _drain_and_write_triage_queue(
-            bot_state, current_run, defer_callbacks=pending_callbacks, funnel_sink=funnel_sink,
-            candidate_budget=CandidateBudget.for_operation("alerts"),
-        )
+    from src.two_bot.call_inventory import operation_cost_row, operation_scope, record_operation_cost
+    alerts_budget = CandidateBudget.for_operation("alerts")
+    with warning_context, operation_scope("alerts") as cost_join:
+        try:
+            drafted = _drain_and_write_triage_queue(
+                bot_state, current_run, defer_callbacks=pending_callbacks, funnel_sink=funnel_sink,
+                candidate_budget=alerts_budget,
+            )
+        finally:
+            # Persisted with the run, so an interrupted request survives a reload.
+            record_operation_cost(current_run, operation_cost_row(
+                "alerts", join=cost_join, candidate_budget=alerts_budget))
 
     pruned_event_ids: set = set()
     drafted = _prune_weakest_cycle_drafts(

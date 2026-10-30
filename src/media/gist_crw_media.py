@@ -19,7 +19,7 @@ import json
 import math
 
 from src.data import crw_contract
-from src.data.ocean_sst_anomaly import REGION_REGISTRY
+from src.data.crw_regions import REGION_REGISTRY
 from src.data.source_status import SourceFetchError
 from src.editorial.revisions import fingerprint
 from src.media import crw_graphic_adapter as adapter, gist_assets
@@ -36,8 +36,8 @@ DERIVATION = "crw_delivery_v1"
 SIGNAL = "regional_sst_anomaly"
 FILES = ("src/media/gist_media.py", "src/media/gist_crw_media.py", "src/media/gist_hazard_media.py",
          "src/media/canonical_png.py", "src/media/gist_assets.py", hazard.FONT,
-         "src/media/crw_graphic_adapter.py", "src/data/crw_contract.py", "src/data/ocean_sst_anomaly.py",
-         "src/two_bot/intern/marine.py", "src/media/temperature_graphic_adapter.py")
+         "src/media/crw_graphic_adapter.py", "src/data/crw_contract.py", "src/data/crw_regions.py",
+         "src/two_bot/intern/marine_crw.py", "src/media/temperature_graphic_adapter.py")
 MAX_PACKET_BYTES = adapter.PACKET_LIMIT
 _TOP = frozenset({"schema_version", "kind", "template", "template_version", "adapter_version", "synthetic",
                   "source", "renderer", "image", "description"})
@@ -64,6 +64,36 @@ def renderer_identity():
     return {"version": RENDERER_VERSION, "files": {path: hazard._digest(hazard._resource(path)) for path in FILES},
             "pillow": pillow_version, "freetype": features.version("freetype2"), "png_codec": canonical_png.PROFILE,
             "layout": "basic", "width": WIDTH, "height": HEIGHT}
+
+
+_REFERENCE = frozenset({"schema_version", "artifact_sha256", "packet_sha256"})
+
+
+def packet_reference(bundle):
+    """The collector's exact retained-packet reference, or None for a bundle without one.
+
+    Only store identities are carried (never bytes). A present reference is the only
+    acceptable packet for this draft: no region-only, newest or other selection.
+    """
+    raw = bundle.get("raw_signal_dump") if type(bundle) is dict else None
+    if type(raw) is not dict or "retained_packet" not in raw:
+        return None
+    value = raw["retained_packet"]
+    _require(type(value) is dict and set(value) == _REFERENCE and type(value["schema_version"]) is int
+             and value["schema_version"] == 1 and hazard._is_sha(value["artifact_sha256"])
+             and hazard._is_sha(value["packet_sha256"]), "media_source_packet_invalid",
+             "the draft's retained CRW packet reference is malformed")
+    return value
+
+
+def _require_reference(bundle, packet_artifact_sha256, packet=None):
+    reference = packet_reference(bundle)
+    if reference is None:
+        return
+    _require(packet_artifact_sha256 == reference["artifact_sha256"]
+             and (packet is None or fingerprint(packet) == reference["packet_sha256"]),
+             "media_source_packet_mismatch",
+             "this is not the CRW packet the collector retained for this draft; select the draft's own packet")
 
 
 def load_packet(store, packet_artifact_sha256):
@@ -205,7 +235,9 @@ def prepare_media(bundle, store, packet_artifact_sha256, *, synthetic=False):
     """Rebuild from the retained packet only; refuse rather than approximate."""
     _require(claims(bundle), "media_unsupported", "unsupported source for a CRW image")
     _require(type(synthetic) is bool, "media_unsupported", "synthetic status must be explicit")
+    _require_reference(bundle, packet_artifact_sha256)  # Before any store read.
     packet = load_packet(store, packet_artifact_sha256)
+    _require_reference(bundle, packet_artifact_sha256, packet)
     spec = _spec(bundle, packet, synthetic)
     evidence = spec["evidence"]
     try:
@@ -269,6 +301,11 @@ def validate_descriptor(value, bundle):
     raw = bundle.get("raw_signal_dump", {}) if type(bundle) is dict else {}
     _require(source["bundle_sha256"] == fingerprint(bundle) and source["region_slug"] == raw.get("region_slug")
              and source["product_date"] == raw.get("date"), "media_source_changed", "source binding changed")
+    reference = packet_reference(bundle)
+    _require(reference is None or (source["packet_artifact_sha256"] == reference["artifact_sha256"]
+                                   and source["packet_sha256"] == reference["packet_sha256"]),
+             "media_source_packet_mismatch",
+             "this is not the CRW packet the collector retained for this draft; select the draft's own packet")
     renderer = value["renderer"]
     _require(hazard._exact(renderer, _RENDERER) and type(renderer["files"]) is dict
              and set(renderer["files"]) == set(FILES) and all(hazard._is_sha(v) for v in renderer["files"].values()),

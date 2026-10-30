@@ -72,8 +72,60 @@ export function CostPanel({evidence, stale = false, loading = false, localEviden
       scenario?.invalid ? note("Invalid evidence is present. Invalid records and their conflicting counterparts are excluded.") : null,
       note("The scenario covers at most 32 recent observations, not a calendar month. Excluded responses do not cost zero. A missing cache count creates a range for eligible tokens only; it does not bound account charges."),
       note("Grounding, tools, cache storage, taxes, other pricing tiers and uncaptured requests are not included. Thinking tokens are counted separately from answer tokens. Actual account pricing and bills are unverified."),
-      note("The monthly ledger can miss concurrent or unsaved activity. Neither view proves complete accounting, savings or an enforced spending cap.")),
+      note("The monthly ledger can miss concurrent or unsaved activity. Neither view proves complete accounting, savings or an enforced spending cap."),
+      h(SpendClasses, {classes: recorded?.spend_classes})),
+    h(OperationCosts, {rows: Array.isArray(evidence?.operations) ? evidence.operations : null}),
     localEvidence === undefined ? null : h(LocalCosts, {evidence: localCostEvidence(localEvidence), stale}))
+}
+
+const spendLabels = {discovery: "News discovery", selection: "Candidate writing and checks", other: "Other recorded stages"}
+function SpendClasses({classes}) {
+  if (!classes || typeof classes !== "object") return h("p", {className: "runtime-note"}, "Discovery and selection responses unavailable.")
+  return h("dl", {className: "runtime-settings cost-counts", "aria-label": "Responses by spending purpose"},
+    Object.entries(spendLabels).map(([key, title]) => h(Metric, {key, title},
+      `${count(classes[key]?.recorded_calls)} recorded · ${count(classes[key]?.unpriced_calls)} unpriced`)))
+}
+
+const operationLabels = {alerts: "Alerts run", leaderboard: "Hot 10", publish: "Publishing", manual_generation: "Manual writing",
+  batch_generation: "Batch writing", threshold_refresh: "Threshold refresh"}
+const stageLabels = {writer: "Writer", safety: "Safety", fact_check: "Fact check", critic: "Critic",
+  newsworthiness_search: "News search", newsworthiness_verify: "News verification", news_verification_page: "News source page",
+  source_http_get: "Source data", gist_state: "State storage", x_publish: "X", bluesky_publish: "Bluesky",
+  x_metrics_read: "X metrics", batch_writer: "Batch writer", synchronous_writer: "Urgent writer", local_required_check: "Local check"}
+const label = stage => stageLabels[stage] || stage.replaceAll("_", " ")
+const ceilingLabels = {candidate_attempts: "candidate attempts (this operation)", provider_call_cap: "provider calls per stage",
+  estimated_token_cap: "estimated token cap (trial)", local_spend_allowance: "local reserved allowance",
+  daily_publication_cap: "daily publication cap", monthly_budget_watch: "monthly budget watch (alert only, not a cap)",
+  invoice_ceiling: "invoice ceiling (not enforced: no invoice access)"}
+const yesNo = value => value === true ? "yes" : value === false ? "no" : "unknown"
+export function OperationCosts({rows}) {
+  const note = text => h("p", {className: "runtime-note"}, text)
+  if (rows === null) return null
+  return h("section", {className: "local-cost-section", "aria-label": "Recent operations: calls and allowances"},
+    h("h3", null, "Recent operations: calls and allowances"),
+    note("Each row joins the requests an operation actually sent. Charges stay unknown; estimates are not added together."),
+    rows.length === 0 ? note("No operation records retained yet.") : h("ul", {className: "local-cost-requests"}, rows.map((row, index) => {
+      const outcomes = row.requests.by_outcome, another = Object.entries(row.another_attempt_allowed)
+      return h("li", {key: `${row.run_started_at}-${row.operation}-${row.spend_class}-${index}`},
+        h("details", null,
+          h("summary", null, `${operationLabels[row.operation] || row.operation} · ${row.spend_class === "discovery" ? "discovery" : "selection"} · ${count(row.requests.total)} requests${row.requests.interrupted ? ` · ${row.requests.interrupted} interrupted` : ""}`),
+          note(`Run started: ${row.run_started_at ? row.run_started_at.replace("T", " ").replace("Z", " UTC") : "Unknown"}`),
+          note(`May call: ${row.may_call.map(c => `${label(c.stage)}${c.pricing === "unknown" ? " (unpriced)" : ""}`).join(", ") || "none declared"}.`),
+          row.candidate_attempts ? note(`Candidate attempts: ${count(row.candidate_attempts.used)} of ${row.candidate_attempts.limit === null ? "no operation limit" : count(row.candidate_attempts.limit)} used · ${count(row.candidate_attempts.returned_unstarted)} returned unstarted${row.candidate_attempts.refused ? " · configuration refused" : ""}.`) : null,
+          row.allowances.length ? h("dl", {className: "runtime-settings cost-counts"}, row.allowances.map(a => h(Metric, {key: a.stage, title: `${label(a.stage)} allowance`},
+            `${count(a.reserved)} of ${count(a.limit)} reserved · ${count(a.physical_attempts)} physical attempts · ${count(a.refused_before_egress)} refused before sending`))) : null,
+          h("dl", {className: "runtime-settings cost-counts"},
+            h(Metric, {title: "Returned"}, count(outcomes.returned)),
+            h(Metric, {title: "Interrupted (outcome unknown)"}, count(outcomes.dispatched)),
+            h(Metric, {title: "Failed after sending"}, count(outcomes.unknown)),
+            h(Metric, {title: "Malformed responses"}, count(outcomes.malformed)),
+            h(Metric, {title: "Unpriced requests"}, count(row.unpriced_requests)),
+            h(Metric, {title: "Estimate-only requests"}, count(row.estimate_only_requests))),
+          row.requests.by_stage.length ? note(`Observed: ${row.requests.by_stage.map(s => `${label(s.stage)} ${count(s.requests)}`).join(", ")}.`) : note("No requests were sent."),
+          another.length ? note(`Another attempt allowed: ${another.map(([k, v]) => `${label(k)} ${yesNo(v)}`).join(", ")}.`) : null,
+          row.requests.truncated ? note("More requests were sent than this record retains; the extra requests stay unknown.") : null,
+          note(`Applicable limits: ${row.ceilings.map(c => ceilingLabels[c] || c.replaceAll("_", " ")).join(", ")}.`)))
+    })))
 }
 
 

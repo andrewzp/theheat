@@ -98,6 +98,14 @@ def recommend_approval_policy(
     is_strong = signal_total >= 72 and copy_total >= 72
     is_good = signal_total >= 66 and copy_total >= 68
 
+    if tweet_type in ("official_warning", "nhc_advisory", "severe_weather"):
+        from src.editorial.warning_automatic import approval_policy_fields
+        warning_auto = approval_policy_fields(tweet_type)
+        if warning_auto is not None:
+            # Opt-in, default-off typed warning TEXT. Arming and every send still need the
+            # family's current-source owner plus the episode and qualified-copy rules.
+            return ApprovalPolicy(**warning_auto)
+
     if tweet_type == "official_warning":
         return ApprovalPolicy(key="official_warning_manual", mode="manual_only",
             recommended_delay_minutes=None, can_auto_approve=False,
@@ -240,6 +248,19 @@ def recommend_approval_policy(
                 "human polish framing before auto-post."
             ),
         )
+
+    if tweet_type in ("air_quality_hazard", "dust_event"):
+        from src.data.air_quality_current import auto_text_enabled
+        if auto_text_enabled(tweet_type):
+            # Opt-in, default-off forecast TEXT. Arming and every send still need the
+            # per-source current/episode/text-only eligibility in air_quality_current.
+            return ApprovalPolicy(
+                key="pm25_forecast_auto_text" if tweet_type == "air_quality_hazard" else "dust_forecast_auto_text",
+                mode="armed_auto",
+                recommended_delay_minutes=30,
+                can_auto_approve=True,
+                reason="Opt-in current model-forecast text; a live source re-read gates arming and sending.",
+            )
 
     if (
         tweet_type in {
