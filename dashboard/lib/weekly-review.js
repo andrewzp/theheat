@@ -22,7 +22,7 @@ function unique(rows, key) {
 }
 
 const CHECK_STAGES = ["writer", "safety", "fact_check", "critic", "honesty_gate", "evidence_contract"]
-const OWNER_STATES = new Set(["access_expired"]), INPUT_STATES = new Set(["baseline_unavailable", "unqualified_input"])
+const OWNER_STATES = new Set(["access_expired", "access_refused"]), INPUT_STATES = new Set(["baseline_unavailable", "unqualified_input"])
 
 // W16.1: joins retained source outcomes, stage failures, post-age samples and supplied cost reconciliation.
 function weeklyEvidence(state, posts, inWindow, costReconciliation) {
