@@ -77,14 +77,20 @@ _PROTOCOL_PHASES: tuple[str, ...] = (
     "worker_check_critic", "worker_other",
 )
 # Spans inside the target body (inside ready_body), in source order. Repeated
-# loops and matrices get one coarse span each so they cannot exhaust the budget.
+# loops get coarse spans; the 18 fault iterations additionally have fixed words.
 BODY_PHASES = (
     "body_clock", "body_draft", "body_binding", "body_protocol", "body_rows", "body_history", "body_config",
     "body_node", "body_node_checks", "body_passive_check", "body_passive_reads", "body_intent_controls",
     "body_fault_matrix", "body_refusal_order", "body_delivery_file", "body_generation_file",
     "body_exception_cleanup", "body_standalone", "body_restore_matrix", "body_passive_history",
 )
-PHASES: tuple[str, ...] = _PROTOCOL_PHASES + BODY_PHASES
+# Closed vocabulary: no arbitrary fault, path, subject or exception text can enter output.
+_FAULTS = ("reviewer", "requester", "publisher", "policy", "source", "profile", "state", "expiry")
+FAULT_PHASES = {(boundary, fault): f"fault_{label}_{fault}"
+                for boundary, label, faults in (("proof", "proof", _FAULTS),
+                    ("description", "desc", _FAULTS + ("late_reviewer", "late_publisher")))
+                for fault in faults}
+PHASES: tuple[str, ...] = _PROTOCOL_PHASES + BODY_PHASES + tuple(FAULT_PHASES.values())
 # A terminal reason is the last line the witness writes.
 TERMINAL_REASONS = ("overflow", "reentrant", "malformed", "restore_conflict")
 # A note is written at most once per reason; witnessing continues.
@@ -571,6 +577,17 @@ def body_phase(name: Any) -> Phase | _Null:
         witness.invalid("malformed")
         return NULL
     return Phase(witness, name)
+
+
+def fault_phase(boundary: Any, fault: Any) -> Phase | _Null:
+    """One fixed fault iteration, including its restoration; never changes its outcome."""
+    witness = _current
+    if witness is None:
+        return NULL
+    if type(boundary) is not str or type(fault) is not str or (boundary, fault) not in FAULT_PHASES:
+        witness.invalid("malformed")
+        return NULL
+    return Phase(witness, FAULT_PHASES[(boundary, fault)])
 
 
 def fixture_phase(argname: Any) -> Phase | _Null:
