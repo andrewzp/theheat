@@ -33,7 +33,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from src.data._http import fetch_with_retry
-from src.two_bot.call_inventory import OperationAllowance, consume, runtime_counts
+from src.two_bot.call_inventory import OperationAllowance, runtime_counts
 
 NEWS_KINDS = ("fire", "heat_mortality")
 MAX_NEWS_EVENTS = 10
@@ -245,23 +245,14 @@ def _call_grounded_search(now: datetime) -> str:
     from google.genai import types as genai_types
 
     from src.config import CHEAP_MODEL
+    from src.two_bot.trial_budget import google_trial_options, provider_call
 
     client = genai.Client(
-        api_key=api_key, http_options=genai_types.HttpOptions(timeout=90000, retry_options=genai_types.HttpRetryOptions(attempts=1))
+        api_key=api_key, http_options=genai_types.HttpOptions(timeout=90000, retry_options=genai_types.HttpRetryOptions(attempts=1), **google_trial_options())
     )
-    ticket = consume("newsworthiness_search", provider="google", model=CHEAP_MODEL)
-    try:
-        response = client.models.generate_content(
-            model=CHEAP_MODEL,
-            contents=GROUNDED_PROMPT,
-            config=genai_types.GenerateContentConfig(
-                tools=[genai_types.Tool(google_search=genai_types.GoogleSearch())],
-            ),
-        )
-    except BaseException:
-        ticket.settle("unknown")
-        raise
-    ticket.settle("returned")
+    response = provider_call("newsworthiness_search", "google", dict(model=CHEAP_MODEL,
+        contents=GROUNDED_PROMPT, config=genai_types.GenerateContentConfig(
+            tools=[genai_types.Tool(google_search=genai_types.GoogleSearch())])), client.models.generate_content)
     from src.two_bot.usage_ledger import record_response
     record_response("newsworthiness_search", response, CHEAP_MODEL, "google")
     return response.text or "[]"
@@ -424,22 +415,13 @@ def _call_verify_flash(claim: str, value: Any, page_text: str) -> str:
     from google.genai import types as genai_types
 
     from src.config import CHEAP_MODEL
+    from src.two_bot.trial_budget import google_trial_options, provider_call
 
     client = genai.Client(
-        api_key=api_key, http_options=genai_types.HttpOptions(timeout=90000, retry_options=genai_types.HttpRetryOptions(attempts=1))
+        api_key=api_key, http_options=genai_types.HttpOptions(timeout=90000, retry_options=genai_types.HttpRetryOptions(attempts=1), **google_trial_options())
     )
-    ticket = consume("newsworthiness_verify", provider="google", model=CHEAP_MODEL)
-    try:
-        response = client.models.generate_content(
-            model=CHEAP_MODEL,
-            contents=VERIFY_PROMPT_TEMPLATE.format(
-                claim=claim, value=value, page_text=page_text
-            ),
-        )
-    except BaseException:
-        ticket.settle("unknown")
-        raise
-    ticket.settle("returned")
+    response = provider_call("newsworthiness_verify", "google", dict(model=CHEAP_MODEL,
+        contents=VERIFY_PROMPT_TEMPLATE.format(claim=claim, value=value, page_text=page_text)), client.models.generate_content)
     from src.two_bot.usage_ledger import record_response
     record_response("newsworthiness_verify", response, CHEAP_MODEL, "google")
     return response.text or "{}"

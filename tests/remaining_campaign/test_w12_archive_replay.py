@@ -70,7 +70,7 @@ def test_reparse_cli_runs_offline_in_a_fresh_process(archives):
     assert FIXTURE["accepted_tweet"] not in raw  # Content-free summary: no retained text on stdout.
 
 
-def test_uncaptured_news_model_call_is_refused_and_recorded_in_an_open_scope(journey_env, tmp_path, monkeypatch):
+def test_news_model_call_without_actual_hooked_sdk_is_refused_in_an_open_scope(journey_env, tmp_path, monkeypatch):
     from google import genai
     from src.data import newsworthiness as news
     sent = []
@@ -81,16 +81,16 @@ def test_uncaptured_news_model_call_is_refused_and_recorded_in_an_open_scope(jou
 
     monkeypatch.setattr(genai, "Client", lambda **_k: SimpleNamespace(models=SimpleNamespace(
         generate_content=generate_content)))
-    assert inv.archive_coverage()["newsworthiness_verify"] == "uncaptured_model"
+    assert inv.archive_coverage()["newsworthiness_verify"] == "provider_call_seam"
     assert inv.archive_coverage()["writer"] == "provider_call_seam"
     root = private_root(tmp_path, "news")
     with request_archive.capture(root, operation="invented news rehearsal") as scope:
-        with pytest.raises(request_archive.RequestArchiveRefused, match="archive_route_uncaptured"):
+        with pytest.raises(request_archive.RequestArchiveRefused, match="archive_unobserved_transport"):
             news._call_verify_flash("Invented claim", 1, "Invented page")
         directory = Path(scope.directory)
     assert sent == []
     loaded = replay.load_archive(directory)
-    assert any(record.get("type") == "foreign_call_refused" for record in loaded.records)
+    assert any(record.get("type") == "call_refused" and record.get("data", {}).get("reason") == "archive_unobserved_transport" for record in loaded.records)
     # Outside a scope the default path is unchanged (capture stays default off).
     news._call_verify_flash("Invented claim", 1, "Invented page")
     assert len(sent) == 1

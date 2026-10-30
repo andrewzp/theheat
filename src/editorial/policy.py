@@ -63,6 +63,7 @@ POLICY_FILES = (
     "src/storage/retained_reports.py", "src/commands/postgres_report_development.py",
     "src/evaluation/coverage.py", "src/commands/postgres_coverage.py",
     "src/orchestrator/sources/newsworthiness.py",
+    "src/data/newsworthiness.py",
     "src/data/places.py", "data/place_registry.json", "data/country_codes.json",
     "src/commands/postgres_batch_results.py", "src/commands/postgres_checks.py",
     "src/commands/check_execution_journal.py", "src/two_bot/check_executor.py",

@@ -133,7 +133,7 @@ ARCHIVE_CAPTURE: dict[str, str] = {
     **{s: "provider_call_seam" for s in ("writer", "safety", "fact_check", "critic", "undeclared_provider_call")},
     "batch_writer": "route_family:batch_submit", "local_required_check": "route_family:command_check",
     "synchronous_writer": "engine_retained_observation",
-    "newsworthiness_search": "uncaptured_model", "newsworthiness_verify": "uncaptured_model",
+    "newsworthiness_search": "provider_call_seam", "newsworthiness_verify": "provider_call_seam",
     "paid_evaluation": "provider_call_seam", "paid_pr_replay": "provider_call_seam",
     "selfheal_repair": "uncaptured_external_agent",
 }
