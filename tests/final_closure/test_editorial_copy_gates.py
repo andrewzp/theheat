@@ -113,12 +113,15 @@ def _deterministic(text):
     return check_requests.deterministic_result(saved)
 
 
-def test_retained_deterministic_check_names_the_copy_rule_and_is_otherwise_unchanged():
-    rejected = _deterministic(STERILE)
-    assert rejected["passed"] is False
-    assert any(f.startswith("copy_gate: source_led_opener") for f in rejected["failures"])
-    clean = _deterministic(CLEAN)
-    assert clean["passed"] is True and clean["failures"] == []
+def test_retained_revision_checks_do_not_block_operator_copy_style():
+    """Boundary: copy rules gate model generation, never an operator's saved edit.
+
+    The retained deterministic stage (saved revisions, synchronous/batch lanes) keeps
+    its factual and safety rules unchanged; the editor shows copy notes as advice.
+    """
+    assert _deterministic(STERILE) == {"passed": True, "failures": [], "failure_count": 0}
+    unsupported = _deterministic("A satellite detection model shows a Mali wildfire at 361 MW.")
+    assert unsupported["passed"] is False  # Factual rules still apply to the same text.
 
 
 def test_policy_identity_and_stage_consumers_include_the_gate():

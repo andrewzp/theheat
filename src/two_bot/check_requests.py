@@ -11,7 +11,6 @@ from src.state_schema import BotState
 from src.two_bot import critic, fact_check, pipeline
 from src.two_bot.candidate_derivation import retained_bundle
 from src.two_bot.check_origin import checked_text
-from src.two_bot.copy_gates import copy_rejection
 from src.two_bot.evidence_contract import audit_story_bundle
 from src.two_bot.types import MemorySlice, StoryBundle
 from src.voice import safety
@@ -85,9 +84,6 @@ def deterministic_result(packet: dict, *, resolved=None) -> dict:
         passed, reason = check(tweet)
         if not passed:
             failures.append(reason or "local_safety_rejected")
-    copy_hit = copy_rejection(tweet, bundle)
-    if copy_hit is not None:
-        failures.append("copy_gate: " + copy_hit)
     rejected = fact_check.local_rejection(tweet, [], bundle, state)
     if rejected is not None:
         failures.extend(rejected.failures)
