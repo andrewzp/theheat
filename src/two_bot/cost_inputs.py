@@ -123,5 +123,38 @@ def missing_price_inputs(observed_stages: dict[str, int]) -> list[dict]:
     return [grouped[stage] for stage in sorted(grouped)]
 
 
-__all__ = ["BILLING_EXPORT_INPUT", "HOSTING_SERVICES", "INVOICE_IMPORT_PROVIDERS", "STATEMENT_INPUTS",
-           "missing_price_inputs", "register"]
+MIRROR = "dashboard/lib/cost-inputs.js"
+
+
+def render_mirror() -> str:
+    import json
+    return ("// Mirror of src/two_bot/cost_inputs.register(); parity-tested by\n"
+            "// tests/final_closure/test_cost_inputs.py. States inputs only: no price, no total.\n"
+            "export const COST_INPUTS = " + json.dumps(register(), indent=2, sort_keys=True, ensure_ascii=True) + "\n")
+
+
+def main(argv: list[str] | None = None) -> int:
+    """``python -m src.two_bot.cost_inputs --check|--write`` (after a declaration change)."""
+    import sys
+    from pathlib import Path
+    args = sys.argv[1:] if argv is None else argv
+    target = Path(__file__).resolve().parents[2] / MIRROR
+    if args == ["--write"]:
+        target.write_text(render_mirror())
+        return 0
+    if args == ["--check"]:
+        current = target.read_text() if target.exists() else ""
+        if current != render_mirror():
+            print(f"{MIRROR} is stale; run python -m src.two_bot.cost_inputs --write")
+            return 1
+        return 0
+    print("usage: python -m src.two_bot.cost_inputs --check|--write")
+    return 2
+
+
+__all__ = ["BILLING_EXPORT_INPUT", "HOSTING_SERVICES", "INVOICE_IMPORT_PROVIDERS", "MIRROR", "STATEMENT_INPUTS",
+           "main", "missing_price_inputs", "register", "render_mirror"]
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -83,3 +83,8 @@ def test_operations_mirror_is_identical_and_renders_the_exact_inputs():
     assert "No monthly provider ceiling is enforced" in html and "never added together" in html
     assert "theheat.billing-export-profile/v1 JSON profile" in html
     assert "X developer account plan statement" in html and "Vercel usage/invoice" in html
+
+
+def test_mirror_is_current_and_regenerates_exactly():
+    assert cost_inputs.main(["--check"]) == 0
+    assert (ROOT / cost_inputs.MIRROR).read_text() == cost_inputs.render_mirror()
