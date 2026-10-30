@@ -88,7 +88,7 @@ def _draft(key: str, place: str, *, status: str = "pending") -> dict:
 
 
 def fixture() -> tuple[dict, dict]:
-    """(imported snapshot, current local state): held/posted unchanged, edited moved on, fresh never imported."""
+    """Invented history: unchanged and edited imported IDs stay held; fresh was never imported."""
     from src.editorial.revisions import record_human_review
     held, posted, edited = _draft("held", "Brackwater Fen"), _draft("posted", "Thistle Reach", status="posted"), _draft("edited", "Ossory Flats")
     posted.update(tweet_id=TWEET_ID, posted_at="2026-10-30T09:00:00Z")

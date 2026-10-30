@@ -16,7 +16,7 @@ import sqlite3
 from typing import Any
 
 from src.commands import batch_journal, batch_worker_journal, batch_result_journal, check_journal, check_execution_journal, domain_journal, spend_journal
-from src.commands import delivery_reconciliation, media_journal
+from src.commands import delivery_reconciliation, media_journal, recovery_provenance
 from src.commands.command_roles import require_transitions
 from src.commands.reducer import AutomaticPolicy, failure_result, reduce_command
 from src.commands.schema import Command, CommandError, Principal, authorize, canonical_json, utc_datetime, utc_text
@@ -198,6 +198,9 @@ class SQLiteAuthority:
                         raise CommandError("command_expired", "Command expired before durable acceptance")
                     if utc_datetime(command.requested_at) > clock + timedelta(minutes=5):
                         raise CommandError("invalid_time", "Command was requested too far in the future")
+                    if getattr(self, "recovery_journal", None) is not None:
+                        snapshot = connection.execute("SELECT version,state_json FROM authority_state WHERE singleton=1").fetchone()
+                        recovery_provenance.require_current(self, command, json.loads(snapshot["state_json"]))
                     cursor = connection.execute("INSERT INTO command_intents(command_id,digest,command_json,accepted_at) VALUES(?,?,?,?)", (command.command_id, command.digest, encoded, at))
                     receipt = {"command_id": command.command_id, "sequence": cursor.lastrowid, "accepted_at": at, "digest": command.digest}
                     connection.execute("INSERT INTO command_events(command_id,event,recorded_at,data_json) VALUES(?,'accepted',?,?)", (command.command_id, at, canonical_json(receipt)))
@@ -249,6 +252,7 @@ class SQLiteAuthority:
                     principal = resolve_principal(command.actor_subject)
                     if principal is None:
                         raise CommandError("forbidden", "Operator authorization was revoked before execution")
+                    recovery_provenance.require_current(self, command, state)
                     from src.editorial.policy import current_editorial_policy
                     reduction = reduce_command(state, command, principal, now=clock, policy=policy, editorial_policy=current_editorial_policy())
                     require_transitions(state, reduction.state, command.action, tuple(t.draft_id for t in command.targets))

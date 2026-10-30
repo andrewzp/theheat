@@ -13,6 +13,7 @@ from uuid import UUID
 
 from src.commands import postgres_batch, postgres_batch_results, postgres_batch_worker, postgres_spending
 from src.commands import postgres_check_observations, postgres_checks, postgres_media, postgres_media_commands
+from src.commands import recovery_provenance
 from src.commands.reducer import AutomaticPolicy, reduce_command
 from src.commands.schema import SOURCE_ACTIONS, COVERAGE_ACTIONS, REPORT_ACTIONS, GENERATION_ACTIONS, CANDIDATE_ACTIONS, MEDIA_ACTIONS, EDITOR_MEDIA_ACTIONS, Command, CommandError, Principal, authorize, canonical_json, utc_datetime, utc_text
 from src.editorial.policy import current_editorial_policy
@@ -735,7 +736,7 @@ class PostgresCommandAuthority:
         raw = _body(command.as_dict())
         with self.projections._connection(writing=True) as c:
             self._validate(c)
-            self._state(c, lock=True)
+            _, state = self._state(c, lock=True)
             clock = _clock(now)
             prior = self._intent(c, command.command_id)
             if prior:
@@ -747,6 +748,7 @@ class PostgresCommandAuthority:
                     raise CommandError("command_expired", "Command expired before durable acceptance")
                 if utc_datetime(command.requested_at) > clock + timedelta(minutes=5):
                     raise CommandError("invalid_time", "Command was requested too far in the future")
+                recovery_provenance.require_current(self, command, state)
                 at = utc_text(clock)
                 row = c.execute(f"INSERT INTO {SCHEMA}.intents(command_id,digest,command_bytes,accepted_at) VALUES(%s,%s,%s,%s) RETURNING sequence",
                                 (command.command_id, command.digest, raw, at)).fetchone()
@@ -834,8 +836,7 @@ class PostgresCommandAuthority:
                     command, _ = intent
                     p._require(command.action != "abandon_submission", "incomplete_submission_closure")
                     p._require(command.environment == self.environment, "command_environment_mismatch")
-                    if command.action == "prepare_media_revision" and _prepared_media is None:
-                        raise CommandError("native_preparation_required", "The separate native worker must prepare this graphic")
+                    needs_native = command.action == "prepare_media_revision" and _prepared_media is None
                     if command.action == ghcn_source.ACTION and (ghcn_prepared is None
                             or ghcn_prepared.command_id != command.command_id or ghcn_prepared.command_digest != command.digest):
                         raise CommandError("ghcn_preparation_required", "Independent source replay must finish before consuming this command")
@@ -862,6 +863,9 @@ class PostgresCommandAuthority:
                     try:
                         if actor is None:
                             raise CommandError("forbidden", "Operator authorization was revoked before execution")
+                        recovery_provenance.require_current(self, command, state)
+                        if needs_native:
+                            raise CommandError("native_preparation_required", "The separate native worker must prepare this graphic")
                         if command.action in SOURCE_ACTIONS:
                             from src.commands import postgres_source_results as sources
                             from src.commands.reducer import Reduction
@@ -963,6 +967,8 @@ class PostgresCommandAuthority:
                         if reduction.changed_ids or (source_transition is not None and source_transition.state_changed):
                             changed = reduction.state
                     except CommandError as exc:
+                        if needs_native and exc.code == "native_preparation_required":
+                            raise  # unchanged pending handoff, after the imported-target hold
                         result = {"status": "rejected", "code": exc.code, "message": str(exc)}
                     except (ValueError, TypeError, UnicodeError, OverflowError):
                         if command.action in SOURCE_ACTIONS | MEDIA_ACTIONS | EDITOR_MEDIA_ACTIONS | CANDIDATE_ACTIONS | GENERATION_ACTIONS | REPORT_ACTIONS | COVERAGE_ACTIONS:

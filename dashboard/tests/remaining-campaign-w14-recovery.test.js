@@ -147,7 +147,9 @@ test("the real route projects the journal's imported records read-only with thei
   assert.ok(held.holds.some(h => h.action === "approve" && h.code === "imported_review_not_current"))
   // Imported bytes carry a passed review, yet the record stays history: the hold, not the pill, decides.
   assert.equal(drafts["w14p-held"].review_status, "passed")
-  for (const id of ["w14p-edited", "w14p-fresh"]) assert.equal(Object.hasOwn(drafts[id], "recovery"), false, id)
+  assert.equal(drafts["w14p-edited"].recovery.provenance.kind, "imported")
+  assert.deepEqual(drafts["w14p-edited"].recovery.actions, [])
+  assert.equal(Object.hasOwn(drafts["w14p-fresh"], "recovery"), false)
   assert.equal(body.recoveredPublished.length, 1)
   const [posted] = body.recoveredPublished
   assert.equal(posted.draft_id, "w14p-posted"); assert.equal(posted.surface, "published")
@@ -164,7 +166,8 @@ test("editor shows an imported record read-only without edit, review or approve 
   assert.match(imported, /<span class="workbench-pill">Imported history \(read-only\)<\/span>/)
   for (const control of [/>Approve locally</, />Edit</, />Reject</, />Record human review</, />Use This</, /class="draft-actions"/])
     assert.doesNotMatch(imported, control)
-  for (const id of ["w14p-fresh", "w14p-edited"]) {
+  assert.match(workbench(drafts, "w14p-edited"), /Imported history \(read-only\)/)
+  for (const id of ["w14p-fresh"]) {
     const current = workbench(drafts, id)
     const detail = current.slice(current.indexOf('<div class="draft-workbench">'))
     assert.match(detail, new RegExp(`<strong>w14p-ev-${id.slice(5)}</strong>`))

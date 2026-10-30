@@ -144,8 +144,8 @@ class PreviewServer(HTTPServer):
         if recovery_journal is not None:
             # W14.6: explicit read-only import journal (local_cli import-run/restore-run).
             from src.commands import recovery_provenance
-            recovery_provenance.check(recovery_journal, environment=authority.environment)
-        self.recovery_journal = recovery_journal
+            recovery_provenance.configure(authority, recovery_journal)
+        self.recovery_journal = getattr(authority, "recovery_journal", None)
         parsed = urlsplit(origin)
         if (parsed.scheme != "http" or parsed.hostname != "127.0.0.1" or not parsed.port
                 or parsed.username or parsed.password or parsed.path or parsed.query or parsed.fragment):
@@ -410,6 +410,8 @@ def arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--media-scratch")
     parser.add_argument("--media-dependency-manifest")
     parser.add_argument("--delivery-fixture")
+    parser.add_argument("--recovery-journal", help="Absolute path of a local SQLite command authority whose import-run/restore-run "
+                        "history keeps imported draft IDs read-only; opened read-only by ingress and worker")
 
 
 def adapter(args) -> tuple[PostgresCommandAuthority, Operators]:
@@ -417,6 +419,9 @@ def adapter(args) -> tuple[PostgresCommandAuthority, Operators]:
     operators = Operators(args.operators)
     authority = PostgresCommandAuthority(socket_directory=args.socket_directory, database=args.database,
                                          user=args.user, port=args.database_port, environment="local")
+    if getattr(args, "recovery_journal", None) is not None:
+        from src.commands import recovery_provenance
+        recovery_provenance.configure(authority, args.recovery_journal)
     ghcn_values = [getattr(args, name, None) for name in ("ghcn_database", "ghcn_manifest", "ghcn_database_sha256", "ghcn_manifest_sha256")]
     if any(ghcn_values):
         if not all(ghcn_values):
@@ -457,8 +462,6 @@ def main() -> int:
     parser.add_argument("--port", type=int, required=True)
     parser.add_argument("--origin", required=True)
     parser.add_argument("--candidate-input-id", action="append", default=[])
-    parser.add_argument("--recovery-journal", help="Absolute path of a local SQLite command authority whose import-run/restore-run "
-                        "history marks matching current drafts read-only; opened read-only")
     args = parser.parse_args()
     try:
         authority, operators = adapter(args)

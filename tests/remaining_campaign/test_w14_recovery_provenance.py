@@ -44,8 +44,8 @@ def test_state_reply_marks_exact_imported_identities_read_only(tmp_path):
     result = child.run(str(tmp_path))
     assert result["import"] == ["imported"] and result["status"] == 200 and result["journal_unchanged"]
     entry = {"origin": "import", "import_id": "w14p-import", "source_sha256": result["source_sha256"]}
-    # held/posted hold imported bytes; edited moved on locally; fresh was never imported.
-    assert result["reply"]["recovery_provenance"] == {"w14p-held": entry, "w14p-posted": entry}
+    # Changed bytes do not establish a supported current transition; fresh was never imported.
+    assert result["reply"]["recovery_provenance"] == {"w14p-held": entry, "w14p-posted": entry, "w14p-edited": entry}
     assert {d["id"] for d in result["reply"]["state"]["drafts"]} == {"w14p-held", "w14p-posted", "w14p-edited", "w14p-fresh"}
     assert result["unconfigured_status"] == 200 and result["unconfigured_provenance"] == {}
 
@@ -67,7 +67,7 @@ def test_reader_never_infers_currentness_and_prefers_the_matching_import(tmp_pat
     duplicated = {"drafts": [current["drafts"][2], deepcopy(current["drafts"][2])]}
     alone, _ = _journal(tmp_path, snapshot, import_id="w14p-alone")
     assert "w14p-edited" in recovery_provenance.provenance(alone.path, duplicated)
-    assert "w14p-edited" not in recovery_provenance.provenance(alone.path, {"drafts": [current["drafts"][2]]})
+    assert "w14p-edited" in recovery_provenance.provenance(alone.path, {"drafts": [current["drafts"][2]]})
     assert recovery_provenance.provenance(None, current) == {}
 
 
