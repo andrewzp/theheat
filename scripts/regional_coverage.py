@@ -42,7 +42,8 @@ def main(argv: list[str] | None = None) -> int:
     pilots.add_argument("--output", type=Path)
     args = parser.parse_args(argv)
     try:
-        version = identities = None
+        version: dict | None = None
+        identities: dict[str, object] | None = None
         if args.inputs is not None:
             document = threshold_rebuild.verify_inputs(args.inputs, roles=("stations", "inventory", "countries"))
             paths = {role: args.inputs / document["inputs"][role]["name"] for role in ("stations", "inventory", "countries")}
