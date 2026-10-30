@@ -9,11 +9,17 @@ path to a qualified replacement:
 1. ``build_plan`` — deterministic universe of catalogue points x months, which
    of them the installed file already qualifies, what is missing, the required
    isolated dependency and explicit request bounds. No network.
-2. ``acquire`` — finite, resumable owner-run fetch through an injectable
-   provider adapter (the default wraps Meteostat ``Normals(Point(...))``) with
-   explicit request/byte/deadline/retry limits. Each point is one atomically
-   written partition; failed or incomplete results are never relabelled and the
-   installed baseline is never written.
+2. ``acquire`` — finite, resumable owner-run fetch. The default provider is
+   ``meteostat_normals.MeteostatBulkProvider``: the agreed Meteostat
+   ``Normals(Point(...))`` product reproduced over the owned
+   ``bounded_http`` transport, so the request/transfer/decoded-byte/deadline/
+   retry limits are physical (every request incl. retries and redirects, every
+   received and decompressed byte, cancellation, no background work). The
+   Meteostat SDK wrapper stays refused (``normals_bounded_transport_unavailable``).
+   Injected test providers keep the adapter-call semantics. Each point is one
+   atomically written partition carrying its station/file provenance; failed
+   or incomplete results are never relabelled and the installed baseline is
+   never written.
 3. ``admit`` — candidate manifest + CSV checks (schema, duplicates, provenance,
    complete selected months) and actual-loader acceptance.
 4. ``install_plan`` — bounded local comparison with the installed artifact's
@@ -38,7 +44,7 @@ import time
 from typing import Any, Callable, Iterable, Protocol
 
 from src.data import acquisition_dependencies as deps
-from src.data import open_meteo, places
+from src.data import bounded_http, meteostat_normals, open_meteo, places
 
 PRODUCT = "meteostat-normals-point-v1"
 PLAN_SCHEMA = "theheat.normals-acquisition-plan/v1"
@@ -58,7 +64,15 @@ MAX_FILE_BYTES = 16 * 1024 * 1024
 MAX_PARTITION_BYTES = 256 * 1024
 TMAX_RANGE = (-90.0, 60.0)
 LIMIT_BOUNDS = {"max_requests": (1, 20_000), "max_bytes": (1, 64 * 1024 * 1024),
-                "deadline_seconds": (1, 6 * 3600), "max_retries": (0, 5)}
+                "deadline_seconds": (1, 6 * 3600), "max_retries": (0, 5),
+                "max_decoded_bytes": (1, 256 * 1024 * 1024)}
+STOP_REASONS = {"deadline": "deadline", "cancelled": "cancelled", "request_limit": "request_limit",
+                "transfer_limit": "byte_limit", "decoded_limit": "decoded_byte_limit"}
+COUNTER_SEMANTICS = {
+    "requests": "provider adapter calls (one per point-period attempt)",
+    "bytes": "normalized artifact bytes retained in partitions (not a transfer budget)",
+    "transport": "physical: requests incl. retries/redirects, received bytes, decompressed bytes",
+}
 
 
 class NormalsError(deps.AcquisitionError):
@@ -177,7 +191,7 @@ def build_plan(cities_path: Path, installed_path: Path, *, months: Iterable[int]
     plan: dict[str, Any] = {
         "schema": PLAN_SCHEMA, "product": PRODUCT,
         "provider": {"name": "meteostat", "interface": "Normals(Point(lat, lon), start, end).fetch()",
-                     "dependency_manifest": deps.MANIFEST_PATH.name},
+                     "contract": meteostat_normals.CONTRACT, "dependency_manifest": deps.MANIFEST_PATH.name},
         "periods": [list(period) for period in PERIODS],
         "period_rule": "first period with any tmax; never mixed within a point; each row states its own period",
         "months": selected,
@@ -186,21 +200,37 @@ def build_plan(cities_path: Path, installed_path: Path, *, months: Iterable[int]
         "universe": {"points": len(points), "point_months": len(points) * len(selected)},
         "points": points,
         "missing": {"points": len(need), "point_months": sum(len(point["missing_months"]) for point in need)},
-        "request_bounds": {"minimum_requests": len(need), "maximum_requests_without_retries": len(need) * len(PERIODS),
-                           "suggested_max_bytes": max(len(need) * len(PERIODS) * 4096, 4096)},
+        "request_bounds": _request_bounds(len(need)),
     }
     plan["plan_sha256"] = _plan_identity(plan)
     plan["dependency"] = dependency
-    plan["live_acquisition"] = {"status": "unsupported", "reason": "normals_bounded_transport_unavailable",
-        "required": "owned transport with physical-request, streamed-byte and cancellation enforcement"}
+    plan["live_acquisition"] = {"status": "bounded_transport", "transport": bounded_http.SCHEMA,
+                                "provider": meteostat_normals.VERSION, "network": "explicit owner run only",
+                                "sdk_wrapper": "refused: normals_bounded_transport_unavailable"}
     plan["plan_sha256"] = _plan_identity(plan)
     out_dir = f"normals-candidate-{plan['plan_sha256'][:12]}"
+    bounds = plan["request_bounds"]
     plan["next_command"] = [
         "python", "scripts/build_normals.py", "acquire", "--plan", plan_path, "--out-dir", out_dir,
-        "--installed", str(installed_path), "--max-requests", str(plan["request_bounds"]["maximum_requests_without_retries"] or 1),
-        "--max-bytes", str(plan["request_bounds"]["suggested_max_bytes"]), "--deadline-seconds", "3600",
+        "--installed", str(installed_path), "--max-requests", str(bounds["suggested_max_requests"]),
+        "--max-bytes", str(bounds["suggested_max_bytes"]),
+        "--max-decoded-bytes", str(bounds["suggested_max_decoded_bytes"]), "--deadline-seconds", "3600",
         "--max-retries", "2"]
     return plan
+
+
+def _request_bounds(points: int) -> dict[str, int]:
+    """Physical upper bounds: one station list, then at most max_count station files per point-period.
+
+    Station files are fetched once per run and shared between points, so real
+    counts are normally far lower. Sizes are allowances, not expectations.
+    """
+    files = points * meteostat_normals.MAX_COUNT * len(PERIODS)
+    upper = (1 + files) if points else 0
+    return {"minimum_requests": 1 if points else 0, "maximum_requests_without_retries": upper,
+            "suggested_max_requests": max(1, min(LIMIT_BOUNDS["max_requests"][1], upper * 3)),
+            "suggested_max_bytes": min(LIMIT_BOUNDS["max_bytes"][1], 16 * 1024**2 + files * 4096),
+            "suggested_max_decoded_bytes": min(LIMIT_BOUNDS["max_decoded_bytes"][1], 64 * 1024**2 + files * 16384)}
 
 
 def plan_result(plan: dict[str, Any]) -> dict[str, Any]:
@@ -233,12 +263,20 @@ def validate_plan(plan: Any) -> dict[str, Any]:
 
 @dataclass(frozen=True)
 class Limits:
+    """``max_requests``/``max_bytes`` are physical for a bounded provider (requests incl. retries and
+    redirects; received bytes) and adapter-call/normalized-byte caps for an injected one.
+    ``max_decoded_bytes`` caps decompressed bytes (default 8x ``max_bytes``, at most 256 MiB)."""
+
     max_requests: int
     max_bytes: int
     deadline_seconds: float
     max_retries: int
+    max_decoded_bytes: int | None = None
 
     def __post_init__(self) -> None:
+        if self.max_decoded_bytes is None and isinstance(self.max_bytes, int) and not isinstance(self.max_bytes, bool):
+            object.__setattr__(self, "max_decoded_bytes",
+                               max(1, min(self.max_bytes * 8, LIMIT_BOUNDS["max_decoded_bytes"][1])))
         for name, (low, high) in LIMIT_BOUNDS.items():
             value = getattr(self, name)
             if isinstance(value, bool) or not isinstance(value, (int, float)) or not low <= value <= high:
@@ -340,12 +378,17 @@ def _journal(out_dir: Path) -> dict[str, Any]:
 
 
 def acquire(plan: dict[str, Any], out_dir: Path, provider: Provider, limits: Limits, *, installed_path: Path,
-            clock: Callable[[], float] = time.monotonic, now: Callable[[], str] = _utc_now) -> dict[str, Any]:
-    """Assemble supplied/injected provider responses; resume compatible partitions.
+            clock: Callable[[], float] = time.monotonic, now: Callable[[], str] = _utc_now,
+            cancel: threading.Event | None = None) -> dict[str, Any]:
+    """Resumable acquisition into a candidate directory; compatible partitions are reused.
 
-    Default live Meteostat acquisition is refused: its transport is not bounded.
-    Counters here describe adapter invocations and normalized artifact bytes, not
-    physical requests, transferred bytes or permission for live provider execution.
+    A provider with ``bounded_transport`` (the default Meteostat bulk provider)
+    is bound to one ``bounded_http`` allowance for the whole run: the request,
+    byte and decoded-byte limits are physical, the deadline is absolute, and
+    ``cancel`` stops it within one poll interval. Its calls run synchronously in
+    this thread, so once this function returns nothing writes the journal,
+    partitions or candidate. An injected provider (offline fixtures) keeps the
+    adapter-call/normalized-byte semantics recorded in ``COUNTER_SEMANTICS``.
     """
     validate_plan(plan)
     out_dir = Path(out_dir)
@@ -361,12 +404,24 @@ def acquire(plan: dict[str, Any], out_dir: Path, provider: Provider, limits: Lim
         raise NormalsError("normals_out_dir_belongs_to_another_plan")
     for stale in (out_dir / "partitions").glob(".*.tmp") if (out_dir / "partitions").exists() else []:
         stale.unlink()  # an interrupted write is never a partition
+    bounded = bool(getattr(provider, "bounded_transport", False))
     run: dict[str, Any]
     started, run = clock(), {"started_at": now(), "requests": 0, "bytes": 0, "resumed": 0, "written": 0,
                              "status": "running", "reasons": []}
+    if bounded:
+        assert limits.max_decoded_bytes is not None
+        transport_limits = bounded_http.Limits(
+            max_requests=limits.max_requests, max_transfer_bytes=limits.max_bytes,
+            max_decoded_bytes=limits.max_decoded_bytes, deadline_seconds=float(limits.deadline_seconds),
+            max_retries=limits.max_retries)
+        provider.bind(transport_limits, deadline_at=time.monotonic() + float(limits.deadline_seconds),  # type: ignore[attr-defined]
+                      cancel=cancel if cancel is not None else threading.Event())
+        run["transport"] = provider.counters()  # type: ignore[attr-defined]
     journal["runs"].append(run)
 
     def save() -> None:
+        if bounded:
+            run["transport"] = provider.counters()  # type: ignore[attr-defined]
         _atomic_write(out_dir / "journal.json", _canonical(journal))
 
     def stop(reason: str) -> None:
@@ -383,7 +438,7 @@ def acquire(plan: dict[str, Any], out_dir: Path, provider: Provider, limits: Lim
                 except (ValueError, deps.AcquisitionError):
                     pass
                 path.unlink()  # incompatible or damaged: re-request, never relabel
-            record = _fetch_point(plan, point, provider, limits, run, started, clock, now, journal)
+            record = _fetch_point(plan, point, provider, limits, run, started, clock, now, journal, bounded)
             if record is None:
                 if run["status"] == "incomplete":
                     break
@@ -406,28 +461,35 @@ def acquire(plan: dict[str, Any], out_dir: Path, provider: Provider, limits: Lim
             run["status"] = "complete"
     run["finished_at"] = now()
     save()
+    counters = _counters(run)
     if run["status"] != "complete":
         return deps.result("normals", "incomplete", reasons=run["reasons"],
-                           source={"plan_sha256": plan["plan_sha256"]}, counters=_counters(run),
-                           observed=plan["missing"]["point_months"])
+                           source={"plan_sha256": plan["plan_sha256"], "counter_semantics": COUNTER_SEMANTICS},
+                           counters=counters, observed=plan["missing"]["point_months"])
     manifest = assemble_candidate(plan, out_dir, installed_path=installed_path, now=now)
     status = "ready" if manifest["rows"] else "source_absent"
     reasons = ["points_without_source_data"] if manifest["missing_points"] else []
-    return deps.result("normals", status, reasons=reasons, source={"plan_sha256": plan["plan_sha256"]},
+    return deps.result("normals", status, reasons=reasons,
+                       source={"plan_sha256": plan["plan_sha256"], "counter_semantics": COUNTER_SEMANTICS},
                        product={"candidate_sha256": manifest["csv_sha256"], "rows": manifest["rows"],
                                 "missing_points": len(manifest["missing_points"])},
-                       counters=_counters(run), observed=plan["universe"]["point_months"], promoted=manifest["rows"])
+                       counters=counters, observed=plan["universe"]["point_months"], promoted=manifest["rows"])
 
 
-def _counters(run: dict) -> dict[str, int]:
-    return {key: int(run[key]) for key in ("requests", "bytes", "resumed", "written")}
+def _counters(run: dict) -> dict[str, Any]:
+    counters: dict[str, Any] = {key: int(run[key]) for key in ("requests", "bytes", "resumed", "written")}
+    if "transport" in run:
+        counters["transport"] = run["transport"]
+    return counters
 
 
-def _fetch_point(plan, point, provider, limits, run, started, clock, now, journal) -> dict | None:
+def _fetch_point(plan, point, provider, limits, run, started, clock, now, journal, bounded=False) -> dict | None:
     key = f"{point['place_id']}-{point['sampling_point_id']}"
     attempted: list[list[Any]] = []
+    # A bounded provider retries inside its physical allowance; never multiply retries here.
+    attempts = 1 if bounded else limits.max_retries + 1
     for start, end in (tuple(period) for period in plan["periods"]):
-        for attempt in range(limits.max_retries + 1):
+        for attempt in range(attempts):
             remaining = limits.deadline_seconds - (clock() - started)
             if run["requests"] >= limits.max_requests:
                 run["status"], run["reasons"] = "incomplete", ["request_limit"]
@@ -435,48 +497,64 @@ def _fetch_point(plan, point, provider, limits, run, started, clock, now, journa
             if remaining <= 0:
                 run["status"], run["reasons"] = "incomplete", ["deadline"]
                 return None
-            if run["bytes"] >= limits.max_bytes:
+            if not bounded and run["bytes"] >= limits.max_bytes:
                 run["status"], run["reasons"] = "incomplete", ["byte_limit"]
                 return None
             run["requests"] += 1
             try:
-                response = _call(lambda: provider.fetch(point["lat"], point["lon"], start, end), remaining)
+                if bounded:
+                    response = provider.fetch(point["lat"], point["lon"], start, end)
+                else:
+                    response = _call(lambda: provider.fetch(point["lat"], point["lon"], start, end), remaining)
                 values, payload = normalize_response(response)
-            except _ProductInvalid as error:
+            except bounded_http.TransportStop as bound:
+                run["status"], run["reasons"] = "incomplete", [STOP_REASONS[bound.reason]]
+                return None
+            except meteostat_normals.ProviderUnavailable as unavailable:
+                run["status"], run["reasons"] = "incomplete", [f"provider_{unavailable.outcome}"]
+                return None
+            except (_ProductInvalid, meteostat_normals.ProductInvalid) as error:
                 return _partition(plan, point, provider, now, "invalid_product", start, end, {}, b"",
-                                  attempted + [[start, end, str(error)]], run)
+                                  attempted + [[start, end, str(error)]], run, None)
             except TimeoutError:
                 run["status"], run["reasons"] = "incomplete", ["deadline"]
                 return None
             except Exception as error:  # noqa: BLE001 - provider transport failures are retryable
                 failure = journal["failures"].setdefault(key, {"attempts": 0})
                 failure.update(attempts=failure["attempts"] + 1, error_class=type(error).__name__[:64])
+                if isinstance(error, bounded_http.TransportOutcome):
+                    failure["outcome"] = error.outcome
                 continue
-            if run["bytes"] + len(payload) > limits.max_bytes:
+            if not bounded and run["bytes"] + len(payload) > limits.max_bytes:
                 run["status"], run["reasons"] = "incomplete", ["byte_limit"]
                 return None
             run["bytes"] += len(payload)
+            provenance = getattr(response, "provenance", None)
             if not values:
                 attempted.append([start, end, "no_data"])
                 break  # explicit next period, never a relabel
             wanted = {month: values[month] for month in point["missing_months"] if month in values}
             status = "complete" if len(wanted) == len(point["missing_months"]) else "incomplete_source"
             return _partition(plan, point, provider, now, status, start, end, wanted, payload,
-                              attempted + [[start, end, "data"]], run)
+                              attempted + [[start, end, "data"]], run, provenance)
         else:
             return None  # retries exhausted: failure stays in the journal, the point stays pending
-    return _partition(plan, point, provider, now, "no_data", None, None, {}, b"", attempted, run)
+    return _partition(plan, point, provider, now, "no_data", None, None, {}, b"", attempted, run, None)
 
 
-def _partition(plan, point, provider, now, status, start, end, values, payload, attempted, run) -> dict:
-    return {"schema": PARTITION_SCHEMA, "plan_sha256": plan["plan_sha256"],
-            **{k: point[k] for k in ("place_id", "sampling_point_id", "city", "country", "lat", "lon")},
-            "months": point["missing_months"], "status": status, "period_start": start, "period_end": end,
-            "values": {str(month): value for month, value in sorted(values.items())},
-            "missing_months": [month for month in point["missing_months"] if month not in values],
-            "provider": provider.name, "provider_version": str(provider.version), "retrieved_at": now(),
-            "payload_sha256": _sha(payload) if payload else None, "payload_bytes": len(payload),
-            "attempted_periods": attempted}
+def _partition(plan, point, provider, now, status, start, end, values, payload, attempted, run,
+               provenance=None) -> dict:
+    record = {"schema": PARTITION_SCHEMA, "plan_sha256": plan["plan_sha256"],
+              **{k: point[k] for k in ("place_id", "sampling_point_id", "city", "country", "lat", "lon")},
+              "months": point["missing_months"], "status": status, "period_start": start, "period_end": end,
+              "values": {str(month): value for month, value in sorted(values.items())},
+              "missing_months": [month for month in point["missing_months"] if month not in values],
+              "provider": provider.name, "provider_version": str(provider.version), "retrieved_at": now(),
+              "payload_sha256": _sha(payload) if payload else None, "payload_bytes": len(payload),
+              "attempted_periods": attempted}
+    if provenance is not None:
+        record["source_provenance"] = provenance
+    return record
 
 
 def assemble_candidate(plan: dict[str, Any], out_dir: Path, *, installed_path: Path,
@@ -497,9 +575,13 @@ def assemble_candidate(plan: dict[str, Any], out_dir: Path, *, installed_path: P
             missing.append({"place_id": point["place_id"], "sampling_point_id": point["sampling_point_id"],
                             "status": record["status"], "missing_months": record["missing_months"]})
             continue
+        source = record.get("source_provenance") or {}
         points.append({k: record[k] for k in ("place_id", "sampling_point_id", "period_start", "period_end",
                                               "retrieved_at", "provider", "provider_version", "months")}
-                      | {"partition_sha256": _sha(raw)})
+                      | {"partition_sha256": _sha(raw),
+                         "stations": [row.get("station") for row in source.get("selected_stations", [])],
+                         "month_station": source.get("month_station", {}),
+                         "stations_file_sha256": (source.get("stations_file") or {}).get("sha256")})
         for month, value in record["values"].items():
             rows.append({"city": point["city"], "country": point["country"], "place_id": point["place_id"],
                          "sampling_point_id": point["sampling_point_id"], "lat": repr(point["lat"]),
@@ -516,7 +598,9 @@ def assemble_candidate(plan: dict[str, Any], out_dir: Path, *, installed_path: P
                 "months": plan["months"], "periods": plan["periods"], "csv": "normals.csv",
                 "csv_sha256": _sha(body), "csv_bytes": len(body), "rows": len(rows),
                 "retained_baseline_rows": retained, "points": points, "missing_points": missing,
-                "installed_baseline": plan["inputs"]["installed_baseline"], "assembled_at": now()}
+                "installed_baseline": plan["inputs"]["installed_baseline"],
+                "source_contract": plan["provider"].get("contract"), "units": {"avg_high_c": "degC"},
+                "assembled_at": now()}
     # The CSV lands first; the manifest that binds it lands last. A crash between
     # them leaves a mismatch that admission refuses.
     _atomic_write(out_dir / "candidate" / "normals.csv", body)

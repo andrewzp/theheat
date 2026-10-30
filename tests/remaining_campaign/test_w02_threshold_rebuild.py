@@ -329,20 +329,26 @@ def test_cli_end_to_end_plan_build_assemble_then_package_verify(inputs, tmp_path
     assert json.loads(capsys.readouterr().out)["status"] == "ready"
 
 
-def test_dependency_manifest_distinguishes_unavailable_incompatible_and_available():
+def test_dependency_manifest_distinguishes_unavailable_incompatible_and_available(tmp_path):
     rows = deps.read_manifest()
-    assert {row["tool"] for row in rows} == {"normals", "thresholds"}
-    assert next(r for r in rows if r["name"] == "meteostat")["spec"] == ">=1.6,<2"
+    # The checked-in normals tool is standard-library only (owned bounded transport); the SDK is not declared.
+    assert {row["tool"] for row in rows} == {"thresholds"}
+    stdlib = deps.check("normals", installed=lambda name: None)
+    assert stdlib["status"] == "available" and stdlib["requirements"] == [] and deps.dependency_status(stdlib) is None
+    # Version/interface semantics still hold for any declared third-party requirement.
+    manifest = tmp_path / "requirements-acquisition.txt"
+    manifest.write_text("meteostat>=1.6,<2  # tool=normals api=Normals,Point\nrequests>=2.31  # tool=thresholds\n")
+    assert next(r for r in deps.read_manifest(manifest) if r["name"] == "meteostat")["spec"] == ">=1.6,<2"
 
     class Module:
         Normals = Point = staticmethod(lambda *a: None)
 
-    absent = deps.check("normals", installed=lambda name: None)
-    old_major = deps.check("normals", installed=lambda name: "2.0.1")
-    no_api = deps.check("normals", installed=lambda name: "1.6.8", importer=lambda name: object())
-    broken = deps.check("normals", installed=lambda name: "1.6.8",
+    absent = deps.check("normals", manifest=manifest, installed=lambda name: None)
+    old_major = deps.check("normals", manifest=manifest, installed=lambda name: "2.0.1")
+    no_api = deps.check("normals", manifest=manifest, installed=lambda name: "1.6.8", importer=lambda name: object())
+    broken = deps.check("normals", manifest=manifest, installed=lambda name: "1.6.8",
                         importer=lambda name: (_ for _ in ()).throw(ImportError("invented")))
-    good = deps.check("normals", installed=lambda name: "1.6.8", importer=lambda name: Module)
+    good = deps.check("normals", manifest=manifest, installed=lambda name: "1.6.8", importer=lambda name: Module)
     assert [absent["status"], old_major["status"], no_api["status"], broken["status"], good["status"]] == [
         "unavailable", "incompatible", "incompatible", "incompatible", "available"]
     assert no_api["requirements"][0]["missing_api"] == ["Normals", "Point"]

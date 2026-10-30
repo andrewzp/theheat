@@ -10,10 +10,13 @@
 # `python scripts/check_acquisition_dependencies.py` reads this file and reports
 # available / unavailable / incompatible per tool without installing anything.
 #
-# Meteostat 1.x provides the `Normals` and `Point` classes used by the
-# meteostat-normals-point-v1 product. A 2.x release changes that interface and
-# is refused until the adapter is deliberately migrated.
-meteostat>=1.6,<2  # tool=normals api=Normals,Point
+# The `normals` tool needs no third-party distribution. Its live path is the
+# owned, physically bounded transport (src/data/bounded_http.py) reproducing the
+# meteostat-python 1.7.6 `Normals(Point(lat, lon), start, end)` contract for
+# the meteostat-normals-point-v1 product (src/data/meteostat_normals.py). The
+# meteostat SDK is not installed or imported: its hidden requests, retries and
+# disk cache cannot be bounded. Meteostat 2.x (new data interface) would be a
+# deliberate product migration, not a dependency bump.
 # The threshold rebuild and package verifier use only the standard library and
 # the runtime's pinned requests for an explicit bounded archive fetch.
 requests>=2.31  # tool=thresholds api=Session

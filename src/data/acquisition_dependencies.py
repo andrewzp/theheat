@@ -47,6 +47,10 @@ _LINE = re.compile(
     r"\s*#\s*tool=(?P<tool>[a-z_]+)(?:\s+api=(?P<api>[A-Za-z0-9_,]+))?\s*\Z")
 _CLAUSE = re.compile(r"(==|>=|<=|<|>|!=)\s*([0-9][0-9A-Za-z.]*)")
 MAX_MANIFEST_BYTES = 16 * 1024
+# Tools whose live path needs no third-party distribution. ``normals`` reaches
+# Meteostat through the owned ``bounded_http`` transport (meteostat_normals);
+# the unbounded meteostat SDK wrapper stays refused.
+STDLIB_TOOLS = {"normals": "standard library only: src/data/bounded_http.py + src/data/meteostat_normals.py"}
 
 
 class AcquisitionError(ValueError):
@@ -117,6 +121,9 @@ def check(tool: str, *, manifest: Path = MANIFEST_PATH, installed=_installed, im
     and wrong-interface cases without touching the shared environment.
     """
     rows = [row for row in read_manifest(manifest) if row["tool"] == tool]
+    if not rows and tool in STDLIB_TOOLS:
+        return {"tool": tool, "status": "available", "manifest": manifest.name, "requirements": [],
+                "installation": "none_required", "runtime": STDLIB_TOOLS[tool]}
     if not rows:
         raise AcquisitionError("acquisition_tool_unknown")
     results, status = [], "available"
