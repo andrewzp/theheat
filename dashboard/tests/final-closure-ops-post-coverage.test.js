@@ -27,7 +27,9 @@ test("a delivered post joins the coverage class and region logged for its exact 
 })
 
 test("absent, unmatched, malformed and conflicting coverage rows never become a selected region", () => {
-  assert.deepEqual(coverage(fixture(undefined)), { status: "not_loaded", rows: 0 })
+  // Absent equals the contract default [] (as the dashboard route decodes it); malformed is unknown.
+  assert.deepEqual(coverage(fixture(undefined)), { status: "not_recorded", rows: 0 })
+  assert.deepEqual(coverage(fixture({ rows: [] })), { status: "unknown", rows: 0 })
   assert.deepEqual(coverage(fixture([{ cls: "heat", continent: "A", country: "B", event_id: "other" }])), { status: "not_recorded", rows: 0 })
   assert.equal(coverage(fixture([{ cls: "heat", continent: 7, country: "B", event_id: "invented_event_1" }])).status, "unknown")
   const conflict = coverage(fixture([
@@ -47,5 +49,7 @@ test("the history view states coverage as output geography, not what was missed"
   assert.match(markup, /Logged coverage: heat · Fictionland, Atlantis/)
   assert.match(markup, /not a measure of what was missed/)
   const none = renderToStaticMarkup(React.createElement(PostOutcomeHistory, { outcomes: postOutcomes(fixture(undefined), { now }) }))
-  assert.match(none, /Coverage class and region are unknown/)
+  assert.match(none, /No coverage log row matches this post's event/)
+  const malformed = renderToStaticMarkup(React.createElement(PostOutcomeHistory, { outcomes: postOutcomes(fixture({ rows: [] }), { now }) }))
+  assert.match(malformed, /Coverage class and region are unknown/)
 })

@@ -158,8 +158,11 @@ function correctionsFor(tweetId, report) {
 // receipt's exact event ID. One distinct class/region is required; the log is
 // output geography, never a recall denominator or evidence of worldwide coverage.
 const COVERAGE_TEXT = /^[^\u0000-\u001f]{1,80}$/
-function coverageFor(eventIds, log) {
-  if (!Array.isArray(log)) return { status: "not_loaded", rows: 0 }
+function coverageFor(eventIds, raw) {
+  // The state contract defaults coverage_log to [], so absent and empty agree with
+  // the dashboard's decoded read; only a malformed container is unknown.
+  const log = raw === undefined ? [] : raw
+  if (!Array.isArray(log)) return { status: "unknown", rows: 0 }
   const matches = log.filter(row => object(row) && eventIds.has(row.event_id))
   if (!matches.length) return { status: "not_recorded", rows: 0 }
   const readable = matches.filter(row => ["cls", "continent", "country"].every(key => typeof row[key] === "string" && COVERAGE_TEXT.test(row[key])))
