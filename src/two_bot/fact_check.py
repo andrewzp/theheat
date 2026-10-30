@@ -223,6 +223,8 @@ def local_rejection(
         failures.extend(scientific_claim_failures(tweet, bundle))
         if isinstance(tweet, str):
             failures.extend(temperature_claim_failures(tweet, bundle))
+            from src.data.rainfall_supply import rainfall_claim_failures
+            failures.extend(rainfall_claim_failures(tweet, bundle))
     if not isinstance(tweet, str) or not tweet.strip() or len(tweet) > 280:
         failures.append("invalid_tweet: fact checking requires nonempty tweet text within 280 characters")
     elif isinstance(tweet, str):

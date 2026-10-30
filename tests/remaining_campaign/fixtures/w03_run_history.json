@@ -1,0 +1,444 @@
+{
+ "expected": {
+  "firms.modis_nrt|past_1d|world|fire_source_contract.firms_csv": {
+   "failures": 2,
+   "first_failure": "2026-10-22T06:00:00Z",
+   "last_failure": "2026-10-23T06:00:00Z",
+   "last_outcome": "empty_success",
+   "recovered_at": null,
+   "state": "reachable_unqualified"
+  },
+  "firms.noaa_hms|current_utc_day_file|north_america|fire_source_contract.hms_text": {
+   "failures": 1,
+   "first_failure": "2026-10-22T06:00:00Z",
+   "last_failure": "2026-10-22T06:00:00Z",
+   "last_outcome": "endpoint_missing",
+   "recovered_at": null,
+   "state": "open"
+  },
+  "firms.viirs_noaa20_nrt|past_1d|world|fire_source_contract.firms_csv": {
+   "failures": 2,
+   "first_failure": "2026-10-22T06:00:00Z",
+   "last_failure": "2026-10-23T06:00:00Z",
+   "last_outcome": "empty_success",
+   "recovered_at": null,
+   "state": "reachable_unqualified"
+  },
+  "firms.viirs_noaa21_nrt|past_1d|world|fire_source_contract.firms_csv": {
+   "failures": 3,
+   "first_failure": "2026-10-21T06:00:00Z",
+   "last_failure": "2026-10-23T06:00:00Z",
+   "last_outcome": "qualified",
+   "recovered_at": "2026-10-24T06:00:00Z",
+   "state": "recovered"
+  },
+  "gpm_imerg.imerg_late_grid_datapool|imerg_late_daily_walkback_late|configured_watchlist|gpm_imerg.grid_subset": {
+   "failures": 0,
+   "first_failure": null,
+   "last_failure": null,
+   "last_outcome": "qualified",
+   "recovered_at": null,
+   "state": "qualified"
+  },
+  "gpm_imerg.imerg_late_opendap|imerg_late_daily_walkback_late|rotating_window|gpm_imerg.ascii_subset": {
+   "failures": 3,
+   "first_failure": "2026-10-21T06:00:00Z",
+   "last_failure": "2026-10-23T06:00:00Z",
+   "last_outcome": "access_refused",
+   "recovered_at": null,
+   "state": "access_hold"
+  }
+ },
+ "run_history": [
+  {
+   "id": "invented-run-4",
+   "sources": [
+    {
+     "details": {
+      "incident": {
+       "attempts": [
+        {
+         "data_kind": "satellite_derived",
+         "http_status": 200,
+         "key": "firms.viirs_noaa21_nrt|past_1d|world|fire_source_contract.firms_csv",
+         "outcome": "qualified",
+         "parser_contract": "fire_source_contract.firms_csv",
+         "product_id": "firms.viirs_noaa21_nrt",
+         "provider": "nasa_firms",
+         "region": "world",
+         "role": "primary",
+         "rows": 12,
+         "source_id": "firms",
+         "upstream": "nasa_firms.viirs_noaa21_nrt",
+         "window": "past_1d"
+        }
+       ],
+       "independent_source_upper_bound": 1,
+       "open_keys": [],
+       "primary_outcomes": [
+        "qualified"
+       ],
+       "product_state": "primary_qualified",
+       "schema": "theheat.source-incident/v1",
+       "served_product_ids": [
+        "firms.viirs_noaa21_nrt"
+       ],
+       "source": "firms"
+      }
+     },
+     "source": "firms",
+     "status": "success"
+    },
+    {
+     "details": {
+      "incident": {
+       "attempts": [
+        {
+         "data_kind": "satellite_derived",
+         "http_status": null,
+         "key": "gpm_imerg.imerg_late_grid_datapool|imerg_late_daily_walkback_late|configured_watchlist|gpm_imerg.grid_subset",
+         "outcome": "qualified",
+         "parser_contract": "gpm_imerg.grid_subset",
+         "product_id": "gpm_imerg.imerg_late_grid_datapool",
+         "provider": "nasa_gesdisc",
+         "region": "configured_watchlist",
+         "role": "alternate_route",
+         "rows": 40,
+         "source_id": "gpm_imerg",
+         "upstream": "nasa_gesdisc.gpm_3imergdl_07",
+         "window": "imerg_late_daily_walkback_late"
+        }
+       ],
+       "independent_source_upper_bound": 1,
+       "open_keys": [],
+       "primary_outcomes": [],
+       "product_state": "alternate_served",
+       "schema": "theheat.source-incident/v1",
+       "served_product_ids": [
+        "gpm_imerg.imerg_late_grid_datapool"
+       ],
+       "source": "gpm_imerg"
+      }
+     },
+     "source": "gpm_imerg",
+     "status": "success"
+    }
+   ],
+   "started_at": "2026-10-24T06:00:00Z"
+  },
+  {
+   "id": "invented-run-3",
+   "sources": [
+    {
+     "details": {
+      "incident": {
+       "attempts": [
+        {
+         "data_kind": "satellite_derived",
+         "http_status": 200,
+         "key": "firms.viirs_noaa21_nrt|past_1d|world|fire_source_contract.firms_csv",
+         "outcome": "empty_success",
+         "parser_contract": "fire_source_contract.firms_csv",
+         "product_id": "firms.viirs_noaa21_nrt",
+         "provider": "nasa_firms",
+         "region": "world",
+         "role": "primary",
+         "rows": 0,
+         "source_id": "firms",
+         "upstream": "nasa_firms.viirs_noaa21_nrt",
+         "window": "past_1d"
+        },
+        {
+         "data_kind": "satellite_derived",
+         "http_status": 200,
+         "key": "firms.viirs_noaa20_nrt|past_1d|world|fire_source_contract.firms_csv",
+         "outcome": "empty_success",
+         "parser_contract": "fire_source_contract.firms_csv",
+         "product_id": "firms.viirs_noaa20_nrt",
+         "provider": "nasa_firms",
+         "region": "world",
+         "role": "alternate_product",
+         "rows": 0,
+         "source_id": "firms",
+         "upstream": "nasa_firms.viirs_noaa20_nrt",
+         "window": "past_1d"
+        },
+        {
+         "data_kind": "satellite_derived",
+         "http_status": 200,
+         "key": "firms.modis_nrt|past_1d|world|fire_source_contract.firms_csv",
+         "outcome": "empty_success",
+         "parser_contract": "fire_source_contract.firms_csv",
+         "product_id": "firms.modis_nrt",
+         "provider": "nasa_firms",
+         "region": "world",
+         "role": "alternate_product",
+         "rows": 0,
+         "source_id": "firms",
+         "upstream": "nasa_firms.modis_nrt",
+         "window": "past_1d"
+        }
+       ],
+       "independent_source_upper_bound": 0,
+       "open_keys": [
+        "firms.modis_nrt|past_1d|world|fire_source_contract.firms_csv",
+        "firms.viirs_noaa20_nrt|past_1d|world|fire_source_contract.firms_csv",
+        "firms.viirs_noaa21_nrt|past_1d|world|fire_source_contract.firms_csv"
+       ],
+       "primary_outcomes": [
+        "empty_success"
+       ],
+       "product_state": "reachable_unqualified",
+       "schema": "theheat.source-incident/v1",
+       "served_product_ids": [],
+       "source": "firms"
+      }
+     },
+     "source": "firms",
+     "status": "success"
+    },
+    {
+     "details": {
+      "incident": {
+       "attempts": [
+        {
+         "data_kind": "satellite_derived",
+         "http_status": null,
+         "key": "gpm_imerg.imerg_late_opendap|imerg_late_daily_walkback_late|rotating_window|gpm_imerg.ascii_subset",
+         "outcome": "access_refused",
+         "parser_contract": "gpm_imerg.ascii_subset",
+         "product_id": "gpm_imerg.imerg_late_opendap",
+         "provider": "nasa_gesdisc",
+         "region": "rotating_window",
+         "role": "primary",
+         "rows": null,
+         "source_id": "gpm_imerg",
+         "upstream": "nasa_gesdisc.gpm_3imergdl_07",
+         "window": "imerg_late_daily_walkback_late"
+        }
+       ],
+       "independent_source_upper_bound": 0,
+       "open_keys": [
+        "gpm_imerg.imerg_late_opendap|imerg_late_daily_walkback_late|rotating_window|gpm_imerg.ascii_subset"
+       ],
+       "primary_outcomes": [
+        "access_refused"
+       ],
+       "product_state": "access_hold",
+       "schema": "theheat.source-incident/v1",
+       "served_product_ids": [],
+       "source": "gpm_imerg"
+      }
+     },
+     "source": "gpm_imerg",
+     "status": "failed"
+    }
+   ],
+   "started_at": "2026-10-23T06:00:00Z"
+  },
+  {
+   "id": "invented-run-2",
+   "sources": [
+    {
+     "details": {
+      "incident": {
+       "attempts": [
+        {
+         "data_kind": "satellite_derived",
+         "http_status": 503,
+         "key": "firms.viirs_noaa21_nrt|past_1d|world|fire_source_contract.firms_csv",
+         "outcome": "provider_error",
+         "parser_contract": "fire_source_contract.firms_csv",
+         "product_id": "firms.viirs_noaa21_nrt",
+         "provider": "nasa_firms",
+         "region": "world",
+         "role": "primary",
+         "rows": null,
+         "source_id": "firms",
+         "upstream": "nasa_firms.viirs_noaa21_nrt",
+         "window": "past_1d"
+        },
+        {
+         "data_kind": "satellite_derived",
+         "http_status": 503,
+         "key": "firms.viirs_noaa20_nrt|past_1d|world|fire_source_contract.firms_csv",
+         "outcome": "provider_error",
+         "parser_contract": "fire_source_contract.firms_csv",
+         "product_id": "firms.viirs_noaa20_nrt",
+         "provider": "nasa_firms",
+         "region": "world",
+         "role": "alternate_product",
+         "rows": null,
+         "source_id": "firms",
+         "upstream": "nasa_firms.viirs_noaa20_nrt",
+         "window": "past_1d"
+        },
+        {
+         "data_kind": "satellite_derived",
+         "http_status": 503,
+         "key": "firms.modis_nrt|past_1d|world|fire_source_contract.firms_csv",
+         "outcome": "provider_error",
+         "parser_contract": "fire_source_contract.firms_csv",
+         "product_id": "firms.modis_nrt",
+         "provider": "nasa_firms",
+         "region": "world",
+         "role": "alternate_product",
+         "rows": null,
+         "source_id": "firms",
+         "upstream": "nasa_firms.modis_nrt",
+         "window": "past_1d"
+        },
+        {
+         "data_kind": "satellite_derived",
+         "http_status": 404,
+         "key": "firms.noaa_hms|current_utc_day_file|north_america|fire_source_contract.hms_text",
+         "outcome": "endpoint_missing",
+         "parser_contract": "fire_source_contract.hms_text",
+         "product_id": "firms.noaa_hms",
+         "provider": "noaa_nesdis_hms",
+         "region": "north_america",
+         "role": "witness",
+         "rows": null,
+         "source_id": "firms",
+         "upstream": "noaa_nesdis.hms_fire_points",
+         "window": "current_utc_day_file"
+        }
+       ],
+       "independent_source_upper_bound": 0,
+       "open_keys": [
+        "firms.modis_nrt|past_1d|world|fire_source_contract.firms_csv",
+        "firms.noaa_hms|current_utc_day_file|north_america|fire_source_contract.hms_text",
+        "firms.viirs_noaa20_nrt|past_1d|world|fire_source_contract.firms_csv",
+        "firms.viirs_noaa21_nrt|past_1d|world|fire_source_contract.firms_csv"
+       ],
+       "primary_outcomes": [
+        "provider_error"
+       ],
+       "product_state": "unavailable",
+       "schema": "theheat.source-incident/v1",
+       "served_product_ids": [],
+       "source": "firms"
+      }
+     },
+     "source": "firms",
+     "status": "failed"
+    },
+    {
+     "details": {
+      "incident": {
+       "attempts": [
+        {
+         "data_kind": "satellite_derived",
+         "http_status": null,
+         "key": "gpm_imerg.imerg_late_opendap|imerg_late_daily_walkback_late|rotating_window|gpm_imerg.ascii_subset",
+         "outcome": "access_expired",
+         "parser_contract": "gpm_imerg.ascii_subset",
+         "product_id": "gpm_imerg.imerg_late_opendap",
+         "provider": "nasa_gesdisc",
+         "region": "rotating_window",
+         "role": "primary",
+         "rows": null,
+         "source_id": "gpm_imerg",
+         "upstream": "nasa_gesdisc.gpm_3imergdl_07",
+         "window": "imerg_late_daily_walkback_late"
+        }
+       ],
+       "independent_source_upper_bound": 0,
+       "open_keys": [
+        "gpm_imerg.imerg_late_opendap|imerg_late_daily_walkback_late|rotating_window|gpm_imerg.ascii_subset"
+       ],
+       "primary_outcomes": [
+        "access_expired"
+       ],
+       "product_state": "access_hold",
+       "schema": "theheat.source-incident/v1",
+       "served_product_ids": [],
+       "source": "gpm_imerg"
+      }
+     },
+     "source": "gpm_imerg",
+     "status": "failed"
+    }
+   ],
+   "started_at": "2026-10-22T06:00:00Z"
+  },
+  {
+   "id": "invented-run-1",
+   "sources": [
+    {
+     "details": {
+      "incident": {
+       "attempts": [
+        {
+         "data_kind": "satellite_derived",
+         "http_status": 404,
+         "key": "firms.viirs_noaa21_nrt|past_1d|world|fire_source_contract.firms_csv",
+         "outcome": "endpoint_missing",
+         "parser_contract": "fire_source_contract.firms_csv",
+         "product_id": "firms.viirs_noaa21_nrt",
+         "provider": "nasa_firms",
+         "region": "world",
+         "role": "primary",
+         "rows": null,
+         "source_id": "firms",
+         "upstream": "nasa_firms.viirs_noaa21_nrt",
+         "window": "past_1d"
+        }
+       ],
+       "independent_source_upper_bound": 0,
+       "open_keys": [
+        "firms.viirs_noaa21_nrt|past_1d|world|fire_source_contract.firms_csv"
+       ],
+       "primary_outcomes": [
+        "endpoint_missing"
+       ],
+       "product_state": "unavailable",
+       "schema": "theheat.source-incident/v1",
+       "served_product_ids": [],
+       "source": "firms"
+      }
+     },
+     "source": "firms",
+     "status": "failed"
+    },
+    {
+     "details": {
+      "incident": {
+       "attempts": [
+        {
+         "data_kind": "satellite_derived",
+         "http_status": null,
+         "key": "gpm_imerg.imerg_late_opendap|imerg_late_daily_walkback_late|rotating_window|gpm_imerg.ascii_subset",
+         "outcome": "access_expired",
+         "parser_contract": "gpm_imerg.ascii_subset",
+         "product_id": "gpm_imerg.imerg_late_opendap",
+         "provider": "nasa_gesdisc",
+         "region": "rotating_window",
+         "role": "primary",
+         "rows": null,
+         "source_id": "gpm_imerg",
+         "upstream": "nasa_gesdisc.gpm_3imergdl_07",
+         "window": "imerg_late_daily_walkback_late"
+        }
+       ],
+       "independent_source_upper_bound": 0,
+       "open_keys": [
+        "gpm_imerg.imerg_late_opendap|imerg_late_daily_walkback_late|rotating_window|gpm_imerg.ascii_subset"
+       ],
+       "primary_outcomes": [
+        "access_expired"
+       ],
+       "product_state": "access_hold",
+       "schema": "theheat.source-incident/v1",
+       "served_product_ids": [],
+       "source": "gpm_imerg"
+      }
+     },
+     "source": "gpm_imerg",
+     "status": "failed"
+    }
+   ],
+   "started_at": "2026-10-21T06:00:00Z"
+  }
+ ]
+}

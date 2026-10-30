@@ -14,7 +14,11 @@ MAX_ITEMS = 32
 MAX_FACTS = 64
 MAX_LIST = 64
 MAX_BYTES = 16_384
+MAX_RECORD_FIELDS = 16
+_FIELD = re.compile(r"[a-z][a-z0-9_]{0,63}")
 # A scalar fact is referenced whole; a list-valued fact only by one exact element.
+# An element is a scalar or one flat record of scalars (e.g. one ranked Hot10 row);
+# an empty list is retained but offers nothing to reference.
 POINTER = re.compile(r"/current_facts/(0|[1-9][0-9]?)(?:/value/(0|[1-9][0-9]?))?")
 _KIND_ALIASES = {
     "all_time_high": "open_meteo_archive_high",
@@ -57,11 +61,19 @@ def _scalar(value: Any) -> bool:
         return False
 
 
+def _record(value: Any) -> bool:
+    """One flat row of named scalars; never nested and never relabelled as a scalar fact."""
+    return (type(value) is dict and 1 <= len(value) <= MAX_RECORD_FIELDS
+            and all(isinstance(key, str) and _FIELD.fullmatch(key) for key in value)
+            and all(_scalar(field) for field in value.values()))
+
+
 def _fact(value: Any) -> bool:
     if type(value) is not dict or not _string(value.get("label"), 160) or "value" not in value:
         return False
     item = value["value"]
-    valid = _scalar(item) or (type(item) is list and 1 <= len(item) <= MAX_LIST and all(_scalar(x) for x in item))
+    valid = _scalar(item) or (type(item) is list and len(item) <= MAX_LIST
+                              and all(_scalar(x) or _record(x) for x in item))
     return valid and (value.get("unit") in (None, "") or _string(value.get("unit"), 80))
 
 

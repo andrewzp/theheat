@@ -449,8 +449,15 @@ def _refill_drain(
     budget = candidate_budget if candidate_budget is not None else CandidateBudget.for_operation("drain")
     # A failed or untrustworthy ranking holds the slate with zero writer calls;
     # walking the raw queue order instead would buy events nobody ranked.
+    from src.orchestrator import portfolio_selection as _portfolio
+
     try:
-        ranked = _triage.select_survivors(bot_state, queue, refill=True)
+        # W08 (THEHEAT_PORTFOLIO_SELECTION, default off): importance-vector portfolio order.
+        ranked = (_portfolio.select(bot_state, queue, cap=None, full=True) if _portfolio.enabled()
+                  else _triage.select_survivors(bot_state, queue, refill=True))
+    except _portfolio.PortfolioRankingFailed as exc:
+        return _hold_operation(bot_state, current_run, funnel_sink, list(queue), budget,
+                               note="portfolio_ranking_failed", error=exc.code)
     except Exception as exc:  # noqa: BLE001
         return _hold_operation(bot_state, current_run, funnel_sink, list(queue), budget,
                                note="selector_unavailable", error=str(exc)[:200])
@@ -995,8 +1002,15 @@ def _drain_and_write_triage_queue(
     survivors = live_queue  # default: legacy passthrough
     if triage_enabled and live_queue:
         cap = budget.limit if budget.limit is not None else _triage.MAX_DRAFTS_PER_CYCLE
+        from src.orchestrator import portfolio_selection as _portfolio
+
         try:
-            selected = _triage.select_survivors(bot_state, live_queue, global_cap=cap)
+            # W08 (THEHEAT_PORTFOLIO_SELECTION, default off): importance-vector portfolio within the same cap.
+            selected = (_portfolio.select(bot_state, live_queue, cap=cap) if _portfolio.enabled()
+                        else _triage.select_survivors(bot_state, live_queue, global_cap=cap))
+        except _portfolio.PortfolioRankingFailed as exc:
+            return _hold_operation(bot_state, current_run, funnel_sink, live_queue, budget,
+                                   note="portfolio_ranking_failed", error=exc.code)
         except Exception as exc:  # noqa: BLE001 — held loudly below, never written through
             return _hold_operation(bot_state, current_run, funnel_sink, live_queue, budget,
                                    note="selector_unavailable", error=str(exc)[:200])

@@ -79,6 +79,11 @@ def fetch_metrics(tweet_ids: list[str]) -> dict[str, dict]:
     ids = _unique_ids(tweet_ids)
     if not ids:
         return {}
+    from src.two_bot.call_inventory import background_lane_enabled, consume
+    if not background_lane_enabled("metrics"):
+        # Exact opt-in at the real call boundary, before any client construction.
+        print("[twitter_metrics] THEHEAT_METRICS_ENABLED is not 1, skipping metrics fetch")
+        return {}
 
     client = _get_client()
     if client is None:
@@ -89,7 +94,13 @@ def fetch_metrics(tweet_ids: list[str]) -> dict[str, dict]:
         metrics_by_id: dict[str, dict] = {}
         for batch in _batches(ids):
             # The four configured credentials are OAuth1, not a bearer token.
-            response = client.get_tweets(ids=batch, tweet_fields=["public_metrics", "created_at"], user_auth=True)
+            ticket = consume("x_metrics_read", provider="x")
+            try:
+                response = client.get_tweets(ids=batch, tweet_fields=["public_metrics", "created_at"], user_auth=True)
+            except BaseException:
+                ticket.settle("unknown")
+                raise
+            ticket.settle("returned")
             for tweet in response.data or []:
                 tweet_id = str(_tweet_field(tweet, "id") or "")
                 public_metrics = _tweet_field(tweet, "public_metrics")

@@ -43,7 +43,9 @@ any mixed product, platform or minute is refused rather than altered.
 ## Operator flow
 
 1. Open the draft in the dashboard. For CRW, radar or a cone, first paste the exact
-   retained identity printed by the retention command (below). **Preview graphic**
+   retained identity printed by the retention command (below). A CRW draft whose
+   collector retained its packet arrives with that packet already selected (the help
+   text says so); any other packet is refused. **Preview graphic**
    builds the image from the saved source. On a phone, **View full size** opens it at
    the full screen width; Escape or **Close full-size image** returns to the page.
    For a published image, **Original as retained** shows the exact original beside
@@ -62,6 +64,15 @@ any mixed product, platform or minute is refused rather than altered.
 5. **Approve + Post** dispatches the existing manual post. The sender rebuilds the
    PNG and both descriptions from the saved source, checks every identity and the
    source time again, and uploads exactly the reviewed bytes and description.
+
+The picker and **Operations › Post-image families** name each family's lane (native,
+retained packet or published), what it needs and the input missing on this deployment.
+A store setting is reported as configuration only, never as proven access or hosted
+rendering. **Delivered graphics** rebuilds a delivered CRW, radar or cone image from the
+retained identity its own receipt-named revision recorded (the same reader as the
+preview and sender); a missing store or artifact holds and nothing is substituted.
+In the retained-input field only the exact SHA256 is accepted: a web address, file path
+or name is named and refused before any request.
 
 Editing the text, changing quote references, replacing or removing the image are
 real revisions: they revoke the joint review and any approval. If the renderer or
@@ -129,11 +140,48 @@ against the saved source.
 
 Published originals, their pixel-equivalent PNGs and retained CRW source packets
 need exact bytes that both the dashboard preview and the bot's sender can read.
-They live in the existing immutable artifact store, configured with
-`THEHEAT_MEDIA_STORE=sqlite:<absolute path>`; Gist keeps only a SHA256 reference.
-Without a configured store those lanes show a named hold and native charts are
-unaffected. Retain already acquired private files locally (no fetch, upload
-endpoint, review or approval):
+They live in an immutable content-addressed store; Gist keeps only a SHA256
+reference. Without a configured store those lanes show a named hold and native
+charts and text posts are unaffected. There is never a fallback to another store,
+a URL, an older asset or another rendering profile.
+
+### Store configuration (two separate capabilities)
+
+| Who | Capability | Settings (server-side only) |
+|---|---|---|
+| Vercel preview function | read-only | `THEHEAT_MEDIA_STORE=postgres`, `THEHEAT_MEDIA_STORE_DSN=<reader DSN>` |
+| Actions manual sender (`manual_tweet`) | read-only | repo variable `THEHEAT_MEDIA_STORE=postgres`, secret `THEHEAT_MEDIA_STORE_DSN` |
+| CRW collector retention (opt-in) | insert-only | variable `THEHEAT_CRW_PACKET_RETENTION=1`, variable `THEHEAT_MEDIA_WRITER_STORE=postgres`, secret `THEHEAT_MEDIA_WRITER_DSN` |
+| Local operator | either | `--store sqlite:<absolute path>` (both), or the variables above |
+
+`.github/workflows/bot.yml` passes the reader settings only to `manual_tweet` runs and
+the writer settings only to other runs, and only when retention is `1`. Never give
+the writer DSN to the preview, the browser or the sender. A DSN is a keyword/value
+string (`host= port= dbname= user= password= sslmode=verify-full sslrootcert=system`
+or an absolute CA file; `channel_binding=require` is implied). URLs, service names,
+password files, client certificates and ambient `PG*` variables are refused before
+any connection. Each operation uses one short transaction (5 s connect, 10 s
+statement, 20 s transaction) and closes its connection. The PostgreSQL table is
+`theheat_media.artifacts` (migration 009); the reader role needs only `SELECT`, the
+writer only `SELECT, INSERT`. Provisioning the database, roles and secrets is a
+separate operator step this code does not perform.
+
+### Collector retention (CRW, default off)
+
+With `THEHEAT_CRW_PACKET_RETENTION=1` the CRW collector keeps the exact primary
+ERDDAP CSV and metadata bytes it already downloaded (no extra request), verifies
+them with the same rules the preview uses, retains the packet through the writer and
+saves only its identity on the draft. The run report's `media_retention` counts each
+outcome: `retained`, `store_unavailable`, `retention_unknown` (acknowledgement lost:
+not counted as retained; rerunning retention is safe), `unsupported_source_leg` (the
+NOAA STAR fallback is never relabelled as primary), `source_unqualified`,
+`packet_unavailable`, `packet_too_large`, `packet_invalid`, `retention_error`. Any
+outcome other than `retained` only holds the image; the text story is unchanged.
+
+### Retention, export and restore commands
+
+Retain already acquired private files locally (no fetch, upload endpoint, review or
+approval):
 
 ```sh
 python scripts/retain_gist_media.py published --product nhc_track_cone_v1 \
@@ -142,7 +190,27 @@ python scripts/retain_gist_media.py published --product nhc_track_cone_v1 \
 python scripts/retain_gist_media.py crw-packet --packet PACKET.json
 python scripts/retain_gist_media.py verify --manifest SHA256
 python scripts/retain_gist_media.py backup --target /absolute/new-backup.sqlite3
+python scripts/retain_gist_media.py export --target /absolute/new-dir \
+  --manifest SHA256 --crw-packet SHA256
+python scripts/retain_gist_media.py restore --source /absolute/export-dir
+python scripts/retain_gist_media.py plan --state /absolute/private-state.json
 ```
+
+`plan` reads an owner-only local copy of the saved state (nothing is fetched) and lists
+every retained item its drafts need, why (unresolved delivery, current joint review or
+approval, delivered history, attached) and whether this store can serve it. Missing or
+changed items are named holds (`media_original_missing`, `media_source_packet_missing`,
+`media_asset_changed`, ...), exactly the holds the preview and the sender apply before
+any attachment or upload; present items are grouped into `export` arguments.
+
+`export` writes a new owner-only directory with each selected item's complete,
+re-verified closure (manifest, original, canonical PNG, receipt, product and reuse
+references; or the CRW packet) under their exact SHA256 names. `restore` checks every
+file, size, hash and relation before inserting anything through the writer, and
+refuses missing, corrupt, oversized, conflicting, symlinked, FIFO/device or
+unexpected entries and any existing output. Include every asset referenced by an
+unresolved delivery or a current review. Export is not a database backup or a draft
+migration; PostgreSQL has no `backup` command here, and SQLite backups keep working.
 
 Inputs must be absolute, non-symlinked, owner-only (0600) files. A product
 reference and a reuse reference are both required; unknown rights, missing labels,
@@ -157,12 +225,15 @@ one referenced by history, an unresolved delivery or a current review.
 |---|---|
 | `media_store_unavailable` | No media store here; native charts still work. Configure the store or post text only. |
 | `media_retained_input_required` | Paste the retained packet/asset identity. |
+| `media_source_packet_mismatch` | Not the CRW packet the collector retained for this draft; select the draft's own packet. |
+| `media_source_packet_invalid` | The draft's packet reference is malformed; the image stays held (text is unaffected). |
 | `media_source_packet_missing`, `media_original_missing` | Retain the input locally again; nothing is fetched. |
 | `media_asset_changed`, `media_asset_invalid` | Bytes, rights, labels, times or format changed or are incomplete; retain again. |
 | `media_context_mismatch` | The image is for another storm, advisory, warning, place or time. |
 | `media_published_stale`, `media_forecast_ended`, `media_detection_stale`, `media_source_stale` | Past its posting window; it stays inspectable but cannot be approved or sent. |
 | `media_renderer_changed` | Recipe/profile changed; preview again and record a new joint review, or remove. |
 | unknown delivery | An upload or post acknowledgement was lost; reconcile, never resend. |
+| store fails after approval | The send stops before any intent; the draft returns to pending. When the store is back, approve again (a reconnected store authorizes nothing). |
 
 Recency rules for the store-backed kinds: CRW uses the unchanged 0–5 day product
 rule; radar the 15-minute editorial ceiling inside its warning interval; the cone

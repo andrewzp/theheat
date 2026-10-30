@@ -115,9 +115,42 @@ function verifyConfiguredAuth(request) {
   return { ok: false, response: unauthorizedResponse() }
 }
 
+const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"])
+
+function crossOriginRefusal() {
+  return Response.json({
+    error: "Changes must come from this dashboard's own page.",
+    code: "cross_origin_mutation_refused",
+  }, { status: 403, headers: { "Cache-Control": "no-store" } })
+}
+
+// Browsers attach cached Basic credentials to cross-site requests, so a valid
+// credential alone cannot authorize a mutation. Generalizes the post-feedback
+// route's same-origin rule to every protected state-changing request: Origin
+// must equal the request origin and the raw Host. A non-browser caller without
+// Origin or Fetch Metadata keeps working; it must still authenticate.
+export function mutationOriginError(request) {
+  if (SAFE_METHODS.has(request.method)) return null
+  const origin = request.headers.get("origin")
+  const site = request.headers.get("sec-fetch-site")
+  if (site && !["same-origin", "none"].includes(site)) return crossOriginRefusal()
+  if (origin === null) return null
+  let expected, parsed
+  try { expected = new URL(request.url); parsed = new URL(origin) } catch { return crossOriginRefusal() }
+  // The raw Host is what the browser addressed; frameworks may canonicalize a
+  // loopback request URL to localhost, so loopback names compare as loopback.
+  const host = (request.headers.get("host") || expected.host).toLowerCase()
+  const loopback = value => /^(?:127\.0\.0\.1|localhost|\[::1\])(?::\d{1,5})?$/.test(value)
+  if (origin !== parsed.origin || parsed.host !== host || parsed.protocol !== expected.protocol
+      || (expected.host !== host && !(loopback(expected.host) && loopback(host)))) return crossOriginRefusal()
+  return null
+}
+
 export function verifyDashboardAuth(request) {
   const result = verifyConfiguredAuth(request)
   if (!result.ok) return result
+  const originError = mutationOriginError(request)
+  if (originError) return { ok: false, response: originError }
   const previewError = localPreviewGuard(request)
   return previewError ? { ok: false, response: previewError } : result
 }

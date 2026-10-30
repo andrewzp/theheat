@@ -16,7 +16,8 @@ import sqlite3
 from typing import Any
 
 from src.commands import batch_journal, batch_worker_journal, batch_result_journal, check_journal, check_execution_journal, domain_journal, spend_journal
-from src.commands import media_journal
+from src.commands import delivery_reconciliation, media_journal
+from src.commands.command_roles import require_transitions
 from src.commands.reducer import AutomaticPolicy, failure_result, reduce_command
 from src.commands.schema import Command, CommandError, Principal, authorize, canonical_json, utc_datetime, utc_text
 
@@ -80,6 +81,7 @@ class SQLiteAuthority:
         allowed.update(check_journal._TABLES)
         allowed.update(check_execution_journal._TABLES)
         allowed.update(media_journal._TABLES)
+        allowed.update(delivery_reconciliation._TABLES)
         tables = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")}
         if tables - allowed:
             raise domain_journal.DomainJournalError("Refusing a database that is not the separate local command authority")
@@ -249,6 +251,7 @@ class SQLiteAuthority:
                         raise CommandError("forbidden", "Operator authorization was revoked before execution")
                     from src.editorial.policy import current_editorial_policy
                     reduction = reduce_command(state, command, principal, now=clock, policy=policy, editorial_policy=current_editorial_policy())
+                    require_transitions(state, reduction.state, command.action, tuple(t.draft_id for t in command.targets))
                     result = {"status": "applied" if reduction.changed_ids else "unchanged", "changed_ids": list(reduction.changed_ids),
                               "identities": list(reduction.identities), "publish_intent_id": reduction.publish_intent_id}
                     if reduction.changed_ids:
@@ -493,6 +496,28 @@ class SQLiteAuthority:
             self._check_environment(connection)
             registration = batch_journal.read(connection, job_id)
             return domain_journal.read_artifact(connection, registration["plan_sha256"])
+
+    def delivery_reconciliation(self, request: dict, principal: Principal, *, now: datetime | None = None,
+                                before_commit: Callable[[], None] | None = None) -> dict:
+        """Confirm/cancel one publish attempt against operator receipt evidence.
+
+        Refusals are terminal and change nothing; the state version and the
+        append-only decision row commit together or not at all.
+        """
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                self._check_environment(connection)
+                self._check_tables(connection)
+                result = delivery_reconciliation.apply(connection, request, actor=principal.subject, role=principal.role,
+                                                       now=utc_text(now or datetime.now(UTC)))
+                if before_commit is not None:
+                    before_commit()
+                connection.commit()
+                return result
+            except BaseException:
+                connection.rollback()
+                raise
 
     def read(self) -> tuple[int, dict]:
         with closing(self._connect()) as connection:

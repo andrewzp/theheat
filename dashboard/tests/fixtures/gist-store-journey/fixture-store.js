@@ -14,11 +14,16 @@ from pathlib import Path
 from src.media import gist_assets
 from tests.gist_store_helpers import CLOCKS, retain, saved_state
 value=json.load(sys.stdin)
-store=gist_assets.configured()
+# Seeding is retention: the explicit writer capability on this run's private local store.
+store=gist_assets.configured_writer({gist_assets.WRITER_ENV: os.environ[gist_assets.ENV]})
 drafts,retained=[],{}
-for family in ('crw','radar','cone'):
+for family in ('crw','crw_collected','radar','cone'):
     drafts.append(saved_state(family)['drafts'][0])
     retained[family]=retain(family,store)
+# A different valid CRW packet (same bytes, other acquisition times): never the collected draft's own.
+from src.media import gist_crw_media
+from tests.gist_crw_helpers import varied_inputs
+retained['crw_other']=gist_crw_media.retain_packet(store,{**varied_inputs('caribbean')[1],'csv_retrieved_at':'2026-06-16T12:45:00Z'})
 state={'drafts':drafts,'publish_ledger':{},'errors':[],'unrelated':{'preserve':True},'run_history':[value['runtime']]}
 print(json.dumps(dict(raw=json.dumps(state,ensure_ascii=False),clocks={k:list(v) for k,v in CLOCKS.items()},retained=retained)))
 `

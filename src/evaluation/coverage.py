@@ -20,7 +20,9 @@ MAX_RESULT_BYTES = 2 * 1024 * 1024
 NAMESPACES = {SET, DECISION, ASSESSMENT, "retained-report-artifact-v1", "retained-report-revision-v1",
     "report-development-v1", "scientific-supply-ghcn-v1", "cyclone-supply-nhc-v1", "physical-episode-revision-v1",
     "sourced-generation-input-v1", "sourced-generation-job-v1", "candidate-admission-input-v1",
-    "command-intent-v1", "command-result-v1", "command-core-v1"}
+    "command-intent-v1", "command-result-v1", "command-core-v1",
+    # W15.2: exact rows of a supplied saved Gist state (draft, receipt, suppression, source run).
+    "gist-state-record-v1"}
 STAGES = ("source_input_retained", "scientific_evidence_qualified", "physical_episode_detected", "story_prepared",
           "report_review_opened", "generation_accepted", "candidate_retained", "checks_completed", "draft_saved", "publication_confirmed")
 CODES = set("reference_pending grouping_unresolved translation_pending source_claim_unqualified first_availability_unknown "
@@ -28,7 +30,9 @@ CODES = set("reference_pending grouping_unresolved translation_pending source_cl
     "source_failed source_partial source_not_scheduled source_stale scientific_gate_held selection_not_observed writer_rejected "
     "provider_unavailable checks_failed checks_unavailable manual_review_pending publication_paused publication_unknown "
     "source_or_reference_corrected later_knowledge denominator_not_qualified quiet_period_unqualified "
-    "reference_selection_unqualified unsupported_trace_adapter".split())
+    "reference_selection_unqualified unsupported_trace_adapter "
+    # W15.2 production-match miss reasons; each names what differed, never a verdict.
+    "place_mismatch hazard_mismatch budget_excluded".split())
 CHOICES = {"D1": {"one_reported_episode_candidate", "require_supported_splits", "exclude", "hold"},
            "D2": {"one_reported_episode_candidate", "require_supported_splits", "exclude", "hold"},
            "D3-taxonomy": {"forecast_candidate", "project_report_candidate", "hold"},
@@ -287,7 +291,7 @@ class ResolvedUnit:
     encoded: bytes
 
     @classmethod
-    def create(cls, *, unit_id, source_label, stages, decisions=(), holds=()):
+    def create(cls, *, unit_id, source_label, stages, decisions=(), holds=(), match=None):
         identifier(unit_id)
         text(source_label, 300)
         array(stages, len(STAGES))
@@ -300,7 +304,12 @@ class ResolvedUnit:
         require(all(type(value) is RetainedInput for value in decisions), "coverage_retained_decision_required")
         retained = [value.value(DECISION) for value in decisions]
         array(retained, 32)
-        return cls(p._canonical(dict(unit_id=unit_id, source_label=source_label, stages=stages, decisions=retained, holds=list(holds))))
+        row = dict(unit_id=unit_id, source_label=source_label, stages=stages, decisions=retained, holds=list(holds))
+        if match is not None:
+            # Reviewable matching evidence from production_match; carried, never interpreted here.
+            require(type(match) is dict and len(p._canonical(match)) <= 32768, "coverage_match_bound")
+            row["match"] = match
+        return cls(p._canonical(row))
 
 
 def evaluate(retained_set, resolved, *, cutoff, evaluated_at, state_version, policy_sha256, input_refs):
@@ -368,7 +377,8 @@ def evaluate(retained_set, resolved, *, cutoff, evaluated_at, state_version, pol
         units.append(dict(unit_id=candidate["unit_id"], source_label=item["source_label"], report_refs=candidate["report_refs"],
             reference_state=state, selected_relevance_decision_ref=selected_ref,
             source_class=candidate["source_class"], hazards=candidate["hazard_labels"], regions=candidate["region_memberships"],
-            original_time_labels=candidate["time_fields"], holds=sorted(holds), stages=[cells.get(name, stage(name)) for name in STAGES]))
+            original_time_labels=candidate["time_fields"], holds=sorted(holds), stages=[cells.get(name, stage(name)) for name in STAGES],
+            **({"match_evidence": item["match"]} if "match" in item else {})))
     require(decisions_seen == set(declared_decisions), "coverage_decision_resolution_incomplete")
     input_refs = list({digest(ref): ref for ref in [*input_refs, set_ref, *document["human_decision_refs"]]}.values())
     lineages = {ref["lineage_id"] for candidate in document["units"] for ref in candidate["report_refs"]}

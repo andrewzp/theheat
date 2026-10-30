@@ -60,6 +60,12 @@ STATION_DLY_URL = "https://www.ncei.noaa.gov/pub/data/ghcn/daily/all/{station_id
 META_WATERMARK_KEY = "last_diff_date"
 
 
+def _consume_acquisition() -> None:
+    """Declared periodic acquisition call: counted before egress, price unknown."""
+    from src.two_bot.call_inventory import consume
+    consume("threshold_acquisition", join=False)
+
+
 def _fetch_diff(start: date, end: date, timeout: int = 120) -> bytes | None:
     """Fetch exactly the source interval requested, without alternate predecessors.
 
@@ -70,6 +76,7 @@ def _fetch_diff(start: date, end: date, timeout: int = 120) -> bytes | None:
     if not 0 < (end - start).days <= 31:
         raise ArtifactError("invalid_threshold_diff_interval")
     url = f"{BASE_URL}/superghcnd_diff_{start:%Y%m%d}_to_{end:%Y%m%d}.tar.gz"
+    _consume_acquisition()
     resp = requests.get(url, timeout=timeout, allow_redirects=False)
     if resp.status_code == 404:
         return None
@@ -82,6 +89,7 @@ def _fetch_diff(start: date, end: date, timeout: int = 120) -> bytes | None:
 def _fetch_station_thresholds(station_id: str, timeout: int = 120):
     """Recompute one station from its full .dly file after update/delete diffs."""
     url = STATION_DLY_URL.format(station_id=station_id)
+    _consume_acquisition()
     resp = requests.get(url, timeout=timeout)
     resp.raise_for_status()
     return compute_thresholds(parse_dly_bytes(resp.content))

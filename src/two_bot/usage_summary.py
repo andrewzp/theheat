@@ -10,6 +10,15 @@ from src.two_bot.usage_observations import summarize_observations
 
 INSTRUMENTED_STAGES = ['writer', 'fact_check', 'critic', 'safety', 'newsworthiness_search', 'newsworthiness_verify']
 UNTRACKED_STAGES = ['workflow_agents', 'other_account_usage']
+# Discovery (news search/verification) is reported apart from candidate selection.
+SPEND_CLASS_STAGES = {'discovery': ['newsworthiness_search', 'newsworthiness_verify'],
+                      'selection': ['writer', 'fact_check', 'critic', 'safety']}
+_CLASS_FIELDS = ('recorded_calls', 'priced_calls', 'unpriced_calls', 'legacy_calls')
+
+
+def _spend_class(key) -> str:
+    stage = key.split('|', 1)[0] if isinstance(key, str) else ''
+    return next((name for name, stages in SPEND_CLASS_STAGES.items() if stage in stages), 'other')
 SCOPE = 'Instrumented writer, checker, critic, safety and news responses in state-writing runs; table estimates, not account totals or invoices.'
 LIMITS = [
     "Instrumented stages describe this code version, not proof that retained runs captured every call; historical usage is not backfilled.",
@@ -39,13 +48,14 @@ def summarize_usage(state, *, now=None) -> dict:
     recorded = priced = legacy_usd = 0.0
     calls = priced_calls = unpriced_calls = missing_usage = legacy_calls = 0
     row_count = legacy_rows = inconsistent = excluded = 0
+    classes = {name: dict.fromkeys(_CLASS_FIELDS, 0) for name in (*SPEND_CLASS_STAGES, 'other')}
     for day, bucket in (ledger.items() if isinstance(ledger, dict) else []):
         if not _is_valid_day_key(day) or not day.startswith(prefix) or day > today:
             continue
         if not isinstance(bucket, dict):
             excluded += 1
             continue
-        for agg in bucket.values():
+        for key, agg in bucket.items():
             if not isinstance(agg, dict) or not _money(agg.get("usd")):
                 excluded += 1
                 continue
@@ -57,9 +67,12 @@ def summarize_usage(state, *, now=None) -> dict:
                 continue
             count = int(agg["calls"])
             calls += count
+            spend = classes[_spend_class(key)]
+            spend["recorded_calls"] += count
             if not any(field in agg for field in _COVERAGE_FIELDS):
                 legacy_rows += 1
                 legacy_calls += count
+                spend["legacy_calls"] += count
                 legacy_usd += agg["usd"]
                 continue
             if (agg.get("cost_coverage_invalid") or not coverage_fields_valid(agg)
@@ -74,6 +87,9 @@ def summarize_usage(state, *, now=None) -> dict:
             unpriced_calls += agg["unpriced_calls"]
             missing_usage += agg["missing_usage_calls"]
             old_calls = count - agg["priced_calls"] - agg["unpriced_calls"]
+            spend["priced_calls"] += agg["priced_calls"]
+            spend["unpriced_calls"] += agg["unpriced_calls"]
+            spend["legacy_calls"] += old_calls
             legacy_calls += old_calls
             old_usd = max(0.0, agg["usd"] - agg["priced_usd"])
             legacy_usd += old_usd
@@ -97,5 +113,6 @@ def summarize_usage(state, *, now=None) -> dict:
         "legacy_rows": legacy_rows, "inconsistent_rows": inconsistent, "excluded_rows": excluded,
         "instrumented_stages": list(INSTRUMENTED_STAGES), "untracked_stages": list(UNTRACKED_STAGES), "scope": SCOPE, "limitations": list(LIMITS),
         "budget_enforced": False,
+        "spend_classes": classes if available else None,
         "usage_observation_window": summarize_observations(state.get("llm_usage_observations") if hasattr(state, "get") else None),
     }

@@ -1,182 +1,109 @@
 #!/usr/bin/env python3
-"""Bootstrap the GHCN-Daily threshold SQLite from the full archive.
+"""Owner-run GHCN-Daily threshold rebuild from explicit local inputs.
 
-This is a ONE-TIME local run on the developer's machine. The result
-(data/station_thresholds.sqlite) is then uploaded as a GitHub Release
-asset and downloaded by CI at job start.
+Replaces the old one-shot bootstrap that silently downloaded the whole archive.
+Every step is explicit, bounded and restartable; nothing uploads.
 
-What this does:
-  1. Downloads ghcnd_all.tar.gz (~3.44 GB compressed) from NOAA NCEI.
-  2. Streams through all per-station .dly files.
-  3. For each station with TMAX/TMIN LASTYEAR >= active_cutoff, computes
-     all-time / monthly / calendar-date records and climatological means.
-  4. Writes everything to station_thresholds.sqlite.
+  fetch-archive  bounded resumable download of ghcnd_all.tar.gz with a receipt
+                 (--max-bytes/--deadline-seconds/--max-retries are required)
+  plan           exact inputs (stations/inventory/countries files + archive),
+                 snapshot cutoff, QC policy, active universe and partitions
+  build          one archive pass over the selected pending partitions; each
+                 partition is published only when complete
+  assemble       SQLite artifact + gzip asset + V2 manifest + build manifest
 
-Runtime: ~30-60 minutes on M-series Mac with fast internet.
-Disk: ~5 GB temporary (tarball download); SQLite file ends up around 1 GB.
-
-Prerequisites:
-  - Run refresh_station_inventory.py first (station rows must exist).
-  - At least 6 GB free disk space for the tarball download.
-
-Usage:
-  python -m scripts.build_station_thresholds [options]
-
-  Options:
-    --db PATH       Path to SQLite file (default: data/station_thresholds.sqlite)
-    --tarball PATH  Use a pre-downloaded tarball instead of re-downloading
-    --no-download   Skip download (assumes tarball already exists at default path)
-    --max-stations N  Stop after N stations (for testing; omit for full run)
-    --dry-run       Parse but don't write to DB
+Station/inventory/country text files are the NOAA ghcnd-stations.txt,
+ghcnd-inventory.txt and ghcnd-countries.txt files, saved by the owner.
+Then verify and plan the upload with ``scripts/threshold_package.py``.
+Each command prints JSON. Exit 0 ready/planned, 1 other status, 2 refused input.
 """
 
 from __future__ import annotations
 
 import argparse
-import sys
-import time
+import json
 from pathlib import Path
+import sys
 
-import requests
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from src.data.ghcn_db import DEFAULT_DB_PATH, open_db, load_active_stations, upsert_thresholds
-from src.data.ghcn_format import (
-    compute_thresholds,
-    stream_station_obs_from_tar,
-)
-
-TARBALL_URL = "https://www.ncei.noaa.gov/pub/data/ghcn/daily/ghcnd_all.tar.gz"
-DEFAULT_TARBALL_PATH = Path(__file__).parent.parent / "data" / "_ghcnd_all.tar.gz"
+from src.data import acquisition_dependencies as deps  # noqa: E402
+from src.data import threshold_rebuild as rebuild  # noqa: E402
 
 
-# ---------------------------------------------------------------------------
-# Download with progress
-# ---------------------------------------------------------------------------
-
-def _download_tarball(dest: Path, chunk_size: int = 1024 * 1024) -> None:
-    """Stream-download the tarball, printing progress every 100 MB."""
-    print(f"Downloading {TARBALL_URL}")
-    print(f"→ {dest}")
-    dest.parent.mkdir(parents=True, exist_ok=True)
-
-    resp = requests.get(TARBALL_URL, stream=True, timeout=300)
-    resp.raise_for_status()
-
-    total_bytes = 0
-    t0 = time.monotonic()
-    with open(dest, "wb") as f:
-        for chunk in resp.iter_content(chunk_size=chunk_size):
-            f.write(chunk)
-            total_bytes += len(chunk)
-            mb = total_bytes / (1024 ** 2)
-            if int(mb) % 100 == 0 and mb > 0:
-                elapsed = time.monotonic() - t0
-                print(f"  {mb:.0f} MB downloaded in {elapsed:.0f}s ...", flush=True)
-
-    elapsed = time.monotonic() - t0
-    gb = total_bytes / (1024 ** 3)
-    print(f"  ✓ {gb:.2f} GB downloaded in {elapsed:.0f}s")
+def _paths(args) -> dict[str, Path]:
+    return {"stations": args.stations, "inventory": args.inventory, "countries": args.countries,
+            "archive": args.archive}
 
 
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
+def _emit(document: dict) -> int:
+    print(json.dumps(document, sort_keys=True, indent=2))
+    return 0 if document.get("status") in {"planned", "ready"} else 1
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description="Bootstrap GHCN threshold SQLite from full archive.")
-    parser.add_argument("--db", type=Path, default=DEFAULT_DB_PATH)
-    parser.add_argument("--tarball", type=Path, default=DEFAULT_TARBALL_PATH)
-    parser.add_argument("--no-download", action="store_true")
-    parser.add_argument("--max-stations", type=int, default=None)
-    parser.add_argument("--dry-run", action="store_true")
-    args = parser.parse_args()
 
-    print("=== GHCN-Daily threshold bootstrap ===")
-    print(f"DB:      {args.db}")
-    print(f"Tarball: {args.tarball}")
-
-    # 1. Download tarball if needed
-    if args.no_download:
-        if not args.tarball.exists():
-            print(f"ERROR: --no-download specified but {args.tarball} not found.", file=sys.stderr)
-            return 1
-        print(f"Using existing tarball: {args.tarball}")
-    else:
-        _download_tarball(args.tarball)
-
-    # 2. Load active station set from DB (to filter which stations to process)
-    print(f"\nLoading active stations from {args.db} ...", flush=True)
-    if not args.db.exists():
-        print(
-            f"ERROR: {args.db} not found. Run scripts/refresh_station_inventory.py first.",
-            file=sys.stderr,
-        )
-        return 1
-
-    with open_db(args.db) as conn:
-        active_stations = load_active_stations(conn)
-
-    active_ids = frozenset(s["station_id"] for s in active_stations)
-    print(f"  {len(active_ids):,} active stations to process")
-
-    if args.max_stations is not None:
-        active_ids = frozenset(list(active_ids)[: args.max_stations])
-        print(f"  [--max-stations] Capped at {len(active_ids)} stations")
-
-    # 3. Stream through tarball, computing thresholds one station at a time.
-    print(f"\nStreaming {args.tarball} and writing thresholds ...", flush=True)
-    t0 = time.monotonic()
-    written = 0
-    skipped = 0
-    total_obs = 0
-
-    db_context = open_db(args.db) if not args.dry_run else None
-    conn = db_context.__enter__() if db_context else None
+def main(argv: list[str] | None = None, *, session_factory=None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    sub = parser.add_subparsers(dest="command", required=True)
+    fetch = sub.add_parser("fetch-archive")
+    fetch.add_argument("--dest", type=Path, required=True)
+    fetch.add_argument("--max-bytes", type=int, required=True)
+    fetch.add_argument("--deadline-seconds", type=float, required=True)
+    fetch.add_argument("--max-retries", type=int, required=True)
+    for name in ("plan", "build", "assemble"):
+        command = sub.add_parser(name)
+        for flag in ("--stations", "--inventory", "--countries", "--archive"):
+            command.add_argument(flag, type=Path, required=True)
+        if name == "plan":
+            command.add_argument("--snapshot-date", required=True)
+            command.add_argument("--partitions", type=int, required=True)
+            command.add_argument("--active-year-cutoff", type=int)
+            command.add_argument("--archive-receipt", type=Path)
+            command.add_argument("--output", type=Path, required=True)
+        else:
+            command.add_argument("--plan", type=Path, required=True)
+            command.add_argument("--work-dir", type=Path, required=True)
+        if name == "build":
+            command.add_argument("--partition", type=int, action="append", help="repeat; default all pending")
+            command.add_argument("--deadline-seconds", type=float, required=True)
+        if name == "assemble":
+            command.add_argument("--out-dir", type=Path, required=True)
+    args = parser.parse_args(argv)
     try:
-        with open(args.tarball, "rb") as f:
-            for i, (_station_id, obs_list) in enumerate(
-                stream_station_obs_from_tar(f, station_ids=active_ids),
-                1,
-            ):
-                total_obs += len(obs_list)
-                t = compute_thresholds(obs_list)
-                if t is None:
-                    skipped += 1
-                    continue
-                if conn is not None:
-                    upsert_thresholds(conn, t)
-                    if i % 500 == 0:
-                        conn.commit()
-                written += 1
-                if i % 500 == 0:
-                    elapsed = time.monotonic() - t0
-                    print(f"  {i:,} stations processed ({elapsed:.0f}s) ...", flush=True)
-        if conn is not None:
-            conn.commit()
-    finally:
-        if db_context is not None:
-            db_context.__exit__(None, None, None)
+        if args.command == "fetch-archive":
+            if session_factory is None:
+                import requests
 
-    if args.dry_run:
-        elapsed = time.monotonic() - t0
-        print(f"\n[dry-run] {written:,} stations parsed, {skipped} skipped, {total_obs:,} obs in {elapsed:.0f}s")
-        return 0
-
-    if written == 0:
-        print("ERROR: No station thresholds were written.", file=sys.stderr)
-        return 1
-
-    elapsed = time.monotonic() - t0
-    db_mb = args.db.stat().st_size / (1024 ** 2)
-    print(f"  ✓ {written:,} stations written, {skipped} skipped in {elapsed:.0f}s")
-    print(f"  Observations parsed: {total_obs:,}")
-    print(f"  DB size: {db_mb:.1f} MB")
-
-    print("\n✓ Bootstrap complete.")
-    print("Next: upload data/station_thresholds.sqlite as a GitHub Release asset.")
-    return 0
+                session_factory = requests.Session
+            return _emit(rebuild.fetch_archive(args.dest, session=session_factory(), max_bytes=args.max_bytes,
+                                               deadline_seconds=args.deadline_seconds, max_retries=args.max_retries))
+        if args.command == "plan":
+            plan = rebuild.build_plan(stations=args.stations, inventory=args.inventory, countries=args.countries,
+                                      archive=args.archive, snapshot_date=args.snapshot_date,
+                                      partitions=args.partitions, active_year_cutoff=args.active_year_cutoff,
+                                      archive_receipt=args.archive_receipt)
+            if args.output.exists() and json.loads(args.output.read_text()).get("plan_sha256") != plan["plan_sha256"]:
+                raise rebuild.RebuildError("threshold_plan_output_exists")
+            rebuild._atomic_bytes(args.output, json.dumps(plan, sort_keys=True, indent=2).encode() + b"\n")
+            status = "source_absent" if plan["missing_inputs"] else "planned"
+            return _emit(deps.result("thresholds", status, reasons=[f"{name}_missing" for name in plan["missing_inputs"]],
+                                     source={"plan_sha256": plan["plan_sha256"], "inputs": plan["inputs"]},
+                                     product={"active_stations": plan["active_stations"],
+                                              "partitions": len(plan["partitions"])},
+                                     observed=plan["active_stations"]))
+        plan = json.loads(args.plan.read_text(encoding="utf-8"))
+        if args.command == "build":
+            return _emit(rebuild.build_partitions(plan, paths=_paths(args), work_dir=args.work_dir,
+                                                  select=args.partition, deadline_seconds=args.deadline_seconds))
+        build = rebuild.assemble(plan, paths=_paths(args), work_dir=args.work_dir, out_dir=args.out_dir)
+        return _emit(deps.result("thresholds", "ready", source={"plan_sha256": plan["plan_sha256"]},
+                                 product={"database": build["database"], "asset": build["asset"],
+                                          "coverage": build["coverage"]},
+                                 observed=build["coverage"]["active_stations"],
+                                 promoted=build["coverage"]["active_with_thresholds"]))
+    except (deps.AcquisitionError, OSError, ValueError, KeyError) as error:
+        label = str(error) if isinstance(error, deps.AcquisitionError) else "threshold_input_unavailable"
+        print(json.dumps({"status": "refused", "error": label}))
+        return 2
 
 
 if __name__ == "__main__":

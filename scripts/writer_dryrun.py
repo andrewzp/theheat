@@ -575,6 +575,14 @@ def main() -> int:
     p.add_argument("--record-label", dest="record_label", default=DEFAULTS["record_label"])
     p.add_argument("--record-scope", dest="record_scope", default=DEFAULTS["record_scope"])
     args = p.parse_args()
+    from src.two_bot.call_inventory import BackgroundLaneDisabled, require_background_lane
+    try:
+        # Paid evaluation is exact opt-in at this real call boundary, before any
+        # provider client exists; the workflow job gate remains separate.
+        require_background_lane("paid_evaluation")
+    except BackgroundLaneDisabled:
+        print("paid evaluation disabled: THEHEAT_PAID_EVALUATION_ENABLED is not 1; no provider call made")
+        return 2
 
     if args.record_path and args.country_cluster:
         p.error("--record-path and --country-cluster are mutually exclusive")

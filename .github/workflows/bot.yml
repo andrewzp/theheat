@@ -431,6 +431,25 @@ jobs:
           # Rollback: gh variable set THEHEAT_NHC_ADVISORY_ACQUISITION --body 0 --repo andrewzp/theheat
           THEHEAT_NHC_ADVISORY_ACQUISITION: ${{ vars.THEHEAT_NHC_ADVISORY_ACQUISITION || '0' }}
           THEHEAT_NHC_ADVISORY_NOMINATION: ${{ vars.THEHEAT_NHC_ADVISORY_NOMINATION }}
+          # Typed official-warning automatic text (W04) — each default OFF; exactly '1' arms
+          # its own 30-minute armed_auto policy for that family's drafts only. Text-only;
+          # still requires THEHEAT_AUTOMATIC_PUBLICATION_ENABLED and the current epoch.
+          # Rollback: gh variable set <NAME> --body 0 --repo andrewzp/theheat
+          THEHEAT_NHC_ADVISORY_AUTO_TEXT: ${{ vars.THEHEAT_NHC_ADVISORY_AUTO_TEXT || '0' }}
+          THEHEAT_OFFICIAL_WARNING_AUTO_TEXT: ${{ vars.THEHEAT_OFFICIAL_WARNING_AUTO_TEXT || '0' }}
+          THEHEAT_NWS_WARNING_AUTO_TEXT: ${{ vars.THEHEAT_NWS_WARNING_AUTO_TEXT || '0' }}
+          # Owner-supplied national-service observed temperature (W05) — default OFF; exactly '1'
+          # reads retained packets from the named directory only (no provider fetch).
+          THEHEAT_REGIONAL_OBSERVED: ${{ vars.THEHEAT_REGIONAL_OBSERVED || '0' }}
+          THEHEAT_REGIONAL_OBSERVED_PACKETS: ${{ vars.THEHEAT_REGIONAL_OBSERVED_PACKETS || '' }}
+          # Rainfall window/product provenance on GPM bundles (W06) — default OFF; Root decides
+          # after Earthdata access is renewed. Off keeps today's admission behaviour.
+          THEHEAT_RAINFALL_WINDOW_PROVENANCE: ${{ vars.THEHEAT_RAINFALL_WINDOW_PROVENANCE || '0' }}
+          # Physical-episode keys, importance portfolio selection and the bounded regional rainfall
+          # scan (W06/W07/W08) — each default OFF; exactly '1' enables. Off keeps today's behaviour byte-identical.
+          THEHEAT_HAZARD_EPISODES: ${{ vars.THEHEAT_HAZARD_EPISODES || '0' }}
+          THEHEAT_PORTFOLIO_SELECTION: ${{ vars.THEHEAT_PORTFOLIO_SELECTION || '0' }}
+          THEHEAT_RAINFALL_REGIONAL_SCAN: ${{ vars.THEHEAT_RAINFALL_REGIONAL_SCAN || '0' }}
           # Throughput Initiative (2026-06-16). All default "0"/safe in code;
           # production controls them via repo variables. Activate in order
           # A->B->C->D per docs/2026-06-16_throughput-activation-runbook.md.
@@ -477,6 +496,16 @@ jobs:
           TWEET_TEXT: ${{ github.event.inputs.tweet_text }}
           DRAFT_ID: ${{ github.event.inputs.draft_id }}
           PUBLISH_INTENT_ID: ${{ github.event.inputs.publish_intent_id }}
+          # Shared immutable media store (docs/GIST_POST_IMAGES.md). Unset values keep
+          # every store-backed image held; text and native images are unaffected.
+          # Read-only capability for the manual sender only:
+          THEHEAT_MEDIA_STORE: ${{ steps.mode.outputs.mode == 'manual_tweet' && vars.THEHEAT_MEDIA_STORE || '' }}
+          THEHEAT_MEDIA_STORE_DSN: ${{ steps.mode.outputs.mode == 'manual_tweet' && secrets.THEHEAT_MEDIA_STORE_DSN || '' }}
+          # Opt-in CRW packet retention (default off); the insert-only capability is
+          # never present in a manual_tweet (sender) run.
+          THEHEAT_CRW_PACKET_RETENTION: ${{ steps.mode.outputs.mode != 'manual_tweet' && vars.THEHEAT_CRW_PACKET_RETENTION || '0' }}
+          THEHEAT_MEDIA_WRITER_STORE: ${{ steps.mode.outputs.mode != 'manual_tweet' && vars.THEHEAT_CRW_PACKET_RETENTION == '1' && vars.THEHEAT_MEDIA_WRITER_STORE || '' }}
+          THEHEAT_MEDIA_WRITER_DSN: ${{ steps.mode.outputs.mode != 'manual_tweet' && vars.THEHEAT_CRW_PACKET_RETENTION == '1' && secrets.THEHEAT_MEDIA_WRITER_DSN || '' }}
         run: python -m src.main ${{ steps.mode.outputs.mode }}
 
       - name: Open issue on scheduled-run failure

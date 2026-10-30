@@ -17,6 +17,7 @@ SOURCE_URL = "https://air-quality-api.open-meteo.com/v1/air-quality"
 PRODUCT = "open-meteo-cams-air-quality-auto"
 SOURCE_NAME = "CAMS air-quality forecast via Open-Meteo (automatic domain)"
 LIMIT = 32_768
+MAX_GRID_OFFSET_DEG = 0.75
 VARIABLES = ("pm2_5", "pm10", "dust", "aerosol_optical_depth", "us_aqi")
 UNITS = dict(pm2_5="μg/m³", pm10="μg/m³", dust="μg/m³",
              aerosol_optical_depth="dimensionless", us_aqi="US AQI")
@@ -121,6 +122,24 @@ def build_window(data: dict, *, city: str, country: str, lat: float, lon: float,
     raise AssertionError("unreachable")
 
 
+def current_series(data: Any, packet: dict) -> dict:
+    """Re-read series for the retained window's exact day, zone and grid; never re-dated.
+
+    Used only to compare with the retained samples. It does not build or repair
+    a packet, and any mismatch in hours, zone, offset or grid is a hold.
+    """
+    try:
+        hourly, units = data["hourly"], data["hourly_units"]
+        if (hourly["time"] != packet["hours"] or data["timezone"] != packet["timezone"]
+                or data["utc_offset_seconds"] != packet["utc_offset_seconds"]
+                or [data["latitude"], data["longitude"]] != packet["grid_location"]):
+            raise ValueError("current window does not match the retained day, zone or grid")
+        return {key: _series(hourly.get(key), units.get(key), key) for key in VARIABLES}
+    except (KeyError, TypeError, ValueError, AttributeError):
+        reject("current_shape")
+    raise AssertionError("unreachable")
+
+
 def validate_window(packet: Any) -> dict[str, float | int | None]:
     """Recompute available aggregates from an internally consistent selected record."""
     try:
@@ -154,6 +173,10 @@ def validate_window(packet: Any) -> dict[str, float | int | None]:
         for point in ([location["lat"], location["lon"]], grid):
             if not all(_number(v) for v in point) or not -90 <= point[0] <= 90 or not -180 <= point[1] <= 180:
                 raise ValueError
+        # The provider's grid cell must be near the requested point (CAMS cells are well under this).
+        lon_gap = abs(grid[1] - location["lon"]) % 360
+        if abs(grid[0] - location["lat"]) > MAX_GRID_OFFSET_DEG or min(lon_gap, 360 - lon_gap) > MAX_GRID_OFFSET_DEG:
+            raise ValueError
         series = core["series"]
         if type(series) is not dict or set(series) != set(VARIABLES):
             raise ValueError

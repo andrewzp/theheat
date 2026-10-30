@@ -59,6 +59,31 @@ def main(argv: list[str] | None = None) -> int:
     drain.add_argument("--operators", required=True)
     drain.add_argument("--limit", type=int, default=100)
     actions.add_parser("status")
+    jobs = actions.add_parser("jobs", help="Read-only overdue job inspection and scheduled-role diagnosis")
+    jobs.add_argument("--workflow-health", help="Offline JSON list of existing workflow-health classifications")
+    jobs.add_argument("--disabled", action="append", default=[], help="Workflow intentionally disabled")
+    recover = actions.add_parser("recover", help="Release never-granted work or record reconciliation; never resends")
+    recover.add_argument("--job-id", required=True)
+    recover.add_argument("--operation", choices=("release_unstarted", "reconcile"), required=True)
+    import_plan_parser = actions.add_parser("import-plan", help="Lossless pre-mutation import plan; writes nothing")
+    import_plan_parser.add_argument("--item", action="append", required=True, metavar="IMPORT_ID=FILE")
+    import_run = actions.add_parser("import-run", help="Resumable idempotent import of a reviewed plan")
+    import_run.add_argument("--plan", required=True)
+    import_run.add_argument("--item", action="append", required=True, metavar="IMPORT_ID=FILE")
+    restore = actions.add_parser("restore-plan", help="Verify a backup against this authority; writes nothing")
+    restore_run = actions.add_parser("restore-run", help="Re-verify a reviewed restore plan, then append only")
+    for sub in (restore, restore_run):
+        sub.add_argument("--backup", required=True)
+        sub.add_argument("--expected-sha256", required=True)
+        sub.add_argument("--restore-id", required=True)
+        sub.add_argument("--media-export", help="theheat_media_export_v1 directory")
+    restore_run.add_argument("--plan", required=True)
+    restore_run.add_argument("--media-store", help="Insert-only target SQLite media store")
+    delivery = actions.add_parser("delivery", help="Inspect, confirm or cancel a publish attempt; never sends")
+    delivery.add_argument("operation", choices=("inspect", "confirm", "cancel"))
+    delivery.add_argument("--request", help="Reconciliation request JSON (confirm/cancel)")
+    delivery.add_argument("--operators")
+    delivery.add_argument("--subject")
     args = parser.parse_args(argv)
     try:
         store = SQLiteAuthority(args.database, environment=args.environment)
@@ -95,6 +120,57 @@ def main(argv: list[str] | None = None) -> int:
                     break
                 results.append(result)
             output = {"results": results, "automatic_publication_enabled": False}
+        elif args.action in {"import-plan", "import-run"}:
+            from src.commands import import_plan
+            pairs = [value.split("=", 1) for value in args.item]
+            if any(len(pair) != 2 for pair in pairs):
+                raise CommandError("invalid_import_item", "Use IMPORT_ID=FILE")
+            items = [(name, Path(path).read_bytes()) for name, path in pairs]
+            if args.action == "import-plan":
+                output = import_plan.plan(items, authority=store)
+            else:
+                output = import_plan.execute(store, _read(args.plan), items)
+        elif args.action in {"restore-plan", "restore-run"}:
+            from src.commands import restore_plan
+            backup = Path(args.backup).read_bytes()
+            if args.action == "restore-plan":
+                output = restore_plan.plan(store, backup, expected_sha256=args.expected_sha256, restore_id=args.restore_id,
+                                           now=datetime.now(UTC), media_export=args.media_export)
+            else:
+                writer = None
+                if args.media_store:
+                    from src.media import gist_assets
+                    writer = gist_assets.SQLiteMediaStore(args.media_store)
+                output = restore_plan.execute(store, _read(args.plan), backup, expected_sha256=args.expected_sha256,
+                                              now=datetime.now(UTC), media_export=args.media_export, media_writer=writer)
+        elif args.action == "delivery":
+            from src.commands import delivery_reconciliation
+            if args.operation == "inspect":
+                output = delivery_reconciliation.inspect(store.read()[1])
+            else:
+                principal = _resolve(args.operators, args.subject) if args.operators and args.subject else None
+                if principal is None:
+                    raise CommandError("forbidden", "No local operator fixture exists for this subject")
+                request = _read(args.request)
+                if request.get("action") != args.operation:
+                    raise CommandError("reconciliation_action_invalid", "Request action must match the operation")
+                output = store.delivery_reconciliation(request, principal)
+        elif args.action == "jobs":
+            from src.commands import job_recovery
+            now = datetime.now(UTC)
+            inspection = job_recovery.inspect_jobs(store, now=now)
+            health = json.loads(Path(args.workflow_health).read_text()) if args.workflow_health else []
+            if not isinstance(health, list):
+                raise CommandError("invalid_fixture", "Workflow health must be a JSON list")
+            schedules = job_recovery.diagnose_schedules(health, now=now, disabled=args.disabled)
+            output = {"inspection": inspection, "schedules": schedules,
+                      "holds": job_recovery.operations_holds(schedules, inspection)}
+        elif args.action == "recover":
+            from src.commands import job_recovery
+            from src.commands.job_authority import RoleBoundAuthority, ServiceIdentity
+            maintenance = RoleBoundAuthority(store, ServiceIdentity("maintenance", "local-cli-maintenance"))
+            operation = job_recovery.release_unstarted if args.operation == "release_unstarted" else job_recovery.reconcile
+            output = operation(maintenance, args.job_id, now=datetime.now(UTC))
         else:
             version, _ = store.read()
             events = store.journal()
@@ -105,6 +181,7 @@ def main(argv: list[str] | None = None) -> int:
         print(canonical_json(output))
         return 0
     except (CommandError, DomainJournalError, DomainProjectionError, sqlite3.DatabaseError, OSError, ValueError) as exc:
+        # ReconciliationError is a ValueError carrying its bounded refusal code.
         print(canonical_json({"error": getattr(exc, "code", "local_fixture_error"), "message": str(exc)}), file=sys.stderr)
         return 2
 

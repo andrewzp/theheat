@@ -103,8 +103,16 @@ def run_nhc_advisory(bot_state: BotState, current_run: dict | None, environ=None
             return {"status": "reused", "promoted": 0}
         if bundle.event_id in bot_state.get("posted_events", []):
             return {"status": "reused", "promoted": 0}
+        from src.editorial import warning_automatic
+        payload = capture_bundle(bundle).payload()
+        # Same storm/hazard/place episode: an unknown earlier delivery or an unchanged
+        # published statement (a tier/category-only update) buys no writer.
+        fence = warning_automatic.runner_fence("nhc_advisory", payload, bot_state)
+        if fence is not None:
+            raise AdvisoryHold(fence)
         context = {"source": "NHC", "source_key": "nhc_advisory",
-                   "headline": f"NHC forecast for {bundle.where}", "facts": bundle.current_facts}
+                   "headline": f"NHC forecast for {bundle.where}", "facts": bundle.current_facts,
+                   "warning_consequence_brief": warning_automatic.consequence_brief("nhc_advisory", payload)}
         with _TRIAGE_QUEUE_LOCK:
             queue = cast(dict, bot_state).get("_triage_queue", [])
             duplicates = [row for row in queue if getattr(row, "event_id", None) == bundle.event_id]

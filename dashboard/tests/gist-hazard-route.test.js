@@ -187,8 +187,9 @@ for (const family of FAMILIES) {
       assert.deepEqual(times.map(ms => gistMediaCurrentness(attached, ms)?.code ?? null), py.times)
       assert.deepEqual(descriptors.map(value => validGistMedia(attached, value)), py.valid)
       assert.deepEqual(py.valid, [true, false, false, false, false, false, false, false, false, false, false])
+      // The legacy Hot10 card is never a second image; the Hot10 family is that bulletin's own image.
       const two = structuredClone(attached); two.hot10_rows = [{ rank: 1 }]
-      assert.equal(validGistMedia(two), false)
+      assert.equal(validGistMedia(two), family === "hot10")
     })
   })
 }
@@ -197,9 +198,11 @@ for (const family of FAMILIES) {
   test(`${family}: a quote-reference-only edit revokes joint review but keeps text, source and image`, async () => {
     await withGist(family, async t => {
       await attach(t); const reviewed = await joint(t)
-      // PM2.5's list-valued grid fact is referenced by one exact element (P31 gap closed).
+      // PM2.5's list-valued grid fact is referenced by one exact element (P31 gap closed); the
+      // Hot10 bulletin's ranking is a list of flat rows, referenced by one exact ranked row (W09.1).
       const facts = reviewed.review_context.two_bot.bundle.current_facts
-      const grid = facts.findIndex(fact => Array.isArray(fact.value))
+      const grid = family === "hot10" ? facts.findIndex(fact => fact.label === "ranking") : facts.findIndex(fact => Array.isArray(fact.value))
+      assert.equal(family !== "hot10" || grid >= 0, true)
       const sources = [{ pointer: "/current_facts/0" }, ...(grid >= 0 ? [{ pointer: `/current_facts/${grid}/value/1` }] : [])]
       assert.equal(family !== "pm25" || grid >= 0, true)
       if (grid >= 0) {

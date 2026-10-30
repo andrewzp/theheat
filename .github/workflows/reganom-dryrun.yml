@@ -81,6 +81,7 @@ jobs:
           INPUT_WINDOW_START: ${{ inputs.window_start }}
           INPUT_WINDOW_END: ${{ inputs.window_end }}
           INPUT_LATEST_DAY: ${{ inputs.latest_day }}
+          THEHEAT_PAID_EVALUATION_ENABLED: ${{ vars.THEHEAT_PAID_EVALUATION_ENABLED }}
         # `|| true`: a clean kill is informative, not a job failure — we want the
         # drafts + verdicts in the log regardless of how many would ship.
         run: |

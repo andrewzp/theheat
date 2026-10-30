@@ -5,6 +5,7 @@ requires-python = "==3.12.*"
 dependencies = [
   "reportlab==4.4.9",
   "pillow==12.2.0",
+  "psycopg[binary]==3.3.6",
   "requests==2.34.2",
   "tzdata==2026.5",
 ]

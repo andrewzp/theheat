@@ -13,10 +13,20 @@ from src.two_bot.intern import build_regional_sst_anomaly_bundle
 
 
 def run_ocean_sst_anomaly(bot_state: BotState, current_run: dict | None) -> None:
+    # Imported here, not at module load: the media store must stay out of every other
+    # src.main process (a text-only manual sender loads no Gist media module).
+    from src.media import crw_capture
+
     print("[alerts] Checking per-region SST anomaly...")
     start = time.perf_counter()
     try:
-        collection = ocean_sst_anomaly.collect_all_regions(strict=False)
+        # Explicit, default-off: keep the exact primary bytes this collection already reads.
+        retention = crw_capture.enabled()
+        collection = ocean_sst_anomaly.collect_all_regions(
+            strict=False, **({"capture_packets": True} if retention else {})
+        )
+        retention_store = crw_capture.writer()[0] if retention else None
+        retention_outcomes: Counter[str] = Counter()
         readings = collection.readings
         marine_outcomes = Counter(record_reading(bot_state, "sst_anomaly", r) for r in readings)
         reading_year = readings[0].date[:4] if readings else str(date.today().year)
@@ -48,6 +58,9 @@ def run_ocean_sst_anomaly(bot_state: BotState, current_run: dict | None) -> None
             )
             if not _should_draft(score, event.event_id):
                 continue
+            if retention:  # A hold attaches no reference; the text story is unaffected.
+                event, outcome = crw_capture.retain_for_event(event, collection.captured, retention_store)
+                retention_outcomes[outcome] += 1
 
             review_context = _review_context(
                 source="NOAA Coral Reef Watch 5km SST anomaly (gridded)",
@@ -106,7 +119,8 @@ def run_ocean_sst_anomaly(bot_state: BotState, current_run: dict | None) -> None
             promoted=source_promoted,
             drafted=0,
             note=collection.note,
-            details={**collection.details(), "marine_components": dict(marine_outcomes)},
+            details={**collection.details(), "marine_components": dict(marine_outcomes),
+                     **({"media_retention": crw_capture.summary(retention_outcomes)} if retention else {})},
         )
     except Exception:
         # Source outcomes are fixed codes above. Unexpected runner errors must

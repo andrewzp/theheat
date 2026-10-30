@@ -18,6 +18,7 @@ from src.data.fire_source_contract import (
 from src.data._http import fetch_with_retry
 from src.data._witness import is_witness_eligible_failure, tag_source_leg, with_witness
 from src.data.open_meteo import load_cities
+from src.data import source_incidents
 from src.data.source_status import SourceFetchError, SourceSkipped
 from src.editorial._regions import _haversine_km
 
@@ -75,8 +76,12 @@ def fetch_fires(
     days: int = 1,
     *,
     strict: bool = False,
+    attempts: list[dict[str, Any]] | None = None,
 ) -> list[FireEvent]:
     """Fetch active fires from NASA FIRMS, filtered by confidence and FRP.
+
+    ``attempts`` (optional) receives one product-level incident attempt per leg
+    reached (``source_incidents.attempt``); the return shape is unchanged.
 
     ``frp_min`` is Fire Radiative Power floor in megawatts. Raised from
     100 to 250 MW on 2026-04-24 after reviewing production draft quality:
@@ -95,10 +100,10 @@ def fetch_fires(
         return []
 
     def primary() -> list[FireEvent]:
-        return _fetch_fires_product_chain(confidence_min, frp_min, source, days)
+        return _fetch_fires_product_chain(confidence_min, frp_min, source, days, attempts=attempts)
 
     def witness() -> list[FireEvent]:
-        return _fetch_fires_hms(frp_min)
+        return _fetch_fires_hms(frp_min, attempts=attempts)
 
     try:
         _validate_request(source, days)
@@ -118,6 +123,8 @@ def _fetch_fires_product_chain(
     frp_min: float,
     source: str,
     days: int,
+    *,
+    attempts: list[dict[str, Any]] | None = None,
 ) -> list[FireEvent]:
     """Try FIRMS products in order (R-06): a given product can be momentarily
     empty/lagged while a sibling has the data. A non-first product records
@@ -138,7 +145,7 @@ def _fetch_fires_product_chain(
     any_reachable = False
     for index, product in enumerate(chain):
         try:
-            fires = _fetch_fires_primary(confidence_min, frp_min, product, days)
+            fires = _fetch_fires_primary(confidence_min, frp_min, product, days, attempts=attempts)
         except (SourceFetchError, requests.RequestException) as exc:
             if not is_witness_eligible_failure(exc):
                 raise
@@ -248,19 +255,58 @@ def _event(row: FireSourceRow, source_url: str, *, leg: str | None = None) -> Fi
     )
 
 
+# Product-level incident identity for each reached leg (W03). The window and
+# region are the request actually sent; the parser contract is the row validator.
+_FIRMS_PARSER = "fire_source_contract.firms_csv"
+_HMS_PARSER = "fire_source_contract.hms_text"
+
+
+def _read_leg(
+    url: str, product: str, *, product_id: str, window: str, region: str, parser: str,
+    attempts: list[dict[str, Any]] | None,
+) -> list[FireSourceRow]:
+    """Fetch and validate one leg, recording its classified outcome when asked."""
+    def note(outcome: str, *, status: int | None = None, rows: int | None = None) -> None:
+        if attempts is not None:
+            attempts.append(source_incidents.attempt(
+                product_id, outcome, window=window, region=region, parser_contract=parser,
+                http_status=status, rows=rows))
+
+    try:
+        resp = fetch_with_retry(url, timeout=30)
+    except Exception as exc:
+        note(source_incidents.classify_exception(exc), status=source_incidents.http_status_of(exc))
+        raise
+    text = resp.text
+    raw_status = getattr(resp, "status_code", None)
+    status = raw_status if type(raw_status) is int and 100 <= raw_status <= 599 else None
+    required = HMS_FIELDS if product == HMS_PRODUCT else FIRMS_FIELDS
+    if source_incidents.classify_body(text, required_header=required)[0] == "access_refused":
+        # A 2xx refusal page is an access outcome, not schema drift or an empty product.
+        note("access_refused", status=status)
+        reject("provider access refusal body")
+    try:
+        rows = _qualified_rows(text, product, datetime.now(UTC))
+    except SourceFetchError as exc:
+        note(source_incidents.classify_exception(exc), status=status)
+        raise
+    note("qualified" if rows else "empty_success", status=status, rows=len(rows))
+    return rows
+
+
 def _fetch_fires_primary(
     confidence_min: int,
     frp_min: float,
     source: str,
     days: int,
+    *,
+    attempts: list[dict[str, Any]] | None = None,
 ) -> list[FireEvent]:
     _validate_request(source, days)
-    resp = fetch_with_retry(
-        f"{FIRMS_URL}/{FIRMS_API_KEY}/{source}/world/{days}", timeout=30,
+    rows = _read_leg(
+        f"{FIRMS_URL}/{FIRMS_API_KEY}/{source}/world/{days}", source, product_id=f"firms.{source.lower()}",
+        window=f"past_{days}d", region="world", parser=_FIRMS_PARSER, attempts=attempts,
     )
-    text = resp.text
-    reference = datetime.now(UTC)
-    rows = _qualified_rows(text, source, reference)
     return [_event(row, FIRMS_PUBLIC_URL) for row in rows
             if row.frp is not None and row.ranking_confidence >= confidence_min and row.frp >= frp_min]
 
@@ -270,14 +316,12 @@ def _in_north_america(lat: float, lon: float) -> bool:
     return lat_min <= lat <= lat_max and lon_min <= lon <= lon_max
 
 
-def _fetch_fires_hms(frp_min: float) -> list[FireEvent]:
+def _fetch_fires_hms(frp_min: float, *, attempts: list[dict[str, Any]] | None = None) -> list[FireEvent]:
     """Read NOAA's dated file, retaining each row's own UTC acquisition minute."""
     requested_day = datetime.now(UTC).date()
     url = f"{HMS_FIRE_URL}/{requested_day:%Y}/{requested_day:%m}/hms_fire{requested_day:%Y%m%d}.txt"
-    resp = fetch_with_retry(url, timeout=30)
-    text = resp.text
-    reference = datetime.now(UTC)
-    rows = _qualified_rows(text, HMS_PRODUCT, reference)
+    rows = _read_leg(url, HMS_PRODUCT, product_id="firms.noaa_hms", window="current_utc_day_file",
+                     region="north_america", parser=_HMS_PARSER, attempts=attempts)
     return [_event(row, url, leg="noaa_hms") for row in rows
             if row.frp is not None and row.frp >= frp_min and _in_north_america(row.lat, row.lon)]
 

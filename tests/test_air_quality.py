@@ -29,11 +29,15 @@ def _payload(
     dust: list[float | None] | None = None,
     aod: list[float | None] | None = None,
     us_aqi: list[int | None] | None = None,
+    lat: float = 31.5,
+    lon: float = 74.3,
 ) -> dict:
+    # The grid cell is the requested city's own point: a far-away cell is an
+    # inconsistent location and is withheld (MAX_GRID_OFFSET_DEG).
     day = day or datetime.now(UTC).date().isoformat()
     return {
-        "latitude": 31.5,
-        "longitude": 74.3,
+        "latitude": lat,
+        "longitude": lon,
         "timezone": "GMT",
         "utc_offset_seconds": 0,
         "hourly_units": {"pm2_5": "μg/m³", "pm10": "μg/m³", "dust": "μg/m³",
@@ -212,7 +216,7 @@ def test_batch_fetch_list_response_parsed():
     ]
     payload = [
         _payload(pm25=[150.0] * 24, dust=[100.0] * 24),
-        _payload(pm25=[250.0] * 24, dust=[800.0] * 24),
+        _payload(pm25=[250.0] * 24, dust=[800.0] * 24, lat=28.6, lon=77.2),
     ]
 
     with patch("src.data.air_quality.fetch_with_retry", return_value=_response(payload)):
@@ -244,7 +248,7 @@ def test_batch_fetch_partial_chunk_failure():
     ):
         mock_fetch.side_effect = [
             requests.RequestException("timeout"),
-            _response([_payload(pm25=[250.0] * 24)]),
+            _response([_payload(pm25=[250.0] * 24, lat=50.0, lon=51.0)]),
         ]
         observations = fetch_batch_air_quality(cities, chunk_size=50, recovery_passes=0)
 
@@ -264,8 +268,8 @@ def test_batch_fetch_recovers_rate_limited_chunk_after_wait():
     ):
         mock_fetch.side_effect = [
             _http_error(429, date="Tue, 09 Jun 2026 17:44:57 GMT"),  # chunk 0, main pass
-            _response([_payload()]),                                 # chunk 1, main pass
-            _response([_payload() for _ in range(50)]),              # chunk 0, recovery
+            _response([_payload(lat=50.0, lon=51.0)]),               # chunk 1, main pass
+            _response([_payload(lat=float(i), lon=float(i + 1)) for i in range(50)]),  # chunk 0, recovery
         ]
         observations = fetch_batch_air_quality(cities, chunk_size=50)
 
@@ -342,7 +346,7 @@ def test_batch_fetch_recovers_transport_failed_chunk():
     ):
         mock_fetch.side_effect = [
             requests.RequestException("timeout"),         # main pass fails
-            _response([_payload() for _ in range(50)]),   # recovery succeeds
+            _response([_payload(lat=float(i), lon=float(i + 1)) for i in range(50)]),   # recovery succeeds
         ]
         observations = fetch_batch_air_quality(cities, chunk_size=50)
 

@@ -24,8 +24,9 @@ import re
 import time
 from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime, timedelta
+from functools import partial
 from typing import Any, Literal
 
 import requests
@@ -35,16 +36,17 @@ from src.data._witness import is_witness_eligible_failure
 from src.data.ocean_sst import _REQUEST_HEADERS
 from src.data.source_status import SourceFetchError
 from src.data import crw_contract as contract
+# Pure region/tier/event definitions live in crw_regions (exact same objects re-exported
+# here) so the sealed preview runtime can package them without the collector.
+from src.data.crw_regions import (  # noqa: F401
+    ANOMALY_TIERS, REGION_REGISTRY, RegionDef, RegionalSSTAnomalyEvent, _ERDDAP_BASE, _GRID_DEG,
+    _GRID_STRIDE, _SST_ANOM_VAR, _TARGET_DEG, _build_url, _detect_tier,
+)
 
-_ERDDAP_BASE = "https://coastwatch.noaa.gov/erddap/griddap/noaacrwsstanomalyDaily.csv"
 NOAA_STAR_SSTA_LEG = "noaa_star_nc"
 NOAA_STAR_SSTA_BASE_URL = (
     "https://www.star.nesdis.noaa.gov/pub/sod/mecb/crw/data/5km/v3.1_op/nc/v1.0/daily/ssta"
 )
-_SST_ANOM_VAR = "sea_surface_temperature_anomaly"
-_GRID_DEG = 0.05
-_TARGET_DEG = 1.0
-_GRID_STRIDE = max(1, round(_TARGET_DEG / _GRID_DEG))
 _MIN_VALID_CELLS = 10
 _FETCH_WORKERS = 4
 _FETCH_TIMEOUT_SECONDS = 10
@@ -54,45 +56,6 @@ _VALID_RANGE = (-15.0, 15.0)
 _SYNTHESIS_ANOMALY_FLOOR_C = 2.0
 _NOAA_STAR_FILE_RE = re.compile(r"^ct5km_ssta_v3\.1_(\d{8})\.nc$")
 
-# Provisional absolute area-weighted basin-mean anomaly tiers in degree C.
-# These are not Hobday MHW categories; recalibrate after NH late-summer runs.
-ANOMALY_TIERS: tuple[tuple[int, float], ...] = (
-    (3, 4.5),
-    (2, 3.5),
-    (1, 2.5),
-)
-
-
-@dataclass(frozen=True)
-class RegionDef:
-    slug: str
-    display_name: str
-    lat_s: float
-    lat_n: float
-    lon_w: float
-    lon_e: float
-
-
-# 13 generous global marquee basin boxes. They deliberately do not cross the
-# dateline. Fast follow after NH late-summer calibration: tighten broad boxes
-# toward anomaly cores so hot patches are not diluted by basin-wide averaging.
-REGION_REGISTRY: tuple[RegionDef, ...] = (
-    RegionDef("north_atlantic", "North Atlantic", 0, 60, -80, 0),
-    RegionDef("subpolar_n_atlantic", "Subpolar North Atlantic", 45, 60, -45, -20),
-    RegionDef("ne_pacific_blob", 'NE Pacific ("the Blob")', 40, 55, -150, -125),
-    RegionDef("mediterranean", "Mediterranean Sea", 30, 46, -5, 36),
-    RegionDef("tasman_sea", "Tasman Sea", -45, -30, 150, 175),
-    RegionDef("gulf_of_mexico", "Gulf of Mexico", 18, 30, -98, -80),
-    RegionDef("caribbean", "Caribbean Sea", 9, 22, -88, -60),
-    RegionDef("western_indian_ocean", "Western Indian Ocean", -10, 10, 45, 75),
-    RegionDef("bay_of_bengal", "Bay of Bengal", 5, 22, 80, 95),
-    RegionDef("coral_triangle", "Coral Triangle", -10, 10, 120, 150),
-    RegionDef("great_barrier_reef", "Great Barrier Reef", -24, -10, 142, 154),
-    RegionDef("california_current", "California Current", 30, 42, -127, -116),
-    RegionDef("nino34", "Niño 3.4", -5, 5, -170, -120),
-)
-
-
 @dataclass(frozen=True)
 class RegionalSSTReading:
     region_slug: str
@@ -101,19 +64,6 @@ class RegionalSSTReading:
     anomaly_c: float
     tier: int
     cells_used: int
-    source_leg: str | None = None
-    provenance: dict[str, Any] | None = None
-
-
-@dataclass(frozen=True)
-class RegionalSSTAnomalyEvent:
-    region_slug: str
-    region_display_name: str
-    date: str
-    anomaly_c: float
-    tier: int
-    cells_used: int
-    event_id: str
     source_leg: str | None = None
     provenance: dict[str, Any] | None = None
 
@@ -177,6 +127,9 @@ class RegionalSSTResult:
 @dataclass(frozen=True)
 class RegionalSSTCollection:
     regions: tuple[RegionalSSTResult, ...]
+    # Explicit packet capture only: exact primary CSV bytes by region plus the one
+    # metadata response, held in memory for this run. Never in details/health.
+    captured: CapturedPrimaryBytes | None = field(default=None, repr=False, compare=False)
 
     @property
     def readings(self) -> list[RegionalSSTReading]:
@@ -232,29 +185,16 @@ class RegionalSSTCollection:
 
 
 @dataclass(frozen=True)
+class CapturedPrimaryBytes:
+    metadata_body: bytes = field(repr=False)
+    csv: Mapping[str, tuple[bytes, str]] = field(repr=False)
+
+
+@dataclass(frozen=True)
 class NoaaStarSstaFile:
     url: str
     data_date: str
     name: str
-
-
-def _build_url(region: RegionDef, *, time_token: str = "last") -> str:
-    """Build a single-box ERDDAP griddap CSV URL for a region."""
-
-    if region.lon_w > region.lon_e:
-        raise ValueError(
-            f"Region '{region.slug}' has lon_w ({region.lon_w}) > lon_e "
-            f"({region.lon_e}): dateline-crossing bboxes are not supported in v1. "
-            "Split the region into two sub-boxes and union the area-weighted means."
-        )
-
-    stride = _GRID_STRIDE
-    return (
-        f"{_ERDDAP_BASE}?{_SST_ANOM_VAR}"
-        f"[({time_token})]"
-        f"[({region.lat_n}):{stride}:({region.lat_s})]"
-        f"[({region.lon_w}):{stride}:({region.lon_e})]"
-    )
 
 
 def _parse_griddap_csv(text: str) -> tuple[str | None, list[tuple[float, float]]]:
@@ -296,6 +236,11 @@ def _source_body(
 
 
 def _primary_metadata() -> dict:
+    return _primary_metadata_with_body()[0]
+
+
+def _primary_metadata_with_body() -> tuple[dict, bytes]:
+    """The same single metadata request, also returning the exact bytes it read."""
     body, retrieved = _source_body(
         contract.METADATA_URL, limit=contract.CSV_LIMIT, timeout=10, attempts=1
     )
@@ -303,7 +248,7 @@ def _primary_metadata() -> dict:
         **contract.metadata_contract(body),
         "retrieved_at": retrieved,
         "response_bytes": len(body),
-    }
+    }, body
 
 
 def _area_weighted_mean(cells: list[tuple[float, float]]) -> float | None:
@@ -316,13 +261,6 @@ def _area_weighted_mean(cells: list[tuple[float, float]]) -> float | None:
     if den == 0:
         return None
     return num / den
-
-
-def _detect_tier(anomaly_c: float) -> int | None:
-    for tier, threshold in ANOMALY_TIERS:
-        if anomaly_c >= threshold:
-            return tier
-    return None
 
 
 def fetch_region_sst(
@@ -362,6 +300,7 @@ def _fetch_region_sample_strict(
     min_valid_cells: int = _MIN_VALID_CELLS,
     today: date | None = None,
     metadata: dict | None = None,
+    capture: dict[str, tuple[bytes, str]] | None = None,
 ) -> RegionalSSTSample:
 
     metadata = _primary_metadata() if metadata is None else metadata
@@ -421,6 +360,8 @@ def _fetch_region_sample_strict(
             metadata=deepcopy(metadata),
         ),
     )
+    if capture is not None:  # Explicit retention only: the bytes this request already read.
+        capture[region.slug] = (body, retrieved_at)
     return replace(result, outcome="candidate", diagnostic=None, reading=reading)
 
 
@@ -451,17 +392,27 @@ def _failure_sample(
     )
 
 
-def collect_all_regions(*, strict: bool = False) -> RegionalSSTCollection:
+def collect_all_regions(
+    *, strict: bool = False, capture_packets: bool = False
+) -> RegionalSSTCollection:
     """Collect once and retain every region's outcome before filtering candidates.
 
     The native leg still runs only if *all* primary errors are fallback eligible.
     Quiet and insufficient primary samples are never retried or replaced.
+    ``capture_packets`` keeps the exact primary bytes already read (no request is
+    added, repeated or reordered); fallback-leg bytes are never captured.
     """
 
     primary: dict[str, RegionalSSTSample] = {}
     failures: dict[str, bool] = {}
+    captured: CapturedPrimaryBytes | None = None
+    csv_capture: dict[str, tuple[bytes, str]] | None = {} if capture_packets else None
     try:
-        metadata = _primary_metadata()
+        # Off: the unchanged call path. On: the same single request, keeping its bytes.
+        if capture_packets:
+            metadata, metadata_body = _primary_metadata_with_body()
+        else:
+            metadata = _primary_metadata()
     except (requests.RequestException, SourceFetchError, ValueError) as exc:
         if strict:
             raise
@@ -469,9 +420,15 @@ def collect_all_regions(*, strict: bool = False) -> RegionalSSTCollection:
             primary[region.slug] = _failure_sample(region, exc, metadata=True)
             failures[region.slug] = is_witness_eligible_failure(exc)
     else:
+        if csv_capture is not None:
+            captured = CapturedPrimaryBytes(metadata_body, csv_capture)
+        fetch = (
+            _fetch_region_sample_strict if csv_capture is None
+            else partial(_fetch_region_sample_strict, capture=csv_capture)
+        )
         with ThreadPoolExecutor(max_workers=min(_FETCH_WORKERS, len(REGION_REGISTRY))) as executor:
             futures = {
-                executor.submit(_fetch_region_sample_strict, region, metadata=metadata): region
+                executor.submit(fetch, region, metadata=metadata): region
                 for region in REGION_REGISTRY
             }
             for future in as_completed(futures):
@@ -503,7 +460,7 @@ def collect_all_regions(*, strict: bool = False) -> RegionalSSTCollection:
                 final[region.slug] = _failure_sample(region, exc, leg=NOAA_STAR_SSTA_LEG)
     return RegionalSSTCollection(tuple(
         RegionalSSTResult(primary[r.slug], final[r.slug]) for r in REGION_REGISTRY
-    ))
+    ), captured)
 
 
 def detect_regional_sst_anomaly_events(

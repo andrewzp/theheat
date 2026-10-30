@@ -13,14 +13,14 @@ import { draftIdentity, fingerprint } from "../../lib/draft-revisions.js"
 import { validGistMedia } from "../../lib/gist-media.js"
 import manifest from "../../lib/graphic-runtime-manifest.json" with { type: "json" }
 
-export const FAMILIES = (process.env.THEHEAT_GIST_HAZARD_FAMILIES || "pm25,modis,viirs").split(",")
+export const FAMILIES = (process.env.THEHEAT_GIST_HAZARD_FAMILIES || "pm25,modis,viirs,hot10").split(",")
 const root = path.resolve(new URL("../../..", import.meta.url).pathname)
 const python = process.env.THEHEAT_TEST_PYTHON || "python3"
 const digest = bytes => createHash("sha256").update(bytes).digest("hex")
 const trap = "import json,sys,socket\nsocket.socket.connect=lambda *a,**k: (_ for _ in ()).throw(AssertionError('external connection trapped'))\n"
 const fixtureCode = trap + `
 value=json.load(sys.stdin)
-if value['family'] in ('crw','radar','cone'):
+if value['family'] in ('crw','crw_collected','radar','cone'):
     from tests.gist_store_helpers import CLOCKS, saved_state
 else:
     from tests.gist_hazard_helpers import CLOCKS, saved_state
@@ -79,8 +79,16 @@ export async function withGist(family, run, options = {}) {
   const primary = `invented-${family}`
   const get = (id = primary) => state().drafts.find(d => d.id === id)
   const replaceState = value => { rawState = typeof value === "string" ? value : JSON.stringify(value) }
-  const render = request => pythonJSON(renderCode, { raw_state: rawState, request,
-    policy: manifest.identity.policy_source_sha256, runtime: manifest.runtime_sha256 })
+  // options.render may replace the checkout render (e.g. a fresh packaged-runtime process);
+  // it returns { status, body } so a packaged hold reaches the route as its HTTP reply.
+  const renderReply = options.render ? request => options.render(request, rawState, headers.Authorization)
+    : request => ({ status: 200, body: pythonJSON(renderCode, { raw_state: rawState, request,
+      policy: manifest.identity.policy_source_sha256, runtime: manifest.runtime_sha256 }) })
+  const render = request => {
+    const reply = renderReply(request)
+    assert.equal(reply.status, 200, JSON.stringify(reply.body))
+    return reply.body
+  }
   globalThis.fetch = async (url, request = {}) => {
     url = String(url)
     if (url === "http://localhost:3000/api/graphic_preview") {
@@ -91,7 +99,11 @@ export async function withGist(family, run, options = {}) {
       assert.equal(requestBody.format, "png")
       previews.push(requestBody)
       if (options.previewFailure) return new Response("invented refused preview", { status: 422 })
-      const response = render(requestBody)
+      const reply = renderReply(requestBody)
+      if (reply.status !== 200) {
+        return new Response(JSON.stringify(reply.body), { status: reply.status, headers: { "Content-Type": "application/json" } })
+      }
+      const response = reply.body
       assert.equal(response.png_sha256, digest(Buffer.from(response.png_base64, "base64")))
       options.changePreview?.(response)
       return new Response(JSON.stringify(response), { headers: { "Content-Type": "application/json" } })
@@ -127,15 +139,22 @@ export async function withGist(family, run, options = {}) {
       const response = await route.GET(new Request("http://localhost:3000/api/drafts", { headers }))
       return (await response.json()).drafts
     }
-    const preview = (draft, retained = options.retainedInput) => render({ draft_id: draft.id, expected_revision: revision(draft),
+    async function delivered() {
+      const response = await route.GET(new Request("http://localhost:3000/api/drafts?delivered=1", { headers }))
+      assert.equal(response.status, 200)
+      return (await response.json()).delivered
+    }
+    const previewRequest = (draft, retained = options.retainedInput) => ({ draft_id: draft.id, expected_revision: revision(draft),
       expected_policy_source_sha256: manifest.identity.policy_source_sha256, expected_preview_runtime_sha256: manifest.runtime_sha256, format: "png",
       ...(retained ? { retained_input_sha256: retained } : {}) })
+    const preview = (draft, retained) => render(previewRequest(draft, retained))
+    const previewReply = (draft, retained) => renderReply(previewRequest(draft, retained))
     const at = value => {
       now = typeof value === "number" ? value : Date.parse(value)
       const next = new Date(now - 60000).toISOString()
       rawState = rawState.split(stamp).join(next); stamp = next
     }
-    await run({ post, list, state, get, replaceState, raw: () => rawState, patches, previews, dispatches, preview, clock, at,
+    await run({ post, list, delivered, state, get, replaceState, raw: () => rawState, patches, previews, dispatches, preview, previewReply, clock, at,
       primary, secondary: `${primary}-secondary`, rawBundle: values.raw_bundle, retainedInput: options.retainedInput ?? null })
   } finally {
     globalThis.fetch = originalFetch; Date.now = originalNow

@@ -272,7 +272,12 @@ def read(store, manifest_sha256):
 # ------------------------------------------------------------------ association
 
 def _registry():
-    raw = (Path(__file__).resolve().parents[2] / "data/place_registry.json").read_bytes()
+    # The sealed preview runtime embeds the exact public registry (as places.py reads
+    # it); an ordinary checkout keeps its data directory. No other fallback.
+    from importlib.resources import files
+    resource = files("src.data").joinpath("registry", "place_registry.json")
+    raw = (resource.read_bytes() if resource.is_file()
+           else (Path(__file__).resolve().parents[2] / "data/place_registry.json").read_bytes())
     _require(len(raw) <= 2_000_000, "media_source_unqualified", "registry bound")
     rows = [p for p in json.loads(raw)["places"] if p["place_id"] == radar.POINT["place_id"]]
     _require(len(rows) == 1, "media_source_unqualified", "registry point changed")

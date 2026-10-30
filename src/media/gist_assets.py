@@ -6,7 +6,11 @@ update/delete/replace triggers). Gist keeps only a reference: the SHA256 of an
 immutable asset manifest or packet. The reference never names a URL or a path, and
 nothing here fetches from the network. State and approval authority stay in Gist.
 
-Configuration: ``THEHEAT_MEDIA_STORE=sqlite:<absolute path>``. Unset, unsupported or
+Configuration (readers: preview and sender): ``THEHEAT_MEDIA_STORE=sqlite:<absolute
+path>`` or ``THEHEAT_MEDIA_STORE=postgres`` with a read-only ``THEHEAT_MEDIA_STORE_DSN``
+(gist_assets_postgres). Retention is a separate, explicitly enabled writer capability
+(``THEHEAT_MEDIA_WRITER_STORE`` / ``THEHEAT_MEDIA_WRITER_DSN``) that readers never
+read. There is no fallback between backends. Unset, unsupported or
 unreachable configuration holds only the store-backed media lanes with
 ``media_store_unavailable``; native recipes never read the store. This module is
 packaged in the sealed preview runtime so an unconfigured deployment names that
@@ -25,6 +29,9 @@ import stat
 
 NAMESPACE = "theheat-gist-media"
 ENV = "THEHEAT_MEDIA_STORE"
+DSN_ENV = "THEHEAT_MEDIA_STORE_DSN"
+WRITER_ENV = "THEHEAT_MEDIA_WRITER_STORE"
+WRITER_DSN_ENV = "THEHEAT_MEDIA_WRITER_DSN"
 MAX_DOCUMENT_BYTES = 1_000_000
 SHA = re.compile(r"[a-f0-9]{64}\Z")
 
@@ -95,8 +102,9 @@ class SQLiteMediaStore:
 
     backend = "sqlite"
 
-    def __init__(self, path):
+    def __init__(self, path, *, writable=True):
         self.path = Path(path)
+        self.writable = writable
         _owned_regular(self.path, must_exist=False)
 
     def _connect(self, *, write):
@@ -114,6 +122,7 @@ class SQLiteMediaStore:
 
     def put_many(self, blobs):
         """Retain every blob atomically; identical retries are idempotent."""
+        _require(self.writable, "media_store_unavailable", "this store configuration is read-only")
         from src.commands import domain_journal  # Loaded only once a store is actually configured.
         with closing(self._connect(write=True)) as connection:
             try:
@@ -158,13 +167,26 @@ class SQLiteMediaStore:
         return SQLiteMediaStore(target)
 
 
-def configured(environ=None):
-    """The deployment's configured store, or an explicit lane-specific hold."""
-    value = (os.environ if environ is None else environ).get(ENV, "")
+def _select(environ, selector, dsn_name, role):
+    value = environ.get(selector, "")
     _require(type(value) is str and value != "", "media_store_unavailable",
              "no media store is configured for published or retained-source images")
-    _require(value.startswith("sqlite:"), "media_store_unavailable", "the configured media store is not supported")
-    return SQLiteMediaStore(value[len("sqlite:"):])
+    if value.startswith("sqlite:"):
+        return SQLiteMediaStore(value[len("sqlite:"):], writable=role == "writer")
+    _require(value == "postgres", "media_store_unavailable", "the configured media store is not supported")
+    from src.media import gist_assets_postgres  # No driver import until PostgreSQL is selected.
+    return gist_assets_postgres.PostgresMediaStore(gist_assets_postgres.parse_dsn(environ.get(dsn_name, "")),
+                                                   role=role)
+
+
+def configured(environ=None):
+    """The deployment's read-only store, or an explicit lane-specific hold."""
+    return _select(os.environ if environ is None else environ, ENV, DSN_ENV, "reader")
+
+
+def configured_writer(environ=None):
+    """The separately supplied insert-only retention store; never used by preview or sender."""
+    return _select(os.environ if environ is None else environ, WRITER_ENV, WRITER_DSN_ENV, "writer")
 
 
 def put_document(store, value, *extra_blobs):

@@ -30,6 +30,12 @@ RATES = {"writer": ("3.75", "15"), "safety": ("0.30", "2.50"),
 _ACTIVE: ContextVar[TrialBudget | None] = ContextVar("theheat_trial_budget", default=None)
 
 
+def stage_reserve_usd(stage: str) -> Decimal:
+    """The full-wire scenario reservation for one stage (estimated token cap only)."""
+    incoming, outgoing = (Decimal(v) for v in RATES[stage])
+    return (MAX_REQUEST_BYTES * incoming + OUTPUT_LIMITS[stage] * outgoing) / 1_000_000
+
+
 class TrialStopped(RuntimeError):
     """A refused or uncertain purchase must not buy a retry or replacement."""
 
@@ -59,6 +65,11 @@ class TrialBudget:
             raise TrialStopped(self.stopped)
         if not event_id or event_id in self.candidates or len(self.candidates) >= MAX_CANDIDATES:
             self.stop("trial_candidate_limit")
+        # Refuse a candidate the remaining allowance cannot carry through every
+        # declared stage, instead of buying a writer call and stopping mid-checks.
+        needed = sum((stage_reserve_usd(stage) for stage in MODELS), Decimal(0))
+        if MAX_CALLS - len(self.calls) < len(MODELS) or self.estimated_reserved + needed > MAX_ESTIMATED_USD:
+            self.stop("trial_allowance_cannot_cover_candidate")
         self.candidates.add(event_id)
         self.candidate = event_id
 
@@ -108,10 +119,9 @@ class TrialBudget:
             # token, including schema/envelope. This is NOT an exact token counter
             # or a hard provider-invoice ceiling. Hard bytes/calls/output caps are
             # independent; no discounts/free tier/unknown charge refunds assumed.
-            incoming, outgoing = (Decimal(v) for v in RATES[stage])
             # SDK wire serialization may expand Unicode or add an envelope.
             # Reserve the full wire allowance; the final HTTP hook enforces it.
-            reserve = (MAX_REQUEST_BYTES * incoming + OUTPUT_LIMITS[stage] * outgoing) / 1_000_000
+            reserve = stage_reserve_usd(stage)
             if self.estimated_reserved + reserve > MAX_ESTIMATED_USD:
                 self.stop("trial_estimated_allowance_exhausted")
             row = {"ordinal": len(self.calls) + 1, "candidate": self.candidate,
@@ -220,7 +230,7 @@ def provider_call(stage: str, provider: str, request: dict, send: Callable):
     budget = current_trial()
     archive = _active_archive()
     if budget is None and archive is None:
-        return send(**request)
+        return _joined_send(stage, provider, request, send)
     if archive is not None:
         archive.require_supported_sender(provider, send)
     bounded = budget.reserve(stage, provider, request) if budget is not None else request
@@ -230,7 +240,7 @@ def provider_call(stage: str, provider: str, request: dict, send: Callable):
         # Reservation/evidence work can outlive the source window. Recheck before
         # handing off to the SDK; existing conservative outcome retention remains.
         guard_warning_provider_attempt()
-        response = send(**bounded)
+        response = _joined_send(stage, provider, bounded, send)
     except BaseException as exc:
         if budget is not None:
             budget.stopped = "trial_provider_outcome_unknown"
@@ -250,4 +260,22 @@ def provider_call(stage: str, provider: str, request: dict, send: Callable):
     if held is not None:
         # Evidence failed after a possible purchase: never an approved result.
         raise held from None
+    return response
+
+
+def _joined_send(stage: str, provider: str, request: dict, send: Callable):
+    """One physical send joined to the active operation/candidate attempt.
+
+    The request row is recorded before the send. A raised call (timeout,
+    transport or SDK error) stays an unknown outcome; nothing is released.
+    """
+    from src.two_bot.call_inventory import consume_provider_stage
+    model = request.get("model") if isinstance(request, dict) else None
+    ticket = consume_provider_stage(stage, provider, model if isinstance(model, str) else None)
+    try:
+        response = send(**request)
+    except BaseException:
+        ticket.settle("unknown")
+        raise
+    ticket.settle("returned")
     return response

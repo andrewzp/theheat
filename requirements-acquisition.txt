@@ -1,0 +1,19 @@
+# Isolated operator acquisition dependencies (W02 / P06, P09, P17).
+#
+# NOT part of the bot runtime: never install into the runtime or SDK-locked
+# environments, and never add these to requirements.txt. Root creates a
+# separate virtual environment for the owner-run acquisition tools, resolves
+# exact versions with hashes there (for example `pip-compile --generate-hashes`)
+# and records that lock beside the acquisition receipt.
+#
+# Each requirement names the tool that needs it with `tool=<name>`.
+# `python scripts/check_acquisition_dependencies.py` reads this file and reports
+# available / unavailable / incompatible per tool without installing anything.
+#
+# Meteostat 1.x provides the `Normals` and `Point` classes used by the
+# meteostat-normals-point-v1 product. A 2.x release changes that interface and
+# is refused until the adapter is deliberately migrated.
+meteostat>=1.6,<2  # tool=normals api=Normals,Point
+# The threshold rebuild and package verifier use only the standard library and
+# the runtime's pinned requests for an explicit bounded archive fetch.
+requests>=2.31  # tool=thresholds api=Session

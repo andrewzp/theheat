@@ -4,7 +4,10 @@ Values, places and times are fabricated. Each bundle is built by the production
 source builders, so its retained receipts/windows are internally consistent.
 """
 from copy import deepcopy
+from datetime import UTC, datetime
 import math
+from pathlib import Path
+import tempfile
 
 from src.data.air_quality import _parse_single_location, detect_pm25_hazard
 from src.media.temperature_graphic_adapter import story_bundle_snapshot
@@ -42,12 +45,16 @@ def with_bundle(draft, bundle):
 
 
 # Per-family fixed clocks: one inside the image-path recency window, one after it.
+# Hot10: captured 09:00Z; Bangkok (UTC+7), the earliest-ending ranked local day, ends 17:00Z.
+HOT10_CAPTURE = datetime(2026, 10, 29, 9, 0, tzinfo=UTC)
 CLOCKS = {"pm25": ("2026-06-08T13:00:00Z", "2026-06-08T18:15:00Z"),
           "modis": ("2032-03-01T12:00:00Z", "2032-03-03T00:00:00Z"),
-          "viirs": ("2032-03-01T12:00:00Z", "2032-03-03T00:00:00Z")}
-TYPES = {"pm25": "air_quality_hazard", "modis": "fire", "viirs": "fire"}
+          "viirs": ("2032-03-01T12:00:00Z", "2032-03-03T00:00:00Z"),
+          "hot10": ("2026-10-29T10:00:00Z", "2026-10-29T17:30:00Z")}
+TYPES = {"pm25": "air_quality_hazard", "modis": "fire", "viirs": "fire", "hot10": "hot10"}
 TEXTS = {"pm25": PM25_TEXT, "modis": "Invented satellite heat detections near a saved source minute.",
-         "viirs": "Invented NOAA-20 VIIRS heat detections near a saved source minute."}
+         "viirs": "Invented NOAA-20 VIIRS heat detections near a saved source minute.",
+         "hot10": "Invented Hot 10 forecast: the sampled leader's daily high runs 9.2°C above its point normal."}
 VIIRS_CATEGORIES = ("high", "nominal", "low", "high")
 # Primary A deliberately not the maximum; four retained detections in source order.
 MODIS_VALUES = (125.75, 500.1234, 750.25, 90.5)
@@ -55,7 +62,41 @@ MODIS_COORDINATES = [(35.25, -110.5), (38.5, -104.2), (31.9, -99.0), (44.4, -120
 VARYING_PM25 = [round(160 + 30 * math.sin(i / 3.5) + i, 2) for i in range(24)]
 
 
+# Long supported catalogue names, both signs and zero, two provider-local dates (captured 22:30Z).
+HOT10_MIXED = (("Santiago de los Caballeros", "America/Santo_Domingo", 9.4), ("Lubumbashi", "Africa/Lubumbashi", 8.8),
+               ("Mbuji-Mayi", "Africa/Lubumbashi", 7.1), ("Al Maḩallah al Kubrá", "Africa/Cairo", 4.4),
+               ("Mazār-e Sharīf", "Asia/Kabul", 2.0), ("Hamhŭng", "Asia/Pyongyang", 0.0),
+               ("Ra’s Bayrūt", "Asia/Beirut", -1.5), ("San Miguel de Tucumán", "America/Argentina/Tucuman", -3.2),
+               ("Kisangani", "Africa/Lubumbashi", -6.7), ("Kinshasa", "Africa/Kinshasa", -8.0))
+HOT10_MIXED_CAPTURE = datetime(2026, 10, 29, 22, 30, tzinfo=UTC)
+# Kinshasa (UTC+1) ends its 2026-10-29 local day at 23:00Z; 22:45Z keeps every ranked day current.
+HOT10_MIXED_CLOCK = "2026-10-29T22:45:00Z"
+
+
+def hot10_bundle(cities=None, *, now=HOT10_CAPTURE, sampled=None):
+    """A qualified bulletin from the real loaders, qualifier and bundle builder (invented values)."""
+    from src.editorial import hot10_contract
+    from src.two_bot.intern import build_hot10_bundle
+    from tests import live_content_harness as h
+
+    cities = h.CITIES if cities is None else cities
+    with tempfile.TemporaryDirectory() as directory:
+        _catalogue, normals, temps = h.qualified_inputs(Path(directory), now, cities)
+    result = hot10_contract.qualify(temps, normals, sampled=sampled or len(cities), now=now)
+    assert result["complete"], result["universe"]
+    return build_hot10_bundle(result["rows"], changes=[], event_id=f"hot10_{now.date().isoformat()}",
+                              universe=result["universe"]).to_dict()
+
+
+def hot10_rows(bundle):
+    """The production legacy compact rows saved beside every Hot10 draft."""
+    from src.orchestrator.hot10 import _compact_hot10_rows
+    return _compact_hot10_rows(bundle["raw_signal_dump"]["cities"])
+
+
 def family_bundle(family):
+    if family == "hot10":
+        return hot10_bundle()
     if family == "pm25":
         return pm25_bundle(VARYING_PM25, **SENDABLE_PM25)
     if family == "modis":
@@ -75,18 +116,89 @@ def modis_bundle(values=(500.1234, 125.75, 750.25), **options):
     return story_bundle_snapshot(graphic_bundle(values, **options))
 
 
-def saved_state(family, *, runtime=None):
+def saved_state(family, *, runtime=None, bundle=None):
     """Two drafts sharing one invented retained source, plus an unrelated field."""
     from src.editorial import revisions
 
-    bundle = family_bundle(family)
+    bundle = family_bundle(family) if bundle is None else bundle
     drafts = []
     for suffix in ("", "-secondary"):
         draft = dict(id=f"invented-{family}{suffix}", event_id=bundle["event_id"], type=TYPES[family],
                      text=TEXTS[family], status="pending", created_at=CLOCKS[family][0],
                      review_context=dict(two_bot=dict(bundle=deepcopy(bundle))))
+        if family == "hot10":
+            draft["hot10_rows"] = hot10_rows(bundle)
         revisions.initialize_revision(draft)
         draft.update(content_revision=1, decision_revision=0)
         drafts.append(draft)
     return {"drafts": drafts, "publish_ledger": {}, "errors": [], "unrelated": {"preserve": True},
             "run_history": [runtime] if runtime else []}
+
+
+# A Hot10 post delivered the previous local day; its image is inspected later from history.
+HOT10_DELIVERED_CAPTURE = datetime(2026, 10, 28, 9, 0, tzinfo=UTC)
+HOT10_DELIVERED_CLOCK = "2026-10-28T10:00:00Z"
+HOT10_DELIVERED_TEXT = "Invented earlier Hot 10 forecast: the sampled leader ran 9.2°C above its point normal."
+
+
+def deliver_with_fake_x(state, draft, *, at):
+    """Run the real manual sender once against invented X SDK factories; returns the recorded calls.
+
+    Only the X client factories, Gist persistence, the final safety model and the
+    Bluesky crosspost are replaced (as tests/gist_media_helpers.install_fake_x).
+    """
+    import os
+    from types import SimpleNamespace
+    from unittest import mock
+
+    from freezegun import freeze_time
+
+    from src.orchestrator import posting
+    from src.posting import twitter
+
+    calls = []
+    storage = mock.MagicMock()
+    storage.check_daily_cap.return_value = True
+    storage.write_state.return_value = True
+
+    def upload(*, filename, file, **_options):
+        calls.append(("upload", file.read(), filename))
+        return SimpleNamespace(media_id=98765)
+
+    def create(*, text, **options):
+        calls.append(("create", text, options))
+        return SimpleNamespace(data={"id": "invented-x-receipt-" + draft["id"]})
+
+    environment = {"DRAFT_ID": draft["id"], "TWEET_TEXT": draft["text"], "PUBLISH_INTENT_ID": draft["publish_intent_id"]}
+    with mock.patch.object(twitter, "_get_client", lambda: SimpleNamespace(create_tweet=create)), \
+            mock.patch.object(twitter, "_get_upload_api", lambda: SimpleNamespace(
+                media_upload=upload, create_media_metadata=lambda media_id, text, **_o: calls.append(("alt", media_id, text)))), \
+            mock.patch.object(posting, "state", storage), mock.patch.object(posting, "post_tweet", twitter.post_tweet), \
+            mock.patch.object(posting, "run_safety_pipeline", mock.MagicMock(return_value=(True, None))), \
+            mock.patch.object(posting, "post_to_bluesky", mock.MagicMock(side_effect=AssertionError("no crosspost"))), \
+            mock.patch.dict(os.environ, environment), freeze_time(at):
+        posting.run_manual_tweet(state)
+    return calls
+
+
+def delivered_hot10_draft(state):
+    """Append an earlier Hot10 draft, jointly reviewed and delivered once through the real sender."""
+    from src.editorial import revisions
+    from src.media import gist_media
+
+    from freezegun import freeze_time
+
+    bundle = hot10_bundle(now=HOT10_DELIVERED_CAPTURE)
+    draft = dict(id="invented-hot10-delivered", event_id=bundle["event_id"], type="hot10", text=HOT10_DELIVERED_TEXT,
+                 status="pending", created_at=HOT10_DELIVERED_CLOCK, hot10_rows=hot10_rows(bundle),
+                 review_context=dict(two_bot=dict(bundle=deepcopy(bundle))))
+    with freeze_time(HOT10_DELIVERED_CLOCK):
+        revisions.initialize_revision(draft)
+        revisions.invalidate_media_attachment(draft, gist_media.prepare_media(bundle)["descriptor"], at=HOT10_DELIVERED_CLOCK)
+        revisions.record_joint_media_review(draft)
+        revisions.authorize_draft(draft, "manual", "invented-delivered-intent")
+    draft.update(status="approved", approval_mode="manual", publish_intent_id="invented-delivered-intent")
+    state["drafts"].append(draft)
+    calls = deliver_with_fake_x(state, draft, at=HOT10_DELIVERED_CLOCK)
+    assert [call[0] for call in calls] == ["upload", "alt", "create"] and draft["status"] == "posted", calls
+    return draft, calls

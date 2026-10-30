@@ -65,6 +65,19 @@ def _command(raw: bytes, digest: str) -> Command:
         raise p.ProjectionError("corrupt_command_intent") from None
 
 
+def _bind_transitions(state: dict, reduction, command: Command) -> None:
+    """Every domain reduction stays inside its role/command transition binding.
+
+    A violation is an implementation fault, not operator input: it rolls back
+    every domain effect and leaves the accepted intent pending.
+    """
+    from src.commands.command_roles import RoleError, require_transitions
+    try:
+        require_transitions(state, reduction.state, command.action, tuple(t.draft_id for t in command.targets))
+    except RoleError as exc:
+        raise RuntimeError(exc.code) from None
+
+
 class PostgresCommandAuthority:
     def __init__(self, *, socket_directory: str | Path, database: str, user: str,
                  port: int = 5432, environment: str = "local"):
@@ -928,6 +941,7 @@ class PostgresCommandAuthority:
                             reduction = media_transition.reduction
                         else:
                             reduction = reduce_command(state, command, actor, now=clock, policy=policy, editorial_policy=editorial_policy)
+                        _bind_transitions(state, reduction, command)
                         result = {"status": "applied" if reduction.changed_ids else "unchanged", "changed_ids": list(reduction.changed_ids),
                                   "identities": list(reduction.identities), "publish_intent_id": reduction.publish_intent_id}
                         if source_transition is not None:

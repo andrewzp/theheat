@@ -100,6 +100,9 @@ MEDIA_HOLDS = {
     "media_retained_input_required": "Select the retained source packet or published asset for this image.",
     "media_source_packet_missing": "The retained CRW source packet is not in the media store. Retain it locally "
                                    "first; nothing is fetched.",
+    "media_source_packet_mismatch": "This is not the CRW source packet retained for this draft. Select the "
+                                    "draft's own packet; nothing is substituted.",
+    "media_source_packet_invalid": "The draft's retained CRW packet reference is malformed; the image is held.",
     "media_original_missing": "The published original is not in the media store. Retain it again; nothing is "
                               "fetched.",
     "media_asset_missing": "A retained asset is missing from the media store.",

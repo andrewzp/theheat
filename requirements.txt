@@ -10,6 +10,9 @@ httpx2==2.13.1
 pydantic==2.13.5
 requests>=2.31
 Pillow==12.2.0
+# The shared media store's PostgreSQL driver (same exact pin as requirements-postgres.txt).
+# Imported only when THEHEAT_MEDIA_STORE / THEHEAT_MEDIA_WRITER_STORE explicitly select postgres.
+psycopg[binary]==3.3.6
 # GPM IMERG alternate fetch (THEHEAT_GPM_SOURCE=datapool|s3): single daily-grid
 # download + local subset. boto3 is only used by the s3 source; h5py parses the
 # .nc4 grid. Both are lazy-imported, so the default opendap path doesn't need them.

@@ -30,7 +30,7 @@ from src.state import DEFAULT_STATE
 from tests.gist_media_helpers import install_fake_x
 
 ROOT = Path(__file__).resolve().parents[1]
-FAMILIES = ["pm25", "modis", "viirs"]
+FAMILIES = ["pm25", "modis", "viirs", "hot10"]
 
 ROUTE_JOURNEY = r'''
 import fs from "node:fs"; import { pathToFileURL } from "node:url"

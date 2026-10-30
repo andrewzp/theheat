@@ -58,7 +58,21 @@ export default function PostOutcomeHistory({ outcomes }) {
             : "Writer-reported angle and text provenance are unknown."),
         selected.writer_context?.status === "recorded" && h("p", { className: "runtime-note" },
           `${selected.writer_context.retained_different_text ? "Retained history includes different text. " : ""}Retained history is incomplete${selected.writer_context.history_unavailable ? " and includes unavailable observations" : ""}. A text match does not establish that no edits occurred. Actor and human authorship are unknown.`),
-        h("p", { className: "runtime-note" }, `${selected.observations.length} retained observations. Post age uses the platform's recorded creation time; receipt time is not a substitute.`)),
+        h("p", { className: "runtime-note" }, `${selected.observations.length} retained observations. Post age uses the platform's recorded creation time; receipt time is not a substitute.`),
+        h("p", { className: "runtime-note" }, `Retained text versions for this post: ${selected.retained_text_versions ?? "unknown"}. Who edited them is not recorded here.`),
+        selected.evidence_needed?.length ? h("p", { className: "runtime-note" }, `Still needed to know more: ${selected.evidence_needed.map(item => ({
+          published_revision: "the exact published revision", published_type_and_source: "the published type and source evidence",
+          metric_observation: "a metric observation", platform_creation_time: "the platform's creation time" })[item] || item.replaceAll("_", " ")).join("; ")}.`) : null,
+        h("p", { className: "runtime-note" }, selected.feedback?.status === "recorded"
+          ? `Your feedback: ${selected.feedback.editorial_opinions} rating(s); tags ${Object.entries(selected.feedback.revision_tags).filter(([, n]) => n).map(([k, n]) => `${k} ${n}`).join(", ") || "none"}.`
+          : selected.feedback?.status === "none_recorded" ? "No feedback recorded for this post. That is not a negative score."
+            : "Feedback is shown in the feedback section; it is not loaded in this view."),
+        selected.corrections?.status === "candidates" && h("div", { role: "note" },
+          h("p", null, "Correction candidates for your review (nothing is corrected or deleted automatically):"),
+          h("ul", null, ...selected.corrections.candidates.map((c, i) => h("li", { key: i, style: { overflowWrap: "anywhere" } },
+            `“${c.claim}” — ${c.kind}: ${c.source_statement} (retrieved ${c.source_retrieved_at}; uncertainty: ${c.uncertainty})`)))),
+        selected.corrections?.status === "evidence_needed" && h("p", { className: "runtime-note" },
+          `A supplied discrepancy is incomplete: ${selected.corrections.incomplete.flat().map(item => item.replaceAll("_", " ")).join("; ")}.`)),
       selected.publication_context?.status === "recorded" && selected.publication_context.source && h("details", { className: "runtime-details" },
         h("summary", { style: { minHeight: 44 } }, "Source evidence details"),
         h("dl", { style: { fontSize: 12, lineHeight: 1.6, overflowWrap: "anywhere" } },

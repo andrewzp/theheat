@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 import random
 import time
 from typing import Any
@@ -64,11 +64,20 @@ def fetch_with_retry(
     timeout: float = 30,
     attempts: int = 3,
     backoff_base: float = 1.0,
+    call_stage: str = "source_http_get",
+    on_attempt: Callable[[], None] | None = None,
     **kwargs: Any,
 ) -> requests.Response:
-    """GET a URL, retrying transport failures and 5xx responses only."""
+    """GET a URL, retrying transport failures and 5xx responses only.
+
+    Each physical attempt consumes the declared ``call_stage`` (unknown price,
+    never free) immediately before egress; ``on_attempt`` lets an operation
+    allowance count the same physical attempts. Neither changes retry policy.
+    """
     if attempts < 1:
         raise ValueError("attempts must be >= 1")
+    from src.two_bot.call_inventory import declaration, consume
+    declaration(call_stage)  # Refuse an undeclared stage before any egress.
 
     request_headers = dict(headers) if headers else {}
     if not any(key.lower() == "user-agent" for key in request_headers):
@@ -77,6 +86,9 @@ def fetch_with_retry(
     last_transport_error: requests.RequestException | None = None
     waf_retried = False
     for attempt_index in range(attempts):
+        if on_attempt is not None:
+            on_attempt()
+        consume(call_stage, join=False)
         try:
             response = _get_session().get(
                 url,

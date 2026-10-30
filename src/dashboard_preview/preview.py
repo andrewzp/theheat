@@ -26,8 +26,10 @@ def check_request(request, policy_sha, runtime_sha):
     # A retained-input identity (CRW source packet or published asset manifest) is
     # only meaningful for the PNG post image; it is an exact SHA256, never a path/URL.
     if (not isinstance(request, dict)
-            or set(request) not in (REQUEST_KEYS, REQUEST_KEYS | {"format"}, REQUEST_KEYS | {"format", "retained_input_sha256"})
+            or set(request) not in (REQUEST_KEYS, REQUEST_KEYS | {"format"}, REQUEST_KEYS | {"format", "retained_input_sha256"},
+                                    REQUEST_KEYS | {"format", "delivered"})
             or ("format" in request and request["format"] != "png")
+            or ("delivered" in request and request["delivered"] is not True)
             or ("retained_input_sha256" in request and not (isinstance(request["retained_input_sha256"], str)
                                                             and SHA.fullmatch(request["retained_input_sha256"])))):
         raise PreviewError("bad_request")
@@ -104,6 +106,10 @@ def qualified_spec(bundle, *, synthetic=False, include_viirs=False, include_temp
         return spec, "CAMS via Open-Meteo", {"kind": "pm25_forecast_day",
             **{key: evidence[key] for key in ("valid_date", "timezone", "valid_start", "valid_end")},
             **{key: window[key] for key in ("requested_at", "retrieved_at")}}
+    if bundle["signal_kind"] == "hot10":
+        from src.media.hot10_graphic_adapter import SOURCE_LABEL, hot10_graphic_spec
+        spec = hot10_graphic_spec(bundle, expected_bundle_sha256=fingerprint(bundle), synthetic=synthetic)
+        return spec, SOURCE_LABEL, hot10_source_context(spec["evidence"])
     if include_temperature:
         # The adapter already replays this retained read-only StoryBundle facade;
         # it independently audits every field and warrant before projecting it.
@@ -117,6 +123,16 @@ def qualified_spec(bundle, *, synthetic=False, include_viirs=False, include_temp
             "retrieved_at": evidence["evidence_as_of"],
             "reporting_interval_known": False, "timezone": None}
     raise PreviewError("graphic_unavailable")
+
+
+def hot10_source_context(evidence):
+    """Presentation copy of the ten qualified rows; the PNG and descriptor stay the binding."""
+    return {"kind": "hot10_bulletin", "local_days": list(evidence["local_days"]),
+            "qualified_cities": evidence["qualified_cities"], "sampled_cities": evidence["sampled_cities"],
+            "rows": [{"rank": row["rank"], "city": row["city"], "country": row["country"],
+                      "valid_date": row["valid_date"], "timezone": row["timezone"],
+                      "forecast_high_c": round(row["forecast_high_c"], 1), "normal_high_c": round(row["normal_high_c"], 1),
+                      "departure_c": round(row["departure_c"], 1)} for row in evidence["rows"]]}
 
 
 def _store_backed_result(request, prepared, policy_sha, runtime_sha, bundle):
@@ -148,8 +164,135 @@ def _store_backed_result(request, prepared, policy_sha, runtime_sha, bundle):
             "width": 1200, "height": 1500}
 
 
+_IDENTITY = ("content_revision", "text_sha256", "evidence_sha256")
+
+
+def delivered_snapshot(draft, receipt):
+    """The exact revision a confirmed receipt names: the draft itself or a retained earlier revision.
+
+    A later edit, replacement or source change never rewrites what was delivered;
+    the receipt's identity selects the snapshot, and nothing else qualifies.
+    """
+    if not (isinstance(receipt, dict) and receipt.get("phase") == "confirmed" and isinstance(receipt.get("tweet_id"), str)
+            and receipt["tweet_id"] and all(key in receipt for key in _IDENTITY)):
+        return None
+    candidates = [draft]
+    history = draft.get("revision_history")
+    for row in reversed(history if isinstance(history, list) else []):
+        if not isinstance(row, dict) or not all(key in row for key in ("text", *_IDENTITY)):
+            continue
+        snapshot = {key: value for key, value in deepcopy(draft).items() if key not in ("media_attachment", "revision_history")}
+        snapshot.update(text=row["text"], content_revision=row["content_revision"])
+        snapshot["review_context"] = deepcopy(row.get("review_context"))
+        if "media_attachment" in row:
+            snapshot["media_attachment"] = deepcopy(row["media_attachment"])
+        candidates.append(snapshot)
+    for candidate in candidates:
+        try:
+            if all(draft_identity(candidate)[key] == receipt[key] for key in _IDENTITY):
+                return candidate
+        except (ValueError, TypeError):
+            continue
+    return None
+
+
+def _delivered_store_backed(request, snapshot, attachment, receipt, *, policy_sha, runtime_sha, store):
+    """A delivered CRW chart or published image, rebuilt from the attachment's own immutable identity.
+
+    The same reader as the preview and the sender (W10.4): the retained input named by the
+    delivered descriptor, never a newer or caller-chosen one. A missing store or artifact holds
+    with its named code; a different rebuilt descriptor holds as a changed renderer.
+    """
+    from src.media import gist_media
+    bundle = deepcopy(snapshot["review_context"]["two_bot"]["bundle"])
+    _retained_bundle_json(bundle)
+    identity = (attachment["source"]["packet_artifact_sha256"] if gist_media.kind_of(attachment) == gist_media.CRW
+                else attachment["asset"]["manifest_sha256"])
+    try:
+        prepared = gist_media.prepare_media(bundle, retained_input_sha256=identity, store=store)
+    except ValueError as exc:
+        code = getattr(exc, "code", None)
+        if isinstance(code, str) and code.startswith("media_"):
+            raise PreviewError("media_hold", code) from None
+        raise
+    if prepared["descriptor"] != attachment:
+        raise PreviewError("media_hold", "media_renderer_changed")
+    result = _store_backed_result(request, prepared, policy_sha, runtime_sha, bundle)
+    result.pop("posting_window")
+    result["schema_version"] = 6
+    result["delivered"] = {"tweet_id": receipt["tweet_id"], "text": snapshot["text"],
+                           "content_revision": snapshot["content_revision"],
+                           "confirmed_at": receipt.get("confirmed_at") or receipt.get("at")}
+    return result
+
+
+def _delivered_preview(request, *, policy_sha, runtime_sha, read_state, budget, store=None):
+    """Rebuild a delivered image byte-for-byte from its retained recipe, or refuse.
+
+    Inspection only: no currentness, approval, attachment or send. The rebuilt
+    descriptor must equal the delivered one exactly; a changed renderer holds.
+    Store-backed kinds (CRW, published radar/cone) read their own retained identity.
+    """
+    from src.media import gist_hazard_media as hazard, gist_media
+    budget.remaining()
+    state = read_state()
+    drafts = state.get("drafts")
+    matches = [d for d in drafts if isinstance(d, dict) and d.get("id") == request["draft_id"]] \
+        if isinstance(drafts, list) else []
+    if len(matches) != 1:
+        raise PreviewError("draft_unavailable")
+    draft = matches[0]
+    if {**draft_identity(draft), "decision_revision": decision_revision(draft)} != request["expected_revision"]:
+        raise PreviewError("stale_preview")
+    ledger = state.get("publish_ledger")
+    receipt = ledger.get(draft.get("event_id")) if isinstance(ledger, dict) else None
+    snapshot = delivered_snapshot(draft, receipt)
+    attachment = (snapshot or {}).get("media_attachment")
+    if (snapshot is not None and receipt is not None and isinstance(attachment, dict)
+            and attachment.get("kind") in gist_media.STORE_KINDS):
+        budget.remaining()
+        return _delivered_store_backed(request, snapshot, attachment, receipt, policy_sha=policy_sha,
+                                       runtime_sha=runtime_sha, store=store)
+    if snapshot is None or not isinstance(attachment, dict) or attachment.get("kind") not in hazard.KINDS:
+        raise PreviewError("draft_unavailable")
+    bundle = deepcopy(snapshot["review_context"]["two_bot"]["bundle"])
+    _retained_bundle_json(bundle)
+    spec, source, context = qualified_spec(bundle, include_viirs=True)
+    budget.remaining()
+    prepared = gist_media.prepare_media(bundle)
+    if prepared["descriptor"] != attachment:
+        raise PreviewError("media_hold", "media_renderer_changed")
+    descriptor = prepared["descriptor"]
+    assert receipt is not None and spec is not None
+    return {"schema_version": 6, "draft_id": request["draft_id"],
+            "revision_identity": deepcopy(request["expected_revision"]),
+            "policy_source_sha256": policy_sha, "preview_runtime_sha256": runtime_sha,
+            "media_kind": descriptor["kind"], "media_descriptor": descriptor,
+            "media_descriptor_sha256": fingerprint(descriptor),
+            "png_base64": base64.b64encode(prepared["png"]).decode("ascii"),
+            "png_sha256": descriptor["image"]["png_sha256"], "title": prepared["title"],
+            "delivery_text": prepared["delivery_text"], "expanded_description": prepared["full_text"],
+            "scope": prepared["scope"], "source": source, "source_context": context,
+            "delivered": {"tweet_id": receipt["tweet_id"], "text": snapshot["text"],
+                          "content_revision": snapshot["content_revision"],
+                          "confirmed_at": receipt.get("confirmed_at") or receipt.get("at")},
+            "width": 1200, "height": 1500, "publication_approved": False, "attachment": False}
+
+
 def build_preview(request, *, policy_sha, runtime_sha, read_state, budget, synthetic=False, store=None):
     check_request(request, policy_sha, runtime_sha)
+    if request.get("delivered") is True:
+        try:
+            result = _delivered_preview(request, policy_sha=policy_sha, runtime_sha=runtime_sha,
+                                        read_state=read_state, budget=budget, store=store)
+        except PreviewError:
+            raise
+        except (ValueError, KeyError, TypeError, AttributeError, UnicodeError, RecursionError, OverflowError) as exc:
+            raise PreviewError("graphic_unavailable") from exc
+        body = json.dumps(result, ensure_ascii=False, separators=(",", ":"), allow_nan=False).encode("utf-8")
+        if len(body) > MAX_RESPONSE:
+            raise PreviewError("graphic_unavailable")
+        return body
     store_backed = False
     try:
         budget.remaining()

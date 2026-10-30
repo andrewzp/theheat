@@ -72,6 +72,10 @@ def run_newsworthiness(bot_state: BotState, current_run: dict | None, *, retenti
         except Exception:  # noqa: BLE001 — no report storage failure may stop source health.
             retained = {"status": "retention_unavailable", "generation_available": False, "publication_enabled": False}
     state.record_news_events(bot_state, result.events)
+    from src.two_bot.call_inventory import operation_cost_row, record_operation_cost
+    # Discovery spend is reported separately from candidate (selection) spend.
+    record_operation_cost(current_run, operation_cost_row(
+        "alerts", allowances=(result.allowance,), spend_class="discovery", source=SOURCE_KEY))
     observed = len(result.events)
     note_bits = [
         f"events={observed}",

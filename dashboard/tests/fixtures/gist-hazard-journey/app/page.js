@@ -2,6 +2,12 @@
 import { useEffect, useState } from "react"
 import { DraftWorkbench } from "../../../../app/components/DraftWorkbench.js"
 const headers = { "Content-Type": "application/json", authorization: "Basic Zml4dHVyZTppbnZlbnRlZA==" }
+// The fixture page authenticates its own reads; production relies on the browser's Basic session.
+async function loadDelivered() {
+  const response = await fetch("/api/drafts?delivered=1", { headers, cache: "no-store" })
+  if (!response.ok) throw new Error("Invented delivered read failed")
+  return (await response.json()).delivered
+}
 export default function Journey() {
   const [drafts, setDrafts] = useState([]), [selected, setSelected] = useState("invented-pm25")
   const [editing, setEditing] = useState(null), [text, setText] = useState(""), [revision, setRevision] = useState(null)
@@ -34,7 +40,7 @@ export default function Journey() {
           await refresh()
           setDone(value => ({ count: value.count + 1, ok: String(response.ok), error: body.error ?? "", code: body.code ?? "" }))
         } finally { setAction(null) }
-      }} draftAction={action} draftFeedback={feedback} pendingCommand={null} botRuns={[]} />
+      }} draftAction={action} draftFeedback={feedback} pendingCommand={null} botRuns={[]} loadDelivered={loadDelivered} />
     <output id="journey-actions" hidden data-count={done.count} data-ok={done.ok} data-code={done.code}>{done.error}</output>
   </main>
 }

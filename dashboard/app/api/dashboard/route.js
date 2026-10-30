@@ -9,8 +9,10 @@ import { projectStateForDashboard } from "../../../lib/projection.js"
 import { hasUnresolvedPublish, projectDraft } from "../../../lib/draft-revisions.js"
 import { buildRuntimeConfig, dashboardDeployment } from "../../../lib/runtime-inventory.js"
 import { buildProductHealth } from "../../../lib/product-health.js"
+import { graphicAvailabilityPayload } from "../../../lib/graphic-availability.js"
 import { buildCostEvidence } from "../../../lib/cost-evidence.js"
 import { nwsSourceTiming } from "../../../lib/nws-source-timing.js"
+import { recoveredPublishedRecords, recoveredRecordFor, recoveryProvenanceMap } from "../../../lib/recovery-continuity.js"
 
 export const runtime = "nodejs"
 
@@ -30,7 +32,7 @@ function tsValue(s) {
   return Number.isFinite(parsed) ? parsed : 0
 }
 
-function pendingDrafts(state, local = null, runtimeReport = null) {
+function pendingDrafts(state, local = null, runtimeReport = null, provenance = {}) {
   const now = Date.now()
   return (state?.drafts || [])
     .filter((d) => ["pending", "approved"].includes(d.status))
@@ -45,7 +47,11 @@ function pendingDrafts(state, local = null, runtimeReport = null) {
     })
     .map((d) => {
       try {
-        if (local) return localDraftProjection(d, state, local)
+        if (local) {
+          // W14.6: imported/restored/superseded records carry their read-only editor view.
+          const recovery = recoveredRecordFor(d, state, { surface: "editor", provenance })
+          return recovery ? { ...localDraftProjection(d, state, local), recovery } : localDraftProjection(d, state, local)
+        }
         return { ...projectDraft(d, dashboardEditorialPolicy(state, { runtimeReport }).policy), editorial_policy: dashboardEditorialPolicy(state, { runtimeReport }), automatic_publication: dashboardAutomaticPolicy(state, { runtimeReport }), publish_blocked: hasUnresolvedPublish(d, state), tweet_id: d.tweet_id ?? null }
       } catch (error) {
         return { ...d, text: typeof d.text === "string" ? d.text : "[Invalid draft text]", revision_identity: null, review_status: "conflict", review_kind: null, publish_blocked: true, review_error: error.message, tweet_id: d.tweet_id ?? null }
@@ -156,6 +162,8 @@ export async function GET(request) {
     sourceHealth: { sources: [], stats: null },
     config: buildRuntimeConfig(),
     deployment: dashboardDeployment(),
+    // W10.6: per-family image requirements and the store setting's presence (never its value).
+    graphicAvailability: graphicAvailabilityPayload(process.env),
     productHealth: null,
     costEvidence: buildCostEvidence(null),
     runs: [],
@@ -170,7 +178,9 @@ export async function GET(request) {
     results.costEvidence = buildCostEvidence(state, {scenario: url.searchParams.get("cost_scenario")})
     results.state = projectStateForDashboard(state)
     results.stateBackend = local ? "local command preview" : getStateBackend()
-    results.drafts = { drafts: pendingDrafts(state, local, runtimeReport), posted: postedDraftsWithMetrics(state) }
+    const provenance = local ? recoveryProvenanceMap(local.recovery_provenance) : {}
+    results.drafts = { drafts: pendingDrafts(state, local, runtimeReport, provenance), posted: postedDraftsWithMetrics(state) }
+    if (local) results.recoveredPublished = recoveredPublishedRecords(state, provenance)
     results.suppressions = suppressionsPayload(state, { sourceFilter, sinceFilter, limit })
     results.sourceHealth = buildSourceHealthPayload(state)
     results.config = buildRuntimeConfig(state, { runtimeReport })

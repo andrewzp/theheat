@@ -1460,6 +1460,16 @@ def _merge_synthesis_cooldown(
     return merged
 
 
+def _consume_gist_request() -> None:
+    """Declared hosting call (unknown price, never free): counted per physical request.
+
+    State I/O is not joined to an operation's paid request rows; its outcome
+    belongs to the existing read/write error handling.
+    """
+    from src.two_bot.call_inventory import consume
+    consume("gist_state", join=False)
+
+
 def _read_gist_state(*, strict: bool = False) -> BotState:
     if not GIST_ID and not GITHUB_TOKEN:
         return _fresh_state()
@@ -1469,6 +1479,7 @@ def _read_gist_state(*, strict: bool = False) -> BotState:
         return _fresh_state()
 
     try:
+        _consume_gist_request()
         resp = requests.get(
             f"https://api.github.com/gists/{GIST_ID}",
             headers=_headers(),
@@ -1492,6 +1503,7 @@ def _read_gist_state(*, strict: bool = False) -> BotState:
                         f"{STATE_FILENAME} is truncated and has no raw_url"
                     )
                 return _fresh_state()
+            _consume_gist_request()
             raw_resp = requests.get(raw_url, headers=_headers(), timeout=30)
             raw_resp.raise_for_status()
             content = raw_resp.text
@@ -1524,6 +1536,7 @@ def _write_gist_state(state: BotState) -> bool:
             print(warning)
             log_error(normalized, "state_size", warning)
             payload = json.dumps(normalized, separators=(",", ":"), default=json_default)
+        _consume_gist_request()
         resp = requests.patch(
             f"https://api.github.com/gists/{GIST_ID}",
             headers=_headers(),

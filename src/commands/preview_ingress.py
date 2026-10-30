@@ -119,10 +119,12 @@ class Operators:
 
 class PreviewServer(HTTPServer):
     """Single bounded connection at a time; each request has a read deadline."""
-    def __init__(self, authority: PostgresCommandAuthority, operators: Operators, *, port: int, origin: str, candidate_inputs: tuple[str, ...] = ()):
+    def __init__(self, authority: PostgresCommandAuthority, operators: Operators, *, port: int, origin: str, candidate_inputs: tuple[str, ...] = (),
+                 recovery_journal: str | None = None):
         if authority.environment != "local":
             raise ValueError("local_authority_required")
-        self._initialize(authority, operators, port=port, origin=origin, candidate_inputs=candidate_inputs)
+        self._initialize(authority, operators, port=port, origin=origin, candidate_inputs=candidate_inputs,
+                         recovery_journal=recovery_journal)
 
     @classmethod
     def for_hosted_fixture(cls, authority, operators, *, port, origin, candidate_inputs=()):
@@ -137,8 +139,13 @@ class PreviewServer(HTTPServer):
         result._initialize(authority, operators, port=port, origin=origin, candidate_inputs=candidate_inputs)
         return result
 
-    def _initialize(self, authority, operators, *, port, origin, candidate_inputs):
+    def _initialize(self, authority, operators, *, port, origin, candidate_inputs, recovery_journal=None):
         safe_environment()
+        if recovery_journal is not None:
+            # W14.6: explicit read-only import journal (local_cli import-run/restore-run).
+            from src.commands import recovery_provenance
+            recovery_provenance.check(recovery_journal, environment=authority.environment)
+        self.recovery_journal = recovery_journal
         parsed = urlsplit(origin)
         if (parsed.scheme != "http" or parsed.hostname != "127.0.0.1" or not parsed.port
                 or parsed.username or parsed.password or parsed.path or parsed.query or parsed.fragment):
@@ -148,6 +155,14 @@ class PreviewServer(HTTPServer):
         self.candidate_inputs = candidate_inputs
         self.authority, self.operators, self.origin = authority, operators, origin
         super().__init__(("127.0.0.1", port), PreviewHandler)
+
+    def recovery_provenance(self, state: dict) -> dict:
+        """Empty without a configured journal: every current draft stays current."""
+        journal = getattr(self, "recovery_journal", None)
+        if journal is None:
+            return {}
+        from src.commands import recovery_provenance
+        return recovery_provenance.provenance(journal, state, environment=self.authority.environment)
 
     def get_request(self):
         connection, address = super().get_request()
@@ -257,6 +272,7 @@ class PreviewHandler(BaseHTTPRequestHandler):
                                  "editorial_policy": current_editorial_policy(), "role": actor.role, "operator_subject": actor.subject,
                                  "candidates": self.server.authority.candidate_projection(self.server.candidate_inputs + self.server.authority.generated_candidate_inputs(), now=datetime.now(UTC), resolve_principal=self.server.operators.resolve),
                                  "local_cost": self.server.authority.local_cost_projection(now=datetime.now(UTC)),
+                                 "recovery_provenance": self.server.recovery_provenance(state),
                                  "local_preview": True, "publication_enabled": False})
                 return
             if self.command == "GET" and self.path == "/ghcn-source-context":
@@ -441,10 +457,13 @@ def main() -> int:
     parser.add_argument("--port", type=int, required=True)
     parser.add_argument("--origin", required=True)
     parser.add_argument("--candidate-input-id", action="append", default=[])
+    parser.add_argument("--recovery-journal", help="Absolute path of a local SQLite command authority whose import-run/restore-run "
+                        "history marks matching current drafts read-only; opened read-only")
     args = parser.parse_args()
     try:
         authority, operators = adapter(args)
-        with PreviewServer(authority, operators, port=args.port, origin=args.origin, candidate_inputs=tuple(args.candidate_input_id)) as server:
+        with PreviewServer(authority, operators, port=args.port, origin=args.origin, candidate_inputs=tuple(args.candidate_input_id),
+                           recovery_journal=args.recovery_journal) as server:
             server.serve_forever()
     except (ValueError, OSError, CommandError, ProjectionError):
         print('{"error":"local_preview_unavailable"}')

@@ -1,0 +1,644 @@
+"""Deterministic, bounded GHCN threshold rebuild and offline package verification.
+
+The legacy manifest ``data/station_thresholds.version`` names a single asset
+``station_thresholds.sqlite`` (957,243,392 bytes) on ``thresholds-latest``; that
+release currently has no assets and the manifest carries no diff watermark.
+Nothing here repairs or pretends to repair that release. It supplies the code
+Root needs to rebuild a replacement from explicitly acquired local inputs:
+
+- ``fetch_archive`` — an explicit, byte/deadline/retry-bounded, resumable fetch
+  of one archive with a retained receipt. Never silent and never by default.
+- ``build_plan`` — exact input identities (station/inventory/country files and
+  archive), snapshot cutoff, QC policy, active-station universe and contiguous
+  station partitions.
+- ``build_partitions`` — one archive pass builds the selected incomplete
+  partitions; a partition becomes visible only after it completes, so restarts
+  skip finished partitions and never promote an unfinished one.
+- ``assemble`` — the SQLite artifact (station rows + thresholds + provenance +
+  explicit ``last_diff_date`` watermark), its gzip release asset, a V2
+  ``station_thresholds.version`` manifest and a complete build manifest.
+- ``verify_package`` / ``upload_plan`` — the actual ``threshold_artifacts`` and
+  ``ghcn_runtime_inputs`` consumer contract run offline, plus an explicit upload
+  plan. No upload is executed here.
+
+Artifact integrity and loader acceptance are not scientific qualification and
+thresholds are accepted station samples before the cutoff, not certified records.
+"""
+
+from __future__ import annotations
+
+from contextlib import closing
+from datetime import date, datetime, timezone
+import gzip
+import hashlib
+import json
+import os
+from pathlib import Path
+import sqlite3
+import time
+from typing import Any, Callable
+
+from src.data import acquisition_dependencies as deps
+from src.data import ghcn_db
+from src.data.ghcn_format import (
+    ElementInventory,
+    compute_thresholds,
+    parse_countries_file,
+    parse_inventory_file,
+    parse_stations_file,
+    stream_station_obs_from_tar,
+)
+
+PLAN_SCHEMA = "theheat.threshold-rebuild-plan/v1"
+PARTITION_SCHEMA = "theheat.threshold-partition/v1"
+BUILD_SCHEMA = "theheat.threshold-build-manifest/v1"
+UPLOAD_SCHEMA = "theheat.threshold-upload-plan/v1"
+RELEASE = "thresholds-latest"
+DEFAULT_REPO = "andrewzp/theheat"
+ARCHIVE_URL = "https://www.ncei.noaa.gov/pub/data/ghcn/daily/ghcnd_all.tar.gz"
+MAX_TEXT_BYTES = 128 * 1024 * 1024
+MAX_ARCHIVE_BYTES = 8 * 1024**3
+MAX_PARTITIONS = 256
+QC_POLICY = {
+    "elements": ["TMAX", "TMIN"], "accepted_quality_flag": "blank", "missing_value": "-9999 refused",
+    "nonfinite": "refused", "observations_on_or_after_cutoff": "excluded",
+}
+REPORTING_LIMIT = ("Accepted station samples before the cutoff; not certified records, not archive continuity, "
+                   "and not a statement about dates the source calendar did not report.")
+
+
+class RebuildError(deps.AcquisitionError):
+    """Fixed labels only; never provider bodies or local paths."""
+
+
+def _canonical(value: Any) -> bytes:
+    return json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
+
+
+def _sha_file(path: Path, limit: int = MAX_ARCHIVE_BYTES) -> tuple[str, int]:
+    if path.is_symlink() or not path.is_file():
+        raise RebuildError("threshold_input_not_regular_file")
+    digest, total = hashlib.sha256(), 0
+    with path.open("rb") as handle:
+        while chunk := handle.read(1024**2):
+            total += len(chunk)
+            if total > limit:
+                raise RebuildError("threshold_input_too_large")
+            digest.update(chunk)
+    return digest.hexdigest(), total
+
+
+def _identity(path: Path, limit: int = MAX_ARCHIVE_BYTES) -> dict[str, Any] | None:
+    if not path.exists():
+        return None
+    sha, size = _sha_file(path, limit)
+    return {"name": path.name, "sha256": sha, "bytes": size}
+
+
+def _atomic_bytes(path: Path, raw: bytes) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    try:
+        with temporary.open("wb") as handle:
+            handle.write(raw)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
+def _text(path: Path) -> str:
+    _sha_file(path, MAX_TEXT_BYTES)
+    return path.read_text(encoding="ascii", errors="replace")
+
+
+# ---------------------------------------------------------------------------
+# explicit bounded archive fetch (owner-run; never invoked by plan/build)
+# ---------------------------------------------------------------------------
+
+def fetch_archive(dest: Path, *, session: Any, max_bytes: int, deadline_seconds: float, max_retries: int,
+                  url: str = ARCHIVE_URL, clock: Callable[[], float] = time.monotonic,
+                  now: Callable[[], str] = _utc_now, chunk_size: int = 1024**2) -> dict[str, Any]:
+    """Resumable bounded download into ``dest``; refuses redirects and never overwrites ``dest``."""
+    if not 1 <= max_bytes <= MAX_ARCHIVE_BYTES or not 1 <= deadline_seconds <= 24 * 3600 or not 0 <= max_retries <= 5:
+        raise RebuildError("threshold_fetch_limit_invalid")
+    if dest.exists():
+        raise RebuildError("threshold_archive_exists")
+    part = dest.with_name(dest.name + ".part")
+    started, attempts, metadata = clock(), 0, {}
+    while True:
+        offset = part.stat().st_size if part.exists() else 0
+        if offset > max_bytes:
+            raise RebuildError("threshold_fetch_byte_limit")
+        if clock() - started >= deadline_seconds:
+            return deps.result("thresholds", "incomplete", reasons=["deadline"],
+                               counters={"bytes": offset, "attempts": attempts})
+        attempts += 1
+        headers = {"Range": f"bytes={offset}-"} if offset else {}
+        try:
+            response = session.get(url, headers=headers, stream=True, allow_redirects=False,
+                                   timeout=(30, 120))
+            if response.status_code == 404:
+                return deps.result("thresholds", "source_absent", reasons=["archive_not_found"],
+                                   counters={"bytes": offset, "attempts": attempts})
+            if response.status_code not in (200, 206):
+                raise RebuildError("threshold_fetch_unexpected_status")
+            if response.status_code == 200 and offset:
+                offset = 0  # server ignored the range: restart from zero, never splice
+                part.unlink(missing_ok=True)
+            if response.status_code == 206 and not str(response.headers.get("Content-Range", "")).startswith(
+                    f"bytes {offset}-"):
+                raise RebuildError("threshold_fetch_range_mismatch")
+            length = response.headers.get("Content-Length")
+            if length is not None and offset + int(length) > max_bytes:
+                return deps.result("thresholds", "incomplete", reasons=["byte_limit"],
+                                   counters={"bytes": offset, "attempts": attempts})
+            metadata = {key: response.headers.get(key) for key in ("Last-Modified", "ETag")}
+            written = offset
+            with part.open("ab") as handle:
+                for chunk in response.iter_content(chunk_size=chunk_size):
+                    written += len(chunk)
+                    if written > max_bytes:
+                        return deps.result("thresholds", "incomplete", reasons=["byte_limit"],
+                                           counters={"bytes": written - len(chunk), "attempts": attempts})
+                    handle.write(chunk)
+                    if clock() - started >= deadline_seconds:
+                        return deps.result("thresholds", "incomplete", reasons=["deadline"],
+                                           counters={"bytes": written, "attempts": attempts})
+            if length is not None and written != offset + int(length):
+                raise ConnectionError("short body")
+            break
+        except RebuildError:
+            raise
+        except Exception:  # noqa: BLE001 - transport failure; resume from the retained part
+            if attempts > max_retries:
+                return deps.result("thresholds", "incomplete", reasons=["transport_failures"],
+                                   counters={"bytes": part.stat().st_size if part.exists() else 0,
+                                             "attempts": attempts})
+    sha, size = _sha_file(part)
+    os.replace(part, dest)
+    receipt = {"url": url, "name": dest.name, "sha256": sha, "bytes": size, "retrieved_at": now(),
+               "last_modified": metadata.get("Last-Modified"), "etag": metadata.get("ETag"), "attempts": attempts}
+    _atomic_bytes(dest.with_name(dest.name + ".receipt.json"), _canonical(receipt))
+    return deps.result("thresholds", "ready", source=receipt, counters={"bytes": size, "attempts": attempts})
+
+
+# ---------------------------------------------------------------------------
+# 02.4 deterministic plan, partitions and assembly
+# ---------------------------------------------------------------------------
+
+def _inventory(inventory_text: str) -> dict[str, list[ElementInventory]]:
+    by_station: dict[str, list[ElementInventory]] = {}
+    for row in parse_inventory_file(inventory_text):
+        by_station.setdefault(row.station_id, []).append(row)
+    return by_station
+
+
+def _active(rows: list[ElementInventory], cutoff_year: int) -> bool:
+    return any(row.element in {"TMAX", "TMIN"} and row.last_year >= cutoff_year for row in rows)
+
+
+def _plan_identity(plan: dict[str, Any]) -> str:
+    return hashlib.sha256(_canonical({k: v for k, v in plan.items() if k != "plan_sha256"})).hexdigest()
+
+
+def build_plan(*, stations: Path, inventory: Path, countries: Path, archive: Path, snapshot_date: str,
+               partitions: int, active_year_cutoff: int | None = None,
+               archive_receipt: Path | None = None) -> dict[str, Any]:
+    try:
+        snapshot = date.fromisoformat(snapshot_date)
+    except (TypeError, ValueError):
+        raise RebuildError("threshold_snapshot_date_invalid") from None
+    if snapshot.isoformat() != snapshot_date:
+        raise RebuildError("threshold_snapshot_date_invalid")
+    if not 1 <= partitions <= MAX_PARTITIONS:
+        raise RebuildError("threshold_partition_count_invalid")
+    cutoff_year = snapshot.year - 1 if active_year_cutoff is None else active_year_cutoff
+    if not 1800 <= cutoff_year <= snapshot.year:
+        raise RebuildError("threshold_active_cutoff_invalid")
+    missing = [name for name, path in (("stations", stations), ("inventory", inventory), ("countries", countries),
+                                       ("archive", archive)) if not path.exists()]
+    texts = {"stations": stations, "inventory": inventory, "countries": countries}
+    inputs: dict[str, Any] = {name: _identity(path, MAX_TEXT_BYTES) for name, path in texts.items()}
+    inputs["archive"] = _identity(archive)
+    receipt = None
+    if archive_receipt is not None and archive_receipt.exists():
+        receipt = json.loads(archive_receipt.read_bytes()[:65536])
+        if inputs["archive"] is None or receipt.get("sha256") != inputs["archive"]["sha256"]:
+            raise RebuildError("threshold_archive_receipt_mismatch")
+    universe: list[str] = []
+    if not {"stations", "inventory"} & set(missing):
+        by_station = _inventory(_text(inventory))
+        known = {meta.station_id for meta in parse_stations_file(_text(stations))}
+        universe = sorted(sid for sid in known if _active(by_station.get(sid, []), cutoff_year))
+    size = -(-len(universe) // partitions) if universe else 0
+    chunks = [universe[i:i + size] for i in range(0, len(universe), size)] if size else []
+    plan: dict[str, Any] = {
+        "schema": PLAN_SCHEMA, "source_product": "noaa-ghcn-daily-v2", "release": RELEASE,
+        "inputs": inputs, "missing_inputs": missing,
+        "archive_retrieval": None if receipt is None else {k: receipt.get(k) for k in (
+            "url", "retrieved_at", "last_modified", "etag")},
+        "snapshot_date": snapshot_date, "comparison_before": snapshot_date,
+        "watermark_last_diff_date": snapshot_date, "snapshot_date_basis": "operator_declared",
+        "active_year_cutoff": cutoff_year, "qc_policy": QC_POLICY, "reporting_limit": REPORTING_LIMIT,
+        "active_stations": len(universe),
+        "partitions": [{"index": i, "first": chunk[0], "last": chunk[-1], "stations": len(chunk),
+                        "station_ids_sha256": hashlib.sha256("\n".join(chunk).encode()).hexdigest()}
+                       for i, chunk in enumerate(chunks)],
+    }
+    plan["plan_sha256"] = _plan_identity(plan)
+    return plan
+
+
+def _check_plan(plan: Any) -> dict[str, Any]:
+    if not isinstance(plan, dict) or plan.get("schema") != PLAN_SCHEMA or plan.get("plan_sha256") != _plan_identity(plan):
+        raise RebuildError("threshold_plan_invalid_or_altered")
+    if plan["missing_inputs"]:
+        raise RebuildError("threshold_plan_inputs_missing")
+    return plan
+
+
+def _check_inputs(plan: dict[str, Any], paths: dict[str, Path], names: tuple[str, ...]) -> None:
+    for name in names:
+        limit = MAX_ARCHIVE_BYTES if name == "archive" else MAX_TEXT_BYTES
+        if _identity(paths[name], limit) != plan["inputs"][name]:
+            raise RebuildError(f"threshold_{name}_changed_since_plan")
+
+
+def _partition_ids(plan: dict[str, Any], paths: dict[str, Path]) -> list[list[str]]:
+    by_station = _inventory(_text(paths["inventory"]))
+    known = {meta.station_id for meta in parse_stations_file(_text(paths["stations"]))}
+    universe = sorted(sid for sid in known if _active(by_station.get(sid, []), plan["active_year_cutoff"]))
+    out = []
+    for entry in plan["partitions"]:
+        ids = [sid for sid in universe if entry["first"] <= sid <= entry["last"]]
+        if hashlib.sha256("\n".join(ids).encode()).hexdigest() != entry["station_ids_sha256"]:
+            raise RebuildError("threshold_partition_universe_changed")
+        out.append(ids)
+    return out
+
+
+def _receipt_path(work_dir: Path, index: int) -> Path:
+    return work_dir / f"part-{index:04d}.json"
+
+
+def partition_state(plan: dict[str, Any], work_dir: Path) -> dict[int, str]:
+    """complete only when the receipt binds this plan and the partition bytes still match."""
+    states = {}
+    for entry in plan["partitions"]:
+        receipt, database = _receipt_path(work_dir, entry["index"]), work_dir / f"part-{entry['index']:04d}.sqlite"
+        state = "pending"
+        if receipt.exists() and database.exists():
+            try:
+                record = json.loads(receipt.read_bytes()[:65536])
+                if (record.get("schema") == PARTITION_SCHEMA and record.get("plan_sha256") == plan["plan_sha256"]
+                        and record.get("station_ids_sha256") == entry["station_ids_sha256"]
+                        and record.get("sha256") == _sha_file(database)[0]):
+                    state = "complete"
+            except (ValueError, deps.AcquisitionError):
+                state = "pending"
+        states[entry["index"]] = state
+    return states
+
+
+def build_partitions(plan: dict[str, Any], *, paths: dict[str, Path], work_dir: Path,
+                     select: list[int] | None = None, deadline_seconds: float = 6 * 3600,
+                     clock: Callable[[], float] = time.monotonic) -> dict[str, Any]:
+    """Single archive pass for the selected pending partitions; publish each only when complete."""
+    _check_plan(plan)
+    _check_inputs(plan, paths, ("stations", "inventory", "archive"))
+    if not 1 <= deadline_seconds <= 24 * 3600:
+        raise RebuildError("threshold_deadline_invalid")
+    work_dir.mkdir(parents=True, exist_ok=True)
+    for stale in work_dir.glob("*.building*"):
+        stale.unlink()  # an interrupted partition is never promoted
+    states = partition_state(plan, work_dir)
+    chosen = sorted(i for i in (select if select is not None else states) if states.get(i) == "pending")
+    if not chosen:
+        return deps.result("thresholds", "ready", reasons=["no_pending_partitions"],
+                           counters={"complete": sum(s == "complete" for s in states.values()), "built": 0})
+    ids = _partition_ids(plan, paths)
+    owner = {sid: index for index in chosen for sid in ids[index]}
+    retrieved_at = (plan.get("archive_retrieval") or {}).get("retrieved_at")
+    before = date.fromisoformat(plan["comparison_before"])
+    started = clock()
+    connections = {}
+    counts = {index: {"written": 0, "without_samples": 0} for index in chosen}
+    try:
+        for index in chosen:
+            building = work_dir / f"part-{index:04d}.sqlite.building"
+            building.unlink(missing_ok=True)
+            conn = sqlite3.connect(building)
+            conn.executescript(ghcn_db._DDL)
+            connections[index] = conn
+        seen: set[str] = set()
+        with paths["archive"].open("rb") as handle:
+            for station_id, observations in stream_station_obs_from_tar(handle, station_ids=frozenset(owner)):
+                if clock() - started >= deadline_seconds:
+                    raise TimeoutError
+                if station_id in seen:
+                    raise RebuildError("threshold_archive_duplicate_station")
+                seen.add(station_id)
+                thresholds = compute_thresholds(observations, before=before, retrieved_at=retrieved_at,
+                                                source_revision=plan["inputs"]["archive"]["sha256"])
+                index = owner[station_id]
+                if thresholds is None:
+                    counts[index]["without_samples"] += 1
+                    continue
+                ghcn_db.upsert_thresholds(connections[index], thresholds)
+                counts[index]["written"] += 1
+        for index in chosen:
+            counts[index]["without_samples"] += len(set(ids[index]) - seen)
+            conn = connections.pop(index)
+            conn.commit()
+            conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            conn.execute("PRAGMA journal_mode=DELETE")
+            conn.close()
+            building = work_dir / f"part-{index:04d}.sqlite.building"
+            final = work_dir / f"part-{index:04d}.sqlite"
+            os.replace(building, final)
+            entry = plan["partitions"][index]
+            _atomic_bytes(_receipt_path(work_dir, index), _canonical({
+                "schema": PARTITION_SCHEMA, "plan_sha256": plan["plan_sha256"], "index": index,
+                "station_ids_sha256": entry["station_ids_sha256"], "stations": entry["stations"],
+                **counts[index], "sha256": _sha_file(final)[0]}))
+    except TimeoutError:
+        _abandon(connections, work_dir)
+        return deps.result("thresholds", "incomplete", reasons=["deadline"],
+                           counters={"built": 0, "pending": len(chosen)})
+    except BaseException:
+        _abandon(connections, work_dir)
+        raise
+    states = partition_state(plan, work_dir)
+    pending = sorted(i for i, s in states.items() if s != "complete")
+    return deps.result("thresholds", "incomplete" if pending else "ready",
+                       reasons=["partitions_pending"] if pending else [],
+                       counters={"built": len(chosen), "pending": len(pending),
+                                 "complete": len(states) - len(pending)})
+
+
+def _abandon(connections: dict[int, sqlite3.Connection], work_dir: Path) -> None:
+    for conn in connections.values():
+        conn.close()
+    for stale in work_dir.glob("*.building*"):
+        stale.unlink()
+
+
+def assemble(plan: dict[str, Any], *, paths: dict[str, Path], work_dir: Path, out_dir: Path,
+             now: Callable[[], str] = _utc_now) -> dict[str, Any]:
+    """Build the artifact, gzip asset, V2 manifest and build manifest from complete partitions only."""
+    from scripts import threshold_artifacts as artifacts
+
+    _check_plan(plan)
+    _check_inputs(plan, paths, ("stations", "inventory", "countries", "archive"))
+    states = partition_state(plan, work_dir)
+    if any(state != "complete" for state in states.values()) or not states:
+        raise RebuildError("threshold_partitions_incomplete")
+    target = out_dir / "station_thresholds.sqlite"
+    if target.exists() or (out_dir / "station_thresholds.version").exists():
+        raise RebuildError("threshold_output_exists")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    building = out_dir / "station_thresholds.sqlite.building"
+    building.unlink(missing_ok=True)
+    stations = sorted(parse_stations_file(_text(paths["stations"])), key=lambda meta: meta.station_id)
+    by_station = _inventory(_text(paths["inventory"]))
+    countries = parse_countries_file(_text(paths["countries"]))
+    try:
+        with closing(sqlite3.connect(building)) as conn:
+            conn.executescript(ghcn_db._DDL)
+            for meta in stations:
+                ghcn_db.upsert_station(conn, meta, countries.get(meta.country_code_inferred(), ""),
+                                       by_station.get(meta.station_id, []), plan["active_year_cutoff"])
+            conn.commit()
+            receipts = []
+            for entry in plan["partitions"]:
+                part = work_dir / f"part-{entry['index']:04d}.sqlite"
+                conn.execute("ATTACH DATABASE ? AS part", (str(part.resolve()),))
+                conn.execute("INSERT INTO thresholds SELECT station_id,kind,month,day,value_c,record_year "
+                             "FROM part.thresholds ORDER BY station_id,kind,month,day")
+                conn.execute("INSERT INTO threshold_provenance SELECT station_id,payload_json "
+                             "FROM part.threshold_provenance ORDER BY station_id")
+                conn.commit()
+                conn.execute("DETACH DATABASE part")
+                receipts.append(json.loads(_receipt_path(work_dir, entry["index"]).read_bytes()))
+            ghcn_db.set_meta(conn, "last_diff_date", plan["watermark_last_diff_date"])
+            ghcn_db.set_meta(conn, "rebuild_plan_sha256", plan["plan_sha256"])
+            conn.commit()
+            conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            conn.execute("PRAGMA journal_mode=DELETE")
+            conn.execute("VACUUM")
+            coverage = {
+                "stations": conn.execute("SELECT COUNT(*) FROM stations").fetchone()[0],
+                "active_stations": conn.execute("SELECT COUNT(*) FROM stations WHERE is_active=1").fetchone()[0],
+                "active_with_thresholds": conn.execute(
+                    "SELECT COUNT(*) FROM stations WHERE is_active=1 AND station_id IN "
+                    "(SELECT DISTINCT station_id FROM thresholds)").fetchone()[0],
+                "threshold_rows": conn.execute("SELECT COUNT(*) FROM thresholds").fetchone()[0],
+                "orphan_threshold_stations": conn.execute(
+                    "SELECT COUNT(DISTINCT station_id) FROM thresholds WHERE station_id NOT IN "
+                    "(SELECT station_id FROM stations)").fetchone()[0],
+            }
+            sqlite_version = conn.execute("SELECT sqlite_version()").fetchone()[0]
+        for suffix in ("-wal", "-journal"):
+            Path(str(building) + suffix).unlink(missing_ok=True)
+        os.replace(building, target)
+    except BaseException:
+        building.unlink(missing_ok=True)
+        raise
+    stats = artifacts.database_stats(target)
+    sha, size = artifacts.digest(target)
+    asset = out_dir / f"station_thresholds-{sha}.sqlite.gz"
+    with target.open("rb") as source, asset.open("xb") as output:
+        with gzip.GzipFile(filename="", mode="wb", fileobj=output, mtime=0) as compressed:
+            while chunk := source.read(1024**2):
+                compressed.write(chunk)
+    asset_sha, asset_size = artifacts.digest(asset, artifacts.MAX_ASSET_BYTES)
+    manifest = {"release": RELEASE, "sha256": sha, "bytes": str(size), **stats, "format": "sqlite-gzip",
+                "asset": asset.name, "asset_sha256": asset_sha, "asset_bytes": str(asset_size)}
+    _atomic_bytes(out_dir / "station_thresholds.version",
+                  "".join(f"{key}={value}\n" for key, value in manifest.items()).encode("ascii"))
+    build = {"schema": BUILD_SCHEMA, "plan_sha256": plan["plan_sha256"], "inputs": plan["inputs"],
+             "archive_retrieval": plan["archive_retrieval"], "snapshot_date": plan["snapshot_date"],
+             "comparison_before": plan["comparison_before"], "snapshot_date_basis": plan["snapshot_date_basis"],
+             "active_year_cutoff": plan["active_year_cutoff"], "qc_policy": plan["qc_policy"],
+             "reporting_limit": plan["reporting_limit"], "partitions": receipts, "coverage": coverage,
+             "database": {"name": target.name, "sha256": sha, "bytes": size, "sqlite_version": sqlite_version},
+             "asset": {"name": asset.name, "sha256": asset_sha, "bytes": asset_size},
+             "manifest": dict(manifest), "assembled_at": now(),
+             "scientific_qualification": "not_established_by_artifact_integrity"}
+    _atomic_bytes(out_dir / "build-manifest.json", _canonical(build))
+    return build
+
+
+# ---------------------------------------------------------------------------
+# 02.5 offline package verification and explicit upload plan
+# ---------------------------------------------------------------------------
+
+def _release_disposition(release_assets: Any, name: str, sha: str, size: int) -> dict[str, Any]:
+    """Classify an operator-saved ``gh api repos/<repo>/releases/tags/<tag>`` document."""
+    if release_assets is None:
+        return {"state": "unknown_requires_owner_read"}
+    if not isinstance(release_assets, dict) or not isinstance(release_assets.get("assets"), list):
+        return {"state": "release_metadata_invalid"}
+    rows = [row for row in release_assets["assets"] if isinstance(row, dict)]
+    matches = [row for row in rows if row.get("name") == name]
+    base = {"asset_count": len(rows), "release_empty": not rows}
+    if len(matches) > 1:
+        return {**base, "state": "asset_identity_conflict"}
+    if not matches:
+        return {**base, "state": "asset_absent_upload_required"}
+    row = matches[0]
+    if row.get("state") == "uploaded" and row.get("size") == size and row.get("digest") == f"sha256:{sha}":
+        return {**base, "state": "asset_present_verified"}
+    return {**base, "state": "asset_identity_conflict"}
+
+
+def verify_package(database: Path, manifest_path: Path, *, asset: Path | None = None,
+                   build_manifest: Path | None = None, release_assets: Any = None) -> dict[str, Any]:
+    """The actual ensure/loader contract offline: manifest, digest, schema, coverage, cutoff, consumer read."""
+    from scripts import threshold_artifacts as artifacts
+    from src.storage import ghcn_runtime_inputs
+
+    reasons: list[str] = []
+    try:
+        manifest = artifacts.read_manifest(manifest_path)
+    except (artifacts.ArtifactError, OSError):
+        return deps.result("thresholds", "product_invalid", reasons=["invalid_threshold_manifest"])
+    name, asset_sha, asset_size = artifacts._asset(manifest)
+    disposition = _release_disposition(release_assets, name, asset_sha, asset_size)
+    if not database.exists():
+        status = "source_absent" if disposition.get("state") != "asset_present_verified" else "incomplete"
+        return deps.result("thresholds", status, reasons=["threshold_database_absent",
+                                                          "release_" + disposition["state"]],
+                           source={"release": manifest["release"], "required_asset": name,
+                                   "required_asset_bytes": asset_size, "disposition": disposition})
+    try:
+        stats = artifacts.verify_database(database, manifest)
+    except (artifacts.ArtifactError, OSError) as error:
+        return deps.result("thresholds", "product_invalid", reasons=[str(error)])
+    coverage: dict[str, Any] = {}
+    try:
+        with ghcn_db.open_db_readonly(database) as conn:
+            coverage = {
+                "active_stations": int(stats["active_stations"]),
+                "active_with_thresholds": conn.execute(
+                    "SELECT COUNT(*) FROM stations WHERE is_active=1 AND station_id IN "
+                    "(SELECT DISTINCT station_id FROM thresholds)").fetchone()[0],
+                "orphan_threshold_stations": conn.execute(
+                    "SELECT COUNT(DISTINCT station_id) FROM thresholds WHERE station_id NOT IN "
+                    "(SELECT station_id FROM stations)").fetchone()[0],
+                "stations_without_provenance": conn.execute(
+                    "SELECT COUNT(DISTINCT station_id) FROM thresholds WHERE station_id NOT IN "
+                    "(SELECT station_id FROM threshold_provenance)").fetchone()[0],
+                "unknown_kinds": conn.execute(
+                    "SELECT COUNT(*) FROM thresholds WHERE kind NOT IN ('all_time_max','all_time_min',"
+                    "'monthly_max','monthly_min','calendar_date_max','calendar_date_min',"
+                    "'climatological_mean','climatological_mean_min')").fetchone()[0],
+            }
+            cutoffs = set()
+            for (payload,) in conn.execute("SELECT payload_json FROM threshold_provenance"):
+                record = json.loads(payload)
+                cutoffs.add(record.get("comparison_before") if isinstance(record, dict) else "invalid")
+    except (ValueError, sqlite3.Error):
+        return deps.result("thresholds", "product_invalid", reasons=["threshold_schema_unrecognized"])
+    if coverage["orphan_threshold_stations"] or coverage["stations_without_provenance"] or coverage["unknown_kinds"]:
+        reasons.append("threshold_rows_unbound")
+    if not coverage["active_with_thresholds"]:
+        reasons.append("threshold_station_coverage_empty")
+    if len(cutoffs) != 1 or None in cutoffs or "invalid" in cutoffs:
+        reasons.append("threshold_cutoff_not_uniform")
+    if not stats["last_diff_date"]:
+        reasons.append("threshold_baseline_lineage_unknown")
+    build = None
+    if build_manifest is not None:
+        build = json.loads(build_manifest.read_bytes()[: 4 * 1024**2])
+        if (build.get("schema") != BUILD_SCHEMA or build.get("manifest") != manifest
+                or cutoffs != {build.get("comparison_before")}
+                or stats["last_diff_date"] != build.get("snapshot_date")):
+            reasons.append("threshold_build_manifest_mismatch")
+    if asset is not None:
+        if asset.name != name:
+            reasons.append("threshold_asset_filename_mismatch")
+        elif artifacts.digest(asset, artifacts.MAX_ASSET_BYTES if "format" in manifest else artifacts.MAX_DB_BYTES) \
+                != (asset_sha, asset_size):
+            reasons.append("threshold_asset_digest_mismatch")
+        elif manifest.get("format") == "sqlite-gzip":
+            expanded = hashlib.sha256()
+            total = 0
+            with gzip.open(asset, "rb") as source:
+                while chunk := source.read(1024**2):
+                    total += len(chunk)
+                    if total > int(manifest["bytes"]):
+                        break
+                    expanded.update(chunk)
+            if (expanded.hexdigest(), total) != (manifest["sha256"], int(manifest["bytes"])):
+                reasons.append("threshold_asset_does_not_expand_to_database")
+    if set(reasons) <= {"threshold_baseline_lineage_unknown"}:
+        manifest_sha = artifacts.digest(manifest_path, 4096)[0]
+        baseline = ghcn_runtime_inputs.Baseline(database, manifest_path, manifest["sha256"], manifest_sha)
+        try:
+            with baseline.reader() as (_target, descriptor):
+                coverage["consumer_threshold_rows_sha256"] = descriptor["threshold_rows_sha256"]
+        except Exception as error:  # noqa: BLE001 - the consumer's refusal is the finding
+            reasons.append("consumer_refused:" + str(error)[:64])
+    status = "product_invalid" if reasons and reasons != ["threshold_baseline_lineage_unknown"] else (
+        "incomplete" if reasons else "ready")
+    return deps.result("thresholds", status, reasons=reasons,
+                       source={"release": manifest["release"], "required_asset": name,
+                               "required_asset_bytes": asset_size, "disposition": disposition},
+                       product={"manifest": manifest, "coverage": coverage,
+                                "comparison_before": sorted(c for c in cutoffs if isinstance(c, str))},
+                       observed=int(stats["active_stations"]), promoted=int(coverage.get("active_with_thresholds", 0)))
+
+
+def upload_plan(verification: dict[str, Any], *, asset: Path, manifest_path: Path, installed_manifest: Path,
+                repo: str = DEFAULT_REPO) -> dict[str, Any]:
+    """Explicit owner steps; nothing is executed. The prior manifest stays the rollback reference."""
+    from scripts import threshold_artifacts as artifacts
+
+    if verification.get("status") != "ready":
+        raise RebuildError("threshold_package_not_verified")
+    manifest = verification["product"]["manifest"]
+    previous = None
+    if installed_manifest.exists():
+        previous_fields = artifacts.read_manifest(installed_manifest)
+        p_name, p_sha, p_size = artifacts._asset(previous_fields)
+        previous = {"manifest_sha256": artifacts.digest(installed_manifest, 4096)[0], "fields": previous_fields,
+                    "required_asset": p_name, "required_asset_bytes": p_size, "required_asset_sha256": p_sha}
+    disposition = verification["source"]["disposition"]
+    if disposition.get("state") == "asset_identity_conflict":
+        raise RebuildError("threshold_asset_identity_conflict")
+    return {
+        "schema": UPLOAD_SCHEMA, "executed": False, "performed_by": "root",
+        "release": manifest["release"], "repo": repo,
+        "asset": {"path": str(asset), "name": manifest["asset"], "sha256": manifest["asset_sha256"],
+                  "bytes": int(manifest["asset_bytes"])},
+        "release_disposition": disposition,
+        "steps": [
+            {"action": "read_release", "argv": ["gh", "api", f"repos/{repo}/releases/tags/{manifest['release']}"],
+             "expect": "no asset with this name, or the identical verified digest"},
+            {"action": "upload", "argv": ["gh", "release", "upload", manifest["release"], str(asset), "--repo", repo],
+             "skip_when": "asset_present_verified", "never": ["--clobber", "delete", "rename", "second upload"]},
+            {"action": "verify_remote", "expect": {"name": manifest["asset"], "state": "uploaded",
+                                                   "size": int(manifest["asset_bytes"]),
+                                                   "digest": f"sha256:{manifest['asset_sha256']}"}},
+            {"action": "install_manifest", "copy": [str(manifest_path), str(installed_manifest)]},
+            {"action": "consumer_check", "argv": ["python", "-m", "scripts.threshold_artifacts", "ensure",
+                                                  "--repo", repo], "on": "a clean cache"},
+        ],
+        "rollback": previous and {"restore_manifest_sha256": previous["manifest_sha256"],
+                                  "previous_required_asset": previous["required_asset"],
+                                  "previous_required_asset_bytes": previous["required_asset_bytes"],
+                                  "note": "restoring the prior manifest restores its prior (currently absent) asset "
+                                          "requirement; it does not recreate that asset"},
+        "preserved_evidence": "the prior release state is recorded above as read; this plan does not repair it",
+    }
+
+
+__all__ = ["ARCHIVE_URL", "BUILD_SCHEMA", "PLAN_SCHEMA", "RebuildError", "assemble", "build_partitions",
+           "build_plan", "fetch_archive", "partition_state", "upload_plan", "verify_package"]

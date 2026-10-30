@@ -9,12 +9,16 @@ import pytest
 
 from src.media import gist_crw_media as crw, gist_published_media as published
 from tests import gist_published_helpers as ph
-from tests.gist_crw_helpers import varied_inputs
+from tests.gist_crw_helpers import collected_inputs, varied_inputs
 
 CLOCKS = {"crw": ("2026-06-16T13:00:00Z", "2026-06-20T00:00:00Z"),
+          "crw_collected": ("2026-06-16T13:00:00Z", "2026-06-20T00:00:00Z"),
           "radar": ph.CLOCKS["radar"], "cone": ph.CLOCKS["cone"]}
-TYPES = {"crw": "regional_sst_anomaly", "radar": "severe_weather", "cone": "cyclone_land_threat"}
+TYPES = {"crw": "regional_sst_anomaly", "crw_collected": "regional_sst_anomaly", "radar": "severe_weather",
+         "cone": "cyclone_land_threat"}
 TEXTS = {"crw": "Invented Caribbean satellite analysis runs about 3°C above its daily climatology.",
+         "crw_collected": "Invented collector-retained Caribbean satellite analysis runs about 3°C above its daily "
+                          "climatology.",
          "radar": "Invented catastrophic tornado warning near Oklahoma City; radar context only.",
          "cone": "Invented hurricane forecast cone keeps the islands inside the track area."}
 
@@ -22,6 +26,8 @@ TEXTS = {"crw": "Invented Caribbean satellite analysis runs about 3°C above its
 def family_bundle(family):
     if family == "crw":
         return varied_inputs("caribbean")[0]
+    if family == "crw_collected":  # The bundle carries the collector's exact packet reference.
+        return collected_inputs("caribbean")[0]
     if family == "radar":
         patch = pytest.MonkeyPatch()
         try:
@@ -37,6 +43,8 @@ def retain(family, store):
     """Retain this family's invented input; returns the exact identity to select."""
     if family == "crw":
         return crw.retain_packet(store, varied_inputs("caribbean")[1])
+    if family == "crw_collected":
+        return crw.retain_packet(store, collected_inputs("caribbean")[1])
     if family == "radar":
         doc, raw, refs, receipt = ph.radar_inputs()
         return published.retain(store, published.radar.FAMILY, doc, raw, refs, receipt)

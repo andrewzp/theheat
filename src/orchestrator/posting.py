@@ -5,6 +5,7 @@ from src.data.fire_identity import legacy_history_reason
 from src.data.places import has_unregistered_identity, legacy_publication_status, requires_identity_review
 
 from copy import deepcopy
+from src.posting import outbox_outcome
 
 # ruff: noqa: F403,F405
 from src.orchestrator.common import *
@@ -15,6 +16,7 @@ from src.editorial.approval import (
 )
 from src.editorial.publication import automatic_approval_allowed, observe_publication_policy
 from src.orchestrator.draft_save import _critic_passed
+from src.editorial.automatic_text import HOLD_MESSAGES, automatic_text_hold
 from src.orchestrator.nws_publication import current_nws_source as _retained_nws_source
 from src.editorial.revisions import (
     approval_is_current,
@@ -38,14 +40,54 @@ def _current_nws_source(draft, *, live):
     # An NHC advisory needs this process's own owner: static before intent,
     # a fresh fixed read at the live boundaries (manual entry, after intent).
     return (current_warning_source(draft) or current_advisory_source(draft, live=live)
-            or _retained_nws_source(draft, live=live))
+            or _retained_nws_source(draft, live=live) or _current_hot10_source(draft)
+            or _current_air_quality_source(draft, live=live) or _current_warning_auto_source(draft))
+
+
+def _current_warning_auto_source(draft) -> str | None:
+    # An automatic warning binding keeps its opt-in eligibility (flag, text only,
+    # qualified copy) at every send boundary. The family owner above re-reads the
+    # source; this adds no read. Manual sends keep their existing gates.
+    from src.editorial import warning_automatic
+    if not warning_automatic.governs(draft):
+        return None
+    if (draft.get("approval_binding") or {}).get("mode") != "auto":
+        return None
+    return warning_automatic.auto_text_hold(draft)
+
+
+def _current_air_quality_source(draft, *, live) -> str | None:
+    # An automatic air-quality binding keeps its opt-in eligibility (flag, text
+    # only, forecast wording, intact unexpired recent window) at every send
+    # boundary. The one live re-read happens in process_due_drafts before safety,
+    # never again after the durable intent. Manual sends keep their existing gates.
+    del live  # Fixed bounded rules here; the single re-read is the caller's.
+    if draft.get("type") not in ("air_quality_hazard", "dust_event"):
+        return None
+    if (draft.get("approval_binding") or {}).get("mode") != "auto":
+        return None
+    from src.data import air_quality_current
+    return air_quality_current.auto_text_hold(draft, {}, _utc_now(), live=False)
+
+
+def _current_hot10_source(draft) -> str | None:
+    # The retained bulletin is the whole source: intact rows, leader day current.
+    if draft.get("type") != "hot10":
+        return None
+    from src.editorial.hot10_contract import current_hold
+    review, two_bot = draft.get("review_context"), None
+    if isinstance(review, dict):
+        two_bot = review.get("two_bot")
+    return current_hold(two_bot.get("bundle") if isinstance(two_bot, dict) else None, _utc_now())
 
 
 def _hold_nws_draft(draft: dict, reason: str) -> None:
     revoke_approval(draft)
     draft["status"] = "pending"
     draft["approval_mode"] = "manual"
-    source_names: dict[object, str] = {"official_warning": "Official warning", "nhc_advisory": "NHC advisory"}
+    source_names: dict[object, str] = {"official_warning": "Official warning", "nhc_advisory": "NHC advisory",
+                                       "hot10": "Hot10 bulletin", "air_quality_hazard": "PM2.5 forecast",
+                                       "dust_event": "Dust forecast"}
     source = source_names.get(draft.get("type"), "NWS warning")
     draft["post_error"] = f"{source} needs fresh source review: {reason}"
     _touch_draft(draft)
@@ -86,13 +128,24 @@ def _hot10_card_enabled() -> bool:
 def _hot10_media_for_draft(draft: dict) -> tuple[bytes | None, str | None]:
     if not _hot10_card_enabled():
         return None, None
+    # Images never gain automatic authority: an automatic send is always text only.
+    if (draft.get("approval_binding") or {}).get("mode") != "manual":
+        return None, None
     rows = draft.get("hot10_rows")
     if not isinstance(rows, list) or not rows:
         return None, None
 
     try:
-        from src.media.hot10_card import build_hot10_alt_text, render_hot10_card
+        from src.media.hot10_card import (build_hot10_alt_text, hot10_bulletin_alt_text, render_hot10_bulletin,
+                                          render_hot10_card)
 
+        review, two_bot = draft.get("review_context"), None
+        if isinstance(review, dict):
+            two_bot = review.get("two_bot")
+        bundle = two_bot.get("bundle") if isinstance(two_bot, dict) else None
+        if isinstance(bundle, dict) and bundle.get("signal_kind") == "hot10":
+            # A qualified bulletin renders only from its exact retained rows, or not at all.
+            return render_hot10_bulletin(bundle), hot10_bulletin_alt_text(bundle)
         return render_hot10_card(rows), build_hot10_alt_text(rows)
     except Exception as exc:
         print(f"[post] Hot 10 card render failed; posting text-only: {exc!r}")
@@ -256,6 +309,10 @@ def post_approved(draft_or_text: dict | str, bot_state: BotState) -> str:
     if source_hold:
         _hold_nws_draft(draft, source_hold)
         return "failed"
+    text_hold = automatic_text_hold(draft.get("text")) if mode == "auto" else None
+    if text_hold is not None:
+        draft["post_error"] = HOLD_MESSAGES[text_hold]
+        return "failed"
 
     # Capture this before any sender mutation for the storage stale-read check.
     expected_draft = deepcopy(draft) if tracked else None
@@ -279,8 +336,10 @@ def post_approved(draft_or_text: dict | str, bot_state: BotState) -> str:
         # the original expected snapshots above for the later conditional write.
         # An interruption here must leave no phantom submitted intent.
         try:
-            from src.media.gist_media import media_for_draft
-            if snapshot.get("hot10_rows"):
+            from src.media.gist_media import HOT10, media_for_draft
+            # The Hot10 family is the bulletin's own image; its legacy compact rows never add a second one.
+            attached = snapshot["media_attachment"]
+            if snapshot.get("hot10_rows") and not (isinstance(attached, dict) and attached.get("kind") == HOT10):
                 raise ValueError("Only one explicitly selected image is allowed")
             media_png, alt_text = media_for_draft(snapshot)
         except (ValueError, KeyError, TypeError, OSError, UnicodeError) as exc:
@@ -298,6 +357,9 @@ def post_approved(draft_or_text: dict | str, bot_state: BotState) -> str:
         "phase": "submitted",
         "at": _utc_now_iso(),
     }
+    if "media_attachment" in snapshot:
+        # Exact PNG/alt bytes are durable with the intent, before any egress.
+        row["delivery_identity"] = outbox_outcome.delivery_identity(tweet_text, media_png, alt_text)
     context = publication_observation(snapshot, event_id, row)
     if context is not None:
         row["publication_observations"] = {fingerprint(context): context}
@@ -355,19 +417,36 @@ def post_approved(draft_or_text: dict | str, bot_state: BotState) -> str:
             draft.pop("autoship_attempted", None)
             _touch_draft(draft)
             return "failed"
-    try:
-        result = post_tweet(tweet_text, media_png=media_png, alt_text=alt_text)
-    except Exception as exc:  # A lost response must never authorize a blind retry.
-        print(f"[post] Publication outcome unknown: {exc!r}")
-        result = None
-    if result is not None and result.get("error") == "rate_limited":
+    # A text-only row is already bound by text/text_sha256; a graphic adds PNG/alt.
+    bound = outbox_outcome.delivery_identity(tweet_text, media_png, alt_text)
+    if (media_png is not None or "delivery_identity" in row) and row.setdefault("delivery_identity", bound) != bound:
+        row["phase"] = "not_sent"
+        draft["publish_outcome"] = "not_sent"
+        draft["post_error"] = "Delivery bytes changed after the intent was recorded; nothing sent"
+        draft.pop("autoship_attempted", None)
+        _touch_draft(draft)
+        return "failed"
+    with outbox_outcome.recording() as stage_report:
+        try:
+            result = post_tweet(tweet_text, media_png=media_png, alt_text=alt_text)
+        except Exception as exc:  # A lost response must never authorize a blind retry.
+            print(f"[post] Publication outcome unknown: {exc!r}")
+            result = None
+    outcome = outbox_outcome.classify(stage_report, result)
+    if stage_report["stages"] or stage_report["refused_before_egress"]:
+        row["delivery_outcome"] = {key: outcome[key] for key in ("status", "stage", "reason", "media_state", "proof")}
+    if outcome["status"] == "not_sent":
         row["phase"] = "not_sent"
         draft["publish_outcome"] = "not_sent"
         draft.pop("autoship_attempted", None)
+        if not outcome["rate_limited"] and outcome["proof"] != "legacy_rate_limited_contract":
+            draft["post_error"] = f"Nothing was sent ({outcome['reason']}); a new attempt is allowed"
         _touch_draft(draft)
-        return "rate_limited"
+        if outcome["rate_limited"]:
+            return "rate_limited"
+        return "failed"
 
-    tweet_id = str((result or {}).get("id") or "")
+    tweet_id = str((result or {}).get("id") or "") if outcome["status"] == "confirmed" else ""
     if not tweet_id:
         row["phase"] = "unknown"
         draft["publish_outcome"] = "unknown"
@@ -686,6 +765,29 @@ def process_due_drafts(bot_state: BotState, current_run: dict | None = None) -> 
             _demote_autoship_to_manual(draft, "Editorial policy changed before final safety")
             failures.append(f"{draft.get('id')}: policy changed")
             continue
+        text_hold = automatic_text_hold(draft.get("text"))
+        if text_hold is not None:
+            _demote_autoship_to_manual(draft, HOLD_MESSAGES[text_hold])
+            failures.append(f"{draft.get('id')}: {text_hold}")
+            continue
+        if draft.get("type") in ("air_quality_hazard", "dust_event"):
+            # The one bounded live re-read of this city/window, with the episode
+            # rules (first post or a rise; an unknown delivery blocks), before safety.
+            from src.data.air_quality_current import auto_text_hold
+            aq_hold = auto_text_hold(draft, bot_state, _utc_now(), live=True)
+            if aq_hold is not None:
+                _hold_nws_draft(draft, aq_hold)
+                failures.append(f"{draft.get('id')}: {aq_hold}")
+                continue
+        from src.editorial import warning_automatic
+        if warning_automatic.governs(draft):
+            # Episode/update rules against the current queue and ledger, before safety.
+            # The family's fresh source read already happened above; no second read.
+            warning_hold = warning_automatic.auto_text_hold(draft, bot_state, _utc_now())
+            if warning_hold is not None:
+                _hold_nws_draft(draft, warning_hold)
+                failures.append(f"{draft.get('id')}: {warning_hold}")
+                continue
 
         # Safety check before auto-posting (same gate as manual path)
         passed, reason = run_safety_pipeline(draft["text"])

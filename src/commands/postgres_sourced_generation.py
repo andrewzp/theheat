@@ -182,6 +182,11 @@ def prepare(authority, c, state, version, command, actor, *, now, policy, editor
     refuse(refs["expected_state_version"] == version and refs["expected_policy_sha256"] == fingerprint(editorial_policy), "generation_context_changed")
     refuse(refs["brief_id"] == refs["brief_sha256"], "generation_input_mismatch")
     value, config = current(authority, c, refs["brief_id"], editorial_policy, now, resolved=resolved)
+    from src.two_bot.engine_boundary import duplicate_purchases
+    # One purchase per source revision/event across engines: an urgent twin of a
+    # batch brief (even one whose submission outcome is unknown) cannot buy again.
+    current_values = {i: read(c, INPUT, i) for i in configuration(authority)["current_inputs"]}
+    refuse(refs["brief_id"] not in duplicate_purchases(current_values), "generation_duplicate_engine_purchase")
     from src.commands.postgres_important_variants import ordinary_guard
     ordinary_guard(c, value, refs["brief_id"])
     bundle = source_bundle(value["bundle"], resolved=resolved)
@@ -335,8 +340,20 @@ def project(authority, c, state, version, policy, now):
         return dict(schema_version=1, enabled=False, disabled_reason="sourced_generation_unavailable", briefs=[])
     config = configuration(authority)
     rows = []
+    from src.two_bot.engine_boundary import duplicate_purchases
+    duplicates = duplicate_purchases({i: read(c, INPUT, i) for i in config["current_inputs"]})
     for identity in config["current_inputs"]:
         value = document(read(c, INPUT, identity))
+        if identity in duplicates:
+            # Same source revision/event under two briefs: neither engine may buy it.
+            rows.append(dict(brief_id=identity, brief_sha256=identity, source_key=value["source_key"],
+                event_id=value["save"]["event_id"], signal_kind=value["bundle"]["signal_kind"],
+                where=str(value["bundle"]["where"])[:512], when=str(value["bundle"]["when"])[:512],
+                captured_at=value["captured_at"], useful_until=value["useful_until"], expected_state_version=version,
+                expected_policy_sha256=fingerprint(policy), status="blocked", job_id=None, writer_usage=None,
+                execution_mode="synchronous" if value["urgent"] else "batch",
+                reason="generation_duplicate_engine_purchase"))
+            continue
         row = dict(brief_id=identity, brief_sha256=identity, source_key=value["source_key"],
             event_id=value["save"]["event_id"], signal_kind=value["bundle"]["signal_kind"],
             where=str(value["bundle"]["where"])[:512], when=str(value["bundle"]["when"])[:512],

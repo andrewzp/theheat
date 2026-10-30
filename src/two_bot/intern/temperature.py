@@ -637,18 +637,84 @@ def build_heat_records_cluster_bundle(
         raw_signal_dump={"stations": stations, "event_id": event_id},
     )
 
+def _hot10_bulletin_bundle(cities: list[dict], *, changes: list[str], event_id: str, universe: dict) -> StoryBundle:
+    """A qualified bulletin: provider provenance, the disclosed universe and compact writer facts."""
+    from src.editorial import hot10_contract as contract
+    from src.data.temperature_evidence import FORECAST_PRODUCT
+
+    leader = cities[0]
+    ranking = [
+        {"rank": row["rank"], "city": row["city"], "country": row["country"], "valid_date": row["valid_date"],
+         "forecast_high_c": round(row["temp_high_c"], 1), "normal_high_c": round(row["normal_high_c"], 1),
+         "departure_c": round(row["anomaly_c"], 1)}
+        for row in cities
+    ]
+    excluded = sum(universe["excluded"].values())
+    local_days = universe["local_days"]
+    return StoryBundle(
+        signal_kind="hot10",
+        where=f"{leader['city']}, {leader['country']}",
+        when=leader["valid_date"],
+        event_id=event_id,
+        headline_metric={"label": "top_anomaly_c", "value": leader["anomaly_c"], "unit": "C"},
+        current_facts=[
+            {"label": "leader_city", "value": leader["city"]},
+            {"label": "leader_country", "value": leader["country"]},
+            {"label": "leader_forecast_high_c", "value": round(leader["temp_high_c"], 1)},
+            {"label": "leader_normal_high_c", "value": round(leader["normal_high_c"], 1)},
+            {"label": "leader_departure_c", "value": round(leader["anomaly_c"], 1)},
+            {"label": "evidence_type", "value": "forecast"},
+            {"label": "source_name", "value": contract.SOURCE_NAME},
+            {"label": "source_product", "value": FORECAST_PRODUCT},
+            {"label": "baseline_product", "value": contract.BASELINE_PRODUCT},
+            {"label": "sampled_cities", "value": universe["sampled_cities"]},
+            {"label": "qualified_cities", "value": universe["qualified_cities"]},
+            {"label": "excluded_cities", "value": excluded},
+            {"label": "ranked_by", "value": universe["ranked_by"]},
+            {"label": "baseline_scope", "value": universe["baseline_scope"]},
+            {"label": "universe_scope", "value": universe["scope"]},
+            {"label": "valid_dates", "value": local_days},
+            {"label": "date_scope", "value": (
+                "Each city uses its own provider-local forecast day"
+                + ("; the ranked cities span more than one local date" if len(local_days) > 1 else "")
+                + ". This is not a simultaneous observed global maximum.")},
+            {"label": "ranking", "value": ranking},
+            {"label": "rank_changes", "value": changes},
+            {"label": "claim_limit", "value": (
+                "Forecast daily highs ranked by departure from each city's point monthly normal, among sampled "
+                "catalogue cities only. Not observed temperatures, not the hottest places on Earth, not a record, "
+                "and no health, infrastructure or other human consequence is supplied.")},
+            *_audience_unit_facts(leader["country"]),
+        ],
+        historical_context={"scope": "daily_top10_anomaly_leaderboard", "ranked_by": universe["ranked_by"]},
+        raw_signal_dump={
+            "schema": contract.SCHEMA, "source_name": contract.SOURCE_NAME, "source_product": FORECAST_PRODUCT,
+            "source_url": contract.FORECAST_URL,
+            "evidence": {"domain": "temperature_ranking", "evidence_type": "forecast",
+                         "source_product": FORECAST_PRODUCT, "baseline_product": contract.BASELINE_PRODUCT,
+                         "aggregation": "local_daily_extreme", "unit": "C", "valid_dates": local_days},
+            "cities": cities, "universe": universe, "changes": changes, "event_id": event_id,
+        },
+    )
+
+
 def build_hot10_bundle(
     cities: list[dict],
     *,
     changes: list[str],
     event_id: str,
+    universe: dict | None = None,
 ) -> StoryBundle:
     """Daily Hot 10 leaderboard.
 
-    ``cities`` is the ranked list of {city, country, temp_high_c,
-    normal_high_c, anomaly_c}. ``changes`` is the precomputed
-    rank-shift / new-entry strings the writer can paraphrase.
+    With ``universe`` the rows are ``hot10_contract.qualify`` output and the
+    bundle carries the provider provenance the source boundary requires. The
+    legacy shape (ranked {city, country, temp_high_c, normal_high_c,
+    anomaly_c}) has no source identity and stays refused at that boundary.
+    ``changes`` is the precomputed rank-shift / new-entry strings.
     """
+    if universe is not None:
+        return _hot10_bulletin_bundle(cities, changes=changes, event_id=event_id, universe=universe)
 
     leader = cities[0] if cities else None
     return StoryBundle(

@@ -58,6 +58,22 @@ export function mediaPNGRequest(draft, manifest, retainedInputSha256 = null) {
   return { ...request, format: "png", ...(retainedInputSha256 ? { retained_input_sha256: retainedInputSha256 } : {}) }
 }
 
+// A delivered native image, rebuilt from the recipe its confirmed receipt names (any
+// current status: a later edit never rewrites what was delivered). Inspection only.
+export function deliveredPNGRequest(draft, manifest) {
+  const revision = draft?.revision_identity, receipt = draft?.delivered
+  if (!draft || typeof draft.id !== "string" || !draft.id || draft.id.length > 200 || !revision || !receipt
+      || typeof receipt.tweet_id !== "string" || !receipt.tweet_id
+      || !Number.isSafeInteger(revision.content_revision) || revision.content_revision < 0
+      || !Number.isSafeInteger(revision.decision_revision) || revision.decision_revision < 0
+      || revision.decision_revision >= Number.MAX_SAFE_INTEGER
+      || !isSHA(revision.text_sha256) || !isSHA(revision.evidence_sha256)) return null
+  return { draft_id: draft.id, expected_revision: { content_revision: revision.content_revision, text_sha256: revision.text_sha256,
+    evidence_sha256: revision.evidence_sha256, decision_revision: revision.decision_revision },
+  expected_policy_source_sha256: manifest.identity.policy_source_sha256,
+  expected_preview_runtime_sha256: manifest.runtime_sha256, format: "png", delivered: true }
+}
+
 // Store-backed families need one explicitly selected retained input (exact SHA256).
 const CYCLONE_SIGNALS = ["cyclone_rapid_intensification", "cyclone_tier_crossing", "cyclone_landfall",
   "cyclone_land_threat", "cyclone_basin_record"]
@@ -68,6 +84,19 @@ export function storeFamilyFor(draft) {
   if (bundle.signal_kind === "severe_weather" && Object.hasOwn(raw, "source_evidence")) return "radar"
   if (CYCLONE_SIGNALS.includes(bundle.signal_kind) && raw.source === "nhc") return "cone"
   return null
+}
+
+// The collector's exact retained CRW packet reference carried by this draft's own bundle
+// (store identities only), or null. Present means it is the only acceptable packet:
+// Python refuses any other selection; this is never a region-only or newest lookup.
+export function retainedPacketReference(draft) {
+  const raw = draft?.review_context?.two_bot?.bundle?.raw_signal_dump
+  if (draft?.review_context?.two_bot?.bundle?.signal_kind !== "regional_sst_anomaly" || !raw || typeof raw !== "object"
+      || !Object.hasOwn(raw, "retained_packet")) return null
+  const value = raw.retained_packet
+  const keys = value && typeof value === "object" && !Array.isArray(value) ? Object.keys(value).sort() : []
+  return keys.join() === "artifact_sha256,packet_sha256,schema_version" && value.schema_version === 1
+    && isSHA(value.artifact_sha256) && isSHA(value.packet_sha256) ? value : { invalid: true }
 }
 
 export const graphicRequestKey = request => request ? canonical(request) : "unavailable"
@@ -93,6 +122,14 @@ export function firePreviewSourceStatus(draft) {
     if (signal.signal_kind !== "fire" || signal.acquisition_evidence.source_product !== product) return "unsupported"
   }
   return FIRE_PREVIEW_PRODUCTS[product]
+}
+
+// Affordance only: hot10_graphic_adapter.py validates every retained row and the universe.
+export function hot10PreviewSourceStatus(draft) {
+  const bundle = draft?.review_context?.two_bot?.bundle, raw = bundle?.raw_signal_dump
+  if (!bundle || !raw || typeof raw !== "object") return "missing"
+  return draft.type === "hot10" && bundle.signal_kind === "hot10" && raw.schema === "theheat.hot10-bulletin/v1"
+    && Array.isArray(raw.cities) && raw.cities.length === 10 ? "bulletin" : "unsupported"
 }
 
 const temperatureKinds = {
@@ -126,6 +163,8 @@ const templates = {
     adapter: "src/media/air_quality_graphic_adapter.py", context: "pm25_forecast_day" },
   crw_sampled_cells: { version: "p31-crw-gist-cells-1", source: "NOAA Coral Reef Watch · daily 5 km SST anomaly v3.1",
     adapter: "src/media/crw_graphic_adapter.py", context: "crw_product_day" },
+  hot10_departure_table: { version: "w01-hot10-table-1", source: "Open-Meteo forecast · Meteostat point normals",
+    adapter: "src/media/hot10_graphic_adapter.py", context: "hot10_bulletin" },
 }
 const exactKeys = (value, keys) => value && typeof value === "object" && !Array.isArray(value)
   && Object.keys(value).length === keys.length && keys.every(key => Object.hasOwn(value, key))
@@ -151,6 +190,20 @@ function sourceContext(value, template) {
       && calendarDate(context.product_date) && utcTimestamp(context.retrieved_at)
       && Number.isSafeInteger(context.valid_cells) && Number.isSafeInteger(context.total_cells)
       && context.valid_cells >= 10 && context.valid_cells <= context.total_cells && context.total_cells <= 20000
+  if (template.context === "hot10_bulletin") {
+    // Ten ranked rows exactly as Python projected them from the retained bulletin.
+    const finite = value => typeof value === "number" && Number.isFinite(value)
+    const label = value => typeof value === "string" && value.length > 0 && value.length <= 120 && value.isWellFormed()
+    return exactKeys(context, ["kind", "local_days", "qualified_cities", "sampled_cities", "rows"])
+      && Array.isArray(context.local_days) && context.local_days.length >= 1 && context.local_days.length <= 3
+      && context.local_days.every(calendarDate) && Number.isSafeInteger(context.qualified_cities)
+      && Number.isSafeInteger(context.sampled_cities) && context.qualified_cities >= 10
+      && context.sampled_cities >= context.qualified_cities && Array.isArray(context.rows) && context.rows.length === 10
+      && context.rows.every((row, index) => exactKeys(row, ["rank", "city", "country", "valid_date", "timezone",
+        "forecast_high_c", "normal_high_c", "departure_c"]) && row.rank === index + 1 && label(row.city) && label(row.country)
+        && context.local_days.includes(row.valid_date) && label(row.timezone)
+        && [row.forecast_high_c, row.normal_high_c, row.departure_c].every(finite))
+  }
   if (template.context === "ghcn_station_day")
     return exactKeys(context, ["kind", "station_id", "valid_date", "retrieved_at", "reporting_interval_known", "timezone"])
       && typeof context.station_id === "string" && /^[A-Z0-9]{11}$/.test(context.station_id)
@@ -210,12 +263,18 @@ const HAZARD_MEDIA = {
       "src/media/viirs_map_graphic_adapter.py", "src/data/fire_source_contract.py", "src/data/fire_evidence.py",
       "src/media/maps/ne_110m_land_v4_1_0.json", "src/media/maps/manifest.json"] },
 }
+// Hot10: the qualified bulletin's ten rows (src/media/hot10_graphic_adapter.py).
+HAZARD_MEDIA.gist_hot10_bulletin_v1 = { template: "hot10_departure_table", templateVersion: "w01-hot10-table-1",
+  adapterVersion: "w01-hot10-bulletin-1", derivation: "hot10_delivery_v1",
+  files: ["src/media/gist_media.py", "src/media/gist_hazard_media.py", "src/media/canonical_png.py", "src/media/fonts/DejaVuSansMono.ttf",
+    "src/media/evidence_graphic.py", "src/media/hot10_graphic_adapter.py", "src/editorial/hot10_contract.py",
+    "src/data/temperature_evidence.py"] }
 // CRW is a native sampled-cell chart (schema 4) rebuilt from a retained source packet.
 HAZARD_MEDIA.gist_crw_anomaly_v1 = { template: "crw_sampled_cells", templateVersion: "p31-crw-gist-cells-1",
   adapterVersions: ["p31-crw-erddap-1", "p31-crw-erddap-2"], derivation: "crw_delivery_v1", rendererVersion: "gist-crw-png-1",
   files: ["src/media/gist_media.py", "src/media/gist_crw_media.py", "src/media/gist_hazard_media.py", "src/media/canonical_png.py",
     "src/media/gist_assets.py", "src/media/fonts/DejaVuSansMono.ttf", "src/media/crw_graphic_adapter.py", "src/data/crw_contract.py",
-    "src/data/ocean_sst_anomaly.py", "src/two_bot/intern/marine.py", "src/media/temperature_graphic_adapter.py"] }
+    "src/data/crw_regions.py", "src/two_bot/intern/marine_crw.py", "src/media/temperature_graphic_adapter.py"] }
 // Published originals (schema 5): Python reverifies every retained byte; this guards presentation.
 const PUBLISHED_FILES = ["src/media/gist_media.py", "src/media/gist_published_media.py", "src/media/canonical_png.py",
   "src/media/gist_assets.py", "src/media/published_radar.py"]
@@ -233,6 +292,8 @@ export const MEDIA_HOLD_MESSAGES = Object.freeze({
   media_store_unavailable: "No media store is configured here for published or retained-source images; native charts are unaffected.",
   media_retained_input_required: "Select the retained source packet or published asset for this image.",
   media_source_packet_missing: "The retained CRW source packet is not in the media store. Retain it locally first; nothing is fetched.",
+  media_source_packet_mismatch: "This is not the CRW source packet retained for this draft. Select the draft's own packet; nothing is substituted.",
+  media_source_packet_invalid: "The draft's retained CRW packet reference is malformed; the image is held.",
   media_original_missing: "The published original is not in the media store. Retain it again; nothing is fetched.",
   media_asset_missing: "A retained asset is missing from the media store.",
   media_asset_changed: "Retained bytes no longer match their identity. Retain the asset again.",
@@ -281,7 +342,7 @@ const hazardKeys = ["schema_version", "draft_id", "revision_identity", "policy_s
 function postingWindow(value) {
   return exactKeys(value, ["status", "code", "reason", "checked_at"]) && utcTimestamp(value.checked_at)
     && (value.status === "current" ? value.code === null && value.reason === null
-      : value.status === "unavailable" && typeof value.code === "string" && /^media_[a-z_]{1,60}$/.test(value.code)
+      : value.status === "unavailable" && typeof value.code === "string" && /^media_[a-z0-9_]{1,60}$/.test(value.code)
         && typeof value.reason === "string" && value.reason.length > 0 && value.reason.length <= 200)
 }
 
@@ -382,6 +443,34 @@ async function validatePublishedResponse(value, request, manifest) {
   return value
 }
 
+const deliveredKeys = [...hazardKeys.filter(key => key !== "posting_window"), "delivered"]
+const deliveredPublishedKeys = [...publishedKeys.filter(key => key !== "posting_window"), "delivered"]
+
+// Schema 6: a delivered snapshot. The same recipe checks as a preview, plus the receipt it names.
+// Store-backed kinds (W10.4) are checked against the retained identity their own descriptor names;
+// Python already required that descriptor to equal the delivered attachment exactly.
+async function validateDeliveredResponse(value, request, manifest) {
+  const receipt = value?.delivered, descriptor = value?.media_descriptor
+  const published = Object.values(PUBLISHED).some(product => product.kind === value?.media_kind)
+  if (request?.delivered !== true || !exactKeys(value, published ? deliveredPublishedKeys : deliveredKeys) || value.schema_version !== 6
+      || !exactKeys(receipt, ["tweet_id", "text", "content_revision", "confirmed_at"])
+      || typeof receipt.tweet_id !== "string" || !/^[A-Za-z0-9_-]{1,80}$/.test(receipt.tweet_id)
+      || typeof receipt.text !== "string" || !receipt.text.isWellFormed() || !receipt.text.trim() || [...receipt.text].length > 280
+      || !Number.isSafeInteger(receipt.content_revision) || receipt.content_revision < 0 || !utcTimestamp(receipt.confirmed_at))
+    throw new Error("invalid preview")
+  const { delivered: _receipt, ...rest } = value
+  const window = { status: "current", code: null, reason: null, checked_at: receipt.confirmed_at }
+  if (published) {
+    if (!isSHA(descriptor?.asset?.manifest_sha256)) throw new Error("invalid preview")
+    await validatePublishedResponse({ ...rest, schema_version: 5, posting_window: window },
+      { ...request, retained_input_sha256: descriptor.asset.manifest_sha256 }, manifest)
+    return value
+  }
+  const retained = HAZARD_MEDIA[value?.media_kind]?.rendererVersion ? { retained_input_sha256: descriptor?.source?.packet_artifact_sha256 } : {}
+  await validateHazardPNGResponse({ ...rest, schema_version: 4, posting_window: window }, { ...request, ...retained }, manifest)
+  return value
+}
+
 async function validatePNGResponse(value, request, manifest) {
   const descriptor = value?.media_descriptor, renderer = descriptor?.renderer, files = manifest?.identity?.files
   const template = templates.temperature_comparator
@@ -416,6 +505,7 @@ async function validatePNGResponse(value, request, manifest) {
 }
 
 export async function validateGraphicResponse(value, request, manifest) {
+  if (request?.delivered === true) return validateDeliveredResponse(value, request, manifest)
   if (request?.format === "png" && value?.schema_version === 5) return validatePublishedResponse(value, request, manifest)
   if (request?.format === "png" && value?.schema_version === 4) return validateHazardPNGResponse(value, request, manifest)
   if (request?.format === "png") return validatePNGResponse(value, request, manifest)
@@ -525,7 +615,7 @@ export function createGraphicPreviewController({ manifest, onChange, fetcher = g
         }
         const value = await validateGraphicResponse(await readBounded(response), request, manifest)
         if (!valid() || controller.signal.aborted) return
-        const png = [3, 4, 5].includes(value.schema_version)
+        const png = [3, 4, 5, 6].includes(value.schema_version)
         const image = value.schema_version === 5 ? pngBytes(value.png_base64, value.width, value.height, 8 * 1024 * 1024)
           : png ? pngBytes(value.png_base64) : value.svg_utf8
         url = createURL(new Blob([image], { type: png ? "image/png" : "image/svg+xml" }))

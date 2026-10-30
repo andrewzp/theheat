@@ -222,6 +222,9 @@ def execute_writer_once(request: dict, *, api_key: str,
         from anthropic import Anthropic
         client = Anthropic(api_key=api_key, base_url="https://api.anthropic.com",
                            max_retries=0, timeout=SOCKET_TIMEOUT_SECONDS, http_client=http)
+        from src.two_bot.call_inventory import consume
+        # Declared local writer; the dispatch grant and observation own its outcome.
+        consume("synchronous_writer", provider="anthropic", join=False)
         try:
             client.messages.create(**detached)
         except Exception:

@@ -45,6 +45,32 @@ def _normalized(text: str) -> str:
     return re.sub(r"[\s\-\u2010-\u2015\u2212]+", " ", text)
 
 
+_DUST = re.compile(r"\bdust\b")
+_PERIOD_COMPARISON = re.compile(
+    r"\b(?:who|guidelines?|limits?|standards?)\b|\b\d+(?:\.\d+)?\s*(?:x|times)\b|\b(?:twice|triple|double)\b"
+    r"|\b(?:24 hour|daily|day long) (?:mean|average)\b"
+)
+_NEGATED_PERIOD = re.compile(r"\b(?:not|no|never|without) (?:a |an |any )?(?:24 hour |daily |day long )?(?:mean|average)\b")
+
+
+def dust_comparison_failures(tweet: str, bundle) -> list[str]:
+    """A dust story's peak is never a 24-hour mean or a WHO-period comparison.
+
+Only a clause naming PM10 may carry the existing co-reported PM10 anchor; an
+explicit negation ("a peak, not a daily mean") is not a comparison.
+"""
+    if getattr(bundle, "signal_kind", None) != "dust_event" or not isinstance(tweet, str):
+        return []
+    for clause in re.split(r"[!?;。]|\.(?!\d)|(?<!\d)\.", _normalized(tweet)):
+        if not _DUST.search(clause) or "pm10" in clause.replace(" ", ""):
+            continue
+        scan = _NEGATED_PERIOD.sub(" ", clause)
+        if _PERIOD_COMPARISON.search(scan):
+            return ["dust_peak_comparison: a forecast dust peak cannot be compared with a 24-hour mean, "
+                    "WHO period or multiple; only supplied PM10 carries the PM10 anchor"]
+    return []
+
+
 def causal_claim_failures(tweet: str, bundle) -> list[str]:
     """Hold named positive AQ causal links, including quoted/forecast assertions.
 
@@ -58,6 +84,9 @@ Other paraphrases and pronoun-only links still require model review.
         isinstance(related, list) and any(is_air_quality(signal) for signal in related)
     )):
         return []
+    comparison = dust_comparison_failures(tweet, bundle)
+    if comparison:
+        return comparison
     # Keep decimal points (PM2.5 and numeric values); do not join independent
     # sentences. Commas, quotes, line breaks and Unicode dashes cannot hide a link.
     clauses = re.split(r"[!?;。]|\.(?!\d)|(?<!\d)\.", _normalized(tweet))

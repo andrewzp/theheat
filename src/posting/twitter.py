@@ -36,19 +36,36 @@ def _get_upload_api() -> tweepy.API | None:
     return tweepy.API(auth)
 
 
+def _declared(send, stage=None):
+    """Each X SDK phase consumes the declared platform stage before egress."""
+    from src.posting import outbox_outcome
+    from src.two_bot.call_inventory import consume
+    ticket = consume("x_publish", provider="x")
+    entry = outbox_outcome.begin(stage) if stage else None
+    try:
+        response = send()
+    except BaseException as exc:
+        outbox_outcome.finish(entry, exc)
+        ticket.settle("unknown")
+        raise
+    outbox_outcome.finish(entry)
+    ticket.settle("returned")
+    return response
+
+
 def upload_png(api, png: bytes, **options):
     """One SDK phase; authorization and durable effects belong to its caller."""
-    return api.media_upload(filename="hot10.png", file=BytesIO(png), **options)
+    return _declared(lambda: api.media_upload(filename="hot10.png", file=BytesIO(png), **options), "upload")
 
 
 def set_alt_text(api, media_id: str, alt_text: str, **options):
-    return api.create_media_metadata(media_id, alt_text, **options)
+    return _declared(lambda: api.create_media_metadata(media_id, alt_text, **options), "alt")
 
 
 def create_post(client, text: str, media_ids=None, **options):
     if media_ids is not None:
         options["media_ids"] = media_ids
-    return client.create_tweet(text=text, **options)
+    return _declared(lambda: client.create_tweet(text=text, **options), "create")
 
 
 def post_tweet(
@@ -61,9 +78,11 @@ def post_tweet(
     Returns ``{"error": "rate_limited"}`` on 429 so callers can distinguish
     transient rate limits from permanent failures.
     """
+    from src.posting.outbox_outcome import refuse_before_egress
     client = _get_client()
     if not client:
         print("[twitter] No credentials configured, skipping post")
+        refuse_before_egress("credentials_unavailable")
         return None
 
     try:
@@ -72,6 +91,7 @@ def post_tweet(
             upload_api = _get_upload_api()
             if upload_api is None:
                 print("[twitter] No upload API credentials configured, skipping post")
+                refuse_before_egress("upload_credentials_unavailable")
                 return None
             media = upload_png(upload_api, media_png)
             media_id = str(media.media_id)
