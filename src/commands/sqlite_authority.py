@@ -14,6 +14,7 @@ import json
 import os
 from pathlib import Path
 import sqlite3
+import tempfile
 from typing import Any
 
 from src.commands import batch_journal, batch_worker_journal, batch_result_journal, check_journal, check_execution_journal, domain_journal, spend_journal
@@ -573,12 +574,30 @@ class SQLiteAuthority:
         return report
 
     def verify_backup(self, *, expected_sha256: str | None = None) -> dict:
-        """Read-only verification of an authority file used as a backup or restore source."""
+        """Verify a standalone artifact, inspecting exactly the bytes we hash.
+
+        A live WAL/journal is not a standalone backup. Inspect an immutable private
+        copy of the captured bytes, never a later WAL-aware view of the source.
+        """
+        def require_standalone() -> None:
+            for suffix in ("-wal", "-journal"):
+                sidecar = Path(self.path + suffix)
+                if sidecar.exists() and sidecar.stat().st_size:
+                    raise CommandError("backup_sidecar_present", "Verify a standalone backup, not an active journal")
+        require_standalone()
         raw = Path(self.path).read_bytes()
+        require_standalone()
         digest = hashlib.sha256(raw).hexdigest()
         if expected_sha256 is not None and digest != expected_sha256:
             raise CommandError("backup_artifact_changed", "Backup bytes differ from the recorded sha256")
-        uri = Path(self.path).resolve().as_uri() + "?mode=ro"
+        with tempfile.TemporaryDirectory(prefix="theheat-backup-verify-") as directory:
+            frozen = Path(directory) / "captured.sqlite"
+            frozen.write_bytes(raw)
+            frozen.chmod(0o600)
+            return self._verify_backup_bytes(frozen, raw, digest)
+
+    def _verify_backup_bytes(self, frozen: Path, raw: bytes, digest: str) -> dict:
+        uri = frozen.as_uri() + "?mode=ro&immutable=1"
         with closing(sqlite3.connect(uri, uri=True, isolation_level=None)) as connection:
             connection.row_factory = sqlite3.Row
             connection.execute("PRAGMA query_only=ON")

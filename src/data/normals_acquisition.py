@@ -443,6 +443,12 @@ def acquire(plan: dict[str, Any], out_dir: Path, provider: Provider, limits: Lim
                 if run["status"] == "incomplete":
                     break
                 continue
+            if bounded:
+                try:
+                    provider.check()  # type: ignore[attr-defined]
+                except bounded_http.TransportStop as exc:
+                    stop(exc.reason)
+                    break
             _atomic_write(path, _canonical(record))
             journal["failures"].pop(f"{point['place_id']}-{point['sampling_point_id']}", None)
             run["written"] += 1
@@ -466,6 +472,13 @@ def acquire(plan: dict[str, Any], out_dir: Path, provider: Provider, limits: Lim
         return deps.result("normals", "incomplete", reasons=run["reasons"],
                            source={"plan_sha256": plan["plan_sha256"], "counter_semantics": COUNTER_SEMANTICS},
                            counters=counters, observed=plan["missing"]["point_months"])
+    if bounded:
+        try:
+            provider.check()  # type: ignore[attr-defined]
+        except bounded_http.TransportStop as exc:
+            stop(exc.reason)
+            save()
+            return deps.result("normals", "incomplete", reasons=run["reasons"], counters=_counters(run))
     manifest = assemble_candidate(plan, out_dir, installed_path=installed_path, now=now)
     status = "ready" if manifest["rows"] else "source_absent"
     reasons = ["points_without_source_data"] if manifest["missing_points"] else []

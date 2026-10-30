@@ -19,6 +19,7 @@
     {"id": "abbreviations_one_sentence", "text": "Sample City in the U.S. state of Example hit 47°C on Oct. 30 at 3 p.m. local time.", "codes": []},
     {"id": "decimal_and_url", "text": "About 356.2 mm of rain fell on Sample Basin in seven days, a satellite estimate.\nhttps://example.org/product", "codes": []},
     {"id": "danger_word_unsourced", "text": "Port Example faces dangerously hot air on Thursday, 47°C forecast.", "codes": ["danger_wording_needs_source"]},
-    {"id": "long_single_sentence", "text": "Port Example is forecast to reach 47°C on Thursday afternoon, which would sit 8°C above its July normal and above every other forecast high among the 152 sampled cities in the region this week, model forecast.", "codes": ["over_automatic_length"]}
+    {"id": "long_single_sentence", "text": "Port Example is forecast to reach 47°C on Thursday afternoon, which would sit 8°C above its July normal and above every other forecast high among the 152 sampled cities in the region this week, model forecast.", "codes": ["over_automatic_length"]},
+    {"id": "substantive_diagnosis", "text": "Sample Bay reached 31°C, a sign of coral bleaching confirmed in the survey.", "codes": ["consequence_needs_review"]}
   ]
 }

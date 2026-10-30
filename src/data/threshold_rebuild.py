@@ -42,6 +42,7 @@ import time
 from typing import Any, Callable
 
 from src.data import acquisition_dependencies as deps
+from src.data import bounded_http
 from src.data import ghcn_db
 from src.data.ghcn_format import (
     ElementInventory,
@@ -131,30 +132,42 @@ class _FetchDeadline(BaseException):
 def fetch_archive(dest: Path, *, session: Any, max_bytes: int, deadline_seconds: float, max_retries: int,
                   url: str = ARCHIVE_URL, clock: Callable[[], float] = time.monotonic,
                   now: Callable[[], str] = _utc_now, chunk_size: int = 1024**2,
-                  expected_bytes: int | None = None) -> dict[str, Any]:
+                  expected_bytes: int | None = None, check: Callable[[], None] | None = None) -> dict[str, Any]:
     """Owner CLI absolute deadline, including delayed headers and partial chunks.
 
     This POSIX main-thread boundary owns its timer. Unsupported hosts/threads or
     an existing timer refuse before transport instead of pretending to bound it.
     """
-    if not 1 <= deadline_seconds <= 24 * 3600:
+    if not 0 < deadline_seconds <= 24 * 3600:
         raise RebuildError("threshold_fetch_limit_invalid")
     if threading.current_thread() is not threading.main_thread() or not hasattr(signal, "setitimer"):
         raise RebuildError("threshold_owned_deadline_unavailable")
     if signal.getitimer(signal.ITIMER_REAL) != (0.0, 0.0):
         raise RebuildError("threshold_deadline_already_owned")
     previous = signal.getsignal(signal.SIGALRM)
+    wall_deadline = time.monotonic() + deadline_seconds
+    def owned_check() -> None:
+        if check is not None:
+            try:
+                check()
+            except bounded_http.TransportStop as exc:
+                raise _FetchDeadline(exc.reason) from None
+        if time.monotonic() >= wall_deadline:
+            raise _FetchDeadline("deadline")
     def expired(_signum, _frame):
-        raise _FetchDeadline()
+        owned_check()
     signal.signal(signal.SIGALRM, expired)
-    signal.setitimer(signal.ITIMER_REAL, deadline_seconds)
+    # Poll the same cancellation authority even during blocking headers/body.
+    # This owned POSIX timer changes no network retry/phase allowance.
+    signal.setitimer(signal.ITIMER_REAL, min(deadline_seconds, 0.1), 0.1)
     try:
+        owned_check()
         return _fetch_archive(dest, session=session, max_bytes=max_bytes, deadline_seconds=deadline_seconds,
                               max_retries=max_retries, url=url, clock=clock, now=now, chunk_size=chunk_size,
-                              expected_bytes=expected_bytes)
-    except _FetchDeadline:
+                              expected_bytes=expected_bytes, check=owned_check)
+    except _FetchDeadline as exc:
         part = dest.with_name(dest.name + ".part")
-        return deps.result("thresholds", "incomplete", reasons=["deadline"],
+        return deps.result("thresholds", "incomplete", reasons=[str(exc) or "deadline"],
                            counters={"bytes": part.stat().st_size if part.exists() else 0})
     finally:
         signal.setitimer(signal.ITIMER_REAL, 0)
@@ -164,7 +177,7 @@ def fetch_archive(dest: Path, *, session: Any, max_bytes: int, deadline_seconds:
 def _fetch_archive(dest: Path, *, session: Any, max_bytes: int, deadline_seconds: float, max_retries: int,
                   url: str = ARCHIVE_URL, clock: Callable[[], float] = time.monotonic,
                   now: Callable[[], str] = _utc_now, chunk_size: int = 1024**2,
-                  expected_bytes: int | None = None) -> dict[str, Any]:
+                  expected_bytes: int | None = None, check: Callable[[], None] = lambda: None) -> dict[str, Any]:
     """Resumable bounded download into ``dest``; refuses redirects and never overwrites ``dest``.
 
     A resumed range carries ``If-Range`` with the first response's validator, so
@@ -172,7 +185,7 @@ def _fetch_archive(dest: Path, *, session: Any, max_bytes: int, deadline_seconds
     versions. ``expected_bytes`` pins the exact planned size: a different total is
     refused and the bytes are kept aside as ``.rejected``, never promoted.
     """
-    if not 1 <= max_bytes <= MAX_ARCHIVE_BYTES or not 1 <= deadline_seconds <= 24 * 3600 or not 0 <= max_retries <= 5:
+    if not 1 <= max_bytes <= MAX_ARCHIVE_BYTES or not 0 < deadline_seconds <= 24 * 3600 or not 0 <= max_retries <= 5:
         raise RebuildError("threshold_fetch_limit_invalid")
     if expected_bytes is not None and not 1 <= expected_bytes <= max_bytes:
         raise RebuildError("threshold_fetch_limit_invalid")
@@ -190,6 +203,7 @@ def _fetch_archive(dest: Path, *, session: Any, max_bytes: int, deadline_seconds
     elif part.exists():
         part.unlink()  # bytes without a validator cannot be resumed safely
     while True:
+        check()
         offset = part.stat().st_size if part.exists() else 0
         if offset > max_bytes:
             raise RebuildError("threshold_fetch_byte_limit")
@@ -227,6 +241,7 @@ def _fetch_archive(dest: Path, *, session: Any, max_bytes: int, deadline_seconds
             written = offset
             with part.open("ab") as handle:
                 for chunk in response.iter_content(chunk_size=chunk_size):
+                    check()
                     written += len(chunk)
                     if written > max_bytes:
                         return deps.result("thresholds", "incomplete", reasons=["byte_limit"],
@@ -254,6 +269,7 @@ def _fetch_archive(dest: Path, *, session: Any, max_bytes: int, deadline_seconds
         validator_path.unlink(missing_ok=True)
         return deps.result("thresholds", "product_invalid", reasons=["archive_size_differs_from_plan"],
                            counters={"bytes": size, "attempts": attempts})
+    check()
     os.replace(part, dest)
     validator_path.unlink(missing_ok=True)
     receipt = {"url": url, "name": dest.name, "sha256": sha, "bytes": size, "retrieved_at": now(),
@@ -858,6 +874,7 @@ def fetch_inputs(plan: dict[str, Any], dest: Path, *, transport: Any, archive_se
             raise RebuildError("threshold_version_changed_since_plan")
         if target.exists() and target.read_bytes() != response.body:
             raise RebuildError("threshold_input_exists_with_other_bytes")
+        transport.check()
         _atomic_bytes(target, response.body)
         receipts[role] = {**response.receipt(), "name": asset["name"], "retrieved_at": now()}
     archive = plan["assets"]["archive"]
@@ -870,9 +887,11 @@ def fetch_inputs(plan: dict[str, Any], dest: Path, *, transport: Any, archive_se
             raise RebuildError("threshold_input_exists_with_other_bytes")
         outcome = deps.result("thresholds", "ready", source=prior)
     else:
+        transport.check()
         outcome = fetch_archive(archive_path, session=archive_session, max_bytes=archive["bytes"],
-                                expected_bytes=archive["bytes"], deadline_seconds=archive_deadline_seconds,
-                                max_retries=max_retries, url=archive["url"], now=now)
+                                expected_bytes=archive["bytes"],
+                                deadline_seconds=min(archive_deadline_seconds, transport.remaining()),
+                                max_retries=max_retries, url=archive["url"], now=now, check=transport.check)
     if outcome["status"] != "ready":
         return deps.result("thresholds", outcome["status"], reasons=outcome["reasons"],
                            source={"fetch_plan_sha256": plan["plan_sha256"], "text_inputs": sorted(receipts)},
@@ -893,6 +912,7 @@ def fetch_inputs(plan: dict[str, Any], dest: Path, *, transport: Any, archive_se
                                   "etag": r.get("etag"), "retrieved_at": r.get("retrieved_at")}
                            for role, r in receipts.items()},
                 "completed_at": now()}
+    transport.check()
     _atomic_bytes(manifest_path, _canonical(document))
     return deps.result("thresholds", "ready", source={"fetch_plan_sha256": plan["plan_sha256"],
                                                      "source_version": plan["source_version"]["version"]},

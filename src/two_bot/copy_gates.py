@@ -14,7 +14,6 @@ editor's advisory notes; the paired vectors in
 from __future__ import annotations
 
 from dataclasses import dataclass
-import json
 import re
 from typing import Any
 
@@ -23,7 +22,7 @@ MAX_EXCERPT = 80
 
 # Free blocking codes. Advisory codes never block a draft.
 BLOCKING = ("source_led_opener", "generic_explanatory_ending", "too_many_sentences", "invented_danger")
-ADVISORY = ("second_sentence", "over_automatic_length", "danger_wording_needs_source")
+ADVISORY = ("second_sentence", "over_automatic_length", "danger_wording_needs_source", "consequence_needs_review")
 MESSAGES = {
     "source_led_opener": "Lead with the place and the fact, not the source, model or product; attribution and forecast labels follow the fact.",
     "generic_explanatory_ending": "End on the fact or a sourced consequence; a generic reminder/highlighting/climate ending adds words without news.",
@@ -32,6 +31,7 @@ MESSAGES = {
     "second_sentence": "A second sentence must be essential qualification or a sourced consequence.",
     "over_automatic_length": "Over 200 characters: cannot post automatically; shorter usually reads better.",
     "danger_wording_needs_source": "Danger or health wording needs an attributed source warning saying so.",
+    "consequence_needs_review": "Check this diagnostic or consequence clause against the source; it may be substantive rather than filler.",
 }
 
 _I = re.IGNORECASE | re.ASCII
@@ -73,6 +73,8 @@ _WINK_KICKER = re.compile(
     r"(?:^|[.!?]\s+)(?:the\s+calendar\s+says\s+[A-Za-z]+|and\s+it's\s+only\s+[A-Za-z]+|"
     r"a\s+record\s+is\s+a\s+record|let\s+that\s+sink\s+in|read\s+that\s+again|"
     r"you\s+read\s+that\s+right)[.!?]?\s*$", _I)
+_DIAGNOSTIC = re.compile(r"\b(?:sign|signal|testament|illustration|example|symbol|snapshot|glimpse)\s+(?:of|that|to)\b", _I)
+_GENERIC_CONTEXT = re.compile(r"\b(?:warming\s+world|region\s+is\s+warming|growing\s+heat\s+risk|climate\s+change|changing\s+climate)\b", _I)
 
 _DANGER = re.compile(
     r"\b(?:life[-\s]threatening|dangerous(?:ly)?|deadly|lethal|hazardous|unhealthy|unsafe|toxic|"
@@ -137,7 +139,11 @@ def _excerpt(value: str) -> str:
 
 
 def _source_text(bundle: Any) -> str | None:
-    """Lower-cased evidence text; editorial prohibitions are not source wording."""
+    """Current event's explicit source prose, never arbitrary serialized metadata.
+
+    This is only a cheap absence/wording aid. Presence is not factual approval;
+    uncertain paraphrases still require every existing model/factual check.
+    """
     if bundle is None:
         return None
     try:
@@ -145,17 +151,34 @@ def _source_text(bundle: Any) -> str | None:
     except (TypeError, ValueError, AttributeError):
         return ""
 
-    def strip(item: Any) -> Any:
-        if isinstance(item, dict):
-            return {k: strip(v) for k, v in item.items() if k not in ("forbidden_claims", "forbidden_phrases")}
-        if isinstance(item, (list, tuple)):
-            return [strip(v) for v in item]
-        return item
-    try:
-        encoded = json.dumps(strip(value), ensure_ascii=False, default=str, sort_keys=True)
-    except (TypeError, ValueError):
+    if not isinstance(value, dict):
         return ""
-    return re.sub(r"[-\s]+", " ", encoded.lower())
+    excerpts = []
+    for fact in value.get("current_facts", []):
+        if not isinstance(fact, dict) or fact.get("label") not in {
+                "warning_text", "forecast_hazard_statement", "source_reported_context", "report_statement"}:
+            continue
+        if fact.get("event_id", value.get("event_id")) != value.get("event_id"):
+            continue
+        if isinstance(fact.get("value"), str) and fact.get("source_url") and fact.get("source_name"):
+            excerpts.append(fact["value"])
+    raw = value.get("raw_signal_dump")
+    if isinstance(raw, dict) and isinstance(raw.get("warning_text"), str):
+        excerpts.append(raw["warning_text"])
+    return " ".join(excerpts).lower()
+
+
+def _danger_supported(term: str, source: str) -> bool:
+    # Normalize harmless morphology, but do not accept a negated statement or a
+    # substring embedded in another word. Other paraphrases remain advisory.
+    term = term.replace("dangerously", "dangerous")
+    for sentence in re.split(r"[.!?;\n]", source):
+        normalized = re.sub(r"[-\s]+", " ", sentence).replace("dangerously", "dangerous")
+        if re.search(r"\b(?:not|no|never|without|unlikely)\b", normalized):
+            continue
+        if re.search(r"\b" + re.escape(term) + r"\b", normalized):
+            return True
+    return False
 
 
 def copy_notes(text: str, bundle: Any = None) -> list[CopyNote]:
@@ -175,7 +198,8 @@ def copy_notes(text: str, bundle: Any = None) -> list[CopyNote]:
                     _ENDING_CLIMATE, _CLIMATE_SLOGAN, _WINK_KICKER):
         match = pattern.search(body)
         if match:
-            notes.append(CopyNote("generic_explanatory_ending", True,
+            ambiguous = bool(_DIAGNOSTIC.search(match.group(0)) and not _GENERIC_CONTEXT.search(match.group(0)))
+            notes.append(CopyNote("consequence_needs_review" if ambiguous else "generic_explanatory_ending", not ambiguous,
                                   _excerpt(match.group(0).lstrip(" ,;:.!?-—–"))))
             break
     parts = sentences(body)
@@ -189,8 +213,14 @@ def copy_notes(text: str, bundle: Any = None) -> list[CopyNote]:
         if source is None:
             notes.append(CopyNote("danger_wording_needs_source", False, _excerpt(match.group(0))))
             break
-        if term not in source:
-            notes.append(CopyNote("invented_danger", True, _excerpt(match.group(0))))
+        if not _danger_supported(term, source):
+            # Missing wording in an actual warning is semantic uncertainty, not
+            # proof that a synonymous consequence was invented. Mandatory checks
+            # decide it. With no current-event warning at all, reject free.
+            negated = bool(re.search(r"\b(?:not|no|never|without|unlikely)\b", source))
+            uncertain = bool(source.strip()) and not negated
+            notes.append(CopyNote("danger_wording_needs_source" if uncertain else "invented_danger",
+                                  not uncertain, _excerpt(match.group(0))))
             break
     if len(text) > 200:  # Unicode scalars of the complete text, as the automatic cap counts.
         notes.append(CopyNote("over_automatic_length", False, f"{len(text)} characters"))

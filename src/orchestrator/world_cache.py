@@ -250,9 +250,14 @@ def _read_remote() -> dict:
             f"https://api.github.com/gists/{GIST_ID}", headers=_headers(), timeout=15
         )
         resp.raise_for_status()
-        meta = resp.json().get("files", {}).get(WORLD_CACHE_FILENAME)
-        if not meta:
+        envelope = resp.json()
+        if not isinstance(envelope, dict) or not isinstance(envelope.get("files"), dict):
+            raise CacheUnreadable("gist_files_invalid")
+        if WORLD_CACHE_FILENAME not in envelope["files"]:
             return {}
+        meta = envelope["files"][WORLD_CACHE_FILENAME]
+        if not isinstance(meta, dict) or not meta:
+            raise CacheUnreadable("cache_metadata_invalid")
         if meta.get("truncated"):
             _gist_request()
             raw = requests.get(meta["raw_url"], headers=_headers(), timeout=30)

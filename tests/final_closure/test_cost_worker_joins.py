@@ -248,9 +248,9 @@ def test_every_thread_boundary_in_src_propagates_or_is_a_declared_unjoined_data_
 
     root = pathlib.Path(__file__).resolve().parents[2]
     # join=False source fetches only (``source_http_get``): counted process-wide by declaration.
-    data_pools = {"src/data/ghcn.py", "src/data/coral_dhw.py", "src/data/gpm_imerg.py",
-                  "src/data/ocean_sst_anomaly.py", "src/data/normals_acquisition.py"}
-    propagated = {"src/orchestrator/scheduler.py", "src/two_bot/pipeline.py"}
+    data_pools = {"src/data/normals_acquisition.py"}
+    propagated = {"src/orchestrator/scheduler.py", "src/two_bot/pipeline.py", "src/data/ghcn.py",
+                  "src/data/coral_dhw.py", "src/data/gpm_imerg.py", "src/data/ocean_sst_anomaly.py"}
     # A helper thread that only resolves a hostname and writes its own local box;
     # it can never reach a declared call. Kept DNS-only by the assertion below.
     dns_only = {"src/data/bounded_http.py"}

@@ -40,6 +40,7 @@ import hashlib
 from copy import deepcopy
 from dataclasses import replace
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from src.two_bot.call_inventory import submit_in_context
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from itertools import zip_longest
@@ -324,7 +325,7 @@ def _fetch_recent_obs(
         raw_by_date = _runtime.diffs(dates)
     else:
         with ThreadPoolExecutor(max_workers=lookback_days) as pool:
-            future_to_date = {pool.submit(_fetch_diff, d): d for d in dates}
+            future_to_date = {submit_in_context(pool, _fetch_diff, d): d for d in dates}
             for fut in as_completed(future_to_date):
                 d = future_to_date[fut]
                 content = fut.result()
@@ -791,7 +792,7 @@ def check_extreme_signals_for_stations(
                 metrics["archive_verification_failed"] += 1
     else:
         with ThreadPoolExecutor(max_workers=4) as pool:
-            futures = {pool.submit(fetch_archive, sid): sid for sid in selected}
+            futures = {submit_in_context(pool, fetch_archive, sid): sid for sid in selected}
             for future in as_completed(futures):
                 sid = futures[future]
                 try:

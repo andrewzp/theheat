@@ -99,12 +99,19 @@ export function gpmAccessHealth(state, { asOf = new Date().toISOString() } = {})
   const runHistory = state?.run_history
   const newest = rowsNewestFirst(runHistory, GPM)[0]
   const latestAccess = newest ? accessRecord(newest[1]) : null
-  const backoff = refusalBackoff(runHistory, { credentialExpiresAt: credential.expires_at, now })
+  const latestRun = (Array.isArray(runHistory) ? runHistory : []).filter(run => parse(run?.started_at))
+    .sort((a, b) => parse(b.started_at) - parse(a.started_at))[0]
+  const inventory = latestRun?.runtime_inventory
+  const captured = parse(inventory?.captured_at), started = parse(latestRun?.started_at)
+  const reported = inventory?.flags?.earthdata_refusal_backoff_enabled
+  const enabled = typeof reported === "boolean" && inventory?.schema_version === 1
+    && captured && started && started <= captured && captured <= now && now - captured <= 6 * 3600000 ? reported : null
+  const backoff = enabled === true ? refusalBackoff(runHistory, { credentialExpiresAt: credential.expires_at, now }) : null
   const hold = earthdataHold(runHistory)
   let stage
   if (expired) stage = "access_expired"
   else if (backoff) stage = "refused_backoff"
-  else if (hold) stage = hold.stage
+  else if (hold) stage = hold.stage === "access_backoff" && enabled !== true ? "access_refused" : hold.stage
   else if (lastGood.age_days !== null && lastGood.age_days <= CURRENT_DATA_DAYS) stage = "current"
   else stage = "no_current_data"
   const age = lastGood.age_days
@@ -114,10 +121,11 @@ export function gpmAccessHealth(state, { asOf = new Date().toISOString() } = {})
   const lead = {
     access_expired: `Earthdata access expired ${credential.expires_at ? credential.expires_at.slice(0, 10) : ""}; owner renewal required. No request is sent until then. `,
     refused_backoff: `Earthdata refused this credential; the same credential is retried only after ${backoff ? backoff.next_attempt_after : ""} unless renewed. `,
+    access_refused: "Earthdata refused access; retry suppression is disabled or unverified. Owner action is needed. ",
     current: "",
     no_current_data: "No qualified GPM run is retained for the current window. ",
   }[stage] ?? `Earthdata owner-access hold (${stage}); a renewed credential is tried at the next scheduled run. `
-  return { schema: ACCESS_SCHEMA, source: GPM, as_of: iso(now), stage, credential, last_good: lastGood, backoff,
+  return { schema: ACCESS_SCHEMA, source: GPM, as_of: iso(now), stage, credential, last_good: lastGood, backoff, backoff_enabled: enabled,
     latest_access_record: latestAccess, hold_stage: hold ? hold.stage : null,
     public_text: (lead + lastText).trim(), empty_feed_is_not_coverage: true }
 }

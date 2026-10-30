@@ -24,6 +24,7 @@ import re
 import time
 from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from src.two_bot.call_inventory import submit_in_context
 from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime, timedelta
 from functools import partial
@@ -428,7 +429,7 @@ def collect_all_regions(
         )
         with ThreadPoolExecutor(max_workers=min(_FETCH_WORKERS, len(REGION_REGISTRY))) as executor:
             futures = {
-                executor.submit(fetch, region, metadata=metadata): region
+                submit_in_context(executor, fetch, region, metadata=metadata): region
                 for region in REGION_REGISTRY
             }
             for future in as_completed(futures):

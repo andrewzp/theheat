@@ -95,7 +95,10 @@ export function dashboardDeployment(env = process.env) {
 // only report) ran the deployed revision. A deployment never implies a run.
 export function codeRevisionEvidence(state = {}, { deployment = null, runtimeReport = null, now = Date.now() } = {}) {
   const reportRun = runtimeReport === null ? null : configurationReportRun(runtimeReport)
-  const runs = [...(Array.isArray(state?.run_history) ? state.run_history : []), ...(reportRun ? [reportRun] : [])]
+  const history = [...(Array.isArray(state?.run_history) ? state.run_history : []), ...(reportRun ? [reportRun] : [])]
+  const latestInvocation = history.filter(run => Number.isFinite(timestamp(run?.started_at)))
+    .sort((a, b) => timestamp(b.started_at) - timestamp(a.started_at))[0]
+  const runs = history
     .flatMap((run) => {
       const snapshot = run?.runtime_inventory
       const started = timestamp(run?.started_at)
@@ -107,7 +110,7 @@ export function codeRevisionEvidence(state = {}, { deployment = null, runtimeRep
     })
     .sort((a, b) => b.captured - a.captured)
   const dashboard = sha(deployment?.git_sha)?.toLowerCase() ?? null
-  const latest = runs[0] ?? null
+  const latest = runs.find(run => run.captured >= timestamp(latestInvocation?.started_at)) ?? null
   const pipeline = dashboard ? runs.find((run) => run.git_sha === dashboard && run.kind === "bot_run") ?? null : null
   const iso = (value) => new Date(value).toISOString()
   const status = !dashboard || !latest?.git_sha ? "unknown" : latest.git_sha === dashboard ? "matches" : "differs"

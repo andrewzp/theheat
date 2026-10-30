@@ -62,6 +62,11 @@ def _cancel_on_sigterm(cancel: threading.Event):
     return signal.signal(signal.SIGTERM, lambda _signum, _frame: cancel.set())
 
 
+def _check_cancel(cancel: threading.Event) -> None:
+    if cancel.is_set():
+        raise bounded_http.TransportStop("cancelled")
+
+
 def _read_json(path: Path, limit: int = 4 * 1024**2):
     return json.loads(path.read_bytes()[:limit])
 
@@ -178,7 +183,8 @@ def main(argv: list[str] | None = None, *, session_factory=None, base_url: str =
 
                 session_factory = requests.Session
             return _emit(rebuild.fetch_archive(args.dest, session=session_factory(), max_bytes=args.max_bytes,
-                                               deadline_seconds=args.deadline_seconds, max_retries=args.max_retries))
+                                               deadline_seconds=args.deadline_seconds, max_retries=args.max_retries,
+                                               check=lambda: _check_cancel(cancel)))
         if args.command == "plan":
             plan = rebuild.build_plan(stations=args.stations, inventory=args.inventory, countries=args.countries,
                                       archive=args.archive, snapshot_date=args.snapshot_date,

@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from copy import deepcopy
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from src.two_bot.call_inventory import submit_in_context
 import hashlib
 from collections.abc import Mapping
 
@@ -164,7 +165,7 @@ def _fetch_coral_dhw_primary(
         worker_count = min(8, len(target_stations))
         with ThreadPoolExecutor(max_workers=worker_count) as executor:
             futures = {
-                executor.submit(
+                submit_in_context(executor,
                     _fetch_station_latest,
                     station,
                     index=index,

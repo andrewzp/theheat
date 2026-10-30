@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, MutableMapping, Sequence
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from src.two_bot.call_inventory import submit_in_context
 from dataclasses import dataclass, replace
 from src.data import places
 from datetime import date, datetime, timedelta, timezone
@@ -747,7 +748,7 @@ def _fetch_daily_precip_primary(
         executor = ThreadPoolExecutor(max_workers=min(worker_count, len(remaining)))
         try:
             futures = {
-                executor.submit(fetch_one, index, city): index
+                submit_in_context(executor, fetch_one, index, city): index
                 for index, city in remaining
             }
             for future in as_completed(futures):

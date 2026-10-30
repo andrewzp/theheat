@@ -637,7 +637,7 @@
     "src/data/climate_indices.py": "ee020029a91261d26ece8dd5ed27859b963e8cc8321d27c51afdce6ce3dc74d7",
     "src/data/co2.py": "63d9578eb77bcc56b438ef85ee56fc7a1695982a46f2b3133e04b65adefa3d5f",
     "src/data/copernicus_ems.py": "9e2c512e7ccb022a44190c6ea17ab10f18fa6232c7dcd2de51d1bc91fedcde95",
-    "src/data/coral_dhw.py": "8e943e926ef7f83376ac4e995de35ac603ffc0c1f2cc686495152c23c220e7f4",
+    "src/data/coral_dhw.py": "fc9357d1019e67e69e66a24d90aa1771e05097a99db1f042f4adfee2e8fb9560",
     "src/data/coral_source_contract.py": "1809eeeb915f6dcf09bed99f67da998338360eafb11c976805679a1a87c5f310",
     "src/data/crw_contract.py": "6dde2bbf1e1d81cf61e8b6bcc959e6ed61555d7aedb8d3e36ecf4313e8891170",
     "src/data/drought.py": "f04b304f46a7bb0f2806242b1e640c7aad943656b39eb94fa545745dd34652ff",
@@ -646,8 +646,8 @@
     "src/data/fire_source_contract.py": "851fcf3800b742f89f0780b8c8348bd9aa701b1cc93771fd5433cd6fee3c3d72",
     "src/data/firms.py": "760c6157ec3cf3e84003ec764763f0c108539350e6bceba84c33532d8e75c422",
     "src/data/gdacs.py": "acd12ae1dd53550d5a377b8adc3f8f6179ae9b86239aa606717a0d07f0875457",
-    "src/data/ghcn.py": "59c455a56f8aa963e27aeae1198997f7a0779a9b2f9080edab2d2c0842fc012b",
-    "src/data/gpm_imerg.py": "af9cd5fcd676ddda2a40fd25c80af2f697467b9d3d0768666b5866bf3f29f412",
+    "src/data/ghcn.py": "fb4c427895dfd38b9dd1575e03f833d493324a7f68c9ea47daa0a6e5de4d7994",
+    "src/data/gpm_imerg.py": "c403a0762406ae61607bf764c3ab7ad4d141f8db941ae9a5e72c674efe53452b",
     "src/data/ice_mass.py": "6352519b96130b565a9507f558a289126b1e9524cc79437239c55c5f4f2dd737",
     "src/data/jtwc.py": "1ad213e88299c9333c149cde0dbfd28d689e31b89e1c51440995536c64776e56",
     "src/data/methane.py": "061c60608f1d7c016b5afcce91c4d178d98e9f26ea1fdffb600e5f9cc6161355",
@@ -658,7 +658,7 @@
     "src/data/nws_alerts.py": "f96c74c51bedaefc6e667c5d93e00d3ff08de8dcf1f3ecdb16dacad68a4bf402",
     "src/data/ocean.py": "46987453207a69d4b6772d46de0c61235d4825eaa85b544ca5b61d340c669891",
     "src/data/ocean_sst.py": "7d62eefb7a6c657f014c756a62adb53d2e231e4d113bf2cb210cb213bf3fbeda",
-    "src/data/ocean_sst_anomaly.py": "58ba5f6447cced286e71ff46d965f35c1ce4aafeddb946c5a78a084682d53190",
+    "src/data/ocean_sst_anomaly.py": "78f0c70c0ce712b969042ffd2a1ac75d9fc0a71a0cee89535de5274fd2973f67",
     "src/data/open_meteo.py": "58fa0a9135a526370e2daa3a832b290203615187d165b47d95ac05025523d508",
     "src/data/ozone_hole.py": "83d3acbbb19398bad2c4a1930d7ebc6b3968d1938847c57385ffe11c1fb05d67",
     "src/data/reanalysis_anomaly.py": "396755069ccecfe73a17f3dd7a51d1b1a1d7e5ab6172d3826b440af14426b1fa",
@@ -710,5 +710,5 @@
     "src/two_bot/intern/warnings.py": "04e0a4506ffbb29124c8d2960a5e5025305699297fcf8f9178b23caac2cd7a37"
   },
   "evidence_scope": "Referenced local code inventory; not live/provider/transitive-source qualification.",
-  "registry_sha256": "81a7595bc7543a973cc54b1ec4cc73ccd353dc382230c913fbbb59033e14d5ad"
+  "registry_sha256": "64da6d4875dd921a522da164a9095956c6cd28199e9e9e45e9fe60364f2a69bd"
 }

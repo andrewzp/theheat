@@ -15,6 +15,7 @@ export const COPY_MESSAGES = Object.freeze({
   second_sentence: "A second sentence must be essential qualification or a sourced consequence.",
   over_automatic_length: "Over 200 characters: cannot post automatically; shorter usually reads better.",
   danger_wording_needs_source: "Danger or health wording needs an attributed source warning saying so.",
+  consequence_needs_review: "Check this diagnostic or consequence clause against the source; it may be substantive rather than filler.",
 })
 
 const URL = /https?:\/\/\S+/gi
@@ -45,6 +46,8 @@ const ENDING_PARTICIPLE = new RegExp(SEP
 const ENDING_CLIMATE = /\bas\s+(?:the\s+|our\s+)?(?:climate|planet|world|earth|globe)\s+(?:warms|heats(?:\s+up)?|changes|keeps\s+warming|continues\s+to\s+warm)\b[^.!?]*[.!?]?\s*$/i
 const CLIMATE_SLOGAN = /\b(?:climate\s+change|global\s+warming)\s+(?:in\s+action|is\s+here|is\s+real|at\s+work)\b/i
 const WINK_KICKER = /(?:^|[.!?]\s+)(?:the\s+calendar\s+says\s+[A-Za-z]+|and\s+it's\s+only\s+[A-Za-z]+|a\s+record\s+is\s+a\s+record|let\s+that\s+sink\s+in|read\s+that\s+again|you\s+read\s+that\s+right)[.!?]?\s*$/i
+const DIAGNOSTIC = /\b(?:sign|signal|testament|illustration|example|symbol|snapshot|glimpse)\s+(?:of|that|to)\b/i
+const GENERIC_CONTEXT = /\b(?:warming\s+world|region\s+is\s+warming|growing\s+heat\s+risk|climate\s+change|changing\s+climate)\b/i
 const DANGER = /\b(?:life[-\s]threatening|dangerous(?:ly)?|deadly|lethal|hazardous|unhealthy|unsafe|toxic|potentially\s+fatal|fatal|health\s+(?:risk|threat|hazard|emergency)|threat\s+to\s+life|threatens?\s+lives|brace\s+for)\b/i
 const BOUNDARY = /[.!?]["')\]]*\s+(?=[A-Z0-9"'(])/g
 const ABBREVIATIONS = new Set([
@@ -99,7 +102,11 @@ export function copyNotes(text) {
   }
   for (const pattern of [ENDING_REMINDER, ENDING_REMINDER_SENTENCE, ENDING_PARTICIPLE, ENDING_CLIMATE, CLIMATE_SLOGAN, WINK_KICKER]) {
     const match = body.match(pattern)
-    if (match) { notes.push(note("generic_explanatory_ending", match[0].replace(/^[\s,;:.!?\-—–]+/, ""))); break }
+    if (match) {
+      const ambiguous = DIAGNOSTIC.test(match[0]) && !GENERIC_CONTEXT.test(match[0])
+      notes.push(note(ambiguous ? "consequence_needs_review" : "generic_explanatory_ending", match[0].replace(/^[\s,;:.!?\-—–]+/, "")))
+      break
+    }
   }
   const parts = sentences(body)
   if (parts.length >= 3) notes.push(note("too_many_sentences", parts[2]))

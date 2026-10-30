@@ -144,7 +144,20 @@ def gpm_access_health(state: Mapping[str, Any], *, now: datetime) -> dict[str, A
         if isinstance(access, Mapping) and access.get("schema") == SCHEMA:
             latest_access = access
         break
-    backoff = refusal_backoff(run_history, credential_expires_at=credential["expires_at"], now=now)
+    runs = sorted((r for r in (run_history if isinstance(run_history, list) else [])
+                   if isinstance(r, Mapping) and _parse(r.get("started_at")) is not None),
+                  key=lambda r: _parse(r["started_at"]) or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
+    latest_run = runs[0] if runs else {}
+    inventory = latest_run.get("runtime_inventory")
+    inventory = inventory if isinstance(inventory, Mapping) else {}
+    captured = _parse(inventory.get("captured_at"))
+    started = _parse(latest_run.get("started_at"))
+    flags = inventory.get("flags")
+    reported = flags.get("earthdata_refusal_backoff_enabled") if isinstance(flags, Mapping) else None
+    enabled = reported if (type(reported) is bool and inventory.get("schema_version") == 1
+                           and captured is not None and started is not None and started <= captured <= now
+                           and now - captured <= timedelta(hours=6)) else None
+    backoff = refusal_backoff(run_history, credential_expires_at=credential["expires_at"], now=now) if enabled is True else None
     hold = source_incidents.earthdata_access_hold(source_incidents.project_incidents(run_history, source=GPM_SOURCE))
     if credential["expired"]:
         stage = "access_expired"
@@ -152,6 +165,8 @@ def gpm_access_health(state: Mapping[str, Any], *, now: datetime) -> dict[str, A
         stage = "refused_backoff"
     elif hold is not None:
         stage = str(hold["stage"])
+        if stage == "access_backoff" and enabled is not True:
+            stage = "access_refused"
     elif last_good["age_days"] is not None and last_good["age_days"] <= CURRENT_DATA_DAYS:
         stage = "current"
     else:
@@ -164,11 +179,13 @@ def gpm_access_health(state: Mapping[str, Any], *, now: datetime) -> dict[str, A
                            "owner renewal required. No request is sent until then. "),
         "refused_backoff": ("Earthdata refused this credential; the same credential is retried only after "
                             f"{backoff['next_attempt_after'] if backoff else ''} unless renewed. "),
+        "access_refused": "Earthdata refused access; retry suppression is disabled or unverified. Owner action is needed. ",
         "current": "",
         "no_current_data": "No qualified GPM run is retained for the current window. ",
     }.get(stage, f"Earthdata owner-access hold ({stage}); a renewed credential is tried at the next scheduled run. ")
     return {"schema": SCHEMA, "source": GPM_SOURCE, "as_of": _iso(now), "stage": stage, "credential": credential,
-            "last_good": last_good, "backoff": backoff, "latest_access_record": dict(latest_access) if latest_access else None,
+            "last_good": last_good, "backoff": backoff, "backoff_enabled": enabled,
+            "latest_access_record": dict(latest_access) if latest_access else None,
             "hold": hold, "requests_sent_by_projection": 0, "public_text": (text + last_text).strip(),
             "empty_feed_is_not_coverage": True}
 

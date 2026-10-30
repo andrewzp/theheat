@@ -251,6 +251,11 @@ class MeteostatBulkProvider:
     def counters(self) -> dict[str, Any]:
         return self.transport.snapshot() if self.transport is not None else {}
 
+    def check(self) -> None:
+        if self.transport is None:
+            raise RuntimeError("meteostat_provider_unbound")
+        self.transport.check()
+
     def _get(self, path: str) -> tuple[bytes, dict[str, Any]]:
         if self.transport is None:
             raise RuntimeError("meteostat_provider_unbound")
@@ -290,6 +295,7 @@ class MeteostatBulkProvider:
         return self._files[station]
 
     def fetch(self, lat: float, lon: float, start: int, end: int) -> NormalsFrame:
+        self.check()
         now = self._now()
         if end - start != 29 or end % 10 != 0 or end >= now.year:
             raise ProductInvalid("normals_reference_period_invalid")
@@ -324,6 +330,7 @@ class MeteostatBulkProvider:
                       "month_station": {str(key[2]): station_id for key, (_v, station_id) in sorted(months.items())
                                         if station_id is not None},
                       "units": CONTRACT["units"], "licence": CONTRACT["licence"]}
+        self.check()
         return NormalsFrame(tmax_by_month, provenance)
 
 

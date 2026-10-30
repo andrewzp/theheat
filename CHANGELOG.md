@@ -1,3 +1,20 @@
+## 0.9.109.51
+
+- Lead generated copy with the place and strongest supported fact. Reject clear
+  filler before paid checks; retain required factual and safety review for
+  substantive consequences and uncertain paraphrases. Show advisory copy notes
+  and compare graphic values using compatible units.
+- Add bounded Meteostat normals and pinned GHCN threshold-input acquisition,
+  source-access diagnostics and report evidence in the editor. HMS previous-day
+  lookup and Earthdata refusal backoff remain disabled by default.
+- Carry operation attribution and cancellation into worker pools, report missing
+  cost inputs, and join retained usage and coverage to exact delivery events.
+- Add PostgreSQL reconciliation and explicit restore/reconciliation origins,
+  stricter Gist cache read guards, mutation body limits and verification of
+  standalone backup bytes. Production storage and publishing controls are unchanged.
+- Distinguish deployed dashboard code from observed bot runs; connect weekly
+  review to bounded experiment plans and update source/media setup runbooks.
+
 ## 0.9.109.50
 
 - Tighten short-copy prompts, preserve explicit unsupported-consequence findings,

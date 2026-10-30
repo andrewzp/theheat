@@ -1,303 +1,310 @@
 {
- "cases": {
-  "current": {
-   "as_of": "2026-10-30T12:00:00Z",
-   "expected": {
-    "backoff": null,
-    "credential": {
-     "days_since_expiry": null,
-     "expired": false,
-     "expires_at": null,
-     "tracked": false
-    },
-    "last_good": {
-     "age_days": 1,
-     "basis": "precip_recent_by_city (primary GPM only)",
-     "cities": 1,
-     "data_date": "2026-10-29"
-    },
-    "public_text": "Last good GPM data 2026-10-29 (1 day old).",
-    "stage": "current"
-   },
-   "state": {
-    "precip_recent_by_city": {
-     "ficta:one": [
-      {
-       "date": "2026-10-29",
-       "mm": 3.0
-      }
-     ]
-    },
-    "run_history": []
-   }
-  },
-  "expired": {
-   "as_of": "2026-10-30T12:00:00Z",
-   "expected": {
-    "backoff": null,
-    "credential": {
-     "days_since_expiry": 68,
-     "expired": true,
-     "expires_at": "2026-08-22T15:18:07Z",
-     "tracked": true
-    },
-    "last_good": {
-     "age_days": 71,
-     "basis": "precip_recent_by_city (primary GPM only)",
-     "cities": 2,
-     "data_date": "2026-08-20"
-    },
-    "public_text": "Earthdata access expired 2026-08-22; owner renewal required. No request is sent until then. Last good GPM data 2026-08-20 (71 days old).",
-    "stage": "access_expired"
-   },
-   "state": {
-    "credential_expiry": {
-     "EARTHDATA_TOKEN": {
-      "expires_at": "2026-08-22T15:18:07Z",
-      "label": "NASA Earthdata",
-      "source": "jwt"
-     }
-    },
-    "precip_recent_by_city": {
-     "ficta:one": [
-      {
-       "date": "2026-08-19",
-       "mm": 1.0
+  "cases": {
+    "current": {
+      "as_of": "2026-10-30T12:00:00Z",
+      "expected": {
+        "backoff": null,
+        "credential": {
+          "days_since_expiry": null,
+          "expired": false,
+          "expires_at": null,
+          "tracked": false
+        },
+        "last_good": {
+          "age_days": 1,
+          "basis": "precip_recent_by_city (primary GPM only)",
+          "cities": 1,
+          "data_date": "2026-10-29"
+        },
+        "public_text": "Last good GPM data 2026-10-29 (1 day old).",
+        "stage": "current"
       },
-      {
-       "date": "2026-08-20",
-       "mm": 2.0
+      "state": {
+        "precip_recent_by_city": {
+          "ficta:one": [
+            {
+              "date": "2026-10-29",
+              "mm": 3.0
+            }
+          ]
+        },
+        "run_history": []
       }
-     ],
-     "ficta:two": [
-      {
-       "date": "2026-08-18",
-       "mm": 0
-      }
-     ]
     },
-    "run_history": []
-   }
-  },
-  "refused_backoff": {
-   "as_of": "2026-10-30T12:00:00Z",
-   "expected": {
-    "backoff": {
-     "consecutive_refusals": 2,
-     "credential_expires_at": "2026-12-30T00:00:00Z",
-     "next_attempt_after": "2026-10-31T06:00:00Z",
-     "refused_at": "2026-10-30T06:00:00Z",
-     "requests_sent": 0
-    },
-    "credential": {
-     "days_since_expiry": null,
-     "expired": false,
-     "expires_at": "2026-12-30T00:00:00Z",
-     "tracked": true
-    },
-    "last_good": {
-     "age_days": 71,
-     "basis": "precip_recent_by_city (primary GPM only)",
-     "cities": 2,
-     "data_date": "2026-08-20"
-    },
-    "public_text": "Earthdata refused this credential; the same credential is retried only after 2026-10-31T06:00:00Z unless renewed. Last good GPM data 2026-08-20 (71 days old).",
-    "stage": "refused_backoff"
-   },
-   "state": {
-    "credential_expiry": {
-     "EARTHDATA_TOKEN": {
-      "expires_at": "2026-12-30T00:00:00Z",
-      "label": "NASA Earthdata",
-      "source": "jwt"
-     }
-    },
-    "precip_recent_by_city": {
-     "ficta:one": [
-      {
-       "date": "2026-08-19",
-       "mm": 1.0
+    "expired": {
+      "as_of": "2026-10-30T12:00:00Z",
+      "expected": {
+        "backoff": null,
+        "credential": {
+          "days_since_expiry": 68,
+          "expired": true,
+          "expires_at": "2026-08-22T15:18:07Z",
+          "tracked": true
+        },
+        "last_good": {
+          "age_days": 71,
+          "basis": "precip_recent_by_city (primary GPM only)",
+          "cities": 2,
+          "data_date": "2026-08-20"
+        },
+        "public_text": "Earthdata access expired 2026-08-22; owner renewal required. No request is sent until then. Last good GPM data 2026-08-20 (71 days old).",
+        "stage": "access_expired"
       },
-      {
-       "date": "2026-08-20",
-       "mm": 2.0
+      "state": {
+        "credential_expiry": {
+          "EARTHDATA_TOKEN": {
+            "expires_at": "2026-08-22T15:18:07Z",
+            "label": "NASA Earthdata",
+            "source": "jwt"
+          }
+        },
+        "precip_recent_by_city": {
+          "ficta:one": [
+            {
+              "date": "2026-08-19",
+              "mm": 1.0
+            },
+            {
+              "date": "2026-08-20",
+              "mm": 2.0
+            }
+          ],
+          "ficta:two": [
+            {
+              "date": "2026-08-18",
+              "mm": 0
+            }
+          ]
+        },
+        "run_history": []
       }
-     ],
-     "ficta:two": [
-      {
-       "date": "2026-08-18",
-       "mm": 0
-      }
-     ]
     },
-    "run_history": [
-     {
-      "id": "invented-2026-10-30T06:00:00Z",
-      "sources": [
-       {
-        "details": {
-         "earthdata_access": {
-          "backoff": null,
+    "refused_backoff": {
+      "as_of": "2026-10-30T12:00:00Z",
+      "expected": {
+        "backoff": {
+          "consecutive_refusals": 2,
           "credential_expires_at": "2026-12-30T00:00:00Z",
-          "refused": true,
+          "next_attempt_after": "2026-10-31T06:00:00Z",
           "refused_at": "2026-10-30T06:00:00Z",
-          "schema": "theheat.source-access/v1"
-         },
-         "incident": {
-          "attempts": [
-           {
-            "key": "gpm_imerg.imerg_late_opendap|imerg_late_daily_walkback_late|rotating_window|gpm_imerg.ascii_subset",
-            "outcome": "access_refused",
-            "parser_contract": "gpm_imerg.ascii_subset",
-            "product_id": "gpm_imerg.imerg_late_opendap",
-            "provider": "nasa_gesdisc",
-            "region": "rotating_window",
-            "role": "primary",
-            "window": "imerg_late_daily_walkback_late"
-           }
-          ],
-          "product_state": "access_hold",
-          "schema": "theheat.source-incident/v1",
-          "source": "gpm_imerg"
-         }
+          "requests_sent": 0
         },
-        "source": "gpm_imerg",
-        "status": "failed"
-       }
-      ],
-      "started_at": "2026-10-30T06:00:00Z"
-     },
-     {
-      "id": "invented-2026-10-30T00:00:00Z",
-      "sources": [
-       {
-        "details": {
-         "earthdata_access": {
-          "backoff": null,
-          "credential_expires_at": "2026-12-30T00:00:00Z",
-          "refused": true,
-          "refused_at": "2026-10-30T00:00:00Z",
-          "schema": "theheat.source-access/v1"
-         },
-         "incident": {
-          "attempts": [
-           {
-            "key": "gpm_imerg.imerg_late_opendap|imerg_late_daily_walkback_late|rotating_window|gpm_imerg.ascii_subset",
-            "outcome": "access_refused",
-            "parser_contract": "gpm_imerg.ascii_subset",
-            "product_id": "gpm_imerg.imerg_late_opendap",
-            "provider": "nasa_gesdisc",
-            "region": "rotating_window",
-            "role": "primary",
-            "window": "imerg_late_daily_walkback_late"
-           }
-          ],
-          "product_state": "access_hold",
-          "schema": "theheat.source-incident/v1",
-          "source": "gpm_imerg"
-         }
+        "credential": {
+          "days_since_expiry": null,
+          "expired": false,
+          "expires_at": "2026-12-30T00:00:00Z",
+          "tracked": true
         },
-        "source": "gpm_imerg",
-        "status": "failed"
-       }
-      ],
-      "started_at": "2026-10-30T00:00:00Z"
-     }
-    ]
-   }
-  },
-  "renewed_after_refusal": {
-   "as_of": "2026-10-30T12:00:00Z",
-   "expected": {
-    "backoff": null,
-    "credential": {
-     "days_since_expiry": null,
-     "expired": false,
-     "expires_at": "2027-01-15T00:00:00Z",
-     "tracked": true
-    },
-    "last_good": {
-     "age_days": 71,
-     "basis": "precip_recent_by_city (primary GPM only)",
-     "cities": 2,
-     "data_date": "2026-08-20"
-    },
-    "public_text": "Earthdata owner-access hold (access_refused); a renewed credential is tried at the next scheduled run. Last good GPM data 2026-08-20 (71 days old).",
-    "stage": "access_refused"
-   },
-   "state": {
-    "credential_expiry": {
-     "EARTHDATA_TOKEN": {
-      "expires_at": "2027-01-15T00:00:00Z",
-      "label": "NASA Earthdata",
-      "source": "jwt"
-     }
-    },
-    "precip_recent_by_city": {
-     "ficta:one": [
-      {
-       "date": "2026-08-19",
-       "mm": 1.0
+        "last_good": {
+          "age_days": 71,
+          "basis": "precip_recent_by_city (primary GPM only)",
+          "cities": 2,
+          "data_date": "2026-08-20"
+        },
+        "public_text": "Earthdata refused this credential; the same credential is retried only after 2026-10-31T06:00:00Z unless renewed. Last good GPM data 2026-08-20 (71 days old).",
+        "stage": "refused_backoff"
       },
-      {
-       "date": "2026-08-20",
-       "mm": 2.0
-      }
-     ],
-     "ficta:two": [
-      {
-       "date": "2026-08-18",
-       "mm": 0
-      }
-     ]
-    },
-    "run_history": [
-     {
-      "id": "invented-2026-10-30T06:00:00Z",
-      "sources": [
-       {
-        "details": {
-         "earthdata_access": {
-          "backoff": null,
-          "credential_expires_at": "2026-12-30T00:00:00Z",
-          "refused": true,
-          "refused_at": "2026-10-30T06:00:00Z",
-          "schema": "theheat.source-access/v1"
-         },
-         "incident": {
-          "attempts": [
-           {
-            "key": "gpm_imerg.imerg_late_opendap|imerg_late_daily_walkback_late|rotating_window|gpm_imerg.ascii_subset",
-            "outcome": "access_refused",
-            "parser_contract": "gpm_imerg.ascii_subset",
-            "product_id": "gpm_imerg.imerg_late_opendap",
-            "provider": "nasa_gesdisc",
-            "region": "rotating_window",
-            "role": "primary",
-            "window": "imerg_late_daily_walkback_late"
-           }
-          ],
-          "product_state": "access_hold",
-          "schema": "theheat.source-incident/v1",
-          "source": "gpm_imerg"
-         }
+      "state": {
+        "credential_expiry": {
+          "EARTHDATA_TOKEN": {
+            "expires_at": "2026-12-30T00:00:00Z",
+            "label": "NASA Earthdata",
+            "source": "jwt"
+          }
         },
-        "source": "gpm_imerg",
-        "status": "failed"
-       }
-      ],
-      "started_at": "2026-10-30T06:00:00Z"
-     }
-    ]
-   }
-  }
- },
- "compared_fields": [
-  "stage",
-  "credential",
-  "last_good",
-  "backoff",
-  "public_text"
- ],
- "schema": "theheat.final-closure.supply-gpm-access-fixture/v1"
+        "precip_recent_by_city": {
+          "ficta:one": [
+            {
+              "date": "2026-08-19",
+              "mm": 1.0
+            },
+            {
+              "date": "2026-08-20",
+              "mm": 2.0
+            }
+          ],
+          "ficta:two": [
+            {
+              "date": "2026-08-18",
+              "mm": 0
+            }
+          ]
+        },
+        "run_history": [
+          {
+            "id": "invented-2026-10-30T06:00:00Z",
+            "sources": [
+              {
+                "details": {
+                  "earthdata_access": {
+                    "backoff": null,
+                    "credential_expires_at": "2026-12-30T00:00:00Z",
+                    "refused": true,
+                    "refused_at": "2026-10-30T06:00:00Z",
+                    "schema": "theheat.source-access/v1"
+                  },
+                  "incident": {
+                    "attempts": [
+                      {
+                        "key": "gpm_imerg.imerg_late_opendap|imerg_late_daily_walkback_late|rotating_window|gpm_imerg.ascii_subset",
+                        "outcome": "access_refused",
+                        "parser_contract": "gpm_imerg.ascii_subset",
+                        "product_id": "gpm_imerg.imerg_late_opendap",
+                        "provider": "nasa_gesdisc",
+                        "region": "rotating_window",
+                        "role": "primary",
+                        "window": "imerg_late_daily_walkback_late"
+                      }
+                    ],
+                    "product_state": "access_hold",
+                    "schema": "theheat.source-incident/v1",
+                    "source": "gpm_imerg"
+                  }
+                },
+                "source": "gpm_imerg",
+                "status": "failed"
+              }
+            ],
+            "started_at": "2026-10-30T06:00:00Z",
+            "runtime_inventory": {
+              "schema_version": 1,
+              "captured_at": "2026-10-30T06:00:00Z",
+              "flags": {
+                "earthdata_refusal_backoff_enabled": true
+              }
+            }
+          },
+          {
+            "id": "invented-2026-10-30T00:00:00Z",
+            "sources": [
+              {
+                "details": {
+                  "earthdata_access": {
+                    "backoff": null,
+                    "credential_expires_at": "2026-12-30T00:00:00Z",
+                    "refused": true,
+                    "refused_at": "2026-10-30T00:00:00Z",
+                    "schema": "theheat.source-access/v1"
+                  },
+                  "incident": {
+                    "attempts": [
+                      {
+                        "key": "gpm_imerg.imerg_late_opendap|imerg_late_daily_walkback_late|rotating_window|gpm_imerg.ascii_subset",
+                        "outcome": "access_refused",
+                        "parser_contract": "gpm_imerg.ascii_subset",
+                        "product_id": "gpm_imerg.imerg_late_opendap",
+                        "provider": "nasa_gesdisc",
+                        "region": "rotating_window",
+                        "role": "primary",
+                        "window": "imerg_late_daily_walkback_late"
+                      }
+                    ],
+                    "product_state": "access_hold",
+                    "schema": "theheat.source-incident/v1",
+                    "source": "gpm_imerg"
+                  }
+                },
+                "source": "gpm_imerg",
+                "status": "failed"
+              }
+            ],
+            "started_at": "2026-10-30T00:00:00Z"
+          }
+        ]
+      }
+    },
+    "renewed_after_refusal": {
+      "as_of": "2026-10-30T12:00:00Z",
+      "expected": {
+        "backoff": null,
+        "credential": {
+          "days_since_expiry": null,
+          "expired": false,
+          "expires_at": "2027-01-15T00:00:00Z",
+          "tracked": true
+        },
+        "last_good": {
+          "age_days": 71,
+          "basis": "precip_recent_by_city (primary GPM only)",
+          "cities": 2,
+          "data_date": "2026-08-20"
+        },
+        "public_text": "Earthdata refused access; retry suppression is disabled or unverified. Owner action is needed. Last good GPM data 2026-08-20 (71 days old).",
+        "stage": "access_refused"
+      },
+      "state": {
+        "credential_expiry": {
+          "EARTHDATA_TOKEN": {
+            "expires_at": "2027-01-15T00:00:00Z",
+            "label": "NASA Earthdata",
+            "source": "jwt"
+          }
+        },
+        "precip_recent_by_city": {
+          "ficta:one": [
+            {
+              "date": "2026-08-19",
+              "mm": 1.0
+            },
+            {
+              "date": "2026-08-20",
+              "mm": 2.0
+            }
+          ],
+          "ficta:two": [
+            {
+              "date": "2026-08-18",
+              "mm": 0
+            }
+          ]
+        },
+        "run_history": [
+          {
+            "id": "invented-2026-10-30T06:00:00Z",
+            "sources": [
+              {
+                "details": {
+                  "earthdata_access": {
+                    "backoff": null,
+                    "credential_expires_at": "2026-12-30T00:00:00Z",
+                    "refused": true,
+                    "refused_at": "2026-10-30T06:00:00Z",
+                    "schema": "theheat.source-access/v1"
+                  },
+                  "incident": {
+                    "attempts": [
+                      {
+                        "key": "gpm_imerg.imerg_late_opendap|imerg_late_daily_walkback_late|rotating_window|gpm_imerg.ascii_subset",
+                        "outcome": "access_refused",
+                        "parser_contract": "gpm_imerg.ascii_subset",
+                        "product_id": "gpm_imerg.imerg_late_opendap",
+                        "provider": "nasa_gesdisc",
+                        "region": "rotating_window",
+                        "role": "primary",
+                        "window": "imerg_late_daily_walkback_late"
+                      }
+                    ],
+                    "product_state": "access_hold",
+                    "schema": "theheat.source-incident/v1",
+                    "source": "gpm_imerg"
+                  }
+                },
+                "source": "gpm_imerg",
+                "status": "failed"
+              }
+            ],
+            "started_at": "2026-10-30T06:00:00Z"
+          }
+        ]
+      }
+    }
+  },
+  "compared_fields": [
+    "stage",
+    "credential",
+    "last_good",
+    "backoff",
+    "public_text"
+  ],
+  "schema": "theheat.final-closure.supply-gpm-access-fixture/v1"
 }
