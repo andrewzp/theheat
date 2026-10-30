@@ -147,6 +147,38 @@ def test_reserved_batch_is_queued_and_unknown_submission_remains_held(sourced):
     assert sourced["store"].spending("status", {"intent_id": intent}, now=utc_text(NOW))["intent"]["state"] == "uncertain"
 
 
+@pytest.mark.parametrize("urgent", [False, True])
+def test_unknown_purchase_survives_current_brief_replacement(sourced, core, urgent):
+    assert request(sourced)["status"] == "applied"
+    intent = sourced["result"]["generation"]["intent_id"]
+    sent, factory = transport(sourced, fail_post=True)
+    assert run(sourced, "submit", factory)["outcome"] == "submission_uncertain"
+    assert len(sent) == 1
+    before = sourced["store"].spending("status", {}, now=utc_text(NOW))
+
+    value = deepcopy(sourced["value"])
+    value.update(urgent=urgent, useful_until=utc_text(NOW+timedelta(hours=9)))
+    refs = sourced["store"].retain_generation_input(value)
+    if urgent:
+        core[2].initialize_synchronous_checks(now=NOW)
+        reserve = sourced["store"].retain_generation_reservation(allowance_document(refs["brief_id"], schema_version=2,
+            execution_mode="synchronous", samples=1, max_attempts=1, read_budget_seconds=180))
+        config = dict(schema_version=2, current_inputs=[refs["brief_id"]], reservations=dict(batch=None, synchronous=reserve))
+    else:
+        reserve = sourced["store"].retain_generation_reservation(allowance_document(refs["brief_id"]))
+        config = dict(current_inputs=[refs["brief_id"]], reservation=reserve)
+    sourced["store"].configure_sourced_generation(lambda: config)
+    replacement = dict(sourced, refs=refs, value=value, config=config)
+    projection = sourced["store"].generation_projection(now=NOW)["briefs"][0]
+    assert projection["status"] == "blocked" and projection["reason"] == "generation_duplicate_engine_purchase"
+    result = request(replacement)
+    assert result["status"] == "rejected" and result["code"] == "generation_duplicate_engine_purchase"
+    assert sourced["store"].spending("status", {}, now=utc_text(NOW)) == before
+    assert sourced["store"].spending("status", {"intent_id": intent}, now=utc_text(NOW))["intent"]["state"] == "uncertain"
+    assert admin(core[3], "SELECT count(*) FROM theheat_projection.versions WHERE namespace='sourced-sync-job-v1'") == [(0,)]
+    assert len(sent) == 1
+
+
 def test_manual_automatic_same_job_and_no_second_provider_request(sourced):
     first = request(sourced)
     client = SourcedGenerationClient(sourced["store"], candidate.EDITOR, candidate.resolve, lambda: NOW)

@@ -61,5 +61,5 @@ def test_postgres_generation_refuses_before_routing_and_projects_duplicates_bloc
     assert project.index("duplicate_purchases") < project.index("current(authority, c, identity, policy, now)")
     assert 'status="blocked"' in project and 'reason="generation_duplicate_engine_purchase"' in project
     # No fallback: an unavailable batch lane raises; it never calls the synchronous engine.
-    batch_branch = prepare[prepare.index("_, _, context, key = plan_identity"):]
+    batch_branch = prepare[prepare.index('job = "gs_"+key'):]
     assert "sync." not in batch_branch and "CommandError(\"generation_window_or_request_invalid\"" in batch_branch

@@ -187,14 +187,16 @@ def prepare(authority, c, state, version, command, actor, *, now, policy, editor
     # batch brief (even one whose submission outcome is unknown) cannot buy again.
     current_values = {i: read(c, INPUT, i) for i in configuration(authority)["current_inputs"]}
     refuse(refs["brief_id"] not in duplicate_purchases(current_values), "generation_duplicate_engine_purchase")
+    _, _, context, key = plan_identity(value, state, editorial_policy, now=now, epoch=admission.PAUSED_EPOCH, resolved=resolved)
+    from src.commands import postgres_synchronous_generation as sync
+    retained_purchase_guard(c, value, refs["brief_id"], sync.JOB if value["urgent"] else JOB,
+        ("gss_" if value["urgent"] else "gs_") + key)
     from src.commands.postgres_important_variants import ordinary_guard
     ordinary_guard(c, value, refs["brief_id"])
     bundle = source_bundle(value["bundle"], resolved=resolved)
     refuse(negative_cache.should_skip(state, value["save"]["event_id"], bundle, now=now) is None, "generation_negative_cache")
     if value["urgent"]:
-        from src.commands import postgres_synchronous_generation as sync
         return sync.prepare(c, value, config, state, editorial_policy, now, authority.environment, resolved=resolved)
-    _, _, context, key = plan_identity(value, state, editorial_policy, now=now, epoch=admission.PAUSED_EPOCH)
     job = "gs_"+key
     reused = exists(c, JOB, job)
     if reused:
@@ -360,6 +362,13 @@ def project(authority, c, state, version, policy, now):
             captured_at=value["captured_at"], useful_until=value["useful_until"], expected_state_version=version,
             expected_policy_sha256=fingerprint(policy), status="ready", job_id=None, writer_usage=None,
             execution_mode="synchronous" if value["urgent"] else "batch")
+        from src.commands import postgres_synchronous_generation as sync
+        try:
+            retained_purchase_guard(c, value, identity, sync.JOB if value["urgent"] else JOB, None)
+        except CommandError as exc:
+            row.update(status="blocked", reason=exc.code)
+            rows.append(row)
+            continue
         if value["schema_version"] == 2:
             from src.commands import postgres_synchronous_generation as sync
             row["status"] = "pending_validation"
@@ -423,6 +432,37 @@ def jobs_for(c, identity, namespace):
         ORDER BY f.snapshot_id LIMIT 17""", (namespace, b'"brief_id"', json.dumps(identity).encode())).fetchall()
     refuse(len(rows) <= 16, "generation_candidate_capacity")
     return [row[0] for row in rows]
+
+
+def retained_purchase_guard(c, value, brief_id, namespace, job_id):
+    """Check both durable engines while holding the caller's state-row lock.
+
+    Current configuration is only a view; removing an old brief cannot release
+    its registered/reserved/unknown purchase. Query retained input identities
+    by source and revision, bound artifact reads, then compare the exact story
+    identity. Existing job records are the claim; no migration or new backend
+    is needed, including for jobs registered before this guard existed.
+    """
+    from src.commands import postgres_synchronous_generation as sync
+    from src.two_bot.engine_boundary import purchase_identity
+
+    rows = c.execute("""SELECT k.snapshot_id FROM theheat_projection.fields k
+        JOIN theheat_projection.artifacts ka ON ka.sha=k.artifact_sha
+        JOIN theheat_projection.fields r ON r.namespace=k.namespace AND r.snapshot_id=k.snapshot_id
+        JOIN theheat_projection.artifacts ra ON ra.sha=r.artifact_sha
+        WHERE k.namespace=%s AND k.name_json=%s AND ka.payload=%s
+          AND r.name_json=%s AND ra.payload=%s ORDER BY k.snapshot_id LIMIT 65""",
+        (INPUT, b'"source_key"', p._canonical(value["source_key"]), b'"source_revision"', p._canonical(value["source_revision"]))).fetchall()
+    refuse(len(rows) <= 64, "generation_purchase_lookup_bound")
+    identity = purchase_identity(value)
+    for (retained_id,) in rows:
+        if purchase_identity(read(c, INPUT, retained_id)) != identity:
+            continue
+        for retained_namespace in (JOB, sync.JOB):
+            for retained_job in jobs_for(c, retained_id, retained_namespace):
+                refuse(retained_id == brief_id and retained_namespace == namespace
+                    and (job_id is None or retained_job == job_id),
+                    "generation_duplicate_engine_purchase")
 
 
 def candidates_for(c, identity, namespace):
