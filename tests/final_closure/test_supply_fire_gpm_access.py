@@ -33,6 +33,7 @@ def _hms_body(when: datetime) -> str:
 @responses.activate
 def test_unpublished_current_hms_day_reads_yesterday_once_and_keeps_row_times(monkeypatch):
     monkeypatch.setattr(firms, "FIRMS_API_KEY", "invented_key")
+    monkeypatch.setenv(firms.HMS_PREVIOUS_DAY_FLAG, "1")
     now = datetime.now(UTC)
     yesterday = now - timedelta(days=1)
     for product in ("VIIRS_NOAA21_NRT", "VIIRS_NOAA20_NRT", "MODIS_NRT"):
@@ -54,8 +55,26 @@ def test_unpublished_current_hms_day_reads_yesterday_once_and_keeps_row_times(mo
 
 
 @responses.activate
+@pytest.mark.parametrize("flag", ["0", "true", None])
+def test_flag_off_keeps_the_single_current_day_read(monkeypatch, flag):
+    monkeypatch.setattr(firms, "FIRMS_API_KEY", "invented_key")
+    if flag is None:
+        monkeypatch.delenv(firms.HMS_PREVIOUS_DAY_FLAG, raising=False)
+    else:
+        monkeypatch.setenv(firms.HMS_PREVIOUS_DAY_FLAG, flag)
+    now = datetime.now(UTC)
+    responses.add(responses.GET, firms._hms_url(now.date()), status=404)
+    attempts: list = []
+    with pytest.raises(Exception):
+        firms._fetch_fires_hms(250, attempts=attempts, today=now.date())
+    assert [(a["window"], a["outcome"]) for a in attempts] == [("current_utc_day_file", "endpoint_missing")]
+    assert len(responses.calls) == 1
+
+
+@responses.activate
 def test_a_non_404_hms_failure_never_falls_back_to_another_day(monkeypatch):
     monkeypatch.setattr(firms, "FIRMS_API_KEY", "invented_key")
+    monkeypatch.setenv(firms.HMS_PREVIOUS_DAY_FLAG, "1")
     now = datetime.now(UTC)
     for _ in range(3):
         responses.add(responses.GET, firms._hms_url(now.date()), status=503)
@@ -104,6 +123,7 @@ def test_runner_sends_no_request_inside_backoff_and_records_it(monkeypatch):
     exp_iso = expires.replace(microsecond=0).isoformat().replace("+00:00", "Z")
     monkeypatch.setenv("EARTHDATA_TOKEN", _jwt(expires))
     monkeypatch.delenv("THEHEAT_RAINFALL_REGIONAL_SCAN", raising=False)
+    monkeypatch.setenv(gpm_runner.REFUSAL_BACKOFF_FLAG, "1")
     refused_at = (datetime.now(UTC) - timedelta(hours=1)).replace(microsecond=0).isoformat().replace("+00:00", "Z")
     bot_state = state_mod._fresh_state()
     bot_state["run_history"] = [_refused_row(refused_at, exp_iso)]
@@ -116,6 +136,22 @@ def test_runner_sends_no_request_inside_backoff_and_records_it(monkeypatch):
     outcomes = [a["outcome"] for a in entry["details"]["incident"]["attempts"]]
     assert outcomes == ["access_backoff"]
     assert bot_state["source_health"]["gpm_imerg"]["runs"][-1]["error_class"] == "auth"
+
+
+def test_backoff_flag_off_still_attempts_and_records_the_refusal(monkeypatch):
+    trap_network(monkeypatch.setattr)
+    expires = datetime.now(UTC) + timedelta(days=40)
+    exp_iso = expires.replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    monkeypatch.setenv("EARTHDATA_TOKEN", _jwt(expires))
+    monkeypatch.delenv("THEHEAT_RAINFALL_REGIONAL_SCAN", raising=False)
+    monkeypatch.delenv(gpm_runner.REFUSAL_BACKOFF_FLAG, raising=False)
+    seen: list = []
+    monkeypatch.setattr(gpm_imerg, "fetch_daily_precip", lambda **kwargs: seen.append(kwargs) or [])
+    refused_at = (datetime.now(UTC) - timedelta(hours=1)).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    bot_state = state_mod._fresh_state()
+    bot_state["run_history"] = [_refused_row(refused_at, exp_iso)]
+    gpm_runner.run_gpm_imerg(bot_state, {"id": "r", "sources": []}, [])
+    assert len(seen) == 1 and "access_backoff" not in seen[0]  # off: today's behaviour, one ordinary attempt
 
 
 def test_runner_records_a_refusal_once_and_leaves_normal_rows_unchanged(monkeypatch):

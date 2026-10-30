@@ -13,7 +13,7 @@ const FLAG_KEYS = [
   "pm25_forecast_auto_text_enabled", "dust_forecast_auto_text_enabled",
   "nhc_advisory_auto_text_enabled", "official_warning_auto_text_enabled", "nws_warning_auto_text_enabled",
   "regional_observed_enabled", "rainfall_window_provenance_enabled", "hazard_episodes_enabled", "portfolio_selection_enabled",
-  "rainfall_regional_scan_enabled",
+  "rainfall_regional_scan_enabled", "hms_previous_day_file_enabled", "earthdata_refusal_backoff_enabled",
 ]
 const CREDENTIAL_KEYS = ["anthropic", "gemini", "safety_gemini", "twitter", "bluesky", "nasa_firms", "earthdata", "github_state"]
 

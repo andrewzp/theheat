@@ -13,6 +13,9 @@ from src.orchestrator.common import *
 # W06.2 (default off): rotate the per-city legs through bounded blocks of the watchlist.
 SCAN_FLAG = "THEHEAT_RAINFALL_REGIONAL_SCAN"
 SCAN_DEADLINE_S = 900.0
+# A3 (default OFF): after a provider refusal of the same Earthdata credential, skip GPM requests on
+# the bounded 6 h / 24 h / 72 h schedule. Exactly "1" enables; refusals are recorded either way.
+REFUSAL_BACKOFF_FLAG = "THEHEAT_EARTHDATA_REFUSAL_BACKOFF"
 
 
 def scan_blocks(cities: list[dict], block: int) -> tuple[list[str], list[list[int]]]:
@@ -81,7 +84,8 @@ def run_gpm_imerg(
     credential_expires_at = source_access.credential_identity(expiry, configured=bool(token))["expires_at"]
     now = datetime.now(timezone.utc)
     backoff = (source_access.refusal_backoff(bot_state.get("run_history"), credential_expires_at=credential_expires_at,
-                                             now=now) if token else None)
+                                             now=now)
+               if token and os.environ.get(REFUSAL_BACKOFF_FLAG) == "1" else None)
     access = {"access_backoff": backoff} if backoff else {}
 
     def details() -> dict:

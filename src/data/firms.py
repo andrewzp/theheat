@@ -324,6 +324,11 @@ def _in_north_america(lat: float, lon: float) -> bool:
     return lat_min <= lat <= lat_max and lon_min <= lon <= lon_max
 
 
+# A3 (default OFF): read the previous UTC day's HMS file once when the current day's
+# file is not yet published. Exactly "1" enables; off keeps the single current-day read.
+HMS_PREVIOUS_DAY_FLAG = "THEHEAT_HMS_PREVIOUS_DAY_FILE"
+
+
 def _hms_url(day: date) -> str:
     return f"{HMS_FIRE_URL}/{day:%Y}/{day:%m}/hms_fire{day:%Y%m%d}.txt"
 
@@ -343,6 +348,12 @@ def _fetch_fires_hms(frp_min: float, *, attempts: list[dict[str, Any]] | None = 
     ``endpoint_missing``. This is the same product, not a second witness.
     """
     current = today or datetime.now(UTC).date()
+    if os.environ.get(HMS_PREVIOUS_DAY_FLAG) != "1":
+        url = _hms_url(current)
+        rows = _read_leg(url, HMS_PRODUCT, product_id="firms.noaa_hms", window="current_utc_day_file",
+                         region="north_america", parser=_HMS_PARSER, attempts=attempts)
+        return [_event(row, url, leg="noaa_hms") for row in rows
+                if row.frp is not None and row.frp >= frp_min and _in_north_america(row.lat, row.lon)]
     for offset, window in ((0, "current_utc_day_file"), (1, "previous_utc_day_file")):
         url = _hms_url(current - timedelta(days=offset))
         try:
