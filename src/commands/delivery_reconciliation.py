@@ -8,7 +8,9 @@ attempt is supplied. Confirming writes the receipt onto the ledger row only;
 the existing publisher reconciliation (``posting._reconcile_publish_ledger``)
 repairs the draft. Cancelling withdraws the draft's approval and records the
 cancellation, keeping every delivery field; delivered content cannot be
-cancelled. Decisions are idempotent by ``reconciliation_id`` on the row itself,
+cancelled. Withdrawal does not settle transport: an exact later receipt may
+still confirm that attempt, retaining the withdrawal and never permitting retry.
+Decisions are idempotent by ``reconciliation_id`` on the row itself,
 so a reload or a repeated request is ``unchanged`` and a reused identifier with
 a different request is refused.
 
@@ -113,8 +115,9 @@ def inspect(state: dict) -> dict:
         confirmed = bool(row.get("tweet_id"))
         cancelled = bool(row.get("operator_cancellation"))
         conflicts = bool(row.get("attempt_conflicts"))
-        open_attempt = not (confirmed or cancelled or conflicts or draft is None)
-        actions = ([] if row.get("phase") == "not_sent" else ["confirm"]) + ["cancel"] if open_attempt else []
+        open_attempt = not (confirmed or conflicts or draft is None)
+        actions = (([] if row.get("phase") == "not_sent" else ["confirm"])
+                   + ([] if cancelled else ["cancel"])) if open_attempt else []
         rows.append({
             "event_id": event_id, "draft_id": draft.get("id") if draft else None,
             "phase": "confirmed" if confirmed else str(row.get("phase") or "legacy_unknown"),
@@ -170,7 +173,6 @@ def decide(state: dict, request: Any, *, actor: str, at: str) -> tuple[dict, dic
                          "event_id": request["event_id"], "phase": target.get("phase")}
     receipt = request["receipt"]
     _require(not row.get("tweet_id"), "attempt_already_confirmed")
-    _require(not row.get("operator_cancellation"), "attempt_cancelled")
     _require(row.get("phase") != "not_sent", "attempt_proven_not_sent")
     _require(isinstance(row.get("text"), str) and receipt["text"] == row["text"], "receipt_text_mismatch")
     _require(isinstance(row.get("at"), str) and _utc(receipt["created_at"]) >= _utc(row["at"]), "receipt_predates_attempt")

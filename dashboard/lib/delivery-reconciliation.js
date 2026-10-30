@@ -2,6 +2,7 @@
 // Mirrors src/commands/delivery_reconciliation.py exactly; both are checked against
 // tests/fixtures/w14_delivery_reconciliation_vectors.json. Unknown stays unknown
 // without a receipt whose text, time and media description match the attempt.
+// Approval withdrawal cannot erase transport evidence or prevent a late receipt.
 import { createHash } from "node:crypto"
 import { decisionRevision, draftIdentity, fingerprint, revokeApproval } from "./draft-revisions.js"
 
@@ -71,8 +72,8 @@ export function inspectReconciliation(state) {
     try { current = draft ? draftIdentity(draft) : null; revision = draft ? decisionRevision(draft) : null } catch { current = null; revision = null }
     const confirmed = Boolean(row.tweet_id), cancelled = Boolean(row.operator_cancellation)
     const conflicts = Boolean(Array.isArray(row.attempt_conflicts) ? row.attempt_conflicts.length : row.attempt_conflicts)
-    const open = !(confirmed || cancelled || conflicts || draft === null)
-    const actions = open ? [...(row.phase === "not_sent" ? [] : ["confirm"]), "cancel"] : []
+    const open = !(confirmed || conflicts || draft === null)
+    const actions = open ? [...(row.phase === "not_sent" ? [] : ["confirm"]), ...(cancelled ? [] : ["cancel"])] : []
     return {
       event_id: eventId, draft_id: draft ? draft.id ?? null : null,
       phase: confirmed ? "confirmed" : String(row.phase || "legacy_unknown"),
@@ -124,7 +125,6 @@ export function decideReconciliation(state, rawRequest, { actor, at }) {
   }
   const receipt = request.receipt
   need(!row.tweet_id, "attempt_already_confirmed")
-  need(!row.operator_cancellation, "attempt_cancelled")
   need(row.phase !== "not_sent", "attempt_proven_not_sent")
   need(typeof row.text === "string" && receipt.text === row.text, "receipt_text_mismatch")
   need(typeof row.at === "string" && utc(receipt.created_at) >= utc(row.at), "receipt_predates_attempt")
