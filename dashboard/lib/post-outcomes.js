@@ -153,6 +153,24 @@ function correctionsFor(tweetId, report) {
   return { status: candidates.length ? "candidates" : incomplete.length ? "evidence_needed" : "none_supplied", candidates, incomplete }
 }
 
+// The coverage class/region a delivered post was logged under, joined only by the
+// receipt's exact event ID. One distinct class/region is required; the log is
+// output geography, never a recall denominator or evidence of worldwide coverage.
+const COVERAGE_TEXT = /^[^\u0000-\u001f]{1,80}$/
+function coverageFor(eventIds, log) {
+  if (!Array.isArray(log)) return { status: "not_loaded", rows: 0 }
+  const matches = log.filter(row => object(row) && eventIds.has(row.event_id))
+  if (!matches.length) return { status: "not_recorded", rows: 0 }
+  const readable = matches.filter(row => ["cls", "continent", "country"].every(key => typeof row[key] === "string" && COVERAGE_TEXT.test(row[key])))
+  const distinct = new Map(readable.map(row => [JSON.stringify([row.cls, row.continent, row.country]), row]))
+  if (readable.length !== matches.length) return { status: "unknown", rows: matches.length }
+  if (distinct.size !== 1) return { status: "conflict", rows: matches.length }
+  const row = [...distinct.values()][0]
+  return { status: "recorded", rows: matches.length, coverage_class: row.cls, continent: row.continent, country: row.country,
+    date: typeof row.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(row.date) ? row.date : null,
+    scope: "output_geography_not_recall" }
+}
+
 export function postOutcomes(rawState, { now = Date.now(), feedbackRecords = null, correctionReport = null } = {}) {
   const clock = now instanceof Date ? now.getTime() : now
   if (!Number.isFinite(clock) || !Number.isFinite(new Date(clock).getTime())) throw new TypeError("Outcome history requires a valid clock")
@@ -250,6 +268,7 @@ export function postOutcomes(rawState, { now = Date.now(), feedbackRecords = nul
     last.evidence_needed = evidenceNeeded(last)
     last.feedback = feedbackFor(tweet_id, feedbackRecords)
     last.corrections = correctionsFor(tweet_id, correctionReport)
+    last.coverage = coverageFor(new Set((receipts.get(tweet_id) || []).map(row => row.event_id).filter(nonblank)), state.coverage_log)
   }
   results.sort((a, b) => a.tweet_id.localeCompare(b.tweet_id))
   return { status: results.length ? "retained" : inventoryKnown ? "no_retained_receipts" : "unknown", posts: results }
