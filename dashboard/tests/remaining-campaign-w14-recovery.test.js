@@ -38,7 +38,10 @@ test("fresh-process journey output is readable on every surface with exact histo
   assert.deepEqual(published.history.filter(h => h.kind === "attempt").map(h => h.entry.phase), ["confirmed"])
   const operations = projectRecoveredRecord(draftOf(state, "w14j-cancelled"), state, { surface: "operations" })
   assert.equal(operations.attempt.cancelled, true); assert.equal(operations.attempt.phase, "unknown")
-  assert.deepEqual(operations.actions, [])
+  // Withdrawal prevents another send, but must not hide a genuine late receipt.
+  assert.deepEqual(operations.actions, ["confirm"])
+  assert.equal(operations.actions.includes("retry"), false)
+  assert.equal(operations.actions.includes("approve"), false)
   assert.ok(operations.holds.some(h => h.code === "unknown_delivery_never_retried"))
   assert.ok(operations.holds.some(h => h.code === "intent_cancelled"))
   const imported = projectRecoveredState(state, { surface: "editor", provenance })

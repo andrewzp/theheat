@@ -36,7 +36,10 @@ state=json.loads(value['raw_state'])
 sys.stdout.buffer.write(build_preview(value['request'],policy_sha=value['policy'],runtime_sha=value['runtime'],read_state=lambda:state,budget=Budget()))
 `
 export function pythonJSON(code, input) {
-  const result = spawnSync(python, ["-c", code], { cwd: root, input: JSON.stringify(input), encoding: "utf8", timeout: 60000,
+  // Keep the original deadline and assertions. A slow child leaves bounded
+  // stack evidence instead of only an empty stderr/SIGTERM after 60 seconds.
+  const diagnostic = "import faulthandler\nfaulthandler.dump_traceback_later(15, repeat=True)\n"
+  const result = spawnSync(python, ["-c", diagnostic + code], { cwd: root, input: JSON.stringify(input), encoding: "utf8", timeout: 60000,
     env: { PATH: process.env.PATH, HOME: "/nonexistent-invented-gist-test", LC_ALL: "C", LANG: "C", NETRC: "/dev/null",
       PYTHON_DOTENV_DISABLED: "1", PYTHONDONTWRITEBYTECODE: "1", NO_PROXY: "*", no_proxy: "*",
       // The invented local media store for store-backed families (never a credential).
