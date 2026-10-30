@@ -142,8 +142,27 @@ def run_firms(bot_state: BotState, current_run: dict | None) -> None:
         _record_source_run(
             current_run, bot_state, "firms", firms_start,
             status="failed", error=str(e), details=_incident_details(attempts),
+            error_class=_incident_error_class(attempts),
         )
     return
+
+
+# The failing leg's own outcome classifies the run. The generic text classifier
+# reads any "404" as an auth failure; a missing endpoint or an unpublished dated
+# file is not a credential problem and must not send the owner to the key.
+_OUTCOME_ERROR_CLASS = {"endpoint_missing": "endpoint_missing", "granule_missing": "granule_missing",
+                        "access_refused": "auth", "access_expired": "auth", "access_not_configured": "auth",
+                        "rate_limited": "http429", "provider_error": "http5xx", "transport_failure": "connection",
+                        "malformed": "parse", "stale_product": "stale_product"}
+
+
+def _incident_error_class(attempts: list[dict]) -> str | None:
+    """Error class of the last failing leg reached; None keeps the generic text classifier."""
+    for item in reversed(attempts):
+        outcome = item.get("outcome") if isinstance(item, dict) else None
+        if outcome in _OUTCOME_ERROR_CLASS:
+            return _OUTCOME_ERROR_CLASS[outcome]
+    return None
 
 
 def _fetch_firms_with_attempts(attempts: list[dict]):

@@ -134,8 +134,12 @@ def test_firms_runner_incident_journey_reaches_run_history_and_projection(offlin
 
     entry, _ = _run(bot_state, 2, offline, {p: (503, "busy") for p in ("VIIRS_NOAA21_NRT", "VIIRS_NOAA20_NRT", "MODIS_NRT")})
     outcomes = [(a["product_id"], a["outcome"]) for a in entry["details"]["incident"]["attempts"]]
+    # HMS: the current UTC day's file may not be published yet (granule_missing); the previous
+    # day's file is read once, and only its absence is a missing endpoint.
     assert outcomes == [("firms.viirs_noaa21_nrt", "provider_error"), ("firms.viirs_noaa20_nrt", "provider_error"),
-                        ("firms.modis_nrt", "provider_error"), ("firms.noaa_hms", "endpoint_missing")]
+                        ("firms.modis_nrt", "provider_error"), ("firms.noaa_hms", "granule_missing"),
+                        ("firms.noaa_hms", "endpoint_missing")]
+    assert bot_state["source_health"]["firms"]["runs"][-1]["error_class"] == "endpoint_missing"  # not "auth"
     # The fixed public text names neither the key nor the URL.
     assert INVENTED_KEY not in json.dumps(bot_state["source_health"]) + json.dumps(bot_state["run_history"])
 

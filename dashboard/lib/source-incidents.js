@@ -7,11 +7,11 @@ export const INCIDENT_SCHEMA = "theheat.source-incident/v1"
 
 const QUALIFIED = new Set(["qualified"])
 const REACHABLE_UNQUALIFIED = new Set(["empty_success", "stale_product", "malformed"])
-const ACCESS_HOLDS = new Set(["access_refused", "access_expired", "access_not_configured"])
+const ACCESS_HOLDS = new Set(["access_refused", "access_expired", "access_not_configured", "access_backoff"])
 const KNOWN = new Set([
   "qualified", "empty_success", "stale_product", "malformed", "endpoint_missing", "access_refused",
-  "access_expired", "access_not_configured", "rate_limited", "provider_error", "transport_failure",
-  "granule_missing", "not_attempted",
+  "access_expired", "access_not_configured", "access_backoff", "rate_limited", "provider_error",
+  "transport_failure", "granule_missing", "not_attempted",
 ])
 
 export const INCIDENT_LABELS = Object.freeze({
@@ -27,6 +27,7 @@ export const OUTCOME_TEXT = Object.freeze({
   access_refused: "Provider refused access; owner account/key check required.",
   access_expired: "Credential expired; owner renewal required. No request was sent.",
   access_not_configured: "Credential not configured; no request was sent.",
+  access_backoff: "Provider refused this same credential recently; no request was sent inside its backoff.",
   empty_success: "Provider answered with no product rows; not recovery.",
   stale_product: "Provider answered with stale rows only; not recovery.",
   malformed: "Provider answered with something other than the product; not recovery.",

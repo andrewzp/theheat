@@ -146,6 +146,13 @@ export function SourcesView({ sources, stats, trace = null }) {
               </ul>
             )}
             <RainfallReadiness source={s.source} readiness={s.rainfall_readiness} />
+            {s.access_health && (
+              <div className="source-outcome" data-access-stage={s.access_health.stage} data-testid={`${s.source}-access-health`}>
+                <strong>Access and last good data</strong> — {s.access_health.public_text}
+                {s.access_health.backoff ? ` ${s.access_health.backoff.consecutive_refusals} consecutive refusal(s); no request inside the backoff.` : ""}
+                {" "}An empty or model-served feed is not current coverage.
+              </div>
+            )}
             {s.last_error && !s.served_via && (
               <div
                 className={`source-diagnostic ${sourceDiagnosticClass(s.health)}`}
