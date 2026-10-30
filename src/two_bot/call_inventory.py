@@ -63,6 +63,37 @@ class UndeclaredCallError(RuntimeError):
     """A physical call stage without a declaration; refused before egress."""
 
 
+class OperationCancelled(RuntimeError):
+    """The work's deadline passed; refused before egress, never counted as a call."""
+
+    def __init__(self, reason: str):
+        super().__init__(f"operation_cancelled:{reason}")
+        self.reason = reason
+
+
+class CancelToken:
+    """Cooperative cancellation for one unit of worker work (e.g. a timed-out source runner).
+
+    A Python thread cannot be killed safely; once cancelled, every later
+    ``consume`` in that work's context refuses before egress, so a worker that
+    outlives its deadline buys no further provider/data/platform/hosting call.
+    A request already in flight keeps its existing (unknown/spent) accounting.
+    """
+
+    def __init__(self, scope: str):
+        self.scope = scope
+        self.reason: str | None = None
+
+    @property
+    def cancelled(self) -> bool:
+        return self.reason is not None
+
+    def cancel(self, reason: str) -> None:
+        with _LOCK:
+            if self.reason is None:
+                self.reason = reason
+
+
 class BackgroundLaneDisabled(RuntimeError):
     """An opt-in background lane is not exactly enabled; refused before construction."""
 
@@ -213,6 +244,7 @@ _RUNTIME_COUNTS: dict[str, int] = {}
 # join, by (stage, reason). Process-wide; visible in ``inventory()``.
 UNJOINED_REASONS = ("no_operation", "late_after_close")
 _UNJOINED: dict[tuple[str, str], int] = {}
+_CANCELLED: dict[str, int] = {}
 # Usage-observation attribution: shape owned by src.two_bot.usage_observations.
 _EVENT_ID = re.compile(CONTRACT["identifier_pattern"])
 
@@ -303,6 +335,16 @@ _ATTEMPT: ContextVar[_Join | None] = ContextVar("theheat_attempt_join", default=
 _DISPATCH: ContextVar[tuple[str, dict] | None] = ContextVar("theheat_dispatch_attribution", default=None)
 # (allowance, stage): physical attempts counted exactly per context, never by process-wide deltas.
 _ALLOWANCE: ContextVar[tuple[Any, str] | None] = ContextVar("theheat_allowance_attempts", default=None)
+_CANCEL: ContextVar[CancelToken | None] = ContextVar("theheat_cancel_token", default=None)
+
+
+def run_cancellable(token: CancelToken, fn: Callable[..., _T], /, *args: Any, **kwargs: Any) -> _T:
+    """Run ``fn`` with ``token`` governing every later physical call in its context."""
+    saved = _CANCEL.set(token)
+    try:
+        return fn(*args, **kwargs)
+    finally:
+        _CANCEL.reset(saved)
 
 
 def submit_in_context(executor: Any, fn: Callable[..., _T], /, *args: Any, **kwargs: Any) -> Any:
@@ -368,6 +410,11 @@ def consume(stage: str, *, provider: str | None = None, model: str | None = None
     chosen = provider if provider is not None else found.providers[0]
     if chosen not in found.providers:
         raise UndeclaredCallError("undeclared_call_provider")
+    token = _CANCEL.get()
+    if token is not None and token.cancelled:
+        with _LOCK:
+            _CANCELLED[stage] = _CANCELLED.get(stage, 0) + 1
+        raise OperationCancelled(str(token.reason))
     if ARCHIVE_CAPTURE.get(stage) == "uncaptured_model":
         _refuse_uncaptured_in_open_archive()
     allowance = _ALLOWANCE.get()
@@ -431,8 +478,11 @@ def unjoined_calls() -> dict:
     """Process-wide physical calls with no live operation join; spent, never free."""
     with _LOCK:
         rows = sorted(_UNJOINED.items())
+    with _LOCK:
+        cancelled = sorted(_CANCELLED.items())
     return {"by_stage": [{"stage": stage, "reason": reason, "physical_calls": n} for (stage, reason), n in rows],
-            "total": sum(n for _, n in rows), "scope": "process_local", "actual_cost_known": False}
+            "total": sum(n for _, n in rows), "scope": "process_local", "actual_cost_known": False,
+            "cancelled_before_egress": [{"stage": stage, "refused_calls": n} for stage, n in cancelled]}
 
 
 def inventory() -> dict:
@@ -646,7 +696,7 @@ def record_operation_cost(current_run: dict | None, row: dict, *, join: _Join | 
 
 
 __all__ = ["ATTRIBUTION_STATUSES", "BACKGROUND_LANES", "BackgroundLaneDisabled", "CEILING_KINDS", "CallDeclaration",
-           "CallTicket", "DECLARATIONS", "consume_provider_stage", "OPERATIONS", "OperationAllowance", "PATH_CEILINGS",
+           "CallTicket", "CancelToken", "OperationCancelled", "run_cancellable", "DECLARATIONS", "consume_provider_stage", "OPERATIONS", "OperationAllowance", "PATH_CEILINGS",
            "UNJOINED_REASONS", "UndeclaredCallError", "background_lane_enabled", "close_attempt_join", "consume",
            "current_attempt_join", "declaration", "in_copied_context", "inventory", "open_attempt_join",
            "operation_cost_row", "operation_scope", "record_operation_cost", "require_background_lane",

@@ -258,3 +258,42 @@ def test_every_thread_boundary_in_src_propagates_or_is_a_declared_unjoined_data_
     for name in data_pools:
         assert "provider_call" not in (root / name).read_text()
 
+
+
+@pytest.mark.parametrize("concurrent", [False, True])
+def test_a_timed_out_runner_buys_no_further_call_after_its_deadline(monkeypatch, concurrent):
+    """Counterexample on the base: the runner kept sending after its budget expired."""
+    monkeypatch.setattr(inv, "_CANCELLED", {})
+    release, finished = threading.Event(), threading.Event()
+    outcome: dict = {}
+
+    def slow_runner():
+        inv.consume("source_http_get", join=False)
+        release.wait(5)
+        try:
+            inv.consume("source_http_get", join=False)
+            outcome["late"] = "sent"
+        except inv.OperationCancelled as exc:
+            outcome["late"] = exc.reason
+        finally:
+            finished.set()
+
+    runner = scheduler.SourceRunner("invented_slow", slow_runner)
+    run: dict = {}
+    before = inv.runtime_counts().get("source_http_get", 0)
+    scheduler.run_stage1_sources(_bot_state(), run, serial_runners=[] if concurrent else [runner],
+                                 concurrent_runners=[runner] if concurrent else [], budget_seconds=0.2)
+    release.set()
+    assert finished.wait(5)
+    assert outcome["late"] == "runner_budget_exceeded"
+    assert inv.runtime_counts()["source_http_get"] == before + 1  # Only the in-budget call was made.
+    assert inv.unjoined_calls()["cancelled_before_egress"] == [{"stage": "source_http_get", "refused_calls": 1}]
+
+
+def test_an_uncancelled_token_changes_nothing():
+    token = inv.CancelToken("invented")
+    assert inv.run_cancellable(token, lambda: inv.consume("source_http_get", join=False).stage) == "source_http_get"
+    token.cancel("first")
+    token.cancel("second")
+    with pytest.raises(inv.OperationCancelled, match="first"):
+        inv.run_cancellable(token, inv.consume, "source_http_get", join=False)
