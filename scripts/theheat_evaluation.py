@@ -6,6 +6,8 @@ match-coverage         intake record + saved state -> coverage assessment with m
 metrics-intake         saved state + supplied X API lookup response -> new state copy + report
 route-evaluation       saved state -> per-route factual/editorial evaluation columns
 correction-candidates  saved state + supplied discrepancies -> review-only candidates
+experiment-plan        weekly review's selected improvement + arm spec -> frozen default-off plan
+experiment-accept      frozen plan + supplied bound result -> HOLD / PROMOTE_RECOMMENDED decision
 
 Reads only the named files and writes only the named new output file. No
 network, model, Gist, platform or database access; nothing is published,
@@ -84,6 +86,14 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--state", type=Path, required=True)
     p.add_argument("--discrepancies", type=Path, required=True)
     p.add_argument("--output", type=Path, required=True)
+    p = sub.add_parser("experiment-plan")
+    p.add_argument("--weekly-review", type=Path, required=True)
+    p.add_argument("--spec", type=Path, required=True)
+    p.add_argument("--output", type=Path, required=True)
+    p = sub.add_parser("experiment-accept")
+    p.add_argument("--plan", type=Path, required=True)
+    p.add_argument("--result", type=Path, required=True)
+    p.add_argument("--output", type=Path, required=True)
     try:
         args = parser.parse_args(argv)
     except SystemExit as exc:
@@ -113,6 +123,12 @@ def main(argv: list[str] | None = None) -> int:
                 human_comparisons=_json(args.human_comparisons) if args.human_comparisons else None,
                 counterexample_text_sha256s=set(_json(args.counterexamples)) if args.counterexamples else None,
                 execution="invented_fixture" if args.invented_fixture else "retained_runtime")
+        elif args.command == "experiment-plan":
+            from src.evaluation import experiment_plan
+            result = experiment_plan.plan_from_weekly_review(_json(args.weekly_review), _json(args.spec))
+        elif args.command == "experiment-accept":
+            from src.evaluation import experiment_plan
+            result = experiment_plan.accept(_json(args.plan), _json(args.result))
         else:
             from src.evaluation import correction_candidates
             result = correction_candidates.prepare(_json(args.state), _json(args.discrepancies))

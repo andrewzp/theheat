@@ -113,4 +113,27 @@ def accept(plan: dict, result: dict) -> dict:
             "rollback": plan["rollback"] if decision == "PROMOTE_RECOMMENDED" else None}
 
 
-__all__ = ["PlanError", "REQUIRED_CHECKS", "RESULT_SCHEMA", "SCHEMA", "accept", "prepare_plan"]
+WEEKLY_REVIEW_KIND = "weekly_retained_outcome_review"
+_SPEC_KEYS = {"question", "arms", "allowance"}
+_SPEC_OPTIONAL = {"minimum_supplied_ratings", "max_factual_failure_increase"}
+
+
+def plan_from_weekly_review(review: Any, spec: Any) -> dict:
+    """Freeze a plan for the weekly review's own selected improvement.
+
+    The improvement is copied from the supplied review, never from the spec, so
+    an experiment cannot drift from what the weekly reader selected. Owner
+    actions (expired access, missing inputs) are not experimentable and refuse.
+    """
+    _require(isinstance(review, dict) and review.get("kind") == WEEKLY_REVIEW_KIND
+             and isinstance(review.get("report_id"), str) and bool(_SHA.fullmatch(review["report_id"])), "weekly_review")
+    improvement = review.get("improvement")
+    _require(isinstance(improvement, dict), "weekly_review_improvement")
+    _require(isinstance(spec, dict) and _SPEC_KEYS <= set(spec) <= _SPEC_KEYS | _SPEC_OPTIONAL, "spec_shape")
+    selected = {**deepcopy(improvement), "weekly_review_id": review["report_id"]}
+    return prepare_plan(question=spec["question"], improvement=selected, arms=spec["arms"], allowance=spec["allowance"],
+                        **{key: spec[key] for key in _SPEC_OPTIONAL if key in spec})
+
+
+__all__ = ["PlanError", "REQUIRED_CHECKS", "RESULT_SCHEMA", "SCHEMA", "WEEKLY_REVIEW_KIND", "accept",
+           "plan_from_weekly_review", "prepare_plan"]
