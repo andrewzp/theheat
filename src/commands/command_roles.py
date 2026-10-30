@@ -36,7 +36,8 @@ class OperatorCommand:
     roles: frozenset[str]
     # None: the command targets no draft (source, coverage, report, generation,
     # candidate). Such a command may create pending drafts but never approve or
-    # remove one and never changes an existing draft's status.
+    # remove one. The verified GHCN source-result invalidation below is the sole
+    # exception for an existing draft: approved -> pending with approval cleared.
     from_statuses: frozenset[str] | None
     to_statuses: frozenset[str] | None
 
@@ -182,11 +183,13 @@ def _drafts(state: Any) -> dict[str, Any] | None:
     return rows
 
 
-def require_transitions(before: Any, after: Any, action: str, target_ids: tuple[str, ...] = ()) -> None:
+def require_transitions(before: Any, after: Any, action: str, target_ids: tuple[str, ...] = (), *,
+                        source_invalidation_ids: tuple[str, ...] = ()) -> None:
     """Refuse a reduction whose draft-status effect lies outside the action's binding.
 
     Called inside the authority transaction after the reducer, so a refusal
-    becomes a terminal rejected result with no state change.
+    becomes a terminal rejected result with no state change. Source invalidation
+    IDs come only from the verified source transition, never command payloads.
     """
     old, new = _drafts(before), _drafts(after)
     if old is None or new is None:
@@ -195,6 +198,7 @@ def require_transitions(before: Any, after: Any, action: str, target_ids: tuple[
     if set(old) - set(new):
         raise RoleError("transition_not_allowed", "A command cannot remove a retained draft")
     targets = set(target_ids)
+    invalidations = set(source_invalidation_ids) if action == "commit_ghcn_source_run" and not targets else set()
     for draft_id, status in new.items():
         prior = old.get(draft_id)
         if draft_id not in old:
@@ -206,6 +210,14 @@ def require_transitions(before: Any, after: Any, action: str, target_ids: tuple[
                 raise RoleError("transition_not_allowed", "This action cannot produce that draft status")
             continue
         if status != prior:
+            if draft_id in invalidations and prior == "approved" and status == "pending":
+                draft = next(d for d in after["drafts"] if isinstance(d, Mapping) and d.get("id") == draft_id)
+                if draft.get("approval_mode") == "manual" and not any(key in draft for key in (
+                        "approval_binding", "approved_at", "auto_approve_at", "auto_approve_requested_at",
+                        "autoship_on_critic_pass", "review_binding")):
+                    # The source helper retains old publish-intent fields as
+                    # historical evidence; they do not restore cleared approval.
+                    continue
             raise RoleError("transition_not_allowed", "This action cannot change another draft's status")
 
 

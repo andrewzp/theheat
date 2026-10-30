@@ -66,7 +66,7 @@ def _command(raw: bytes, digest: str) -> Command:
         raise p.ProjectionError("corrupt_command_intent") from None
 
 
-def _bind_transitions(state: dict, reduction, command: Command) -> None:
+def _bind_transitions(state: dict, reduction, command: Command, *, source_invalidation_ids: tuple[str, ...] = ()) -> None:
     """Every domain reduction stays inside its role/command transition binding.
 
     A violation is an implementation fault, not operator input: it rolls back
@@ -74,7 +74,8 @@ def _bind_transitions(state: dict, reduction, command: Command) -> None:
     """
     from src.commands.command_roles import RoleError, require_transitions
     try:
-        require_transitions(state, reduction.state, command.action, tuple(t.draft_id for t in command.targets))
+        require_transitions(state, reduction.state, command.action, tuple(t.draft_id for t in command.targets),
+                            source_invalidation_ids=source_invalidation_ids)
     except RoleError as exc:
         raise RuntimeError(exc.code) from None
 
@@ -945,7 +946,13 @@ class PostgresCommandAuthority:
                             reduction = media_transition.reduction
                         else:
                             reduction = reduce_command(state, command, actor, now=clock, policy=policy, editorial_policy=editorial_policy)
-                        _bind_transitions(state, reduction, command)
+                        # GHCN prepare computed these IDs after exact replay and
+                        # locked target ownership checks. Payload/command targets
+                        # and reused source outcomes cannot grant this exception.
+                        invalidated = tuple(source_transition.outcome.get("changed_draft_ids", ())) if (
+                            command.action == ghcn_source.ACTION and source_transition is not None
+                            and source_transition.state_changed and source_transition.outcome.get("reused") is False) else ()
+                        _bind_transitions(state, reduction, command, source_invalidation_ids=invalidated)
                         result = {"status": "applied" if reduction.changed_ids else "unchanged", "changed_ids": list(reduction.changed_ids),
                                   "identities": list(reduction.identities), "publish_intent_id": reduction.publish_intent_id}
                         if source_transition is not None:
