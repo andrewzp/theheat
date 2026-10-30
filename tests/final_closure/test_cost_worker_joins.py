@@ -11,6 +11,7 @@ from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import threading
 from types import SimpleNamespace
+from typing import Any, cast
 
 import pytest
 
@@ -85,7 +86,7 @@ def test_writer_samples_join_the_candidate_attempt_and_keep_its_slot(monkeypatch
     budget = _budget()
     with inv.operation_scope("alerts") as join:
         assert budget.reserve("event:invented_heat_02")
-        slate = pipeline._writer_sample_slate(object(), object(), 2)
+        slate = pipeline._writer_sample_slate(cast(Any, object()), cast(Any, object()), 2)
         budget.settle("event:invented_heat_02", writer_started=False)
     assert len(slate) == 2 and join.dispatched() == 2
     assert budget.joined_requests == 2 and budget.refused_before_writer == 0
@@ -220,10 +221,14 @@ def test_an_unreserved_allowance_attempt_is_refused_before_egress():
     from src.data import newsworthiness as news
 
     allowance = news.news_discovery_allowance()
-    sent = []
+    sent: list[int] = []
+
+    def send():
+        inv.consume("newsworthiness_verify", provider="google")
+        sent.append(1)
+
     with pytest.raises(ValueError, match="unreserved_physical_attempt"):
-        news._counted(allowance, "newsworthiness_verify",
-                      lambda: (inv.consume("newsworthiness_verify", provider="google"), sent.append(1)))
+        news._counted(allowance, "newsworthiness_verify", send)
     assert sent == [] and allowance.outcomes["newsworthiness_verify"]["unavailable"] == 1
 
 
