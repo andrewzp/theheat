@@ -113,7 +113,7 @@ class Spies:
 
 
 def offline_world(monkeypatch):
-    """Every real source runner offline (connections counted and refused), invented
+    """Every real source runner offline (transport attempts counted and refused), invented
     FIRMS detections at the adapter boundary and the offline stage spies installed."""
     import socket
     from types import SimpleNamespace
@@ -122,10 +122,16 @@ def offline_world(monkeypatch):
 
     connects: list = []
 
-    def refused(self, address, *args, **kwargs):
-        connects.append(address)  # Every attempted source connection, counted and refused.
+    def refused_lookup(host, port, *args, **kwargs):
+        connects.append((host, port))  # Refuse before a DNS request can leave the fixture.
         raise OSError("network refused: invented operation test")
+
+    def refused(self, address, *args, **kwargs):
+        connects.append(address)  # Direct IP connections cannot bypass the DNS refusal.
+        raise OSError("network refused: invented operation test")
+    monkeypatch.setattr(socket, "getaddrinfo", refused_lookup)
     monkeypatch.setattr(socket.socket, "connect", refused)
+    monkeypatch.setattr(socket.socket, "connect_ex", refused)
     # Offline runners retry their refused requests with real backoff sleeps. Only
     # the waiting is removed; the number of attempts (counted above) is unchanged.
     monkeypatch.setattr("time.sleep", lambda seconds: None)
@@ -170,3 +176,9 @@ def isolate_firms(monkeypatch) -> None:
     main = importlib.import_module("src.main")
     for name in OTHER_ALERT_RUNNERS:
         monkeypatch.setattr(main, name, lambda *args, **kwargs: None, raising=False)
+    # The facade assigns into each split module without monkeypatch knowing.
+    # Register those runner replacements too, so teardown restores every owner.
+    for module in main._SYNC_MODULES:
+        for name in OTHER_ALERT_RUNNERS:
+            if hasattr(module, name):
+                monkeypatch.setattr(module, name, lambda *args, **kwargs: None)

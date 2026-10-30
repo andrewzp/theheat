@@ -11,13 +11,14 @@ from __future__ import annotations
 
 from datetime import date
 import importlib
+import socket
 import sys
 
 import pytest
 
 from src.data.open_meteo import CityTemp
 from src.editorial.scoring import EditorialScore
-from tests.operation_budget_helpers import fresh_state, offline_world
+from tests.operation_budget_helpers import OTHER_ALERT_RUNNERS, fresh_state, isolate_firms, offline_world
 
 alerts_mod = importlib.import_module("src.orchestrator.run_alerts")
 hot10_mod = importlib.import_module("src.orchestrator.hot10")
@@ -28,6 +29,27 @@ WARNING_SCORE = EditorialScore("official_warning", 80, 80, 80, 80, 80, 0, 80, 60
 @pytest.fixture
 def world(monkeypatch):
     return offline_world(monkeypatch)
+
+
+def test_offline_world_refuses_dns_and_both_connection_paths(world):
+    with pytest.raises(OSError, match="network refused"):
+        socket.getaddrinfo("invented.invalid", 443)
+    with socket.socket() as transport:
+        for connect in (transport.connect, transport.connect_ex):
+            with pytest.raises(OSError, match="network refused"):
+                connect(("192.0.2.1", 443))
+    assert len(world.connects) == 3
+
+
+def test_firms_isolation_restores_every_compatibility_target(world, monkeypatch):
+    main = importlib.import_module("src.main")
+    originals = [(module, name, getattr(module, name)) for module in main._SYNC_MODULES
+                 for name in OTHER_ALERT_RUNNERS if hasattr(module, name)]
+    with monkeypatch.context() as scoped:
+        isolate_firms(scoped)
+        main._sync_compat_globals()
+        assert all(getattr(module, name) is not original for module, name, original in originals)
+    assert all(getattr(module, name) is original for module, name, original in originals)
 
 
 def run_alerts(*, warning=False):
