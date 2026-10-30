@@ -11,6 +11,7 @@ import base64
 from datetime import UTC, datetime, timedelta
 import json
 from pathlib import Path
+from typing import Any, cast
 
 import pytest
 import responses
@@ -45,10 +46,12 @@ def test_unpublished_current_hms_day_reads_yesterday_once_and_keeps_row_times(mo
     attempts: list = []
     fires = firms.fetch_fires(attempts=attempts)
     assert len(fires) == 1 and fires[0].source_leg == "noaa_hms"
-    assert fires[0].acquired_at.startswith(yesterday.strftime("%Y-%m-%d"))  # the row's own minute, not "today"
+    acquired_at = fires[0].acquired_at
+    assert acquired_at is not None
+    assert acquired_at.startswith(yesterday.strftime("%Y-%m-%d"))  # the row's own minute, not "today"
     hms = [(a["window"], a["outcome"]) for a in attempts if a["product_id"] == "firms.noaa_hms"]
     assert hms == [("current_utc_day_file", "granule_missing"), ("previous_utc_day_file", "qualified")]
-    hms_calls = [c.request.url for c in responses.calls if "hms_fire" in c.request.url]
+    hms_calls = [c.request.url for c in responses.calls if "hms_fire" in cast(str, c.request.url)]
     assert len(hms_calls) == 2  # bounded: today, then yesterday once; never a crawl
     incident = si.run_incident("firms", attempts)
     assert incident["product_state"] == "alternate_served" and incident["independent_source_upper_bound"] == 1
@@ -104,10 +107,12 @@ def test_backoff_schedule_is_per_credential_and_bounded():
     exp = "2026-12-30T00:00:00Z"
     now = datetime(2026, 10, 30, 12, tzinfo=UTC)
     one = [_refused_row("2026-10-30T09:00:00Z", exp)]
-    assert sa.refusal_backoff(one, credential_expires_at=exp, now=now)["next_attempt_after"] == "2026-10-30T15:00:00Z"
+    first = sa.refusal_backoff(one, credential_expires_at=exp, now=now)
+    assert first is not None and first["next_attempt_after"] == "2026-10-30T15:00:00Z"
     assert sa.refusal_backoff(one, credential_expires_at=exp, now=now + timedelta(hours=4)) is None  # 6 h elapsed
     three = one + [_refused_row("2026-10-29T09:00:00Z", exp), _refused_row("2026-10-28T09:00:00Z", exp)]
     backoff = sa.refusal_backoff(three, credential_expires_at=exp, now=now)
+    assert backoff is not None
     assert backoff["consecutive_refusals"] == 3 and backoff["next_attempt_after"] == "2026-11-02T09:00:00Z"
     # A renewed credential (different expiry claim) is tried at once; older refusals never hold it.
     assert sa.refusal_backoff(three, credential_expires_at="2027-01-15T00:00:00Z", now=now) is None
@@ -146,7 +151,12 @@ def test_backoff_flag_off_still_attempts_and_records_the_refusal(monkeypatch):
     monkeypatch.delenv("THEHEAT_RAINFALL_REGIONAL_SCAN", raising=False)
     monkeypatch.delenv(gpm_runner.REFUSAL_BACKOFF_FLAG, raising=False)
     seen: list = []
-    monkeypatch.setattr(gpm_imerg, "fetch_daily_precip", lambda **kwargs: seen.append(kwargs) or [])
+
+    def recording_fetch(**kwargs: Any) -> list:
+        seen.append(kwargs)
+        return []
+
+    monkeypatch.setattr(gpm_imerg, "fetch_daily_precip", recording_fetch)
     refused_at = (datetime.now(UTC) - timedelta(hours=1)).replace(microsecond=0).isoformat().replace("+00:00", "Z")
     bot_state = state_mod._fresh_state()
     bot_state["run_history"] = [_refused_row(refused_at, exp_iso)]
@@ -169,7 +179,7 @@ def test_runner_records_a_refusal_once_and_leaves_normal_rows_unchanged(monkeypa
     monkeypatch.setattr(gpm_imerg, "fetch_daily_precip", refused)
     monkeypatch.setattr(gpm_runner, "_trace_details", lambda trace: dict(refusal_details))
     bot_state = state_mod._fresh_state()
-    current_run = {"id": "r", "sources": []}
+    current_run: dict[str, Any] = {"id": "r", "sources": []}
     gpm_runner.run_gpm_imerg(bot_state, current_run, [])
     access = current_run["sources"][-1]["details"]["earthdata_access"]
     assert access["refused"] is True and access["backoff"] is None and access["refused_at"]
@@ -177,7 +187,7 @@ def test_runner_records_a_refusal_once_and_leaves_normal_rows_unchanged(monkeypa
     monkeypatch.setattr(gpm_imerg, "fetch_daily_precip", lambda **_k: [])
     monkeypatch.setattr(gpm_runner, "_trace_details", lambda trace: {"rainfall_opportunity": {}})
     bot_state2 = state_mod._fresh_state()
-    run2 = {"id": "r2", "sources": []}
+    run2: dict[str, Any] = {"id": "r2", "sources": []}
     gpm_runner.run_gpm_imerg(bot_state2, run2, [])
     assert "earthdata_access" not in run2["sources"][-1]["details"]
 

@@ -14,6 +14,7 @@ import json
 from pathlib import Path
 import random
 import tarfile
+from typing import Any, cast
 
 import pytest
 import requests
@@ -72,7 +73,7 @@ def noaa():
     # The first transfer drops after 40%; the resume must carry If-Range and get the same entity.
     server.route(PREFIX + "ghcnd_all.tar.gz", fx.truncated(archive, len(archive) * 2 // 5, '"e1"'),
                  fx.ranged(archive, '"e1"'))
-    server.files = files
+    cast(Any, server).files = files
     yield server
     server.close()
 
@@ -156,11 +157,11 @@ def test_resolve_fetch_package_install_then_the_bot_consumer_verifies(tmp_path, 
     manifest_fields = artifacts.read_manifest(installed)
     cache = tmp_path / "cache" / "station_thresholds.sqlite"
     fake = FakeRelease(rows=_release(asset)["assets"], blobs={asset.name: asset.read_bytes()})
-    assert artifacts.ensure_database(cache, manifest_fields, fake) == "verified_download"
+    assert artifacts.ensure_database(cache, manifest_fields, cast(Any, fake)) == "verified_download"
     # With the legacy manifest the same consumer refuses: the release has no such asset.
     with pytest.raises(artifacts.ArtifactError, match="threshold_baseline_asset_unavailable"):
         artifacts.ensure_database(tmp_path / "other.sqlite", artifacts.read_manifest(
-            Path(done["previous"]["retained_copy"])), FakeRelease())
+            Path(done["previous"]["retained_copy"])), cast(Any, FakeRelease()))
 
 
 def test_a_version_change_between_resolve_and_fetch_refuses_the_input_set(tmp_path, noaa, capsys):

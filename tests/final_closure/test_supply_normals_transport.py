@@ -14,6 +14,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 import threading
 import time
+from typing import Any
 
 import pytest
 
@@ -171,7 +172,7 @@ def test_cli_default_provider_is_the_bounded_meteostat_bulk_contract(tmp_path, m
     assert build_normals.main(["plan", "--cities", str(cities), "--installed", str(installed),
                                "--output", str(plan_path)]) == 0
     capsys.readouterr()
-    seen = {}
+    seen: dict[str, Any] = {}
 
     class Recorder(mn.MeteostatBulkProvider):
         def bind(self, limits, *, deadline_at, cancel):
@@ -317,7 +318,8 @@ def _transport(origin, **limit_overrides):
     values = {"max_requests": 5, "max_transfer_bytes": 100_000, "max_decoded_bytes": 100_000,
               "deadline_seconds": 1.0, "max_retries": 0}
     return bounded_http.BoundedTransport(bounded_http.Limits(**{**values, **limit_overrides}),
-                                         allowed_origins=[origin], **FAST)
+                                         allowed_origins=[origin], poll_seconds=FAST["poll_seconds"],
+                                         backoff_seconds=FAST["backoff_seconds"], connect_wait=FAST["connect_wait"])
 
 
 def test_tls_handshake_that_never_completes_is_bounded_by_the_deadline():
