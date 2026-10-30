@@ -5,7 +5,9 @@ reference-intake       supplied reference events/quiet periods -> intake record
 match-coverage         intake record + saved state -> coverage assessment with match evidence
 metrics-intake         saved state + supplied X API lookup response -> new state copy + report
 route-evaluation       saved state -> per-route factual/editorial evaluation columns
-correction-candidates  saved state + supplied discrepancies -> review-only candidates
+correction-candidates  saved state + supplied discrepancies and/or retained source findings -> review-only candidates
+copy-review-pack       saved state -> small private pack of recent copy with copy notes and feedback targets
+copy-comparison        saved state (+ optional supplied incumbent texts) -> descriptive copy-shape groups
 experiment-plan        weekly review's selected improvement + arm spec -> frozen default-off plan
 experiment-accept      frozen plan + supplied bound result -> HOLD / PROMOTE_RECOMMENDED decision
 
@@ -18,6 +20,7 @@ from __future__ import annotations
 import argparse
 from datetime import UTC, datetime
 import json
+import os
 from pathlib import Path
 import sys
 
@@ -49,6 +52,16 @@ def _write(path: Path, value) -> None:
         raise ValueError("output_exists")
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("x", encoding="utf-8") as handle:
+        handle.write(json.dumps(value, ensure_ascii=False, sort_keys=True, indent=1) + "\n")
+
+
+def _write_private(path: Path, value) -> None:
+    """Owner-only new file: review packs carry exact private copy."""
+    if path.exists():
+        raise ValueError("output_exists")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as handle:
         handle.write(json.dumps(value, ensure_ascii=False, sort_keys=True, indent=1) + "\n")
 
 
@@ -84,7 +97,24 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--output", type=Path, required=True)
     p = sub.add_parser("correction-candidates")
     p.add_argument("--state", type=Path, required=True)
-    p.add_argument("--discrepancies", type=Path, required=True)
+    p.add_argument("--discrepancies", type=Path, help="JSON list of supplied discrepancies")
+    p.add_argument("--from-source-findings", action="store_true",
+                   help="also derive discrepancies from retained contradicting source findings on confirmed posts")
+    p.add_argument("--output", type=Path, required=True)
+    p = sub.add_parser("copy-review-pack")
+    p.add_argument("--state", type=Path, required=True)
+    p.add_argument("--since", required=True)
+    p.add_argument("--until", required=True)
+    p.add_argument("--limit", type=int, default=12)
+    p.add_argument("--include-pending", action="store_true", help="also list pending/approved drafts")
+    p.add_argument("--exclude-draft", action="append", default=[], help="draft id to leave out (repeatable)")
+    p.add_argument("--output", type=Path, required=True)
+    p = sub.add_parser("copy-comparison")
+    p.add_argument("--state", type=Path, required=True)
+    p.add_argument("--since", required=True)
+    p.add_argument("--until", required=True)
+    p.add_argument("--policy-sha256", help="group drafts reviewed under this exact editorial policy")
+    p.add_argument("--incumbent-texts", type=Path, help="JSON list of private incumbent texts (aggregated only)")
     p.add_argument("--output", type=Path, required=True)
     p = sub.add_parser("experiment-plan")
     p.add_argument("--weekly-review", type=Path, required=True)
@@ -129,9 +159,28 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "experiment-accept":
             from src.evaluation import experiment_plan
             result = experiment_plan.accept(_json(args.plan), _json(args.result))
+        elif args.command == "copy-review-pack":
+            from src.evaluation import copy_review
+            statuses = ("posted", "rejected", "pending", "approved") if args.include_pending else copy_review.DEFAULT_STATUSES
+            result = copy_review.review_pack(_json(args.state), since=_time(args.since), until=_time(args.until),
+                                             limit=args.limit, statuses=statuses, exclude_ids=args.exclude_draft)
+            _write_private(args.output, result)
+            sys.stdout.write(json.dumps({"status": "written", "output": str(args.output), "items": len(result["items"])}) + "\n")
+            return 0
+        elif args.command == "copy-comparison":
+            from src.evaluation import copy_review
+            result = copy_review.compare(_json(args.state), since=_time(args.since), until=_time(args.until),
+                                         policy_sha256=args.policy_sha256,
+                                         incumbent_texts=_json(args.incumbent_texts) if args.incumbent_texts else None)
         else:
             from src.evaluation import correction_candidates
-            result = correction_candidates.prepare(_json(args.state), _json(args.discrepancies))
+            supplied = _json(args.discrepancies) if args.discrepancies else None
+            if args.from_source_findings:
+                result = correction_candidates.prepare_from_state(_json(args.state), supplied)
+            elif supplied is None:
+                raise ValueError("discrepancies_or_source_findings_required")
+            else:
+                result = correction_candidates.prepare(_json(args.state), supplied)
         _write(args.output, result)
     except (OSError, ValueError, KeyError, TypeError) as exc:
         sys.stdout.write(json.dumps({"status": "refused", "error": type(exc).__name__, "detail": str(exc)[:200]}) + "\n")
