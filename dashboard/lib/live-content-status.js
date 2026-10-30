@@ -6,8 +6,9 @@ import { latestIncidentState } from "./source-incidents.js"
 
 const OUTCOMES = Object.freeze({
   access_expired: ["Access expired", "Renew the expired credential (operator action). A stored key is not recovery."],
-  baseline_unavailable: ["Comparison baseline unavailable", "Rebuild and upload the checksum-bound station thresholds asset; the release currently has none."],
-  unqualified_input: ["Too few qualified inputs", "Qualified point normals are missing: run scripts/build_normals.py plan, then the bounded acquire and admit steps; Root installs the admitted file so ten places can qualify."],
+  baseline_unavailable: ["Comparison baseline unavailable", "The thresholds release has no asset. Run scripts/build_station_thresholds.py resolve-inputs, fetch-inputs and package (one bounded, byte-pinned NOAA GHCN-Daily input set), upload the printed asset to thresholds-latest, then install-manifest; the next run's threshold ensure verifies it."],
+  unqualified_input: ["Too few qualified inputs", "Qualified point normals are missing: run scripts/build_normals.py plan, then the bounded Meteostat acquire, admit and install-plan steps; Root installs the admitted file so ten places can qualify."],
+  access_refused: ["Access refused", "Owner checks the refused account or key. The same credential is retried only on its bounded backoff; a renewed credential is tried at the next run. A stored key is not recovery."],
   selector_or_budget_hold: ["Held by selector or budget", "Check the configured candidate budget and selector; no source fault is implied."],
   writer_or_check_rejection: ["Checked copy rejected", "Read the rejection reason; the source supplied a candidate."],
   stale_data: ["Data stale", "Wait for a newer source day; stale data is withheld, not posted."],
@@ -38,6 +39,10 @@ export function sourceOutcome(row, rejections = []) {
   // Product-level incident payload (W03): name the exact leg, never the whole source.
   const incident = latestIncidentState(row)
   const named = incident?.failing?.map(item => `${item.product_id}: ${item.text ?? item.outcome}`).join("; ") || null
+  if (incident?.product_state === "access_hold"
+      && incident.failing.some(item => item.outcome === "access_refused" || item.outcome === "access_backoff")) {
+    return outcome("access_refused", row, named)
+  }
   if (incident?.product_state === "unavailable" && incident.failing.some(item => item.outcome === "endpoint_missing")) {
     return outcome("endpoint_missing", row, named)
   }

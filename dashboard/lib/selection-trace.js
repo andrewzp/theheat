@@ -1,3 +1,9 @@
+import { sourceOutcome } from "./live-content-status.js"
+
+// Source gaps: why a source supplied nothing in the latest run, with its owner/next action.
+const GAP_STATES = new Set(["access_expired", "access_refused", "baseline_unavailable", "unqualified_input",
+  "endpoint_missing", "regional_hold", "unavailable", "reachable_unqualified", "alternate_served", "stale_data"])
+
 // Coverage-to-selection trace (W08.6) from retained state only. Each event gets
 // exactly one of six distinct outcomes; unknown denominators stay null and a
 // complete trace is never global recall or calibrated preference.
@@ -40,8 +46,16 @@ export function selectionTrace(state, { referenceOpportunities = null } = {}) {
     }
   }
   const notFetched = []
+  const gaps = []
   for (const run of list(state?.run_history).slice(0, 1)) {
-    for (const s of list(run?.sources)) if (s?.status === "failed" || s?.status === "skipped") notFetched.push(s?.source)
+    for (const s of list(run?.sources)) {
+      if (s?.status === "failed" || s?.status === "skipped") notFetched.push(s?.source)
+      const why = sourceOutcome(s)
+      if (GAP_STATES.has(why.state)) {
+        gaps.push({ source: why.source, status: why.status, state: why.state, reason: why.label, detail: why.detail,
+          next_action: why.next_action })
+      }
+    }
   }
   const reference = Array.isArray(referenceOpportunities) ? referenceOpportunities : null
   for (const id of reference ?? []) if (!rows.has(id)) put(id, "not_fetched", "reference opportunity with no retained candidate")
@@ -51,6 +65,8 @@ export function selectionTrace(state, { referenceOpportunities = null } = {}) {
     events: [...rows.values()].sort((a, b) => a.event_id.localeCompare(b.event_id)),
     counts,
     not_fetched_sources: notFetched.sort(),
+    // Miss reasons for the coverage view and weekly cadence; a gap is not a count of missed events.
+    source_gaps: gaps.sort((a, b) => String(a.source).localeCompare(String(b.source))),
     reference_denominator: reference ? reference.length : null,
     recall: null,
     scope: "Retained candidates, checks and drafts only; not global recall or calibrated editor preference.",
