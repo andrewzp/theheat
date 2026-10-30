@@ -1,3 +1,16 @@
+## 0.9.109.49
+
+- Hold ranking errors, malformed selections and invalid candidate limits before
+  writing. Share the configured candidate-attempt allowance across alert drains
+  and refill; retain an attempted slot after rejection and stop repeated missing-
+  provider preflight failures. Preserve the separate one-candidate leaderboard
+  limit and make generation holds visible in application health.
+- Recognize a narrowly bounded negative station-measurement disclaimer in
+  forecast copy without granting a factual pass. Continue checking affirmative
+  observation claims and every other source, time, units and safety constraint.
+- Document the distinction between candidate allowances, provider calls, retries,
+  daily post limits and invoice costs; reporting thresholds are not spending caps.
+
 ## 0.9.109.48
 
 - Add an opt-in, explicitly nominated NHC public-advisory workflow through the
