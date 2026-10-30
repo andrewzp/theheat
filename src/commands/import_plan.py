@@ -29,13 +29,16 @@ from typing import Any
 
 from src.commands import domain_journal
 from src.commands.schema import CommandError, canonical_json
+from src.evaluation.file_boundary import FileBoundaryError, read_regular
 
-SCHEMA = "theheat.import-plan/v1"
+SCHEMA = "theheat.import-plan/v2"
 PROJECTED = frozenset({"drafts", "memory", "publish_ledger"})
 PROTECTED_TOP = ("publish_ledger", "posted_events", "publication_control", "pending_confirmations")
 PROTECTED_DRAFT = ("tweet_id", "posted_at", "publish_intent_id", "review_binding", "approval_binding", "media_attachment")
 MAX_ITEMS = 200
 MAX_FINDINGS = 2000
+MAX_SIDECARS = 32
+MAX_SIDECAR_BYTES = 16 * 1024 * 1024
 _ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}")
 _SAFE = 9007199254740991
 
@@ -114,6 +117,13 @@ def _existing(authority: Any, import_id: str) -> dict | None:
         return dict(row) if row else None
 
 
+def _sidecar(name: str) -> dict:
+    # Retain an absolute lexical path, never resolve a symlink as trusted input.
+    path = str(Path(name).absolute())
+    raw = read_regular(path, MAX_SIDECAR_BYTES)
+    return {"path": path, "sha256": hashlib.sha256(raw).hexdigest(), "byte_count": len(raw)}
+
+
 def plan_item(raw: bytes, import_id: str, *, authority: Any = None, sidecars: tuple[str, ...] = ()) -> dict:
     if not isinstance(import_id, str) or not _ID.fullmatch(import_id):
         raise CommandError("invalid_import_identity", "Supply a bounded stable import identity")
@@ -128,8 +138,15 @@ def plan_item(raw: bytes, import_id: str, *, authority: Any = None, sidecars: tu
     if not isinstance(state.get("drafts"), list):
         unsupported.append("drafts_not_list")
     unprojected = sorted(set(state) - PROJECTED)
+    retained_sidecars = []
+    if not isinstance(sidecars, tuple) or len(sidecars) > MAX_SIDECARS:
+        raise CommandError("invalid_import_sidecars", "Supply at most 32 required sidecars per item")
     for name in sidecars:
-        if not isinstance(name, str) or not Path(name).is_file():
+        try:
+            if not isinstance(name, str):
+                raise ValueError("invalid_sidecar")
+            retained_sidecars.append(_sidecar(name))
+        except (OSError, ValueError):
             missing.append({"sidecar": Path(str(name)).name[:120], "code": "source_sidecar_unavailable"})
     collision = "new"
     if authority is not None:
@@ -139,6 +156,7 @@ def plan_item(raw: bytes, import_id: str, *, authority: Any = None, sidecars: tu
     return {"import_id": import_id, "source_sha256": sha, "canonical_sha256": canonical_sha,
             "supported": not unsupported and not missing and collision != "identity_collision_refused",
             "unsupported": unsupported, "missing": missing, "collision": collision,
+            "sidecars": retained_sidecars,
             "unprojected_top_level_fields": unprojected, "protected": _protected(state),
             "numeric_findings": _numbers(raw),
             "publication_authorized": False, "review_currentness": "not_inherited"}
@@ -179,6 +197,15 @@ def execute(authority: Any, plan_value: dict, items: list[tuple[str, bytes]], *,
         raw = supplied[import_id]
         if hashlib.sha256(raw).hexdigest() != planned[import_id]["source_sha256"]:
             raise CommandError("import_source_changed", "An item's bytes changed after planning; nothing further is imported")
+        try:
+            required = planned[import_id]["sidecars"]
+            if not isinstance(required, list) or len(required) > MAX_SIDECARS:
+                raise ValueError("invalid_sidecars")
+            for sidecar in required:
+                if _sidecar(sidecar["path"]) != sidecar:
+                    raise ValueError("changed_sidecar")
+        except (OSError, FileBoundaryError, ValueError, KeyError, TypeError):
+            raise CommandError("import_sidecar_changed", "A required sidecar is missing or changed; nothing further is imported") from None
         prior = _existing(authority, import_id)
         if prior is not None and prior["artifact_sha256"] != planned[import_id]["source_sha256"]:
             raise CommandError("import_receipt_collision", "This identity already holds different history")
