@@ -50,3 +50,34 @@ copy preference, measure global opportunity recall, authorize a paid experiment 
 resume publishing. Review actual evidence before proposing one bounded experiment.
 The full weekly-learning contract still needs that experiment and measured review;
 a single generated report does not complete it.
+
+## Turn the selected improvement into one bounded plan
+
+The report's `improvement` names the week's single proposed change. When it is a
+`local_repair` or `source_uncertainty` (not an `owner_action` such as an expired
+credential), freeze a default-off plan for exactly that improvement:
+
+```sh
+python scripts/theheat_evaluation.py experiment-plan \
+  --weekly-review /private/reviews/weekly-review-<date>-<id>.json \
+  --spec /private/reviews/experiment-spec.json --output /private/reviews/plan.json
+```
+
+The spec supplies only `question`, two to four `arms` (each with `arm_id`,
+`code_revision`, `brief_sha256`, `policy_sha256` and `model`) and an `allowance`
+(`max_candidates`, `max_model_calls`); the improvement is copied from the review
+and bound to its report ID. Plans fix one writer sample and no revisions, list the
+required checks and rollback criteria, and are never authorized to run or publish.
+Running an arm is a separate, explicitly authorized operation.
+
+After real, bound results exist, read the decision without changing anything:
+
+```sh
+python scripts/theheat_evaluation.py experiment-accept \
+  --plan /private/reviews/plan.json --result /private/reviews/result.json \
+  --output /private/reviews/decision.json
+```
+
+Missing arms, unproven required checks, too few supplied ratings, more factual
+failures or an exceeded allowance all `HOLD`. `PROMOTE_RECOMMENDED` makes no
+automatic change; a person applies the reviewed arm's revision and policy.
