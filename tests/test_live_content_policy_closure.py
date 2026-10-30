@@ -35,6 +35,13 @@ OWNERS = (
     "src/commands/recovery_provenance.py",
     "src/commands/import_plan.py",
     "src/evaluation/file_boundary.py",
+    "src/commands/command_roles.py",
+    "src/commands/preview_worker.py",
+    "src/editorial/report_supply.py",
+    "src/data/gpm_imerg.py",
+    "src/orchestrator/sources/gpm_imerg.py",
+    "src/data/regional_observations.py",
+    "src/orchestrator/sources/regional_observed.py",
 )
 
 
