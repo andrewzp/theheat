@@ -4,6 +4,8 @@ from copy import deepcopy
 from datetime import UTC, datetime, timedelta, timezone
 import json
 
+import pytest
+
 from src import runtime_inventory, state
 from src.orchestrator import cli
 from src.storage import sqlite_store
@@ -12,6 +14,24 @@ from src.voice import safety
 
 
 NOW = datetime(2026, 9, 9, 2, 0, tzinfo=UTC)
+
+
+@pytest.mark.parametrize("value", [None, "", "0", "1", "true", "yes", " 1"])
+def test_automatic_forecast_inventory_uses_the_actual_kind_switches(monkeypatch, value):
+    from src.data.air_quality_current import auto_text_enabled
+
+    for env_key in ("THEHEAT_PM25_FORECAST_AUTO_TEXT", "THEHEAT_DUST_FORECAST_AUTO_TEXT"):
+        monkeypatch.delenv(env_key, raising=False)
+    for env_key, kind, report_key, other_key in (
+        ("THEHEAT_PM25_FORECAST_AUTO_TEXT", "air_quality_hazard", "pm25_forecast_auto_text_enabled", "dust_forecast_auto_text_enabled"),
+        ("THEHEAT_DUST_FORECAST_AUTO_TEXT", "dust_event", "dust_forecast_auto_text_enabled", "pm25_forecast_auto_text_enabled"),
+    ):
+        if value is not None:
+            monkeypatch.setenv(env_key, value)
+        flags = runtime_inventory.collect_runtime_inventory("alerts", now=NOW)["flags"]
+        assert flags[report_key] is auto_text_enabled(kind) is (value == "1")
+        assert flags[other_key] is False
+        monkeypatch.delenv(env_key, raising=False)
 
 
 def test_snapshot_uses_loaded_models_and_never_serializes_credentials(monkeypatch):

@@ -10,6 +10,7 @@ const FLAG_KEYS = [
   "records_cluster_enabled", "newsworthiness_enabled", "news_enrich_enabled",
   "news_boost_enabled", "engagement_window_enabled", "shadow_ab_enabled",
   "signals_provider", "gpm_source", "aq_pm25_enabled", "aq_dust_enabled", "wetbulb_enabled",
+  "pm25_forecast_auto_text_enabled", "dust_forecast_auto_text_enabled",
   "nhc_advisory_auto_text_enabled", "official_warning_auto_text_enabled", "nws_warning_auto_text_enabled",
   "regional_observed_enabled", "rainfall_window_provenance_enabled", "hazard_episodes_enabled", "portfolio_selection_enabled",
   "rainfall_regional_scan_enabled",
