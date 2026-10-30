@@ -875,7 +875,7 @@ class TestPipelineMetadata:
         }}
 
         writer_result = WriterResult(
-            tweet="Per NIFC, 3 firefighters were killed on the Alpine fire.",
+            tweet="3 firefighters were killed on the Alpine fire, per NIFC.",  # Fact-first: a "Per X," opener is a copy-gate rejection.
             kill_reason=None, angle_chosen="impact", era_anchor_used=None,
             peer_comparison_used=None, reasoning="r", cited_impact=True,
         )

@@ -91,7 +91,7 @@ class Spies:
             "official_warning": "Invented Warning Agency warns: dangerous winds are possible tonight on Example Island.",
             "hot10": ("Riyadh's forecast high of 39.2°C runs 9.2°C above its monthly normal, the largest departure "
                       "among 14 sampled cities."),
-        }.get(bundle.signal_kind, f"NASA satellites recorded a strong thermal detection near {bundle.where}.")
+        }.get(bundle.signal_kind, f"A strong thermal detection near {bundle.where}, recorded by NASA satellites.")
         return WriterResult(text, None, "number", None, None, "Explicit invented offline model response.")
 
     def safety(self, text):
