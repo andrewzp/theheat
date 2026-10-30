@@ -252,7 +252,11 @@ def run_leaderboard(bot_state: BotState, current_run: dict | None = None) -> Bot
             current_run, bot_state, "leaderboard", leaderboard_start,
             status="success", observed=len(temps), promoted=len(hot10) if score.passes else 0, drafted=0
         )
-        _drain_and_write_triage_queue(bot_state, current_run)
+        # Hot10 is its own operation: one daily candidate, at most one writer attempt.
+        from src.orchestrator.candidate_budget import CandidateBudget
+        _drain_and_write_triage_queue(
+            bot_state, current_run, candidate_budget=CandidateBudget.for_operation("leaderboard"),
+        )
         _run_twitter_metrics(bot_state, current_run)
 
     except Exception as e:

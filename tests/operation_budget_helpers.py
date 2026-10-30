@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from dataclasses import dataclass, field
+from typing import Any
 
 from src.state import DEFAULT_STATE
 from src.two_bot import pipeline, trial_budget
@@ -20,7 +21,7 @@ from tests.fire_source_fixtures import fire_event
 REGIONS = ("Mali", "Niger", "Chad", "Sudan", "Ghana", "Benin", "Togo", "Guinea")
 
 
-def fresh_state() -> dict:
+def fresh_state() -> Any:  # A BotState-shaped invented dict.
     state = deepcopy(DEFAULT_STATE)
     state["drafts"], state["posted_events"] = [], []
     return state
@@ -32,7 +33,7 @@ def fires(count: int, *, frp: float = 361.0):
             for index in range(count)]
 
 
-def enqueue_fires(state: dict, count: int, *, source: str = "firms") -> list[str]:
+def enqueue_fires(state: Any, count: int, *, source: str = "firms") -> list[str]:
     """The real source boundary: score, audit and queue each invented detection."""
     from src.editorial.scoring import score_fire_event
     from src.orchestrator.common import _review_context

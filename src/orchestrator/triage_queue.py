@@ -14,7 +14,7 @@ from collections import Counter
 from collections.abc import Callable
 from typing import TYPE_CHECKING, cast
 
-from src.orchestrator.candidate_budget import CandidateBudget
+from src.orchestrator.candidate_budget import CandidateBudget, writer_started
 from src.orchestrator.common import _utc_now_iso
 from src.orchestrator.suppression import (
     _current_suppression_ctx,
@@ -330,6 +330,20 @@ def _hold_operation(
     return 0
 
 
+def _settle_attempt(budget: CandidateBudget, key: str, drafted: bool, result: dict,
+                    current_run: dict | None, candidate: "TriageCandidateBundle", *, counted: bool) -> None:
+    """Keep a started attempt's slot; return it only on an explicit pre-writer report.
+
+    A cache hit or deterministic refusal inside the dispatch made no paid
+    attempt: its slot and its ``writer_attempted`` count are returned, and the
+    budget records it as ``refused_before_writer``.
+    """
+    started = writer_started(drafted, result)
+    budget.settle(key, writer_started=started)
+    if not started and counted:
+        _bump_source_field_in_run(current_run, candidate.source, "writer_attempted", -1)
+
+
 def _record_negcache_kill_if_eligible(
     bot_state: BotState, candidate: "TriageCandidateBundle", cand_result: dict
 ) -> None:
@@ -451,6 +465,17 @@ def _refill_drain(
         ):
             _funnel.record_slate_terminal(funnel_sink, candidate.event_id, "triage_cap")
 
+    def _budget_cut(candidate: "TriageCandidateBundle") -> None:
+        # The operation's candidate attempts are spent: refill cannot buy more.
+        _triage._record_triage_suppression(
+            bot_state, candidate, cap=per_cat_cap, global_cap=budget.limit or 0, reason="candidate_budget",
+        )
+        budget.hold()
+        if funnel_sink is not None and candidate.event_id not in funnel_sink.get(
+            "_slate_terminal", {}
+        ):
+            _funnel.record_slate_terminal(funnel_sink, candidate.event_id, "triage_cap")
+
     drafted_count = 0
     queued_count = 0
     attempts = 0
@@ -461,12 +486,20 @@ def _refill_drain(
         if drafted_count + queued_count >= target or attempts >= max_attempts:
             _cut(candidate, "global_cap")
             continue
+        if budget.exhausted():
+            _budget_cut(candidate)
+            continue
 
         # Distinct candidates only: never spend a 2nd writer call on an event_id we
         # already attempted this cycle (the first attempt may have critic-killed, so
         # can_draft_candidate wouldn't catch it). (codex)
         if candidate.event_id and candidate.event_id in attempted_event_ids:
             _pre_writer_kill(candidate, "duplicate_draft", "pre-writer: duplicate event in slate")
+            continue
+        budget_key = CandidateBudget.key_for(candidate)
+        if budget.seen(budget_key):
+            # An earlier drain of this same operation already handled the event.
+            _pre_writer_kill(candidate, "duplicate_draft", "pre-writer: event already handled this operation")
             continue
         # A cache-skipped event blocks only IDENTICAL facts (codex r10):
         # same fingerprint → duplicate_draft (not a second savings-inflating
@@ -547,6 +580,10 @@ def _refill_drain(
             _pre_writer_kill(candidate, "negative_cache", f"pre-writer: {negcache_reason}")
             continue
 
+        # Reserve before the paid boundary; a rejected attempt keeps its slot.
+        if not budget.reserve(budget_key):
+            _budget_cut(candidate)
+            continue
         _bump_source_field_in_run(current_run, candidate.source, "triaged_out")
         if generation_client is None:
             _bump_source_field_in_run(current_run, candidate.source, "writer_attempted")
@@ -564,6 +601,8 @@ def _refill_drain(
         drafted = _common._try_two_bot_draft(
             candidate.bundle, bot_state, candidate.score, **draft_kwargs,
         )
+        _settle_attempt(budget, budget_key, drafted, cand_result, current_run, candidate,
+                        counted=generation_client is None)
         if cand_result.get("generation_status") in {"queued", "reused"}:
             queued_count += 1
             success_by_category[category] = success_by_category.get(category, 0) + 1
@@ -938,6 +977,25 @@ def _drain_and_write_triage_queue(
                 candidate, "duplicate_draft", "pre-writer: duplicate event in slate"
             )
             continue
+        budget_key = CandidateBudget.key_for(candidate)
+        if budget.seen(budget_key):
+            # An earlier drain of this same operation already handled the event.
+            _legacy_pre_writer_row(
+                candidate, "duplicate_draft", "pre-writer: event already handled this operation"
+            )
+            continue
+        # Reserve before the paid boundary; a rejected attempt keeps its slot.
+        if not budget.reserve(budget_key):
+            _triage._record_triage_suppression(
+                bot_state, candidate, cap=_triage._per_category_cap(), global_cap=budget.limit or 0,
+                reason="candidate_budget",
+            )
+            budget.hold()
+            if funnel_sink is not None and candidate.event_id not in funnel_sink.get("_slate_terminal", {}):
+                from src.orchestrator import funnel as _funnel
+
+                _funnel.record_slate_terminal(funnel_sink, candidate.event_id, "triage_cap")
+            continue
         if candidate.event_id:
             attempted_event_ids.add(candidate.event_id)
         if generation_client is None:
@@ -967,6 +1025,8 @@ def _drain_and_write_triage_queue(
             candidate.score,
             **draft_kwargs,
         )
+        _settle_attempt(budget, budget_key, drafted, cand_result, current_run, candidate,
+                        counted=generation_client is None)
         if cand_result.get("generation_status") in {"queued", "reused"}:
             if funnel_sink is not None:
                 from src.orchestrator import funnel as _funnel

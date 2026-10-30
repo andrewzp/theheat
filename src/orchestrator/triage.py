@@ -471,6 +471,9 @@ def _record_triage_suppression(
         reasons_field = [f"pending_type_cap={_pending_type_cap()}"]
     elif reason == "per_country_cap":
         reasons_field = [f"per_country_cap={_per_country_cap()}"]
+    elif reason == "candidate_budget":
+        # The operation already spent its THEHEAT_MAX_DRAFTS_PER_CYCLE attempts.
+        reasons_field = [f"candidate_budget={global_cap}"]
     else:
         reasons_field = [f"per_category_cap={cap}"]
 
