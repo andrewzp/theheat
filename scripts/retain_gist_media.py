@@ -127,16 +127,16 @@ def main(argv=None, environ=None):
             from src.media import gist_crw_media as crw, gist_published_media as published
             if not args.manifest and not args.crw_packet:
                 raise SystemExit("readback needs at least one --manifest or --crw-packet identity")
-            items = []
+            read_items: list[dict] = []
             for sha in args.manifest:
                 manifest, original, png = published.read(store, sha)
-                items.append({"kind": "published", "manifest_sha256": sha, "product": manifest["product"],
+                read_items.append({"kind": "published", "manifest_sha256": sha, "product": manifest["product"],
                               "original_bytes": len(original), "derivative_bytes": len(png), "verified": True})
             for sha in args.crw_packet:
                 packet = crw.load_packet(store, sha)
-                items.append({"kind": "crw_packet", "packet_artifact_sha256": sha,
+                read_items.append({"kind": "crw_packet", "packet_artifact_sha256": sha,
                               "packet_bytes": len(gist_assets.encode_document(packet)), "verified": True})
-            result = {"capability": "reader", "store_kind": type(store).__name__, "items": items,
+            result = {"capability": "reader", "store_kind": type(store).__name__, "items": read_items,
                       "credentials_printed": False, "publication_approved": False}
         elif args.command == "plan":
             from src.media import gist_media_export as portable
