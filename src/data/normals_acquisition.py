@@ -110,7 +110,9 @@ def file_identity(path: Path) -> dict[str, Any] | None:
     return {"name": path.name, "sha256": _sha(raw), "bytes": len(raw), "git_blob_sha1": blob}
 
 
-def _atomic_write(path: Path, raw: bytes) -> None:
+def _atomic_write(path: Path, raw: bytes, *, check: Callable[[], None] | None = None) -> None:
+    if check is not None:
+        check()
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
     try:
@@ -118,6 +120,8 @@ def _atomic_write(path: Path, raw: bytes) -> None:
             handle.write(raw)
             handle.flush()
             os.fsync(handle.fileno())
+        if check is not None:
+            check()
         os.replace(temporary, path)
     finally:
         temporary.unlink(missing_ok=True)
@@ -449,10 +453,12 @@ def acquire(plan: dict[str, Any], out_dir: Path, provider: Provider, limits: Lim
                 except bounded_http.TransportStop as exc:
                     stop(exc.reason)
                     break
-            _atomic_write(path, _canonical(record))
+            _atomic_write(path, _canonical(record), check=provider.check if bounded else None)  # type: ignore[attr-defined]
             journal["failures"].pop(f"{point['place_id']}-{point['sampling_point_id']}", None)
             run["written"] += 1
             save()
+    except bounded_http.TransportStop as exc:
+        stop(exc.reason)
     except BaseException:
         stop("interrupted")
         run["finished_at"] = now()
@@ -479,7 +485,13 @@ def acquire(plan: dict[str, Any], out_dir: Path, provider: Provider, limits: Lim
             stop(exc.reason)
             save()
             return deps.result("normals", "incomplete", reasons=run["reasons"], counters=_counters(run))
-    manifest = assemble_candidate(plan, out_dir, installed_path=installed_path, now=now)
+    try:
+        manifest = assemble_candidate(plan, out_dir, installed_path=installed_path, now=now,
+                                      check=provider.check if bounded else None)  # type: ignore[attr-defined]
+    except bounded_http.TransportStop as exc:
+        stop(exc.reason)
+        save()
+        return deps.result("normals", "incomplete", reasons=run["reasons"], counters=_counters(run))
     status = "ready" if manifest["rows"] else "source_absent"
     reasons = ["points_without_source_data"] if manifest["missing_points"] else []
     return deps.result("normals", status, reasons=reasons,
@@ -571,7 +583,7 @@ def _partition(plan, point, provider, now, status, start, end, values, payload, 
 
 
 def assemble_candidate(plan: dict[str, Any], out_dir: Path, *, installed_path: Path,
-                       now: Callable[[], str] = _utc_now) -> dict[str, Any]:
+                       now: Callable[[], str] = _utc_now, check: Callable[[], None] | None = None) -> dict[str, Any]:
     """Retained qualified rows + complete partitions -> candidate CSV, then its binding manifest."""
     rows, points, missing = [], [], []
     retained = 0
@@ -616,8 +628,8 @@ def assemble_candidate(plan: dict[str, Any], out_dir: Path, *, installed_path: P
                 "assembled_at": now()}
     # The CSV lands first; the manifest that binds it lands last. A crash between
     # them leaves a mismatch that admission refuses.
-    _atomic_write(out_dir / "candidate" / "normals.csv", body)
-    _atomic_write(out_dir / "candidate" / "manifest.json", _canonical(manifest))
+    _atomic_write(out_dir / "candidate" / "normals.csv", body, check=check)
+    _atomic_write(out_dir / "candidate" / "manifest.json", _canonical(manifest), check=check)
     return manifest
 
 

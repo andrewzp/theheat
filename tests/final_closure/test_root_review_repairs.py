@@ -98,6 +98,24 @@ def test_normals_cancellation_after_return_never_promotes_partition_or_candidate
     assert not (out / "candidate/normals.csv").exists()
 
 
+def test_normals_cancellation_during_assembly_never_promotes_candidate(tmp_path, monkeypatch):
+    from src.data import normals_acquisition as na
+    cancel = threading.Event()
+    provider = cached_provider(cancel)
+    _cities, installed, plan = world(tmp_path, names=("Riyadh",))
+    monkeypatch.setattr(provider, "fetch", lambda *a: mn.NormalsFrame({m: 30.0 for m in range(1, 13)}, {}))
+    original = na.assemble_candidate
+    def assemble(*args, **kwargs):
+        cancel.set()
+        return original(*args, **kwargs)
+    monkeypatch.setattr(na, "assemble_candidate", assemble)
+    out = tmp_path / "acquisition"
+    result = na.acquire(plan, out, provider, limits(), installed_path=installed, cancel=cancel)
+    assert result["status"] == "incomplete"
+    assert not (out / "candidate/normals.csv").exists()
+    assert not (out / "candidate/manifest.json").exists()
+
+
 def test_actual_nested_coral_pool_preserves_parent_cancellation(monkeypatch):
     entered, release, done = threading.Event(), threading.Event(), threading.Event()
     result = {}
@@ -143,6 +161,13 @@ def test_arbitrary_metadata_or_negated_warning_never_provides_danger_support(evi
     bundle = replace(_bundle(), raw_signal_dump=evidence)
     result = copy_gates.copy_rejection("Mali faces dangerous surf.", bundle)
     assert result is not None and result.startswith("invented_danger")
+
+
+@pytest.mark.parametrize("warning", ["Dangerous surf can occur without warning.",
+    "Strong surf is expected. No evacuations ordered."])
+def test_unrelated_negation_does_not_kill_current_warning_paraphrases(warning):
+    bundle = replace(_bundle(), raw_signal_dump={"warning_text": warning})
+    assert copy_gates.copy_rejection("Mali faces dangerous surf, the service warns.", bundle) is None
 
 
 @pytest.mark.usefixtures("configured_pipeline_providers")

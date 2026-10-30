@@ -168,17 +168,25 @@ def _source_text(bundle: Any) -> str | None:
     return " ".join(excerpts).lower()
 
 
-def _danger_supported(term: str, source: str) -> bool:
-    # Normalize harmless morphology, but do not accept a negated statement or a
-    # substring embedded in another word. Other paraphrases remain advisory.
-    term = term.replace("dangerously", "dangerous")
+def _danger_support(term: str, source: str) -> tuple[bool, bool]:
+    """Word-bound matches and narrow explicit negation, never a semantic pass.
+
+    'Without warning' and 'no evacuations' do not negate a danger assertion.
+    Ambiguous paraphrases remain for the mandatory factual/safety checks.
+    """
+    def normalize(text: str) -> str:
+        return re.sub(r"[-\s]+", " ", text.lower()).replace("dangerously", "dangerous")
+    wanted, supported, negated = normalize(term), False, False
     for sentence in re.split(r"[.!?;\n]", source):
-        normalized = re.sub(r"[-\s]+", " ", sentence).replace("dangerously", "dangerous")
-        if re.search(r"\b(?:not|no|never|without|unlikely)\b", normalized):
-            continue
-        if re.search(r"\b" + re.escape(term) + r"\b", normalized):
-            return True
-    return False
+        normalized = normalize(sentence)
+        for match in re.finditer(r"\b" + re.escape(wanted) + r"\b", normalized):
+            prefix, suffix = normalized[:match.start()], normalized[match.end():]
+            denied = bool(re.search(r"\b(?:no|not|never|without)\s+(?:[a-z]+\s+){0,2}$", prefix)
+                          and not re.search(r"\bnot\s+only\s*$", prefix))
+            denied = denied or bool(re.match(r"\s+(?:[a-z]+\s+){0,3}(?:not|never)\s+expected\b", suffix))
+            negated |= denied
+            supported |= not denied
+    return supported, negated and not supported
 
 
 def copy_notes(text: str, bundle: Any = None) -> list[CopyNote]:
@@ -213,11 +221,11 @@ def copy_notes(text: str, bundle: Any = None) -> list[CopyNote]:
         if source is None:
             notes.append(CopyNote("danger_wording_needs_source", False, _excerpt(match.group(0))))
             break
-        if not _danger_supported(term, source):
+        supported, negated = _danger_support(term, source)
+        if not supported:
             # Missing wording in an actual warning is semantic uncertainty, not
             # proof that a synonymous consequence was invented. Mandatory checks
             # decide it. With no current-event warning at all, reject free.
-            negated = bool(re.search(r"\b(?:not|no|never|without|unlikely)\b", source))
             uncertain = bool(source.strip()) and not negated
             notes.append(CopyNote("danger_wording_needs_source" if uncertain else "invented_danger",
                                   not uncertain, _excerpt(match.group(0))))
