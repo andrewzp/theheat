@@ -60,6 +60,7 @@ class Spies:
 
     writer_kill: set[str] = field(default_factory=set)  # event ids the writer kills
     critic_kill: set[str] = field(default_factory=set)  # event ids the critic rejects
+    critic_reject_first: int = 0  # reject the first n critic calls, whoever they are
     calls: list[tuple[str, str]] = field(default_factory=list)
 
     def install(self, monkeypatch) -> "Spies":
@@ -86,7 +87,10 @@ class Spies:
         self._dispatch("writer", "anthropic", bundle.event_id)
         if bundle.event_id in self.writer_kill:
             return WriterResult(None, "Explicit invented offline writer kill.", "", None, None, "Offline fixture.")
-        text = f"NASA satellites recorded a strong thermal detection near {bundle.where}."
+        text = {
+            "official_warning": "Invented Warning Agency warns: dangerous winds are possible tonight on Example Island.",
+            "hot10": "Invented City 0 tops today's Hot 10, running 10.0C above its normal high.",
+        }.get(bundle.signal_kind, f"NASA satellites recorded a strong thermal detection near {bundle.where}.")
         return WriterResult(text, None, "number", None, None, "Explicit invented offline model response.")
 
     def safety(self, text):
@@ -99,7 +103,8 @@ class Spies:
 
     def critic(self, text, bundle, *_args, **_kwargs):
         self._dispatch("critic", "google", bundle.event_id)
-        if bundle.event_id in self.critic_kill:
+        rejected_first = sum(stage == "critic" for stage, _ in self.calls) <= self.critic_reject_first
+        if bundle.event_id in self.critic_kill or rejected_first:
             return CriticResult(False, "Explicit invented offline critic rejection.", "Offline fixture.")
         return CriticResult(True, None, "Explicit invented offline critic pass.")
 
