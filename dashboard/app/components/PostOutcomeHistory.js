@@ -60,6 +60,10 @@ export default function PostOutcomeHistory({ outcomes }) {
           `${selected.writer_context.retained_different_text ? "Retained history includes different text. " : ""}Retained history is incomplete${selected.writer_context.history_unavailable ? " and includes unavailable observations" : ""}. A text match does not establish that no edits occurred. Actor and human authorship are unknown.`),
         h("p", { className: "runtime-note" }, `${selected.observations.length} retained observations. Post age uses the platform's recorded creation time; receipt time is not a substitute.`),
         h("p", { className: "runtime-note" }, `Retained text versions for this post: ${selected.retained_text_versions ?? "unknown"}. Who edited them is not recorded here.`),
+        h("p", { className: "runtime-note" }, selected.generation_usage?.status === "joined"
+          ? `Generation usage joined to this post's event: ${selected.generation_usage.responses} model response(s) across ${selected.generation_usage.attempts} attempt(s) (${Object.entries(selected.generation_usage.by_stage).map(([stage, row]) => `${stage.replaceAll("_", " ")} ${row.responses}`).join(", ")}). Includes attempts that were not published; the charge is unknown.`
+          : selected.generation_usage?.status === "not_joined" ? "No retained model usage is attributed to this post. Older responses carry no attribution and the usage window is bounded, so this is not zero cost."
+            : "Generation usage for this post is unknown."),
         h("p", { className: "runtime-note" }, selected.coverage?.status === "recorded"
           ? `Logged coverage: ${selected.coverage.coverage_class} · ${selected.coverage.country}, ${selected.coverage.continent}. This is where the post landed, not a measure of what was missed.`
           : selected.coverage?.status === "conflict" ? "Coverage log rows for this post disagree; no class or region has been selected."

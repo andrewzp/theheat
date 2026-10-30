@@ -1,5 +1,6 @@
 /** Read-only retained observations. No collection, attribution or billing authority. */
 import { draftIdentity, fingerprint, textHash, mergePassiveMaps, publicationObservationStatus } from "./draft-revisions.js"
+import { validUsageObservation } from "./usage-observations.js"
 
 export const OUTCOME_METRICS = ["likes", "retweets", "replies", "quotes", "impressions", "bookmarks"]
 const object = value => value !== null && typeof value === "object" && !Array.isArray(value)
@@ -171,6 +172,30 @@ function coverageFor(eventIds, log) {
     scope: "output_geography_not_recall" }
 }
 
+// Model responses attributed to a delivered post's exact receipt event (the
+// attempt join written by src/two_bot/usage_ledger.py). Rows without an
+// attribution, unjoined or operation-only rows are never assigned to a post.
+// The window is bounded and older rows carry no attribution, so absence is
+// "not_joined", not zero; token counts are usage, never a charge.
+function costFor(eventIds, window) {
+  const rows = object(window) && Array.isArray(window.observations) ? window.observations : null
+  if (rows === null) return { status: "not_loaded", charge: "unknown" }
+  const joined = rows.filter(row => validUsageObservation(row) && Object.hasOwn(row, "attribution")
+    && row.attribution.status === "joined_attempt" && eventIds.has(row.attribution.event_id))
+  if (!joined.length) return { status: "not_joined", charge: "unknown" }
+  const stages = {}
+  for (const row of joined) {
+    const stage = stages[row.stage ?? "unknown"] ??= { responses: 0, usage_present: 0, providers: [] }
+    stage.responses += 1
+    stage.usage_present += row.usage_status === "present" ? 1 : 0
+    if (!stage.providers.includes(row.provider)) stage.providers.push(row.provider)
+  }
+  for (const stage of Object.values(stages)) stage.providers.sort()
+  return { status: "joined", responses: joined.length, attempts: new Set(joined.map(row => row.attribution.attempt)).size,
+    by_stage: stages, charge: "unknown", scope: "retained_window_all_attempts_for_event",
+    window_truncated: window.truncated === true }
+}
+
 export function postOutcomes(rawState, { now = Date.now(), feedbackRecords = null, correctionReport = null } = {}) {
   const clock = now instanceof Date ? now.getTime() : now
   if (!Number.isFinite(clock) || !Number.isFinite(new Date(clock).getTime())) throw new TypeError("Outcome history requires a valid clock")
@@ -268,6 +293,7 @@ export function postOutcomes(rawState, { now = Date.now(), feedbackRecords = nul
     last.evidence_needed = evidenceNeeded(last)
     last.feedback = feedbackFor(tweet_id, feedbackRecords)
     last.corrections = correctionsFor(tweet_id, correctionReport)
+    last.generation_usage = costFor(new Set((receipts.get(tweet_id) || []).map(row => row.event_id).filter(nonblank)), state.llm_usage_observations)
     last.coverage = coverageFor(new Set((receipts.get(tweet_id) || []).map(row => row.event_id).filter(nonblank)), state.coverage_log)
   }
   results.sort((a, b) => a.tweet_id.localeCompare(b.tweet_id))
