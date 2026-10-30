@@ -151,10 +151,15 @@ def preflight(root: Path = ROOT, *, run_generators: bool = True) -> dict:
                                 "network reachability of any source, model, Gist or X service"]}
     report["features"] = _features(report)
     report["next_commands"] = [
-        "pytest tests/remaining_campaign/ (credential-free env -i, offline fixtures)",
+        "pytest tests/remaining_campaign/ tests/final_closure/ (credential-free env -i, offline fixtures)",
         "python scripts/theheat_onboard.py inspect-draft --state <saved-state.json> --draft-id <id>",
         "node scripts/weekly_review.mjs --state <saved-state.json> --output <new private dir>",
+        "python scripts/theheat_evaluation.py experiment-plan --weekly-review <review.json> --spec <spec.json> --output <plan.json>",
+        "python -m src.commands.local_cli --database <disposable.sqlite> backup --output <new private file> (then verify-backup)",
     ]
+    if report["repository"]["normals"]["status"] != "qualified":
+        report["next_commands"].append(
+            "python scripts/build_normals.py plan|acquire|admit|install-plan (owner-run bounded live acquisition)")
     return report
 
 
