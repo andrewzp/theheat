@@ -149,3 +149,141 @@ def test_actual_warning_builder_can_be_selected_without_observed_harm(monkeypatc
     vector = report_supply.importance_vector(evidence)
     assert evidence["evidence_type"] == "official_warning" and vector["impact"] is None
     assert vector["rarity"] is None
+
+
+def test_retained_report_producer_reaches_ordinary_drain_writer_and_removal_holds(tmp_path, monkeypatch):
+    import hashlib
+    from src.editorial import newsworthiness, hazard_episodes
+    from src.orchestrator import common
+    from src.state import DEFAULT_STATE
+    from src.two_bot.bundle_capture import capture_bundle
+    from src.two_bot.writer import build_writer_user_prompt
+    from src.two_bot.types import MemorySlice
+    from tests.remaining_campaign.test_w08_portfolio_selection import candidate
+    trap_network(monkeypatch.setattr)
+    monkeypatch.setenv("THEHEAT_NEWSWORTHINESS_ENABLED", "1")
+    monkeypatch.setenv("THEHEAT_NEWS_ENRICH_ENABLED", "1")
+    monkeypatch.setenv("THEHEAT_TRIAGE_ENABLED", "0")
+    monkeypatch.setenv("THEHEAT_REFILL_ENABLED", "0")
+    monkeypatch.setenv("THEHEAT_RETAINED_REPORT_PACKETS", str(tmp_path))
+    from dataclasses import replace
+    from src.two_bot.intern.disasters import build_global_flood_bundle
+    from tests.remaining_campaign.test_w07_episode_admission import _activation
+    event = _activation("Red", 100.0)
+    row = replace(candidate(event.event_id), bundle=build_global_flood_bundle(event), source="copernicus_ems",
+                  review_context={})
+    monkeypatch.setenv(hazard_episodes.FLAG, "1")
+    assertion = hazard_episodes.copernicus_assertion(event)
+    admission = hazard_episodes.admit({}, assertion, source=row.source, event_id=row.event_id,
+                                      score=row.score, summary="Invented retained activation")
+    hazard_episodes.bind(row.review_context, admission)
+    again = deepcopy(row)
+    doc = report()
+    doc["retained_text_sha256"] = hashlib.sha256(doc["retained_text"].encode()).hexdigest()
+    claim = {"claim_id": "c1", "claim_kind": "flood_occurring", "place_id": "pl-ficta", "window": ["2026-10-28", "2026-10-29"],
+             "text": "120 households were evacuated", "attribution": "Ficta Civil Protection"}
+    ledger = hazard_episodes.empty_ledger()
+    ep = hazard_episodes.assign(ledger, assertion)
+    joined = hazard_episodes.join_report(ledger, report_sha256=doc["report_sha256"], claim=claim,
+        observation={"place_id": "pl-ficta", "window": claim["window"], "evidence_type": "official_flood_report"},
+        episode_id=ep["episode_id"], actor="invented-editor")
+    packet = {"target_event_id": row.event_id,
+        "bundle_sha256": hashlib.sha256(capture_bundle(row.bundle).serialized.encode()).hexdigest(),
+        "report": doc, "selected_claim_ids": ["c1"], "episode_ledger": ledger, "join_ids": [joined["join_id"]]}
+    (tmp_path / "report.json").write_text(json.dumps(packet))
+    prompts = []
+    def writer(bundle, state, score, **kwargs):
+        prompts.append(build_writer_user_prompt(bundle, MemorySlice()))
+        return True
+    monkeypatch.setattr(common, "_try_two_bot_draft", writer)
+    state = deepcopy(DEFAULT_STATE)
+    state["_triage_queue"] = [row]
+    common._drain_and_write_triage_queue(state, {"id": "report-test", "sources": []})
+    assert len(prompts) == 1 and "attributed_report_statement" in prompts[0]
+    item = row.bundle.human_impact[0]
+    assert item["value"] == claim["text"] and item["attribution"] == claim["attribution"]
+    assert item["report_sha256"] == doc["report_sha256"] and item["claim_id"] == "c1"
+    assert item["physical_join_id"] == joined["join_id"]
+    # Same physical input, removed join: no later writer can inherit the statement.
+    hazard_episodes.remove_join(ledger, joined["join_id"], actor="invented-editor")
+    (tmp_path / "report.json").write_text(json.dumps(packet))
+    newsworthiness.attach_human_impact([row], [])
+    assert not row.bundle.human_impact
+    newsworthiness.attach_human_impact([again], [])
+    assert not again.bundle.human_impact
+    assert "report_join_unavailable" in again.review_context["retained_report_holds"]
+
+
+@pytest.mark.parametrize("change,reason", [
+    ("changed_text", "report_retained_text_identity"),
+    ("missing_text", "report_retained_text_identity"),
+    ("changed_target", "report_candidate_changed"),
+    ("translation", "report_selected_claim_held"),
+    ("unsupported_summary", None),
+    ("wrong_claim", "report_claim_join_mismatch"),
+    ("wrong_reference", "report_join_unavailable"),
+    ("removed", "report_join_unavailable"),
+])
+def test_actual_report_consumer_keeps_claim_identity_and_holds(tmp_path, monkeypatch, change, reason):
+    import hashlib
+    from src.editorial import newsworthiness, hazard_episodes
+    from src.two_bot.bundle_capture import capture_bundle
+    from tests.remaining_campaign.test_w08_portfolio_selection import candidate
+    trap_network(monkeypatch.setattr)
+    monkeypatch.setenv(report_supply.PACKET_DIRECTORY_ENV, str(tmp_path))
+    row = candidate("target")
+    row.bundle.human_impact = []
+    doc = report()
+    doc["retained_text_sha256"] = hashlib.sha256(doc["retained_text"].encode()).hexdigest()
+    ledger = hazard_episodes.empty_ledger()
+    episode = hazard_episodes.assign(ledger, {"hazard": "flood", "issuer": "gdacs", "source_event_id": "target"})
+    claim = {"claim_id": "c1", "text": doc["claims"][0]["quote"], "attribution": "Ficta Civil Protection",
+             "claim_kind": "flood_occurring", "place_id": "pl-ficta", "window": ["2026-10-28", "2026-10-29"]}
+    join = hazard_episodes.join_report(ledger, report_sha256=doc["report_sha256"], claim=claim,
+        observation={"place_id": "pl-ficta", "window": claim["window"], "evidence_type": "official_flood_report"},
+        episode_id=episode["episode_id"], actor="invented-editor")
+    packet = {"target_event_id": row.event_id, "bundle_sha256": hashlib.sha256(
+        capture_bundle(row.bundle).serialized.encode()).hexdigest(), "report": doc,
+        "selected_claim_ids": ["c1"], "episode_ledger": ledger, "join_ids": [join["join_id"]]}
+    if change == "changed_text":
+        doc["retained_text"] += " Changed bytes."
+    elif change == "missing_text":
+        doc.pop("retained_text")
+    elif change == "changed_target":
+        row.bundle.headline_metric["value"] = 999
+    elif change == "translation":
+        doc["claims"][0]["original_language"] = "pt"
+    elif change == "unsupported_summary":
+        doc["claims"][0]["summary"] = "Invented deaths everywhere"
+    elif change == "wrong_claim":
+        join["claim"]["claim_id"] = "different-claim"
+    elif change == "wrong_reference":
+        join["report_sha256"] = "d" * 64
+    else:
+        hazard_episodes.remove_join(ledger, join["join_id"], actor="invented-editor")
+    (tmp_path / "report.json").write_text(json.dumps(packet))
+    newsworthiness.attach_human_impact([row], [])
+    if reason:
+        assert row.bundle.human_impact == []
+        assert reason in row.review_context["retained_report_holds"]
+    else:
+        assert row.bundle.human_impact[0]["claim"] == claim["text"]
+        assert "Invented deaths" not in json.dumps(row.bundle.human_impact)
+
+
+
+def test_supplied_warning_prompt_keeps_selected_attribution_and_original_bytes():
+    from tests import warning_helpers as wh
+    from src.two_bot.intern.warnings import build_warning_bundle
+    from src.two_bot.writer import build_writer_user_prompt
+    from src.two_bot.types import MemorySlice
+    metadata, original = wh.packet()
+    encoded = wh.encode(metadata)
+    bundle = build_warning_bundle(encoded, original, nomination=wh.nomination(encoded, original), now=wh.NOW)
+    before = deepcopy(bundle.to_dict())
+    prompt = build_writer_user_prompt(bundle, MemorySlice())
+    assert "qualified_warning_consequence_view" in prompt and wh.WARNING in prompt
+    assert bundle.to_dict() == before
+    bundle.raw_signal_dump["source_name"] = "Different authority"
+    with pytest.raises(ValueError, match="warning_retained_attribution_changed"):
+        build_writer_user_prompt(bundle, MemorySlice())

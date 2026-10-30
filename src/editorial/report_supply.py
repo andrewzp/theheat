@@ -9,6 +9,12 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from typing import Any
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+from itertools import islice
 
 from src.editorial import portfolio
 
@@ -62,7 +68,7 @@ def brief_items(report: Mapping[str, Any]) -> dict[str, Any]:
         quote = claim.get("quote")
         if not _text(quote, 500):
             reasons.append("quote_missing")
-        elif retained_valid and quote not in retained:
+        elif retained_valid and isinstance(retained, str) and quote not in retained:
             reasons.append("excerpt_not_in_retained_text")
         elif retrieval == "excerpt_only" and not claim.get("excerpt_attested"):
             reasons.append("unsupported_excerpt")
@@ -80,7 +86,8 @@ def brief_items(report: Mapping[str, Any]) -> dict[str, Any]:
             held.append({"claim_id": claim.get("claim_id"), "reasons": reasons, "translation": translation})
             continue
         items.append({
-            "claim": str(claim.get("summary") or quote), "value": quote, "source_name": report.get("source_name"),
+            "claim": translation["translated_text"] if translation["state"] == "translation_human_reviewed" else quote,
+            "value": quote, "claim_id": claim.get("claim_id"), "source_name": report.get("source_name"),
             "url": report.get("url"), "as_of": report.get("source_date"), "attribution": claim.get("attribution"),
             "original_language": claim.get("original_language"), "translation": translation,
             "retrieval_status": retrieval, "report_sha256": report.get("report_sha256"),
@@ -88,6 +95,126 @@ def brief_items(report: Mapping[str, Any]) -> dict[str, Any]:
         })
     return {"human_impact": items, "held_claims": held,
             "scope": "Attributed report statements only; not observations or adjudicated impacts."}
+
+
+PACKET_DIRECTORY_ENV = "THEHEAT_RETAINED_REPORT_PACKETS"
+MAX_PACKET_BYTES = 4 * 1024 * 1024
+MAX_PACKET_FILES = 16
+
+
+def _packet_items(packet: Mapping[str, Any], candidate: Any) -> list[dict[str, Any]]:
+    """Exact explicit joins; neither geographic resemblance nor report text is authority."""
+    from src.editorial.hazard_episodes import writer_statements, SCHEMA
+    from src.two_bot.bundle_capture import capture_bundle
+
+    bundle = candidate.bundle
+    raw = bundle.raw_signal_dump or {}
+    if bundle.signal_kind in {"nhc_advisory", "official_warning", "severe_weather"} or "physical_episode" in raw:
+        raise ValueError("report_immutable_bundle")
+    digest = hashlib.sha256(capture_bundle(bundle).serialized.encode()).hexdigest()
+    if packet.get("bundle_sha256") != digest:
+        raise ValueError("report_candidate_changed")
+    report = packet.get("report")
+    if not isinstance(report, dict):
+        raise ValueError("report_missing")
+    text = report.get("retained_text")
+    if (report.get("retrieval_status") != "full_text_retained" or not isinstance(text, str) or not _text(text, MAX_PACKET_BYTES)
+            or report.get("retained_text_sha256") != hashlib.sha256(text.encode()).hexdigest()):
+        raise ValueError("report_retained_text_identity")
+    if (not re.fullmatch(r"[0-9a-f]{64}", str(report.get("report_sha256")))
+            or not _text(report.get("source_name"), 200) or not _text(report.get("url"), 2000)):
+        raise ValueError("report_source_identity")
+    selected = packet.get("selected_claim_ids")
+    if (not isinstance(selected, list) or not selected or len(selected) > 5
+            or any(not _text(value, 100) for value in selected) or len(set(selected)) != len(selected)):
+        raise ValueError("report_claim_selection")
+    claims = report.get("claims")
+    if not isinstance(claims, list) or any(not isinstance(c, dict) for c in claims):
+        raise ValueError("report_claims")
+    ids = [c.get("claim_id") for c in claims]
+    if any(not _text(value, 100) for value in ids) or len(set(ids)) != len(ids):
+        raise ValueError("report_claim_identity")
+    qualified = brief_items(report)
+    items = [item for item in qualified["human_impact"] if item["claim_id"] in selected]
+    if len(items) != len(selected):
+        raise ValueError("report_selected_claim_held")
+    episode = (candidate.review_context or {}).get("physical_episode") or {}
+    joins = packet.get("join_ids") or []
+    if episode or joins:
+        ledger = packet.get("episode_ledger")
+        if (not isinstance(ledger, dict) or ledger.get("schema") != SCHEMA or not isinstance(joins, list)
+                or not joins or len(joins) != len(set(joins))):
+            raise ValueError("report_join_unavailable")
+        statements = [row for row in writer_statements(ledger, str(episode.get("episode_id") or ""))
+                      if row["join_id"] in joins and row["report_sha256"] == report["report_sha256"]]
+        if len(statements) != len(joins):
+            raise ValueError("report_join_unavailable")
+        for item in items:
+            matches = [row for row in statements if row["statement"] == item["value"]
+                       and row["attribution"] == item["attribution"] and row["claim_id"] == item["claim_id"]]
+            if len(matches) != 1:
+                raise ValueError("report_claim_join_mismatch")
+            item["physical_join_id"] = matches[0]["join_id"]
+            item["physical_episode_id"] = episode["episode_id"]
+            item["claim_window"] = matches[0]["time"]
+    for item in items:
+        item["retained_text_sha256"] = report["retained_text_sha256"]
+        item["target_bundle_sha256"] = digest
+    return items
+
+
+def attach_supplied_reports(queue: Sequence[Any], *, max_items: int) -> set[int]:
+    """Ordinary enrichment consumer of bounded, locally supplied retained report packets.
+
+    Called under the existing news-enrichment controls. Absent directory means no
+    reads. The supplied report hash is a reference, not authentication; the separate
+    retained-text digest binds the quotes. No fetch, inference, or independent confirmation.
+    """
+    directory = os.environ.get(PACKET_DIRECTORY_ENV)
+    if not directory:
+        return set()
+    enriched: set[int] = set()
+    # Re-enrichment starts from the original supplied-fact-free queue bundle.
+    # This also withdraws a previously attached claim when its join is removed.
+    for candidate in queue:
+        candidate.bundle.human_impact = [item for item in candidate.bundle.human_impact or []
+            if not (isinstance(item, dict) and item.get("target_bundle_sha256")
+                    and item.get("evidence_class") == "attributed_report_statement")]
+    try:
+        paths = list(islice(Path(directory).iterdir(), MAX_PACKET_FILES + 1))
+        if len(paths) > MAX_PACKET_FILES:
+            raise ValueError("report_packet_count_limit")
+        total, packets = 0, []
+        for path in sorted(paths):
+            if path.suffix != ".json" or path.is_symlink() or not path.is_file():
+                continue
+            with path.open("rb") as handle:
+                content = handle.read(MAX_PACKET_BYTES + 1)
+            total += len(content)
+            if len(content) > MAX_PACKET_BYTES or total > 2 * MAX_PACKET_BYTES:
+                raise ValueError("report_packet_byte_limit")
+            packet = json.loads(content)
+            if isinstance(packet, dict):
+                packets.append(packet)
+        for candidate in queue:
+            matches = [p for p in packets if p.get("target_event_id") == candidate.event_id]
+            if not matches:
+                continue
+            try:
+                if len(matches) != 1 or sum(c.event_id == candidate.event_id for c in queue) != 1:
+                    raise ValueError("report_target_ambiguous")
+                items = _packet_items(matches[0], candidate)
+                existing = list(candidate.bundle.human_impact or [])
+                if len(existing) + len(items) > max_items:
+                    raise ValueError("report_fact_limit")
+                candidate.bundle.human_impact = [*existing, *items]
+                enriched.add(id(candidate))
+            except (ValueError, KeyError, TypeError, AttributeError) as exc:
+                candidate.review_context.setdefault("retained_report_holds", []).append(str(exc))
+    except (OSError, ValueError, TypeError) as exc:
+        for candidate in queue:
+            candidate.review_context.setdefault("retained_report_holds", []).append(str(exc))
+    return enriched
 
 
 # --- 08.3 importance vector ----------------------------------------------------------------

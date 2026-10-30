@@ -119,7 +119,8 @@ def test_report_joins_feed_only_matched_statements_and_are_removable():
     assert matched["status"] == "matched" and unmatched["status"] == "report_claim_only"
     statements = he.writer_statements(ledger, ep)
     assert statements == [{"statement": "Streets flooded in Ficta", "attribution": "Ficta civil protection",
-                           "time": WINDOW, "evidence_class": "report_claim_matched_to_observation"}]
+                           "time": WINDOW, "evidence_class": "report_claim_matched_to_observation",
+                           "join_id": matched["join_id"], "report_sha256": "a" * 64, "episode_id": ep, "claim_id": None}]
     he.remove_join(ledger, matched["join_id"], actor="op")
     assert he.writer_statements(ledger, ep) == [] and ledger["report_joins"][0]["report_sha256"] == "a" * 64
 

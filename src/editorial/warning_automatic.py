@@ -232,6 +232,15 @@ def writer_consequence_view(bundle: Any) -> dict[str, Any] | None:
         packet = json.loads(metadata)
         if _sha(metadata) != retained["metadata_sha256"] or _sha(original) != packet["content_sha256"]:
             raise ValueError("warning_retained_evidence_changed")
+        from src.editorial.official_warning import _origin
+        identity = {"schema": "theheat.warning-evidence/v1", "metadata_sha256": _sha(metadata),
+                    "content_sha256": _sha(original), "issuer_id": packet["issuer_id"],
+                    "issuer_name": raw["source_name"], "origin": _origin(packet["source_url"]),
+                    "report_id": packet["report_id"], "revision": packet["revision"],
+                    "original_language": packet["original_language"]}
+        evidence_sha = _sha(json.dumps(identity, sort_keys=True, ensure_ascii=False, separators=(",", ":")))
+        if evidence_sha != retained["evidence_sha256"]:
+            raise ValueError("warning_retained_attribution_changed")
         anchor = packet["warning"]
         if original.encode()[anchor["start"]:anchor["end"]] != anchor["text"].encode():
             raise ValueError("warning_retained_anchor_changed")

@@ -399,7 +399,9 @@ def attach_human_impact(queue: list[Any], news_events: list[dict] | None) -> int
     """Attach matched events' impact facts to their candidates' bundles, in
     place. Returns the number of candidates that gained facts. Dedup on
     (claim, url); total facts per bundle capped."""
-    enriched: set[int] = set()
+    from src.editorial.report_supply import attach_supplied_reports
+
+    enriched = attach_supplied_reports(queue, max_items=MAX_IMPACT_FACTS_PER_BUNDLE)
     for ev, candidate in match_news_to_candidates(news_events, queue):
         bundle = candidate.bundle
         existing = list(getattr(bundle, "human_impact", None) or [])

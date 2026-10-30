@@ -287,10 +287,20 @@ def join_report(ledger: dict[str, Any], *, report_sha256: str, claim: Mapping[st
 
 def writer_statements(ledger: Mapping[str, Any], episode_id: str) -> list[dict[str, Any]]:
     """Only matched, attributed statements with their own times; never a scientific warrant."""
-    return [{"statement": j["claim"].get("text"), "attribution": j["claim"].get("attribution"),
-             "time": j["claim"].get("window"), "evidence_class": "report_claim_matched_to_observation"}
+    episode = _episode(ledger, episode_id)
+    if episode.get("status") != "active" or episode.get("historical_hold"):
+        return []
+    return [{"statement": j["claim"]["text"], "attribution": j["claim"]["attribution"],
+             "time": j["claim"]["window"], "evidence_class": "report_claim_matched_to_observation",
+             "join_id": j["join_id"], "report_sha256": j["report_sha256"], "episode_id": episode_id,
+             "claim_id": j["claim"].get("claim_id")}
             for j in ledger["report_joins"] if j["episode_id"] == episode_id and j["status"] == "matched"
-            and not j["removed"]]
+            and not j["removed"] and isinstance(j.get("claim"), dict)
+            and all(isinstance(j["claim"].get(key), str) and j["claim"][key].strip()
+                    for key in ("text", "attribution"))
+            and isinstance(j["claim"].get("window"), list) and len(j["claim"]["window"]) == 2
+            and all(isinstance(value, str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}Z)?", value)
+                    for value in j["claim"]["window"])]
 
 
 def remove_join(ledger: dict[str, Any], join_id: str, *, actor: str) -> dict[str, Any]:
