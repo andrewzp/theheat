@@ -144,22 +144,23 @@ def generator_report(root: Path = ROOT, *, timeout: float = 300.0, run: bool = T
 
 
 def preflight(root: Path = ROOT, *, run_generators: bool = True) -> dict:
+    repository = repository_report(root)
     report = {"schema": "theheat.onboarding-preflight/v1", "root": str(root),
-              "repository": repository_report(root), "dependencies": dependency_report(root),
+              "repository": repository, "dependencies": dependency_report(root),
               "node": node_report(root), "generated": generator_report(root, run=run_generators),
               "not_inspected": ["environment values and credentials (owner-supplied; never read)",
                                 "network reachability of any source, model, Gist or X service"]}
     report["features"] = _features(report)
-    report["next_commands"] = [
+    commands = [
         "pytest tests/remaining_campaign/ tests/final_closure/ (credential-free env -i, offline fixtures)",
         "python scripts/theheat_onboard.py inspect-draft --state <saved-state.json> --draft-id <id>",
         "node scripts/weekly_review.mjs --state <saved-state.json> --output <new private dir>",
         "python scripts/theheat_evaluation.py experiment-plan --weekly-review <review.json> --spec <spec.json> --output <plan.json>",
         "python -m src.commands.local_cli --database <disposable.sqlite> backup --output <new private file> (then verify-backup)",
     ]
-    if report["repository"]["normals"]["status"] != "qualified":
-        report["next_commands"].append(
-            "python scripts/build_normals.py plan|acquire|admit|install-plan (owner-run bounded live acquisition)")
+    if repository["normals"]["status"] != "qualified":
+        commands.append("python scripts/build_normals.py plan|acquire|admit|install-plan (owner-run bounded live acquisition)")
+    report["next_commands"] = commands
     return report
 
 
