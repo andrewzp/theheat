@@ -15,7 +15,10 @@ test("owned actual-handler quote/fact journey at desktop, 390 and 320", {
   const report = { scope: "invented_claim_reference_journey", actual_handlers: true, mocked: ["Gist in-memory transport"], source_or_platform_calls: 0, publication_calls: 0, widths: [], errors: [], refused_requests: [] }
   try {
     for (const width of [1280, 390, 320]) {
-      const context = await browser.newContext({ viewport: { width, height: 900 } })
+      // Child panels use normal same-origin fetches. Authenticate the invented
+      // browser session too, rather than only the fixture page's explicit calls.
+      const context = await browser.newContext({ viewport: { width, height: 900 },
+        httpCredentials: { username: "fixture", password: "invented" } })
       const page = await context.newPage()
       page.on("pageerror", error => report.errors.push(String(error)))
       await context.route("**/*", route => {

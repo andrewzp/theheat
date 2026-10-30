@@ -22,8 +22,15 @@ export async function inventedFetch(url, options = {}) {
   }
   return Response.json({ files: { "state.json": { content: JSON.stringify(store.state) } } })
 }
+let handlerTail = Promise.resolve()
 export async function actualHandler(handler, request) {
+  // Sibling panels can now read concurrently. Keep the explicit in-memory
+  // transport installed only for its own handler, and restore it in all cases.
+  const priorHandler = handlerTail
+  let release
+  handlerTail = new Promise(resolve => { release = resolve })
+  await priorHandler
   const previous = globalThis.fetch
   globalThis.fetch = inventedFetch
-  try { return await handler(request) } finally { globalThis.fetch = previous }
+  try { return await handler(request) } finally { globalThis.fetch = previous; release() }
 }
