@@ -129,7 +129,7 @@ def _desk_state():
         ("pending-1", "pending", "Sample Coast is forecast to reach 45°C Friday.", "2026-10-23T10:00:00Z"),
         ("held-1", "pending", "Invented held draft text.", "2026-10-23T11:00:00Z"),
     ]
-    drafts = []
+    drafts: list[dict] = []
     for draft_id, status, text, at in rows:
         d = {"id": draft_id, "status": status, "text": text, "type": "temperature", "updated_at": at,
              "content_revision": 1}

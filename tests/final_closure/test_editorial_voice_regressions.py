@@ -14,11 +14,13 @@ verification-required, not publishable gold.
 from __future__ import annotations
 
 from copy import deepcopy
+from typing import Any, cast
 
 import pytest
 
 from src.evaluation import historical as evaluation
 from src.orchestrator.suppression import _record_downstream_suppression
+from src.state_schema import BotState
 from src.two_bot import pipeline
 from tests import live_content_harness as h
 from tests.ghcn_graphic_helpers import graphic_bundles
@@ -72,9 +74,9 @@ def test_required_historical_findings_keep_their_evidence_limits():
 @pytest.mark.parametrize("spec,variant", TARGETED, ids=lambda row: row.get("probe_id", row.get("case_id")))
 def test_known_defect_overrides_approving_models_through_real_parsers(spec, variant, approving_models):
     approving_models.copy = variant["tweet"]
-    outcome = {}
+    outcome: dict[str, Any] = {}
     bundle = evaluation.structural_bundle(spec)
-    assert pipeline.generate_draft(bundle, {}, result_out=outcome) is None
+    assert pipeline.generate_draft(bundle, cast(BotState, {}), result_out=outcome) is None
     assert approving_models.stages() == ["writer"]  # Real SDK writer parse; no paid check bought.
     assert outcome["kill_stage"] == "fact_check"
     assert set(variant["expected_codes"]) <= _codes(outcome)
@@ -83,7 +85,7 @@ def test_known_defect_overrides_approving_models_through_real_parsers(spec, vari
 
     # Downstream consumer: the ordinary suppression ledger retains stage and the
     # fixed code; the private candidate stays in state, never in stdout.
-    state = {"suppressions": []}
+    state = cast(BotState, {"suppressions": []})
     _record_downstream_suppression(bot_state=state, source="synthetic_probe", run_id=None, event_id=bundle.event_id,
                                    score=None, kill_stage=outcome["kill_stage"], kill_reason=outcome["kill_reason"],
                                    summary=None, rejected_candidate=outcome["rejected_candidate"])
@@ -97,7 +99,7 @@ def test_known_defect_overrides_approving_models_through_real_parsers(spec, vari
 @pytest.mark.parametrize("spec,variant", CONTROLS, ids=lambda row: row.get("probe_id", row.get("case_id")))
 def test_controls_are_not_rejected_locally_and_still_buy_every_required_check(spec, variant, approving_models):
     approving_models.copy = variant["tweet"]
-    draft = pipeline.generate_draft(evaluation.structural_bundle(spec), {}, result_out={})
+    draft = pipeline.generate_draft(evaluation.structural_bundle(spec), cast(BotState, {}), result_out={})
     # The scripted approvals produce a draft only to prove the order of required
     # checks; this says nothing about the control's truth or quality.
     assert draft is not None and draft["text"] == variant["tweet"]
@@ -126,8 +128,8 @@ def test_intervening_record_history_needs_named_archive_scope_and_cutoff():
 ])
 def test_voice_defect_is_rejected_free_through_the_real_sdk_writer(tweet, code, approving_models):
     approving_models.copy = tweet
-    outcome = {}
-    assert pipeline.generate_draft(_bundle(), _state_with_memory(), result_out=outcome) is None
+    outcome: dict[str, Any] = {}
+    assert pipeline.generate_draft(_bundle(), cast(BotState, _state_with_memory()), result_out=outcome) is None
     assert approving_models.stages() == ["writer"]
     assert outcome["kill_stage"] == "copy_gate" and outcome["kill_reason"].startswith(code)
 
@@ -138,12 +140,12 @@ def test_cutting_an_unsupported_ending_is_what_lets_an_evidence_equivalent_rewri
     padded = "Mali thermal power is 361 MW, a stark reminder of a warming world."
     cut = "Mali thermal power is 361 MW."
     approving_models.copy = padded
-    first = {}
-    assert pipeline.generate_draft(_bundle(), _state_with_memory(), result_out=first) is None
+    first: dict[str, Any] = {}
+    assert pipeline.generate_draft(_bundle(), cast(BotState, _state_with_memory()), result_out=first) is None
     assert first["kill_stage"] == "copy_gate"
     approving_models.requests.clear()
     approving_models.copy = cut
-    draft = pipeline.generate_draft(_bundle(), _state_with_memory(), result_out={})
+    draft = pipeline.generate_draft(_bundle(), cast(BotState, _state_with_memory()), result_out={})
     assert draft is not None and draft["text"] == cut
     assert approving_models.stages() == ["writer", "safety", "fact_check", "critic"]
 

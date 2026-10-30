@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import asdict, replace
 import json
 from pathlib import Path
+from typing import Any, cast
 from unittest.mock import Mock
 
 import pytest
@@ -17,6 +18,7 @@ import pytest
 from src.editorial.policy import current_editorial_policy, source_manifest
 from src.evaluation.production_match import CHECK_STAGES
 from src.two_bot import check_requests, copy_gates, fact_check, pipeline, writer
+from src.state_schema import BotState
 from src.two_bot.types import CriticResult, FactCheckResult, WriterResult
 from src.writer_health import STAGES as WRITER_HEALTH_STAGES
 from tests.two_bot.conftest import _bundle, _state_with_memory, configured_pipeline_providers  # noqa: F401
@@ -26,6 +28,10 @@ ROOT = Path(__file__).resolve().parents[2]
 VECTORS = json.loads((ROOT / "tests/fixtures/copy_gate_vectors.json").read_text())["vectors"]
 STERILE = "A satellite detection model shows Mali thermal power at 361 MW."
 CLEAN = "Mali thermal power is 361 MW."
+
+
+def _state() -> BotState:
+    return cast(BotState, _state_with_memory())
 
 
 @pytest.mark.parametrize("vector", VECTORS, ids=lambda v: v["id"])
@@ -38,19 +44,21 @@ def test_blocking_and_advisory_codes_are_disjoint_and_explained():
     assert set(copy_gates.MESSAGES) == set(copy_gates.BLOCKING) | set(copy_gates.ADVISORY)
     assert copy_gates.copy_rejection(CLEAN) is None
     assert copy_gates.copy_rejection("Port Example hit 47°C. It was hot.") is None  # Two sentences: advisory only.
-    assert copy_gates.copy_rejection(123) is None and copy_gates.copy_notes("   ") == []
+    assert copy_gates.copy_rejection(cast(Any, 123)) is None and copy_gates.copy_notes("   ") == []
 
 
 def test_danger_wording_blocks_unless_the_same_wording_is_in_source_evidence():
     text = "Mali faces a life-threatening heat warning on Tuesday."
     bundle = _bundle()
-    assert copy_gates.copy_rejection(text, bundle).startswith("invented_danger")
+    hit = copy_gates.copy_rejection(text, bundle)
+    assert hit is not None and hit.startswith("invented_danger")
     sourced = replace(bundle, raw_signal_dump={**bundle.raw_signal_dump,
                                                "warning_text": "Life threatening heat expected (invented)"})
     assert copy_gates.copy_rejection(text, sourced) is None
     # An editorial prohibition naming the word is not source wording.
     forbidden = replace(bundle, historical_context={"forbidden_claims": ["life-threatening"]})
-    assert copy_gates.copy_rejection(text, forbidden).startswith("invented_danger")
+    hit = copy_gates.copy_rejection(text, forbidden)
+    assert hit is not None and hit.startswith("invented_danger")
 
 
 @pytest.fixture
@@ -82,8 +90,8 @@ def _writer_responds(monkeypatch, tweet):
 ])
 def test_real_writer_output_is_rejected_free_before_any_paid_check(monkeypatch, paid, tweet, code):
     provider = _writer_responds(monkeypatch, tweet)
-    outcome = {}
-    assert pipeline.generate_draft(_bundle(), _state_with_memory(), result_out=outcome) is None
+    outcome: dict[str, Any] = {}
+    assert pipeline.generate_draft(_bundle(), _state(), result_out=outcome) is None
     assert provider.call_count == 1  # One routine writer sample; no repair or refill call.
     assert outcome["kill_stage"] == "copy_gate" and outcome["kill_reason"].startswith(code)
     assert outcome["stage_outcomes"] == {"writer": "pass", "copy_gate": "kill"}
@@ -93,7 +101,7 @@ def test_real_writer_output_is_rejected_free_before_any_paid_check(monkeypatch, 
 @pytest.mark.usefixtures("configured_pipeline_providers")
 def test_fact_first_output_still_buys_every_required_check(monkeypatch, paid):
     provider = _writer_responds(monkeypatch, CLEAN)
-    draft = pipeline.generate_draft(_bundle(), _state_with_memory())
+    draft = pipeline.generate_draft(_bundle(), _state())
     assert draft and draft["text"] == CLEAN and provider.call_count == 1
     assert [model.call_count for model in paid] == [1, 1, 1]
 
@@ -101,8 +109,8 @@ def test_fact_first_output_still_buys_every_required_check(monkeypatch, paid):
 @pytest.mark.usefixtures("configured_pipeline_providers")
 def test_factual_rejection_keeps_priority_over_copy(monkeypatch, paid):
     _writer_responds(monkeypatch, "A satellite detection model shows a Mali wildfire at 361 MW.")
-    outcome = {}
-    assert pipeline.generate_draft(_bundle(), _state_with_memory(), result_out=outcome) is None
+    outcome: dict[str, Any] = {}
+    assert pipeline.generate_draft(_bundle(), _state(), result_out=outcome) is None
     assert outcome["kill_stage"] == "fact_check" and all(not model.mock_calls for model in paid)
 
 

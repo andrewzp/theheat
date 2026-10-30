@@ -720,7 +720,7 @@ def test_generate_draft_returns_none_on_fact_check_fail(mock_writer, mock_extrac
     )
     state = _state_with_memory()
 
-    outcome = {}
+    outcome: dict = {}
     result = generate_draft(_monthly_high_bundle(), state, result_out=outcome)
 
     assert result is None
