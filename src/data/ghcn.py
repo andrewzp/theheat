@@ -40,7 +40,6 @@ import hashlib
 from copy import deepcopy
 from dataclasses import replace
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from src.two_bot.call_inventory import submit_in_context
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from itertools import zip_longest
@@ -324,6 +323,11 @@ def _fetch_recent_obs(
     if _runtime is not None:
         raw_by_date = _runtime.diffs(dates)
     else:
+        # The sealed read-only graphic runtime imports the pure GHCN helpers,
+        # but deliberately excludes live-call authority. Resolve it only in
+        # the live collector branch, before dispatching either nested pool.
+        from src.two_bot.call_inventory import submit_in_context
+
         with ThreadPoolExecutor(max_workers=lookback_days) as pool:
             future_to_date = {submit_in_context(pool, _fetch_diff, d): d for d in dates}
             for fut in as_completed(future_to_date):
@@ -791,6 +795,8 @@ def check_extreme_signals_for_stations(
             except (requests.RequestException, OSError, ValueError, TypeError, UnicodeError):
                 metrics["archive_verification_failed"] += 1
     else:
+        from src.two_bot.call_inventory import submit_in_context
+
         with ThreadPoolExecutor(max_workers=4) as pool:
             futures = {submit_in_context(pool, fetch_archive, sid): sid for sid in selected}
             for future in as_completed(futures):
