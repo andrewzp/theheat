@@ -181,7 +181,15 @@ def consequence_brief(kind: str, bundle: dict) -> dict[str, Any]:
         names = ["NWS", "National Weather Service"] + ([props["senderName"]] if props.get("senderName") else [])
         timing = {"issued_at": props.get("sent"), "expires": props.get("expires"), "ends": props.get("ends")}
         places = [{"name": str(props.get("areaDesc") or ""), "country": "US"}]
-        episode = {"key": ["nws", str(props.get("event") or ""), str(props.get("areaDesc") or "").casefold()],
+        alert_id = props.get("id") or envelope.get("source_alert_id")
+        if not isinstance(alert_id, str) or not alert_id:
+            raise ValueError("nws_alert_identity_missing")
+        references = props.get("references") or []
+        if not isinstance(references, list) or any(not isinstance(row, dict) or not isinstance(row.get("identifier"), str)
+                                                  or not row["identifier"] for row in references):
+            raise ValueError("nws_references_invalid")
+        episode = {"key": ["nws", alert_id],
+                   "official_ids": sorted({alert_id, *(row["identifier"] for row in references)}),
                    "rank": _sent_rank(props.get("sent")), "statement_sha256": _sha(str(props.get("description") or "")),
                    "issuer": "nws"}
         tier = str(props.get("event") or "") or None
@@ -194,6 +202,43 @@ def consequence_brief(kind: str, bundle: dict) -> dict[str, Any]:
             "source_categories": sorted({m[1] for m in _CATEGORY.finditer(corpus)}),
             "source_harm_terms": sorted({m.group().casefold() for m in _OBSERVED_HARM.finditer(corpus)}),
             "episode": episode, "lead": "one short complete lead; keep issuer attribution and warning modality"}
+
+
+def writer_consequence_view(bundle: Any) -> dict[str, Any] | None:
+    """Derived prompt view; internal integrity only, never current-source authority.
+
+    Existing pipeline owners still establish source authenticity and currentness.
+    This reads no owner or transport and never changes captured bundle bytes.
+    """
+    kind = getattr(bundle, "signal_kind", None)
+    if kind not in FAMILIES:
+        return None
+    from src.two_bot.bundle_capture import capture_bundle
+    payload = capture_bundle(bundle).payload()
+    raw = payload["raw_signal_dump"]
+    if kind == "nhc_advisory":
+        from src.two_bot.intern.nhc_advisory import RetainedAdvisory
+        RetainedAdvisory(bundle)
+    elif kind == "severe_weather":
+        from src.media.published_radar import source_envelope
+        envelope = raw["source_evidence"]
+        if envelope != source_envelope(envelope["feature"], envelope["captured_at"]):
+            raise ValueError("nws_retained_evidence_changed")
+        if payload["event_id"] != "nws_" + envelope["source_alert_id"]:
+            raise ValueError("nws_retained_identity_changed")
+    else:
+        retained = raw["official_warning"]
+        metadata, original = retained["metadata_utf8"], retained["source_utf8"]
+        packet = json.loads(metadata)
+        if _sha(metadata) != retained["metadata_sha256"] or _sha(original) != packet["content_sha256"]:
+            raise ValueError("warning_retained_evidence_changed")
+        anchor = packet["warning"]
+        if original.encode()[anchor["start"]:anchor["end"]] != anchor["text"].encode():
+            raise ValueError("warning_retained_anchor_changed")
+    brief = consequence_brief(kind, payload)
+    # The writer receives only the selected hazard/context; global bulletin term
+    # inventories remain copy floors, not a license to import another place's impact.
+    return {key: brief[key] for key in ("family", "assertion", "attribution_names", "statements", "timing", "places", "lead")}
 
 
 def _advisory_rank(value: str) -> list:
@@ -273,6 +318,25 @@ def episode_hold(draft: dict, state: Any) -> str | None:
     state = state if isinstance(state, dict) else {}
     ledger = state.get("publish_ledger") if isinstance(state.get("publish_ledger"), dict) else {}
     posted = set(state.get("posted_events") or [])
+    linked_ids = set(mine.get("official_ids", []))
+    if kind == "severe_weather":
+        # Follow only explicit CAP references, including an intermediate saved
+        # update. Area/name similarity never establishes a relationship.
+        known = [_episode(other) for other in state.get("drafts") or []]
+        while True:
+            expanded = set(linked_ids)
+            for entry in known:
+                if entry is not None and entry[0] == kind:
+                    ids = set(entry[1].get("official_ids", []))
+                    if ids & linked_ids:
+                        expanded.update(ids)
+            if expanded == linked_ids:
+                break
+            linked_ids = expanded
+        for identifier in linked_ids:
+            prior = ledger.get("nws_" + identifier)
+            if isinstance(prior, dict) and not prior.get("tweet_id") and prior.get("phase") != "not_sent":
+                return "warning_prior_delivery_unknown"
     own = ledger.get(draft.get("event_id"))
     if isinstance(own, dict) and not own.get("tweet_id") and own.get("phase") != "not_sent":
         return "warning_prior_delivery_unknown"
@@ -280,7 +344,9 @@ def episode_hold(draft: dict, state: Any) -> str | None:
         if not isinstance(other, dict) or other is draft or other.get("id") == draft.get("id"):
             continue
         theirs = _episode(other)
-        if theirs is None or theirs[0] != kind or theirs[1]["key"] != mine["key"]:
+        if theirs is None or theirs[0] != kind or (
+                not (set(theirs[1].get("official_ids", [])) & linked_ids) if kind == "severe_weather"
+                else theirs[1]["key"] != mine["key"]):
             continue  # Different issuer/family/place: never merged by a name coincidence.
         event_id = other.get("event_id")
         row = ledger.get(event_id)

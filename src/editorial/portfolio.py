@@ -77,6 +77,7 @@ class PlanningCandidate:
     regions: tuple[str, ...]
     dimensions: dict
     exceptional_reason: str | None = None
+    required_dimensions: tuple[str, ...] = DIMENSIONS
 
     def validated(self) -> dict:
         binding = validate_binding(self.binding)
@@ -95,9 +96,11 @@ class PlanningCandidate:
             dimensions[key] = None if value is None else dict(value)
         require(self.exceptional_reason is None or _text(self.exceptional_reason),
                 "portfolio_exception_reason_invalid")
+        require(type(self.required_dimensions) is tuple and bool(self.required_dimensions)
+                and set(self.required_dimensions) <= set(DIMENSIONS), "portfolio_required_dimensions_invalid")
         return dict(binding=binding, candidate_id=fingerprint(binding), hazard=self.hazard,
                     regions=sorted(self.regions), dimensions=dimensions,
-                    exceptional_reason=self.exceptional_reason)
+                    exceptional_reason=self.exceptional_reason, required_dimensions=list(self.required_dimensions))
 
 
 def plan_portfolio(candidates: list[PlanningCandidate], *, writing_attempts: int,
@@ -133,11 +136,12 @@ def plan_portfolio(candidates: list[PlanningCandidate], *, writing_attempts: int
         row["weighted_components"] = {key: None if row["dimensions"][key] is None
             else row["dimensions"][key]["score"] * weight
             for key, weight in zip(DIMENSIONS, policy.weights)}
-        row["base_score"] = None if missing else sum(row["weighted_components"].values())
-        row.update(disposition="assessment_incomplete" if missing else "writing_budget",
+        missing_required = [key for key in missing if key in row["required_dimensions"]]
+        row["base_score"] = None if missing_required else sum(value for value in row["weighted_components"].values() if value is not None)
+        row.update(disposition="assessment_incomplete" if missing_required else "writing_budget",
                    selection_rank=None, diversity_penalty=None, adjusted_score=None,
                    evaluated_after_selections=None)
-        if not missing:
+        if not missing_required:
             if row["base_score"] < policy.minimum_score:
                 row["disposition"] = "below_planning_minimum"
             else:

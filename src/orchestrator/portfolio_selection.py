@@ -9,7 +9,8 @@ opinion stage.
 
 * Importance dimensions come only from retained bundle/review fields. A dimension
   with no supporting field stays absent (``None``), never zero; an incomplete vector
-  is ``assessment_incomplete`` and is not selected.
+  is ``assessment_incomplete`` and is not selected. Qualified warnings require
+  urgency, evidence quality and a clear angle; absent observed impact/rarity stay absent.
 * There is no continent or regional quota: the planner's soft diversity penalty is
   the only spread rule, and the country code is its region.
 * A ranking failure raises ``PortfolioRankingFailed``: the drain holds the slate with
@@ -60,7 +61,12 @@ def evidence_for(candidate: Any) -> dict[str, Any]:
     found = review.get("physical_episode")
     episode: Mapping[str, Any] = found if isinstance(found, Mapping) else {}
     evidence: dict[str, Any] = {}
-    evidence_type = episode.get("evidence_type") or raw.get("evidence_type")
+    from src.editorial.warning_automatic import writer_consequence_view
+    warning = writer_consequence_view(bundle)
+    if warning is not None:
+        evidence.update(evidence_type="official_warning", qualified_warning=True,
+                        affected_places=len(warning["places"]))
+    evidence_type = evidence.get("evidence_type") or episode.get("evidence_type") or raw.get("evidence_type")
     if evidence_type:
         # Observed/official evidence vs forecast/warning stays explicit; it is never inferred.
         evidence["evidence_type"] = "observed" if evidence_type in _OBSERVED else evidence_type

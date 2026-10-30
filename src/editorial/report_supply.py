@@ -154,7 +154,9 @@ def rank(candidates: Sequence[Mapping[str, Any]], *, allowance: int) -> dict[str
         planning.append(portfolio.PlanningCandidate(
             binding=dict(row["binding"]), hazard=str(row["hazard"]), regions=tuple(row.get("regions") or ()),
             dimensions=importance_vector(row.get("evidence") or {}),
-            exceptional_reason=row.get("exceptional_reason")))
+            exceptional_reason=row.get("exceptional_reason"),
+            required_dimensions=("urgency", "evidence_quality", "clear_angle")
+            if (row.get("evidence") or {}).get("qualified_warning") is True else portfolio.DIMENSIONS))
     try:
         plan = portfolio.plan_portfolio(planning, writing_attempts=allowance)
     except portfolio.PortfolioError as exc:

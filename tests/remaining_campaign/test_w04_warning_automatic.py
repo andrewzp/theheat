@@ -280,13 +280,14 @@ def test_official_and_nws_families_build_typed_briefs_with_their_own_issuers():
                                          "warning": {"text": "Gale warning for Example Bay: gusts to 50 km/h expected."},
                                          "place": {"name": "Example Bay", "country": "ZZ"}})}}}
     nws = {"event_id": "nws_x", "raw_signal_dump": {"source_evidence": {"feature": {"properties": {
-        "event": "Hurricane Warning", "areaDesc": "Example Bay", "sent": "2026-10-29T20:00:00-05:00",
+        "id": "urn:invented-cap", "event": "Hurricane Warning", "areaDesc": "Example Bay", "sent": "2026-10-29T20:00:00-05:00",
         "headline": "Hurricane Warning issued", "description": "Hurricane conditions are expected.",
         "senderName": "NWS Invented Office"}}}}}
     first = wa.consequence_brief("official_warning", official)
     second = wa.consequence_brief("severe_weather", nws)
     assert first["episode"]["key"][0] == "zz-invented-met" and second["episode"]["key"][0] == "nws"
-    assert first["episode"]["key"][2] == second["episode"]["key"][2] == "example bay"  # same name, separate issuers
+    assert first["places"][0]["name"] == second["places"][0]["name"] == "Example Bay"
+    assert first["episode"]["key"] != second["episode"]["key"]  # same name, separate issuers
     assert wa.copy_hold("Invented Met Service warns gusts to 50 km/h are expected in Example Bay.", first) is None
     assert wa.copy_hold("Gusts reached 50 km/h and damaged Example Bay, Invented Met Service says.", first) == \
         "warning_auto_observed_harm_claim"
