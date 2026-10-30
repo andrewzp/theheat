@@ -6,6 +6,7 @@ import { createGraphicPreviewController, firePreviewSourceStatus, graphicRequest
   isTemperaturePreviewType, mediaPNGRequest, retainedPacketReference, storeFamilyFor, temperaturePNGRequest,
   temperaturePreviewSourceStatus } from "../../lib/graphic-preview.js"
 import { LANE_TEXT, draftGraphicRequirement } from "../../lib/graphic-availability.js"
+import { textGraphicAgreement } from "../../lib/text-graphic-agreement.js"
 
 const h = React.createElement
 
@@ -127,6 +128,21 @@ export function GraphicPreviewFigure({ value, url, originalURL = null }) {
 
 const FIRE_LABELS = { modis: "MODIS", viirs: "NOAA-20/NOAA-21 VIIRS" }
 
+// Advisory join of the text's measured values with the graphic's own description.
+export function TextGraphicAgreement({ text, value }) {
+  if (!value || value.schema_version === 5) {
+    return h("p", { className: "graphic-agreement", "data-status": "published" },
+      "Software does not read a published image; compare its labels with the text yourself.")
+  }
+  const result = textGraphicAgreement(text, value.schema_version >= 4 ? value.delivery_text : value.alt_text)
+  if (result.status !== "compared") return h("p", { className: "graphic-agreement", "data-status": result.status },
+    "No measured values in the text to compare with the graphic description.")
+  return h("p", { className: "graphic-agreement", "data-status": result.unmatched.length ? "unmatched" : "matched" },
+    result.unmatched.length
+      ? `Not stated in the graphic description: ${result.unmatched.join(", ")}. They may be correct from the source (a departure or multiple); check each before recording joint review.`
+      : `Every measured value in the text (${result.compared}) also appears in the graphic description. This is not proof the image or text is correct.`)
+}
+
 // One set of attach/remove/joint-review controls for every Gist post-image family.
 export function MediaControls({ draft, preview, reviewConfirmed, onConfirm, onAction, held = false, retainedInput = null,
   attestations = {}, onAttest = () => {} }) {
@@ -159,6 +175,7 @@ export function MediaControls({ draft, preview, reviewConfirmed, onConfirm, onAc
     canReview && h("div", { className: "workbench-panel", "aria-label": "Review text and attached graphic" },
       h("h3", null, "Review this text and graphic"),
       h("p", { className: "draft-text" }, draft.text),
+      h(TextGraphicAgreement, { text: draft.text, value: preview.value }),
       h("p", null, delivery
         ? "Check this exact text, the image above, the image description sent to X and the expanded source details against the saved source evidence."
         : "Check this exact text, the image above and its full description against the saved source evidence."),

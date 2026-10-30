@@ -363,6 +363,8 @@ h1 span { color: #666; font-weight: 400; font-size: 14px; margin-left: 8px; }
 .copy-notes-empty { color: #777; margin: 0; }
 .copy-notes-excerpt { color: #ddd; }
 .supp-stage--copy-gate    { color: #fbbf24; border-color: #6b5a00; }
+.graphic-agreement { font-size: 13px; line-height: 1.45; color: #bbb; overflow-wrap: anywhere; }
+.graphic-agreement[data-status="unmatched"] { color: #fbbf24; }
 .draft-actions { display: flex; gap: 8px; }
 .draft-edit-area {
   width: 100%; background: #111; border: 1px solid #333; border-radius: 4px;
