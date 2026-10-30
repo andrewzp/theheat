@@ -8,11 +8,13 @@ from __future__ import annotations
 
 import os
 import threading
+import time
 import weakref
 from collections import Counter
 from collections.abc import Callable
 from typing import TYPE_CHECKING, cast
 
+from src.orchestrator.candidate_budget import CandidateBudget
 from src.orchestrator.common import _utc_now_iso
 from src.orchestrator.suppression import (
     _current_suppression_ctx,
@@ -20,7 +22,7 @@ from src.orchestrator.suppression import (
     _record_downstream_suppression,
     _record_triage_error_suppression,
 )
-from src.orchestrator.telemetry import _bump_run_drafted, _bump_source_field_in_run
+from src.orchestrator.telemetry import _bump_run_drafted, _bump_source_field_in_run, _record_source_run
 from src.state_schema import BotState
 
 if TYPE_CHECKING:
@@ -259,6 +261,75 @@ def _abort_cycle_on_billing(
             )
 
 
+class _SelectionInvalid(ValueError):
+    """A selector result the drain cannot trust; a fixed code, never candidate text."""
+
+    def __init__(self, code: str):
+        super().__init__(code)
+        self.code = code
+
+
+def _validated_selection(selected, pool: list, *, cap: int | None) -> list:
+    """Accept only rows the drain itself queued, at most as often as queued, within the cap.
+
+    Anything else holds the selection: a selector cannot nominate an equal-looking
+    copy, a foreign object, a row more often than it was queued, or more rows than
+    its cap allows.
+    """
+    if type(selected) is not list:
+        raise _SelectionInvalid("selector_result_not_list")
+    # A queue may hold repeated copies of one row; a selection may not exceed them.
+    available = Counter(id(candidate) for candidate in pool)
+    for candidate in selected:
+        if id(candidate) not in available:
+            raise _SelectionInvalid("selector_out_of_slate")
+        if available[id(candidate)] == 0:
+            raise _SelectionInvalid("selector_duplicate_candidate")
+        available[id(candidate)] -= 1
+    if cap is not None and len(selected) > cap:
+        raise _SelectionInvalid("selector_over_cap")
+    return selected
+
+
+def _hold_operation(
+    bot_state: BotState,
+    current_run: dict | None,
+    funnel_sink: dict | None,
+    held: list,
+    budget: CandidateBudget,
+    *,
+    note: str,
+    error: str,
+    terminal: str = "triage_error",
+) -> int:
+    """Visible zero-writer hold for one failed selection or refused configuration.
+
+    No other event is selected, no error is cleared and the limit is not raised.
+    The existing ``triage_error`` suppression and ``source_health['triage']``
+    remain; a ``triage`` run row with ``partial_failure`` keeps the application
+    run partial even when the workflow itself exits green.
+    """
+    print(f"[triage] {note}: holding {len(held)} candidate(s) with zero writer attempts")
+    _record_triage_error_suppression(bot_state, error)
+    for candidate in held:
+        # Held, not editorially cut: keep triage_cut = triaged_in - triaged_out exact.
+        _bump_source_field_in_run(current_run, candidate.source, "triaged_out")
+    if funnel_sink is not None:
+        from src.orchestrator import funnel as _funnel
+
+        for candidate in held:
+            if candidate.event_id not in funnel_sink.get("_slate_terminal", {}):
+                _funnel.record_slate_terminal(funnel_sink, candidate.event_id, terminal)
+    budget.hold(len(held))
+    _record_source_run(
+        current_run, bot_state, "triage", time.perf_counter(), status="partial_failure",
+        triaged_in=len(held), error=error, error_class="selection_hold",
+        note=f"{note}: zero writer attempts; {len(held)} candidate(s) held",
+        details={"code": note, "writer_attempts": 0, **budget.summary()},
+    )
+    return 0
+
+
 def _record_negcache_kill_if_eligible(
     bot_state: BotState, candidate: "TriageCandidateBundle", cand_result: dict
 ) -> None:
@@ -281,6 +352,7 @@ def _refill_drain(
     defer_callbacks: list | None = None,
     funnel_sink: dict | None = None,
     generation_client=None,
+    candidate_budget: CandidateBudget | None = None,
 ) -> int:
     """Phase C generate-and-select loop (THEHEAT_REFILL_ENABLED=1).
 
@@ -308,16 +380,19 @@ def _refill_drain(
     # so the skip predicate below only ever consults live entries.
     _negcache.prune(bot_state)
 
+    budget = candidate_budget if candidate_budget is not None else CandidateBudget.for_operation("drain")
+    # A failed or untrustworthy ranking holds the slate with zero writer calls;
+    # walking the raw queue order instead would buy events nobody ranked.
     try:
         ranked = _triage.select_survivors(bot_state, queue, refill=True)
     except Exception as exc:  # noqa: BLE001
-        err_text = str(exc)[:200]
-        print(f"[triage] refill ranking error: {exc!r} — falling back to queue order")
-        from src import state as _state
-
-        _record_triage_error_suppression(bot_state, err_text)
-        _state.record_source_health(bot_state, "triage", "degraded", err_text)
-        ranked = list(queue)
+        return _hold_operation(bot_state, current_run, funnel_sink, list(queue), budget,
+                               note="selector_unavailable", error=str(exc)[:200])
+    try:
+        ranked = _validated_selection(ranked, queue, cap=len(queue))
+    except _SelectionInvalid as exc:
+        return _hold_operation(bot_state, current_run, funnel_sink, list(queue), budget,
+                               note="selector_invalid", error=exc.code)
 
     target = _caps.drafts_target_per_cycle()
     max_attempts = _caps.refill_max_attempts(target)
@@ -560,6 +635,7 @@ def _drain_and_write_triage_queue(
     defer_callbacks: list | None = None,
     funnel_sink: dict | None = None,
     generation_client=None,
+    candidate_budget: CandidateBudget | None = None,
 ) -> int:
     """Drain the triage queue and call _try_two_bot_draft() for each survivor.
 
@@ -572,8 +648,16 @@ def _drain_and_write_triage_queue(
     When triage is DISABLED (default / kill-switch OFF):
         - Writes everything in queue order (legacy behaviour)
 
-    If triage raises, logs the error and falls through to legacy (writes
-    everything). Triage MUST NOT take down the whole cron.
+    If triage raises, or returns anything other than distinct queued
+    candidates within its cap, the selection is HELD: zero writer attempts, a
+    triage_error suppression, degraded triage health and a partial_failure
+    ``triage`` run row. (It formerly fell through to writing every candidate,
+    which turned one selector fault into unbounded paid generation.) An unsafe
+    configured maximum is refused the same way. Triage still never takes down
+    the cron.
+
+    ``candidate_budget`` is the calling operation's attempt budget; a drain
+    without one is its own independent operation.
 
     In all cases (including exception), the queue is popped from bot_state
     before returning so a crashed cron doesn't re-process stale candidates
@@ -587,7 +671,6 @@ def _drain_and_write_triage_queue(
         - Source runners record ``drafted=0`` at their own call site; the
           drain step credits the actual count once survivors are written.
     """
-    from src import state as _state
     from src.orchestrator import caps as _caps
     from src.orchestrator import common as _common
     from src.orchestrator import triage as _triage
@@ -703,12 +786,19 @@ def _drain_and_write_triage_queue(
                 )
         return 0
 
+    budget = candidate_budget if candidate_budget is not None else CandidateBudget.for_operation("drain")
+    if budget.refusal is not None:
+        # An unsafe configured maximum is refused visibly, never defaulted or clamped.
+        return _hold_operation(bot_state, current_run, funnel_sink, list(queue), budget,
+                               note="candidate_budget_config_invalid", error=budget.refusal)
+
     # Phase C: generate-and-select refill loop (flag default OFF). Owns its own
     # ranking, success-aware caps, pre-writer predicate and stop condition.
     if refill_enabled:
         return _refill_drain(
             bot_state, current_run, queue,
             defer_callbacks=defer_callbacks, funnel_sink=funnel_sink, generation_client=generation_client,
+            candidate_budget=budget,
         )
 
     # Economics P1.3 (codex r9–r11): the negative cache protects the legacy
@@ -803,19 +893,18 @@ def _drain_and_write_triage_queue(
         live_queue.append(candidate)
 
     survivors = live_queue  # default: legacy passthrough
-    if triage_enabled:
+    if triage_enabled and live_queue:
+        cap = budget.limit if budget.limit is not None else _triage.MAX_DRAFTS_PER_CYCLE
         try:
-            survivors = _triage.select_survivors(bot_state, live_queue)
-        except Exception as exc:
-            # Legacy passthrough preserves draft production (the cycle still
-            # produces drafts even if the triage stage breaks). But we MUST
-            # surface the failure to the dashboard — silent broken triage is
-            # worse than loud broken triage.
-            err_text = str(exc)[:200]
-            print(f"[triage] error: {exc!r} — falling through to legacy (writing all {len(live_queue)} candidates)")
-            _record_triage_error_suppression(bot_state, err_text)
-            _state.record_source_health(bot_state, "triage", "degraded", err_text)
-            survivors = live_queue
+            selected = _triage.select_survivors(bot_state, live_queue, global_cap=cap)
+        except Exception as exc:  # noqa: BLE001 — held loudly below, never written through
+            return _hold_operation(bot_state, current_run, funnel_sink, live_queue, budget,
+                                   note="selector_unavailable", error=str(exc)[:200])
+        try:
+            survivors = _validated_selection(selected, live_queue, cap=cap)
+        except _SelectionInvalid as exc:
+            return _hold_operation(bot_state, current_run, funnel_sink, live_queue, budget,
+                                   note="selector_invalid", error=exc.code)
 
     survivor_by_source = Counter(candidate.source for candidate in survivors)
     for source, survivor_count in survivor_by_source.items():

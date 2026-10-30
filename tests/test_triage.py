@@ -350,8 +350,15 @@ class TestSuppressionContext:
 
 class TestTriageExceptionHandling:
 
-    def test_triage_exception_falls_through_to_legacy(self, monkeypatch):
-        """If triage.select_survivors raises, drain_and_write writes everything."""
+    def test_triage_exception_holds_with_zero_writer_calls(self, monkeypatch):
+        """If triage.select_survivors raises, the selection is held: nothing is written.
+
+        Contract change (live operating guards, O1): this test previously
+        asserted that a selector exception fell through to writing EVERY queued
+        candidate. That turned one ranking fault into one paid writer attempt
+        per candidate, past THEHEAT_MAX_DRAFTS_PER_CYCLE. A failed selection is
+        now a visible zero-writer hold (see the next two tests for its signals).
+        """
         monkeypatch.setenv("THEHEAT_TRIAGE_ENABLED", "1")
         from src.orchestrator import common
 
@@ -374,9 +381,11 @@ class TestTriageExceptionHandling:
         current_run = {"sources": []}
         drafted = common._drain_and_write_triage_queue(bot_state, current_run)
 
-        # Both candidates should have been written (fallback to full queue)
-        assert len(written) == 2
-        assert drafted == 2
+        # Held: no candidate reaches the writer path, and the run row is partial.
+        assert written == []
+        assert drafted == 0
+        assert current_run["sources"][-1]["source"] == "triage"
+        assert current_run["sources"][-1]["status"] == "partial_failure"
 
     def test_triage_exception_clears_queue_for_next_cron(self, monkeypatch):
         """Even if triage raises, the queue key is removed from bot_state after drain."""
@@ -397,13 +406,14 @@ class TestTriageExceptionHandling:
 
         # Queue must be gone from bot_state so next cron doesn't re-process stale candidates
         assert "_triage_queue" not in bot_state
-        assert drafted == 1
+        assert drafted == 0  # Held (formerly 1 via the write-everything fallback).
 
     def test_triage_exception_records_suppression_and_source_health(self, monkeypatch):
         """A2: When triage raises, drain step records both a triage_error
-        suppression row AND a source_health['triage'] entry while preserving
-        the legacy passthrough behavior (all queued candidates still drafted).
-        Without these signals, broken triage is invisible to the dashboard.
+        suppression row AND a source_health['triage'] entry. Without these
+        signals, broken triage is invisible to the dashboard. (The former
+        legacy passthrough that drafted every queued candidate is replaced by a
+        zero-writer hold; see test_triage_exception_holds_with_zero_writer_calls.)
         """
         monkeypatch.setenv("THEHEAT_TRIAGE_ENABLED", "1")
         from src.orchestrator import common
@@ -428,9 +438,9 @@ class TestTriageExceptionHandling:
 
         drafted = common._drain_and_write_triage_queue(bot_state, {"sources": []})
 
-        # Legacy passthrough preserved — both candidates still drafted.
-        assert drafted == 2
-        assert len(written) == 2
+        # Held — no candidate is drafted (formerly both via the passthrough).
+        assert drafted == 0
+        assert written == []
 
         # (a) Suppression row records the triage stage failure.
         triage_errors = [
