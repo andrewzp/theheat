@@ -47,6 +47,7 @@ def main(argv: list[str] | None = None) -> int:
     importer = actions.add_parser("import")
     importer.add_argument("--state", required=True, help="Private snapshot retained as evidence; does not change current state")
     importer.add_argument("--import-id", required=True, help="Stable identity for idempotent replay of these exact bytes")
+    actions.add_parser("domain-migrate", help="Explicit v1->v2 domain journal migration (reconciliation/restore origins)")
     domain = actions.add_parser("domain-status")
     domain.add_argument("--verify", action="store_true", help="Verify retained artifact hashes and foreign keys")
     domain.add_argument("--projection-record", action="append", default=[], metavar="FILE",
@@ -93,6 +94,8 @@ def main(argv: list[str] | None = None) -> int:
             output = {"initialized": True, "environment": args.environment}
         elif args.action == "import":
             output = store.import_snapshot(Path(args.state).read_bytes(), import_id=args.import_id)
+        elif args.action == "domain-migrate":
+            output = store.migrate_domain()
         elif args.action == "domain-status":
             if args.projection_record:
                 records = read_packets(args.projection_record)

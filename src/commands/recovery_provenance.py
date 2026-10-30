@@ -12,9 +12,10 @@ alone do not prove a supported local transition: that ID stays held until such
 a transition exists. Exact identities select the matching retained import for
 display, never grant currentness. Unavailable provenance refuses mutation.
 
-Restores go through the same importer, so they are labelled ``import``: the
-journal's origin column admits only bootstrap/command/import and a separate
-restore origin is a domain-schema decision. No ``superseded`` entry is produced,
+Restores go through the same importer under their own explicit ``restore``
+origin (domain journal v2) and are equally read-only. Reconciliation snapshots
+record an authority version, not history to admit, and are not read here. No
+``superseded`` entry is produced,
 because no journal row binds a draft id to its replacement. The production Gist
 path never consults this reader; an absent journal is an empty map.
 """
@@ -92,7 +93,7 @@ def require_current(authority: Any, command: Command, state: dict) -> None:
         return
     held = provenance(path, state, environment=authority.environment)
     if any(target.draft_id in held for target in command.targets):
-        raise CommandError("imported_record_read_only", "Imported history has no supported current-revision transition")
+        raise CommandError("imported_record_read_only", "Imported history has no supported current-revision transition (import or restore)")
 
 
 def _identity(draft: dict) -> str | None:
@@ -118,9 +119,9 @@ def provenance(path: str | Path | None, current_state: Any, *, environment: str 
     try:
         with closing(_connect(path, environment)) as connection:
             rows = connection.execute(
-                "SELECT s.origin_id, s.artifact_sha256 AS source_sha256, o.artifact_sha256 AS packet_sha256 "
+                "SELECT s.origin, s.origin_id, s.artifact_sha256 AS source_sha256, o.artifact_sha256 AS packet_sha256 "
                 "FROM domain_snapshots s JOIN domain_occurrences o ON o.snapshot_id=s.snapshot_id "
-                "WHERE s.origin='import' AND o.kind='draft_packet' "
+                "WHERE (s.origin='import' OR s.origin='restore') AND o.kind='draft_packet' "
                 "ORDER BY s.recorded_at, s.snapshot_id, o.locator LIMIT ?", (MAX_DRAFT_PACKETS + 1,)).fetchall()
             if len(rows) > MAX_DRAFT_PACKETS:
                 raise ProvenanceUnavailable("recovery_journal_exceeds_bound")
@@ -138,7 +139,9 @@ def provenance(path: str | Path | None, current_state: Any, *, environment: str 
                 imported = _identity(packet)
                 exact = len(identities) == 1 and identities[0] is not None and imported is not None and identities[0] == imported
                 if draft_id not in result or exact:
-                    result[draft_id] = {"origin": "import", "import_id": row["origin_id"], "source_sha256": row["source_sha256"]}
+                    origin = dict(row).get("origin")  # Both origins are equally read-only history.
+                    origin = origin if origin in ("import", "restore") else "import"
+                    result[draft_id] = {"origin": origin, "import_id": row["origin_id"], "source_sha256": row["source_sha256"]}
                 if exact:
                     matched.add(draft_id)
     except (sqlite3.Error, domain_journal.DomainJournalError, ValueError, RecursionError) as exc:

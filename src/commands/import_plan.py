@@ -108,12 +108,17 @@ def _protected(state: dict) -> dict:
             "unknown_deliveries_preserved": phases.get("unknown", 0) + phases.get("submitted", 0) + phases.get("missing_or_invalid", 0)}
 
 
-def _existing(authority: Any, import_id: str) -> dict | None:
+ORIGINS = ("import", "restore")
+
+
+def _existing(authority: Any, import_id: str, origin: str = "import") -> dict | None:
+    if origin not in ORIGINS:
+        raise CommandError("invalid_import_origin", "Imports retain import or restore history only")
     with closing(authority._connect()) as connection:
         connection.execute("PRAGMA query_only=ON")
         authority._check_environment(connection)
-        row = connection.execute("SELECT artifact_sha256,canonical_sha256 FROM domain_snapshots WHERE origin='import' AND origin_id=?",
-                                 (import_id,)).fetchone()
+        row = connection.execute("SELECT artifact_sha256,canonical_sha256 FROM domain_snapshots WHERE origin=? AND origin_id=?",
+                                 (origin, import_id)).fetchone()
         return dict(row) if row else None
 
 
@@ -124,7 +129,8 @@ def _sidecar(name: str) -> dict:
     return {"path": path, "sha256": hashlib.sha256(raw).hexdigest(), "byte_count": len(raw)}
 
 
-def plan_item(raw: bytes, import_id: str, *, authority: Any = None, sidecars: tuple[str, ...] = ()) -> dict:
+def plan_item(raw: bytes, import_id: str, *, authority: Any = None, sidecars: tuple[str, ...] = (),
+              origin: str = "import") -> dict:
     if not isinstance(import_id, str) or not _ID.fullmatch(import_id):
         raise CommandError("invalid_import_identity", "Supply a bounded stable import identity")
     sha = hashlib.sha256(raw).hexdigest()
@@ -150,7 +156,7 @@ def plan_item(raw: bytes, import_id: str, *, authority: Any = None, sidecars: tu
             missing.append({"sidecar": Path(str(name)).name[:120], "code": "source_sidecar_unavailable"})
     collision = "new"
     if authority is not None:
-        prior = _existing(authority, import_id)
+        prior = _existing(authority, import_id) if origin == "import" else _existing(authority, import_id, origin)
         if prior is not None:
             collision = "duplicate_replay" if prior["artifact_sha256"] == sha else "identity_collision_refused"
     return {"import_id": import_id, "source_sha256": sha, "canonical_sha256": canonical_sha,
@@ -162,20 +168,30 @@ def plan_item(raw: bytes, import_id: str, *, authority: Any = None, sidecars: tu
             "publication_authorized": False, "review_currentness": "not_inherited"}
 
 
-def plan(items: list[tuple[str, bytes]], *, authority: Any = None, sidecars: dict[str, tuple[str, ...]] | None = None) -> dict:
-    """A complete pre-mutation statement; nothing is written."""
+def plan(items: list[tuple[str, bytes]], *, authority: Any = None, sidecars: dict[str, tuple[str, ...]] | None = None,
+         origin: str = "import") -> dict:
+    """A complete pre-mutation statement; nothing is written.
+
+    ``origin="restore"`` (``restore_plan``) checks identity collisions against
+    restore history and binds that origin into the reviewed plan hash.
+    """
     if not isinstance(items, list) or not 1 <= len(items) <= MAX_ITEMS:
         raise CommandError("invalid_import_plan", "Supply 1 to 200 snapshot items")
+    if origin not in ORIGINS:
+        raise CommandError("invalid_import_origin", "Imports retain import or restore history only")
     ids = [item[0] for item in items]
     if len(set(ids)) != len(ids):
         raise CommandError("duplicate_import_identity", "Each item needs its own durable identity")
-    rows = [plan_item(raw, import_id, authority=authority, sidecars=(sidecars or {}).get(import_id, ())) for import_id, raw in items]
+    rows = [plan_item(raw, import_id, authority=authority, sidecars=(sidecars or {}).get(import_id, ()), origin=origin)
+            for import_id, raw in items]
     shas = [row["source_sha256"] for row in rows]
     duplicates = sorted({row["import_id"] for row in rows if shas.count(row["source_sha256"]) > 1})
     body = {"schema": SCHEMA, "items": rows, "duplicate_source_bytes": duplicates,
             "executable": all(row["supported"] for row in rows),
             "external_jobs": "not_imported_unestablished", "migration_claim": "partial_history_only",
             "mutation": "none"}
+    if origin != "import":  # Older reviewed import plans keep their exact bytes.
+        body["origin"] = origin
     body["plan_sha256"] = hashlib.sha256(canonical_json(body).encode("utf-8")).hexdigest()
     return body
 
@@ -188,6 +204,9 @@ def execute(authority: Any, plan_value: dict, items: list[tuple[str, bytes]], *,
         raise CommandError("import_plan_changed", "The plan was altered after review")
     if not plan_value["executable"]:
         raise CommandError("import_plan_not_executable", "The plan states unsupported, missing or colliding items")
+    origin = plan_value.get("origin", "import")
+    if origin not in ORIGINS:
+        raise CommandError("invalid_import_origin", "Imports retain import or restore history only")
     planned = {row["import_id"]: row for row in plan_value["items"]}
     supplied = dict(items)
     if set(supplied) != set(planned):
@@ -206,10 +225,11 @@ def execute(authority: Any, plan_value: dict, items: list[tuple[str, bytes]], *,
                     raise ValueError("changed_sidecar")
         except (OSError, FileBoundaryError, ValueError, KeyError, TypeError):
             raise CommandError("import_sidecar_changed", "A required sidecar is missing or changed; nothing further is imported") from None
-        prior = _existing(authority, import_id)
+        prior = _existing(authority, import_id) if origin == "import" else _existing(authority, import_id, origin)
         if prior is not None and prior["artifact_sha256"] != planned[import_id]["source_sha256"]:
             raise CommandError("import_receipt_collision", "This identity already holds different history")
-        report = authority.import_snapshot(raw, import_id=import_id, now=now)
+        report = (authority.import_snapshot(raw, import_id=import_id, now=now) if origin == "import"
+                  else authority.import_snapshot(raw, import_id=import_id, now=now, origin=origin))
         outcomes.append({"import_id": import_id, "status": "already_imported" if prior is not None else "imported",
                          "snapshot_id": report.get("snapshot_id")})
         if between_items is not None:

@@ -143,14 +143,35 @@ class SQLiteAuthority:
                 connection.rollback()
                 raise
 
-    def import_snapshot(self, raw: bytes, *, import_id: str, now: datetime | None = None) -> dict:
-        """Passive evidence import; never replace current state or grant approval."""
+    def migrate_domain(self) -> dict:
+        """Explicit operator migration of the local domain journal (v1 -> v2 origins)."""
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                self._check_environment(connection)
+                self._check_tables(connection)
+                report = domain_journal.upgrade(connection)
+                connection.commit()
+                return report
+            except BaseException:
+                connection.rollback()
+                raise
+
+    def import_snapshot(self, raw: bytes, *, import_id: str, now: datetime | None = None,
+                        origin: str = "import") -> dict:
+        """Passive evidence import; never replace current state or grant approval.
+
+        ``origin="restore"`` retains a verified backup (``restore_plan``) under
+        its own explicit origin; both stay read-only history for later commands.
+        """
+        if origin not in ("import", "restore"):
+            raise domain_journal.DomainJournalError("Unsupported snapshot origin for an import")
         state = domain_journal.parse_snapshot(raw)
         with closing(self._connect()) as connection:
             connection.execute("BEGIN IMMEDIATE")
             try:
                 self._check_environment(connection)
-                report = domain_journal.record_snapshot(connection, state, origin="import",
+                report = domain_journal.record_snapshot(connection, state, origin=origin,
                     origin_id=import_id, raw=raw, recorded_at=utc_text(now or datetime.now(UTC)))
                 connection.commit()
                 return report
@@ -513,6 +534,9 @@ class SQLiteAuthority:
             try:
                 self._check_environment(connection)
                 self._check_tables(connection)
+                version, state = connection.execute("SELECT version,state_json FROM authority_state WHERE singleton=1").fetchone()
+                if isinstance(request, dict) and isinstance(request.get("event_id"), str):
+                    delivery_reconciliation.hold_recovered_history(self, json.loads(state), request["event_id"])
                 result = delivery_reconciliation.apply(connection, request, actor=principal.subject, role=principal.role,
                                                        now=utc_text(now or datetime.now(UTC)))
                 if before_commit is not None:
@@ -522,6 +546,10 @@ class SQLiteAuthority:
             except BaseException:
                 connection.rollback()
                 raise
+
+    def delivery_reconciliation_view(self) -> dict:
+        """Read-only inspection of every publish attempt in the current state."""
+        return delivery_reconciliation.inspect(self.read()[1])
 
     def read(self) -> tuple[int, dict]:
         with closing(self._connect()) as connection:

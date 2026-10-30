@@ -21,6 +21,7 @@ import time
 from urllib.parse import urlsplit
 from uuid import UUID
 
+from src.commands.delivery_reconciliation import ReconciliationError
 from src.commands.postgres_authority import PostgresCommandAuthority
 from src.commands.schema import Command, CommandError, MAX_COMMAND_BYTES, Principal
 from src.editorial.policy import current_editorial_policy
@@ -286,6 +287,10 @@ class PreviewHandler(BaseHTTPRequestHandler):
             if self.command == "GET" and re.fullmatch(r"/source-runs/[a-f0-9-]{36}", self.path):
                 self.reply(200, self.server.authority.source_run_projection(self.path.removeprefix("/source-runs/")))
                 return
+            if self.command == "GET" and self.path == "/delivery-reconciliation":
+                self.reply(200, {**self.server.authority.delivery_reconciliation_view(), "local_preview": True,
+                                 "publication_enabled": False})
+                return
             if self.command == "GET" and self.path == "/coverage":
                 self.reply(200, self.server.authority.coverage_projection(now=datetime.now(UTC)))
                 return
@@ -333,7 +338,8 @@ class PreviewHandler(BaseHTTPRequestHandler):
                                  "local_preview": True, "publication_enabled": False})
                 return
             recovery_route = re.fullmatch(r"/commands/([a-f0-9-]{36})/abandon", self.path)
-            if self.command != "POST" or (self.path != "/commands" and not recovery_route):
+            reconciliation_route = self.path == "/delivery-reconciliation"
+            if self.command != "POST" or (self.path != "/commands" and not recovery_route and not reconciliation_route):
                 self.reply(404, {"error": "Preview route not found"})
                 return
             if origin != self.server.origin:
@@ -366,6 +372,10 @@ class PreviewHandler(BaseHTTPRequestHandler):
                 return
             body = strict_json(raw)
             now = datetime.now(UTC)
+            if reconciliation_route:
+                # Publisher-only, exact receipt evidence; never sends or permits a retry.
+                self.reply(200, self.server.authority.delivery_reconciliation(body, actor, now=now))
+                return
             if recovery_route:
                 result = self.server.authority.abandon_submission(recovery_route[1], body, actor,
                     self.server.operators.resolve, now=now)
@@ -382,6 +392,8 @@ class PreviewHandler(BaseHTTPRequestHandler):
         except CommandError as exc:
             status = 403 if exc.code == "forbidden" else 503 if exc.code == "authorization_unavailable" else 409
             self.reply(status, {"error": str(exc), "code": exc.code})
+        except ReconciliationError as exc:
+            self.reply(403 if exc.code == "forbidden" else 409, {"error": "Reconciliation refused; nothing changed", "code": exc.code})
         except (ValueError, RecursionError):
             self.reply(400, {"error": "Invalid preview request", "code": "invalid_request"})
         except (BrokenPipeError, ConnectionResetError):

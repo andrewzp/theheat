@@ -16,6 +16,16 @@ a different request is refused.
 
 The rules mirror ``dashboard/lib/delivery-reconciliation.js``; both are checked
 against ``tests/fixtures/w14_delivery_reconciliation_vectors.json``.
+
+Two authority adapters apply the same ``decide``: the local SQLite authority
+(``apply``, with its ``delivery_reconciliations`` table and an explicit
+``reconciliation`` domain snapshot) and the PostgreSQL command authority
+(``apply_postgres``), which locks the authority pointer, advances the state
+version through the existing projection repository and retains an immutable
+decision record in the ``delivery-reconciliation-v1`` projection namespace
+(that version's explicit reconciliation origin). Neither is activated for the
+production Gist, which stays the nontransactional authority. A configured
+recovery journal holds imported/restored drafts read-only here as well.
 """
 from __future__ import annotations
 
@@ -188,8 +198,75 @@ def decide(state: dict, request: Any, *, actor: str, at: str) -> tuple[dict, dic
                      "event_id": request["event_id"], "tweet_id": receipt["tweet_id"]}
 
 
+PG_NAMESPACE = "delivery-reconciliation-v1"
+
+
+def _pg_identity(reconciliation_id: str) -> str:
+    # Projection identities are bounded ASCII; the free-form id is bound by digest.
+    return "sha256:" + _sha(reconciliation_id)
+
+
+def hold_recovered_history(authority: Any, state: dict, event_id: str) -> None:
+    """Imported or restored history is read-only for reconciliation too.
+
+    ``ProvenanceUnavailable`` escapes (fail closed, the transaction rolls back).
+    """
+    path = getattr(authority, "recovery_journal", None)
+    if path is None:
+        return
+    from src.commands import recovery_provenance
+    draft = _draft_for(state, event_id)
+    if draft is not None and draft.get("id") in recovery_provenance.provenance(path, state, environment=authority.environment):
+        raise ReconciliationError("imported_record_read_only")
+
+
+def apply_postgres(authority: Any, request: Any, *, actor: str, role: str, now: str,
+                   before_commit: Any = None) -> dict:
+    """PostgreSQL command-authority adapter: one transaction under the pointer lock.
+
+    A refusal changes nothing. An applied decision advances the state version
+    and retains its immutable decision record together; an interruption before
+    commit leaves neither. A repeated request is ``unchanged``; a reused
+    ``reconciliation_id`` with a different request is refused.
+    """
+    from src.commands.postgres_authority import NAMESPACE, SCHEMA
+    from src.storage import postgres_projection as projection
+    _require(role in ROLES, "forbidden")
+    request = validate_request(request)
+    digest = fingerprint(request)
+    identity = _pg_identity(request["reconciliation_id"])
+    with authority.projections._connection(writing=True) as c:
+        authority._validate(c)
+        version, state = authority._state(c, lock=True)
+        prior = c.execute("SELECT 1 FROM theheat_projection.versions WHERE namespace=%s AND snapshot_id=%s",
+                          (PG_NAMESPACE, identity)).fetchone()
+        if prior is not None:
+            saved = projection.PostgresProjectionRepository._read(c, PG_NAMESPACE, identity)[1]
+            _require(isinstance(saved, dict) and saved.get("request_sha256") == digest, "reconciliation_id_reused")
+            return {"status": "unchanged", "reconciliation_id": request["reconciliation_id"],
+                    "event_id": request["event_id"], "state_version": version}
+        hold_recovered_history(authority, state, request["event_id"])
+        updated, result = decide(state, request, actor=actor, at=now)
+        if result["status"] == "applied":
+            projection._require(version < projection.MAX_INTEGER, "authority_version_exhausted")
+            version += 1
+            encoded, fields = projection._snapshot(updated)
+            authority.projections._record(c, NAMESPACE, str(version), encoded, fields)
+            c.execute(f"UPDATE {SCHEMA}.state SET version=%s,snapshot_id=%s WHERE singleton=1", (version, str(version)))
+            record = {"schema_version": 1, "origin": "reconciliation", "reconciliation_id": request["reconciliation_id"],
+                      "request_sha256": digest, "actor_subject": actor, "result": result,
+                      "authority_version": version, "recorded_at": now}
+            raw, record_fields = projection._snapshot(record)
+            authority.projections._record(c, PG_NAMESPACE, identity, raw, record_fields)
+        if before_commit is not None:
+            before_commit()
+    return {**result, "state_version": version}
+
+
 def apply(connection: Any, request: Any, *, actor: str, role: str, now: str) -> dict:
-    """Local SQLite authority transaction: state version and append-only journal together."""
+    """Local SQLite authority transaction: state version, append-only journal and
+    the explicit ``reconciliation`` domain snapshot of that version, together."""
+    from src.commands import domain_journal
     _require(role in ROLES, "forbidden")
     for table, columns in _TABLES.items():
         connection.execute(f"CREATE TABLE IF NOT EXISTS {table} ({columns})")
@@ -203,4 +280,7 @@ def apply(connection: Any, request: Any, *, actor: str, role: str, now: str) -> 
         connection.execute("INSERT INTO delivery_reconciliations VALUES(?,?,?,?,?,?)",
                            (request["reconciliation_id"], fingerprint(request), actor,
                             canonical_json(result), version, now))
+        domain_journal.record_snapshot(connection, updated, origin="reconciliation",
+                                       origin_id=request["reconciliation_id"], authority_version=version,
+                                       recorded_at=now)
     return {**result, "state_version": version}

@@ -21,7 +21,14 @@ from src.editorial.revisions import _evidence_payload, draft_identity
 if TYPE_CHECKING:
     from src.commands.domain_projection import Record
 
-VERSION = 1
+VERSION = 2
+# Snapshot origins. ``reconciliation`` is the state version a delivery
+# reconciliation decision produced (origin_id = reconciliation_id);
+# ``restore`` is a verified backup retained by ``restore_plan`` (origin_id =
+# restore_id). Neither replaces current state on its own; both are as
+# read-only for later commands as ``import`` history (recovery_provenance).
+ORIGINS = ("bootstrap", "command", "import", "reconciliation", "restore")
+_V1_ORIGINS = ORIGINS[:3]
 MAX_ARTIFACT_BYTES = 16 * 1024 * 1024
 MAX_OCCURRENCES = 10000
 _SHA = re.compile(r"[0-9a-f]{64}")
@@ -30,7 +37,7 @@ _TABLES = {
     "domain_artifacts": "sha256 TEXT PRIMARY KEY, byte_count INTEGER NOT NULL, payload BLOB NOT NULL, CHECK(length(sha256)=64), CHECK(byte_count=length(payload))",
     "domain_entities": "entity_id TEXT PRIMARY KEY, kind TEXT NOT NULL CHECK(kind='draft'), legacy_id TEXT NOT NULL UNIQUE, legacy_event_id TEXT",
     "domain_revisions": "revision_id TEXT PRIMARY KEY, entity_id TEXT NOT NULL REFERENCES domain_entities(entity_id), content_revision INTEGER NOT NULL, text_sha256 TEXT NOT NULL REFERENCES domain_artifacts(sha256), evidence_sha256 TEXT NOT NULL, evidence_artifact_sha256 TEXT NOT NULL REFERENCES domain_artifacts(sha256), identity_json TEXT NOT NULL, UNIQUE(entity_id,content_revision,text_sha256,evidence_sha256)",
-    "domain_snapshots": "snapshot_id TEXT PRIMARY KEY, origin TEXT NOT NULL CHECK(origin IN ('bootstrap','command','import')), origin_id TEXT NOT NULL, artifact_sha256 TEXT NOT NULL REFERENCES domain_artifacts(sha256), canonical_sha256 TEXT NOT NULL, authority_version INTEGER, command_id TEXT REFERENCES command_intents(command_id), recorded_at TEXT NOT NULL, report_json TEXT NOT NULL, UNIQUE(origin,origin_id), UNIQUE(command_id)",
+    "domain_snapshots": "snapshot_id TEXT PRIMARY KEY, origin TEXT NOT NULL CHECK(origin IN ('bootstrap','command','import','reconciliation','restore')), origin_id TEXT NOT NULL, artifact_sha256 TEXT NOT NULL REFERENCES domain_artifacts(sha256), canonical_sha256 TEXT NOT NULL, authority_version INTEGER, command_id TEXT REFERENCES command_intents(command_id), recorded_at TEXT NOT NULL, report_json TEXT NOT NULL, UNIQUE(origin,origin_id), UNIQUE(command_id)",
     "domain_occurrences": "occurrence_id TEXT PRIMARY KEY, snapshot_id TEXT NOT NULL REFERENCES domain_snapshots(snapshot_id), locator TEXT NOT NULL, kind TEXT NOT NULL, artifact_sha256 TEXT NOT NULL REFERENCES domain_artifacts(sha256), entity_id TEXT REFERENCES domain_entities(entity_id), revision_id TEXT REFERENCES domain_revisions(revision_id), disposition TEXT NOT NULL, issues_json TEXT NOT NULL, UNIQUE(snapshot_id,locator)",
 }
 _KEYS = {
@@ -43,9 +50,21 @@ _KEYS = {
 }
 
 
-def _schema_objects() -> dict[str, str]:
+_ORIGINS_BY_VERSION = {1: _V1_ORIGINS, 2: ORIGINS}
+_V2_CHECK = "CHECK(origin IN ('bootstrap','command','import','reconciliation','restore'))"
+
+
+def _tables(version: int) -> dict[str, str]:
+    if version not in _ORIGINS_BY_VERSION:
+        raise DomainJournalError("Unsupported local domain schema version")
+    origins = ",".join(f"'{origin}'" for origin in _ORIGINS_BY_VERSION[version])
+    return {**_TABLES, "domain_snapshots": _TABLES["domain_snapshots"].replace(_V2_CHECK, f"CHECK(origin IN ({origins}))")}
+
+
+def _schema_objects(version: int | None = None) -> dict[str, str]:
+    version = VERSION if version is None else version
     statements = {}
-    for table, columns in _TABLES.items():
+    for table, columns in _tables(version).items():
         statements[table] = f"CREATE TABLE {table} ({columns})"
         for action in ("UPDATE", "DELETE"):
             name = f"{table}_no_{action.lower()}"
@@ -62,11 +81,16 @@ def _schema_objects() -> dict[str, str]:
     return statements
 
 
-SCHEMA_SHA256 = hashlib.sha256(canonical_json([VERSION, _schema_objects()]).encode()).hexdigest()
-
-
 class DomainJournalError(RuntimeError):
     """Propagate outside reducer rejection handling so the whole write rolls back."""
+
+
+def _schema_sha(version: int) -> str:
+    return hashlib.sha256(canonical_json([version, _schema_objects(version)]).encode()).hexdigest()
+
+
+SCHEMA_SHA256 = _schema_sha(VERSION)
+V1_SCHEMA_SHA256 = _schema_sha(1)
 
 
 def _digest(payload: bytes) -> str:
@@ -116,6 +140,10 @@ def validate_schema(connection: sqlite3.Connection, namespace: str | None = None
         raise DomainJournalError(
             "Local domain migration is required; initialize with the current authority state"
         ) from exc
+    if row is not None and row["version"] == 1 and row["schema_sha256"] == V1_SCHEMA_SHA256:
+        raise DomainJournalError(
+            "Local domain schema v1 needs the explicit v2 migration (local_cli domain-migrate); nothing was changed"
+        )
     if row is None or row["version"] != VERSION or row["schema_sha256"] != SCHEMA_SHA256:
         raise DomainJournalError("Unsupported or changed local domain schema")
     for name, sql in _schema_objects().items():
@@ -146,6 +174,54 @@ def install(connection: sqlite3.Connection, namespace: str) -> bool:
         "INSERT INTO domain_schema VALUES(1,?,?,?)", (VERSION, SCHEMA_SHA256, namespace)
     )
     return True
+
+
+def upgrade(connection: sqlite3.Connection) -> dict:
+    """Explicit v1 -> v2 migration inside the caller's ``BEGIN IMMEDIATE``.
+
+    Only the snapshot origin CHECK widens. Every retained snapshot row is
+    copied byte-for-byte (verified by digest), foreign keys are deferred for
+    the rebuild and checked before return, and the immutability triggers are
+    recreated exactly. Any difference rolls the caller's transaction back.
+    """
+    if not connection.in_transaction:
+        raise DomainJournalError("Domain migration requires the authority transaction")
+    row = connection.execute("SELECT * FROM domain_schema WHERE singleton=1").fetchone()
+    if row is not None and row["version"] == VERSION and row["schema_sha256"] == SCHEMA_SHA256:
+        validate_schema(connection)
+        return {"migrated": False, "schema_version": VERSION}
+    if row is None or row["version"] != 1 or row["schema_sha256"] != V1_SCHEMA_SHA256:
+        raise DomainJournalError("Unsupported or changed local domain schema")
+    for name, sql in _schema_objects(1).items():
+        actual = connection.execute("SELECT sql FROM sqlite_master WHERE name=?", (name,)).fetchone()
+        if actual is None or actual["sql"] != sql:
+            raise DomainJournalError("Local domain schema or immutability guards changed")
+
+    def rows_digest() -> tuple[int, str]:
+        rows = [list(r) for r in connection.execute("SELECT * FROM domain_snapshots ORDER BY snapshot_id")]
+        return len(rows), _digest(_json_bytes(rows))
+
+    before = rows_digest()
+    connection.execute("PRAGMA defer_foreign_keys=ON")
+    for action in ("update", "delete", "replace"):
+        connection.execute(f"DROP TRIGGER domain_snapshots_no_{action}")
+    connection.execute("CREATE TEMP TABLE domain_snapshots_v1_copy AS SELECT * FROM domain_snapshots")
+    connection.execute("DROP TABLE domain_snapshots")
+    objects = _schema_objects()
+    connection.execute(objects["domain_snapshots"])
+    connection.execute("INSERT INTO domain_snapshots SELECT * FROM temp.domain_snapshots_v1_copy")
+    connection.execute("DROP TABLE temp.domain_snapshots_v1_copy")
+    for action in ("update", "delete", "replace"):
+        connection.execute(objects[f"domain_snapshots_no_{action}"])
+    connection.execute("DROP TRIGGER domain_schema_no_update")
+    connection.execute("UPDATE domain_schema SET version=?, schema_sha256=? WHERE singleton=1", (VERSION, SCHEMA_SHA256))
+    connection.execute(objects["domain_schema_no_update"])
+    if rows_digest() != before:
+        raise DomainJournalError("Snapshot rows changed during migration; nothing was committed")
+    if connection.execute("PRAGMA foreign_key_check").fetchall():
+        raise DomainJournalError("Domain relationships failed integrity validation after migration")
+    validate_schema(connection)
+    return {"migrated": True, "from_version": 1, "schema_version": VERSION, "snapshots_retained": before[0]}
 
 
 def _artifact(connection: sqlite3.Connection, data: bytes) -> str:
@@ -182,6 +258,8 @@ def record_snapshot(
     if not connection.in_transaction:
         raise DomainJournalError("Domain projection requires the authority transaction")
     namespace = validate_schema(connection)
+    if origin not in ORIGINS:
+        raise DomainJournalError("Unsupported snapshot origin")
     _identifier(origin_id, "origin identity")
     utc_datetime(recorded_at)
     canonical = _json_bytes(state)

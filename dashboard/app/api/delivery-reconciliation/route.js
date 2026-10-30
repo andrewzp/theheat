@@ -1,5 +1,5 @@
 import { requireDashboardAuth } from "../../../lib/auth.js"
-import { previewConfigured } from "../../../lib/draft-command-client.js"
+import { forwardLocalReconciliation, previewConfigured } from "../../../lib/draft-command-client.js"
 import { inspectReconciliation, ReconciliationError } from "../../../lib/delivery-reconciliation.js"
 import { readStateStore, reconcileDeliveryStore } from "../../../lib/state-store.js"
 export const runtime = "nodejs"
@@ -10,6 +10,7 @@ const LIMIT = 16 * 1024
 export async function GET(request) {
   const auth = requireDashboardAuth(request)
   if (auth) return auth
+  if (previewConfigured()) return forwardLocalReconciliation(request)
   try {
     return Response.json({ ...inspectReconciliation(await readStateStore(request)), writes_enabled: enabled() }, { headers })
   } catch {
@@ -24,8 +25,9 @@ export async function POST(request) {
   const auth = requireDashboardAuth(request)
   if (auth) return auth
   if (!enabled()) return Response.json({ code: "delivery_reconciliation_disabled" }, { status: 503, headers })
-  // The local preview authority has no reconciliation journal; the local CLI owns that path.
-  if (previewConfigured()) return Response.json({ code: "local_reconciliation_uses_local_cli" }, { status: 503, headers })
+  // The local preview authority applies the same rules in its own transaction
+  // (SQLite or PostgreSQL adapter); this handler never writes the Gist there.
+  if (previewConfigured()) return forwardLocalReconciliation(request)
   if (request.headers.get("content-type") !== "application/json") return Response.json({ code: "json_required" }, { status: 415, headers })
   let body
   try {
