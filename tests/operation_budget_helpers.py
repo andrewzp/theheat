@@ -110,3 +110,35 @@ class Spies:
 
     def writer_events(self) -> list[str]:
         return [event for stage, event in self.calls if stage == "writer"]
+
+
+def offline_world(monkeypatch):
+    """Every real source runner offline (connections counted and refused), invented
+    FIRMS detections at the adapter boundary and the offline stage spies installed."""
+    import socket
+    from types import SimpleNamespace
+
+    from src.data import firms
+
+    connects: list = []
+
+    def refused(self, address, *args, **kwargs):
+        connects.append(address)  # Every attempted source connection, counted and refused.
+        raise OSError("network refused: invented operation test")
+    monkeypatch.setattr(socket.socket, "connect", refused)
+    # Offline runners retry their refused requests with real backoff sleeps. Only
+    # the waiting is removed; the number of attempts (counted above) is unchanged.
+    monkeypatch.setattr("time.sleep", lambda seconds: None)
+    monkeypatch.setenv("THEHEAT_TRIAGE_ENABLED", "1")
+    monkeypatch.setenv("THEHEAT_MAX_DRAFTS_PER_CYCLE", "1")
+    for name in ("THEHEAT_REFILL_ENABLED", "THEHEAT_FUNNEL_TELEMETRY", "THEHEAT_MULTISIGNAL_CONTEXT",
+                 "THEHEAT_NEWS_ENRICH_ENABLED", "THEHEAT_NEWSWORTHINESS_ENABLED", "THEHEAT_DRAFTS_TARGET_PER_CYCLE",
+                 "THEHEAT_REFILL_MAX_ATTEMPTS", "THEHEAT_NHC_ADVISORY_ACQUISITION"):
+        monkeypatch.delenv(name, raising=False)
+    fetches: list = []
+
+    def fetch_fires(*args, **kwargs):
+        fetches.append("firms")
+        return fires(3)
+    monkeypatch.setattr(firms, "fetch_fires", fetch_fires)
+    return SimpleNamespace(spies=Spies().install(monkeypatch), connects=connects, fetches=fetches)

@@ -11,16 +11,13 @@ from __future__ import annotations
 
 from datetime import date
 import importlib
-import socket
 import sys
-from types import SimpleNamespace
 
 import pytest
 
-from src.data import firms
 from src.data.open_meteo import CityTemp
 from src.editorial.scoring import EditorialScore
-from tests.operation_budget_helpers import Spies, fires, fresh_state
+from tests.operation_budget_helpers import fresh_state, offline_world
 
 alerts_mod = importlib.import_module("src.orchestrator.run_alerts")
 hot10_mod = importlib.import_module("src.orchestrator.hot10")
@@ -30,24 +27,7 @@ WARNING_SCORE = EditorialScore("official_warning", 80, 80, 80, 80, 80, 0, 80, 60
 
 @pytest.fixture
 def world(monkeypatch):
-    connects: list = []
-
-    def refused(self, address, *args, **kwargs):
-        connects.append(address)  # Every attempted source connection, counted and refused.
-        raise OSError("network refused: invented operation test")
-    monkeypatch.setattr(socket.socket, "connect", refused)
-    # Offline runners retry their refused requests with real backoff sleeps. Only
-    # the waiting is removed; the number of attempts (counted above) is unchanged.
-    monkeypatch.setattr("time.sleep", lambda seconds: None)
-    monkeypatch.setenv("THEHEAT_TRIAGE_ENABLED", "1")
-    monkeypatch.setenv("THEHEAT_MAX_DRAFTS_PER_CYCLE", "1")
-    for name in ("THEHEAT_REFILL_ENABLED", "THEHEAT_FUNNEL_TELEMETRY", "THEHEAT_MULTISIGNAL_CONTEXT",
-                 "THEHEAT_NEWS_ENRICH_ENABLED", "THEHEAT_NEWSWORTHINESS_ENABLED", "THEHEAT_DRAFTS_TARGET_PER_CYCLE",
-                 "THEHEAT_REFILL_MAX_ATTEMPTS", "THEHEAT_NHC_ADVISORY_ACQUISITION"):
-        monkeypatch.delenv(name, raising=False)
-    fetches: list = []
-    monkeypatch.setattr(firms, "fetch_fires", lambda *a, **k: fetches.append("firms") or fires(3))
-    return SimpleNamespace(spies=Spies().install(monkeypatch), connects=connects, fetches=fetches)
+    return offline_world(monkeypatch)
 
 
 def run_alerts(*, warning=False):

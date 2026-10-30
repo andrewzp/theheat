@@ -239,6 +239,12 @@ def _abort_cycle_on_billing(
         aborted_event_id=aborted_event_id,
         skipped=len(remaining),
     )
+    # A green workflow must not read as a healthy application run: the existing
+    # run/source-health fields carry the billing hold (fixed code, no provider text).
+    _record_generation_hold(
+        bot_state, current_run, code="provider_billing_exhausted", error_class="provider_billing",
+        held=len(remaining), details={"aborted_event_id": aborted_event_id or None},
+    )
     # Volume telemetry (codex r3/r4 P2): billing-skipped candidates are
     # visible as billing_aborted and — where not already counted — leave the
     # triage_cut denominator via triaged_out, so an outage never reads as an
@@ -259,6 +265,52 @@ def _abort_cycle_on_billing(
             _funnel.record_slate_terminal(
                 funnel_sink, skipped_candidate.event_id, "billing_abort"
             )
+
+
+def _record_generation_hold(bot_state: BotState, current_run: dict | None, *, code: str,
+                            error_class: str, held: int, details: dict) -> None:
+    """One partial ``generation`` run row for an operation-level provider hold."""
+    _record_source_run(
+        current_run, bot_state, "generation", time.perf_counter(), status="partial_failure",
+        error=code, error_class=error_class, note=f"{code}: {held} queued candidate(s) held",
+        details={"code": code, "held": held, **details},
+    )
+
+
+def _hold_on_provider_access(
+    bot_state: BotState,
+    current_run: dict | None,
+    funnel_sink: dict | None,
+    remaining: list,
+    budget: CandidateBudget,
+    preflight: object,
+    *,
+    bump_triaged_out: bool,
+) -> None:
+    """Stop the operation after a deterministic prerequisite refusal.
+
+    Provider prerequisites are process-wide: every later candidate in this
+    operation would fail the same preflight. Hold them instead of re-running
+    generation for each; record only stage names and fixed reason codes.
+    """
+    rows = preflight.get("blocked_stages") if isinstance(preflight, dict) else None
+    blocked = [{"stage": str(row.get("stage")), "reason": str(row.get("reason"))}
+               for row in (rows if isinstance(rows, list) else []) if isinstance(row, dict)][:8]
+    print(f"[triage] missing required provider access; holding {len(remaining)} candidate(s) with no further attempts")
+    for candidate in remaining:
+        if bump_triaged_out:
+            _bump_source_field_in_run(current_run, candidate.source, "triaged_out")
+    if funnel_sink is not None:
+        from src.orchestrator import funnel as _funnel
+
+        for candidate in remaining:
+            if candidate.event_id not in funnel_sink.get("_slate_terminal", {}):
+                _funnel.record_slate_terminal(funnel_sink, candidate.event_id, "provider_preflight")
+    budget.hold(len(remaining))
+    _record_generation_hold(
+        bot_state, current_run, code="provider_access_missing", error_class="provider_prerequisite",
+        held=len(remaining), details={"blocked_stages": blocked, **budget.summary()},
+    )
 
 
 class _SelectionInvalid(ValueError):
@@ -663,6 +715,12 @@ def _refill_drain(
                 bump_triaged_out=True,  # refill counts triaged_out per attempt
             )
             break
+        if cand_result.get("kill_stage") == "provider_preflight":
+            _hold_on_provider_access(
+                bot_state, current_run, funnel_sink, ranked[idx + 1 :], budget,
+                cand_result.get("provider_preflight"), bump_triaged_out=True,
+            )
+            break
 
     return drafted_count
 
@@ -823,6 +881,9 @@ def _drain_and_write_triage_queue(
                 _funnel.record_slate_terminal(
                     funnel_sink, candidate.event_id, "billing_abort"
                 )
+        _record_generation_hold(bot_state, current_run, code="provider_billing_exhausted",
+                                error_class="provider_billing", held=len(queue),
+                                details={"aborted_event_id": None, "earlier_in_process": True})
         return 0
 
     budget = candidate_budget if candidate_budget is not None else CandidateBudget.for_operation("drain")
@@ -1084,6 +1145,12 @@ def _drain_and_write_triage_queue(
                 # Legacy pre-counts every survivor in triaged_out — bumping
                 # again would hide real editorial cuts (codex r4 P2).
                 bump_triaged_out=False,
+            )
+            break
+        if cand_result.get("kill_stage") == "provider_preflight":
+            _hold_on_provider_access(
+                bot_state, current_run, funnel_sink, survivors[idx + 1 :], budget,
+                cand_result.get("provider_preflight"), bump_triaged_out=False,
             )
             break
 
