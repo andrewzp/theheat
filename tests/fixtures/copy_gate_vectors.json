@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "scope": "Invented copy shapes for the deterministic copy gates; never historical, held or posted texts, never weather evidence.",
+  "vectors": [
+    {"id": "model_forecast_opener", "text": "A CAMS model forecast puts Port Example's PM2.5 at 90 µg/m³ Friday, six times the WHO 24-hour guideline.", "codes": ["source_led_opener"]},
+    {"id": "air_quality_model_opener", "text": "An air-quality model forecast puts Sample City's dust near 1,800 µg/m³ Saturday.", "codes": ["source_led_opener"]},
+    {"id": "according_to_opener", "text": "According to the agency, Port Example hit 47°C on Thursday.", "codes": ["source_led_opener"]},
+    {"id": "agency_possessive_opener", "text": "NOAA’s latest data shows Sample Bay at 31°C.", "codes": ["source_led_opener"]},
+    {"id": "advisory_opener", "text": "The latest NHC advisory puts Hurricane Example 200 km off Sample Coast.", "codes": ["source_led_opener"]},
+    {"id": "fact_first_forecast", "text": "Port Example is forecast to reach 47°C Thursday, 8°C above its July normal.", "codes": []},
+    {"id": "fact_first_pm25", "text": "Sample City's PM2.5 is forecast to average 90 µg/m³ Friday, six times the WHO 24-hour guideline (CAMS model).", "codes": []},
+    {"id": "possessive_station_lead", "text": "The Sahara's hottest station recorded 51°C on Monday.", "codes": []},
+    {"id": "reminder_ending", "text": "Port Example hit 47°C Thursday, a stark reminder of how fast the region is warming.", "codes": ["generic_explanatory_ending"]},
+    {"id": "highlighting_ending", "text": "Port Example hit 47°C Thursday — highlighting the growing heat risk.", "codes": ["generic_explanatory_ending"]},
+    {"id": "climate_warms_ending", "text": "Port Example hit 47°C as the planet warms.", "codes": ["generic_explanatory_ending"]},
+    {"id": "wink_kicker", "text": "Blizzard warning for Sample Village on May 11. The calendar says spring.", "codes": ["generic_explanatory_ending", "second_sentence"]},
+    {"id": "three_sentences", "text": "Port Example hit 47°C. That is 8°C above normal. It beat the 1998 mark.", "codes": ["too_many_sentences"]},
+    {"id": "two_sentences", "text": "Port Example hit 47°C on Thursday. The station record began in 1951.", "codes": ["second_sentence"]},
+    {"id": "abbreviations_one_sentence", "text": "Sample City in the U.S. state of Example hit 47°C on Oct. 30 at 3 p.m. local time.", "codes": []},
+    {"id": "decimal_and_url", "text": "About 356.2 mm of rain fell on Sample Basin in seven days, a satellite estimate.\nhttps://example.org/product", "codes": []},
+    {"id": "danger_word_unsourced", "text": "Port Example faces dangerously hot air on Thursday, 47°C forecast.", "codes": ["danger_wording_needs_source"]},
+    {"id": "long_single_sentence", "text": "Port Example is forecast to reach 47°C on Thursday afternoon, which would sit 8°C above its July normal and above every other forecast high among the 152 sampled cities in the region this week, model forecast.", "codes": ["over_automatic_length"]}
+  ]
+}

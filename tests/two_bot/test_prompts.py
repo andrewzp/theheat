@@ -27,10 +27,13 @@ SYSTEMS = (WRITER_SYSTEM_PROMPT, FACT_CHECK_SYSTEM_PROMPT, CRITIC_SYSTEM_PROMPT)
 
 
 @pytest.mark.parametrize("prompt,limit", [
-    (WRITER_SYSTEM_PROMPT, 10500), (FACT_CHECK_SYSTEM_PROMPT, 10000), (CRITIC_SYSTEM_PROMPT, 6500),
+    (WRITER_SYSTEM_PROMPT, 11000), (FACT_CHECK_SYSTEM_PROMPT, 10000), (CRITIC_SYSTEM_PROMPT, 6500),
 ], ids=["writer", "fact-check", "critic"])
 def test_common_prompt_size_has_an_explicit_review_budget(prompt, limit):
     # Character budget guards input growth; it is not an API-token or cost claim.
+    # Writer 10500 -> 11000 (30 Oct 2026): Andrew's editorial direction on the
+    # opening, intelligible scale, personality and endings; the critic absorbed
+    # its matching rule within its unchanged budget.
     assert len(prompt) <= limit
     assert len(prompt.split()) < 1500
 
