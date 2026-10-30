@@ -191,6 +191,9 @@ def build_plan(cities_path: Path, installed_path: Path, *, months: Iterable[int]
     }
     plan["plan_sha256"] = _plan_identity(plan)
     plan["dependency"] = dependency
+    plan["live_acquisition"] = {"status": "unsupported", "reason": "normals_bounded_transport_unavailable",
+        "required": "owned transport with physical-request, streamed-byte and cancellation enforcement"}
+    plan["plan_sha256"] = _plan_identity(plan)
     out_dir = f"normals-candidate-{plan['plan_sha256'][:12]}"
     plan["next_command"] = [
         "python", "scripts/build_normals.py", "acquire", "--plan", plan_path, "--out-dir", out_dir,
@@ -255,14 +258,12 @@ class MeteostatProvider:
     name = "meteostat"
 
     def __init__(self) -> None:
-        from importlib import metadata
-
-        meteostat = __import__("meteostat")
-        self._normals, self._point = meteostat.Normals, meteostat.Point
-        self.version = metadata.version("meteostat")
+        # Normals(Point).fetch hides physical requests and transfer bytes. An SDK
+        # version match is not an enforceable transport budget. Refuse before import.
+        raise NormalsError("normals_bounded_transport_unavailable")
 
     def fetch(self, lat: float, lon: float, start: int, end: int) -> Any:
-        return self._normals(self._point(lat, lon), start, end).fetch()
+        raise NormalsError("normals_bounded_transport_unavailable")
 
 
 class _ProductInvalid(Exception):
@@ -340,7 +341,12 @@ def _journal(out_dir: Path) -> dict[str, Any]:
 
 def acquire(plan: dict[str, Any], out_dir: Path, provider: Provider, limits: Limits, *, installed_path: Path,
             clock: Callable[[], float] = time.monotonic, now: Callable[[], str] = _utc_now) -> dict[str, Any]:
-    """Fetch missing point-months within limits; resume only compatible completed partitions."""
+    """Assemble supplied/injected provider responses; resume compatible partitions.
+
+    Default live Meteostat acquisition is refused: its transport is not bounded.
+    Counters here describe adapter invocations and normalized artifact bytes, not
+    physical requests, transferred bytes or permission for live provider execution.
+    """
     validate_plan(plan)
     out_dir = Path(out_dir)
     candidate_csv = out_dir / "candidate" / "normals.csv"

@@ -298,7 +298,7 @@ def qualify_comparison(evidence: dict[str, Any], comparator: Any, variable: str 
     return {"claim_scope": scope, "reasons": reasons, "variable": variable}
 
 
-def build_candidate(observation: dict[str, Any], comparator: Any = None):
+def build_candidate(observation: dict[str, Any], comparator: Any = None, *, now: datetime | None = None):
     """A StoryBundle for a qualified observed value crossing its absolute band, else ``None``.
 
     Uses the existing absolute-extreme detector and bundle; the evidence carries the
@@ -311,6 +311,14 @@ def build_candidate(observation: dict[str, Any], comparator: Any = None):
     evidence = dict(observation["evidence"])
     if evidence["time_support"]["currentness"] != "current":
         return None, f"time_support_{evidence['time_support']['currentness']}"
+    clock = now or datetime.now(timezone.utc)
+    if clock.utcoffset() is None:
+        raise ValueError("regional_clock_requires_timezone")
+    captured = datetime.fromisoformat(evidence["retrieved_at"].replace("Z", "+00:00"))
+    if captured > clock:
+        return None, "time_support_future_capture"
+    if (clock.astimezone(timezone.utc).date() - date.fromisoformat(evidence["valid_date"])).days > ADAPTERS[observation["adapter"]].max_lag_days:
+        return None, "time_support_stale"
     station, place = observation["station"], observation["station"]["place"]
     tmax = (evidence["variables"].get("TMAX") or {}).get("value_c")
     tmin = (evidence["variables"].get("TMIN") or {}).get("value_c")

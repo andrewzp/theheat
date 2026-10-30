@@ -33,6 +33,8 @@ import gzip
 import hashlib
 import json
 import os
+import signal
+import threading
 from pathlib import Path
 import sqlite3
 import time
@@ -121,7 +123,42 @@ def _text(path: Path) -> str:
 # explicit bounded archive fetch (owner-run; never invoked by plan/build)
 # ---------------------------------------------------------------------------
 
+class _FetchDeadline(BaseException):
+    """Interrupt blocking transport without entering the retry loop."""
+
+
 def fetch_archive(dest: Path, *, session: Any, max_bytes: int, deadline_seconds: float, max_retries: int,
+                  url: str = ARCHIVE_URL, clock: Callable[[], float] = time.monotonic,
+                  now: Callable[[], str] = _utc_now, chunk_size: int = 1024**2) -> dict[str, Any]:
+    """Owner CLI absolute deadline, including delayed headers and partial chunks.
+
+    This POSIX main-thread boundary owns its timer. Unsupported hosts/threads or
+    an existing timer refuse before transport instead of pretending to bound it.
+    """
+    if not 1 <= deadline_seconds <= 24 * 3600:
+        raise RebuildError("threshold_fetch_limit_invalid")
+    if threading.current_thread() is not threading.main_thread() or not hasattr(signal, "setitimer"):
+        raise RebuildError("threshold_owned_deadline_unavailable")
+    if signal.getitimer(signal.ITIMER_REAL) != (0.0, 0.0):
+        raise RebuildError("threshold_deadline_already_owned")
+    previous = signal.getsignal(signal.SIGALRM)
+    def expired(_signum, _frame):
+        raise _FetchDeadline()
+    signal.signal(signal.SIGALRM, expired)
+    signal.setitimer(signal.ITIMER_REAL, deadline_seconds)
+    try:
+        return _fetch_archive(dest, session=session, max_bytes=max_bytes, deadline_seconds=deadline_seconds,
+                              max_retries=max_retries, url=url, clock=clock, now=now, chunk_size=chunk_size)
+    except _FetchDeadline:
+        part = dest.with_name(dest.name + ".part")
+        return deps.result("thresholds", "incomplete", reasons=["deadline"],
+                           counters={"bytes": part.stat().st_size if part.exists() else 0})
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, previous)
+
+
+def _fetch_archive(dest: Path, *, session: Any, max_bytes: int, deadline_seconds: float, max_retries: int,
                   url: str = ARCHIVE_URL, clock: Callable[[], float] = time.monotonic,
                   now: Callable[[], str] = _utc_now, chunk_size: int = 1024**2) -> dict[str, Any]:
     """Resumable bounded download into ``dest``; refuses redirects and never overwrites ``dest``."""
@@ -140,6 +177,7 @@ def fetch_archive(dest: Path, *, session: Any, max_bytes: int, deadline_seconds:
                                counters={"bytes": offset, "attempts": attempts})
         attempts += 1
         headers = {"Range": f"bytes={offset}-"} if offset else {}
+        response = None
         try:
             response = session.get(url, headers=headers, stream=True, allow_redirects=False,
                                    timeout=(30, 120))
@@ -180,6 +218,9 @@ def fetch_archive(dest: Path, *, session: Any, max_bytes: int, deadline_seconds:
                 return deps.result("thresholds", "incomplete", reasons=["transport_failures"],
                                    counters={"bytes": part.stat().st_size if part.exists() else 0,
                                              "attempts": attempts})
+        finally:
+            if response is not None and hasattr(response, "close"):
+                response.close()
     sha, size = _sha_file(part)
     os.replace(part, dest)
     receipt = {"url": url, "name": dest.name, "sha256": sha, "bytes": size, "retrieved_at": now(),

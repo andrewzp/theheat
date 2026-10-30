@@ -33,7 +33,7 @@ def _scanned_fetch(bot_state: BotState, cities: list[dict], *, max_cities: int, 
     """
     from src.data import rainfall_supply
 
-    names, blocks = scan_blocks(cities, max_cities)
+    names, blocks = scan_blocks(cities, min(max_cities, gpm_imerg.MAX_NETWORK_CITIES))
     cursor = rainfall_supply.cursor_from_history(bot_state.get("run_history"), "gpm_imerg", names)
     readings: list = []
     errors: list[BaseException] = []
@@ -43,7 +43,8 @@ def _scanned_fetch(bot_state: BotState, cities: list[dict], *, max_cities: int, 
         order = chosen + [j for j in range(len(cities)) if j not in set(chosen)]
         try:
             rows = _fetch_strict(gpm_imerg.fetch_daily_precip, cities=[cities[j] for j in order],
-                                 max_cities=max_cities, max_workers=max_workers, trace=trace)
+                                 max_cities=max_cities, max_workers=max_workers, trace=trace,
+                                 network_selection=[cities[j] for j in chosen])
         except Exception as exc:
             errors.append(exc)
             raise

@@ -53,15 +53,16 @@ def brief_items(report: Mapping[str, Any]) -> dict[str, Any]:
     if retrieval not in RETRIEVAL:
         raise ValueError("report_retrieval_status")
     retained = report.get("retained_text") if retrieval == "full_text_retained" else None
+    retained_valid = _text(retained, 4 * 1024 * 1024)
     items, held = [], []
     for claim in report.get("claims") or []:
         reasons = []
-        if retrieval == "unavailable":
+        if retrieval == "unavailable" or (retrieval == "full_text_retained" and not retained_valid):
             reasons.append("full_article_unavailable")
         quote = claim.get("quote")
         if not _text(quote, 500):
             reasons.append("quote_missing")
-        elif retained is not None and quote not in retained:
+        elif retained_valid and quote not in retained:
             reasons.append("excerpt_not_in_retained_text")
         elif retrieval == "excerpt_only" and not claim.get("excerpt_attested"):
             reasons.append("unsupported_excerpt")

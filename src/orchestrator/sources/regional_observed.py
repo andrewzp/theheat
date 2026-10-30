@@ -12,6 +12,7 @@ from __future__ import annotations
 
 # ruff: noqa: F403,F405
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 
 from src.data import regional_observations as regional
@@ -51,6 +52,7 @@ def run_regional_observed(bot_state: BotState, current_run: dict | None, packets
             return
         packets = load_packets(os.environ.get(PACKETS_ENV))
     started = time.perf_counter()
+    qualification_time = datetime.now(timezone.utc)
     regions: dict[str, dict] = {}
     observed = promoted = 0
     for packet in packets:
@@ -70,7 +72,7 @@ def run_regional_observed(bot_state: BotState, current_run: dict | None, packets
         admitted = 0
         for observation in result["observations"]:
             observed += 1
-            bundle, reason = regional.build_candidate(observation)
+            bundle, reason = regional.build_candidate(observation, now=qualification_time)
             if bundle is None:
                 reasons[str(reason)] = reasons.get(str(reason), 0) + 1
                 continue
