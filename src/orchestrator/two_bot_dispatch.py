@@ -85,6 +85,11 @@ def _try_two_bot_draft(
     dashboard surfaces it. These are *post-score* kills, distinct from
     the editorial-gate near-misses captured by ``_should_draft``.
     """
+    if result_out is not None:
+        # The pipeline flips this immediately before a writer call. A refusal
+        # below (source hold, cache hit, prerequisite) leaves it False, so the
+        # drain can tell a no-cost refusal from a paid attempt.
+        result_out["writer_started"] = False
     if (getattr(bundle, "signal_kind", None) in ("official_warning", "nhc_advisory")
         or str(getattr(bundle, "event_id", "")).startswith(("official_warning:", "nhc_advisory:"))):
         from src.editorial.official_warning import WarningHold
@@ -96,6 +101,13 @@ def _try_two_bot_draft(
         except WarningHold as exc:
             if result_out is not None:
                 result_out.update(kill_stage="warning_source", kill_reason=exc.code)
+            # Visible like the cache refusal below: a source hold before any paid
+            # attempt leaves a row, not only an optional funnel terminal.
+            hold_ctx = _current_suppression_ctx() or {}
+            _record_downstream_suppression(bot_state=bot_state, source=hold_ctx.get("source") or "writer",
+                run_id=hold_ctx.get("run_id"), event_id=event_id, score=score,
+                kill_stage="warning_source", kill_reason=exc.code,
+                summary=getattr(bundle, "where", None) or city or None)
             return False
     if generation_client is not None:
         from src.commands.schema import CommandError

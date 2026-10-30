@@ -256,9 +256,13 @@ def run_alerts(bot_state: BotState, current_run: dict | None = None, *, ghcn_sup
         warning_runner.run()
     from src.editorial.warning_runtime import WarningSource, warning_source_scope
     warning_context = warning_source_scope(warning_source) if type(warning_source) is WarningSource else nullcontext()
+    # One attempt budget for this whole alerts operation (every drain, refill
+    # included); a later independent operation starts with its own.
+    from src.orchestrator.candidate_budget import CandidateBudget
     with warning_context:
         drafted = _drain_and_write_triage_queue(
-            bot_state, current_run, defer_callbacks=pending_callbacks, funnel_sink=funnel_sink
+            bot_state, current_run, defer_callbacks=pending_callbacks, funnel_sink=funnel_sink,
+            candidate_budget=CandidateBudget.for_operation("alerts"),
         )
 
     pruned_event_ids: set = set()

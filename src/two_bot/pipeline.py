@@ -370,6 +370,8 @@ def generate_draft(
                       "rejected_candidate"):
             result_out.pop(field, None)
         result_out["stage_outcomes"] = stage_outcomes
+        # Explicit operation accounting: False until the first writer call starts.
+        result_out["writer_started"] = False
 
     def _record_kill(stage: str, reason: str) -> None:
         # Opt-in private evidence binding only; a no-op unless capture is open.
@@ -432,6 +434,8 @@ def generate_draft(
         if not _warning_boundary(bundle, _record_kill):
             return None
         samples = 1 if bundle.signal_kind in _CURRENT_SOURCE_KINDS else _writer_samples()
+        if result_out is not None:
+            result_out["writer_started"] = True  # Set before the first paid writer call.
         writer_results = _writer_sample_slate(bundle, memory_slice, samples)
         viable_results = [
             replace(result, tweet=format_source_link(result.tweet, bundle))

@@ -162,7 +162,10 @@ def test_mixed_capture_journey_is_xml_order_independent_with_exact_health(monkey
     if mode == "legacy":
         assert expected[1] == SIX  # Every distinct staged candidate, in staged order.
     elif mode == "refill":
-        assert sorted(expected[1]) == SIX  # Attempt ceiling 2 x target 3, nothing succeeded.
+        # Contract change (live operating guards, O2): refill's own ceiling (2 x target 3 = 6)
+        # used to attempt all six; with triage enabled it may no longer exceed the
+        # operation's THEHEAT_MAX_DRAFTS_PER_CYCLE budget (default 3). Nothing succeeded.
+        assert len(expected[1]) == 3 and set(expected[1]) <= set(SIX)
     else:
         assert len(expected[1]) == 2  # Existing per-category triage cap.
 

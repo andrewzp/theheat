@@ -139,7 +139,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/orchestrator/ghcn_source_result_client.py": "d30d22b50ffd270f647187e11fc8b17fe7f7dff28368e492b1d86fc0131cf1cd",
     "src/orchestrator/nws_publication.py": "a41593f9b1e11216a250c84cf2f4002f68cbd315dcfe3b0d16ca7d8fdaa4f25b",
     "src/orchestrator/posting.py": "51e703ad8605c02418774f1a48cf178fe404f1106680e5b8f83de7dc78983792",
-    "src/orchestrator/run_alerts.py": "ba3e116b8251eb48ac6f3b79cd96a9271735a0df321de407e8e185b4072b0be6",
+    "src/orchestrator/run_alerts.py": "5e686065b23a3f52363715e31124f4d92fc2edc35c38418d21c7543f43ae9373",
     "src/orchestrator/source_result_client.py": "c1c8ae63f62169dcc26f87c8746b1994302cd36e26d6cb2146ff8a803fe089fb",
     "src/orchestrator/sources/air_quality.py": "254d2a44d4bf534b19cf18ae49574ebc3616895e5fe6ef2399f1d46bc26f5d50",
     "src/orchestrator/sources/coral_dhw.py": "6596f95e1ba183c4833d365c9d1d1b009e299e28e555295351fb061899d37e2f",
@@ -152,8 +152,8 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/orchestrator/sources/official_warning.py": "1f6c25135709b0810e4e1f78997f33a9496b968930acc74f9f863311e768278c",
     "src/orchestrator/sources/open_meteo.py": "e3f535af7394f45c9d2e8abd7b1c31d4c01f0d510f325e37bbe14ebc915e2fc3",
     "src/orchestrator/sources/synthesis.py": "e1e101948dde8a2ac07be65d78e37ed0cd8e080c43523ea0ded1b1071cd31522",
-    "src/orchestrator/triage_queue.py": "c65664e1260a23718096fe02f9ad4b10cb1351dd4c96d18198b78d9429372105",
-    "src/orchestrator/two_bot_dispatch.py": "f8994993897102fec64234ec916c7b0955a246f9d98f14768b474d32017a88eb",
+    "src/orchestrator/triage_queue.py": "d82f60df4743eb37437a7ea21124eab3160ef610807befc73e64507a684f11a0",
+    "src/orchestrator/two_bot_dispatch.py": "40271d86e46a5d9ac675fdf54c2e47838630282a106a42cada11449f8e194de2",
     "src/posting/bluesky.py": "b10705777646ebc994585038f81f4bc104ce9e5d217de2920a8411f3e4747fb2",
     "src/posting/delivery_receipts.py": "c944f22458726d02bcdbbf70d274d4831486013dc2eb1e47fd6f2a569abd4147",
     "src/posting/delivery_transport.py": "e50ee85bfe815291f5ec8c75e4c338268e83fc60cc4e919c9cfa70e4d51558e8",
@@ -209,7 +209,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/two_bot/json_utils.py": "c09fd98817c8e478a38cdeb1028769ec146ad0f94701235b7c1e12de7a46e7da",
     "src/two_bot/memory.py": "33634f80d4002dd6246c5f627a8cf3db26cf8cb18fae5f81875db86f199c4bb9",
     "src/two_bot/multisignal.py": "6faa78ed3c5d94b4bb9305e12f4a61d370e212fddee47190b15997b52fbb243e",
-    "src/two_bot/pipeline.py": "28c068b222092cd5e54416660e688382c1ed45d9440e92d4e29ee417034bccef",
+    "src/two_bot/pipeline.py": "3c441cdc08b0bacd6e88fdb3ad4d5854c1327c2a49dc3526303ce4b619c6294d",
     "src/two_bot/prompts/__init__.py": "b08ec3ae2e477637b1fa3aa7f04935b7744b5ea7548bb384965e20ade7fabd2b",
     "src/two_bot/prompts/critic_prompt.py": "dd13f96c2025e7cd27529fb31e7a435845cac7e6f8d2f0feb0b91897d5d6276f",
     "src/two_bot/prompts/fact_check_prompt.py": "2a8372a576ee76dae2b29d79d3b68b7e2ac9e68e22334a7b488dcc994a34e83a",
@@ -217,7 +217,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/two_bot/provider_preflight.py": "9a6aa6b4834c04266acdde286a3ccae991a070ab9411a0d56e7b9ab519422021",
     "src/two_bot/rejected_candidate.py": "4c4c843c14a52e5eb3f955b055d637476a94cf8bdaa0e98bab60c7c702f1ed53",
     "src/two_bot/retained_usage.py": "48fbca8c9c9868a258c5bfdd0966234b4a7f07b4e21577cb1c3cfa0d9bfeeda9",
-    "src/two_bot/scientific_claims.py": "b378a2c571c902e4ac5e36d497af0efecfe748582516bd796e8783a341e6aafb",
+    "src/two_bot/scientific_claims.py": "732815d008c48ffc3c359eda41b053bde4c011dde023b7d9cef35e13e570d08b",
     "src/two_bot/source_links.py": "d0cc31547cd714aa7760f7a2ff3659076c4198ce868bf9fa96aa313f98e5e0a0",
     "src/two_bot/sourced_generation.py": "1603b6508156e14dadb0138cfa123c5c8302b09261545cfa0434c585c3bb20f2",
     "src/two_bot/strict_contract.py": "d4536268c08775cea808d3f2738226da9d33d7244a8c30988d5286d6dae83ca8",
@@ -229,5 +229,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "8c4887f395618e343dafd55f5843987dfa6a7a620713c7c34bab9f419e4434fe"
   },
   "schema_version": 1,
-  "source_sha256": "78464ef7c3a3afc59a7fbce71696e5e187e7dea481f11703386fbb69891e60a1"
+  "source_sha256": "4f84e82f778e8a3c072643c83e5307a46fcf05d3a1b2791cd417170869b63471"
 }

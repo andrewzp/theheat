@@ -655,8 +655,8 @@
     "src/editorial/official_warning.py": "e37a232fe19e8ef90bfc825c92b95b89d9c9f9df7818b4a3352466ad2beeff87",
     "src/editorial/warning_runtime.py": "3d2cb7e2d449545d682728e4adf777a622a2f5139081e46e14398122864d5f38",
     "src/orchestrator/cyclones.py": "389c6441db0839763b6a9cd42146f75e3ab14d1179125d60a9c368eb1e03697d",
-    "src/orchestrator/hot10.py": "6a6f77bf54e7fa0907d21454c460c0ea991f2dd32edf4d251be10989007bb9a1",
-    "src/orchestrator/run_alerts.py": "ba3e116b8251eb48ac6f3b79cd96a9271735a0df321de407e8e185b4072b0be6",
+    "src/orchestrator/hot10.py": "d810e90376a6260e79e4d0753925574d8a8aa73d9a8d718849859265472f3542",
+    "src/orchestrator/run_alerts.py": "5e686065b23a3f52363715e31124f4d92fc2edc35c38418d21c7543f43ae9373",
     "src/orchestrator/sources/air_quality.py": "254d2a44d4bf534b19cf18ae49574ebc3616895e5fe6ef2399f1d46bc26f5d50",
     "src/orchestrator/sources/climate_indices.py": "e46485639d62d426b5d55b6f02191a47b0434bb31eb23e8f4a6bece33e980208",
     "src/orchestrator/sources/co2.py": "2ed59676536ab5ff9fc45d3116c91ffad10986a5a4380687a7191f2bd518d4a6",
@@ -690,5 +690,5 @@
     "src/two_bot/intern/warnings.py": "04e0a4506ffbb29124c8d2960a5e5025305699297fcf8f9178b23caac2cd7a37"
   },
   "evidence_scope": "Referenced local code inventory; not live/provider/transitive-source qualification.",
-  "registry_sha256": "ec0e5e6d9051c4194bafa7cb3871bdca9e1b6b707ad2df8e2dc12eb68382b201"
+  "registry_sha256": "1e368f4470287215d0215b0e93f2717049a5865d470e0b30b3869743abf27ea4"
 }

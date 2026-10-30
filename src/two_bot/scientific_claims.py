@@ -26,6 +26,14 @@ _UNAVAILABLE_INCIDENT_CLAUSE = re.compile(
     r"(?=[.;]|\Z)"
 )
 
+# Ignore only this complete immediate disclaimer in the observation-word scan.
+# Every other clause and every other scientific check still sees the full text.
+_NEGATED_STATION_MEASUREMENT_CLAUSE = re.compile(
+    r"(?:^|[.;,][ \t]+)"
+    r"(?P<clause>not[ \t]+station(?:-|[ \t]+)measured)"
+    r"(?=[.;]|\Z)"
+)
+
 
 def _incident_classification_scan(text: str) -> str:
     """Mask only complete recognized negative clauses in the temporary scan."""
@@ -33,6 +41,19 @@ def _incident_classification_scan(text: str) -> str:
         return text
     chars = list(text)
     for match in _UNAVAILABLE_INCIDENT_CLAUSE.finditer(text):
+        start, end = match.span("clause")
+        chars[start:end] = " " * (end - start)
+    return "".join(chars)
+
+
+def _forecast_observation_scan(text: str) -> str:
+    """Mask the bounded disclaimer, without treating quoted text as a denial."""
+    # Possessive/contraction apostrophes do not quote the disclaimer.
+    quote_scan = re.sub(r"(?<=\w)['’](?=\w)", "", text)
+    if any(char in quote_scan for char in "\"'‘’“”«»‹›\r\n"):
+        return text
+    chars = list(text)
+    for match in _NEGATED_STATION_MEASUREMENT_CLAUSE.finditer(text):
         start, end = match.span("clause")
         chars[start:end] = " " * (end - start)
     return "".join(chars)
@@ -174,7 +195,7 @@ def scientific_claim_failures(tweet: str, bundle) -> list[str]:
     # P06 supplies the more precise temperature source/valid-time rule. This
     # also covers explicitly modelled non-temperature fallback products.
     forecast = is_air_quality(bundle) or evidence.get("evidence_type") == "forecast" or facts.get("evidence_grade") in {"modelled", "model_fallback", "forecast"}
-    if forecast and re.search(r"\b(?:recorded|measured|observed|has broken|broke the record|set a (?:new )?record)\b", text):
+    if forecast and re.search(r"\b(?:recorded|measured|observed|has broken|broke the record|set a (?:new )?record)\b", _forecast_observation_scan(text)):
         failures.append("forecast_as_observation: a forecast cannot establish an already observed measurement or record")
     if re.search(r"\b(?:wet[- ]bulb|heat index|humidex)\b", text):
         moisture = evidence.get("moisture_diagnostic")
