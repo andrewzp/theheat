@@ -194,6 +194,11 @@ class RoleBoundAuthority:
     def candidate_checks(self, action, payload, *, now, request=None, receipt=None, **options):
         self._bind("candidate_checks", action, payload)
         call = lambda: self.inner.candidate_checks(action, payload, now=now, request=request, receipt=receipt, **options)  # noqa: E731
+        if payload.get("stage") == "deterministic":
+            # The journal still validates roles, leases, input identity and the
+            # required null reservation. Its local grant authorizes no provider
+            # request, so neither beginning nor completing it spends a call slot.
+            return call()
         if action == "begin":
             base = {k: payload[k] for k in ("check_set_id", "owner", "fence", "current_context", "checker_state_sha256") if k in payload}
             return self._granted("local_required_check", call, already_granted=lambda: self.inner.candidate_checks(
