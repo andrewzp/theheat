@@ -901,8 +901,8 @@ def fetch_inputs(plan: dict[str, Any], dest: Path, *, transport: Any, archive_se
                        counters={"transport": transport.snapshot()})
 
 
-def verify_inputs(dest: Path) -> dict[str, Any]:
-    """Re-hash every bound input; any change since the fetch refuses the input set."""
+def verify_inputs(dest: Path, *, roles: tuple[str, ...] | None = None) -> dict[str, Any]:
+    """Re-hash every bound input (or the named ``roles``); any change since the fetch refuses the set."""
     path = dest / "inputs-manifest.json"
     if not path.is_file():
         raise RebuildError("threshold_inputs_manifest_missing")
@@ -910,6 +910,8 @@ def verify_inputs(dest: Path) -> dict[str, Any]:
     if not isinstance(document, dict) or document.get("schema") != INPUTS_SCHEMA:
         raise RebuildError("threshold_inputs_manifest_invalid")
     for role, entry in document["inputs"].items():
+        if roles is not None and role not in roles:
+            continue
         limit = MAX_ARCHIVE_BYTES if role == "archive" else MAX_TEXT_BYTES
         if _identity(dest / entry["name"], limit) != {"name": entry["name"], "sha256": entry["sha256"],
                                                       "bytes": entry["bytes"]}:
