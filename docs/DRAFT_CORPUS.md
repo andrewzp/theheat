@@ -11,6 +11,43 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-10-30 — Daily corpus grading (2 drafts)
+
+**Context:** Gist read via git-clone path (success). Queue: 2 pending, both fresh (4.4h and 11.4h old), both Riyadh, Saudi Arabia, both CAMS-forecast PM readings for Oct 30. First graded cycle on this checkout since Jul 6 (main's copies of these docs were last updated then). Grades are historical editorial observations per the Sep 29 evaluation boundary note in `QUALITY_TREND.md`, not factual qualification.
+
+**Grade distribution:** 0 A, 0 B+, 1 B-, 1 C+ → **A-rate 0% (0/2)**.
+
+**Headline finding:** First `dust_event` draft in the corpus to state a WHO multiple unprompted ("roughly 35× the WHO guideline") — the P_dust fix is achievable in the current writer. It still ends at the number. Both drafts are pure data delivery with no close, no named mechanic, and no consequence.
+
+### B-
+
+**[1] dust_event, Riyadh (score 75, 03:44Z)** — "A CAMS air-quality model forecast puts Riyadh's dust concentration at a daily peak of ~4,227 µg/m³ on Oct 30, with a 24-hour PM10 mean roughly 35× the WHO guideline."
+- Violation present (4,227 µg/m³), voice calm, distance kept. WHO anchor present — the calibration the prior 11 dust_event drafts lacked.
+- Wodehouse: "~4,227" pairs an approximation tilde with a four-digit exact figure (P4). Peak (µg/m³) and mean (×WHO) sit in one sentence on different bases, so the reader must reconcile them.
+- No close: sentence ends on the multiple. P_close failing (no consequence or mechanism). Ceiling B- without it.
+
+### C+
+
+**[2] air_quality_hazard, Riyadh (score 74, 10:41Z)** — "A CAMS air-quality model forecast puts Riyadh's 24-hour mean PM2.5 at about 173 µg/m³ on Oct 30 — roughly 11.5× the WHO daily guideline — with co-reported dust values above 3,000 µg/m³ at peak hours."
+- WHO multiple stated, fine. "co-reported" is pipeline jargon (P_tier-adjacent: internal bundle-field phrasing in copy). "about" + "roughly" doubles hedging on one figure (P4).
+- Closes on a second metric, not a consequence. The dust-above-3,000 detail is the stronger fact and is buried in a trailing clause (P5 stranded).
+- Same city, same day, same model, same opener as [1] — near-duplicate cluster; posting both would repeat the story.
+
+### Patterns named
+1. **P_close, 17th cycle:** both drafts fail (data-only endings). 0 positive.
+2. **P_dust: counter-instance.** [1] is the first of 12 dust_event drafts with a WHO anchor. Anchor alone gave B-, not A- — the close is the binding gap now.
+3. **P4:** tilde/"about"/"roughly" hedging on exact values, both drafts.
+4. **Near-duplicate cross-type generation** (dust_event + air_quality_hazard, same city/day) logged as operational, not a voice proposal.
+5. No era anchors, no banned-formula openers, no plant comparisons, no political anchors.
+
+### Followups
+1. Staleness: both drafts <48h old, forecast date is today — nothing to bulk-reject. Write step not attempted (no stale candidates).
+2. P_dust fix text can be reframed: WHO anchor is now present; remaining lever is the close (P_close).
+3. Operator: consider dropping the second of a same-city/same-day pair.
+
+### Numbers
+- Pending: 2 (2 fresh). A-rate 0%. Gap to 50% bar: 50 pp.
+
 ## 2026-07-06 — Daily corpus grading (0 fresh drafts; 15 carry-overs from Jul 5, previously graded)
 
 **Context:** Gist read via git-clone path (success; no rate limit). Queue: 15 pending drafts —
