@@ -251,12 +251,21 @@ def test_every_thread_boundary_in_src_propagates_or_is_a_declared_unjoined_data_
     data_pools = {"src/data/ghcn.py", "src/data/coral_dhw.py", "src/data/gpm_imerg.py",
                   "src/data/ocean_sst_anomaly.py", "src/data/normals_acquisition.py"}
     propagated = {"src/orchestrator/scheduler.py", "src/two_bot/pipeline.py"}
+    # A helper thread that only resolves a hostname and writes its own local box;
+    # it can never reach a declared call. Kept DNS-only by the assertion below.
+    dns_only = {"src/data/bounded_http.py"}
     found = set()
     for path in (root / "src").rglob("*.py"):
         text = path.read_text()
         if re.search(r"ThreadPoolExecutor\(|threading\.Thread\(|run_in_executor|asyncio\.to_thread", text):
             found.add(str(path.relative_to(root)))
-    assert found == data_pools | propagated
+    assert found == data_pools | propagated | dns_only
+    for name in dns_only:
+        text = (root / name).read_text()
+        threads = re.findall(r"threading\.Thread\(([^)]*)\)", text)
+        assert threads == ['target=lookup, name="theheat-bounded-dns", daemon=True'], threads
+        lookup = text.split("def lookup() -> None:", 1)[1].split("helper = threading.Thread", 1)[0]
+        assert "socket.getaddrinfo(" in lookup and not re.search(r"consume|urlopen|request|send|\.connect", lookup)
     for name in propagated:
         text = (root / name).read_text()
         assert "submit_in_context(" in text and ".submit(" not in text.replace("submit_in_context(", "")
