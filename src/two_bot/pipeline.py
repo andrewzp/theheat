@@ -217,9 +217,11 @@ def _writer_sample_slate(
         raise TrialStopped("trial_requires_one_writer_sample")
     if samples <= 1:
         return [writer.write_tweet(bundle, memory_slice)]
+    from src.two_bot.call_inventory import submit_in_context
     with ThreadPoolExecutor(max_workers=samples) as executor:
+        # Each sample joins the same candidate attempt/operation (own context copy).
         futures = [
-            executor.submit(writer.write_tweet, bundle, memory_slice)
+            submit_in_context(executor, writer.write_tweet, bundle, memory_slice)
             for _ in range(samples)
         ]
         return [future.result() for future in futures]
