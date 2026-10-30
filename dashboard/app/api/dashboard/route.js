@@ -7,7 +7,7 @@ import { requireDashboardAuth } from "../../../lib/auth.js"
 import { buildSourceHealthPayload } from "../../../lib/source-health.js"
 import { projectStateForDashboard } from "../../../lib/projection.js"
 import { hasUnresolvedPublish, projectDraft } from "../../../lib/draft-revisions.js"
-import { buildRuntimeConfig, dashboardDeployment } from "../../../lib/runtime-inventory.js"
+import { buildRuntimeConfig, codeRevisionEvidence, dashboardDeployment } from "../../../lib/runtime-inventory.js"
 import { buildProductHealth } from "../../../lib/product-health.js"
 import { graphicAvailabilityPayload } from "../../../lib/graphic-availability.js"
 import { buildCostEvidence } from "../../../lib/cost-evidence.js"
@@ -162,6 +162,7 @@ export async function GET(request) {
     sourceHealth: { sources: [], stats: null },
     config: buildRuntimeConfig(),
     deployment: dashboardDeployment(),
+    codeRevision: null,
     // W10.6: per-family image requirements and the store setting's presence (never its value).
     graphicAvailability: graphicAvailabilityPayload(process.env),
     productHealth: null,
@@ -184,6 +185,7 @@ export async function GET(request) {
     results.suppressions = suppressionsPayload(state, { sourceFilter, sinceFilter, limit })
     results.sourceHealth = buildSourceHealthPayload(state)
     results.config = buildRuntimeConfig(state, { runtimeReport })
+    results.codeRevision = codeRevisionEvidence(state, { deployment: results.deployment, runtimeReport })
     results.productHealth = buildProductHealth(state, { runtimeReport })
   } catch (error) {
     if (previewConfigured()) return previewError(error)
