@@ -33,6 +33,16 @@ _IDENTIFIER = re.compile(CONTRACT["identifier_pattern"])
 _RECORD_KEYS = {"schema_version", "id", "observed_at", "stage", "provider", "requested_model",
                 "resolved_model", "response_id", "usage_status", "counts", "labels", "breakdowns",
                 "invalid_fields", "unsupported_fields"}
+# Optional cost attribution, present on observations recorded from a live
+# provider response (src.two_bot.usage_ledger); older rows and retained-artifact
+# observations carry no ``attribution`` key at all. Mirrored in
+# dashboard/lib/usage-observations.js. Bounded and content-free.
+ATTRIBUTION_KEYS = ("schema_version", "status", "operation", "path", "attempt", "event_id")
+ATTRIBUTION_STATUSES = ("joined_attempt", "joined_operation", "late_after_close", "unjoined")
+ATTRIBUTION_OPERATIONS = ("alerts", "leaderboard", "publish", "manual_generation", "batch_generation",
+                          "threshold_refresh")
+ATTRIBUTION_PATHS = ("ordinary", "manual", "batch", "maintenance")
+_ATTEMPT_ID = re.compile(r"^[a-f0-9]{16}$")
 
 
 def canonical(value) -> str:
@@ -61,9 +71,38 @@ def _timestamp(value) -> bool:
         return False
 
 
+def valid_attribution(raw) -> bool:
+    """Exact shape: joined statuses carry their codes, absent ones carry only nulls."""
+    if not isinstance(raw, dict) or len(raw) != len(ATTRIBUTION_KEYS) or set(raw) != set(ATTRIBUTION_KEYS):
+        return False
+    if type(raw["schema_version"]) not in (int, float) or raw["schema_version"] != 1:
+        return False
+    status, operation, path = raw["status"], raw["operation"], raw["path"]
+    attempt, event_id = raw["attempt"], raw["event_id"]
+    if status not in ATTRIBUTION_STATUSES:
+        return False
+    if status in ("late_after_close", "unjoined"):
+        return operation is None and path is None and attempt is None and event_id is None
+    if operation is not None and (operation not in ATTRIBUTION_OPERATIONS or path not in ATTRIBUTION_PATHS):
+        return False
+    if operation is None and path is not None:
+        return False
+    if status == "joined_operation":
+        return operation is not None and attempt is None and event_id is None
+    if not isinstance(attempt, str) or not _ATTEMPT_ID.fullmatch(attempt):
+        return False
+    return event_id is None or _identifier(event_id)
+
+
 def valid_record(raw) -> bool:
     """Strict bounded persisted schema, paired with the dashboard validator."""
-    if not isinstance(raw, dict) or len(raw) != len(_RECORD_KEYS) or set(raw) != _RECORD_KEYS:
+    if not isinstance(raw, dict):
+        return False
+    attributed = "attribution" in raw
+    keys = _RECORD_KEYS | {"attribution"} if attributed else _RECORD_KEYS
+    if len(raw) != len(keys) or set(raw) != keys:
+        return False
+    if attributed and not valid_attribution(raw["attribution"]):
         return False
     if type(raw["schema_version"]) not in (int, float) or raw["schema_version"] != 1:
         return False
@@ -111,11 +150,13 @@ def valid_record(raw) -> bool:
     return len(canonical(raw).encode()) <= CONTRACT["record_bytes"]
 
 
-def observe_response(stage, response, model, provider) -> dict:
+def observe_response(stage, response, model, provider, *, attribution: dict | None = None) -> dict:
     """Read only allowlisted SDK fields; absent values differ from explicit zero.
 
     No content/text accessor, serialization of the response, or provider request.
     A field access failure is recorded without changing the successful response.
+    ``attribution`` (call_inventory.take_dispatch_attribution) is attached only
+    when supplied; an invalid one is recorded as explicitly ``unjoined``.
     """
     errors: set[str] = set()
     if provider not in ("google", "anthropic"):
@@ -207,6 +248,10 @@ def observe_response(stage, response, model, provider) -> dict:
         "unsupported_fields": unsupported, "invalid_fields": [],
     }
     raw["invalid_fields"] = sorted(errors)
+    if attribution is not None:
+        raw["attribution"] = (dict(attribution) if valid_attribution(attribution) else
+                              {"schema_version": 1, "status": "unjoined", "operation": None, "path": None,
+                               "attempt": None, "event_id": None})
     if not valid_record(raw):
         # Oversize is explicit, not a silent partial observation or retry.
         raw.update(counts={p: None for p in CONTRACT["counts"][provider]},
@@ -243,6 +288,8 @@ def merge_observations(*values) -> dict:
                 # Canonical numeric normalization gives Python/JS JSON parity.
                 normalized = deepcopy(row)
                 normalized["schema_version"] = 1
+                if "attribution" in normalized:
+                    normalized["attribution"]["schema_version"] = 1
                 normalized["counts"] = {k: None if v is None else int(v) for k, v in row["counts"].items()}
                 for value in normalized["breakdowns"].values():
                     for item in value or []:

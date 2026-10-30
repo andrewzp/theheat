@@ -50,14 +50,21 @@ def run_newsworthiness(bot_state: BotState, current_run: dict | None, *, retenti
         return None
 
     print("[alerts] Retrieving newsworthiness events (NIFC + grounded search)...")
-    try:
-        result = fetch_news_events()
-    except Exception as exc:  # noqa: BLE001 — the lane must never block the cycle
-        _record_source_run(
-            current_run, bot_state, SOURCE_KEY, source_start,
-            status="failed", observed=0, error=f"newsworthiness fetch failed: {exc}",
-        )
-        return None
+    from src.two_bot.call_inventory import operation_cost_row, operation_scope, record_operation_cost
+    # Discovery is joined in whichever thread runs it (the scheduler copies the
+    # submitting context); its row is separate from candidate (selection) spend.
+    with operation_scope("alerts") as discovery_join:
+        try:
+            result = fetch_news_events()
+        except Exception as exc:  # noqa: BLE001 — the lane must never block the cycle
+            # Requests sent before the failure stay recorded, unknown and spent.
+            record_operation_cost(current_run, operation_cost_row(
+                "alerts", join=discovery_join, spend_class="discovery", source=SOURCE_KEY), join=discovery_join)
+            _record_source_run(
+                current_run, bot_state, SOURCE_KEY, source_start,
+                status="failed", observed=0, error=f"newsworthiness fetch failed: {exc}",
+            )
+            return None
 
     retained = None
     if retention_observer is not None:
@@ -73,10 +80,10 @@ def run_newsworthiness(bot_state: BotState, current_run: dict | None, *, retenti
         except Exception:  # noqa: BLE001 — no report storage failure may stop source health.
             retained = {"status": "retention_unavailable", "generation_available": False, "publication_enabled": False}
     state.record_news_events(bot_state, result.events)
-    from src.two_bot.call_inventory import operation_cost_row, record_operation_cost
     # Discovery spend is reported separately from candidate (selection) spend.
     record_operation_cost(current_run, operation_cost_row(
-        "alerts", allowances=(result.allowance,), spend_class="discovery", source=SOURCE_KEY))
+        "alerts", join=discovery_join, allowances=(result.allowance,), spend_class="discovery", source=SOURCE_KEY),
+        join=discovery_join)
     observed = len(result.events)
     note_bits = [
         f"events={observed}",

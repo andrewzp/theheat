@@ -7,6 +7,12 @@ const identifier = value => typeof value === "string" && identifierRE.exec(value
 const count = value => Number.isSafeInteger(value) && value >= 0 && value <= C.count_limit
 const sameKeys = (value, keys) => object(value) && Object.keys(value).length === keys.length && keys.every(k => Object.hasOwn(value, k))
 const recordKeys = ["schema_version", "id", "observed_at", "stage", "provider", "requested_model", "resolved_model", "response_id", "usage_status", "counts", "labels", "breakdowns", "invalid_fields", "unsupported_fields"]
+// Optional cost attribution on live-response observations (src/two_bot/usage_observations.py
+// ATTRIBUTION_*). Older rows carry no `attribution` key; absent joins stay explicit nulls.
+export const ATTRIBUTION_KEYS = ["schema_version", "status", "operation", "path", "attempt", "event_id"]
+export const ATTRIBUTION_STATUSES = ["joined_attempt", "joined_operation", "late_after_close", "unjoined"]
+export const ATTRIBUTION_OPERATIONS = ["alerts", "leaderboard", "publish", "manual_generation", "batch_generation", "threshold_refresh"]
+export const ATTRIBUTION_PATHS = ["ordinary", "manual", "batch", "maintenance"]
 const compare = (a, b) => a < b ? -1 : a > b ? 1 : 0
 const canonical = value => JSON.stringify(value && typeof value === "object"
   ? Array.isArray(value) ? value.map(v => JSON.parse(canonical(v)))
@@ -19,8 +25,21 @@ function validTimestamp(value) {
   return Number.isFinite(time.getTime()) && time.toISOString() === value
 }
 
+export function validUsageAttribution(raw) {
+  if (!sameKeys(raw, ATTRIBUTION_KEYS) || raw.schema_version !== 1 || !ATTRIBUTION_STATUSES.includes(raw.status)) return false
+  const {status, operation, path, attempt, event_id: eventId} = raw
+  if (status === "late_after_close" || status === "unjoined") return operation === null && path === null && attempt === null && eventId === null
+  if (operation !== null && (!ATTRIBUTION_OPERATIONS.includes(operation) || !ATTRIBUTION_PATHS.includes(path))) return false
+  if (operation === null && path !== null) return false
+  if (status === "joined_operation") return operation !== null && attempt === null && eventId === null
+  if (typeof attempt !== "string" || !/^[a-f0-9]{16}$/.test(attempt) || attempt.length !== 16) return false
+  return eventId === null || identifier(eventId)
+}
+
 export function validUsageObservation(row) {
-  if (!sameKeys(row, recordKeys) || row.schema_version !== 1
+  const attributed = object(row) && Object.hasOwn(row, "attribution")
+  if (attributed && !validUsageAttribution(row.attribution)) return false
+  if (!sameKeys(row, attributed ? [...recordKeys, "attribution"] : recordKeys) || row.schema_version !== 1
       || typeof row.id !== "string" || !/^[a-f0-9]{32}$/.test(row.id) || row.id.length !== 32
       || !validTimestamp(row.observed_at)
       || !["google", "anthropic", "unknown"].includes(row.provider)

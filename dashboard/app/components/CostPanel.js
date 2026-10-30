@@ -113,7 +113,7 @@ export function OperationCosts({rows}) {
           note(`May call: ${row.may_call.map(c => `${label(c.stage)}${c.pricing === "unknown" ? " (unpriced)" : ""}`).join(", ") || "none declared"}.`),
           row.candidate_attempts ? note(`Candidate attempts: ${count(row.candidate_attempts.used)} of ${row.candidate_attempts.limit === null ? "no operation limit" : count(row.candidate_attempts.limit)} used · ${count(row.candidate_attempts.returned_unstarted)} returned unstarted${row.candidate_attempts.refused ? " · configuration refused" : ""}.`) : null,
           row.allowances.length ? h("dl", {className: "runtime-settings cost-counts"}, row.allowances.map(a => h(Metric, {key: a.stage, title: `${label(a.stage)} allowance`},
-            `${count(a.reserved)} of ${count(a.limit)} reserved · ${count(a.physical_attempts)} physical attempts · ${count(a.refused_before_egress)} refused before sending`))) : null,
+            `${count(a.reserved)} of ${count(a.limit)} reserved · ${count(a.physical_attempts)} physical attempts · ${count(a.refused_before_egress)} refused before sending${a.exact_cache_hits ? ` · ${count(a.exact_cache_hits)} exact cached results reused (no request)` : ""}`))) : null,
           h("dl", {className: "runtime-settings cost-counts"},
             h(Metric, {title: "Returned"}, count(outcomes.returned)),
             h(Metric, {title: "Interrupted (outcome unknown)"}, count(outcomes.dispatched)),
@@ -124,6 +124,7 @@ export function OperationCosts({rows}) {
           row.requests.by_stage.length ? note(`Observed: ${row.requests.by_stage.map(s => `${label(s.stage)} ${count(s.requests)}`).join(", ")}.`) : note("No requests were sent."),
           another.length ? note(`Another attempt allowed: ${another.map(([k, v]) => `${label(k)} ${yesNo(v)}`).join(", ")}.`) : null,
           row.requests.truncated ? note("More requests were sent than this record retains; the extra requests stay unknown.") : null,
+          row.requests.late_after_close ? note(`${count(row.requests.late_after_close)} request${row.requests.late_after_close === 1 ? " was" : "s were"} sent after this operation closed (${row.requests.late_by_stage.map(s => `${label(s.stage)} ${count(s.requests)}`).join(", ") || "stage unknown"}). They are not in the counts above, are not refundable and their charges stay unknown.`) : null,
           note(`Applicable limits: ${row.ceilings.map(c => ceilingLabels[c] || c.replaceAll("_", " ")).join(", ")}.`)))
     })))
 }

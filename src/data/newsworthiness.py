@@ -33,7 +33,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from src.data._http import fetch_with_retry
-from src.two_bot.call_inventory import OperationAllowance, runtime_counts
+from src.two_bot.call_inventory import OperationAllowance
 
 NEWS_KINDS = ("fire", "heat_mortality")
 MAX_NEWS_EVENTS = 10
@@ -96,19 +96,19 @@ def news_discovery_allowance() -> OperationAllowance:
 
 
 def _counted(allowance: OperationAllowance, stage: str, call, *args):
-    """Run one reserved model call; join physical attempts and keep its outcome."""
-    before = runtime_counts().get(stage, 0)
+    """Run one reserved model call; join physical attempts and keep its outcome.
+
+    Attempts are counted by this context's own ``consume`` calls, so a
+    concurrent thread's request of the same stage is never attributed here.
+    """
+    before = allowance.physical_attempts[stage]
     try:
-        raw = call(*args)
+        with allowance.attempts(stage):
+            raw = call(*args)
     except Exception:
-        attempts = runtime_counts().get(stage, 0) - before
-        for _ in range(max(attempts, 0)):
-            allowance.attempt(stage)
         # Egress started: unknown (possibly billed). Otherwise refused before egress.
-        allowance.settle(stage, "unknown" if attempts > 0 else "unavailable")
+        allowance.settle(stage, "unknown" if allowance.physical_attempts[stage] > before else "unavailable")
         raise
-    for _ in range(max(runtime_counts().get(stage, 0) - before, 0)):
-        allowance.attempt(stage)
     return raw
 
 
@@ -368,6 +368,7 @@ def _verify_grounded(events: list[dict], result: NewsRetrievalResult) -> list[di
             if key in verdict_cache:
                 supported = verdict_cache[key]
                 result.verify_cache_hits += 1
+                allowance.cache_hit("newsworthiness_verify")  # Reused exact verdict: no slot, no call.
             else:
                 if not allowance.reserve("newsworthiness_verify"):
                     result.verify_budget_skips += 1

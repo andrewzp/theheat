@@ -10,6 +10,7 @@ from dataclasses import dataclass
 
 from src.orchestrator.suppression import _suppression_context
 from src.orchestrator.telemetry import _record_source_run
+from src.two_bot.call_inventory import submit_in_context
 from src.state_schema import BotState
 
 MAX_WORKERS = 6
@@ -133,7 +134,9 @@ def _run_one_with_budget(
 
     executor = ThreadPoolExecutor(max_workers=1)
     started_at = time.perf_counter()
-    future = executor.submit(_run_with_context, bot_state, current_run, runner)
+    # A copy of this context per runner: operation/attempt joins and a finite
+    # trial follow the work; a closed join is never revived (call_inventory).
+    future = submit_in_context(executor, _run_with_context, bot_state, current_run, runner)
     try:
         _await_with_budget(future, started_at, budget_seconds)
     except TimeoutError:
@@ -177,7 +180,7 @@ def run_stage1_sources(
                 _record_breaker_skip(bot_state, current_run, runner)
                 continue
             started_at = time.perf_counter()
-            future = executor.submit(_run_with_context, bot_state, current_run, runner)
+            future = submit_in_context(executor, _run_with_context, bot_state, current_run, runner)
             dispatch.append((runner, future, started_at))
 
         for runner, future, started_at in dispatch:
