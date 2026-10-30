@@ -15,7 +15,7 @@ export const TRACE_OUTCOMES = Object.freeze({
   waiting: "Draft waiting for review or delivery",
   posted: "Posted with a retained receipt",
 })
-const CHECK_STAGES = new Set(["writer", "safety", "fact_check", "critic", "honesty_gate"])
+const CHECK_STAGES = new Set(["writer", "safety", "fact_check", "critic", "honesty_gate", "copy_gate"])
 const QUALIFICATION_STAGES = new Set(["evidence_contract", "evidence", "admission", "qualification"])
 // episode_repeat: a repeated poll with no new material fact; portfolio_not_selected: outside the plan.
 const SELECTION_STAGES = new Set(["candidate_budget", "selector", "triage", "global_cap", "budget", "episode_repeat",

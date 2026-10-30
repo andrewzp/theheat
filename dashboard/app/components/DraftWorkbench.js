@@ -15,6 +15,7 @@ import { GraphicPreview } from "./GraphicPreview.js"
 import { DeliveredGraphics } from "./DeliveredGraphics.js"
 import { GIST_POST_IMAGE_KINDS } from "../../lib/graphic-preview.js"
 import { EditorMedia } from "./EditorMedia.js"
+import { CopyNotes } from "./CopyNotes.js"
 import RecoveredRecord, { recoveryLabel } from "./RecoveredRecord.js"
 import { formatDuration, timeAgo } from "../../lib/format.js"
 import { draftReviewControls, draftTextLength, manualReviewLabel, revisionKey } from "../../lib/draft-review-ui.js"
@@ -229,7 +230,7 @@ export function DraftWorkbench({
                     <textarea
                       ref={editor}
                       id={editorId}
-                      aria-describedby={`${editorId}-count`}
+                      aria-describedby={`${editorId}-count ${editorId}-copy`}
                       disabled={!!pendingCommand}
                       className="draft-edit-area"
                       value={editText}
@@ -242,11 +243,13 @@ export function DraftWorkbench({
                     <div id={`${editorId}-count`} className={`draft-chars ${draftTextLength(editText) > 280 ? "over" : ""}`}>
                       {draftTextLength(editText)}/280
                     </div>
+                    <CopyNotes id={`${editorId}-copy`} text={editText} live />
                   </>
                 ) : (
                   <>
                     <div className="draft-text">{selectedDraft.text}</div>
                     <div className="draft-chars">{draftTextLength(selectedDraft.text)}/280</div>
+                    <CopyNotes key={`copy:${selectedDraft.id}`} id={`${editorId}-copy`} text={selectedDraft.text} />
                   </>
                 )}
 

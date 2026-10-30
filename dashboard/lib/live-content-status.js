@@ -53,7 +53,7 @@ export function sourceOutcome(row, rejections = []) {
     : []
   if (held.length && !((count(row.promoted) ?? 0) > 0)) return outcome("regional_hold", row, held.join("; "))
   if (row.status === "failed") return outcome("unavailable", row, named)
-  if (rejections.some(r => r?.source === row.source && ["writer", "safety", "fact_check", "critic", "honesty_gate"].includes(r?.stage))) {
+  if (rejections.some(r => r?.source === row.source && ["writer", "safety", "fact_check", "critic", "honesty_gate", "copy_gate"].includes(r?.stage))) {
     return outcome("writer_or_check_rejection", row)
   }
   if ((count(row.promoted) ?? 0) > 0) return outcome("supplying", row)

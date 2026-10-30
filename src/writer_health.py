@@ -26,6 +26,7 @@ STAGES = {
     "safety": "required_safety_not_passed",
     "honesty_gate": "local_scientific_rule_rejection",
     "cross_signal": "local_scientific_rule_rejection",
+    "copy_gate": "local_copy_rule_rejection",
     "evidence_contract": "source_contract_rejected",
     "critic": "critic_rejected",
 }
