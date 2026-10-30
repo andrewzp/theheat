@@ -261,6 +261,10 @@ class Transport:
             return self.send(adapter, request, **options)
 
         setattr_(requests.adapters.HTTPAdapter, "send", send)
+        # OFFLINE-only owned-process seam (as in the NHC fixture). The real
+        # fixed request, parser and current-source comparison still run here.
+        from src.data import air_quality_current
+        setattr_(air_quality_current, "_http_get", air_quality_current._http_get_inprocess)
         trap_network(setattr_)
 
 

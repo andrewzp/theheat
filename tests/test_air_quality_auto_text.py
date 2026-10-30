@@ -134,12 +134,19 @@ class Recorder:
         self.calls: list[dict] = []
         self.body, self.error = body, error
 
-    def __call__(self, url, **options):
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        pass
+
+    def get(self, url, **options):
         self.calls.append({"url": url, **options})
         if self.error is not None:
             raise self.error
         body = self.body
-        return SimpleNamespace(iter_content=lambda chunk_size: [body[i:i + chunk_size] for i in range(0, len(body), chunk_size)],
+        return SimpleNamespace(status_code=200, headers={},
+                               iter_content=lambda chunk_size: [body[i:i + chunk_size] for i in range(0, len(body), chunk_size)],
                                close=lambda: None)
 
 
@@ -147,23 +154,32 @@ def reread(**values) -> Recorder:
     return Recorder(json.dumps(h.aq_payload(LAHORE["lat"], LAHORE["lon"], DAY, **{**HAZARD, **values})).encode())
 
 
+def offline_current_transport(monkeypatch, recorder):
+    # Named OFFLINE boundary: exercise child HTTP logic with an invented session.
+    # Production always owns an isolated child; no callback bypass remains there.
+    monkeypatch.setattr(current, "_http_get", current._http_get_inprocess)
+    monkeypatch.setattr(current, "_session", lambda: recorder)
+
+
 def test_disabled_kinds_never_fetch(monkeypatch):
     monkeypatch.delenv("THEHEAT_PM25_FORECAST_AUTO_TEXT", raising=False)
     recorder = reread()
-    assert current.generation_hold(pm25_bundle(), T0, transport=recorder) is None
+    offline_current_transport(monkeypatch, recorder)
+    assert current.generation_hold(pm25_bundle(), T0) is None
     for value in ("true", "yes", " 1", "1 ", "on"):
         monkeypatch.setenv("THEHEAT_PM25_FORECAST_AUTO_TEXT", value)
-        assert current.generation_hold(pm25_bundle(), T0, transport=recorder) is None
+        assert current.generation_hold(pm25_bundle(), T0) is None
     assert recorder.calls == []
 
 
 def test_one_bounded_request_for_exactly_the_retained_city_and_day(monkeypatch):
     monkeypatch.setenv("THEHEAT_PM25_FORECAST_AUTO_TEXT", "1")
     recorder = reread()
-    assert current.generation_hold(pm25_bundle(), T0, transport=recorder) is None
+    offline_current_transport(monkeypatch, recorder)
+    assert current.generation_hold(pm25_bundle(), T0) is None
     assert len(recorder.calls) == 1
     call = recorder.calls[0]
-    assert call["url"] == contract.SOURCE_URL and call["timeout"] == 10.0 and call["attempts"] == 1
+    assert call["url"] == contract.SOURCE_URL and call["timeout"] == 10.0 and call["allow_redirects"] is False
     assert call["stream"] is True
     assert call["params"] == {"latitude": "31.55", "longitude": "74.35", "hourly": "pm2_5,pm10,dust,aerosol_optical_depth,us_aqi",
                               "timezone": "auto", "domains": "auto", "start_date": DAY, "end_date": DAY}
@@ -181,24 +197,27 @@ def test_one_bounded_request_for_exactly_the_retained_city_and_day(monkeypatch):
 def test_any_current_difference_or_failure_holds_after_exactly_one_request(monkeypatch, recorder, code):
     monkeypatch.setenv("THEHEAT_PM25_FORECAST_AUTO_TEXT", "1")
     transport = recorder()
-    assert current.generation_hold(pm25_bundle(), T0, transport=transport) == code
+    offline_current_transport(monkeypatch, transport)
+    assert current.generation_hold(pm25_bundle(), T0) == code
     assert len(transport.calls) == 1  # Never a retry, another city or another day.
 
 
 def test_dust_compares_its_pm10_anchor_only_when_supplied(monkeypatch):
     monkeypatch.setenv("THEHEAT_DUST_FORECAST_AUTO_TEXT", "1")
-    assert current.generation_hold(dust_bundle(), T0, transport=reread(pm10=91.0)) == "air_quality_source_changed"
-    assert current.generation_hold(dust_bundle(pm10=None), T0, transport=reread(pm10=91.0)) is None
+    offline_current_transport(monkeypatch, reread(pm10=91.0))
+    assert current.generation_hold(dust_bundle(), T0) == "air_quality_source_changed"
+    assert current.generation_hold(dust_bundle(pm10=None), T0) is None
 
 
 def test_ended_window_and_stale_retained_source_hold_without_any_request(monkeypatch):
     monkeypatch.setenv("THEHEAT_PM25_FORECAST_AUTO_TEXT", "1")
     recorder = reread()
-    assert current.generation_hold(pm25_bundle(), datetime(2026, 10, 30, 0, 0, tzinfo=UTC), transport=recorder) == \
+    offline_current_transport(monkeypatch, recorder)
+    assert current.generation_hold(pm25_bundle(), datetime(2026, 10, 30, 0, 0, tzinfo=UTC)) == \
         "air_quality_window_ended"
-    assert current.generation_hold(pm25_bundle(), datetime(2026, 10, 29, 18, 1, tzinfo=UTC), transport=recorder) == \
+    assert current.generation_hold(pm25_bundle(), datetime(2026, 10, 29, 18, 1, tzinfo=UTC)) == \
         "air_quality_source_stale"
-    assert current.generation_hold(pm25_bundle(), datetime(2026, 10, 29, 11, 0, tzinfo=UTC), transport=recorder) == \
+    assert current.generation_hold(pm25_bundle(), datetime(2026, 10, 29, 11, 0, tzinfo=UTC)) == \
         "air_quality_source_future"
     assert recorder.calls == []
     assert current.static_hold(pm25_bundle(), datetime(2026, 10, 29, 23, 0, tzinfo=UTC), automatic=False) is None

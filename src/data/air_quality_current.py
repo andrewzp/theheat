@@ -17,9 +17,15 @@ unknown earlier delivery in that episode.
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+import base64
 import json
 import os
+from pathlib import Path
 import re
+import signal
+import subprocess
+import sys
+import time
 from typing import Any
 
 from src.data import air_quality_contract as contract
@@ -99,66 +105,177 @@ def _compared_keys(story: Any) -> tuple[str, ...]:
     return ("dust", "pm10") if story.raw_signal_dump.get("who_pm10_multiple") is not None else ("dust",)
 
 
-def fetch_current(packet: dict, *, transport=None) -> dict:
-    """One bounded GET for the retained location and local day; returns the re-read series."""
-    from src.data._http import fetch_with_retry
-
+def _request_params(packet: dict) -> dict:
     location = packet["requested_location"]
-    body = bytearray()
-    oversize = False
+    return {"latitude": str(location["lat"]), "longitude": str(location["lon"]),
+            "hourly": ",".join(contract.VARIABLES), "timezone": "auto", "domains": "auto",
+            "start_date": packet["date"], "end_date": packet["date"]}
+
+
+def _session():
+    import requests
+    session = requests.Session()
+    session.trust_env = False
+    session.max_redirects = 0
+    return session
+
+
+def _http_get_inprocess(params: dict) -> bytes:
+    """Child-only HTTP; the parent owns the whole DNS/header/body deadline."""
     try:
-        response = (transport or fetch_with_retry)(
-            contract.SOURCE_URL, timeout=REQUEST_TIMEOUT_S, attempts=1, stream=True,
-            params={"latitude": str(location["lat"]), "longitude": str(location["lon"]),
-                    "hourly": ",".join(contract.VARIABLES), "timezone": "auto", "domains": "auto",
-                    "start_date": packet["date"], "end_date": packet["date"]},
-        )
+        with _session() as session:
+            response = session.get(contract.SOURCE_URL, timeout=REQUEST_TIMEOUT_S, allow_redirects=False, stream=True,
+                headers={"User-Agent": "(theheat-bot, contact@theheat.app)", "Accept-Encoding": "identity"}, params=params)
+            try:
+                if response.status_code != 200:
+                    raise CurrentSourceHold("air_quality_source_unavailable")
+                headers = {key.lower(): value for key, value in response.headers.items()}
+                if headers.get("content-encoding", "identity").lower() != "identity":
+                    raise CurrentSourceHold("air_quality_source_unavailable")
+                length = headers.get("content-length")
+                if length is not None and (not length.isdigit() or len(length) > 10):
+                    raise CurrentSourceHold("air_quality_source_unavailable")
+                if length is not None and int(length) > MAX_BODY_BYTES:
+                    raise CurrentSourceHold("air_quality_source_oversize")
+                body = bytearray()
+                for chunk in response.iter_content(chunk_size=16_384):
+                    if len(body) + len(chunk) > MAX_BODY_BYTES:
+                        raise CurrentSourceHold("air_quality_source_oversize")
+                    body.extend(chunk)
+                if length is not None and int(length) != len(body):
+                    raise CurrentSourceHold("air_quality_source_unavailable")
+                return bytes(body)
+            finally:
+                response.close()
+    except CurrentSourceHold:
+        raise
+    except Exception:
+        raise CurrentSourceHold("air_quality_source_unavailable") from None
+
+
+def _read_child() -> None:
+    """One fixed-source read with a small request and a closed, bounded result."""
+    try:
+        if len(sys.argv[2]) > 2048:
+            raise CurrentSourceHold("air_quality_source_unavailable")
+        params = json.loads(sys.argv[2])
+        if (type(params) is not dict or set(params) != {"latitude", "longitude", "hourly", "timezone", "domains", "start_date", "end_date"}
+                or any(type(value) is not str or len(value) > 256 for value in params.values())):
+            raise CurrentSourceHold("air_quality_source_unavailable")
+        value = {"body": base64.b64encode(_http_get_inprocess(params)).decode("ascii")}
+    except CurrentSourceHold as exc:
+        value = {"hold": exc.code}
+    except Exception:
+        value = {"hold": "air_quality_source_unavailable"}
+    sys.stdout.write(json.dumps(value, ensure_ascii=True))
+
+
+def _stop_owned(child, deadline: float, grace: float) -> None:
+    """Only the new child session belongs to this read, including its descendants."""
+    for sig in (signal.SIGTERM, signal.SIGKILL):
         try:
-            for chunk in response.iter_content(chunk_size=16_384):
-                body.extend(chunk)
-                if len(body) > MAX_BODY_BYTES:
-                    oversize = True  # Stop reading; never buffer an unbounded body.
-                    break
-        finally:
-            response.close()
-    except Exception as exc:  # noqa: BLE001 - any transport outcome is one unavailable read, never a retry.
-        raise CurrentSourceHold("air_quality_source_unavailable") from exc
-    if oversize:
-        raise CurrentSourceHold("air_quality_source_oversize")
+            os.killpg(child.pid, sig)
+        except ProcessLookupError:
+            pass
+        if sig == signal.SIGTERM:
+            try:
+                child.wait(timeout=min(grace, max(0, deadline - time.monotonic())))
+            except subprocess.TimeoutExpired:
+                pass
     try:
-        return contract.current_series(json.loads(bytes(body)), packet)
+        child.communicate(timeout=max(0, deadline - time.monotonic()))
+    except subprocess.TimeoutExpired:
+        if child.stdout is not None:
+            child.stdout.close()
+
+
+def _http_get(params: dict) -> bytes:
+    """One isolated child: the existing ten seconds includes bounded cleanup."""
+    started = time.monotonic()
+    grace = min(.25, REQUEST_TIMEOUT_S / 4)
+    deadline = started + REQUEST_TIMEOUT_S
+    root = str(Path(__file__).resolve().parents[2])
+    request = json.dumps(params, separators=(",", ":"), allow_nan=False)
+    if len(request) > 2048 or not hasattr(os, "killpg"):
+        raise CurrentSourceHold("air_quality_source_unavailable")
+    command = [sys.executable, "-I", "-c",
+        "import sys;sys.path.insert(0,sys.argv[1]);from src.data.air_quality_current import _read_child;_read_child()",
+        root, request]
+    clean_env = {"PATH": os.defpath, "LANG": "C", "LC_ALL": "C", "PYTHONNOUSERSITE": "1",
+                 "PYTHONDONTWRITEBYTECODE": "1", "PYTHON_DOTENV_DISABLED": "1"}
+    try:
+        child = subprocess.Popen(command, env=clean_env, cwd=root, stdin=subprocess.DEVNULL,
+                                 stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, start_new_session=True)
+        try:
+            output, _ = child.communicate(timeout=max(0, deadline - time.monotonic() - 2 * grace))
+        except BaseException:
+            _stop_owned(child, deadline, grace)
+            raise
+        if child.returncode != 0 or len(output) > 4 * ((MAX_BODY_BYTES + 2) // 3) + 128:
+            raise CurrentSourceHold("air_quality_source_unavailable")
+        value = json.loads(output)
+        if type(value) is dict and set(value) == {"hold"} and value["hold"] in {
+            "air_quality_source_unavailable", "air_quality_source_oversize"
+        }:
+            raise CurrentSourceHold(value["hold"])
+        if type(value) is not dict or set(value) != {"body"}:
+            raise CurrentSourceHold("air_quality_source_unavailable")
+        body = base64.b64decode(value["body"], validate=True)
+        if len(body) > MAX_BODY_BYTES:
+            raise CurrentSourceHold("air_quality_source_oversize")
+        if time.monotonic() >= deadline:
+            raise CurrentSourceHold("air_quality_source_unavailable")
+        return body
+    except CurrentSourceHold:
+        raise
+    except (OSError, ValueError, TypeError, subprocess.TimeoutExpired):
+        raise CurrentSourceHold("air_quality_source_unavailable") from None
+
+
+def fetch_current(packet: dict) -> dict:
+    """One owned, bounded GET for the retained location/day; returns its re-read series."""
+    body = _http_get(_request_params(packet))
+    try:
+        return contract.current_series(json.loads(body), packet)
     except (SourceFetchError, ValueError, TypeError):
         raise CurrentSourceHold("air_quality_source_shape") from None
 
 
-def live_hold(bundle: Any, now: datetime, *, transport=None) -> str | None:
+def live_hold(bundle: Any, now: datetime) -> str | None:
     """Static rules, then one re-read compared with the retained samples (never updated in place)."""
+    started = time.monotonic()
     hold = static_hold(bundle, now, automatic=True)
     if hold is not None:
         return hold
     story = _story(bundle)
     packet = story.raw_signal_dump["forecast_window"]
     try:
-        current = fetch_current(packet, transport=transport)
+        current = fetch_current(packet)
     except CurrentSourceHold as exc:
         return exc.code
+    elapsed = time.monotonic() - started
+    if elapsed < 0 or elapsed > REQUEST_TIMEOUT_S:
+        return "air_quality_source_unavailable"
+    hold = static_hold(story, now + timedelta(seconds=elapsed), automatic=True)
+    if hold is not None:
+        return hold
     for key in _compared_keys(story):
         if current[key] != packet["series"][key]:
             return "air_quality_source_changed"
     return None
 
 
-def generation_hold(bundle: Any, now: datetime | None = None, *, transport=None) -> str | None:
+def generation_hold(bundle: Any, now: datetime | None = None) -> str | None:
     """Paid-generation boundary: only for an enabled kind; otherwise no fetch at all."""
     if not auto_text_enabled(getattr(bundle, "signal_kind", None)):
         return None
-    return live_hold(bundle, now or datetime.now(UTC), transport=transport)
+    return live_hold(bundle, now or datetime.now(UTC))
 
 
-def admission_hold(kind: str, bundle: Any, now: datetime, *, transport=None) -> str | None:
+def admission_hold(kind: str, bundle: Any, now: datetime) -> str | None:
     if not auto_text_enabled(kind):
         return None
-    return live_hold(bundle, now, transport=transport)
+    return live_hold(bundle, now)
 
 
 def _episode(event_id: Any) -> tuple[str, int] | None:
@@ -196,7 +313,7 @@ def episode_unresolved(state: Any, event_id: str) -> bool:
     return episode_hold({"event_id": event_id}, state) == "air_quality_prior_delivery_unknown"
 
 
-def auto_text_hold(draft: dict, state: Any, now: datetime, *, live: bool, transport=None) -> str | None:
+def auto_text_hold(draft: dict, state: Any, now: datetime, *, live: bool) -> str | None:
     """Every automatic-text rule for one saved air-quality draft; None when eligible."""
     kind = draft.get("type")
     if not auto_text_enabled(kind):
@@ -212,7 +329,7 @@ def auto_text_hold(draft: dict, state: Any, now: datetime, *, live: bool, transp
     two_bot = review.get("two_bot") if isinstance(review, dict) else None
     bundle = two_bot.get("bundle") if isinstance(two_bot, dict) else None
     if live:
-        return live_hold(bundle, now, transport=transport)
+        return live_hold(bundle, now)
     return static_hold(bundle, now, automatic=True)
 
 
