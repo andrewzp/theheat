@@ -23,6 +23,7 @@ instructions. Production configuration is whatever the bot itself last reported
 
 - [Upgrade acceptance ledger](upgrade-progress.md) — what each original package
   delivered and what still needs evidence.
+- [Qualified source inputs](runbooks/source-inputs.md) — normals, GHCN thresholds, Earthdata and HMS.
 - [Production pause](runbooks/production-pause.md), [source redundancy](runbooks/source-redundancy.md),
   [workflow self-heal](runbooks/workflow-self-heal.md) and
   [regional-anomaly activation](runbooks/reganom-activation.md).
@@ -43,6 +44,8 @@ instructions. Production configuration is whatever the bot itself last reported
 - [Gist post images](GIST_POST_IMAGES.md) — native charts, CRW anomaly, published
   maps and radar, and what each needs before it can be attached.
 - [Temperature graphics in the Workbench](guides/gist-temperature-graphics.md).
+- [Media store setup](MEDIA_STORE_SETUP.md) — shared store/CRW and published radar/cone hosting,
+  cross-host readback, acceptance and rollback; native graphics do not need it.
 
 ## Review, learn and recover
 
