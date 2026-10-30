@@ -513,6 +513,7 @@ export function DraftWorkbench({
                             </button>}
                           </div>
                           <div className="candidate-text">{c.text}</div>
+                          <CopyNotes compact text={c.text} id={`${editorId}-alt-${c.rank}-copy`} />
                           {c.score?.reasons?.length > 0 && (
                             <div className="candidate-meta">{c.score.reasons.join(" · ")}</div>
                           )}

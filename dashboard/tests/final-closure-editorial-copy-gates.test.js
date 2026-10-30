@@ -48,6 +48,15 @@ test("the editor note names the rule, escapes the excerpt and never claims a che
   assert.match(clean, /aria-live="polite"/)
 })
 
+test("alternates show notes only when a rule applies", () => {
+  const quiet = renderToStaticMarkup(React.createElement(CopyNotes, { id: "alt", compact: true,
+    text: "Port Example is forecast to reach 47°C Thursday." }))
+  assert.equal(quiet, "")
+  const noted = renderToStaticMarkup(React.createElement(CopyNotes, { id: "alt", compact: true,
+    text: "According to the agency, Port Example hit 47°C." }))
+  assert.match(noted, /data-code="source_led_opener"/)
+})
+
 test("danger wording is only advisory in the bundle-blind editor", () => {
   const notes = copyNotes("Port Example faces dangerously hot air on Thursday.")
   assert.deepEqual(notes.map(n => [n.code, n.blocking]), [["danger_wording_needs_source", false]])
