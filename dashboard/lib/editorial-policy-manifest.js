@@ -39,13 +39,13 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/commands/bulk_rejection_client.py": "88d6048d3e006279cc8808547a7e907c2f1b79a4cc41bcb8f5917111639ca118",
     "src/commands/check_execution_journal.py": "519b28ec65739e0ce3d378a0c1f9c50b64e84a4f88c413c0f2668f4110a211ec",
     "src/commands/check_journal.py": "f15f914c762604525a5f4e1b0be47d0536be54ed82dfbf932940a3085a0c8a95",
-    "src/commands/command_roles.py": "c59ba2421d1475ce1e23e90d805220bf11671cfadf456a775887ceb0462c9930",
+    "src/commands/command_roles.py": "2bc3771974fb1fc30d4ff23503c3d7d9fbff4613a401125751d280ce33eaa80d",
     "src/commands/delivery_reconciliation.py": "1230afbe8fba9c8a3a9974a4f1b7f32d458a948b05c1e1817fb472acaab4351c",
     "src/commands/hosted_fixture.py": "a175cef7da90b4487d7be8d50599d9715da83c73dc2b19c83945eccb0ffd232f",
     "src/commands/import_plan.py": "93b29d86aa8727496b1e3b4b5c68bbb9b39c52ceeae84b9b0cf6c64a5c05a243",
     "src/commands/job_authority.py": "3fe36818c30ce537b98b5bd622e7863ba576e53a1dd6f8f1238d918d6feb8975",
     "src/commands/media_journal.py": "286d22f43bf37fb0f4fdf640345c06fcf11def6bd6223dc199b5bcee338312f9",
-    "src/commands/postgres_authority.py": "936478f53b9f06ef821cfe3ba31046cf585416994ecf80ce68ca5fc357394393",
+    "src/commands/postgres_authority.py": "8e6bfad4dc8da9ca50e38474b9e93acfb99dce1a838a74cfbc536d35e9ebdaf9",
     "src/commands/postgres_batch_results.py": "3fc0201e0b2f8f1c9a2670d2d6e94f4bcf9d6e0738c8df8cda55e7469dd7a1a5",
     "src/commands/postgres_candidate_admission.py": "bcce0194bf7de42991209cef9309772a615fcd71459ca7b278a37367f3a4aa85",
     "src/commands/postgres_check_observations.py": "1bc106b92c74b66fa337e1fda3ac41269fa39fac977610a750e03fd27f34e2b2",
@@ -265,5 +265,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "8c4887f395618e343dafd55f5843987dfa6a7a620713c7c34bab9f419e4434fe"
   },
   "schema_version": 1,
-  "source_sha256": "751d9cc6c1103b49e163d0c73f77f718e7b5f0572de4e2ad02f8cb0ec644f006"
+  "source_sha256": "55482a42a33b217b232cef9f535bc2a7bf056bffc0b5f3c81f55b71e84d45359"
 }
