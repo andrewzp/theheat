@@ -466,6 +466,12 @@ async function validateDeliveredResponse(value, request, manifest) {
       { ...request, retained_input_sha256: descriptor.asset.manifest_sha256 }, manifest)
     return value
   }
+  if (value.media_kind === "gist_temperature_comparator_v1") {
+    const { media_kind: _kind, delivery_text, expanded_description, ...temperature } = rest
+    if (delivery_text !== descriptor?.alt_text || expanded_description !== delivery_text) throw new Error("invalid preview")
+    await validatePNGResponse({ ...temperature, schema_version: 3, alt_text: delivery_text }, request, manifest)
+    return value
+  }
   const retained = HAZARD_MEDIA[value?.media_kind]?.rendererVersion ? { retained_input_sha256: descriptor?.source?.packet_artifact_sha256 } : {}
   await validateHazardPNGResponse({ ...rest, schema_version: 4, posting_window: window }, { ...request, ...retained }, manifest)
   return value
@@ -616,10 +622,11 @@ export function createGraphicPreviewController({ manifest, onChange, fetcher = g
         const value = await validateGraphicResponse(await readBounded(response), request, manifest)
         if (!valid() || controller.signal.aborted) return
         const png = [3, 4, 5, 6].includes(value.schema_version)
-        const image = value.schema_version === 5 ? pngBytes(value.png_base64, value.width, value.height, 8 * 1024 * 1024)
+        const published = Object.values(PUBLISHED).some(product => product.kind === value.media_kind)
+        const image = published ? pngBytes(value.png_base64, value.width, value.height, 8 * 1024 * 1024)
           : png ? pngBytes(value.png_base64) : value.svg_utf8
         url = createURL(new Blob([image], { type: png ? "image/png" : "image/svg+xml" }))
-        if (value.schema_version === 5)
+        if (published)
           originalURL = createURL(new Blob([base64Bytes(value.original_base64, 2 * 1024 * 1024)], { type: value.original_mime }))
         onChange({ status: "ready", value, url, originalURL })
       } catch {

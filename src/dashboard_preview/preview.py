@@ -233,7 +233,7 @@ def _delivered_preview(request, *, policy_sha, runtime_sha, read_state, budget, 
     descriptor must equal the delivered one exactly; a changed renderer holds.
     Store-backed kinds (CRW, published radar/cone) read their own retained identity.
     """
-    from src.media import gist_hazard_media as hazard, gist_media
+    from src.media import gist_media
     budget.remaining()
     state = read_state()
     drafts = state.get("drafts")
@@ -253,26 +253,32 @@ def _delivered_preview(request, *, policy_sha, runtime_sha, read_state, budget, 
         budget.remaining()
         return _delivered_store_backed(request, snapshot, attachment, receipt, policy_sha=policy_sha,
                                        runtime_sha=runtime_sha, store=store)
-    if snapshot is None or not isinstance(attachment, dict) or attachment.get("kind") not in hazard.KINDS:
+    if snapshot is None or not isinstance(attachment, dict) or attachment.get("kind") not in gist_media.NATIVE_KINDS:
         raise PreviewError("draft_unavailable")
     bundle = deepcopy(snapshot["review_context"]["two_bot"]["bundle"])
     _retained_bundle_json(bundle)
-    spec, source, context = qualified_spec(bundle, include_viirs=True)
+    spec, source, context = qualified_spec(bundle, include_viirs=True, include_temperature=True)
     budget.remaining()
     prepared = gist_media.prepare_media(bundle)
     if prepared["descriptor"] != attachment:
         raise PreviewError("media_hold", "media_renderer_changed")
     descriptor = prepared["descriptor"]
     assert receipt is not None and spec is not None
+    # Temperature's existing descriptor binds its PNG and one full alt text;
+    # expose those exact fields in the delivered envelope without a new recipe.
+    temperature = descriptor["kind"] == MEDIA_TEMPERATURE
     return {"schema_version": 6, "draft_id": request["draft_id"],
             "revision_identity": deepcopy(request["expected_revision"]),
             "policy_source_sha256": policy_sha, "preview_runtime_sha256": runtime_sha,
             "media_kind": descriptor["kind"], "media_descriptor": descriptor,
             "media_descriptor_sha256": fingerprint(descriptor),
             "png_base64": base64.b64encode(prepared["png"]).decode("ascii"),
-            "png_sha256": descriptor["image"]["png_sha256"], "title": prepared["title"],
-            "delivery_text": prepared["delivery_text"], "expanded_description": prepared["full_text"],
-            "scope": prepared["scope"], "source": source, "source_context": context,
+            "png_sha256": descriptor["png_sha256"] if temperature else descriptor["image"]["png_sha256"],
+            "title": prepared["title"],
+            "delivery_text": descriptor["alt_text"] if temperature else prepared["delivery_text"],
+            "expanded_description": descriptor["alt_text"] if temperature else prepared["full_text"],
+            "scope": spec["evidence"]["scope"] if temperature else prepared["scope"],
+            "source": source, "source_context": context,
             "delivered": {"tweet_id": receipt["tweet_id"], "text": snapshot["text"],
                           "content_revision": snapshot["content_revision"],
                           "confirmed_at": receipt.get("confirmed_at") or receipt.get("at")},
