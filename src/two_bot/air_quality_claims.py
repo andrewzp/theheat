@@ -51,20 +51,33 @@ _PERIOD_COMPARISON = re.compile(
     r"|\b(?:24 hour|daily|day long) (?:mean|average)\b"
 )
 _NEGATED_PERIOD = re.compile(r"\b(?:not|no|never|without) (?:a |an |any )?(?:24 hour |daily |day long )?(?:mean|average)\b")
+_PM10_COMPARISON_SPAN = re.compile(
+    r"\bpm\s*10(?:'s)?\s+(?:"
+    r"(?:(?:is\s+)?(?:also\s+)?forecast\s+(?:to\s+)?|(?:is\s+)?)"
+    r"(?:averag(?:e|ing)|(?:24 hour|daily)\s+(?:mean|average))\s+(?:(?:of|is)\s+)?"
+    r"\d[\d,.]*\s*(?:μg|ug)/m3"
+    r"(?:\s*,?\s*(?:about\s+)?(?:\d+(?:\.\d+)?\s*(?:times|x)|twice|double|triple)\s+"
+    r"(?:the\s+)?who\s+(?:24 hour\s+)?(?:guideline|limit|standard)s?\b)?"
+    r"|cross(?:es|ed)?\s+(?:the\s+)?(?:who\s+(?:24 hour\s+)?)?(?:guideline|limit|standard)s?\b)"
+)
 
 
 def dust_comparison_failures(tweet: str, bundle) -> list[str]:
     """A dust story's peak is never a 24-hour mean or a WHO-period comparison.
 
-Only a clause naming PM10 may carry the existing co-reported PM10 anchor; an
-explicit negation ("a peak, not a daily mean") is not a comparison.
+Only an explicit PM10 comparison span may carry the existing co-reported PM10
+anchor; incidental mentions do not exempt the rest of a dust clause. Ambiguous
+mixed comparisons hold. An explicit negation ("a peak, not a daily mean") is not a comparison.
 """
     if getattr(bundle, "signal_kind", None) != "dust_event" or not isinstance(tweet, str):
         return []
     for clause in re.split(r"[!?;。]|\.(?!\d)|(?<!\d)\.", _normalized(tweet)):
-        if not _DUST.search(clause) or "pm10" in clause.replace(" ", ""):
+        if not _DUST.search(clause):
             continue
         scan = _NEGATED_PERIOD.sub(" ", clause)
+        # Remove only the recognized PM10 metric/comparison, never its trailing
+        # clause or a dust comparison before/after a parenthetical PM10 mention.
+        scan = _PM10_COMPARISON_SPAN.sub(" ", scan)
         if _PERIOD_COMPARISON.search(scan):
             return ["dust_peak_comparison: a forecast dust peak cannot be compared with a 24-hour mean, "
                     "WHO period or multiple; only supplied PM10 carries the PM10 anchor"]
@@ -84,9 +97,6 @@ Other paraphrases and pronoun-only links still require model review.
         isinstance(related, list) and any(is_air_quality(signal) for signal in related)
     )):
         return []
-    comparison = dust_comparison_failures(tweet, bundle)
-    if comparison:
-        return comparison
     # Keep decimal points (PM2.5 and numeric values); do not join independent
     # sentences. Commas, quotes, line breaks and Unicode dashes cannot hide a link.
     clauses = re.split(r"[!?;。]|\.(?!\d)|(?<!\d)\.", _normalized(tweet))
@@ -108,4 +118,6 @@ Other paraphrases and pronoun-only links still require model review.
                         "unsupported_air_quality_causation: co-reported air-quality forecasts do not "
                         "establish an event-specific cause or visibility/health impact"
                     ]
-    return []
+    # Preserve the existing causal refusal when a PM10 comparison is itself
+    # caused by dust; otherwise apply the independent dust-peak comparison hold.
+    return dust_comparison_failures(tweet, bundle)
