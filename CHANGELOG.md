@@ -19,7 +19,8 @@
   evidence files without inheriting publication approval.
 - Capture news requests through the existing private SDK archive, retain batch
   and check response lineage, and distinguish incomplete evidence, estimated
-  usage and unknown invoice charges. Add actionable source/job/outcome views and
+  usage and unknown invoice charges. Retain news metadata without copying its
+  live spending allowance. Add actionable source/job/outcome views and
   offline operating/recovery tools without enabling new background jobs.
 
 ## 0.9.109.49

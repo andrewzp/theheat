@@ -690,7 +690,7 @@
     "src/orchestrator/sources/ice_mass.py": "95f7de55872f48814f0397b7730b41cb91d019a1333f466f12014039ae2edd7b",
     "src/orchestrator/sources/marine.py": "341775be8e06a3304f3f05078d55d82c52e43fc64ef9c4b8f1b934c5fe693aa3",
     "src/orchestrator/sources/methane.py": "93647684e6a3c47e429cd9457d9fe806bfa9414bd4d6f3acfd095ded587396e6",
-    "src/orchestrator/sources/newsworthiness.py": "e9e5712b5c5f93b13117653293af0f5247fa20f17bdcdd0f4ad7ae929ce64ba7",
+    "src/orchestrator/sources/newsworthiness.py": "5285f49ce0f5dc74ffc30ecb5058364accb2a92dae362c2f4b070150c7ecea09",
     "src/orchestrator/sources/nhc_advisory.py": "e14956f0d72e576e851efec730ae97459d1f4ca10aaba14fedb3dd98d1c5a1e4",
     "src/orchestrator/sources/nifc.py": "99801aa500b84c0fa2f587c4fa0fda4ffd2d5b53fa4a1f0703b03e645a66e026",
     "src/orchestrator/sources/nsidc_snow.py": "ddd091dae3900c5bce378010aab09709186c0c6774813bf2766026d269119a5d",
@@ -710,5 +710,5 @@
     "src/two_bot/intern/warnings.py": "04e0a4506ffbb29124c8d2960a5e5025305699297fcf8f9178b23caac2cd7a37"
   },
   "evidence_scope": "Referenced local code inventory; not live/provider/transitive-source qualification.",
-  "registry_sha256": "83dc790fec0681d9f71ff6c9fee4a3a53410758a4500fe70bed598adb668f089"
+  "registry_sha256": "4693624e87f0f6666798110794d8c538928c5cd14f66dbe695ebb85cf4ee16ce"
 }
