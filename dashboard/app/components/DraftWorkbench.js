@@ -5,6 +5,7 @@ import { ForecastEvidence } from "./ForecastEvidence.js"
 import { NwsWarningEvidence } from "./NwsWarningEvidence.js"
 import { OfficialWarningEvidence } from "./OfficialWarningEvidence.js"
 import { NhcAdvisoryEvidence } from "./NhcAdvisoryEvidence.js"
+import { ReportStatementEvidence } from "./ReportStatementEvidence.js"
 import { EpisodeJoins } from "./EpisodeJoins.js"
 import { ClaimEvidence } from "./ClaimEvidence.js"
 import { OperatorClaimReferenceHistory, OperatorClaimReferences } from "./OperatorClaimReferences.js"
@@ -284,6 +285,7 @@ export function DraftWorkbench({
                 <NwsWarningEvidence key={"nws:" + reviewKey} draft={selectedDraft} />
                 <OfficialWarningEvidence key={"official-warning:" + reviewKey} draft={selectedDraft} />
                 <NhcAdvisoryEvidence key={"nhc-advisory:" + reviewKey} draft={selectedDraft} />
+                <ReportStatementEvidence key={"report-statements:" + reviewKey} draft={selectedDraft} />
                 {!selectedDraft.local_preview && <EpisodeJoins key={"episode:" + reviewKey} draft={selectedDraft} onChanged={refreshCandidates} />}
                 {recovery && !allows("edit") ? null : selectedDraft.local_preview
                   ? <EditorMedia key={`media:${reviewKey}`} draft={selectedDraft} editing={editingId === selectedDraft.id} updating={!!draftAction || !!pendingCommand} submitCommand={submitLocalCommand} />
