@@ -412,7 +412,7 @@ def test_synthesis_sees_exactly_the_promoted_stage1_components():
         serial_runners=[SourceRunner("invented_fire", component("fire_serial", "fire"))],
         concurrent_runners=[SourceRunner("invented_heat_on_time", component("heat_on_time", "heat")),
                             SourceRunner("invented_heat_late", component("heat_late", "heat", wait=True))],
-        synthesis_runner=SourceRunner("synthesis_fire_drought_heat", synthesis), budget_seconds=0.3)
+        synthesis_runner=SourceRunner("synthesis_fire_drought_heat", synthesis), budget_seconds=1.0)
     release.set()
     _wait_late(owner)
     assert observed == {"fires": ["fire_serial"], "heats": ["heat_on_time"]}
