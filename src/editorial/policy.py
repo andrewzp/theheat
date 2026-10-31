@@ -88,6 +88,7 @@ POLICY_FILES = (
     "src/voice/safety.py", "src/data/temperature_evidence.py",
     "src/editorial/approval.py", "src/data/world_thresholds.py", "src/data/open_meteo.py",
     "src/editorial/hot10_contract.py", "src/editorial/automatic_text.py",
+    "src/data/hot10_baselines.py", "src/data/ghcnd_monthly_normals.py",
     "src/data/air_quality_current.py", "src/editorial/delegated_media_review.py",
     "src/commands/delivery_reconciliation.py", "dashboard/lib/delivery-reconciliation.js",
     "dashboard/app/api/delivery-reconciliation/route.js",
