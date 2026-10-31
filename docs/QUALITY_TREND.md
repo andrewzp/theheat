@@ -76,6 +76,7 @@ We grade drafts on an A through F rubric in `docs/DRAFT_CORPUS.md` (the longitud
 | 2026-07-06 | 0 | — | — | — | — | **N/A** | — | No fresh drafts — queue is an exact match to Jul 5's 15 graded drafts (same `draft_id`s, scores, text); no re-grading performed, all grades stand. No active-proposal evidence updates (P_close/P_tier/P_dust/P9/P_compound/P5 all unchanged from Jul 5). **2 strict staleness bulk-reject candidates newly identified:** [4] Basrah and [6] Al Başrah al Qadīmah `absolute_extreme`, both >48h old (56.2h/52.8h) with a forecast date (July 4) now 2 days elapsed — same Basra-area class flagged Jul 1–3. Write skipped: `gh` CLI absent, no gist-write tool available via the GitHub MCP server this session (38th consecutive skip, May 13 → Jul 6) — logged for operator manual reject. [15] Doha's forecast date (July 5) has also elapsed but is under 48h — flagged to watch, not yet a strict candidate. **Operational note: `main` still unmerged since Jun 8 — 29 consecutive daily cycles stranded on `daily-plan-current`, including the Jun 29 bar-clearing (80%) cycle.** |
 | 2026-10-28 | 15 | 0 | 7 | 6 | 2 | **0%** | ✗ | 15 fresh (no graded cycles on main since Jul 6). 2 B (Quetta, Riyadh dust_event — first WHO-anchored dust drafts), 5 B-, 6 C+ (P_tier ×5: cyclone threshold/advisory jargon, VIIRS "top tier"), 2 D (identical Guam/Typhoon Champi NWS paraphrase, stale, panic register). Same-event saturation: Isaias ×3, Klang/Shah Alam, Guam ×2. |
 | 2026-10-29 | 0 | — | — | — | — | **N/A** | — | No fresh drafts — queue is an exact match to Oct 28's 15 graded drafts (oldest 22 days, newest 12); no re-grading, grades stand. No proposal evidence updates. All 15 remain staleness bulk-reject candidates; gist write blocked (invalid `gh` token / 403), skipped. Nothing new has reached pending since Oct 17 — operator should check suppression ledger / source health. |
+| 2026-10-31 | 4 | 0 | 3 | 1 | 0 | **0%** | ✗ | 4 fresh, queue turned over (Oct 28's 15 gone; intake resumed Oct 30). 3 B- (Riyadh dust_event, Riyadh PM2.5 — same city/day duplicate, Brazil MODIS fire 978.7 MW), 1 C+ (Urumqi, disclaimer close). All PM drafts carry WHO multiples (P_dust counter-evidence, cycle 2). P_close 0/4 positive. No bulk-reject needed (oldest 35h); gist write blocked, skipped. |
 
 **Trend interpretation:**
 The Apr 25 jump to 43% was real but came from a small cohort (7 drafts) and didn't sustain into Apr 27. The Apr 27 regression has named causes (Sonnet rewrite path, verb-list gap in opener regex, era-anchor over-deployment, political anchor curation error). All four have proposed fixes documented in `docs/DRAFT_CORPUS.md` Apr 27 implications section. Next data point: tomorrow's scheduled grader (fires 2026-04-27 06:00 UTC) on the Apr 26-27 cycle output under v2.5 + post-humor-lens fixes.
@@ -85,6 +86,10 @@ We've been in the 9-43% band for three cycles. Need to clear 50% sustained.
 ## Rejection events
 
 Drafts that got rejected, with dates.
+
+### 2026-10-31 — Staleness check: no candidates; write path still blocked
+
+Queue turned over (4 fresh drafts, oldest 35h). Nothing >48h, so no bulk-reject needed. `gh auth` token still invalid; gist writes would be skipped regardless.
 
 ### 2026-10-29 — Staleness bulk-reject: 15 of 15 candidates; write skipped (token invalid / gist API blocked)
 
