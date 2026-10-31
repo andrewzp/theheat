@@ -1,6 +1,7 @@
 import { bindingMatches, draftIdentity, fingerprint, textHash } from "./draft-revisions.js"
 import { parseGistDocument } from "./lossless-gist.js"
 import { postOutcomes } from "./post-outcomes.js"
+import { assertDirectGistWrite, RESULTS_FILE, routeEffective, routeRecordFromFiles } from "./gist-write-route.js"
 
 const PREFIX = "editorial-feedback-"
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
@@ -204,8 +205,13 @@ async function load(requestId = null) {
   let state
   try { state = parseGistDocument(content).value } catch { storeFailure("production_state_document", "invalid_document") }
   if (!object(state) || !Array.isArray(state.drafts)) storeFailure("production_state_document", "invalid_document")
-  return { state, records, recordCount:names.length }
+  // P00c: the route record rides the same state read; command results live in this feedback Gist.
+  return { state, records, recordCount:names.length, route:routeRecordFromFiles(stateGist.files),
+    resultsMeta:Object.hasOwn(gist.files, RESULTS_FILE) ? gist.files[RESULTS_FILE] : null }
 }
+
+// P00c consumer reuse: the exact store reads used by the legacy writer.
+export { load as loadFeedbackStores, filename as feedbackFilename }
 
 function currentTargets(state) {
   return state.drafts.map(d => feedbackTarget(d, state)).filter(Boolean)
@@ -240,10 +246,12 @@ export async function readPostFeedback(requestId = null) {
     kind:"dashboard_editorial_opinion", archive_complete:recordCount <= READ_LIMIT, independent_human_benchmark:false }
 }
 
-export async function savePostFeedback(value) {
-  const revision = isRevision(value)
-  const input = revision ? revisionFeedbackInput(value) : feedbackInput(value)
-  const { state, records, recordCount } = await load(input.request_id)
+export function feedbackInputOf(value) { return isRevision(value) ? revisionFeedbackInput(value) : feedbackInput(value) }
+
+// The legacy writer's exact decision on loaded stores: an identical existing record, or the new
+// record to write. Shared by savePostFeedback and the P00c serialized consumer.
+export function planFeedbackSave(input, { state, records, recordCount }, now = new Date()) {
+  const revision = isRevision(input)
   const existing = records.find(r => r.request_id === input.request_id)
   if (existing) {
     if (fingerprint(recordInput(existing)) !== fingerprint(input)) fail("feedback_id_conflict", 409)
@@ -253,8 +261,25 @@ export async function savePostFeedback(value) {
   const current = revision ? state.drafts.map(d => revisionTarget(d, state)).filter(Boolean) : currentTargets(state)
   if (!current.some(target => fingerprint(target) === fingerprint(input.target))) fail("post_changed", 409)
   const record = revision
-    ? { ...input, schema_version:2, kind:"dashboard_revision_feedback", category:"human_feedback", received_at:new Date().toISOString() }
-    : { ...input, schema_version:1, kind:"dashboard_editorial_opinion", received_at:new Date().toISOString() }
+    ? { ...input, schema_version:2, kind:"dashboard_revision_feedback", category:"human_feedback", received_at:now.toISOString() }
+    : { ...input, schema_version:1, kind:"dashboard_editorial_opinion", received_at:now.toISOString() }
+  return { record, already_saved:false }
+}
+
+// One PATCH of the feedback Gist only (record file plus, for the consumer, its result file).
+export async function patchFeedbackGist(files) {
+  const result = await github("", { method:"PATCH", body:JSON.stringify({files}) })
+  if (!result.ok) fail("feedback_write_uncertain")
+}
+
+export async function savePostFeedback(value, { routeSubmit } = {}) {
+  const input = feedbackInputOf(value)
+  const loaded = await load(input.request_id)
+  const { record, already_saved } = planFeedbackSave(input, loaded)
+  if (already_saved) return { record, already_saved:true }
+  if (routeEffective(loaded.route) && routeSubmit) return { submitted:await routeSubmit(input) }
+  // P00c: in route mode a direct writer without the serialized-group marker refuses before PATCH.
+  try { assertDirectGistWrite(loaded.route) } catch (error) { fail(error.code, 409) }
   // Auxiliary immutable UUID file in the secret feedback archive only. No state.json rewrite or review/approval
   // command. Separate IDs do not overwrite one shared feedback list. Gist is
   // still not transactional; do not retry an uncertain PATCH automatically.
