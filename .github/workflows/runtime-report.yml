@@ -10,7 +10,8 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: theheat-runtime-report
+  # P00c: in serialized route mode this Gist writer joins the theheat-bot group; legacy unchanged.
+  group: ${{ vars.THEHEAT_GIST_WRITE_ROUTE == 'serialized' && 'theheat-bot' || 'theheat-runtime-report' }}
   cancel-in-progress: false
 jobs:
   report:
@@ -52,7 +53,10 @@ jobs:
           THEHEAT_RAINFALL_REGIONAL_SCAN: "${{ vars.THEHEAT_RAINFALL_REGIONAL_SCAN || '0' }}"
           THEHEAT_HMS_PREVIOUS_DAY_FILE: "${{ vars.THEHEAT_HMS_PREVIOUS_DAY_FILE || '0' }}"
           THEHEAT_EARTHDATA_REFUSAL_BACKOFF: "${{ vars.THEHEAT_EARTHDATA_REFUSAL_BACKOFF || '0' }}"
+          THEHEAT_HOT10_NORMALS_PRODUCT: "${{ vars.THEHEAT_HOT10_NORMALS_PRODUCT || 'meteostat-normals-point-v1' }}"
           THEHEAT_AUTOMATIC_PUBLICATION_ENABLED: "${{ vars.THEHEAT_AUTOMATIC_PUBLICATION_ENABLED || '0' }}"
+          THEHEAT_GIST_WRITE_ROUTE: "${{ vars.THEHEAT_GIST_WRITE_ROUTE }}"
+          THEHEAT_SERIALIZED_WRITER: "${{ vars.THEHEAT_GIST_WRITE_ROUTE == 'serialized' && format('{0}:run', github.run_id) || '' }}"
           EXPECTED_COMMIT_SHA: "${{ inputs.expected_commit_sha }}"
           THEHEAT_PRODUCTION_PAUSED: "${{ vars.THEHEAT_PRODUCTION_PAUSED }}"
         run: python scripts/runtime_report.py
