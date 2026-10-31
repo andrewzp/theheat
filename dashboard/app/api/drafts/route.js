@@ -1,4 +1,4 @@
-import { gistMediaCurrentness, prepareGistMedia, requiredAttestations } from "../../../lib/gist-media.js"
+import { prepareGistMedia, requiredAttestations } from "../../../lib/gist-media.js"
 import { HOLD_MESSAGES, automaticTextHold } from "../../../lib/automatic-text.js"
 import { acceptLocalCommand, localCommandRequest, localDraftProjection, previewConfigured, previewError } from "../../../lib/draft-command-client.js"
 import { dashboardEditorialPolicy } from "../../../lib/editorial-policy.js"
@@ -7,8 +7,8 @@ import { readStateStore, readStateWithRuntimeReport, updateDraftStore } from "..
 import { requireDashboardAuth } from "../../../lib/auth.js"
 import { readJsonObject } from "../../../lib/request-json.js"
 import { nwsSourceTiming } from "../../../lib/nws-source-timing.js"
-import { officialWarningValidation } from "../../../lib/official-warning-validation.js"
-import { nhcAdvisoryValidation } from "../../../lib/nhc-advisory-validation.js"
+import { assertMediaCurrent, assertSavedSourceTiming, confirmDraftDecision } from "../../../lib/draft-decision-confirm.js"
+import { submitDraftUpdates, submittedResponse } from "../../../lib/gist-route-submit.js"
 import { publicationAttempt } from "../../../lib/publication-recovery.js"
 import {
   approvalIsCurrent,
@@ -40,22 +40,6 @@ function githubHeaders() {
 
 function fail(message, status = 409, code = "revision_conflict") {
   throw Object.assign(new Error(message), { status, code })
-}
-
-function assertSavedSourceTiming(draft) {
-  const timing = nwsSourceTiming(draft)
-  if (timing.blocked) fail(timing.message, 409, "nws_source_review_required")
-  const warning = officialWarningValidation(draft)
-  if (warning.blocked) fail(warning.message, 409, "warning_source_review_required")
-  const advisory = nhcAdvisoryValidation(draft)
-  if (advisory.blocked) fail(advisory.message, 409, "nhc_advisory_source_review_required")
-}
-
-// New image families: explicit source recency at manual approval (the sender
-// rechecks before upload). Historical previews stay inspectable; nothing changes.
-function assertMediaCurrent(draft) {
-  const timing = gistMediaCurrentness(draft, Date.now())
-  if (timing) fail(`${timing.message}. This image cannot be approved for posting; the draft is unchanged.`, 409, timing.code)
 }
 
 function validIdentity(value) {
@@ -178,9 +162,12 @@ export async function POST(request) {
         assertExpected(draft, body.expectedRevisions?.[draft.id])
         assertMutable(draft, state)
       }
+      // P00c route mode: each prepared rejection is collected, then ONE all-or-nothing command.
+      const collected = []
+      const collect = async (updates) => { collected.push(...updates); return { status: "collected" } }
       for (const draft of targets) {
         const expected = body.expectedRevisions[draft.id]
-        const { draft: rejected } = await updateDraftStore(draft.id, (record, currentState) => {
+        const { draft: rejected, submitted } = await updateDraftStore(draft.id, (record, currentState) => {
           assertExpected(record, expected)
           assertMutable(record, currentState)
           assertPending(record)
@@ -188,10 +175,12 @@ export async function POST(request) {
           record.status = "rejected"
           record.rejected_reason = `bulk_reject_below_${threshold}`
           return record
-        }, { expectedRevision: expected })
+        }, { expectedRevision: expected, routeCommand: collect })
+        if (submitted) continue
         if (!rejected) fail("A draft disappeared during the bulk action.")
         changedIds.push(draft.id)
       }
+      if (collected.length) return submittedResponse(await submitDraftUpdates(collected, { operation: "bulk_reject_below" }))
       return Response.json({ ok: true, action: "bulk_rejected", count: changedIds.length, changedIds, threshold })
     }
 
@@ -201,7 +190,7 @@ export async function POST(request) {
     let minutes
     let checkedPolicySha = null
     let checkedAutomaticEpoch = null
-    const { draft: updatedDraft, state: updatedState, runtimeReport: updatedReport = null } = await updateDraftStore(draftId, async (draft, state, { runtimeReport = null } = {}) => {
+    const { draft: updatedDraft, state: updatedState, runtimeReport: updatedReport = null, submitted } = await updateDraftStore(draftId, async (draft, state, { runtimeReport = null } = {}) => {
       assertExpected(draft, expectedRevision)
       assertMutable(draft, state)
       if (["review", "approve", "auto_approve"].includes(action)) assertSavedSourceTiming(draft)
@@ -302,21 +291,16 @@ export async function POST(request) {
       if (["review", "approve", "auto_approve"].includes(action)) checkedPolicySha = editorialPolicy.policy_sha256
       return draft
     }, { expectedRevision, confirmContext: ["review", "approve", "auto_approve"].includes(action)
-      ? (latestState, { runtimeReport = null } = {}) => {
-        const latestDraft = latestState.drafts?.find(draft => draft.id === draftId)
-        if (!latestDraft) fail("This draft is no longer available.", 409, "draft_not_found")
-        assertSavedSourceTiming(latestDraft)
-        if (action === "approve") assertMediaCurrent(latestDraft)
-        const current = dashboardEditorialPolicy(latestState, { runtimeReport })
-        if (!current.policy || !checkedPolicySha || current.policy_sha256 !== checkedPolicySha) {
-          fail("Editorial policy changed before this decision could be saved. Refresh and review again.", 409, "editorial_policy_changed")
-        }
-        if (action === "auto_approve") {
-          const publication = dashboardAutomaticPolicy(latestState, { runtimeReport })
-          if (!publication.enabled || publication.epoch !== checkedAutomaticEpoch) fail(publication.reason, 409, "automatic_publication_paused")
-        }
-      } : undefined })
+      ? (latestState, { runtimeReport = null } = {}) => confirmDraftDecision(latestState, { runtimeReport },
+        { action, draftId, checkedPolicySha, checkedAutomaticEpoch }) : undefined,
+      // P00c route mode: the same decision becomes a compare-and-swap command; the serialized
+      // consumer repeats the confirmation above and (for approve) dispatches the manual sender.
+      routeCommand: (updates) => submitDraftUpdates(updates, { operation: action,
+        confirm: ["review", "approve", "auto_approve"].includes(action) ? { name: "draft_decision", action,
+          checked_policy_sha256: checkedPolicySha, checked_automatic_epoch: action === "auto_approve" ? checkedAutomaticEpoch : null } : null,
+        followUp: action === "approve" ? { kind: "bot_manual_tweet", publish_intent_id: publishIntentId } : null }) })
 
+    if (submitted) return submittedResponse(submitted)
     if (!updatedDraft) fail("Draft not found", 404, "draft_not_found")
     if (action !== "approve") {
       const names = { edit: "edited", select_candidate: "selected_candidate", reject: "rejected", review: "reviewed", auto_approve: "auto_approved", cancel_auto_approve: "cancelled_auto_approve", attach_graphic: "graphic_attached", remove_graphic: "graphic_removed" }
