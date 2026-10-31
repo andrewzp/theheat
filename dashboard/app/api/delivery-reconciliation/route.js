@@ -2,6 +2,7 @@ import { requireDashboardAuth } from "../../../lib/auth.js"
 import { forwardLocalReconciliation, previewConfigured } from "../../../lib/draft-command-client.js"
 import { inspectReconciliation, ReconciliationError } from "../../../lib/delivery-reconciliation.js"
 import { readStateStore, reconcileDeliveryStore } from "../../../lib/state-store.js"
+import { submitReconciliation, submittedResponse } from "../../../lib/gist-route-submit.js"
 export const runtime = "nodejs"
 const headers = { "Cache-Control": "private, no-store" }
 const LIMIT = 16 * 1024
@@ -37,10 +38,12 @@ export async function POST(request) {
   } catch { return Response.json({ code: "reconciliation_request_invalid" }, { status: 400, headers }) }
   try {
     const at = new Date().toISOString().replace(/\.\d{3}Z$/, "Z")
-    const applied = await reconcileDeliveryStore(body, { actor: "dashboard-operator", at })
+    const applied = await reconcileDeliveryStore(body, { actor: "dashboard-operator", at, routeCommand: submitReconciliation })
+    // P00c route mode: submitted to the serialized consumer, which re-runs the same decision.
+    if (applied.status === "submitted") return submittedResponse(applied.submitted, headers)
     return Response.json(applied, { headers })
   } catch (error) {
-    if (error instanceof ReconciliationError || error.code === "revision_conflict") return Response.json({ code: error.code }, { status: 409, headers })
+    if (error instanceof ReconciliationError || error.code === "revision_conflict" || error.code === "direct_write_disabled_by_route") return Response.json({ code: error.code }, { status: 409, headers })
     return Response.json({ code: "reconciliation_write_unconfirmed" }, { status: 503, headers })
   }
 }

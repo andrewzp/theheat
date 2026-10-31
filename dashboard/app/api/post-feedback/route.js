@@ -1,6 +1,7 @@
 import { mutationOriginError, requireDashboardAuth } from "../../../lib/auth.js"
 import { previewConfigured } from "../../../lib/local-preview-boundary.js"
 import { FeedbackError, feedbackDiagnostic, readPostFeedback, savePostFeedback } from "../../../lib/post-feedback.js"
+import { submitFeedback, submittedBody } from "../../../lib/gist-route-submit.js"
 
 export const runtime = "nodejs"
 const headers = { "Cache-Control":"private, no-store" }
@@ -50,6 +51,11 @@ export async function POST(request) {
   // shared loopback-aware rule, so a page opened at 127.0.0.1 matches its canonicalized localhost URL.
   if (request.headers.get("origin") === null || mutationOriginError(request) ||
       (request.headers.get("sec-fetch-site") && request.headers.get("sec-fetch-site") !== "same-origin")) return response({code:"feedback_origin_refused"}, 403)
-  try { return response(await savePostFeedback(await input(request))) }
+  try {
+    const saved = await savePostFeedback(await input(request), { routeSubmit: submitFeedback })
+    // P00c route mode: submitted to the serialized consumer (feedback Gist only), never PATCHed here.
+    if (saved.submitted) { const { status, body } = submittedBody(saved.submitted); return response(body, status) }
+    return response(saved)
+  }
   catch (error) { return errorResponse(error) }
 }
