@@ -13,7 +13,8 @@ on:
         default: ''
 
 concurrency:
-  group: reject-all-drafts
+  # P00c: in serialized route mode this Gist writer joins the theheat-bot group; legacy unchanged.
+  group: ${{ vars.THEHEAT_GIST_WRITE_ROUTE == 'serialized' && 'theheat-bot' || 'reject-all-drafts' }}
   cancel-in-progress: false
 
 jobs:
@@ -32,4 +33,6 @@ jobs:
         env:
           GIST_ID: ${{ secrets.GIST_ID }}
           GITHUB_TOKEN: ${{ secrets.GH_GIST_TOKEN }}
+          THEHEAT_GIST_WRITE_ROUTE: ${{ vars.THEHEAT_GIST_WRITE_ROUTE }}
+          THEHEAT_SERIALIZED_WRITER: ${{ vars.THEHEAT_GIST_WRITE_ROUTE == 'serialized' && format('{0}:reject', github.run_id) || '' }}
         run: python scripts/reject_all_drafts.py
