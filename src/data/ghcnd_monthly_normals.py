@@ -632,9 +632,14 @@ def install_plan(candidate_dir: Path, installed_path: Path) -> dict[str, Any]:
         "comparison": {"added": len(new.keys() - old.keys()), "removed": len(old.keys() - new.keys()),
                        "changed": sum(1 for k in old.keys() & new.keys() if old[k] != new[k])},
         "install": {"performed_by": "root", "target": str(installed_path),
+                    "requires": ["terms decision: committing this file to a public repository or any public "
+                                 "asset publishes derived GHCN-Daily values (redistribution.status "
+                                 "private_use_release_gated); decide the covering terms or use a private "
+                                 "delivery path first"],
                     "steps": [f"verify sha256 {candidate_sha} of {candidate_dir / 'normals.csv'}",
                               f"copy {candidate_dir / 'normals.csv'} -> {installed_path}",
-                              "commit the installed file with the candidate manifest and this plan",
+                              "commit the installed file with the candidate manifest and this plan only "
+                              "after the terms decision above",
                               "only then set THEHEAT_HOT10_NORMALS_PRODUCT=" + PRODUCT + " (default stays "
                               "meteostat-normals-point-v1; unset or that value restores it)"]},
         "rollback": None if previous is None else {"retained_copy": str(rollback), "sha256": previous["sha256"],

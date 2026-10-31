@@ -132,6 +132,8 @@ def test_cli_builds_admits_and_plans_install_of_twelve_places(tmp_path, capsys):
     assert plan["schema"] == gn.INSTALL_SCHEMA and plan["install"]["performed_by"] == "root"
     assert plan["coverage"]["min_places_per_month"] == 12 and plan["previous"] is None
     assert any("THEHEAT_HOT10_NORMALS_PRODUCT=" + gn.PRODUCT in step for step in plan["install"]["steps"])
+    assert plan["install"]["requires"][0].startswith("terms decision: committing this file to a public repository")
+    assert plan["redistribution"]["status"] == "private_use_release_gated"
     assert not installed.exists()  # Root installs
 
 
