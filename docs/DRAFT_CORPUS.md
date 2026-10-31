@@ -11,6 +11,40 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-10-31 — Daily corpus grading (4 fresh drafts; 0 carry-overs)
+
+**Context:** Gist read via git-clone path (success). 4 pending, all new to the corpus; none of Oct 28's
+15 remain (queue turned over — intake resumed Oct 30 after a 12-day drought; cause of the old 15
+leaving unconfirmed, likely operator reject). Oldest 35h, newest 12h. Graded cold against the Oct 28 baseline.
+
+**Distribution:** 0 A · 0 B · 3 B- · 1 C+ · 0 D → **A-rate 0% (0/4)**. Bar (50%) missed by 50 pp.
+
+**Headline:** Accurate, number-led data delivery with a WHO anchor on all three PM drafts (second
+consecutive cycle of P_dust counter-evidence), but still no close and no mechanic. Two of four are
+the same city on the same day (Riyadh ×2). "A CAMS air-quality model forecast puts…" is now a shared
+opener template across 3 of 3 PM drafts.
+
+### B- (3)
+- **[1] Riyadh dust_event** — peak ~4,227 µg/m³, 24h PM10 mean ~35× WHO (35×45 ≈ 1,575 checks). Peak-vs-mean gap is the implicit violation and the biggest numbers in the corpus for the type. But "~4,227" puts a tilde on an exact figure (P4 approximation tell), and the draft ends on the date. No close. B-.
+- **[2] Riyadh air_quality_hazard** — PM2.5 173 µg/m³, 11.5× WHO (173/15 = 11.5 ✓). Same city, same day as [1]; "co-reported dust values above 3,000" is jargon and just restates [1]. Em-dash aside, no close. B-.
+- **[4] Brazil fire (MODIS)** — 978.7 MW, then "Two nearby signals registered 624 and 465 MW the same pass" — exact numbers, deadpan cluster, the best raw material of the batch. But located by lat/lon ("near 3.7°S, 45.7°W") not a place name (geographic-orientation miss), "satellite confidence 100%" is filler, and nothing says what the fire is burning or what season it is. B-.
+
+### C+ (1)
+- **[3] Urumqi dust_event** — 668 µg/m³, PM10 ~5.8× WHO. Modest multiple, "Urumqi, China:" colon opener, "up to", and a disclaimer close ("model estimates, not station readings") that spends the punchline slot on hedging. C+.
+
+### Patterns named
+1. **P_close:** 0 of 4 positive. Disclaimer close ([3]), date/none ([1], [2], [4]).
+2. **P_dust:** 2 of 2 dust_event drafts carry WHO multiples (Oct 28: 3 of 3). Anchor now holds 2 cycles; archive at 3.
+3. **P_event_sat:** Riyadh ×2 (dust_event + air_quality_hazard, same forecast day).
+4. **P4 (Wodehouse):** tilde on exact number in [1]; hedging disclaimer in [3].
+5. **Opener template:** "A CAMS air-quality model forecast puts X's…" in [1], [2], [3 variant].
+6. **P_tier / P_nws:** not observed (no cyclone/severe_weather drafts).
+7. **No A-grade mechanic** this cycle; nothing to promote.
+
+### Followups
+- Operator: P_close and P_event_sat are the leverage points; a per-city/day dedupe would have cut [2] outright.
+- Staleness: none >48h; Oct 30-dated forecasts will cross the elapsed-date line in the next cycle. Gist write still blocked (gh token invalid) — skipped.
+
 ## 2026-10-29 — Daily corpus grading (0 fresh drafts; 15 carry-overs from Oct 28, previously graded)
 
 **Context:** Gist read via git-clone path (success). 15 pending, identical to the Oct 28 queue
