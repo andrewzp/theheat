@@ -610,3 +610,43 @@ def test_an_expired_worker_never_starts_a_retained_supply_write(monkeypatch, lat
         assert supply.captures == 0 and metrics["supply_retention"] == "unavailable"
     else:
         assert supply.captures == 1 and metrics["supply_retention"] == "retained"
+
+
+def test_a_reobserved_candidate_and_a_new_one_from_two_workers_both_land_like_serial():
+    """Remove-then-append dedup (the real candidate log) is a log edit, not a conflict."""
+    live, run = _live()
+    earlier = (date.today() - timedelta(days=2)).isoformat()
+    live["candidates_log"] = [{"event_id": "invented_old", "category": "", "type": "", "city": "", "where": "",
+                               "date": earlier},
+                              {"event_id": "invented_seen", "category": "", "type": "", "city": "", "where": "",
+                               "date": earlier}]
+
+    def observe(event_id: str):
+        def run_fn(bs, current):
+            state.record_candidate_observation(bs, event_id=event_id, category="", legacy_type="", city="", where="")
+        return run_fn
+
+    owner = scheduler.run_stage1_sources(
+        live, run, serial_runners=[], budget_seconds=10,
+        concurrent_runners=[SourceRunner("invented_new", observe("invented_new")),
+                            SourceRunner("invented_seen", observe("invented_seen"))])
+    assert [s.disposition for s in owner.stages] == ["promoted", "promoted"]
+    assert [r["event_id"] for r in live["candidates_log"]] == ["invented_old", "invented_new", "invented_seen"]
+    assert live["candidates_log"][-1]["date"] == date.today().isoformat()
+
+
+def test_a_worker_replacing_a_list_that_live_also_changed_is_a_conflict():
+    live, run = _live()
+    live["invented_rows"] = ["a", "b"]
+
+    def append(bs, current):
+        bs["invented_rows"].append("c")
+
+    def replace(bs, current):
+        bs["invented_rows"] = ["z"]
+
+    owner = scheduler.run_stage1_sources(
+        live, run, serial_runners=[], budget_seconds=10,
+        concurrent_runners=[SourceRunner("invented_append", append), SourceRunner("invented_replace", replace)])
+    assert [s.disposition for s in owner.stages] == ["promoted", "conflict:invented_rows"]
+    assert live["invented_rows"] == ["a", "b", "c"]

@@ -19,11 +19,13 @@ Merge rules (main thread, deterministic, all-or-nothing per worker):
   value (dicts are merged key by key in place, lists replaced in place);
 * if live also changed the same path since the base:
   - dicts recurse key by key;
-  - append-only lists (worker and live each = base minus some head rows plus
-    a tail) merge as base[max(head drops):] + live's tail + the worker's
-    tail: both appends land in promotion order and window prunes compose.
-    A count-capped log may then exceed its cap by the other appenders' rows
-    until its next capped write (bounded; nothing is lost);
+  - log-shaped lists (worker and live each keep base rows in order, minus
+    any removed, then append a tail: appends, capped/windowed head drops,
+    remove-then-append dedup) merge as the base rows neither side removed,
+    then live's tail, then the worker's tail. A count-capped log may then
+    exceed its cap by the other appenders' rows until its next capped write
+    (bounded; nothing is lost). A side that removed every base row replaced
+    the list: conflict;
   - anything else, including a scalar set to an equal value (two increments
     from one base look equal), is a conflict: nothing of that worker is
     applied and the scheduler records the conflict (fail closed).
@@ -387,16 +389,22 @@ def _setter(container: dict, key: Any, value: Any) -> Callable[[], None]:
     return apply
 
 
-def _append_shape(base: list, other: list) -> tuple[int, list] | None:
-    """(head rows dropped, tail rows added) when ``other`` = base[d:] + tail."""
-    n = len(base)
-    if other[:n] == base:
-        return 0, other[n:]
-    for dropped in range(1, n):
-        keep = n - dropped
-        if len(other) >= keep and other[:keep] == base[dropped:]:
-            return dropped, other[keep:]
-    return None
+def _log_shape(base: list, other: list) -> tuple[list[int], list] | None:
+    """(kept base positions, appended tail) when ``other`` keeps base rows in order, then appends.
+
+    Covers appends, capped/windowed head drops and remove-then-append dedup
+    (a re-observed row moves to the end). Removing every row of a non-empty
+    base is a replacement, not a log edit: None.
+    """
+    kept: list[int] = []
+    j = 0
+    for i, row in enumerate(base):
+        if j < len(other) and _same(other[j], row):
+            kept.append(i)
+            j += 1
+    if base and not kept:
+        return None
+    return kept, other[j:]
 
 
 def _plan_list(base: list, staged: list, live: list, path: str, ops: list) -> None:
@@ -405,20 +413,20 @@ def _plan_list(base: list, staged: list, live: list, path: str, ops: list) -> No
             live[:] = staged
         ops.append(replace)
         return
-    worker = _append_shape(base, staged)
-    other = _append_shape(base, live)
+    worker = _log_shape(base, staged)
+    other = _log_shape(base, live)
     if worker is None or other is None:
         raise StagingConflict(path)
-    # live = base[other_dropped:] + its tail; worker = base[dropped:] + tail.
-    # Result = base[max(drops):] + live's tail + worker's tail: the union of
-    # head drops (window prunes/caps) and both appends, in promotion order.
-    dropped, tail = worker
-    extra = max(dropped - other[0], 0)
+    # Rows either side removed stay removed; live's own row objects are kept;
+    # then live's appended rows, then this worker's, in promotion order.
+    worker_kept = set(worker[0])
+    live_kept, live_tail = other
+    survivors = [row for i, row in zip(live_kept, live) if i in worker_kept]
+    merged = survivors + list(live_tail) + list(worker[1])
 
-    def extend() -> None:
-        del live[:extra]
-        live.extend(tail)
-    ops.append(extend)
+    def merge() -> None:
+        live[:] = merged
+    ops.append(merge)
 
 
 def _queue_delta(stage: WorkerStage) -> list:
