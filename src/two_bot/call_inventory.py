@@ -78,14 +78,29 @@ class CancelToken:
     ``consume`` in that work's context refuses before egress, so a worker that
     outlives its deadline buys no further provider/data/platform/hosting call.
     A request already in flight keeps its existing (unknown/spent) accounting.
+
+    With ``deadline``/``clock`` the token also expires by itself once
+    ``clock() > deadline`` (the deadline instant itself is still inside the
+    budget), so a worker whose owner has not yet noticed the deadline still
+    buys nothing after it. ``refused`` and ``late_responses`` are this work's
+    own late evidence; global counters are unchanged.
     """
 
-    def __init__(self, scope: str):
+    def __init__(self, scope: str, *, deadline: float | None = None,
+                 clock: Callable[[], float] | None = None, deadline_reason: str = "deadline_passed"):
         self.scope = scope
         self.reason: str | None = None
+        self.deadline = deadline
+        self._clock = clock
+        self._deadline_reason = deadline_reason
+        self.refused = 0
+        self.late_responses: dict[str, int] = {}
 
     @property
     def cancelled(self) -> bool:
+        if self.reason is None and self.deadline is not None and self._clock is not None \
+                and self._clock() > self.deadline:
+            self.cancel(self._deadline_reason)
         return self.reason is not None
 
     def cancel(self, reason: str) -> None:
@@ -338,6 +353,11 @@ _ALLOWANCE: ContextVar[tuple[Any, str] | None] = ContextVar("theheat_allowance_a
 _CANCEL: ContextVar[CancelToken | None] = ContextVar("theheat_cancel_token", default=None)
 
 
+def current_cancel_token() -> CancelToken | None:
+    """The cancellation token governing this context's physical calls, if any."""
+    return _CANCEL.get()
+
+
 def run_cancellable(token: CancelToken, fn: Callable[..., _T], /, *args: Any, **kwargs: Any) -> _T:
     """Run ``fn`` with ``token`` governing every later physical call in its context."""
     saved = _CANCEL.set(token)
@@ -394,6 +414,12 @@ def take_dispatch_attribution(stage: str) -> dict:
     """
     found = _DISPATCH.get()
     _DISPATCH.set(None)
+    token = _CANCEL.get()
+    if token is not None and token.cancelled:
+        # The response is still recorded with its dispatch-time attribution;
+        # its work's token also counts it as late (scheduler late evidence).
+        with _LOCK:
+            token.late_responses[stage] = token.late_responses.get(stage, 0) + 1
     if found is None or found[0] != stage:
         return unjoined_attribution()
     return dict(found[1])
@@ -414,6 +440,7 @@ def consume(stage: str, *, provider: str | None = None, model: str | None = None
     if token is not None and token.cancelled:
         with _LOCK:
             _CANCELLED[stage] = _CANCELLED.get(stage, 0) + 1
+            token.refused += 1
         raise OperationCancelled(str(token.reason))
     if ARCHIVE_CAPTURE.get(stage) == "uncaptured_model":
         _refuse_uncaptured_in_open_archive()
@@ -696,7 +723,7 @@ def record_operation_cost(current_run: dict | None, row: dict, *, join: _Join | 
 
 
 __all__ = ["ATTRIBUTION_STATUSES", "BACKGROUND_LANES", "BackgroundLaneDisabled", "CEILING_KINDS", "CallDeclaration",
-           "CallTicket", "CancelToken", "OperationCancelled", "run_cancellable", "DECLARATIONS", "consume_provider_stage", "OPERATIONS", "OperationAllowance", "PATH_CEILINGS",
+           "CallTicket", "CancelToken", "OperationCancelled", "run_cancellable", "current_cancel_token", "DECLARATIONS", "consume_provider_stage", "OPERATIONS", "OperationAllowance", "PATH_CEILINGS",
            "UNJOINED_REASONS", "UndeclaredCallError", "background_lane_enabled", "close_attempt_join", "consume",
            "current_attempt_join", "declaration", "in_copied_context", "inventory", "open_attempt_join",
            "operation_cost_row", "operation_scope", "record_operation_cost", "require_background_lane",
