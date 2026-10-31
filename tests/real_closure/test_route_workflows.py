@@ -76,7 +76,11 @@ def test_bot_drains_only_in_route_mode_and_keeps_every_existing_default():
     step = next(s for s in doc["jobs"]["run"]["steps"] if s.get("name") == "Run bot")
     old_step = next(s for s in old["jobs"]["run"]["steps"] if s.get("name") == "Run bot")
     assert {k: v for k, v in step["env"].items() if k in old_step["env"]} == old_step["env"]
-    assert set(step["env"]) - set(old_step["env"]) == {"THEHEAT_GIST_WRITE_ROUTE", "THEHEAT_SERIALIZED_WRITER"}
+    # Composed candidate: the route adds exactly its two keys; the Hot10 product selector is the
+    # supply stream's own mirror (legacy default, asserted by its own tests). Nothing else is new.
+    assert set(step["env"]) - set(old_step["env"]) == {"THEHEAT_GIST_WRITE_ROUTE", "THEHEAT_SERIALIZED_WRITER",
+                                                       "THEHEAT_HOT10_NORMALS_PRODUCT"}
+    assert step["env"]["THEHEAT_HOT10_NORMALS_PRODUCT"] == "${{ vars.THEHEAT_HOT10_NORMALS_PRODUCT || 'meteostat-normals-point-v1' }}"
     marker = step["env"]["THEHEAT_SERIALIZED_WRITER"]
     assert evaluate(marker, "") == "" and evaluate(marker, "serialized") == "format('{0}:run', github.run_id)"
     assert set(old["jobs"]) == set(doc["jobs"]) - {"commands-before", "commands-after"}
