@@ -10,7 +10,7 @@ from __future__ import annotations
 import ast
 from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 import json
 import pathlib
 import threading
@@ -619,7 +619,8 @@ def test_an_expired_worker_never_starts_a_retained_supply_write(monkeypatch, lat
 def test_a_reobserved_candidate_and_a_new_one_from_two_workers_both_land_like_serial():
     """Remove-then-append dedup (the real candidate log) is a log edit, not a conflict."""
     live, run = _live()
-    earlier = (date.today() - timedelta(days=2)).isoformat()
+    # record_candidate_observation dates rows in UTC; compare on the same clock (not the host zone).
+    earlier = (datetime.now(timezone.utc).date() - timedelta(days=2)).isoformat()
     live["candidates_log"] = [{"event_id": "invented_old", "category": "", "type": "", "city": "", "where": "",
                                "date": earlier},
                               {"event_id": "invented_seen", "category": "", "type": "", "city": "", "where": "",
@@ -636,7 +637,7 @@ def test_a_reobserved_candidate_and_a_new_one_from_two_workers_both_land_like_se
                             SourceRunner("invented_seen", observe("invented_seen"))])
     assert [s.disposition for s in owner.stages] == ["promoted", "promoted"]
     assert [r["event_id"] for r in live["candidates_log"]] == ["invented_old", "invented_new", "invented_seen"]
-    assert live["candidates_log"][-1]["date"] == date.today().isoformat()
+    assert live["candidates_log"][-1]["date"] == datetime.now(timezone.utc).date().isoformat()
 
 
 def test_a_worker_replacing_a_list_that_live_also_changed_is_a_conflict():
