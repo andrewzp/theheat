@@ -82,7 +82,9 @@ def test_pr_and_display_branch_job_exclusions_remain_explicit(workflow):
         " || (github.event_name == 'workflow_dispatch'"
         " && github.event.inputs.mode == 'manual_tweet'))"
     )
-    assert run["needs"] == "test"
+    # P00c: the default-off route drain job precedes the run inside the same group; it is
+    # skipped unless THEHEAT_GIST_WRITE_ROUTE == 'serialized', and run's always() still applies.
+    assert run["needs"] == ["test", "commands-before"]
     # PR-specific groups depend only on the PR number, including forks and the
     # display-only branch; no branch-controlled string can select production.
     assert "head_ref" not in workflow["concurrency"]["group"]
