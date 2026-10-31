@@ -60,7 +60,7 @@ def test_a_concurrent_source_runner_joins_the_submitting_operation_and_attempt()
     budget = _budget()
     with inv.operation_scope("alerts") as join:
         assert budget.reserve("event:invented_heat_01")
-        runner = scheduler.SourceRunner("invented_source", _writer_call)
+        runner = scheduler.SourceRunner("invented_source", lambda bs, run: _writer_call())
         scheduler.run_stage1_sources(_bot_state(), {}, serial_runners=[], concurrent_runners=[runner],
                                      budget_seconds=10, max_workers=2)
         budget.settle("event:invented_heat_01", writer_started=False)
@@ -72,7 +72,7 @@ def test_a_concurrent_source_runner_joins_the_submitting_operation_and_attempt()
 
 def test_serial_runner_threads_also_carry_the_join():
     with inv.operation_scope("leaderboard") as join:
-        runner = scheduler.SourceRunner("invented_serial", _writer_call)
+        runner = scheduler.SourceRunner("invented_serial", lambda bs, run: _writer_call())
         scheduler.run_stage1_sources(_bot_state(), {}, serial_runners=[runner], concurrent_runners=[],
                                      budget_seconds=10)
     assert join.dispatched() == 1
@@ -181,7 +181,7 @@ def test_finite_trial_reaches_a_worker_thread_and_still_refuses_news(tmp_path):
     budget = TrialBudget(lambda _row: None, tmp_path / "stop")
     run: dict = {}
     with trial_scope(budget):
-        runner = scheduler.SourceRunner("invented_news", news._refuse_finite_trial_news)
+        runner = scheduler.SourceRunner("invented_news", lambda bs, run: news._refuse_finite_trial_news())
         scheduler.run_stage1_sources(_bot_state(), run, serial_runners=[], concurrent_runners=[runner],
                                      budget_seconds=10)
     assert budget.stopped == "trial_unassigned_stage"
@@ -281,7 +281,7 @@ def test_a_timed_out_runner_buys_no_further_call_after_its_deadline(monkeypatch,
     release, finished = threading.Event(), threading.Event()
     outcome: dict = {}
 
-    def slow_runner():
+    def slow_runner(bs, run):
         inv.consume("source_http_get", join=False)
         release.wait(5)
         try:

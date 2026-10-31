@@ -8,6 +8,7 @@ from contextlib import nullcontext
 from src.orchestrator.common import *
 from src.orchestrator.finalize import _fire_surviving_draft_callbacks, _prune_weakest_cycle_drafts
 from src.orchestrator.scheduler import SourceRunner, concurrent_sources_enabled, run_stage1_then_synthesis
+from src.orchestrator.staging import attach_late_evidence
 from src.orchestrator.sources.co2 import run_co2
 from src.orchestrator.sources.co_ops import run_water_levels
 from src.orchestrator.sources.climate_indices import run_climate_indices
@@ -101,38 +102,41 @@ def run_alerts(bot_state: BotState, current_run: dict | None = None, *, ghcn_sup
         except (ValueError, TypeError):
             continue
 
+    stage1_owner = None
     if concurrent_sources_enabled():
-        run_stage1_then_synthesis(
+        # Each closure receives the state/run it acts on (a private staged view
+        # under the scheduler); none captures the live bot_state/current_run.
+        stage1_owner = run_stage1_then_synthesis(
             bot_state,
             current_run,
             serial_runners=[
                 SourceRunner(
                     "open_meteo_extreme_signals",
-                    lambda: run_extreme_signals(
-                        bot_state,
-                        current_run,
+                    lambda bs, run: run_extreme_signals(
+                        bs,
+                        run,
                         cities,
                         us_city_state_map,
                         city_elevations,
                         **({"ghcn_supply": ghcn_supply} if ghcn_supply is not None else {}),
                     ),
                 ),
-                SourceRunner("firms", lambda: run_firms(bot_state, current_run)),
-                SourceRunner("drought", lambda: run_drought(bot_state, current_run)),
+                SourceRunner("firms", lambda bs, run: run_firms(bs, run)),
+                SourceRunner("drought", lambda bs, run: run_drought(bs, run)),
             ],
             concurrent_runners=[
-                SourceRunner("fire_footprint", lambda: run_fire_footprint(bot_state, current_run)),
-                SourceRunner("co2", lambda: run_co2(bot_state, current_run)),
-                SourceRunner("ch4_milestone", lambda: run_methane(bot_state, current_run)),
-                SourceRunner("nws_alerts", lambda: run_nws_alerts(bot_state, current_run)),
-                SourceRunner("gdacs", lambda: run_gdacs(bot_state, current_run)),
-                SourceRunner("usgs_quakes", lambda: run_usgs_quakes(bot_state, current_run)),
-                SourceRunner("copernicus_ems", lambda: run_copernicus_ems(bot_state, current_run)),
+                SourceRunner("fire_footprint", lambda bs, run: run_fire_footprint(bs, run)),
+                SourceRunner("co2", lambda bs, run: run_co2(bs, run)),
+                SourceRunner("ch4_milestone", lambda bs, run: run_methane(bs, run)),
+                SourceRunner("nws_alerts", lambda bs, run: run_nws_alerts(bs, run)),
+                SourceRunner("gdacs", lambda bs, run: run_gdacs(bs, run)),
+                SourceRunner("usgs_quakes", lambda bs, run: run_usgs_quakes(bs, run)),
+                SourceRunner("copernicus_ems", lambda bs, run: run_copernicus_ems(bs, run)),
                 SourceRunner(
                     "nhc",
-                    lambda: _process_cyclone_source(
-                        bot_state,
-                        current_run,
+                    lambda bs, run: _process_cyclone_source(
+                        bs,
+                        run,
                         source_key="nhc",
                         source_label="NHC",
                         fetch_fn=nhc.fetch_active_cyclones,
@@ -141,9 +145,9 @@ def run_alerts(bot_state: BotState, current_run: dict | None = None, *, ghcn_sup
                 ),
                 SourceRunner(
                     "jtwc",
-                    lambda: _process_cyclone_source(
-                        bot_state,
-                        current_run,
+                    lambda bs, run: _process_cyclone_source(
+                        bs,
+                        run,
                         source_key="jtwc",
                         source_label="JTWC",
                         fetch_fn=jtwc.fetch_active_cyclones,
@@ -152,38 +156,38 @@ def run_alerts(bot_state: BotState, current_run: dict | None = None, *, ghcn_sup
                 ),
                 SourceRunner(
                     "sea_ice",
-                    lambda: run_sea_ice(bot_state, current_run),
+                    lambda bs, run: run_sea_ice(bs, run),
                     health_sources=("sea_ice_arctic", "sea_ice_antarctic"),
                 ),
-                SourceRunner("enso", lambda: run_enso(bot_state, current_run)),
+                SourceRunner("enso", lambda bs, run: run_enso(bs, run)),
                 SourceRunner(
                     "climate_indices",
-                    lambda: run_climate_indices(bot_state, current_run),
+                    lambda bs, run: run_climate_indices(bs, run),
                     health_sources=("nao", "ao", "pdo", "nao_ao_alignment"),
                 ),
-                SourceRunner("ocean", lambda: run_ocean(bot_state, current_run)),
-                SourceRunner("ocean_sst", lambda: run_ocean_sst(bot_state, current_run)),
-                SourceRunner("ocean_sst_anomaly", lambda: run_ocean_sst_anomaly(bot_state, current_run)),
-                SourceRunner("air_quality", lambda: run_air_quality(bot_state, current_run, cities)),
-                SourceRunner("coral_dhw", lambda: run_coral_dhw(bot_state, current_run)),
-                SourceRunner("water_levels", lambda: run_water_levels(bot_state, current_run)),
-                SourceRunner("river_gauges", lambda: run_river_gauges(bot_state, current_run)),
+                SourceRunner("ocean", lambda bs, run: run_ocean(bs, run)),
+                SourceRunner("ocean_sst", lambda bs, run: run_ocean_sst(bs, run)),
+                SourceRunner("ocean_sst_anomaly", lambda bs, run: run_ocean_sst_anomaly(bs, run)),
+                SourceRunner("air_quality", lambda bs, run: run_air_quality(bs, run, cities)),
+                SourceRunner("coral_dhw", lambda bs, run: run_coral_dhw(bs, run)),
+                SourceRunner("water_levels", lambda bs, run: run_water_levels(bs, run)),
+                SourceRunner("river_gauges", lambda bs, run: run_river_gauges(bs, run)),
                 SourceRunner(
                     "ice_mass",
-                    lambda: run_ice_mass(bot_state, current_run),
+                    lambda bs, run: run_ice_mass(bs, run),
                     health_sources=("ice_mass_greenland", "ice_mass_antarctica"),
                 ),
-                SourceRunner("gpm_imerg", lambda: run_gpm_imerg(bot_state, current_run, cities)),
+                SourceRunner("gpm_imerg", lambda bs, run: run_gpm_imerg(bs, run, cities)),
                 # W05: owner-supplied observed packets; returns at once unless its flag is exactly "1".
-                SourceRunner("regional_observed", lambda: run_regional_observed(bot_state, current_run)),
-                SourceRunner("nsidc_snow", lambda: run_nsidc_snow(bot_state, current_run)),
-                SourceRunner("ozone_hole", lambda: run_ozone_hole(bot_state, current_run)),
-                SourceRunner("reanalysis_anomaly", lambda: run_reanalysis_anomaly(bot_state, current_run)),
-                SourceRunner("newsworthiness", lambda: run_newsworthiness(bot_state, current_run)),
+                SourceRunner("regional_observed", lambda bs, run: run_regional_observed(bs, run)),
+                SourceRunner("nsidc_snow", lambda bs, run: run_nsidc_snow(bs, run)),
+                SourceRunner("ozone_hole", lambda bs, run: run_ozone_hole(bs, run)),
+                SourceRunner("reanalysis_anomaly", lambda bs, run: run_reanalysis_anomaly(bs, run)),
+                SourceRunner("newsworthiness", lambda bs, run: run_newsworthiness(bs, run)),
             ],
             synthesis_runner=SourceRunner(
                 "synthesis_fire_drought_heat",
-                lambda: run_synthesis(bot_state, current_run),
+                lambda bs, run: run_synthesis(bs, run),
             ),
         )
     else:
@@ -252,12 +256,13 @@ def run_alerts(bot_state: BotState, current_run: dict | None = None, *, ghcn_sup
     from src.orchestrator.sources.nhc_advisory import configured as nhc_advisory_configured, run_nhc_advisory_source
     if nhc_advisory_configured():
         # Explicit opt-in only; its owner/budget is installed by the CLI command.
-        SourceRunner("nhc_advisory", lambda: run_nhc_advisory_source(bot_state, current_run)).run()
+        SourceRunner("nhc_advisory", lambda bs, run: run_nhc_advisory_source(bs, run)).run(bot_state, current_run)
     if warning_source is not None:
         from src.orchestrator.sources.official_warning import run_official_warning_source
-        warning_runner = SourceRunner("official_warning", lambda: run_official_warning_source(
-            bot_state, current_run, source=warning_source, score=warning_score))
-        warning_runner.run()
+        warning_runner = SourceRunner("official_warning", lambda bs, run: run_official_warning_source(
+            bs, run, source=warning_source, score=warning_score))
+        # Main thread, no deadline: it acts on the live objects it is handed.
+        warning_runner.run(bot_state, current_run)
     from src.editorial.warning_runtime import WarningSource, warning_source_scope
     warning_context = warning_source_scope(warning_source) if type(warning_source) is WarningSource else nullcontext()
     # One attempt budget for this whole alerts operation (every drain, refill
@@ -288,5 +293,7 @@ def run_alerts(bot_state: BotState, current_run: dict | None = None, *, ghcn_sup
             funnel_sink, current_run, bot_state, pruned_event_ids=pruned_event_ids,
         )
 
+    # Expired Stage 1 workers that finished by now leave late diagnostics only.
+    attach_late_evidence(current_run, stage1_owner)
     print(f"[alerts] Done. Saved {drafted} drafts.")
     return bot_state
