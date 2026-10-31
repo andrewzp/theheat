@@ -457,6 +457,9 @@ jobs:
           # today's single current-day HMS read and today's GPM attempt on every scheduled run.
           THEHEAT_HMS_PREVIOUS_DAY_FILE: ${{ vars.THEHEAT_HMS_PREVIOUS_DAY_FILE || '0' }}
           THEHEAT_EARTHDATA_REFUSAL_BACKOFF: ${{ vars.THEHEAT_EARTHDATA_REFUSAL_BACKOFF || '0' }}
+          # Hot10 normals product (real closure, supply) — default the legacy Meteostat product; only the
+          # exact value noaa-ghcnd-monthly-mean-tmax-v1 ranks against Root's installed GHCN-Daily climatology.
+          THEHEAT_HOT10_NORMALS_PRODUCT: ${{ vars.THEHEAT_HOT10_NORMALS_PRODUCT || 'meteostat-normals-point-v1' }}
           # Throughput Initiative (2026-06-16). All default "0"/safe in code;
           # production controls them via repo variables. Activate in order
           # A->B->C->D per docs/2026-06-16_throughput-activation-runbook.md.
