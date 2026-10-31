@@ -30,7 +30,18 @@ _MAX_ATTEMPTS = 5
 
 def reject_all_pending() -> int:
     """Reject every pending draft. Returns the number rejected. Retries on a
-    write conflict (re-reading the merged state each time)."""
+    write conflict (re-reading the merged state each time).
+
+    P00c route mode: ``write_state`` itself refuses outside a serialized-group job;
+    this precheck stops before the first read instead of retrying a refusal.
+    """
+    from src.commands import gist_route
+    try:
+        if gist_route.configured_mode() == "serialized" and gist_route.serialized_writer_marker() is None:
+            raise gist_route.RouteRefused("direct_write_disabled_by_route")
+    except gist_route.RouteRefused as refused:
+        print(gist_route.refusal_line("reject_all_drafts", refused.code), file=sys.stderr)
+        raise SystemExit(2) from None
     for attempt in range(1, _MAX_ATTEMPTS + 1):
         state = read_state()
         drafts = state.get("drafts") or []
