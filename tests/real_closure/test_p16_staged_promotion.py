@@ -16,6 +16,7 @@ import pathlib
 import threading
 import time
 from types import SimpleNamespace
+from typing import Any, cast
 
 import pytest
 import requests
@@ -110,7 +111,7 @@ def test_a_cached_or_retained_result_returned_after_the_deadline_is_discarded(mo
     yesterday = date.today() - timedelta(days=1)
     if cached == "last_good":
         last_good.write(live, "co2", yesterday, {"date": yesterday.isoformat(), "ppm": 429.91})
-        routes = {co2_data.CO2_URL: [(503, "invented outage", {})]}
+        routes: dict[str, list[tuple[int, str, dict]]] = {co2_data.CO2_URL: [(503, "invented outage", {})]}
     else:
         co2_data._CO2_REVALIDATION_CACHE[co2_data.CO2_URL] = ('"invented-v1"', fx.co2_csv())
         routes = {co2_data.CO2_URL: [(304, "", {"ETag": '"invented-v1"'})]}
@@ -276,7 +277,9 @@ def test_completion_exactly_at_the_deadline_is_on_time_and_after_it_is_late(monk
 
     def runner(bs, current):
         last_good.write(bs, "invented_boundary", date.today(), {"v": 1})
-        stamps[threading.get_ident()] = staging.active_stage().deadline + offset
+        stage = staging.active_stage()
+        assert stage is not None
+        stamps[threading.get_ident()] = stage.deadline + offset
 
     owner = scheduler.run_stage1_sources(live, run, serial_runners=[],
                                          concurrent_runners=[SourceRunner("invented_boundary", runner)],
@@ -595,12 +598,13 @@ def test_an_expired_worker_never_starts_a_retained_supply_write(monkeypatch, lat
 
     monkeypatch.delenv("THEHEAT_GHCN_THRESHOLD_VERIFICATION", raising=False)  # GHCN withheld; no fetch.
     live, run = _live()
-    supply, gate, metrics = _SupplyDouble(), threading.Event(), {}
+    supply, gate = _SupplyDouble(), threading.Event()
+    metrics: dict = {}
 
     def runner(bs, current):
         if late:
             assert gate.wait(10)  # Stands in for the GHCN fetch still in flight at the deadline.
-        source._verified_ghcn_signals(bs, metrics, ghcn_supply=supply, current_run=current)
+        source._verified_ghcn_signals(bs, metrics, ghcn_supply=cast(Any, supply), current_run=current)
 
     owner = scheduler.run_stage1_sources(live, run, serial_runners=[SourceRunner("invented_supply", runner)],
                                          concurrent_runners=[], budget_seconds=0.2 if late else 10)

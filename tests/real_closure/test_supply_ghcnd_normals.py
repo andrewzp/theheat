@@ -21,6 +21,14 @@ from tests.real_closure import supply_ghcnd_fixture as gf
 TWELVE = [name for name, _zone, _kind in h.CITIES[:12]]
 
 
+def _no_gap(_year: int, _month: int) -> float | None:
+    return 30.0
+
+
+def _july_gap(_year: int, month: int) -> float | None:
+    return None if month == 7 else 30.0
+
+
 # ---------------------------------------------------------------------------
 # the explicit rules
 # ---------------------------------------------------------------------------
@@ -170,7 +178,7 @@ def test_fewer_than_ten_places_in_any_month_refuses_install(tmp_path):
     for index, name in enumerate(TWELVE):
         no_july = index < 3  # July: only nine places
         world.add(f"XQW0000{index:04d}", name, text=gf.station_text(
-            f"XQW0000{index:04d}", lambda y, m, gap=no_july: None if (gap and m == 7) else 30.0))
+            f"XQW0000{index:04d}", _july_gap if no_july else _no_gap))
     out = tmp_path / "out"
     result = gn.build_candidate(world.cities, world.write(), world.dir, out)
     assert result["product"]["min_places_per_month"] == 9 and result["reasons"] == ["fewer_than_ten_places_in_some_month"]

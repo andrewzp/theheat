@@ -126,6 +126,7 @@ def test_lost_dispatch_response_then_resubmit_applies_once(tmp_path):
     assert [r["admitted"] for r in h.admit_all(root)] == [True, True]
     assert h.command_status(root, command_id)["status"] == "pending"
     report = h.run_consumer(root, h.consumer_env(root, run_id="901"), root / "report.json")
+    assert report is not None
     assert [row["command_id"] for row in report["applied"]] == [command_id] and report["duplicates"] == [command_id]
     assert h.command_status(root, command_id)["status"] == "applied"
     draft = next(d for d in h.gist_state(root)["drafts"] if d["id"] == "draft_route_1")
@@ -156,6 +157,7 @@ def test_consumer_restart_after_patch_before_reporting_never_double_applies(tmp_
     after_crash = h.gist_files(root)
     assert h.results(root)[response["body"]["command_id"]]["status"] == "applied"
     report = h.run_consumer(root, h.consumer_env(root, run_id="905"), root / "report.json")
+    assert report is not None
     assert report["applied"] == [] and report["duplicates"] == [response["body"]["command_id"]]
     assert report["state_patches"] == 0 and h.gist_files(root) == after_crash
     draft = next(d for d in h.gist_state(root)["drafts"] if d["id"] == "draft_route_1")
@@ -172,6 +174,7 @@ def test_stale_revision_from_an_intervening_group_write_is_refused(tmp_path):
     changed["drafts"][0]["score"] = {"total": 99}  # e.g. a bot run inside the group re-scored it
     h.seed_gist(root, h.STATE_GIST, {**files, "state.json": json.dumps(changed)})
     report = h.run_consumer(root, h.consumer_env(root, run_id="906"), root / "report.json")
+    assert report is not None
     assert report["refused"] == [{"command_id": response["body"]["command_id"], "code": "revision_conflict"}]
     assert _statuses(root)["draft_route_1"] == "pending"
 
@@ -186,6 +189,7 @@ def test_activation_switches_new_code_by_record_and_rollback_restores_legacy(tmp
                                                                 "body": {"inputs": {"command": build.stdout.strip()}}}))
     h.admit_all(root)
     report = h.run_consumer(root, h.consumer_env(root, run_id="907", route="legacy"), root / "r0.json")
+    assert report is not None
     assert report["refused"][0]["code"] == "route_variable_not_serialized"
     shutil_inbox = root / "inbox"
     for path in shutil_inbox.iterdir():

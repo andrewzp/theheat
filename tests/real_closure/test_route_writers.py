@@ -27,7 +27,8 @@ class FakeGist:
     """Whole-file GET/PATCH: a PATCH replaces each named file; nothing is merged server-side."""
 
     def __init__(self, files: dict[str, str]):
-        self.files, self.patches, self.gets = dict(files), [], 0
+        self.files, self.gets = dict(files), 0
+        self.patches: list = []
 
     def get(self, url, **_kwargs):
         self.gets += 1

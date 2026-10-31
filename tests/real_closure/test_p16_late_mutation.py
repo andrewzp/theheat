@@ -10,6 +10,7 @@ source health, candidate log and the triage queue after the deadline.
 from __future__ import annotations
 
 from copy import deepcopy
+from typing import Any, Callable, cast
 
 import pytest
 
@@ -31,13 +32,14 @@ def isolated(monkeypatch):
     suppression._clear_suppression_ctx()
 
 
-ROUTES = {"co2": (co2_data.CO2_URL, fx.co2_csv), "usgs_quakes": (fx.USGS_URL, fx.usgs_geojson)}
+ROUTES: dict[str, tuple[str, Callable[[], Any]]] = {"co2": (co2_data.CO2_URL, fx.co2_csv), "usgs_quakes": (fx.USGS_URL, fx.usgs_geojson)}
 
 
 @pytest.mark.parametrize("source", ["co2", "usgs_quakes"])
 def test_expired_production_runner_cannot_mutate_shared_state_after_its_deadline(monkeypatch, source):
     """co2: last-good, evidence-contract suppression and funnel kill; usgs_quakes: queue admission."""
-    live, run = _fresh_state(), {"id": "run_p16_red", "sources": []}
+    live: dict = cast(dict, _fresh_state())
+    run: dict = {"id": "run_p16_red", "sources": []}
     runners = fx.production_runners(monkeypatch, live, run)
     url, body = ROUTES[source]
     transport = fx.BlockingTransport({url: body()})
@@ -45,7 +47,7 @@ def test_expired_production_runner_cannot_mutate_shared_state_after_its_deadline
     calls_before = inv.runtime_counts().get("source_http_get", 0)
     before_state, before_run = deepcopy(live), deepcopy(run)
 
-    scheduler.run_stage1_sources(live, run, serial_runners=[], concurrent_runners=[runners[source]],
+    scheduler.run_stage1_sources(cast(Any, live), run, serial_runners=[], concurrent_runners=[runners[source]],
                                  budget_seconds=0.2)
 
     # Allowed: the main thread's timeout record, nothing else.
