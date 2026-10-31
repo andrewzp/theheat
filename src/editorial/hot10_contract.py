@@ -1,7 +1,10 @@
 """Hot10: a qualified forecast-anomaly ranking over a disclosed sampled city universe.
 
 Hot10 ranks each sampled city's provider-local forecast daily high by its
-departure from an attributable point normal for that month. It is not the
+departure from an attributable point normal for that month. One normals product
+supplies a whole bulletin (``BASELINES``): the default Meteostat point normal, or
+the explicit NOAA GHCN-Daily station mean daily maximum (1991-2020), never both
+and never relabelled; every row and the bulletin name the product. It is not the
 world's ten hottest places, an observed global maximum or a record. A row ranks
 only with complete Open-Meteo forecast provenance, the provider's local day at
 retrieval, a current interval at qualification, a qualified normal for the same
@@ -24,7 +27,11 @@ SCHEMA = "theheat.hot10-bulletin/v1"
 SIZE = 10
 SOURCE_NAME = "Open-Meteo"
 FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
-BASELINE_PRODUCT = "meteostat-normals-point-v1"
+BASELINE_PRODUCT = "meteostat-normals-point-v1"  # the default product; unchanged
+GHCND_PRODUCT = "noaa-ghcnd-monthly-mean-tmax-v1"
+GHCND_PERIOD = (1991, 2020)
+GHCND_MIN_YEARS = 24
+GHCND_MAX_DISTANCE_KM = 35.0
 MAX_ANOMALY_C = 30.0
 MAX_CAPTURE_AGE = timedelta(hours=12)
 FUTURE_TOLERANCE = timedelta(minutes=5)
@@ -36,6 +43,31 @@ UNIVERSE_SCOPE = ("Ranks only the sampled catalogue cities with qualified foreca
 _FORECAST_KEYS = ("source_product", "model", "unit", "aggregation", "provider_grid", "revision_id")
 _BASELINE_KEYS = ("source_product", "period_start", "period_end", "retrieved_at", "sampling_point_id", "month",
                   "revision_id")
+GHCND_RANKED_BY = ("forecast local daily maximum minus the NOAA GHCN-Daily station mean daily maximum for that "
+                   "month, 1991-2020")
+GHCND_BASELINE_SCOPE = ("NOAA GHCN-Daily station climatology: mean daily maximum for the month, 1991-2020, at the "
+                        "nearest qualifying station (each row states station, distance and years used); not a "
+                        "record maximum")
+_GHCND_KEYS = _BASELINE_KEYS + ("statistic", "years_used", "first_year", "last_year", "valid_days", "station_id",
+                                "station_name", "station_lat", "station_lon", "station_elevation_m", "distance_km",
+                                "source_version")
+# One entry per normals product a bulletin may rank against; the wording is part of the product.
+BASELINES = {
+    BASELINE_PRODUCT: {"ranked_by": RANKED_BY, "baseline_scope": BASELINE_SCOPE, "keys": _BASELINE_KEYS},
+    GHCND_PRODUCT: {"ranked_by": GHCND_RANKED_BY, "baseline_scope": GHCND_BASELINE_SCOPE, "keys": _GHCND_KEYS},
+}
+
+
+def _ghcnd_baseline_ok(meta: dict) -> bool:
+    """A GHCND baseline row: mean daily maximum, the fixed period, enough years, a named nearby station."""
+    years: Any = meta.get("years_used")
+    distance: Any = meta.get("distance_km")
+    return (meta.get("statistic") == "mean_daily_maximum"
+            and (meta.get("period_start"), meta.get("period_end")) == GHCND_PERIOD
+            and type(years) is int and GHCND_MIN_YEARS <= years <= GHCND_PERIOD[1] - GHCND_PERIOD[0] + 1
+            and finite(distance) and 0 <= distance <= GHCND_MAX_DISTANCE_KM
+            and isinstance(meta.get("station_id"), str) and len(meta["station_id"]) == 11
+            and isinstance(meta.get("source_version"), str) and bool(meta["source_version"]))
 
 
 def instant(value: Any) -> datetime | None:
@@ -55,7 +87,8 @@ def _local_date(moment: datetime, zone_name: str) -> str | None:
         return None
 
 
-def _qualify_one(ct: Any, normals: dict, now: datetime) -> tuple[str | None, dict | None]:
+def _qualify_one(ct: Any, normals: dict, now: datetime,
+                 product: str = BASELINE_PRODUCT) -> tuple[str | None, dict | None]:
     evidence = getattr(ct, "evidence", None)
     if not isinstance(evidence, dict) or evidence.get("evidence_type") != "forecast" \
             or evidence.get("source_product") != FORECAST_PRODUCT or not evidence.get("revision_id") \
@@ -88,9 +121,10 @@ def _qualify_one(ct: Any, normals: dict, now: datetime) -> tuple[str | None, dic
     meta = ((entry or {}).get("_meta") or {}).get(month) if isinstance(entry, dict) else None
     if not isinstance(entry, dict) or month not in entry:
         return ("ambiguous_normal" if isinstance(meta, dict) and meta.get("conflict") else "missing_normal"), None
-    if not isinstance(meta, dict) or meta.get("source_product") != BASELINE_PRODUCT \
+    if not isinstance(meta, dict) or meta.get("source_product") != product \
             or meta.get("sampling_point_id") != place["sampling_point_id"] or meta.get("month") != month \
-            or not _valid_timestamp(meta.get("retrieved_at")) or not finite(entry[month]):
+            or not _valid_timestamp(meta.get("retrieved_at")) or not finite(entry[month]) \
+            or (product == GHCND_PRODUCT and not _ghcnd_baseline_ok(meta)):
         return "unqualified_normal", None
     anomaly = float(ct.temp_high_c) - float(entry[month])
     if abs(anomaly) > MAX_ANOMALY_C:
@@ -103,7 +137,7 @@ def _qualify_one(ct: Any, normals: dict, now: datetime) -> tuple[str | None, dic
         "retrieved_at": evidence["retrieved_at"], "temp_high_c": float(ct.temp_high_c),
         "normal_high_c": float(entry[month]), "anomaly_c": anomaly,
         "forecast": {key: evidence.get(key) for key in _FORECAST_KEYS},
-        "baseline": {key: meta.get(key) for key in _BASELINE_KEYS},
+        "baseline": {key: meta.get(key) for key in BASELINES[product]["keys"]},
     }
     return None, row
 
@@ -112,14 +146,20 @@ def row_fingerprint(row: dict) -> str:
     return fingerprint({key: value for key, value in row.items() if key not in ("rank", "row_fingerprint")})
 
 
-def qualify(temps: list, normals: dict, *, sampled: int, now: datetime) -> dict:
-    """Qualified ranked rows (at most ten) plus the disclosed universe and exclusions."""
+def qualify(temps: list, normals: dict, *, sampled: int, now: datetime, product: str = BASELINE_PRODUCT) -> dict:
+    """Qualified ranked rows (at most ten) plus the disclosed universe and exclusions.
+
+    ``normals`` must come from ``product`` alone; a normal of any other product is
+    ``unqualified_normal``, never ranked.
+    """
+    if product not in BASELINES:
+        raise ValueError("hot10_baseline_product_unknown")
     now = now.astimezone(UTC)
     excluded: Counter = Counter()
     rows: list[dict] = []
     seen: set[str] = set()
     for ct in temps:
-        reason, row = _qualify_one(ct, normals, now)
+        reason, row = _qualify_one(ct, normals, now, product)
         if row is not None and row["place_id"] in seen:
             reason, row = "duplicate_location", None
         if row is None:
@@ -133,7 +173,8 @@ def qualify(temps: list, normals: dict, *, sampled: int, now: datetime) -> dict:
         ranked.append({**row, "rank": rank, "row_fingerprint": row_fingerprint(row)})
     universe = {
         "sampled_cities": int(sampled), "returned_forecasts": len(temps), "qualified_cities": len(rows),
-        "excluded": dict(sorted(excluded.items())), "ranked_by": RANKED_BY, "baseline_scope": BASELINE_SCOPE,
+        "excluded": dict(sorted(excluded.items())), "ranked_by": BASELINES[product]["ranked_by"],
+        "baseline_scope": BASELINES[product]["baseline_scope"],
         "scope": UNIVERSE_SCOPE, "local_days": sorted({row["valid_date"] for row in ranked}),
     }
     return {"rows": ranked, "universe": universe, "complete": len(rows) >= SIZE}
@@ -154,15 +195,21 @@ def validate_bundle(bundle: Any) -> list[str]:
     failures = []
     value = raw.get("evidence")
     evidence: dict = value if isinstance(value, dict) else {}
+    product = evidence.get("baseline_product") if isinstance(evidence.get("baseline_product"), str) else None
     if (raw.get("source_product") != FORECAST_PRODUCT or raw.get("source_url") != FORECAST_URL
             or evidence.get("evidence_type") != "forecast" or evidence.get("source_product") != FORECAST_PRODUCT
-            or evidence.get("baseline_product") != BASELINE_PRODUCT):
+            or product not in BASELINES):
         failures.append("provenance")
     rows = raw.get("cities")
     if not isinstance(rows, list) or len(rows) != SIZE or not all(isinstance(row, dict) for row in rows):
         return failures + ["slate_size"]
     if len({row.get("place_id") for row in rows}) != SIZE:
         failures.append("duplicate_location")
+    known = {row["baseline"].get("source_product") for row in rows if isinstance(row.get("baseline"), dict)
+             and isinstance(row["baseline"].get("source_product"), str)} & set(BASELINES)
+    if len(known) > 1 or (product in BASELINES and known and known != {product}):
+        failures.append("baseline_mixed")  # one product per bulletin; never mixed or relabelled
+    expected = product if product in BASELINES else BASELINE_PRODUCT
     for rank, row in enumerate(rows, start=1):
         if row.get("rank") != rank or row.get("row_fingerprint") != row_fingerprint(row):
             failures.append("row_fingerprint")
@@ -172,7 +219,8 @@ def validate_bundle(bundle: Any) -> list[str]:
         retrieved = instant(row.get("retrieved_at"))
         if (not all(finite(value) for value in (temp, normal, anomaly)) or abs(temp - normal - anomaly) > 1e-9
                 or abs(anomaly) > MAX_ANOMALY_C or forecast.get("source_product") != FORECAST_PRODUCT
-                or baseline.get("source_product") != BASELINE_PRODUCT
+                or baseline.get("source_product") != expected
+                or (expected == GHCND_PRODUCT and not _ghcnd_baseline_ok(baseline))
                 or baseline.get("sampling_point_id") != row.get("sampling_point_id")
                 or retrieved is None or _local_date(retrieved, str(row.get("timezone"))) != row.get("valid_date")):
             failures.append("row_unqualified")
@@ -184,7 +232,9 @@ def validate_bundle(bundle: Any) -> list[str]:
     universe: dict = value if isinstance(value, dict) else {}
     qualified, sampled = universe.get("qualified_cities"), universe.get("sampled_cities")
     if (not isinstance(qualified, int) or not isinstance(sampled, int) or qualified < SIZE or sampled < qualified
-            or universe.get("scope") != UNIVERSE_SCOPE):
+            or universe.get("scope") != UNIVERSE_SCOPE
+            or (product == GHCND_PRODUCT and (universe.get("ranked_by"), universe.get("baseline_scope"))
+                != (GHCND_RANKED_BY, GHCND_BASELINE_SCOPE))):
         failures.append("universe")
     leader = rows[0]
     metric = _field(bundle, "headline_metric") or {}
@@ -218,5 +268,6 @@ def current_hold(bundle: Any, now: datetime | None = None) -> str | None:
     return None
 
 
-__all__ = ["BASELINE_PRODUCT", "FORECAST_URL", "SCHEMA", "SIZE", "SOURCE_NAME", "UNIVERSE_SCOPE", "current_hold",
-           "qualify", "row_fingerprint", "validate_bundle"]
+__all__ = ["BASELINES", "BASELINE_PRODUCT", "FORECAST_URL", "GHCND_BASELINE_SCOPE", "GHCND_PRODUCT", "GHCND_RANKED_BY",
+           "SCHEMA", "SIZE", "SOURCE_NAME", "UNIVERSE_SCOPE", "current_hold", "qualify", "row_fingerprint",
+           "validate_bundle"]

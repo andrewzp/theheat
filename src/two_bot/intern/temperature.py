@@ -643,12 +643,27 @@ def _hot10_bulletin_bundle(cities: list[dict], *, changes: list[str], event_id: 
     from src.data.temperature_evidence import FORECAST_PRODUCT
 
     leader = cities[0]
+    # One normals product per bulletin, read from the qualified rows themselves; never mixed.
+    products = {(row.get("baseline") or {}).get("source_product") or contract.BASELINE_PRODUCT for row in cities}
+    if len(products) != 1 or not products <= set(contract.BASELINES):
+        raise ValueError("hot10_baseline_product_mixed")
+    product = products.pop()
+    ghcnd = product == contract.GHCND_PRODUCT
     ranking = [
         {"rank": row["rank"], "city": row["city"], "country": row["country"], "valid_date": row["valid_date"],
          "forecast_high_c": round(row["temp_high_c"], 1), "normal_high_c": round(row["normal_high_c"], 1),
-         "departure_c": round(row["anomaly_c"], 1)}
+         "departure_c": round(row["anomaly_c"], 1),
+         **({"normal_station": f"{row['baseline']['station_id']} {row['baseline']['station_name']}".strip(),
+             "normal_station_km": row["baseline"]["distance_km"], "normal_years": row["baseline"]["years_used"]}
+            if ghcnd else {})}
         for row in cities
     ]
+    baseline_facts = [
+        {"label": "baseline_statistic", "value": (
+            "NOAA GHCN-Daily station climatology: mean daily maximum for the month, 1991-2020. An average of "
+            "daily highs, not a monthly record maximum.")},
+        {"label": "baseline_attribution", "value": "NOAA NCEI GHCN-Daily (station observations)"},
+    ] if ghcnd else []
     excluded = sum(universe["excluded"].values())
     local_days = universe["local_days"]
     return StoryBundle(
@@ -666,7 +681,8 @@ def _hot10_bulletin_bundle(cities: list[dict], *, changes: list[str], event_id: 
             {"label": "evidence_type", "value": "forecast"},
             {"label": "source_name", "value": contract.SOURCE_NAME},
             {"label": "source_product", "value": FORECAST_PRODUCT},
-            {"label": "baseline_product", "value": contract.BASELINE_PRODUCT},
+            {"label": "baseline_product", "value": product},
+            *baseline_facts,
             {"label": "sampled_cities", "value": universe["sampled_cities"]},
             {"label": "qualified_cities", "value": universe["qualified_cities"]},
             {"label": "excluded_cities", "value": excluded},
@@ -683,7 +699,11 @@ def _hot10_bulletin_bundle(cities: list[dict], *, changes: list[str], event_id: 
             {"label": "claim_limit", "value": (
                 "Forecast daily highs ranked by departure from each city's point monthly normal, among sampled "
                 "catalogue cities only. Not observed temperatures, not the hottest places on Earth, not a record, "
-                "and no health, infrastructure or other human consequence is supplied.")},
+                "and no health, infrastructure or other human consequence is supplied.") if not ghcnd else (
+                "Forecast daily highs ranked by departure from each city's NOAA GHCN-Daily station mean daily "
+                "maximum for the month (1991-2020), among sampled catalogue cities only. The normal is an average "
+                "of daily highs, not a record maximum. Not observed temperatures, not the hottest places on Earth, "
+                "not a record, and no health, infrastructure or other human consequence is supplied.")},
             *_audience_unit_facts(leader["country"]),
         ],
         historical_context={"scope": "daily_top10_anomaly_leaderboard", "ranked_by": universe["ranked_by"]},
@@ -691,7 +711,7 @@ def _hot10_bulletin_bundle(cities: list[dict], *, changes: list[str], event_id: 
             "schema": contract.SCHEMA, "source_name": contract.SOURCE_NAME, "source_product": FORECAST_PRODUCT,
             "source_url": contract.FORECAST_URL,
             "evidence": {"domain": "temperature_ranking", "evidence_type": "forecast",
-                         "source_product": FORECAST_PRODUCT, "baseline_product": contract.BASELINE_PRODUCT,
+                         "source_product": FORECAST_PRODUCT, "baseline_product": product,
                          "aggregation": "local_daily_extreme", "unit": "C", "valid_dates": local_days},
             "cities": cities, "universe": universe, "changes": changes, "event_id": event_id,
         },

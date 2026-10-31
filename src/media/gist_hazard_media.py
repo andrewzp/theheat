@@ -311,13 +311,18 @@ def _hot10_delivery(evidence):
     """
     days = evidence["local_days"]
     multi = len(days) > 1
+    ghcnd = evidence["baseline_product"] == hot10_contract.GHCND_PRODUCT
     rows = "; ".join(
         f"{row['rank']} {row['city']}, {row['country']} {hot10_adapter.signed(row['departure_c'], minus='-')}"
         + (f" ({_short_day(row['valid_date'])})" if multi else "") for row in evidence["rows"])
     return (
         ("SYNTHETIC; not real weather. " if evidence["synthetic"] else "")
-        + "Hot 10 chart: each city's forecast daily high minus its point monthly normal, in °C, ranked. "
-        + f"Open-Meteo forecasts, Meteostat normals; {evidence['qualified_cities']} qualified of "
+        + ("Hot 10 chart: each city's forecast daily high minus its point monthly normal, in °C, ranked. "
+           + "Open-Meteo forecasts, Meteostat normals; " if not ghcnd else
+           "Hot 10 chart: each city's forecast daily high minus its station's "
+           + hot10_adapter.BASELINE_WORDING + " (an average, not a record), in °C, ranked. "
+           + "Open-Meteo forecasts, NOAA GHCN-Daily station normals; ")
+        + f"{evidence['qualified_cities']} qualified of "
         + f"{evidence['sampled_cities']} sampled cities; local day{'s' if multi else ''} {', '.join(days)}. "
         + "Warm bands above normal, cool below, on one scale. "
         + f"{rows}. Not observations, records or the world's hottest places."
@@ -666,11 +671,14 @@ def _render_hot10(evidence):
     values = [row["departure_c"] for row in rows]
     _require(all(type(v) in (int, float) and math.isfinite(v) for v in values), "media_source_invalid",
              "nonfinite departure")
+    # The bulletin's normals product sets the title and attribution; the default product's image is unchanged.
+    ghcnd = evidence["baseline_product"] == hot10_contract.GHCND_PRODUCT
     canvas = _Canvas("#0b1220")
-    canvas.text((64, 64), "THEHEAT", size=42, fill=MUTED)
+    canvas.text((64, 64), "THEHEAT · HOT 10" if ghcnd else "THEHEAT", size=42, fill=MUTED)
     if evidence["synthetic"]:
         canvas.text((1136, 64), "SYNTHETIC DATA", size=42, fill=WARM, anchor="rs")
-    canvas.text((64, 128), "Hot 10: forecast high vs normal", size=56, fill=INK)
+    canvas.text((64, 128), "Forecast high vs mean daily max" if ghcnd else "Hot 10: forecast high vs normal",
+                size=56, fill=INK)
     canvas.text((64, 184), f"{evidence['qualified_cities']} of {evidence['sampled_cities']} sampled cities · "
                 "not records", size=42, fill=MUTED)
     left, right, inset = 136, 1136, 148
@@ -703,7 +711,8 @@ def _render_hot10(evidence):
     canvas.text((64, 1412), ("Local day " + days[0]) if not multi else
                 ("Local days " + (", ".join(days) if len(days) == 2 else f"{days[0]} to {days[-1]}")),
                 size=42, fill=MUTED)
-    canvas.text((64, 1462), "Open-Meteo forecast · Meteostat normals", size=42, fill=MUTED)
+    canvas.text((64, 1462), "Open-Meteo · NOAA GHCN-Daily 1991-2020" if ghcnd else
+                "Open-Meteo forecast · Meteostat normals", size=42, fill=MUTED)
     return canvas.png()
 
 
