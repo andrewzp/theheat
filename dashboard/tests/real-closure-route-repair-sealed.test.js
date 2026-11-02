@@ -236,3 +236,26 @@ test("B5 malformed envelopes and size bounds refuse at admission and in Node; pl
     assert.equal(admit("x".repeat(64001)).result.code, "command_too_large")
   })
 })
+
+test("B1 an authentic envelope cannot carry a generic patch, foreign request fields or an approval without its intent", async () => {
+  await withRoute(seed(1), async (gist) => {
+    const snap = await readStateGistSnapshot()
+    const draft = snap.state.drafts[0]
+    const route = await readRouteRecord()
+    const update = { draft_id: draft.id, expected_snapshot: draftMutationSnapshot(draft, snap.state), expected_numeric_sha256: numericIdentitySha256(snap.document, draft.id) }
+    const base = { operation: "edit", params_json: JSON.stringify({ editedText: "x" }), updates: [update], media_descriptor_json: null,
+      publish_intent_id: null, checked_policy_sha256: null, checked_automatic_epoch: null }
+    const build = (operation, payload) => buildSealedCommand({ action: "draft_update", operation, producerKind: "dashboard_editor",
+      actorSubject: "dashboard-operator", route, targets: [{ draft_id: draft.id, ...identity(draft) }], payload: { ...base, operation, ...payload } }).raw
+    const cases = {
+      patch: build("edit", { patch_json: JSON.stringify({ set: { status: "approved" }, unset: [], order: [] }) }),
+      foreign: build("reject", { params_json: JSON.stringify({ status: "approved" }) }),
+      intentless: build("approve", { params_json: "{}", checked_policy_sha256: dashboardEditorialPolicy(snap.state).policy_sha256 }),
+      intentOnReject: build("reject", { params_json: "{}", publish_intent_id: "33333333-3333-4333-8333-333333333333" }),
+    }
+    const report = await consume(Object.values(cases).map(raw => entry(raw)))
+    assert.deepEqual(report.refused.map(row => row.code), ["invalid_payload", "invalid_payload", "invalid_payload", "invalid_payload"])
+    assert.deepEqual(report.applied, [])
+    assert.equal(byId(gist, draft.id).status, "pending")
+  })
+})
