@@ -66,7 +66,8 @@ function transition(entry, state, code, at, extra = {}) {
 }
 
 // Pure reconciliation on one fresh state read plus observed runs. Returns the next outbox and the
-// entries to dispatch now (already marked `dispatching`, to be persisted BEFORE the POST).
+// entries due for a dispatch now. Due entries keep their state (queued/failed): the caller journals
+// ONE entry as `dispatching` immediately before its own POST (review R4), never a batch.
 export function planOutbox({ outbox, state, runtimeReport, activation, runs, at }) {
   const now = at.toISOString(), next = {}, dispatch = [], changes = []
   for (const [id, entry] of Object.entries(outbox || {})) {
@@ -95,8 +96,6 @@ export function planOutbox({ outbox, state, runtimeReport, activation, runs, at 
           if (["queued", "failed"].includes(row.state)) {
             if ((row.attempts ?? 0) >= OUTBOX_MAX_ATTEMPTS) row = transition(row, "exhausted", row.code, now)
             else {
-              // A new attempt observes only its own run (the previous attempt's run is history).
-              row = transition(row, "dispatching", row.code, now, { attempts: (row.attempts ?? 0) + 1, attempt_at: now, run_id: null })
               dispatch.push(id)
             }
           }
@@ -110,6 +109,13 @@ export function planOutbox({ outbox, state, runtimeReport, activation, runs, at 
 }
 
 // Entries whose GitHub run must be observed this drain (bounded).
+// The journal entry written immediately before one POST. A new attempt observes only its own run.
+export function startAttempt(entry, at) {
+  return { ...entry, state: "dispatching", attempts: (entry.attempts ?? 0) + 1, attempt_at: at, run_id: null, updated_at: at }
+}
+
+export const MAX_DISPATCHES_PER_DRAIN = 10
+
 export function lookupTargets(outbox) {
   return Object.entries(outbox || {}).filter(([, entry]) => ["dispatched", "uncertain", "dispatching"].includes(entry?.state))
     .slice(0, OUTBOX_MAX_LOOKUPS).map(([id, entry]) => ({ id, entry }))

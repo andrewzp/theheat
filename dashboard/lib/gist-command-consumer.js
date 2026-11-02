@@ -27,7 +27,7 @@ import { CODE_GENERATION, configuredRouteMode, FEEDBACK_ACTIONS, parseCommandRaw
   resultsDocumentFromFiles, resultsFileContent, RouteError, routeActive, routeApplyCode, routeCredentialCode, serializedWriterMarker } from "./gist-write-route.js"
 import { openEnvelope, sealKey } from "./gist-command-seal.js"
 import { controlKey, verifyRouteControl } from "./gist-route-control.js"
-import { activeOutboxCount, dispatchSender, lookupTargets, observeRuns, OUTBOX_MAX_ACTIVE, outboxEntry, planOutbox, pruneOutbox } from "./gist-sender-outbox.js"
+import { activeOutboxCount, dispatchSender, lookupTargets, MAX_DISPATCHES_PER_DRAIN, observeRuns, OUTBOX_MAX_ACTIVE, outboxEntry, planOutbox, pruneOutbox, startAttempt } from "./gist-sender-outbox.js"
 
 export const RESULT_RETENTION_MS = 3 * 86400000 // > 1 day command lifetime + 2 day artifact retention.
 export const REJECTED_RETENTION_MS = 4 * 86400000
@@ -445,25 +445,25 @@ export async function runSenderOutbox({ env = process.env, now = () => new Date(
   const plan = planOutbox({ outbox: pruned, state: snapshot.state, runtimeReport: snapshot.runtimeReport,
     activation: snapshot.route.command_id, runs, at })
   report.changes = plan.changes
-  if (!plan.changes.length && Object.keys(pruned).length === Object.keys(document0.outbox).length) return report
-  await patchStateGistFiles({ [RESULTS_FILE]: { content: resultsFileContent({ ...document0, outbox: plan.outbox }) } })
-  if (!plan.dispatch.length) return report
-  const outcomes = {}
-  for (const id of plan.dispatch) {
-    const entry = plan.outbox[id]
-    const draft = snapshot.state.drafts.find(candidate => candidate.id === entry.draft_id)
-    outcomes[id] = await dispatchSender(draft, entry, { fetchImpl, token, repo })
-    report.dispatches.push({ publish_intent_id: id, command_id: entry.command_id, state: outcomes[id].state, code: outcomes[id].code })
+  let document = { ...document0, outbox: plan.outbox }
+  const persist = async () => { await patchStateGistFiles({ [RESULTS_FILE]: { content: resultsFileContent(document) } }) }
+  if (plan.changes.length || Object.keys(pruned).length !== Object.keys(document0.outbox).length) await persist()
+  // Review R4: one entry at a time — journal its attempt immediately before its POST and its outcome
+  // immediately after, then move on. Later entries stay queued/failed (definitely unattempted) if the
+  // process stops; only the single in-flight entry can be left `dispatching` (later: uncertain, fenced).
+  // Only this serialized job writes the results file during this step, so the in-memory document is current.
+  for (const id of plan.dispatch.slice(0, MAX_DISPATCHES_PER_DRAIN)) {
+    const attempt = startAttempt(document.outbox[id], now().toISOString())
+    document = { ...document, outbox: { ...document.outbox, [id]: attempt } }
+    await persist()
+    const draft = snapshot.state.drafts.find(candidate => candidate.id === attempt.draft_id)
+    const outcome = await dispatchSender(draft, attempt, { fetchImpl, token, repo })
+    document = { ...document, outbox: { ...document.outbox, [id]: { ...attempt, state: outcome.state, code: outcome.code,
+      run_id: outcome.run_id ?? null, updated_at: now().toISOString() } } }
+    await persist()
+    report.dispatches.push({ publish_intent_id: id, command_id: attempt.command_id, state: outcome.state, code: outcome.code })
   }
-  // Only this serialized job writes the results file; re-read it and record each outcome.
-  const latest = (await readStateGistSnapshot()).resultsDocument
-  const outbox = { ...latest.outbox }
-  const stamp = now().toISOString()
-  for (const [id, outcome] of Object.entries(outcomes)) {
-    if (outbox[id]?.state !== "dispatching") continue
-    outbox[id] = { ...outbox[id], state: outcome.state, code: outcome.code, run_id: outcome.run_id ?? outbox[id].run_id ?? null, updated_at: stamp }
-  }
-  await patchStateGistFiles({ [RESULTS_FILE]: { content: resultsFileContent({ ...latest, outbox }) } })
+  report.deferred_dispatches = Math.max(0, plan.dispatch.length - MAX_DISPATCHES_PER_DRAIN)
   return report
 }
 

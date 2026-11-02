@@ -124,7 +124,8 @@ test("B3 a pending manual_tweet run cancelled/replaced before any claim is recov
     assert.equal(entryOf(gist, intent).state, "dispatched", "not judged before the settle window")
     assert.equal(bot(gist).length, 1)
     const report = await outbox(new Date(t0.getTime() + 10 * 60000))
-    assert.deepEqual(report.changes.map(row => row.to), ["dispatching"])
+    // Review R4: the plan records the definite failure; the attempt itself is journaled per entry around its POST.
+    assert.deepEqual(report.changes.map(row => row.to), ["failed"])
     assert.deepEqual(report.dispatches.map(row => row.state), ["dispatched"])
     assert.deepEqual([entryOf(gist, intent).attempts, bot(gist).length], [2, 2], "re-dispatched exactly once")
     run.status = "completed"; run.conclusion = "success"; run.updated_at = new Date(t0.getTime() + 10 * 60000).toISOString()

@@ -146,8 +146,10 @@ test("P3-3 every in-flight outbox entry is observed: a cancelled run beyond the 
     assert.equal((await consume(raws.map(raw => entry(raw)))).outbox_queued.length, 23)
     const outbox = now => withConsumerEnv({}, () => runSenderOutbox({ token: "invented", repo: "invented/theheat", now: () => now }))
     const t0 = new Date()
-    await outbox(t0)
+    // Review R4: at most MAX_DISPATCHES_PER_DRAIN (10) dispatches per drain; three drains send all 23.
+    for (let drain = 0; drain < 3; drain += 1) await outbox(t0)
     const ids = Object.keys(resultsDoc(gist).outbox)
+    assert.ok(Object.values(resultsDoc(gist).outbox).every(row => row.state === "dispatched"))
     for (const index of [20, 22]) gist.runs.push({ id: 900 + index, display_title: RUN_TITLE_PREFIX + ids[index], status: "completed", conclusion: "cancelled",
       created_at: t0.toISOString(), updated_at: t0.toISOString() })
     const recovered = await outbox(new Date(t0.getTime() + 10 * 60000))
