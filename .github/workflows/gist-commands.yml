@@ -101,6 +101,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           THEHEAT_REPOSITORY: ${{ github.repository }}
+          # Reads the consumer's settled-run continuation from the state Gist (read only; review R1).
+          GIST_ID: ${{ secrets.GIST_ID }}
+          THEHEAT_GIST_READ_TOKEN: ${{ secrets.THEHEAT_GIST_WRITER_TOKEN || secrets.GH_GIST_TOKEN }}
         run: python scripts/gist_command_inbox.py fetch --repo "$THEHEAT_REPOSITORY" --out "$RUNNER_TEMP/inbox"
       - name: Consume serially inside theheat-bot
         working-directory: dashboard

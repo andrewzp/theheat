@@ -44,6 +44,10 @@ on:
         description: 'Idempotency token for approved draft posting'
         required: false
         type: string
+      text_source:
+        description: 'P00c route sender only: state = resolve the approved text from Gist state (no tweet_text input)'
+        required: false
+        type: string
 
 concurrency:
   # PR checks must not occupy or replace pending production runs. Keep every
@@ -279,6 +283,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           THEHEAT_REPOSITORY: ${{ github.repository }}
+          # Reads the consumer's settled-run continuation from the state Gist (read only; review R1).
+          GIST_ID: ${{ secrets.GIST_ID }}
+          THEHEAT_GIST_READ_TOKEN: ${{ secrets.THEHEAT_GIST_WRITER_TOKEN || secrets.GH_GIST_TOKEN }}
         run: python scripts/gist_command_inbox.py fetch --repo "$THEHEAT_REPOSITORY" --out "$RUNNER_TEMP/inbox"
       - name: Drain the command inbox before the run
         working-directory: dashboard
@@ -560,6 +567,8 @@ jobs:
           THEHEAT_GIST_WRITE_ROUTE: ${{ vars.THEHEAT_GIST_WRITE_ROUTE }}
           THEHEAT_SERIALIZED_WRITER: ${{ vars.THEHEAT_GIST_WRITE_ROUTE == 'serialized' && format('{0}:run', github.run_id) || '' }}
           TWEET_TEXT: ${{ github.event.inputs.tweet_text }}
+          # P00c route sender: references only; the text is resolved privately from state (review R2).
+          THEHEAT_SENDER_TEXT_SOURCE: ${{ github.event.inputs.text_source }}
           DRAFT_ID: ${{ github.event.inputs.draft_id }}
           PUBLISH_INTENT_ID: ${{ github.event.inputs.publish_intent_id }}
           # Shared immutable media store (docs/GIST_POST_IMAGES.md). Unset values keep
@@ -605,6 +614,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           THEHEAT_REPOSITORY: ${{ github.repository }}
+          # Reads the consumer's settled-run continuation from the state Gist (read only; review R1).
+          GIST_ID: ${{ secrets.GIST_ID }}
+          THEHEAT_GIST_READ_TOKEN: ${{ secrets.THEHEAT_GIST_WRITER_TOKEN || secrets.GH_GIST_TOKEN }}
         run: python scripts/gist_command_inbox.py fetch --repo "$THEHEAT_REPOSITORY" --out "$RUNNER_TEMP/inbox"
       - name: Drain the command inbox after the final save
         working-directory: dashboard
