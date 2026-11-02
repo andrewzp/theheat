@@ -31,13 +31,25 @@ def good(command_id: str) -> bytes:
     return blob({"command.json": b"{}", "admission.json": json.dumps({"command_id": command_id}).encode()})
 
 
+# v2 provenance (review P2-2): command artifacts carry their producing run, a gist-commands.yml
+# workflow_dispatch run of this repository on main; the runner answers that run's detail.
+ORIGIN = {"id": 900, "repository_id": 7, "head_repository_id": 7, "head_branch": "main", "head_sha": "a" * 40}
+RUN = {"id": 900, "path": ".github/workflows/gist-commands.yml", "event": "workflow_dispatch", "head_branch": "main",
+       "repository": {"id": 7}, "head_repository": {"id": 7}}
+
+
 def runner(listing: list[dict], zips: dict[int, bytes]):
     calls = []
+    for row in listing:
+        if row.get("name", "").startswith("theheat-command-"):
+            row.setdefault("workflow_run", ORIGIN)
 
     def run(args):
         calls.append(args[0])
         if args[0].endswith("/zip"):
             return zips[int(args[0].split("/")[-2])]
+        if "/actions/runs/" in args[0]:
+            return json.dumps(RUN).encode()
         return json.dumps({"artifacts": listing}).encode()
     return run, calls
 
@@ -56,6 +68,7 @@ def test_only_unexpired_admitted_artifacts_are_fetched_in_creation_order(tmp_pat
     assert sorted(p.name for p in tmp_path.iterdir() if p.is_dir()) == [f"{ID}-1", f"{OTHER}-3"]
     assert [c for c in calls if c.endswith("/zip")] == ["repos/invented/theheat/actions/artifacts/1/zip",
                                                          "repos/invented/theheat/actions/artifacts/3/zip"]
+    assert [c for c in calls if "/actions/runs/" in c] == ["repos/invented/theheat/actions/runs/900"], "one lookup per run (cached)"
     assert (tmp_path / f"{ID}-1" / "command.json").read_bytes() == b"{}"
 
 

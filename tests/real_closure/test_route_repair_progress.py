@@ -49,14 +49,15 @@ def _admit(root: Path, responses: list[dict], *, unrelated_per_command: int = 0,
     for index, response in enumerate(responses):
         raw = response["body"]["command"]
         out = root / "admitted" / f"cmd{start_id}-{index:04d}"
-        result = gist_commands.admit(raw, out, now=now)
+        result = gist_commands.admit(raw, out, now=now, seal_kid="k-test", control_kid="k-ctl-test")
         assert result["admitted"], result
         for extra in range(unrelated_per_command):
             (root / "artifacts" / f"u{artifact_id:06d}.json").write_text(json.dumps(
                 {"id": artifact_id, "name": f"bot-run-report-{index}-{extra}", "expired": False, "created_at": stamp}))
             artifact_id += 1
         (root / "artifacts" / f"c{artifact_id:06d}.json").write_text(json.dumps(
-            {"id": artifact_id, "name": f"theheat-command-{result['command_id']}", "expired": False, "created_at": stamp}))
+            {"id": artifact_id, "name": f"theheat-command-{result['command_id']}", "expired": False, "created_at": stamp,
+             "workflow_run": {"id": 5000 + index, "repository_id": 7, "head_repository_id": 7, "head_branch": "main"}}))
         dirs[artifact_id] = out
         artifact_id += 1
     return dirs
@@ -75,6 +76,10 @@ def _runner(root: Path, dirs: dict[int, Path], seed: int):
                 for name in ("command.json", "admission.json"):
                     archive.writestr(name, (folder / name).read_bytes())
             return blob.getvalue()
+        if "/actions/runs/" in args[0]:
+            # Every admitted command came from a gist-commands.yml workflow_dispatch run on main.
+            return json.dumps({"id": int(args[0].split("/")[-1]), "path": ".github/workflows/gist-commands.yml",
+                               "event": "workflow_dispatch", "head_branch": "main"}).encode()
         rows = [json.loads(path.read_text()) for path in sorted((root / "artifacts").iterdir())]
         random.Random(seed).shuffle(rows)
         page = int(args[0].split("&page=")[1])
@@ -179,7 +184,8 @@ def test_scan_does_not_rely_on_order_horizon_filters_without_stopping_and_the_ca
 
 def test_fetch_is_bounded_oldest_first_and_writes_the_scan_report(tmp_path):
     now = datetime(2026, 11, 2, 12, 0, tzinfo=UTC)
-    rows = [{"id": i + 1, "name": f"theheat-command-{i:08d}-2222-4333-8444-555555555555", "expired": False,
+    origin = {"id": 77, "repository_id": 7, "head_repository_id": 7, "head_branch": "main"}
+    rows = [{"id": i + 1, "name": f"theheat-command-{i:08d}-2222-4333-8444-555555555555", "expired": False, "workflow_run": origin,
              "created_at": (now - timedelta(minutes=400 - i)).strftime("%Y-%m-%dT%H:%M:%SZ")} for i in range(inbox.MAX_ARTIFACTS + 20)]
     scan = inbox.scan_admitted(REPO, _listing(rows, 5), now=now)
     assert len(scan["artifacts"]) == inbox.MAX_ARTIFACTS and scan["candidates"] == inbox.MAX_ARTIFACTS + 20
@@ -188,8 +194,11 @@ def test_fetch_is_bounded_oldest_first_and_writes_the_scan_report(tmp_path):
     def run(args: list[str]) -> bytes:
         if args[0].endswith("/zip"):
             return b"not a zip"
+        if "/actions/runs/" in args[0]:
+            return json.dumps({"path": ".github/workflows/gist-commands.yml", "event": "workflow_dispatch", "head_branch": "main"}).encode()
         return _listing(rows[:2], 1)(args)
     result = inbox.fetch(REPO, tmp_path, run, now=now)
     assert json.loads((tmp_path / "scan.json").read_text()) == {"beyond_horizon": 0, "candidates": 2, "deferred": 0,
-                                                                "pages": 1, "scan_complete": True}
+                                                                "pages": 1, "provenance_refused": {}, "scan_complete": True,
+                                                                "unverified": 0}
     assert result["fetched"] == 0 and len(result["skipped"]) == 2
