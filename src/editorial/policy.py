@@ -16,6 +16,8 @@ POLICY_FILES = (
     ".github/workflows/bot.yml", ".github/workflows/runtime-report.yml", "src/runtime_inventory.py",
     "dashboard/lib/runtime-report.js", "dashboard/lib/runtime-inventory.js", "dashboard/lib/state-store.js", "dashboard/lib/publication-control.js",
     "dashboard/app/api/config/route.js", "dashboard/app/api/dashboard/route.js", "dashboard/app/api/drafts/route.js",
+    # The drafts route's review/approval/scheduling checks, moved unchanged (P00c v2 consumer reuse).
+    "dashboard/lib/draft-operations.js",
     "dashboard/lib/nws-source-timing.js", "dashboard/lib/nws-warning-evidence.js",
     "src/two_bot/important_variants.py", "src/two_bot/batch_contract.py",
     "src/commands/postgres_important_variants.py",
