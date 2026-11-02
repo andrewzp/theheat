@@ -408,8 +408,12 @@ def test_an_attachment_never_gains_automatic_authority(aq, monkeypatch):
 
 
 def test_dashboard_never_schedules_an_air_quality_forecast():
+    # The drafts route's per-operation checks live in dashboard/lib/draft-operations.js (moved
+    # unchanged so the P00c serialized consumer runs the same guard); the route must call them.
     route = (h.ROOT / "dashboard/app/api/drafts/route.js").read_text()
-    assert '["air_quality_hazard", "dust_event"].includes(draft.type)' in route and '"air_quality_auto_owner"' in route
+    operations = (h.ROOT / "dashboard/lib/draft-operations.js").read_text()
+    assert 'applyDraftAction' in route and '"../../../lib/draft-operations.js"' in route
+    assert '["air_quality_hazard", "dust_event"].includes(draft.type)' in operations and '"air_quality_auto_owner"' in operations
 
 
 # ---------------------------------------------------------------- B4: episode anti-spam

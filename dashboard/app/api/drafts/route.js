@@ -1,5 +1,4 @@
-import { prepareGistMedia, requiredAttestations } from "../../../lib/gist-media.js"
-import { HOLD_MESSAGES, automaticTextHold } from "../../../lib/automatic-text.js"
+import { prepareGistMedia } from "../../../lib/gist-media.js"
 import { acceptLocalCommand, localCommandRequest, localDraftProjection, previewConfigured, previewError } from "../../../lib/draft-command-client.js"
 import { dashboardEditorialPolicy } from "../../../lib/editorial-policy.js"
 import { dashboardAutomaticPolicy } from "../../../lib/publication-control.js"
@@ -7,21 +6,15 @@ import { readStateStore, readStateWithRuntimeReport, updateDraftStore } from "..
 import { requireDashboardAuth } from "../../../lib/auth.js"
 import { readJsonObject } from "../../../lib/request-json.js"
 import { nwsSourceTiming } from "../../../lib/nws-source-timing.js"
-import { assertMediaCurrent, assertSavedSourceTiming, confirmDraftDecision } from "../../../lib/draft-decision-confirm.js"
+import { confirmDraftDecision } from "../../../lib/draft-decision-confirm.js"
+import { DRAFT_ACTIONS as ACTIONS, applyBulkReject, applyDraftAction, assertExpected, assertMutable, bulkRejectSelected, fail, validIdentity } from "../../../lib/draft-operations.js"
 import { submitDraftUpdates, submittedResponse } from "../../../lib/gist-route-submit.js"
 import { publicationAttempt } from "../../../lib/publication-recovery.js"
 import {
   approvalIsCurrent,
-  authorizeDraft,
   draftIdentity,
   hasUnresolvedPublish,
-  invalidateText,
-  invalidateMediaAttachment,
-  recordJointMediaReview,
-  fingerprint,
   projectDraft,
-  recordHumanReview,
-  reviewIsCurrent,
   revokeApproval,
   textHash,
 } from "../../../lib/draft-revisions.js"
@@ -30,46 +23,11 @@ export const runtime = "nodejs"
 
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN
 const REPO = "andrewzp/theheat"
-const ACTIONS = ["approve", "reject", "edit", "review", "auto_approve", "cancel_auto_approve", "select_candidate", "bulk_reject_below", "attach_graphic", "remove_graphic"]
 
 function githubHeaders() {
   const headers = { Accept: "application/vnd.github.v3+json" }
   if (GITHUB_TOKEN) headers.Authorization = `token ${GITHUB_TOKEN}`
   return headers
-}
-
-function fail(message, status = 409, code = "revision_conflict") {
-  throw Object.assign(new Error(message), { status, code })
-}
-
-function validIdentity(value) {
-  return value && Number.isSafeInteger(value.content_revision) && value.content_revision >= 0 &&
-    Number.isSafeInteger(value.decision_revision) && value.decision_revision >= 0 &&
-    /^[a-f0-9]{64}$/.test(value.text_sha256 || "") &&
-    /^[a-f0-9]{64}$/.test(value.evidence_sha256 || "")
-}
-
-function assertExpected(draft, expectedRevision) {
-  if (!validIdentity(expectedRevision)) fail("Refresh the draft before changing it.", 400, "missing_revision")
-  const current = { ...draftIdentity(draft), decision_revision: draft.decision_revision ?? 0 }
-  if (Object.keys(current).some((key) => current[key] !== expectedRevision[key])) fail("This draft changed. Review the latest version and try again.")
-}
-
-function assertMutable(draft, state) {
-  if (!["pending", "approved"].includes(draft.status)) fail("This draft can no longer be changed.", 409, "draft_not_editable")
-  if (hasUnresolvedPublish(draft, state)) fail("A publication attempt needs reconciliation before this draft can change.", 409, "publication_unresolved")
-}
-
-function assertPending(draft) {
-  if (draft.status !== "pending") fail("This draft is already awaiting publication. Cancel or edit it before approving again.", 409, "draft_not_pending")
-}
-
-function assertReviewed(draft, policy, modelOnly = false) {
-  if (!policy) fail("Editorial policy unverified. Wait for a fresh matching bot report before reviewing or approving.", 409, "editorial_policy_unverified")
-  if (!reviewIsCurrent(draft, policy)) fail("Review this exact version against its source evidence first.", 409, "review_required")
-  if (modelOnly && draft.review_binding?.kind !== "model") {
-    fail("Automatic scheduling requires current model checks. Human-reviewed drafts can be posted manually.", 409, "model_review_required")
-  }
 }
 
 function projection(draft, state, local = null, runtimeReport = null) {
@@ -155,7 +113,7 @@ export async function POST(request) {
       const threshold = Number(delayMinutes ?? 72)
       if (!Number.isFinite(threshold) || threshold < 0 || threshold > 100) fail("Invalid threshold (0-100)", 400, "invalid_threshold")
       const state = await readStateStore()
-      const targets = (state.drafts || []).filter((d) => d.status === "pending" && (d.score?.total || 0) < threshold)
+      const targets = (state.drafts || []).filter((d) => bulkRejectSelected(d, threshold))
       // Validate the complete requested snapshot before the first write. Each
       // updater repeats this check because a later write can still conflict.
       for (const draft of targets) {
@@ -167,15 +125,8 @@ export async function POST(request) {
       const collect = async (updates) => { collected.push(...updates); return { status: "collected" } }
       for (const draft of targets) {
         const expected = body.expectedRevisions[draft.id]
-        const { draft: rejected, submitted } = await updateDraftStore(draft.id, (record, currentState) => {
-          assertExpected(record, expected)
-          assertMutable(record, currentState)
-          assertPending(record)
-          revokeApproval(record)
-          record.status = "rejected"
-          record.rejected_reason = `bulk_reject_below_${threshold}`
-          return record
-        }, { expectedRevision: expected, routeCommand: collect })
+        const { draft: rejected, submitted } = await updateDraftStore(draft.id, (record, currentState) =>
+          applyBulkReject(record, currentState, expected, threshold), { expectedRevision: expected, routeCommand: collect })
         if (submitted) continue
         if (!rejected) fail("A draft disappeared during the bulk action.")
         changedIds.push(draft.id)
@@ -192,104 +143,10 @@ export async function POST(request) {
     let checkedAutomaticEpoch = null
     const { draft: updatedDraft, state: updatedState, runtimeReport: updatedReport = null, submitted } = await updateDraftStore(draftId, async (draft, state, { runtimeReport = null } = {}) => {
       assertExpected(draft, expectedRevision)
-      assertMutable(draft, state)
-      if (["review", "approve", "auto_approve"].includes(action)) assertSavedSourceTiming(draft)
-      const editorialPolicy = dashboardEditorialPolicy(state, { runtimeReport })
-      if (action === "attach_graphic") {
-        // Store-backed images also name their exact retained input (CRW packet or published asset).
-        const descriptor = await prepareGistMedia(request, draft, body.expectedMediaSha256, undefined, body.retainedInputSha256 ?? null)
-        invalidateMediaAttachment(draft, descriptor)
-      } else if (action === "remove_graphic") {
-        invalidateMediaAttachment(draft, null)
-      } else if (action === "edit") {
-        const previousRevision = draft.content_revision
-        try {
-          if (Object.hasOwn(body, "operator_claim_references")) invalidateText(draft, editedText, body.operator_claim_references)
-          else invalidateText(draft, editedText)
-        } catch (error) { fail(error.message, 422, "invalid_draft_edit") }
-        if (draft.content_revision !== previousRevision) {
-          draft.manual_override = true
-          draft.post_error = null
-        }
-      } else if (action === "select_candidate") {
-        const rank = Number(candidateRank)
-        if (!Number.isInteger(rank) || rank < 1) fail("Invalid candidate rank", 400, "invalid_candidate")
-        const candidates = draft.candidates || []
-        const selected = candidates.find((candidate) => candidate.rank === rank)
-        if (!selected) fail("Candidate not found", 404, "candidate_not_found")
-        if (typeof selected.text !== "string" || !selected.text.trim() || Array.from(selected.text).length > 280) fail("Invalid candidate text", 400, "invalid_candidate")
-        textHash(selected.text)
-        invalidateText(draft, selected.text)
-        draft.candidate_score = selected.score
-        draft.selected_candidate_rank = selected.rank
-        draft.manual_override = false
-        draft.post_error = null
-        draft.candidates = [selected, ...candidates.filter((candidate) => candidate.rank !== rank)]
-      } else if (action === "reject") {
-        revokeApproval(draft)
-        draft.status = "rejected"
-        draft.post_error = null
-      } else if (action === "cancel_auto_approve") {
-        revokeApproval(draft)
-        draft.status = "pending"
-      } else if (action === "review") {
-        assertPending(draft)
-        const joint = Object.hasOwn(draft, "media_attachment")
-        if (joint) {
-          if (body.mediaReviewConfirmed !== true) fail("Review the text, image and full description together.", 409, "media_review_required")
-          const attached = draft.media_attachment
-          const retained = attached?.source?.packet_artifact_sha256 ?? attached?.asset?.manifest_sha256 ?? null
-          const descriptor = await prepareGistMedia(request, draft, body.expectedMediaSha256, undefined, retained)
-          if (fingerprint(descriptor) !== fingerprint(draft.media_attachment)) fail("The attached graphic changed; preview it again.", 409, "media_changed")
-          const required = requiredAttestations(draft.media_attachment), supplied = body.publishedAttestations ?? {}
-          if (!supplied || typeof supplied !== "object" || Array.isArray(supplied) || Object.keys(supplied).length !== required.length
-              || !required.every(name => supplied[name] === true))
-            fail("Confirm every published-image attestation together with the text and image.", 409, "media_attestation_required")
-        }
-        if (body.reviewConfirmed !== true) fail("Confirm that you checked this text against its source evidence.", 400, "review_confirmation_required")
-        if (draft.revision_conflicts?.length) fail("Resolve the conflicting text with an edit before reviewing it.")
-        if (!editorialPolicy.policy) fail(editorialPolicy.reason, 409, "editorial_policy_unverified")
-        if (body.expectedPolicySha256 !== editorialPolicy.policy_sha256) fail("Editorial policy changed since your confirmation. Refresh and review again.", 409, "editorial_policy_changed")
-        if (joint) recordJointMediaReview(draft, editorialPolicy.policy, body.publishedAttestations ?? null)
-        else recordHumanReview(draft, editorialPolicy.policy)
-      } else if (action === "auto_approve") {
-        const publication = dashboardAutomaticPolicy(state, { runtimeReport })
-        if (!publication.enabled) fail(publication.reason, 409, "automatic_publication_paused")
-        checkedAutomaticEpoch = publication.epoch
-        assertPending(draft)
-        assertReviewed(draft, editorialPolicy.policy, true)
-        const textHold = automaticTextHold(draft.text)
-        if (textHold) fail(HOLD_MESSAGES[textHold], 409, textHold)
-        if (["air_quality_hazard", "dust_event"].includes(draft.type)) {
-          fail("Air-quality forecasts are armed only by their own current-source check, never from the dashboard.", 409, "air_quality_auto_owner")
-        }
-        const policy = draft.approval_policy || {}
-        if (policy.can_auto_approve === false) fail("This draft type requires manual approval", 400, "manual_only")
-        minutes = Number(delayMinutes ?? policy.recommended_delay_minutes ?? 30)
-        if (!Number.isFinite(minutes) || minutes < 5 || minutes > 1440) fail("Delay must be between 5 and 1440 minutes", 400, "invalid_delay")
-        autoApproveAt = new Date(Date.now() + minutes * 60 * 1000).toISOString()
-        revokeApproval(draft)
-        authorizeDraft(draft, "auto", null, publication.epoch, editorialPolicy.policy)
-        draft.auto_approve_at = autoApproveAt
-        draft.auto_approve_requested_at = new Date().toISOString()
-        draft.approval_mode = "auto"
-        draft.post_error = null
-      } else if (action === "approve") {
-        assertPending(draft)
-        assertReviewed(draft, editorialPolicy.policy)
-        assertMediaCurrent(draft)
-        publishIntentId = crypto.randomUUID()
-        revokeApproval(draft)
-        authorizeDraft(draft, "manual", publishIntentId, null, editorialPolicy.policy)
-        draft.status = "approved"
-        draft.approved_at = new Date().toISOString()
-        draft.approval_mode = "manual"
-        draft.post_error = null
-        draft.publish_intent_id = publishIntentId
-        draft.publish_requested_at = new Date().toISOString()
-      }
-      if (["review", "approve", "auto_approve"].includes(action)) checkedPolicySha = editorialPolicy.policy_sha256
-      return draft
+      const done = await applyDraftAction(draft, state, { runtimeReport, action, body,
+        prepareMedia: (current, expectedMediaSha256, retained) => prepareGistMedia(request, current, expectedMediaSha256, undefined, retained) })
+      ;({ publishIntentId, autoApproveAt, minutes, checkedPolicySha, checkedAutomaticEpoch } = done)
+      return done.draft
     }, { expectedRevision, confirmContext: ["review", "approve", "auto_approve"].includes(action)
       ? (latestState, { runtimeReport = null } = {}) => confirmDraftDecision(latestState, { runtimeReport },
         { action, draftId, checkedPolicySha, checkedAutomaticEpoch }) : undefined,
