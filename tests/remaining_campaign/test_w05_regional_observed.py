@@ -14,6 +14,7 @@ import io
 import json
 
 import pytest
+from freezegun import freeze_time
 
 from src.data import places, regional_observations as ro
 from src.data.temperature_evidence import temperature_claim_failures
@@ -27,6 +28,9 @@ from tests.nhc_advisory_pipeline_helpers import stage_fakes
 
 RETRIEVED = "2026-10-29T08:00:00Z"
 DAY = "2026-10-28"
+# The fixture day is "current" only relative to its own capture; pin the wall clock an hour after
+# capture so the real staleness rule is exercised, not the calendar the suite happens to run on.
+CURRENT = "2026-10-29T09:00:00Z"
 VALUE_COPY = ("A station at Madrid logged 47.3°C for its 28 October reporting day, AEMET data show, "
               "above the 42°C absolute band for its latitude.")
 RECORD_COPY = "Madrid set a new record: 47.3°C, the hottest day ever measured there, AEMET data show."
@@ -88,7 +92,8 @@ def offline(monkeypatch):
         monkeypatch.setenv(name, value)
     monkeypatch.setattr("src.voice.safety.GEMINI_API_KEY", "invented-no-provider-access")
     monkeypatch.delenv("THEHEAT_PRODUCTION_PAUSED", raising=False)
-    return monkeypatch
+    with freeze_time(CURRENT, tick=True):
+        yield monkeypatch
 
 
 def _produce(patch, packets, *, copy=VALUE_COPY, state=None):
@@ -169,6 +174,7 @@ def test_source_day_is_not_a_utc_day_and_currentness_follows_support():
 
 
 # --- 05.4 comparator warrant --------------------------------------------------------
+@freeze_time(CURRENT, tick=True)
 def test_record_wording_needs_the_scoped_warrant_otherwise_value_only():
     observation = ro.parse_packet(aemet_packet())["observations"][0]
     warrant = ro.qualify_comparison(observation["evidence"], {"reconciled": True, "source_product": "ghcn"})
