@@ -91,7 +91,8 @@ def test_pr_and_display_branch_job_exclusions_remain_explicit(workflow):
 def test_required_offline_suite_and_own_production_smoke_gate_remain(workflow):
     test, run = workflow["jobs"]["test-partition"], workflow["jobs"]["run"]
     suite = next(step for step in test["steps"] if step.get("run", "").startswith("python -m pytest tests/ -v "))
-    assert suite["run"] == 'python -m pytest tests/ -v -m "not voice_replay" --ci-partition=${{ matrix.partition }} --ci-postgres-shard=${{ matrix.postgres-shard }} --ci-critical-first --maxfail=1 --durations=20 -o faulthandler_timeout=300'
+    assert suite["run"] == 'python -m pytest tests/ -v -m "not voice_replay" --ci-partition=${{ matrix.partition }} --ci-postgres-shard=${{ matrix.postgres-shard }} --ci-critical-first --maxfail=1 --durations=20 -o faulthandler_timeout=${{ matrix.partition == \'postgres\' && matrix.postgres-shard == \'8\' && \'0\' || \'300\' }}'
+    assert suite["env"]["THEHEAT_CI_SAFE_DIAGNOSTIC"] == "${{ matrix.partition == 'postgres' && matrix.postgres-shard == '8' && '1' || '0' }}"
     assert suite["env"]["THEHEAT_TEST_POSTGRES"] == "1"
     assert {step.get("name") for step in test["steps"]} >= {
         "SQLite backend smoke", "Test dashboard", "Build dashboard",
@@ -212,6 +213,7 @@ def test_only_database_partitions_install_binaries_with_bounded_steps(workflow):
     suite = next(step for step in steps if step.get("run", "").startswith("python -m pytest tests/ -v "))
     assert suite["env"] == {
         "THEHEAT_TEST_POSTGRES": "1", "THEHEAT_POSTGRES_BINDIR": "/usr/lib/postgresql/17/bin",
+        "THEHEAT_CI_SAFE_DIAGNOSTIC": "${{ matrix.partition == 'postgres' && matrix.postgres-shard == '8' && '1' || '0' }}",
     }
     assert "if" not in suite and "continue-on-error" not in suite
 
@@ -279,6 +281,7 @@ def test_written_output_survives_abrupt_exit_with_workflow_setting(workflow, use
         env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=0,
     )
     try:
+        assert child.stdout is not None and child.stderr is not None
         assert select.select([child.stderr], [], [], 5)[0], "Child did not signal readiness"
         assert os.read(child.stderr.fileno(), 4096) == b"ready\n"
         readable = select.select([child.stdout], [], [], 1)[0]
