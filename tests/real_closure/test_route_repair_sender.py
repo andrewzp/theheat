@@ -14,6 +14,8 @@ import json
 from pathlib import Path
 import re
 import subprocess
+from typing import Any, cast
+from unittest.mock import MagicMock
 
 import pytest
 import yaml
@@ -41,10 +43,15 @@ def _draft() -> dict:
     return bind_reviewed_draft(draft, "manual", INTENT)
 
 
-def _state(draft: dict) -> dict:
+def _state(draft: dict) -> Any:
     state = deepcopy(DEFAULT_STATE)
     state["drafts"] = [draft]
     return state
+
+
+def _safety() -> MagicMock:
+    """The external fixture's recording safety mock (typed for direct mypy)."""
+    return cast(MagicMock, posting.run_safety_pipeline)
 
 
 def _dispatch_inputs() -> dict:
@@ -78,7 +85,7 @@ def test_route_dispatch_and_step_env_carry_no_text_and_the_refusing_sender_resol
     run: dict = {}
     posting.run_manual_tweet(state, run)
     out = capsys.readouterr()
-    posting.run_safety_pipeline.assert_called_once_with(PRIVATE)  # resolved from state, exact bytes, after every check
+    _safety().assert_called_once_with(PRIVATE)  # resolved from state, exact bytes, after every check
     send.assert_not_called()  # the claim was refused before any egress
     assert storage.write_state.called, "the write-first claim was attempted"
     row = state["publish_ledger"]["event_route_sender"]
@@ -108,7 +115,7 @@ def test_reference_dispatch_refuses_before_safety_when_state_does_not_bind_it(ex
     for key, value in env.items():
         monkeypatch.setenv(key, value)
     posting.run_manual_tweet(_state(draft))
-    posting.run_safety_pipeline.assert_not_called()
+    _safety().assert_not_called()
     send.assert_not_called()
     out = capsys.readouterr().out
     assert PRIVATE not in out and "A different private text" not in out
