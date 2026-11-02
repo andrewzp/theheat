@@ -5,7 +5,7 @@
 import test from "node:test"
 import assert from "node:assert/strict"
 import { importFresh } from "./helpers/import-fresh.js"
-import { OTHER_SEAL_KEY } from "./helpers/route-memory-gist.js"
+import { CONTROL_ENV, OTHER_SEAL_KEY } from "./helpers/route-memory-gist.js"
 import { admit, byId, commandStatus, consume, entry, identity, post, resultsDoc, seed, sha, withRoute, ROUTE_ACTIVATION, TEST_SEAL_KEY } from "./helpers/route-repair-fixture.js"
 import * as rp from "./helpers/review-policy.js"
 import { canonical } from "../lib/local-command-recovery.js"
@@ -47,7 +47,7 @@ test("B1 posted draft: the server never issues the edit; caller bytes are refuse
     assert.deepEqual([issued.status, issued.body.code], [409, "draft_not_editable"])
     assert.deepEqual(gist.dispatches, [])
     // The donor-style caller-built plaintext command: no longer accepted anywhere.
-    const plaintext = buildCommand({ action: "activate_route", producerKind: "gist_route_control", actorSubject: "x", payload: { generation: 1 } }).raw
+    const plaintext = buildCommand({ action: "activate_route", producerKind: "gist_route_control", actorSubject: "x", payload: { generation: 1 }, env: CONTROL_ENV }).raw
       .replace('"activate_route"', '"draft_update"').replace('"gist_route_control"', '"dashboard_editor"')
     assert.equal((await post("app/api/commands/route.js", { command: plaintext })).body.code, "plaintext_command_refused")
     assert.equal(admit(plaintext).result.code, "plaintext_command_refused")

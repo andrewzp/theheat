@@ -64,6 +64,9 @@ export function installMemoryGist({ gists = {}, artifacts = [], runs = [], dispa
 // Invented test-only seal key (32 bytes of 0x07); never a real secret.
 export const TEST_SEAL_KEY = `k-test:${Buffer.alloc(32, 7).toString("base64")}`
 export const OTHER_SEAL_KEY = `k-test:${Buffer.alloc(32, 9).toString("base64")}`
+// Invented, test-only ROOT route-control key (32 bytes of 0x0b); held by root and consume jobs only.
+export const TEST_CONTROL_KEY = `k-ctl-test:${Buffer.alloc(32, 11).toString("base64")}`
+export const CONTROL_ENV = { THEHEAT_ROUTE_CONTROL_KEY: TEST_CONTROL_KEY }
 export const ROUTE_ACTIVATION = "00000000-0000-4000-8000-000000000001"
 export function routeRecord(mode = "serialized", commandId = ROUTE_ACTIVATION) {
   return JSON.stringify({ schema_version: 1, mode, generation: 1, changed_at: "2026-10-30T12:00:00Z", changed_by_run: "77:consume", command_id: commandId })
@@ -72,7 +75,7 @@ export function routeRecord(mode = "serialized", commandId = ROUTE_ACTIVATION) {
 export function routeEnv(extra = {}) {
   const keys = ["THEHEAT_GIST_WRITE_ROUTE", "THEHEAT_SERIALIZED_WRITER", "GITHUB_RUN_ID", "GIST_ID", "GITHUB_TOKEN",
     "THEHEAT_FEEDBACK_GIST_ID", "THEHEAT_STATE_BACKEND", "THEHEAT_DB_PATH", "NODE_ENV", "DASHBOARD_USERNAME", "DASHBOARD_PASSWORD",
-    "THEHEAT_COMMAND_SEAL_KEY", "THEHEAT_GIST_CREDENTIAL", "THEHEAT_LEGACY_CREDENTIALS_PRESENT"]
+    "THEHEAT_COMMAND_SEAL_KEY", "THEHEAT_GIST_CREDENTIAL", "THEHEAT_LEGACY_CREDENTIALS_PRESENT", "THEHEAT_ROUTE_CONTROL_KEY"]
   const saved = Object.fromEntries(keys.map(key => [key, process.env[key]]))
   for (const key of keys) delete process.env[key]
   Object.assign(process.env, { GIST_ID: "routestategist", GITHUB_TOKEN: "invented-not-a-credential", THEHEAT_FEEDBACK_GIST_ID: "routefeedbackgist",
@@ -82,4 +85,5 @@ export function routeEnv(extra = {}) {
 
 export const consumerMarker = { GITHUB_RUN_ID: "4242", THEHEAT_SERIALIZED_WRITER: "4242:consume" }
 // The route-era consumer job environment (new writer secret name, legacy names deleted).
-export const routeConsumerEnv = { ...consumerMarker, THEHEAT_GIST_CREDENTIAL: "route", THEHEAT_LEGACY_CREDENTIALS_PRESENT: "false" }
+export const routeConsumerEnv = { ...consumerMarker, THEHEAT_GIST_CREDENTIAL: "route", THEHEAT_LEGACY_CREDENTIALS_PRESENT: "false",
+  THEHEAT_ROUTE_CONTROL_KEY: TEST_CONTROL_KEY }

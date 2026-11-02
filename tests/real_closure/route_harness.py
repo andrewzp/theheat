@@ -34,6 +34,10 @@ SHIM = "./tests/helpers/route-fixture-fetch.mjs"
 NODE = shutil.which("node") or "node"
 # Invented, test-only seal key (32 bytes of 0x07), identical to dashboard/tests/helpers/route-memory-gist.js.
 TEST_SEAL_KEY = "k-test:" + base64.b64encode(bytes([7]) * 32).decode("ascii")
+# Invented, test-only ROOT route-control key (32 bytes of 0x0b); root's CLI signs, consumers verify.
+TEST_CONTROL_KEY = "k-ctl-test:" + base64.b64encode(bytes([11]) * 32).decode("ascii")
+# Non-secret repository variables of the admit job: the configured key ids.
+ADMISSION_KIDS = {"THEHEAT_COMMAND_SEAL_KID": "k-test", "THEHEAT_ROUTE_CONTROL_KID": "k-ctl-test"}
 ACTIVATION = "00000000-0000-4000-8000-000000000001"
 
 
@@ -77,7 +81,12 @@ def fixture_state(count: int = 2) -> dict:
 
 def base_env() -> dict[str, str]:
     return {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": os.environ.get("HOME", "/tmp"),
-            "LC_ALL": "C", "TZ": "UTC"}
+            "LC_ALL": "C", "TZ": "UTC", **ADMISSION_KIDS}
+
+
+def root_env() -> dict[str, str]:
+    """Root's shell for ``route-command`` (holds the route-control key; never the dashboard)."""
+    return base_env() | {"THEHEAT_ROUTE_CONTROL_KEY": TEST_CONTROL_KEY}
 
 
 def client_env(root: Path, *, route: str | None = None, barrier: str | None = None, **extra: str) -> dict[str, str]:
@@ -150,6 +159,7 @@ def consumer_env(root: Path, *, run_id: str, route: str = "serialized", **extra:
         "THEHEAT_SERIALIZED_WRITER": f"{run_id}:consume", "GITHUB_REPOSITORY": "invented/theheat",
         "THEHEAT_COMMAND_SEAL_KEY": TEST_SEAL_KEY, "THEHEAT_GIST_CREDENTIAL": "route",
         "THEHEAT_LEGACY_CREDENTIALS_PRESENT": "false", "GH_DISPATCH_TOKEN": "invented-not-a-credential",
+        "THEHEAT_ROUTE_CONTROL_KEY": TEST_CONTROL_KEY,
     }
     env.update(extra)
     return env

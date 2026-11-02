@@ -187,7 +187,7 @@ def test_activation_switches_new_code_by_record_and_rollback_restores_legacy(tmp
     root = h.make_root(tmp_path)
     seed = _seed(root, record=False)
     build = subprocess.run([sys.executable, "-m", "src.commands.gist_commands", "route-command", "--action", "activate_route",
-                            "--generation", "1", "--actor", "root"], cwd=ROOT, env=h.base_env(), capture_output=True, text=True, check=True)
+                            "--generation", "1", "--actor", "root"], cwd=ROOT, env=h.root_env(), capture_output=True, text=True, check=True)
     (root / "dispatches").mkdir()
     (root / "dispatches" / "0001.json").write_text(json.dumps({"workflow": "gist-commands.yml",
                                                                 "body": {"inputs": {"command": build.stdout.strip()}}}))
@@ -202,7 +202,7 @@ def test_activation_switches_new_code_by_record_and_rollback_restores_legacy(tmp
         path.rmdir()
     (root / "dispatches" / "0002.json").write_text(json.dumps({"workflow": "gist-commands.yml", "body": {"inputs": {"command": subprocess.run(
         [sys.executable, "-m", "src.commands.gist_commands", "route-command", "--action", "activate_route", "--generation", "1",
-         "--actor", "root"], cwd=ROOT, env=h.base_env(), capture_output=True, text=True, check=True).stdout.strip()}}}))
+         "--actor", "root"], cwd=ROOT, env=h.root_env(), capture_output=True, text=True, check=True).stdout.strip()}}}))
     h.admit_all(root)
     h.run_consumer(root, h.consumer_env(root, run_id="908", route="serialized"), root / "r1.json")
     assert json.loads(h.gist_files(root)["gist-write-route.json"])["mode"] == "serialized"
@@ -221,7 +221,7 @@ def test_activation_switches_new_code_by_record_and_rollback_restores_legacy(tmp
         path.unlink()
     (root / "dispatches" / "0003.json").write_text(json.dumps({"workflow": "gist-commands.yml", "body": {"inputs": {"command": subprocess.run(
         [sys.executable, "-m", "src.commands.gist_commands", "route-command", "--action", "deactivate_route", "--generation", "1",
-         "--actor", "root"], cwd=ROOT, env=h.base_env(), capture_output=True, text=True, check=True).stdout.strip()}}}))
+         "--actor", "root"], cwd=ROOT, env=h.root_env(), capture_output=True, text=True, check=True).stdout.strip()}}}))
     h.admit_all(root)
     h.run_consumer(root, h.consumer_env(root, run_id="909", route="legacy"), root / "r2.json")
     assert json.loads(h.gist_files(root)["gist-write-route.json"])["mode"] == "legacy"
@@ -266,7 +266,7 @@ def test_real_admission_refuses_noncanonical_bytes(tmp_path, raw, code):
 
 def test_python_and_node_agree_on_canonical_bytes_and_digest(tmp_path):
     build = subprocess.run([sys.executable, "-m", "src.commands.gist_commands", "route-command", "--action", "activate_route",
-                            "--generation", "1", "--actor", "root ünïcode"], cwd=ROOT, env=h.base_env(),
+                            "--generation", "1", "--actor", "root ünïcode"], cwd=ROOT, env=h.root_env(),
                            capture_output=True, text=True, check=True)
     raw = build.stdout.strip()
     script = ("import('./lib/gist-write-route.js').then(m => { const v = m.validateCommandRaw(process.argv[1]);"

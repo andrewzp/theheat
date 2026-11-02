@@ -52,16 +52,18 @@ function base64Bytes(value, { exact = null, max = null } = {}) {
 }
 
 // `<kid>:<standard base64 of exactly 32 bytes>`; null when unset. Never logged or echoed.
-export function sealKey(env = process.env) {
-  const value = env[SEAL_KEY_ENV] ?? ""
-  if (value === "") return null
+// `<kid>:<standard base64 of exactly 32 bytes>` for any route key; null when unset.
+export function parseKeySetting(value, invalidCode) {
+  if (value === undefined || value === "") return null
   const separator = value.indexOf(":")
   const kid = value.slice(0, separator), encoded = value.slice(separator + 1)
-  if (separator < 1 || !KID.test(kid) || !B64.test(encoded)) refuse("command_seal_key_invalid", 503)
+  if (separator < 1 || !KID.test(kid) || !B64.test(encoded)) refuse(invalidCode, 503)
   const key = Buffer.from(encoded, "base64")
-  if (key.length !== 32 || key.toString("base64") !== encoded) refuse("command_seal_key_invalid", 503)
+  if (key.length !== 32 || key.toString("base64") !== encoded) refuse(invalidCode, 503)
   return { kid, key }
 }
+
+export function sealKey(env = process.env) { return parseKeySetting(env[SEAL_KEY_ENV] ?? "", "command_seal_key_invalid") }
 
 export function requireSealKey(env = process.env) {
   const key = sealKey(env)

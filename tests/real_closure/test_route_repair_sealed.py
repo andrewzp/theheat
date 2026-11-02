@@ -89,7 +89,7 @@ def test_python_admission_and_node_agree_on_sealed_bytes_and_refusals(tmp_path):
     built = json.loads(node.stdout)
     raw = built["raw"]
     assert raw.isascii() and "ü" not in raw and "note" not in raw
-    parsed = gist_commands.parse_command(raw, now=datetime.now(UTC))
+    parsed = gist_commands.parse_command(raw, now=datetime.now(UTC), seal_kid="k-test")
     assert parsed["digest"] == built["digest"] == hashlib.sha256(raw.encode()).hexdigest()
     envelope = json.loads(raw)
     tampered = {**envelope, "seal": {**envelope["seal"], "iv": "AAAA"}}

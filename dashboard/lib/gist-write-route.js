@@ -5,6 +5,7 @@
 import { createHash, randomUUID } from "node:crypto"
 import { canonical } from "./local-command-recovery.js"
 import { CLOCK_SKEW_MS, ENVELOPE_SCHEMA, MAX_LIFETIME_MS, parseEnvelope } from "./gist-command-seal.js"
+import { CONTROL_ALG, controlKey, signRouteControl } from "./gist-route-control.js"
 
 export const ROUTE_ENV = "THEHEAT_GIST_WRITE_ROUTE"
 export const MARKER_ENV = "THEHEAT_SERIALIZED_WRITER"
@@ -30,7 +31,9 @@ export const PRODUCERS = Object.freeze({
   gist_route_control: ["activate_route", "deactivate_route"],
 })
 export const FEEDBACK_ACTIONS = new Set(["post_feedback"])
-const ENVELOPE_KEYS = ["action", "actor_subject", "command_id", "expires_at", "payload", "producer", "requested_at", "schema_version", "targets"]
+const ENVELOPE_KEYS = ["action", "actor_subject", "auth", "command_id", "expires_at", "payload", "producer", "requested_at", "schema_version", "targets"]
+const B64_32 = /^[A-Za-z0-9+/]{43}=$/
+const KID = /^[a-z0-9][a-z0-9-]{0,31}$/
 
 export class RouteError extends Error {
   constructor(code, status = 409) { super(code); this.code = code; this.status = status; this.statusCode = status }
@@ -69,9 +72,10 @@ export function routeRecordFromFiles(files) {
 
 const plainObject = value => value && typeof value === "object" && !Array.isArray(value)
 
-// The consumer's results file: {schema_version: 1, results, outbox?, rejected_envelopes?}.
+// The consumer's results file: {schema_version: 1, results, outbox?, rejected_envelopes?, control_results?}.
+// Route-control results live in their OWN namespace: a control id can never settle a sealed command.
 export function resultsDocumentFromFiles(files) {
-  if (!files || typeof files !== "object" || !Object.hasOwn(files, RESULTS_FILE)) return { results: {}, outbox: {}, rejected: {} }
+  if (!files || typeof files !== "object" || !Object.hasOwn(files, RESULTS_FILE)) return { results: {}, outbox: {}, rejected: {}, control: {} }
   const meta = files[RESULTS_FILE]
   let value
   try {
@@ -80,15 +84,17 @@ export function resultsDocumentFromFiles(files) {
   } catch { refuse("command_results_unreadable", 503) }
   if (!value || value.schema_version !== 1 || !plainObject(value.results)
       || (Object.hasOwn(value, "outbox") && !plainObject(value.outbox))
-      || (Object.hasOwn(value, "rejected_envelopes") && !plainObject(value.rejected_envelopes))) refuse("command_results_unreadable", 503)
-  return { results: value.results, outbox: value.outbox ?? {}, rejected: value.rejected_envelopes ?? {} }
+      || (Object.hasOwn(value, "rejected_envelopes") && !plainObject(value.rejected_envelopes))
+      || (Object.hasOwn(value, "control_results") && !plainObject(value.control_results))) refuse("command_results_unreadable", 503)
+  return { results: value.results, outbox: value.outbox ?? {}, rejected: value.rejected_envelopes ?? {}, control: value.control_results ?? {} }
 }
 
 export function resultsFromFiles(files) { return resultsDocumentFromFiles(files).results }
 
-export function resultsFileContent({ results, outbox = {}, rejected = {} }) {
+export function resultsFileContent({ results, outbox = {}, rejected = {}, control = {} }) {
   return JSON.stringify({ schema_version: 1, results, ...(Object.keys(outbox).length ? { outbox } : {}),
-    ...(Object.keys(rejected).length ? { rejected_envelopes: rejected } : {}) })
+    ...(Object.keys(rejected).length ? { rejected_envelopes: rejected } : {}),
+    ...(Object.keys(control).length ? { control_results: control } : {}) })
 }
 
 export function serializedWriterMarker(env = process.env) {
@@ -156,8 +162,11 @@ export function validateCommandRaw(raw, { now = new Date() } = {}) {
   let text
   try { text = canonical(value) } catch { refuse("unsafe_number", 400) }
   if (text !== raw) refuse("non_canonical_command", 400)
+  if (value?.schema_version === 1 && ROUTE_CONTROL_ACTIONS.has(value.action) && !Object.hasOwn(value, "auth")) refuse("route_control_unauthenticated", 403)
   if (!exactKeys(value, ENVELOPE_KEYS) || value.schema_version !== 1) refuse("invalid_command", 400)
   if (!ROUTE_CONTROL_ACTIONS.has(value.action)) refuse("plaintext_command_refused", 400)
+  if (!exactKeys(value.auth, ["alg", "kid", "mac"]) || value.auth.alg !== CONTROL_ALG || typeof value.auth.kid !== "string"
+      || !KID.test(value.auth.kid) || typeof value.auth.mac !== "string" || !B64_32.test(value.auth.mac)) refuse("route_control_unauthenticated", 403)
   if (!UUID.test(value.command_id)) refuse("invalid_command_id", 400)
   const allowed = PRODUCERS[value.producer?.kind]
   if (!exactKeys(value.producer, ["kind", "generation"]) || !allowed || !allowed.includes(value.action)
@@ -190,11 +199,15 @@ export function producerGenerationCode(command, record) {
   return null
 }
 
-export function buildCommand({ action, producerKind, actorSubject, targets = [], payload, now = new Date(), lifetimeMs = 3600000, commandId = randomUUID() }) {
+// Route control only (root's form; tests and parity): signed with THEHEAT_ROUTE_CONTROL_KEY.
+export function buildCommand({ action, producerKind, actorSubject, targets = [], payload, now = new Date(), lifetimeMs = 3600000, commandId = randomUUID(),
+  env = process.env }) {
   const at = new Date(Math.floor(now.getTime() / 1000) * 1000)
-  const command = { schema_version: 1, command_id: commandId, action,
+  const key = controlKey(env)
+  if (!key) refuse("route_control_key_missing", 503)
+  const command = signRouteControl({ schema_version: 1, command_id: commandId, action,
     requested_at: at.toISOString().replace(/\.\d{3}Z$/, "Z"), expires_at: new Date(at.getTime() + lifetimeMs).toISOString().replace(/\.\d{3}Z$/, "Z"),
-    producer: { kind: producerKind, generation: String(CODE_GENERATION) }, actor_subject: actorSubject, targets, payload }
+    producer: { kind: producerKind, generation: String(CODE_GENERATION) }, actor_subject: actorSubject, targets, payload }, key)
   const raw = canonical(command)
   validateCommandRaw(raw, { now })
   return { command, raw, digest: commandDigest(raw) }
@@ -255,9 +268,10 @@ export function followUpOf(outbox, commandId) {
 export async function commandStatus(commandId, { fetchImpl = globalThis.fetch, token = process.env.GITHUB_TOKEN, repo = REPO,
   gistId = process.env.GIST_ID, feedbackGistId = process.env.THEHEAT_FEEDBACK_GIST_ID, digest = null, now = new Date() } = {}) {
   if (!UUID.test(commandId || "")) refuse("invalid_command_id", 400)
-  const rejected = {}
+  const rejected = {}, control = {}
   for (const id of [gistId, feedbackGistId].filter(value => /^[A-Za-z0-9_]+$/.test(value || ""))) {
     const document = resultsDocumentFromFiles(await gistFiles(id, { fetchImpl, token }))
+    Object.assign(control, document.control)
     const result = document.results[commandId]
     if (result) {
       if (digest && result.digest !== digest) return { command_id: commandId, status: "refused", code: "command_id_reused", digest: result.digest }
@@ -268,6 +282,11 @@ export async function commandStatus(commandId, { fetchImpl = globalThis.fetch, t
     Object.assign(rejected, document.rejected)
   }
   if (digest && rejected[digest]) return { command_id: commandId, status: "refused", code: rejected[digest].code, digest }
+  // Root's route control: its own namespace, consulted only after every sealed-command record.
+  const controlRow = control[commandId]
+  if (controlRow && (!digest || controlRow.digest === digest)) {
+    return { command_id: commandId, status: controlRow.status, code: controlRow.code ?? null, digest: controlRow.digest, consumed_at: controlRow.consumed_at, route_control: true }
+  }
   const admitted = await artifactsNamed(`${ARTIFACT_PREFIX}${commandId}`, { fetchImpl, token, repo })
   const live = admitted.filter(row => row.expired !== true)
   const created = live.map(row => Date.parse(row.created_at)).filter(Number.isFinite)

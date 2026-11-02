@@ -9,7 +9,7 @@ import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 import { createHash } from "node:crypto"
 import { importFresh } from "./helpers/import-fresh.js"
-import { consumerMarker, installMemoryGist, routeConsumerEnv, routeEnv, routeRecord, TEST_SEAL_KEY } from "./helpers/route-memory-gist.js"
+import { CONTROL_ENV, consumerMarker, installMemoryGist, routeConsumerEnv, routeEnv, routeRecord, TEST_SEAL_KEY } from "./helpers/route-memory-gist.js"
 import { policy, runtimeRun, initializeRevision, draftIdentity, textHash, fingerprint } from "./helpers/review-policy.js"
 import { consumeGistCommands, retainResults, runSenderOutbox } from "../lib/gist-command-consumer.js"
 import { buildCommand, CODE_GENERATION, producerGenerationCode, RESULTS_FILE, ROUTE_FILE, routeRecordFromFiles, validateCommandRaw } from "../lib/gist-write-route.js"
@@ -184,7 +184,7 @@ test("expiry, producer generations, the marker and a stale consumer generation a
 test("activation follows the repository variable; deactivation only after it returns to legacy; record rides the same PATCH", async () => {
   const initial = seed()
   await withRoute(initial, async (gist) => {
-    const command = (action, now = new Date()) => buildCommand({ action, producerKind: "gist_route_control", actorSubject: "root", payload: { generation: 1 }, now }).raw
+    const command = (action, now = new Date()) => buildCommand({ action, producerKind: "gist_route_control", actorSubject: "root", payload: { generation: 1 }, now, env: CONTROL_ENV }).raw
     const off = await consume([entry(command("activate_route"))], { THEHEAT_GIST_WRITE_ROUTE: "legacy" })
     assert.equal(off.refused[0].code, "route_variable_not_serialized")
     assert.equal(gist.store.routestategist[ROUTE_FILE], undefined)

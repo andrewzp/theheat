@@ -23,9 +23,10 @@ import { applyBulkReject, applyDraftAction, assertExpected, bulkRejectSelected, 
 import { draftMutationSnapshot, mergeDraftIntoState, numericIdentitySha256, patchStateGistFiles, readStateGistSnapshot,
   reconciliationNumericSha256, reconciliationSnapshot, reparseGistState, revisionConflict } from "./state-store.js"
 import { feedbackFilename, feedbackInputOf, loadFeedbackStores, patchFeedbackGist, planFeedbackSave } from "./post-feedback.js"
-import { CODE_GENERATION, configuredRouteMode, FEEDBACK_ACTIONS, parseCommandRaw, producerGenerationCode, RESULTS_FILE, ROUTE_FILE,
+import { CODE_GENERATION, configuredRouteMode, FEEDBACK_ACTIONS, parseCommandRaw, ROUTE_CONTROL_ACTIONS, producerGenerationCode, RESULTS_FILE, ROUTE_FILE,
   resultsDocumentFromFiles, resultsFileContent, RouteError, routeActive, routeApplyCode, routeCredentialCode, serializedWriterMarker } from "./gist-write-route.js"
 import { openEnvelope, sealKey } from "./gist-command-seal.js"
+import { controlKey, verifyRouteControl } from "./gist-route-control.js"
 import { activeOutboxCount, dispatchSender, lookupTargets, observeRuns, OUTBOX_MAX_ACTIVE, outboxEntry, planOutbox, pruneOutbox } from "./gist-sender-outbox.js"
 
 export const RESULT_RETENTION_MS = 3 * 86400000 // > 1 day command lifetime + 2 day artifact retention.
@@ -33,6 +34,8 @@ export const REJECTED_RETENTION_MS = 4 * 86400000
 export const MAX_RESULTS = 2000
 export const MAX_REJECTED = 500
 export const MAX_COMMANDS_PER_DRAIN = 100
+// Root's authenticated route control keeps its own, separately bounded result namespace.
+export const MAX_CONTROL_RESULTS = 200
 export const MAX_BULK_UPDATES = 100
 
 const CODE = /^[a-z0-9_]{1,64}$/
@@ -206,12 +209,17 @@ function applyRouteControl(item, ctx) {
   const credentialCode = command.action === "activate_route" ? routeCredentialCode(ctx.env) : null
   if (credentialCode) throw refusal(credentialCode)
   if (ctx.route && generation < ctx.route.generation) throw refusal("invalid_route_generation")
+  // A no-op transition never rotates the activation (which would strand every outstanding command).
+  if (command.action === "activate_route" && ctx.route?.mode === "serialized" && ctx.route.generation === generation) throw refusal("route_transition_noop")
+  if (command.action === "deactivate_route" && (!ctx.route || ctx.route.mode === "legacy")) throw refusal("route_transition_noop")
   const route = { schema_version: 1, mode: command.action === "activate_route" ? "serialized" : "legacy", generation,
     changed_at: ctx.consumedAt, changed_by_run: ctx.marker, command_id: command.command_id }
   return { state: ctx.state, document: ctx.document, content: null, stateChanged: false, route, extra: { route_mode: route.mode, generation } }
 }
 
 const actionOf = item => item.kind === "sealed" ? item.envelope.action : item.command.action
+// Sealed results and route-control results are separate namespaces (an id never crosses them).
+const namespaceOf = item => item.kind === "control" ? "control" : "results"
 const producerOf = item => item.kind === "sealed" ? item.envelope : item.command
 const requestedOf = item => producerOf(item).requested_at
 
@@ -233,19 +241,24 @@ async function consumeState(items, rejectedItems, snapshot, ctx, report) {
   const document0 = snapshot.resultsDocument
   const kept = retainResults(document0.results, ctx.at)
   const results = kept.results
+  const keptControl = retainResults(document0.control, ctx.at)
+  const control = keptControl.results
   const rejected = retainRejected(document0.rejected, ctx.at)
   let outbox = pruneOutbox(document0.outbox, ctx.at)
   let state = snapshot.state, document = snapshot.document, route = snapshot.route
   let content = null, stateChanged = false, routeChanged = false
-  let resultsChanged = kept.pruned > 0 || Object.keys(rejected).length !== Object.keys(document0.rejected).length
+  let resultsChanged = kept.pruned > 0 || keptControl.pruned > 0 || Object.keys(rejected).length !== Object.keys(document0.rejected).length
     || Object.keys(outbox).length !== Object.keys(document0.outbox).length
   for (const item of rejectedItems) {
-    rejected[item.digest] = { code: "command_seal_invalid", command_id: item.id, at: ctx.consumedAt }
-    report.rejected.push({ command_id: item.id, code: "command_seal_invalid" })
+    rejected[item.digest] = { code: item.rejection, command_id: item.id ?? null, at: ctx.consumedAt }
+    report.rejected.push({ command_id: item.id ?? null, code: item.rejection })
     resultsChanged = true
   }
   for (const item of items) {
-    if (Object.keys(results).length >= MAX_RESULTS) { report.skipped.push({ command_id: item.id, code: "command_results_capacity" }); continue }
+    const table = namespaceOf(item) === "control" ? control : results
+    if (Object.keys(table).length >= (table === control ? MAX_CONTROL_RESULTS : MAX_RESULTS)) {
+      report.skipped.push({ command_id: item.id, code: table === control ? "control_results_capacity" : "command_results_capacity" }); continue
+    }
     const base = { digest: item.digest, action: actionOf(item), consumed_at: ctx.consumedAt, run: ctx.marker, expires_at: producerOf(item).expires_at }
     let row
     try {
@@ -269,13 +282,13 @@ async function consumeState(items, rejectedItems, snapshot, ctx, report) {
       report.skipped.push({ command_id: item.id, code: error.code })
       continue
     }
-    results[item.id] = row
+    table[item.id] = row
     resultsChanged = true
-    report[row.status === "applied" ? "applied" : "refused"].push({ command_id: item.id, code: row.code ?? null })
+    report[row.status === "applied" ? "applied" : "refused"].push({ command_id: item.id, code: row.code ?? null, ...(table === control ? { route_control: true } : {}) })
   }
   report.outbox_active = activeOutboxCount(outbox)
   if (!stateChanged && !routeChanged && !resultsChanged) return
-  const files = { [RESULTS_FILE]: { content: resultsFileContent({ results, outbox, rejected }) } }
+  const files = { [RESULTS_FILE]: { content: resultsFileContent({ results, outbox, rejected, control }) } }
   if (stateChanged) files["state.json"] = { content }
   if (routeChanged) files[ROUTE_FILE] = { content: JSON.stringify(route) }
   await patchStateGistFiles(files)
@@ -335,25 +348,46 @@ export async function consumeGistCommands(entries, { env = process.env, now = ()
   const ctx = { env, marker, at, consumedAt: at.toISOString() }
   const report = { marker, consumed_at: ctx.consumedAt, invalid: [], applied: [], refused: [], duplicates: [], reused: [], rejected: [],
     skipped: [], deferred: 0, outbox_queued: [], outbox_active: 0, state_patches: 0, feedback_patches: 0 }
-  const parsed = []
+  const parsed = [], rejected = []
+  const expiredReceipt = admission => Date.parse(admission?.expires_at) <= at.getTime()
   for (const entry of entries) {
     try {
       const item = parseCommandRaw(entry.raw, { now: at })
       const id = item.kind === "sealed" ? item.envelope.command_id : item.command.command_id
       if (!entry.admission || entry.admission.digest !== item.digest || entry.admission.command_id !== id) throw new RouteError("admission_digest_mismatch")
       parsed.push({ ...item, id, source: entry.source ?? null })
-    } catch (error) { report.invalid.push({ source: entry.source ?? null, code: codeOf(error) }) }
+    } catch (error) {
+      report.invalid.push({ source: entry.source ?? null, code: codeOf(error) })
+      // Unreadable here but admitted: once its admitted expiry has passed it can never apply — settle it.
+      if (/^[a-f0-9]{64}$/.test(entry.admission?.digest || "") && expiredReceipt(entry.admission)) {
+        rejected.push({ id: typeof entry.admission.command_id === "string" ? entry.admission.command_id : null, digest: entry.admission.digest, rejection: "invalid_expired" })
+      }
+    }
   }
-  // Open sealed commands. No key / another key id: not terminal (left for a correctly configured run).
-  let key = null, keyCode = "command_seal_key_missing"
+  // Open sealed commands and verify route control. No key / another key id is not terminal while the
+  // command can still apply (a correctly configured run may open it); once expired it is settled by
+  // digest. A failed authentication is settled by digest at once and never binds the command id.
+  let key = null, keyCode = "command_seal_key_missing", rootKey = null, rootKeyCode = "route_control_key_missing"
   try { key = sealKey(env) } catch (error) { keyCode = codeOf(error) }
-  const opened = [], rejected = []
+  try { rootKey = controlKey(env) } catch (error) { rootKeyCode = codeOf(error) }
+  const opened = []
+  const unopenable = (item, code) => {
+    if (item.expired) rejected.push({ ...item, rejection: "expired_unopened" })
+    else report.skipped.push({ command_id: item.id, code })
+  }
   for (const item of parsed) {
-    if (item.kind !== "sealed") { opened.push(item); continue }
-    if (!key) { report.skipped.push({ command_id: item.id, code: keyCode }); continue }
+    if (item.kind === "control") {
+      if (!rootKey) { unopenable(item, rootKeyCode); continue }
+      try { verifyRouteControl(item.command, rootKey); opened.push(item) } catch (error) {
+        if (error.code === "route_control_key_unknown") unopenable(item, error.code)
+        else rejected.push({ ...item, rejection: "route_control_invalid" })
+      }
+      continue
+    }
+    if (!key) { unopenable(item, keyCode); continue }
     try { opened.push({ ...item, body: openEnvelope(item, key) }) } catch (error) {
-      if (error.code === "command_seal_key_unknown") report.skipped.push({ command_id: item.id, code: error.code })
-      else rejected.push(item)
+      if (error.code === "command_seal_key_unknown") unopenable(item, error.code)
+      else rejected.push({ ...item, rejection: "command_seal_invalid" })
     }
   }
   opened.sort((a, b) => requestedOf(a).localeCompare(requestedOf(b)) || a.id.localeCompare(b.id) || a.digest.localeCompare(b.digest))
@@ -365,14 +399,16 @@ export async function consumeGistCommands(entries, { env = process.env, now = ()
   // ids and already-rejected envelopes never occupy the per-drain budget.
   const fresh = [], seen = new Map()
   for (const item of opened) {
-    const prior = (FEEDBACK_ACTIONS.has(actionOf(item)) ? feedbackDoc.results : snapshot.resultsDocument.results)[item.id]
-    const digest = prior?.digest ?? seen.get(item.id)
+    const table = namespaceOf(item) === "control" ? snapshot.resultsDocument.control
+      : FEEDBACK_ACTIONS.has(actionOf(item)) ? feedbackDoc.results : snapshot.resultsDocument.results
+    const scoped = `${namespaceOf(item)}:${item.id}`
+    const digest = table[item.id]?.digest ?? seen.get(scoped)
     if (digest !== undefined) {
       if (digest === item.digest) report.duplicates.push(item.id)
       else report.reused.push({ command_id: item.id, code: "command_id_reused" })
       continue
     }
-    seen.set(item.id, item.digest)
+    seen.set(scoped, item.digest)
     fresh.push(item)
   }
   const unrecorded = rejected.filter(item => {
@@ -439,7 +475,8 @@ export function acknowledgeable(entries, { stateDocument, feedbackDocument: feed
   for (const entry of entries) {
     const id = entry.admission?.command_id, digest = entry.admission?.digest
     if (!Number.isSafeInteger(entry.artifact_id) || typeof id !== "string" || typeof digest !== "string") continue
-    const row = stateDocument.results[id] ?? feedback.results[id]
+    // The admission receipt names the form: route control is settled only in its own namespace.
+    const row = ROUTE_CONTROL_ACTIONS.has(entry.admission.action) ? stateDocument.control?.[id] : (stateDocument.results[id] ?? feedback.results[id])
     if (row) out.push({ artifact_id: entry.artifact_id, command_id: id, reason: row.digest === digest ? "result_persisted" : "command_id_reused" })
     else if (stateDocument.rejected[digest]) out.push({ artifact_id: entry.artifact_id, command_id: id, reason: "envelope_rejected" })
   }
@@ -452,7 +489,7 @@ export async function acknowledgeArtifacts(entries, { fetchImpl = globalThis.fet
   if (readFeedback) { try { feedback = feedbackDocument(await loadFeedbackStores(null)) } catch { feedback = null } }
   const candidates = acknowledgeable(entries, { stateDocument, feedbackDocument: feedback ?? { results: {}, rejected: {} } })
     // Without a readable feedback Gist, only state-recorded artifacts are acknowledged.
-    .filter(row => feedback || stateDocument.results[row.command_id] || row.reason === "envelope_rejected")
+    .filter(row => feedback || stateDocument.results[row.command_id] || stateDocument.control?.[row.command_id] || row.reason === "envelope_rejected")
   const deleted = [], failed = []
   for (const row of candidates) {
     try {

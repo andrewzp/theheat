@@ -17,9 +17,16 @@ Two forms are admitted:
   only as AES-256-GCM ciphertext; every public field is authenticated by the Node
   sealer/consumer (``dashboard/lib/gist-command-seal.js``). Admission checks exact
   keys, enums, ids, times, producer generation and exact base64/byte bounds.
-* v1 plaintext -- ``activate_route`` / ``deactivate_route`` only (payload
-  ``{generation}``, no private content). Any other v1 action is
+* v1 route control -- ``activate_route`` / ``deactivate_route`` only (payload
+  ``{generation}``, no private content), AUTHENTICATED by root: an HMAC-SHA256 over
+  every field (``auth: {alg: "HS256", kid, mac}``) under the root-held
+  ``THEHEAT_ROUTE_CONTROL_KEY`` (never the dashboard). Any other v1 action is
   ``plaintext_command_refused``: there is no plaintext fallback.
+
+Admission accepts only the configured key ids (non-secret repository variables
+``THEHEAT_COMMAND_SEAL_KID`` and ``THEHEAT_ROUTE_CONTROL_KID``); unset means every sealed
+or control command is refused (default-off). It never verifies a tag or MAC: the Node
+consumer, which holds the keys, does.
 
 The single Node consumer re-verifies every check, opens the seal and applies the
 operation with the dashboard's own domain functions. Admission is not application.
@@ -31,6 +38,7 @@ import base64
 import binascii
 from datetime import UTC, datetime, timedelta
 import hashlib
+import hmac
 import json
 import os
 from pathlib import Path
@@ -52,6 +60,10 @@ MAX_PLAINTEXT_BYTES = 46000
 MAX_CIPHERTEXT_B64 = 4 * -(-MAX_PLAINTEXT_BYTES // 3)  # 61,336 characters
 ENVELOPE_SCHEMA = 2
 SEAL_ALG = "A256GCM"
+CONTROL_ALG = "HS256"
+SEAL_KID_ENV = "THEHEAT_COMMAND_SEAL_KID"
+CONTROL_KID_ENV = "THEHEAT_ROUTE_CONTROL_KID"
+CONTROL_KEY_ENV = "THEHEAT_ROUTE_CONTROL_KEY"
 MAX_LIFETIME = timedelta(days=1)
 CLOCK_SKEW = timedelta(minutes=5)
 ARTIFACT_PREFIX = "theheat-command-"
@@ -77,7 +89,7 @@ SEALED_OPERATIONS: dict[str, frozenset[str]] = {
 _ENVELOPE_KEYS = {"schema_version", "command_id", "action", "operation", "requested_at", "expires_at", "producer",
                   "actor_subject", "route_activation", "seal"}
 _CONTROL_KEYS = {"schema_version", "command_id", "action", "requested_at", "expires_at", "producer",
-                 "actor_subject", "targets", "payload"}
+                 "actor_subject", "targets", "payload", "auth"}
 _KID = re.compile(r"[a-z0-9][a-z0-9-]{0,31}")
 _B64 = re.compile(r"(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?")
 _ACTOR = re.compile(r"[A-Za-z0-9_.:@-]{1,100}")
@@ -168,7 +180,13 @@ def _producer(value: dict, action: str) -> None:
     admission_registry().check(producer["kind"], producer["generation"])
 
 
-def _sealed(value: dict, now: datetime) -> None:
+def _configured_kid(value: str | None, unconfigured: str) -> str:
+    if not value or not _KID.fullmatch(value):
+        raise CommandError(unconfigured, "No key id is configured for this command form (default-off)")
+    return value
+
+
+def _sealed(value: dict, now: datetime, seal_kid: str | None) -> None:
     """The public v2 envelope. No key here: authenticity is the Node consumer's check."""
     _exact(value, _ENVELOPE_KEYS, "Envelope", "invalid_envelope")
     _uuid(value["command_id"], "invalid_command_id")
@@ -185,17 +203,21 @@ def _sealed(value: dict, now: datetime) -> None:
     seal = _exact(value["seal"], {"alg", "kid", "iv", "tag", "ciphertext"}, "Seal", "invalid_envelope")
     if seal["alg"] != SEAL_ALG or not isinstance(seal["kid"], str) or not _KID.fullmatch(seal["kid"]):
         raise CommandError("invalid_envelope", "Unsupported seal")
+    if seal["kid"] != _configured_kid(seal_kid, "command_seal_unconfigured"):
+        raise CommandError("command_seal_kid_unknown", "Sealed under a key id this repository does not use")
     _b64(seal["iv"], exact=12)
     _b64(seal["tag"], exact=16)
     _b64(seal["ciphertext"], limit=MAX_CIPHERTEXT_B64)
 
 
-def _route_control(value: dict, now: datetime, size: int) -> None:
+def _route_control(value: dict, now: datetime, size: int, control_kid: str | None) -> None:
     """v1 plaintext: route control only (its payload is a generation, never private content)."""
     if value.get("action") not in CONTROL_ACTIONS:
         raise CommandError("plaintext_command_refused", "Only route control may travel without a seal")
     if size > MAX_CONTROL_BYTES:
         raise CommandError("command_too_large", "Route control command is too large")
+    if "auth" not in value:
+        raise CommandError("route_control_unauthenticated", "Route control must carry a root HMAC")
     _exact(value, _CONTROL_KEYS, "Command", "invalid_command")
     _uuid(value["command_id"], "invalid_command_id")
     _window(value, now)
@@ -207,9 +229,16 @@ def _route_control(value: dict, now: datetime, size: int) -> None:
     payload = _exact(value["payload"], {"generation"}, "Route control")
     if type(payload["generation"]) is not int or not 1 <= payload["generation"] <= gist_route.CODE_GENERATION:
         raise CommandError("invalid_route_generation", "Route generation must be a generation this code implements")
+    auth = _exact(value["auth"], {"alg", "kid", "mac"}, "Route control authentication", "route_control_unauthenticated")
+    if auth["alg"] != CONTROL_ALG or not isinstance(auth["kid"], str) or not _KID.fullmatch(auth["kid"]):
+        raise CommandError("route_control_unauthenticated", "Route control must carry a root HMAC")
+    _b64(auth["mac"], exact=32)
+    if auth["kid"] != _configured_kid(control_kid, "route_control_unconfigured"):
+        raise CommandError("route_control_kid_unknown", "Route control under a key id this repository does not use")
 
 
-def parse_command(raw: str | bytes, *, now: datetime) -> dict:
+def parse_command(raw: str | bytes, *, now: datetime, seal_kid: str | None = None,
+                  control_kid: str | None = None) -> dict:
     """Validate one raw dispatch input; return ``{command, digest, raw}`` or raise ``CommandError``/``RoleError``."""
     data = raw.encode("utf-8") if isinstance(raw, str) else raw
     if len(data) > MAX_COMMAND_BYTES:
@@ -229,9 +258,9 @@ def parse_command(raw: str | bytes, *, now: datetime) -> dict:
     if value["schema_version"] == ENVELOPE_SCHEMA:
         if not text.isascii():
             raise CommandError("invalid_envelope", "A sealed envelope is ASCII")
-        _sealed(value, now)
+        _sealed(value, now, seal_kid)
     elif value["schema_version"] == 1:
-        _route_control(value, now, len(data))
+        _route_control(value, now, len(data), control_kid)
     else:
         raise CommandError("invalid_command", "Unsupported command schema")
     return {"command": value, "digest": hashlib.sha256(data).hexdigest(), "raw": text}
@@ -241,10 +270,16 @@ def store_of(action: str) -> str:
     return "feedback_gist" if action in FEEDBACK_ACTIONS else "gist_state"
 
 
-def admit(raw: str | bytes, out_dir: Path, *, now: datetime) -> dict:
-    """Admit one command into an immutable artifact directory; never touches a Gist."""
+def admit(raw: str | bytes, out_dir: Path, *, now: datetime, seal_kid: str | None = None,
+          control_kid: str | None = None) -> dict:
+    """Admit one command into an immutable artifact directory; never touches a Gist.
+
+    Key ids default to the non-secret repository variables exported to the admit job.
+    """
+    seal_kid = os.environ.get(SEAL_KID_ENV) if seal_kid is None else seal_kid
+    control_kid = os.environ.get(CONTROL_KID_ENV) if control_kid is None else control_kid
     try:
-        parsed = parse_command(raw, now=now)
+        parsed = parse_command(raw, now=now, seal_kid=seal_kid, control_kid=control_kid)
     except CommandError as exc:
         command_id = None
         try:
@@ -266,18 +301,41 @@ def admit(raw: str | bytes, out_dir: Path, *, now: datetime) -> dict:
             "store": receipt["store"]}
 
 
-def route_command(action: str, *, generation: int, actor_subject: str, now: datetime,
+def parse_control_key(value: str | None) -> tuple[str, bytes]:
+    """``<kid>:<standard base64 of exactly 32 random bytes>`` (root-held; never logged or echoed)."""
+    kid, _, encoded = (value or "").partition(":")
+    if not _KID.fullmatch(kid) or not _B64.fullmatch(encoded):
+        raise CommandError("route_control_key_invalid", "Set THEHEAT_ROUTE_CONTROL_KEY to <kid>:<base64 of 32 bytes>")
+    try:
+        key = base64.b64decode(encoded, validate=True)
+    except (binascii.Error, ValueError):
+        raise CommandError("route_control_key_invalid", "Set THEHEAT_ROUTE_CONTROL_KEY to <kid>:<base64 of 32 bytes>") from None
+    if len(key) != 32 or base64.b64encode(key).decode("ascii") != encoded:
+        raise CommandError("route_control_key_invalid", "Set THEHEAT_ROUTE_CONTROL_KEY to <kid>:<base64 of 32 bytes>")
+    return kid, key
+
+
+def control_mac(command: dict, kid: str, key: bytes) -> str:
+    """HMAC-SHA256 over the canonical command with ``auth`` reduced to ``{alg, kid}`` (every field bound)."""
+    signed = {**{k: v for k, v in command.items() if k != "auth"}, "auth": {"alg": CONTROL_ALG, "kid": kid}}
+    digest = hmac.new(key, canonical_json(signed).encode("utf-8"), hashlib.sha256).digest()
+    return base64.b64encode(digest).decode("ascii")
+
+
+def route_command(action: str, *, generation: int, actor_subject: str, now: datetime, control_key: str,
                   lifetime: timedelta = timedelta(hours=2)) -> str:
-    """Canonical ``activate_route``/``deactivate_route`` command for root's controlled rollout."""
+    """Root-authenticated ``activate_route``/``deactivate_route`` command for the controlled rollout."""
     if action not in PRODUCERS["gist_route_control"]:
         raise CommandError("invalid_action", "Only route activation or deactivation")
+    kid, key = parse_control_key(control_key)
     at = now.astimezone(UTC).replace(microsecond=0)
-    command = {"schema_version": 1, "command_id": str(uuid4()), "action": action,
-               "requested_at": utc_text(at), "expires_at": utc_text(at + lifetime),
-               "producer": {"kind": "gist_route_control", "generation": str(gist_route.CODE_GENERATION)},
-               "actor_subject": actor_subject, "targets": [], "payload": {"generation": generation}}
+    command: dict[str, Any] = {"schema_version": 1, "command_id": str(uuid4()), "action": action,
+                               "requested_at": utc_text(at), "expires_at": utc_text(at + lifetime),
+                               "producer": {"kind": "gist_route_control", "generation": str(gist_route.CODE_GENERATION)},
+                               "actor_subject": actor_subject, "targets": [], "payload": {"generation": generation}}
+    command["auth"] = {"alg": CONTROL_ALG, "kid": kid, "mac": control_mac(command, kid, key)}
     raw = canonical_json(command)
-    parse_command(raw, now=now)
+    parse_command(raw, now=now, control_kid=kid)
     return raw
 
 
@@ -302,7 +360,13 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     now = datetime.now(UTC)
     if args.cmd == "route-command":
-        sys.stdout.write(route_command(args.action, generation=args.generation, actor_subject=args.actor, now=now) + "\n")
+        try:
+            raw = route_command(args.action, generation=args.generation, actor_subject=args.actor, now=now,
+                                control_key=os.environ.get(CONTROL_KEY_ENV, ""))
+        except CommandError as exc:
+            print(json.dumps({"status": "refused", "code": exc.code}), file=sys.stderr)
+            return 2
+        sys.stdout.write(raw + "\n")
         return 0
     result = admit(os.environ.get("THEHEAT_COMMAND_INPUT", ""), args.out, now=now)
     _github_output({"admitted": "true" if result["admitted"] else "false",

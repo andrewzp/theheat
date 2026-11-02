@@ -9,7 +9,7 @@ import { canonical } from "../lib/local-command-recovery.js"
 import { buildCommand, readRouteRecord } from "../lib/gist-write-route.js"
 import { buildSealedCommand } from "../lib/gist-route-submit.js"
 import { readStateGistSnapshot, reconciliationNumericSha256, reconciliationSnapshot } from "../lib/state-store.js"
-import { OTHER_SEAL_KEY } from "./helpers/route-memory-gist.js"
+import { CONTROL_ENV, OTHER_SEAL_KEY } from "./helpers/route-memory-gist.js"
 import { admit, commandStatus, consume, entry, post, resultsDoc, sha, stateOf, withRoute } from "./helpers/route-repair-fixture.js"
 
 const VECTORS = JSON.parse(readFileSync(new URL("../../tests/fixtures/w14_delivery_reconciliation_vectors.json", import.meta.url), "utf8"))
@@ -63,7 +63,7 @@ test("reconcile: refused at submit while inactive; retained commands refuse at a
     const rolled = await consume([entry(retained)], { THEHEAT_GIST_WRITE_ROUTE: "legacy" })
     assert.deepEqual(rolled.refused.map(item => item.code), ["route_not_active"])
     assert.equal(row(gist).tweet_id, null)
-    const control = action => buildCommand({ action, producerKind: "gist_route_control", actorSubject: "root", payload: { generation: 1 } }).raw
+    const control = action => buildCommand({ action, producerKind: "gist_route_control", actorSubject: "root", payload: { generation: 1 }, env: CONTROL_ENV }).raw
     assert.equal((await consume([entry(control("deactivate_route"))], { THEHEAT_GIST_WRITE_ROUTE: "legacy" })).applied.length, 1)
     assert.equal((await consume([entry(control("activate_route"))])).applied.length, 1)
     const second = (await withoutResult(gist, retained))

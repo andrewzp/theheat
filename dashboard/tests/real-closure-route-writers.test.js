@@ -7,7 +7,7 @@ import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 import { createHash } from "node:crypto"
 import { importFresh } from "./helpers/import-fresh.js"
-import { consumerMarker, installMemoryGist, routeConsumerEnv, routeEnv, TEST_SEAL_KEY } from "./helpers/route-memory-gist.js"
+import { CONTROL_ENV, consumerMarker, installMemoryGist, routeConsumerEnv, routeEnv, TEST_SEAL_KEY } from "./helpers/route-memory-gist.js"
 import { policy, runtimeRun, initializeRevision, draftIdentity, textHash, fingerprint } from "./helpers/review-policy.js"
 import { consumeGistCommands } from "../lib/gist-command-consumer.js"
 import { assertDirectGistWrite, buildCommand, CODE_GENERATION, ROUTE_FILE } from "../lib/gist-write-route.js"
@@ -175,12 +175,12 @@ test("gist_command_consumer: runs only with a valid serialized-group marker at a
 
 test("gist_route_control: only root's dispatch may carry it; the dashboard resubmission endpoint refuses route control", async () => {
   await scenario({ THEHEAT_GIST_WRITE_ROUTE: "serialized" }, { "state.json": JSON.stringify(seed()) }, async (gist) => {
-    const raw = buildCommand({ action: "activate_route", producerKind: "gist_route_control", actorSubject: "root", payload: { generation: 1 } }).raw
+    const raw = buildCommand({ action: "activate_route", producerKind: "gist_route_control", actorSubject: "root", payload: { generation: 1 }, env: CONTROL_ENV }).raw
     const response = await post("app/api/commands/route.js", { command: raw }, { origin: "http://localhost" })
     assert.equal(response.status, 403)
     assert.equal(response.body.code, "route_control_not_dashboard")
     assert.deepEqual(gist.dispatches, [])
-    assert.throws(() => buildCommand({ action: "activate_route", producerKind: "dashboard_editor", actorSubject: "x", payload: { generation: 1 } }),
+    assert.throws(() => buildCommand({ action: "activate_route", producerKind: "dashboard_editor", actorSubject: "x", payload: { generation: 1 }, env: CONTROL_ENV }),
       error => error.code === "unauthorized_writer_generation_refused")
   })
 })

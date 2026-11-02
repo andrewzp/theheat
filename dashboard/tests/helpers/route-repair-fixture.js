@@ -14,6 +14,8 @@ import { consumeGistCommands } from "../../lib/gist-command-consumer.js"
 import { ROUTE_FILE, RESULTS_FILE } from "../../lib/gist-write-route.js"
 
 export const ROOT = fileURLToPath(new URL("../../..", import.meta.url))
+// The non-secret repository variables the admit job receives (configured key ids).
+export const ADMISSION_KIDS = { THEHEAT_COMMAND_SEAL_KID: "k-test", THEHEAT_ROUTE_CONTROL_KID: "k-ctl-test" }
 export const sha = text => createHash("sha256").update(text, "utf8").digest("hex")
 export const auth = { authorization: `Basic ${Buffer.from("reviewer:invented-pass").toString("base64")}` }
 export const identity = draft => ({ ...draftIdentity(draft), decision_revision: draft.decision_revision ?? 0 })
@@ -62,7 +64,7 @@ export async function commandStatus(id, digest = null) {
 export function admit(raw) {
   const out = path.join(mkdtempSync(path.join(tmpdir(), "route-repair-")), "artifact")
   const stdout = execFileSync(process.env.THEHEAT_TEST_PYTHON || "python3", ["-m", "src.commands.gist_commands", "admit", "--out", out], { cwd: ROOT,
-    env: { PATH: process.env.PATH, LC_ALL: "C", TZ: "UTC", PYTHONDONTWRITEBYTECODE: "1", THEHEAT_COMMAND_INPUT: raw }, encoding: "utf8" })
+    env: { PATH: process.env.PATH, LC_ALL: "C", TZ: "UTC", PYTHONDONTWRITEBYTECODE: "1", THEHEAT_COMMAND_INPUT: raw, ...ADMISSION_KIDS }, encoding: "utf8" })
   const result = JSON.parse(stdout)
   const files = result.admitted ? Object.fromEntries(readdirSync(out).map(name => [name, readFileSync(path.join(out, name), "utf8")])) : {}
   return { result, files }

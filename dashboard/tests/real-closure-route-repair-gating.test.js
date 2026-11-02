@@ -4,9 +4,10 @@
 import test from "node:test"
 import assert from "node:assert/strict"
 import { buildCommand, ROUTE_FILE } from "../lib/gist-write-route.js"
+import { CONTROL_ENV } from "./helpers/route-memory-gist.js"
 import { byId, consume, entry, identity, post, resultsDoc, seed, sha, withRoute, routeRecord, ROUTE_ACTIVATION } from "./helpers/route-repair-fixture.js"
 
-const control = action => buildCommand({ action, producerKind: "gist_route_control", actorSubject: "root", payload: { generation: 1 } }).raw
+const control = action => buildCommand({ action, producerKind: "gist_route_control", actorSubject: "root", payload: { generation: 1 }, env: CONTROL_ENV }).raw
 
 test("B4 unset/legacy: legacy direct path unchanged; no submission; a retained sealed command is refused at apply and changes nothing", async () => {
   // A command sealed while the route was active (to have authentic bytes at all)...
