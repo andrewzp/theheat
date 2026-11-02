@@ -13,15 +13,24 @@ from src.state import DEFAULT_STATE
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def test_checkout_preflight_names_legacy_normals_and_lock_match_without_running_anything():
+def test_checkout_preflight_names_installed_normals_without_running_anything():
     report = onboarding.preflight(ROOT, run_generators=False)
-    assert report["repository"]["normals"]["status"] == "legacy_unqualified"
-    assert report["repository"]["normals"]["qualified_points"] == 0
+    assert report["repository"]["normals"]["status"] == "qualified"
+    assert report["repository"]["normals"]["qualified_points"] == 440
     assert report["repository"]["station_thresholds"]["status"] == "manifest_valid"
-    assert report["features"]["hot10"] == "holds: qualified normals not installed"
+    assert report["features"]["hot10"] == "inputs present"
     assert report["features"]["generated_artifacts"] == "not_checked"
     assert all(row["status"] == "not_run" for row in report["generated"].values())
     assert "environment values and credentials (owner-supplied; never read)" in report["not_inspected"]
+
+
+def test_explicit_legacy_baseline_still_holds_preflight(tmp_path):
+    (tmp_path / "data").mkdir()
+    (tmp_path / "data/normals.csv").write_text("city,month,avg_high_c\nInventedtown,1,21.5\n")
+    report = onboarding.preflight(tmp_path, run_generators=False)
+    assert report["repository"]["normals"]["status"] == "legacy_unqualified"
+    assert report["repository"]["normals"]["qualified_points"] == 0
+    assert report["features"]["hot10"] == "holds: qualified normals not installed"
 
 
 def test_pins_are_classified_against_this_interpreter(tmp_path):

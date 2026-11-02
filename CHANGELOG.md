@@ -1,5 +1,11 @@
 ## 0.9.109.52
 
+- Restore the Hot10 baseline with newly acquired, attributable Meteostat point
+  normals for 440 catalogue locations across 135 countries and all 12 months.
+  Preserve the 193 unsupported locations as exclusions, the period/point rules,
+  source attribution and a hash-bound installation/rollback record.
+- Read year-only monthly inventory dates consistently with the pinned Meteostat
+  SDK; retain useful source diagnostics for missing and invalid point products.
 - Parse one exact GPM OPeNDAP precipitation scalar, including coordinate-labelled
   grid data. Coordinate arrays and similarly named variables cannot become a
   rainfall amount; ambiguous, malformed and non-finite point results are refused.

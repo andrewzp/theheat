@@ -33,9 +33,11 @@ checks, final safety and every unknown-delivery fence still apply first.
   nothing is drafted.
 - **Final boundary.** The send holds when the retained bulletin changed, its
   leader's local day ended or its capture is over 12 hours old.
-- **Rollout dependency.** The checked-in `data/normals.csv` is legacy, so
-  production Hot10 holds until root runs `scripts/build_normals.py` (a live
-  Meteostat retrieval) and lands its output.
+- **Installed baseline.** `data/normals.csv` contains qualified Meteostat point
+  normals for 440 sampled catalogue locations, acquired 2 November 2026. The
+  other 193 locations remain excluded. See `data/NORMALS.md` and the bound
+  manifest and installation plan. A fresh forecast still needs at least ten
+  qualified places before the bulletin can reach the writer.
 
 ## PM2.5 and dust forecasts (default off)
 
