@@ -75,7 +75,7 @@ const plainObject = value => value && typeof value === "object" && !Array.isArra
 // The consumer's results file: {schema_version: 1, results, outbox?, rejected_envelopes?, control_results?}.
 // Route-control results live in their OWN namespace: a control id can never settle a sealed command.
 export function resultsDocumentFromFiles(files) {
-  if (!files || typeof files !== "object" || !Object.hasOwn(files, RESULTS_FILE)) return { results: {}, outbox: {}, rejected: {}, control: {} }
+  if (!files || typeof files !== "object" || !Object.hasOwn(files, RESULTS_FILE)) return { results: {}, outbox: {}, rejected: {}, control: {}, settled: {} }
   const meta = files[RESULTS_FILE]
   let value
   try {
@@ -85,16 +85,20 @@ export function resultsDocumentFromFiles(files) {
   if (!value || value.schema_version !== 1 || !plainObject(value.results)
       || (Object.hasOwn(value, "outbox") && !plainObject(value.outbox))
       || (Object.hasOwn(value, "rejected_envelopes") && !plainObject(value.rejected_envelopes))
-      || (Object.hasOwn(value, "control_results") && !plainObject(value.control_results))) refuse("command_results_unreadable", 503)
-  return { results: value.results, outbox: value.outbox ?? {}, rejected: value.rejected_envelopes ?? {}, control: value.control_results ?? {} }
+      || (Object.hasOwn(value, "control_results") && !plainObject(value.control_results))
+      || (Object.hasOwn(value, "inbox_settled_runs") && !plainObject(value.inbox_settled_runs))) refuse("command_results_unreadable", 503)
+  return { results: value.results, outbox: value.outbox ?? {}, rejected: value.rejected_envelopes ?? {}, control: value.control_results ?? {},
+    settled: value.inbox_settled_runs ?? {} }
 }
 
 export function resultsFromFiles(files) { return resultsDocumentFromFiles(files).results }
 
-export function resultsFileContent({ results, outbox = {}, rejected = {}, control = {} }) {
+// inbox_settled_runs: the inbox's durable continuation (gist-commands run id -> run created_at).
+export function resultsFileContent({ results, outbox = {}, rejected = {}, control = {}, settled = {} }) {
   return JSON.stringify({ schema_version: 1, results, ...(Object.keys(outbox).length ? { outbox } : {}),
     ...(Object.keys(rejected).length ? { rejected_envelopes: rejected } : {}),
-    ...(Object.keys(control).length ? { control_results: control } : {}) })
+    ...(Object.keys(control).length ? { control_results: control } : {}),
+    ...(Object.keys(settled).length ? { inbox_settled_runs: settled } : {}) })
 }
 
 export function serializedWriterMarker(env = process.env) {

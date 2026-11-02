@@ -288,7 +288,7 @@ async function consumeState(items, rejectedItems, snapshot, ctx, report) {
   }
   report.outbox_active = activeOutboxCount(outbox)
   if (!stateChanged && !routeChanged && !resultsChanged) return
-  const files = { [RESULTS_FILE]: { content: resultsFileContent({ results, outbox, rejected, control }) } }
+  const files = { [RESULTS_FILE]: { content: resultsFileContent({ results, outbox, rejected, control, settled: document0.settled }) } }
   if (stateChanged) files["state.json"] = { content }
   if (routeChanged) files[ROUTE_FILE] = { content: JSON.stringify(route) }
   await patchStateGistFiles(files)
@@ -465,6 +465,39 @@ export async function runSenderOutbox({ env = process.env, now = () => new Date(
   }
   report.deferred_dispatches = Math.max(0, plan.dispatch.length - MAX_DISPATCHES_PER_DRAIN)
   return report
+}
+
+// Root checkpoint R1: the inbox's durable continuation. A gist-commands run is recorded settled only
+// after every command artifact fetched from it was acknowledged (its result durable, the artifact
+// deleted) or once it completed with no command artifact. Settled runs are never examined again;
+// entries older than the inbox horizon (+1 h) are pruned, and the set is bounded.
+export const SETTLED_RUNS_RETENTION_MS = (24 * 60 + 15 + 60) * 60000
+export const MAX_SETTLED_RUNS = 5000
+
+export function settledRunsFrom(entries, acknowledged, emptyCompleted = []) {
+  const byRun = new Map()
+  for (const entry of entries) {
+    if (!Number.isSafeInteger(entry.run_id)) continue
+    const row = byRun.get(entry.run_id) ?? { created_at: entry.run_created_at ?? null, all: 0, acked: 0 }
+    row.all += 1
+    if (acknowledged.some(item => item.artifact_id === entry.artifact_id)) row.acked += 1
+    byRun.set(entry.run_id, row)
+  }
+  const settled = {}
+  for (const [runId, row] of byRun) if (row.all > 0 && row.acked === row.all) settled[runId] = row.created_at
+  for (const row of emptyCompleted) if (Number.isSafeInteger(row?.run_id)) settled[row.run_id] = row.created_at ?? null
+  return settled
+}
+
+export async function recordSettledRuns(settled, { now = () => new Date() } = {}) {
+  if (!Object.keys(settled).length) return { recorded: 0 }
+  const document0 = (await readStateGistSnapshot()).resultsDocument
+  const cutoff = now().getTime() - SETTLED_RUNS_RETENTION_MS
+  const merged = Object.entries({ ...document0.settled, ...settled })
+    .filter(([, created]) => !(Date.parse(created) < cutoff))
+    .sort((a, b) => String(b[1]).localeCompare(String(a[1]))).slice(0, MAX_SETTLED_RUNS)
+  await patchStateGistFiles({ [RESULTS_FILE]: { content: resultsFileContent({ ...document0, settled: Object.fromEntries(merged) }) } })
+  return { recorded: Object.keys(settled).length }
 }
 
 // B.2 acknowledgement: an inbox artifact may be deleted only when a FRESH read of the Gists shows

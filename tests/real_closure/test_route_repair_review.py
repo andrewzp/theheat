@@ -42,66 +42,63 @@ def _zip(command_id: str) -> bytes:
     return blob.getvalue()
 
 
-def _row(artifact_id: int, run_id: int | None, *, head_repo: int = 7, branch: str = "main") -> dict:
-    row = {"id": artifact_id, "name": f"theheat-command-{artifact_id:08d}-2222-4333-8444-555555555555", "expired": False, "created_at": STAMP}
-    if run_id is not None:
-        row["workflow_run"] = {"id": run_id, "repository_id": 7, "head_repository_id": head_repo, "head_branch": branch}
-    return row
+def _cid(n: int) -> str:
+    return f"{n:08d}-2222-4333-8444-555555555555"
 
 
-def _runner(rows: list[dict], runs: dict[int, dict | Exception]):
+def _run(run_id: int, **fields) -> dict:
+    return {"id": run_id, "status": "completed", "created_at": STAMP, **GENUINE_RUN, **fields}
+
+
+def _raw_runner(runs: list[dict], failing: set[int] = frozenset()):  # type: ignore[assignment]
+    """A listing that does NOT honour its query filters (so the inbox's own source checks are what refuse)."""
     calls: list[str] = []
 
     def run(args: list[str]) -> bytes:
-        calls.append(args[0])
-        if args[0].endswith("/zip"):
-            artifact = next(row for row in rows if row["id"] == int(args[0].split("/")[-2]))
-            return _zip(artifact["name"][len("theheat-command-"):])
-        if "/actions/runs/" in args[0]:
-            detail = runs[int(args[0].split("/")[-1])]
-            if isinstance(detail, Exception):
-                raise detail
-            return json.dumps(detail).encode()
-        return json.dumps({"artifacts": rows}).encode()
+        url = args[0]
+        calls.append(url)
+        if "/actions/workflows/gist-commands.yml/runs?" in url:
+            return json.dumps({"total_count": len(runs), "workflow_runs": runs}).encode()
+        if "/actions/runs/" in url and url.endswith("/artifacts?per_page=100"):
+            run_id = int(url.split("/runs/")[1].split("/")[0])
+            if run_id in failing:
+                raise inbox.InboxError("github_request_failed")
+            return json.dumps({"artifacts": [{"id": run_id, "name": f"theheat-command-{_cid(run_id)}", "expired": False}]}).encode()
+        if url.endswith("/zip"):
+            return _zip(_cid(int(url.split("/")[-2])))
+        raise AssertionError(f"unexpected request {url}")
     return run, calls
 
 
-def test_inbox_fetches_only_gist_commands_workflow_dispatch_artifacts_of_this_repository_on_main(tmp_path):
-    rows = [
-        _row(1, 101),                    # genuine
-        _row(2, 102, head_repo=999),     # fork pull_request run: refused from the listing alone
-        _row(3, 103),                    # this repository, another workflow
-        _row(4, 104),                    # this repository, gist-commands.yml but not workflow_dispatch
-        _row(5, 105, branch="feature"),  # dispatched on another branch
-        _row(6, None),                   # no producing run in the listing
-        _row(7, 107),                    # run lookup fails: unverifiable
-        _row(8, 101),                    # second artifact of the genuine run (cached lookup)
+def test_inbox_examines_only_gist_commands_workflow_dispatch_runs_of_this_repository_on_main(tmp_path):
+    runs = [
+        _run(101),                                                      # genuine
+        _run(102, head_repository={"id": 999}),                         # fork pull_request run
+        _run(103, path=".github/workflows/bot.yml@main"),                # this repository, another workflow
+        _run(104, event="pull_request"),                                # gist-commands.yml but not workflow_dispatch
+        _run(105, head_branch="feature"),                               # dispatched on another branch
+        {k: v for k, v in _run(106).items() if k != "repository"},      # producing repository unknown
+        _run(107),                                                      # genuine, but its artifact listing fails
     ]
-    runs: dict[int, dict | Exception] = {
-        101: GENUINE_RUN,
-        103: {**GENUINE_RUN, "path": ".github/workflows/bot.yml"},
-        104: {**GENUINE_RUN, "event": "pull_request"},
-        107: inbox.InboxError("github_request_failed"),
-    }
-    run, calls = _runner(rows, runs)
-    result = inbox.fetch(REPO, tmp_path, run, now=NOW)
-    fetched = sorted(p.name for p in tmp_path.iterdir() if p.is_dir())
-    assert fetched == [f"{1:08d}-2222-4333-8444-555555555555-1", f"{8:08d}-2222-4333-8444-555555555555-8"]
-    assert result["provenance_refused"] == {"provenance_fork": 1, "provenance_workflow": 1, "provenance_event": 1,
-                                            "provenance_branch": 1, "provenance_unknown": 1}
-    assert result["unverified"] == 1
-    lookups = [c for c in calls if "/actions/runs/" in c]
-    assert sorted(lookups) == [f"repos/{REPO}/actions/runs/{n}" for n in (101, 103, 104, 107)], "fork/branch/unknown need no request; one per run"
+    run, calls = _raw_runner(runs, failing={107})
+    result = inbox.fetch(REPO, tmp_path, run, now=NOW, settled=set())
+    assert sorted(p.name for p in tmp_path.iterdir() if p.is_dir()) == [f"{_cid(101)}-101"]
+    assert result["provenance_refused"] == {"provenance_fork": 2, "provenance_workflow": 1, "provenance_event": 1, "provenance_branch": 1}
+    assert result["unreadable_runs"] == 1 and result["scan_complete"] is False, "an unreadable run is reported, never trusted"
+    examined = sorted(int(c.split("/runs/")[1].split("/")[0]) for c in calls if c.endswith("/artifacts?per_page=100"))
+    assert examined == [101, 107], "refused runs are never examined"
+    assert not any("/actions/artifacts?" in c for c in calls), "no repository-wide listing"
     scan = json.loads((tmp_path / "scan.json").read_text())
-    assert scan["provenance_refused"] == result["provenance_refused"] and scan["unverified"] == 1
+    assert scan["provenance_refused"] == result["provenance_refused"]
 
 
-def test_provenance_lookups_are_bounded_and_the_overflow_is_deferred_not_trusted():
-    rows = [_row(i, 1000 + i) for i in range(1, inbox.MAX_RUN_LOOKUPS + 11)]
-    run, calls = _runner(rows, {1000 + i: GENUINE_RUN for i in range(1, inbox.MAX_RUN_LOOKUPS + 11)})
-    proven = inbox.verify_provenance(REPO, rows, run)
-    assert len(proven["artifacts"]) == inbox.MAX_RUN_LOOKUPS and proven["unverified"] == 10
-    assert len([c for c in calls if "/actions/runs/" in c]) == inbox.MAX_RUN_LOOKUPS
+def test_the_examined_runs_are_bounded_and_the_overflow_is_deferred_not_trusted(tmp_path):
+    runs = [_run(1000 + i, created_at=(NOW - timedelta(minutes=900 - i)).strftime("%Y-%m-%dT%H:%M:%SZ"))
+            for i in range(inbox.MAX_RUNS_EXAMINED + 10)]
+    run, calls = _raw_runner(runs)
+    result = inbox.fetch(REPO, tmp_path, run, now=NOW, settled=set())
+    assert (result["runs_examined"], result["deferred_runs"], result["fetched"]) == (inbox.MAX_RUNS_EXAMINED, 10, inbox.MAX_RUNS_EXAMINED)
+    assert len([c for c in calls if c.endswith("/artifacts?per_page=100")]) == inbox.MAX_RUNS_EXAMINED
 
 
 def test_route_control_is_signed_by_root_python_and_verified_by_the_node_consumer(tmp_path):
@@ -169,16 +166,12 @@ def test_run_path_accepts_exactly_the_file_and_its_main_ref_forms(tmp_path):
                ".github/workflows/gist-commands.yml@", "x/.github/workflows/gist-commands.yml@main",
                ".github/workflows/gist-commands.yml@main@main", ".github/workflows/gist-commands.yml@refs/heads/main/x"]
     assert inbox.workflow_paths() == frozenset(accepted)
-    rows = [_row(index + 1, 2000 + index) for index in range(len(accepted) + len(refused))]
-    paths = accepted + refused
-    run, _ = _runner(rows, {2000 + index: {**GENUINE_RUN, "path": path} for index, path in enumerate(paths)})
-    result = inbox.fetch(REPO, tmp_path, run, now=NOW)
-    fetched = sorted(int(p.name.rsplit("-", 1)[1]) for p in tmp_path.iterdir() if p.is_dir())
-    assert fetched == [1, 2, 3]
+    runs = [_run(2000 + index, path=path) for index, path in enumerate(accepted + refused)]
+    run, _ = _raw_runner(runs)
+    result = inbox.fetch(REPO, tmp_path / "a", run, now=NOW, settled=set())
+    assert sorted(int(p.name.rsplit("-", 1)[1]) for p in (tmp_path / "a").iterdir() if p.is_dir()) == [2000, 2001, 2002]
     assert result["provenance_refused"] == {"provenance_workflow": len(refused)}
     # The separate branch and repository checks still apply to an accepted path form.
-    wrong_branch = [_row(50, 3050, branch="feature"), _row(51, 3051)]
-    run, _ = _runner(wrong_branch, {3050: {**GENUINE_RUN, "path": accepted[1]},
-                                    3051: {**GENUINE_RUN, "path": accepted[2], "head_branch": "feature"}})
-    proven = inbox.verify_provenance(REPO, wrong_branch, run)
-    assert proven["artifacts"] == [] and proven["provenance_refused"] == {"provenance_branch": 2}
+    run, _ = _raw_runner([_run(3050, path=accepted[1], head_branch="feature"), _run(3051, path=accepted[2], head_repository={"id": 9})])
+    other = inbox.fetch(REPO, tmp_path / "b", run, now=NOW, settled=set())
+    assert other["fetched"] == 0 and other["provenance_refused"] == {"provenance_branch": 1, "provenance_fork": 1}
