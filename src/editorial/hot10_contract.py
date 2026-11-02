@@ -11,11 +11,21 @@ retrieval, a current interval at qualification, a qualified normal for the same
 point and month, a registered unique location and a plausible departure. Fewer
 than ten qualified rows hold the bulletin: nothing is padded, replaced or estimated
 to fill the slate.
+
+A GHCND baseline is re-checked from what each row retains, never from its declared
+result alone: daily coverage possible for the stated qualifying years and month
+(leap Februaries and the five-missing-day rule included), non-negative rejection
+counts, finite in-range coordinates and elevations, the place elevation of the
+registered catalogue point, and the station distance recomputed within the stored
+0.01 km rounding. A bulletin re-fingerprinted after any of these was changed fails.
 """
 from __future__ import annotations
 
+import calendar
 from collections import Counter
 from datetime import UTC, datetime, timedelta
+import math
+import re
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -32,6 +42,14 @@ GHCND_PRODUCT = "noaa-ghcnd-monthly-mean-tmax-v1"
 GHCND_PERIOD = (1991, 2020)
 GHCND_MIN_YEARS = 24
 GHCND_MAX_DISTANCE_KM = 35.0
+# Mirrors of the GHCND builder's rules (src/data/ghcnd_monthly_normals.py; this packaged module must not import it).
+GHCND_MAX_ELEVATION_DIFF_M = 350.0
+GHCND_MAX_MISSING_DAYS = 5
+GHCND_DISTANCE_TOLERANCE_KM = 0.005  # stored distances are rounded to 0.01 km
+GHCND_ELEVATION_RANGE_M = (-500.0, 9000.0)  # excludes the -999.9 / -9999 missing-value sentinels
+_EARTH_RADIUS_M = 6_371_000
+_GHCND_VERSION = re.compile(r"\d+\.\d+-(?:upd|por)-\d{10}\Z")
+_GHCND_STATION = re.compile(r"[A-Z0-9]{11}\Z")
 MAX_ANOMALY_C = 30.0
 MAX_CAPTURE_AGE = timedelta(hours=12)
 FUTURE_TOLERANCE = timedelta(minutes=5)
@@ -50,7 +68,7 @@ GHCND_BASELINE_SCOPE = ("NOAA GHCN-Daily station climatology: mean daily maximum
                         "record maximum")
 _GHCND_KEYS = _BASELINE_KEYS + ("statistic", "years_used", "first_year", "last_year", "valid_days", "station_id",
                                 "station_name", "station_lat", "station_lon", "station_elevation_m", "distance_km",
-                                "source_version")
+                                "source_version", "qualifying_year_mask", "flagged_values", "place_elevation_m")
 # One entry per normals product a bulletin may rank against; the wording is part of the product.
 BASELINES = {
     BASELINE_PRODUCT: {"ranked_by": RANKED_BY, "baseline_scope": BASELINE_SCOPE, "keys": _BASELINE_KEYS},
@@ -58,16 +76,78 @@ BASELINES = {
 }
 
 
-def _ghcnd_baseline_ok(meta: dict) -> bool:
-    """A GHCND baseline row: mean daily maximum, the fixed period, enough years, a named nearby station."""
+def _registered_elevation(place_id: Any, lat: Any, lon: Any) -> float | None:
+    """The catalogue elevation of ``place_id``'s registered point when (lat, lon) is that point, else None."""
+    try:
+        point = places.sampling_point_id(lat, lon)
+    except (TypeError, ValueError):
+        return None
+    for entry in places.registry():
+        if entry["place_id"] == place_id:
+            same = places.sampling_point_id(entry["lat"], entry["lon"]) == point
+            return float(entry["elevation_m"]) if same and finite(entry.get("elevation_m")) else None
+    return None
+
+
+def _distance_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Haversine, as the builder selects stations."""
+    p1, l1, p2, l2 = map(math.radians, (lat1, lon1, lat2, lon2))
+    arch = math.sin((p2 - p1) / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin((l2 - l1) / 2) ** 2
+    return _EARTH_RADIUS_M * 2 * math.asin(math.sqrt(min(1.0, arch))) / 1000
+
+
+def _ghcnd_coverage_ok(meta: dict, month: int) -> bool:
+    """valid_days possible for the qualifying years named by the mask; rejection counts in range."""
+    mask: Any = meta.get("qualifying_year_mask")
+    years: Any = meta.get("years_used")
+    valid: Any = meta.get("valid_days")
+    flagged: Any = meta.get("flagged_values")
+    span = range(GHCND_PERIOD[0], GHCND_PERIOD[1] + 1)
+    if type(mask) is not str or len(mask) != len(span) or set(mask) - {"0", "1"} \
+            or not all(type(value) is int for value in (years, valid, flagged)):
+        return False
+    chosen = [year for year, flag in zip(span, mask) if flag == "1"]
+    if len(chosen) != years or not chosen or (chosen[0], chosen[-1]) != (meta.get("first_year"), meta.get("last_year")):
+        return False
+    days = sum(calendar.monthrange(year, month)[1] for year in chosen)
+    slots = sum(calendar.monthrange(year, month)[1] for year in span)
+    return days - GHCND_MAX_MISSING_DAYS * len(chosen) <= valid <= days and 0 <= flagged <= slots - valid
+
+
+def _ghcnd_baseline_ok(meta: dict, *, place_id: Any, lat: Any, lon: Any, month: Any) -> bool:
+    """A GHCND baseline row: mean daily maximum, the fixed period, possible coverage, a nearby registered station."""
     years: Any = meta.get("years_used")
     distance: Any = meta.get("distance_km")
-    return (meta.get("statistic") == "mean_daily_maximum"
+    if not (meta.get("statistic") == "mean_daily_maximum"
             and (meta.get("period_start"), meta.get("period_end")) == GHCND_PERIOD
             and type(years) is int and GHCND_MIN_YEARS <= years <= GHCND_PERIOD[1] - GHCND_PERIOD[0] + 1
             and finite(distance) and 0 <= distance <= GHCND_MAX_DISTANCE_KM
-            and isinstance(meta.get("station_id"), str) and len(meta["station_id"]) == 11
-            and isinstance(meta.get("source_version"), str) and bool(meta["source_version"]))
+            and isinstance(meta.get("station_id"), str) and bool(_GHCND_STATION.fullmatch(meta["station_id"]))
+            and isinstance(meta.get("source_version"), str) and bool(_GHCND_VERSION.fullmatch(meta["source_version"]))
+            and type(month) is int and meta.get("month") == month and 1 <= month <= 12
+            and _ghcnd_coverage_ok(meta, month)):
+        return False
+    station_lat: Any = meta.get("station_lat")
+    station_lon: Any = meta.get("station_lon")
+    place_elevation: Any = meta.get("place_elevation_m")
+    station_elevation: Any = meta.get("station_elevation_m")
+    if not all(finite(value) for value in (lat, lon, station_lat, station_lon, place_elevation, station_elevation)):
+        return False
+    low, high = GHCND_ELEVATION_RANGE_M
+    if not (-90 <= lat <= 90 and -180 <= lon <= 180 and -90 <= station_lat <= 90 and -180 <= station_lon <= 180
+            and low <= place_elevation <= high and low <= station_elevation <= high
+            and abs(station_elevation - place_elevation) <= GHCND_MAX_ELEVATION_DIFF_M
+            and place_elevation == _registered_elevation(place_id, lat, lon)):
+        return False
+    actual = _distance_km(lat, lon, station_lat, station_lon)
+    return actual <= GHCND_MAX_DISTANCE_KM and abs(actual - distance) <= GHCND_DISTANCE_TOLERANCE_KM + 1e-9
+
+
+def _valid_month(value: Any) -> int | None:
+    try:
+        return datetime.strptime(value, "%Y-%m-%d").month if isinstance(value, str) else None
+    except ValueError:
+        return None
 
 
 def instant(value: Any) -> datetime | None:
@@ -124,7 +204,8 @@ def _qualify_one(ct: Any, normals: dict, now: datetime,
     if not isinstance(meta, dict) or meta.get("source_product") != product \
             or meta.get("sampling_point_id") != place["sampling_point_id"] or meta.get("month") != month \
             or not _valid_timestamp(meta.get("retrieved_at")) or not finite(entry[month]) \
-            or (product == GHCND_PRODUCT and not _ghcnd_baseline_ok(meta)):
+            or (product == GHCND_PRODUCT and not _ghcnd_baseline_ok(meta, place_id=place["place_id"], lat=place["lat"],
+                                                                   lon=place["lon"], month=month)):
         return "unqualified_normal", None
     anomaly = float(ct.temp_high_c) - float(entry[month])
     if abs(anomaly) > MAX_ANOMALY_C:
@@ -220,7 +301,9 @@ def validate_bundle(bundle: Any) -> list[str]:
         if (not all(finite(value) for value in (temp, normal, anomaly)) or abs(temp - normal - anomaly) > 1e-9
                 or abs(anomaly) > MAX_ANOMALY_C or forecast.get("source_product") != FORECAST_PRODUCT
                 or baseline.get("source_product") != expected
-                or (expected == GHCND_PRODUCT and not _ghcnd_baseline_ok(baseline))
+                or (expected == GHCND_PRODUCT and not _ghcnd_baseline_ok(
+                    baseline, place_id=row.get("place_id"), lat=row.get("lat"), lon=row.get("lon"),
+                    month=_valid_month(row.get("valid_date"))))
                 or baseline.get("sampling_point_id") != row.get("sampling_point_id")
                 or retrieved is None or _local_date(retrieved, str(row.get("timezone"))) != row.get("valid_date")):
             failures.append("row_unqualified")
