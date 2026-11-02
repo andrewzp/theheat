@@ -11,6 +11,36 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-11-02 — Daily corpus grading (0 fresh drafts; 4 carry-overs from Oct 30–31, previously graded)
+
+**Context:** Gist read via git-clone path (success). 4 pending, identical to the Oct 31 queue (same
+`draft_id`s `_20261030_034425_67`, `_104126_68`, `_175304_69`, `_20261031_032828_68`; same text). Nothing new
+since Oct 31 03:28 UTC. No re-grading; Oct 31 grades stand (0 A · 3 B- · 1 C+). The pre-run main sync
+(`reset --hard` / `clean -fd`) was denied by the sandbox classifier; the checkout was verified clean with
+HEAD == origin/main instead, then the rolling branch was used.
+
+**Staleness (as of ~15:20 UTC Nov 2):** [1] Riyadh dust 83.6h, [2] Riyadh PM2.5 76.7h, [3] Urumqi 69.5h —
+all >48h, all "forecast … on Oct 30", forecast date now 3 days elapsed → **3 strict bulk-reject candidates**.
+[4] Brazil fire is 59.9h old but past-tense ("detected … 00:09 UTC Oct 31"), no forecast language — not a
+mechanical candidate, though a 3-day-old satellite pass is weak news value. Gist write skipped: `gh` token
+invalid and the sandbox blocks the gist API path (403). Operator should reject via dashboard.
+
+**A-rate:** — (no fresh drafts). Last graded cycle: 0% (0/4, 2026-10-31).
+
+### Patterns / notes
+1. No proposal evidence updates (P_close, P_dust, P_event_sat, P4, P_tier, P_nws unchanged from Oct 31).
+2. Intake after Oct 31 03:28 UTC: nothing for ~2.5 days. Second dry spell in a month (Oct 17–30 earlier);
+   worth checking source health / suppression ledger.
+
+### Followups
+- Operator: bulk-reject [1][2][3] (elapsed Oct 30 forecasts); consider [4] too.
+- Operator: merge `daily-plan-current` — `main` has no graded cycles since 2026-06-08.
+
+### Numbers
+- Pending: 4 (0 fresh) · A-rate N/A · staleness candidates: 3 (write skipped)
+
+---
+
 ## 2026-10-31 — Daily corpus grading (4 fresh drafts; 0 carry-overs)
 
 **Context:** Gist read via git-clone path (success). 4 pending, all new to the corpus; none of Oct 28's
