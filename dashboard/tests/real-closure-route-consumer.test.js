@@ -258,8 +258,10 @@ test("approve: the consumer repeats the policy confirmation and requests the man
       const sent = await runSenderOutbox({ token: "invented", repo: "invented/theheat" })
       assert.deepEqual(sent.dispatches.map(row => row.state), ["dispatched"])
     } finally { for (const key of Object.keys(routeConsumerEnv)) delete process.env[key] }
+    // Review R2 (deliberate): the sender dispatch carries references only; the text stays in state.
     assert.deepEqual(gist.dispatches.at(-1), { workflow: "bot.yml", body: { ref: "main", inputs: { mode: "manual_tweet",
-      tweet_text: saved.text, draft_id: saved.id, publish_intent_id: saved.publish_intent_id } } })
+      draft_id: saved.id, publish_intent_id: saved.publish_intent_id, text_source: "state" } } })
+    assert.ok(!JSON.stringify(gist.dispatches.at(-1)).includes(saved.text))
     assert.equal(JSON.parse(gist.store.routestategist[RESULTS_FILE]).outbox[saved.publish_intent_id].state, "dispatched")
   })
   const second = seed()

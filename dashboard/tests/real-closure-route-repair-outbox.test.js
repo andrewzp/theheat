@@ -47,8 +47,10 @@ test("B3 the outbox entry is written in the approval's own PATCH; a 403 fails de
     assert.deepEqual(second.dispatches.map(row => row.state), ["dispatched"])
     assert.equal(entryOf(gist, intent).attempts, 2)
     const sent = bot(gist).at(-1).body.inputs
-    assert.deepEqual(sent, { mode: "manual_tweet", tweet_text: byId(gist, "draft_route_1").text, draft_id: "draft_route_1", publish_intent_id: intent })
-    assert.ok(!JSON.stringify(resultsDoc(gist)).includes(sent.tweet_text), "the outbox never stores text")
+    // Review R2 (deliberate): references only; the approved text is resolved by the sender from state.
+    assert.deepEqual(sent, { mode: "manual_tweet", draft_id: "draft_route_1", publish_intent_id: intent, text_source: "state" })
+    const text = byId(gist, "draft_route_1").text
+    assert.ok(!JSON.stringify(bot(gist)).includes(text) && !JSON.stringify(resultsDoc(gist)).includes(text), "no dispatch or outbox carries text")
   }, { gist: { dispatchHandler: row => new Response(null, { status: row.workflow === "bot.yml" ? reply : 204 }) } })
 })
 

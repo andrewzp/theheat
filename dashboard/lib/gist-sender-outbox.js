@@ -167,15 +167,23 @@ function headers(token) {
   return { Accept: "application/vnd.github+json", ...(token ? { Authorization: `token ${token}` } : {}) }
 }
 
-// One bot.yml manual_tweet dispatch. 2xx accepted; 4xx (incl. 429) definitely not accepted;
-// a thrown request or 5xx may have been accepted and is uncertain.
+// One bot.yml manual_tweet dispatch carrying REFERENCES only (review R2): the draft id, the publish
+// intent and text_source=state. Workflow inputs are public run metadata, so the approved text never
+// travels here; the sender resolves the exact bytes from the authoritative state it reads and
+// re-verifies approval under this intent, the text binding, sources, the write-first claim and the
+// unknown-delivery fences (src/orchestrator/posting.py run_manual_tweet). No MAC: a reference can
+// only name a draft that the state already approves under that exact intent.
+// 2xx accepted; 4xx (incl. 429) definitely not accepted; a thrown request or 5xx is uncertain.
+export function senderDispatchInputs(draft, entry) {
+  return { mode: "manual_tweet", draft_id: draft.id, publish_intent_id: entry.publish_intent_id, text_source: "state" }
+}
+
 export async function dispatchSender(draft, entry, { fetchImpl = globalThis.fetch, token, repo }) {
   let response
   try {
     response = await fetchImpl(`https://api.github.com/repos/${repo}/actions/workflows/bot.yml/dispatches`, {
       method: "POST", headers: { ...headers(token), "Content-Type": "application/json" },
-      body: JSON.stringify({ ref: "main", inputs: { mode: "manual_tweet", tweet_text: draft.text, draft_id: draft.id,
-        publish_intent_id: entry.publish_intent_id } }),
+      body: JSON.stringify({ ref: "main", inputs: senderDispatchInputs(draft, entry) }),
     })
   } catch { return { state: "uncertain", code: "dispatch_request_uncertain" } }
   if (response.status >= 200 && response.status < 300) {
