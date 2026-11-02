@@ -120,9 +120,10 @@ export async function POST(request) {
         assertExpected(draft, body.expectedRevisions?.[draft.id])
         assertMutable(draft, state)
       }
-      // P00c route mode: each prepared rejection is collected, then ONE all-or-nothing command.
+      // P00c route mode: each prepared rejection is collected, then ONE all-or-nothing sealed command.
       const collected = []
-      const collect = async (updates) => { collected.push(...updates); return { status: "collected" } }
+      let collectedRoute = null
+      const collect = async (updates, route) => { collected.push(...updates); collectedRoute ??= route; return { status: "collected" } }
       for (const draft of targets) {
         const expected = body.expectedRevisions[draft.id]
         const { draft: rejected, submitted } = await updateDraftStore(draft.id, (record, currentState) =>
@@ -131,7 +132,7 @@ export async function POST(request) {
         if (!rejected) fail("A draft disappeared during the bulk action.")
         changedIds.push(draft.id)
       }
-      if (collected.length) return submittedResponse(await submitDraftUpdates(collected, { operation: "bulk_reject_below" }))
+      if (collected.length) return submittedResponse(await submitDraftUpdates(request, collected, collectedRoute, { operation: "bulk_reject_below", params: { threshold } }))
       return Response.json({ ok: true, action: "bulk_rejected", count: changedIds.length, changedIds, threshold })
     }
 
@@ -141,21 +142,22 @@ export async function POST(request) {
     let minutes
     let checkedPolicySha = null
     let checkedAutomaticEpoch = null
+    let preparedMedia = null
     const { draft: updatedDraft, state: updatedState, runtimeReport: updatedReport = null, submitted } = await updateDraftStore(draftId, async (draft, state, { runtimeReport = null } = {}) => {
       assertExpected(draft, expectedRevision)
       const done = await applyDraftAction(draft, state, { runtimeReport, action, body,
-        prepareMedia: (current, expectedMediaSha256, retained) => prepareGistMedia(request, current, expectedMediaSha256, undefined, retained) })
+        prepareMedia: async (current, expectedMediaSha256, retained) =>
+          (preparedMedia = await prepareGistMedia(request, current, expectedMediaSha256, undefined, retained)) })
       ;({ publishIntentId, autoApproveAt, minutes, checkedPolicySha, checkedAutomaticEpoch } = done)
       return done.draft
     }, { expectedRevision, confirmContext: ["review", "approve", "auto_approve"].includes(action)
       ? (latestState, { runtimeReport = null } = {}) => confirmDraftDecision(latestState, { runtimeReport },
         { action, draftId, checkedPolicySha, checkedAutomaticEpoch }) : undefined,
-      // P00c route mode: the same decision becomes a compare-and-swap command; the serialized
-      // consumer repeats the confirmation above and (for approve) dispatches the manual sender.
-      routeCommand: (updates) => submitDraftUpdates(updates, { operation: action,
-        confirm: ["review", "approve", "auto_approve"].includes(action) ? { name: "draft_decision", action,
-          checked_policy_sha256: checkedPolicySha, checked_automatic_epoch: action === "auto_approve" ? checkedAutomaticEpoch : null } : null,
-        followUp: action === "approve" ? { kind: "bot_manual_tweet", publish_intent_id: publishIntentId } : null }) })
+      // P00c route mode: the same operation and its request fields travel sealed; the serialized
+      // consumer re-runs applyDraftAction and the confirmation on its own read (ROUTE-CONTRACT-v2 §2).
+      routeCommand: (updates, route) => submitDraftUpdates(request, updates, route, { operation: action, body,
+        mediaDescriptor: preparedMedia, publishIntentId: publishIntentId ?? null, checkedPolicySha,
+        checkedAutomaticEpoch: action === "auto_approve" ? checkedAutomaticEpoch : null }) })
 
     if (submitted) return submittedResponse(submitted)
     if (!updatedDraft) fail("Draft not found", 404, "draft_not_found")
