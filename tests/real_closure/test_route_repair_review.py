@@ -157,3 +157,28 @@ def test_a_results_capacity_skip_fails_the_real_consumer_cli_visibly(tmp_path):
     assert report is not None
     assert report["skipped"] == [{"command_id": response["body"]["command_id"], "code": "command_results_capacity"}]
     assert h.command_status(root, response["body"]["command_id"])["status"] == "pending", "left for a later drain, never terminal"
+
+
+def test_run_path_accepts_exactly_the_file_and_its_main_ref_forms(tmp_path):
+    """Review 2: a genuine run's ``path`` may carry an @<ref> suffix; only the file itself, ``@main`` and
+    ``@refs/heads/main`` are accepted. head_branch and repository checks are unchanged."""
+    accepted = [".github/workflows/gist-commands.yml", ".github/workflows/gist-commands.yml@main",
+                ".github/workflows/gist-commands.yml@refs/heads/main"]
+    refused = [".github/workflows/gist-commands.yml@feature", ".github/workflows/gist-commands.yml@refs/heads/main2",
+               ".github/workflows/gist-commands.yml@refs/tags/main", ".github/workflows/bot.yml@main",
+               ".github/workflows/gist-commands.yml@", "x/.github/workflows/gist-commands.yml@main",
+               ".github/workflows/gist-commands.yml@main@main", ".github/workflows/gist-commands.yml@refs/heads/main/x"]
+    assert inbox.workflow_paths() == frozenset(accepted)
+    rows = [_row(index + 1, 2000 + index) for index in range(len(accepted) + len(refused))]
+    paths = accepted + refused
+    run, _ = _runner(rows, {2000 + index: {**GENUINE_RUN, "path": path} for index, path in enumerate(paths)})
+    result = inbox.fetch(REPO, tmp_path, run, now=NOW)
+    fetched = sorted(int(p.name.rsplit("-", 1)[1]) for p in tmp_path.iterdir() if p.is_dir())
+    assert fetched == [1, 2, 3]
+    assert result["provenance_refused"] == {"provenance_workflow": len(refused)}
+    # The separate branch and repository checks still apply to an accepted path form.
+    wrong_branch = [_row(50, 3050, branch="feature"), _row(51, 3051)]
+    run, _ = _runner(wrong_branch, {3050: {**GENUINE_RUN, "path": accepted[1]},
+                                    3051: {**GENUINE_RUN, "path": accepted[2], "head_branch": "feature"}})
+    proven = inbox.verify_provenance(REPO, wrong_branch, run)
+    assert proven["artifacts"] == [] and proven["provenance_refused"] == {"provenance_branch": 2}

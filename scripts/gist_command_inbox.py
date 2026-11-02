@@ -77,6 +77,12 @@ def _created(row: dict) -> datetime | None:
     return parsed if parsed.tzinfo else None
 
 
+def workflow_paths(branch: str = DEFAULT_BRANCH) -> frozenset[str]:
+    """The exact workflow-run ``path`` forms accepted: the file, or the file ``@<branch>`` /
+    ``@refs/heads/<branch>`` (some REST responses append the ref). No other suffix, ref or prefix."""
+    return frozenset({COMMAND_WORKFLOW, f"{COMMAND_WORKFLOW}@{branch}", f"{COMMAND_WORKFLOW}@refs/heads/{branch}"})
+
+
 def _listed_provenance(row: dict, branch: str) -> str | None:
     """Cheap check on the listing's own ``workflow_run`` fields; a refusal code or ``None``."""
     origin = row.get("workflow_run")
@@ -120,7 +126,7 @@ def verify_provenance(repo: str, rows: list[dict], run: Runner, *, branch: str =
                 head_value, own_value = detail.get("head_repository"), detail.get("repository")
                 head: dict = head_value if isinstance(head_value, dict) else {}
                 own: dict = own_value if isinstance(own_value, dict) else {}
-                cache[run_id] = ("provenance_workflow" if detail.get("path") != COMMAND_WORKFLOW
+                cache[run_id] = ("provenance_workflow" if detail.get("path") not in workflow_paths(branch)
                                  else "provenance_event" if detail.get("event") != COMMAND_EVENT
                                  # Branch and fork were checked on the listing; the run detail must not contradict them.
                                  else "provenance_branch" if "head_branch" in detail and detail["head_branch"] != branch
