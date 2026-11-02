@@ -1,7 +1,7 @@
 import { bindingMatches, draftIdentity, fingerprint, textHash } from "./draft-revisions.js"
 import { parseGistDocument } from "./lossless-gist.js"
 import { postOutcomes } from "./post-outcomes.js"
-import { assertDirectGistWrite, RESULTS_FILE, routeEffective, routeRecordFromFiles } from "./gist-write-route.js"
+import { activeRouteActivation, assertDirectGistWrite, RESULTS_FILE, routeEffective, routeRecordFromFiles } from "./gist-write-route.js"
 
 const PREFIX = "editorial-feedback-"
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
@@ -277,7 +277,11 @@ export async function savePostFeedback(value, { routeSubmit } = {}) {
   const loaded = await load(input.request_id)
   const { record, already_saved } = planFeedbackSave(input, loaded)
   if (already_saved) return { record, already_saved:true }
-  if (routeEffective(loaded.route) && routeSubmit) return { submitted:await routeSubmit(input) }
+  if (routeEffective(loaded.route) && routeSubmit) {
+    // P00c v2: submission only while the variable AND the record say serialized (fail closed between).
+    try { activeRouteActivation(loaded.route) } catch (error) { fail(error.code, 409) }
+    return { submitted:await routeSubmit(input, loaded.route) }
+  }
   // P00c: in route mode a direct writer without the serialized-group marker refuses before PATCH.
   try { assertDirectGistWrite(loaded.route) } catch (error) { fail(error.code, 409) }
   // Auxiliary immutable UUID file in the secret feedback archive only. No state.json rewrite or review/approval

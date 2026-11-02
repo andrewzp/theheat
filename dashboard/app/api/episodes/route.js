@@ -62,8 +62,12 @@ export async function POST(request) {
         throw Object.assign(new Error("This draft changed. Review the latest version and try again."), { status: 409, code: "revision_conflict" })
       }
       return applyEpisodeCommand(record, body, { state: current, actor: "dashboard" })
-    }, { expectedRevision, routeCommand: (updates) => submitDraftUpdates(updates, { operation: "episode" }) })
-    // P00c route mode: a compare-and-swap command to the serialized consumer, never a PATCH.
+    }, { expectedRevision, routeCommand: (updates, route) => {
+      // P00c route mode: the sealed episode correction (its exact request fields) is re-applied by the
+      // serialized consumer with the same applyEpisodeCommand; the dashboard never PATCHes.
+      const { draftId: _draft, expectedRevision: _expected, ...params } = body
+      return submitDraftUpdates(request, updates, route, { operation: "episode", params })
+    } })
     if (submitted) return submittedResponse(submitted, headers)
     if (!draft) return refuse("Draft not found.", 404, "draft_not_found")
     return Response.json({ ok: true, action, revision_identity: { ...draftIdentity(draft), decision_revision: draft.decision_revision ?? 0 },

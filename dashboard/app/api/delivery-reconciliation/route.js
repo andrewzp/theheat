@@ -38,12 +38,13 @@ export async function POST(request) {
   } catch { return Response.json({ code: "reconciliation_request_invalid" }, { status: 400, headers }) }
   try {
     const at = new Date().toISOString().replace(/\.\d{3}Z$/, "Z")
-    const applied = await reconcileDeliveryStore(body, { actor: "dashboard-operator", at, routeCommand: submitReconciliation })
+    const applied = await reconcileDeliveryStore(body, { actor: "dashboard-operator", at,
+      routeCommand: (payload, route) => submitReconciliation(request, payload, route) })
     // P00c route mode: submitted to the serialized consumer, which re-runs the same decision.
     if (applied.status === "submitted") return submittedResponse(applied.submitted, headers)
     return Response.json(applied, { headers })
   } catch (error) {
-    if (error instanceof ReconciliationError || error.code === "revision_conflict" || error.code === "direct_write_disabled_by_route") return Response.json({ code: error.code }, { status: 409, headers })
+    if (error instanceof ReconciliationError || ["revision_conflict", "direct_write_disabled_by_route", "route_not_active"].includes(error.code)) return Response.json({ code: error.code }, { status: 409, headers })
     return Response.json({ code: "reconciliation_write_unconfirmed" }, { status: 503, headers })
   }
 }

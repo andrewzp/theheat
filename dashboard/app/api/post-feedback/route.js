@@ -52,7 +52,7 @@ export async function POST(request) {
   if (request.headers.get("origin") === null || mutationOriginError(request) ||
       (request.headers.get("sec-fetch-site") && request.headers.get("sec-fetch-site") !== "same-origin")) return response({code:"feedback_origin_refused"}, 403)
   try {
-    const saved = await savePostFeedback(await input(request), { routeSubmit: submitFeedback })
+    const saved = await savePostFeedback(await input(request), { routeSubmit: (value, route) => submitFeedback(request, value, route) })
     // P00c route mode: submitted to the serialized consumer (feedback Gist only), never PATCHed here.
     if (saved.submitted) { const { status, body } = submittedBody(saved.submitted); return response(body, status) }
     return response(saved)

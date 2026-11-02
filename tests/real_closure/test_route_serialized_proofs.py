@@ -6,6 +6,10 @@ server merge and an interleaving barrier; ``workflow_dispatch`` is a file queue;
 ``theheat-bot`` concurrency group is an ``fcntl.flock`` that only consumers take. A control
 run of the same consumers WITHOUT that boundary loses an update, so the boundary is what
 serializes -- not a stub.
+
+v2 (ROUTE-CONTRACT-v2): ordinary commands are sealed (invented test key) and are submitted/applied
+only while the route is ACTIVE (variable AND record), so the seeded state Gist carries an active route
+record; route control remains the only plaintext form.
 """
 from __future__ import annotations
 
@@ -21,9 +25,9 @@ from tests.real_closure import route_harness as h
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def _seed(root: Path, count: int = 2) -> dict:
+def _seed(root: Path, count: int = 2, *, record: bool = True) -> dict:
     seed = h.fixture_state(count)
-    h.seed_gist(root, h.STATE_GIST, {"state.json": json.dumps(seed["state"])})
+    h.seed_gist(root, h.STATE_GIST, {"state.json": json.dumps(seed["state"]), **({"gist-write-route.json": h.route_record()} if record else {})})
     h.seed_gist(root, h.FEEDBACK_GIST, {})
     return seed
 
@@ -119,7 +123,7 @@ def test_lost_dispatch_response_then_resubmit_applies_once(tmp_path):
     assert lost["status"] == 503 and lost["body"]["code"] == "command_submission_uncertain"
     command_id, retained = lost["body"]["command_id"], lost["body"]["command"]
     assert h.command_status(root, command_id)["status"] == "unknown"
-    resubmitted = h.finish(h.start_client("app/api/commands/route.js", {"command": retained}, h.client_env(root)))
+    resubmitted = h.finish(h.start_client("app/api/commands/route.js", {"command": retained}, h.client_env(root, route="serialized")))
     assert resubmitted["status"] == 202 and resubmitted["body"]["command_id"] == command_id
     queued = [item["body"]["inputs"]["command"] for item in h.dispatches(root)]
     assert queued == [retained, retained], "both dispatches carry the same bytes"
@@ -181,7 +185,7 @@ def test_stale_revision_from_an_intervening_group_write_is_refused(tmp_path):
 
 def test_activation_switches_new_code_by_record_and_rollback_restores_legacy(tmp_path):
     root = h.make_root(tmp_path)
-    seed = _seed(root)
+    seed = _seed(root, record=False)
     build = subprocess.run([sys.executable, "-m", "src.commands.gist_commands", "route-command", "--action", "activate_route",
                             "--generation", "1", "--actor", "root"], cwd=ROOT, env=h.base_env(), capture_output=True, text=True, check=True)
     (root / "dispatches").mkdir()
@@ -202,9 +206,12 @@ def test_activation_switches_new_code_by_record_and_rollback_restores_legacy(tmp
     h.admit_all(root)
     h.run_consumer(root, h.consumer_env(root, run_id="908", route="serialized"), root / "r1.json")
     assert json.loads(h.gist_files(root)["gist-write-route.json"])["mode"] == "serialized"
-    # A dashboard whose variable was never set is switched by the record: it submits, never PATCHes.
+    # v2: a dashboard whose variable was never set sees the record alone -- the fail-closed window:
+    # it neither PATCHes nor submits (route_not_active) until its variable mirror is serialized too.
     unset = h.finish(h.start_client("app/api/drafts/route.js", _reject(seed, "draft_route_1"), h.client_env(root)))
-    assert unset["status"] == 202 and _statuses(root)["draft_route_1"] == "pending"
+    assert unset["status"] == 409 and unset["body"]["code"] == "route_not_active" and _statuses(root)["draft_route_1"] == "pending"
+    active = h.finish(h.start_client("app/api/drafts/route.js", _reject(seed, "draft_route_1"), h.client_env(root, route="serialized")))
+    assert active["status"] == 202 and _statuses(root)["draft_route_1"] == "pending"
     # Rollback: root sets the variable back to legacy, then deactivate_route runs in the group.
     for path in (root / "inbox").iterdir():
         for item in path.iterdir():
@@ -229,8 +236,9 @@ def test_activation_switches_new_code_by_record_and_rollback_restores_legacy(tmp
     (lambda c: {**c, "producer": {"kind": "invented_writer", "generation": "1"}}, "unauthorized_writer_generation_refused"),
     (lambda c: {**c, "producer": {"kind": "gist_route_control", "generation": "1"}}, "unauthorized_writer_generation_refused"),
     (lambda c: {**c, "expires_at": "2026-01-01T00:00:01Z", "requested_at": "2026-01-01T00:00:00Z"}, "expired"),
-    (lambda c: {**c, "payload": {**c["payload"], "operation": "approve"}}, "invalid_payload"),
-], ids=["retired", "future", "unknown-kind", "kind-action-mismatch", "expired", "approve-without-intent"])
+    (lambda c: {**c, "operation": "post_feedback"}, "invalid_operation"),
+    (lambda c: {k: v for k, v in c.items() if k != "seal"}, "invalid_envelope"),
+], ids=["retired", "future", "unknown-kind", "kind-action-mismatch", "expired", "operation-not-for-action", "seal-missing"])
 def test_real_admission_refuses_stale_unauthorized_or_malformed_producers(tmp_path, mutate, code):
     root = h.make_root(tmp_path)
     seed = _seed(root)

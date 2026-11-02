@@ -107,8 +107,20 @@ globalThis.fetch = async (url, init = {}) => {
   }
   if (target.hostname === "api.github.com" && /^\/repos\/[^/]+\/[^/]+\/actions\/artifacts$/.test(target.pathname) && method === "GET") {
     const dir = path.join(ROOT, "artifacts")
-    const artifacts = existsSync(dir) ? readdirSync(dir).filter(n => n.endsWith(".json")).map(n => JSON.parse(readFileSync(path.join(dir, n), "utf8"))) : []
+    let artifacts = existsSync(dir) ? readdirSync(dir).filter(n => n.endsWith(".json")).map(n => JSON.parse(readFileSync(path.join(dir, n), "utf8"))) : []
+    const name = target.searchParams.get("name")
+    if (name) artifacts = artifacts.filter(row => row.name === name)
     return json({ total_count: artifacts.length, artifacts })
+  }
+  const artifact = target.pathname.match(/^\/repos\/[^/]+\/[^/]+\/actions\/artifacts\/(\d+)$/)
+  if (target.hostname === "api.github.com" && artifact && method === "DELETE") {
+    // Acknowledgement: the consumer deletes an admitted artifact after its result is durable.
+    const dir = path.join(ROOT, "artifacts")
+    const file = existsSync(dir) ? readdirSync(dir).find(n => n.endsWith(".json") && JSON.parse(readFileSync(path.join(dir, n), "utf8")).id === Number(artifact[1])) : null
+    if (!file) return new Response(null, { status: 404 })
+    rmSync(path.join(dir, file))
+    log({ event: "artifact_deleted", artifact: Number(artifact[1]) })
+    return new Response(null, { status: 204 })
   }
   throw new Error(`Offline route fixture refuses ${method} ${target.hostname}${target.pathname}`)
 }

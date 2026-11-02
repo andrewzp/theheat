@@ -10,10 +10,14 @@ Everything here is an explicit offline stand-in, never production transport:
   consumer processes take (``group_lock_runner.py``); the consumer itself is the
   REAL Node consumer CLI.
 
-No network, credentials, GitHub or Gist is touched.
+No network, credentials, GitHub or Gist is touched. v2 (ROUTE-CONTRACT-v2): clients seal with an
+invented test key, ordinary commands need the route ACTIVE (variable AND record), and consumers
+run with the route-era credential flags (new writer name, no legacy names) unless a test says otherwise.
 """
 from __future__ import annotations
 
+import base64
+from datetime import UTC, datetime
 import json
 import os
 from pathlib import Path
@@ -28,6 +32,14 @@ STATE_GIST = "fixturestategist0001"
 FEEDBACK_GIST = "fixturefeedbackgist01"
 SHIM = "./tests/helpers/route-fixture-fetch.mjs"
 NODE = shutil.which("node") or "node"
+# Invented, test-only seal key (32 bytes of 0x07), identical to dashboard/tests/helpers/route-memory-gist.js.
+TEST_SEAL_KEY = "k-test:" + base64.b64encode(bytes([7]) * 32).decode("ascii")
+ACTIVATION = "00000000-0000-4000-8000-000000000001"
+
+
+def route_record(mode: str = "serialized", command_id: str = ACTIVATION) -> str:
+    return json.dumps({"schema_version": 1, "mode": mode, "generation": 1, "changed_at": "2026-10-30T12:00:00Z",
+                       "changed_by_run": "77:consume", "command_id": command_id})
 
 
 def make_root(tmp_path: Path) -> Path:
@@ -73,6 +85,7 @@ def client_env(root: Path, *, route: str | None = None, barrier: str | None = No
         "ROUTE_FIXTURE_ROOT": str(root), "ROUTE_FIXTURE_ROLE": "client", "NODE_ENV": "production",
         "DASHBOARD_USERNAME": "reviewer", "DASHBOARD_PASSWORD": "invented-pass", "THEHEAT_STATE_BACKEND": "gist",
         "GIST_ID": STATE_GIST, "GITHUB_TOKEN": "invented-not-a-credential", "THEHEAT_FEEDBACK_GIST_ID": FEEDBACK_GIST,
+        "THEHEAT_COMMAND_SEAL_KEY": TEST_SEAL_KEY,
     }
     if route is not None:
         env["THEHEAT_GIST_WRITE_ROUTE"] = route
@@ -120,7 +133,8 @@ def admit_all(root: Path, *, inboxes: list[Path] | None = None) -> list[dict]:
         results.append(result)
         if result["admitted"]:
             (root / "artifacts" / f"run{index:04d}.json").write_text(json.dumps(
-                {"id": index + 1, "name": f"theheat-command-{result['command_id']}", "expired": False}))
+                {"id": index + 1, "name": f"theheat-command-{result['command_id']}", "expired": False,
+                 "created_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")}))
     for path in sorted((root / "dispatches").iterdir()) if (root / "dispatches").exists() else []:
         data = json.loads(path.read_text())
         data["admitted"] = True
@@ -134,6 +148,8 @@ def consumer_env(root: Path, *, run_id: str, route: str = "serialized", **extra:
         "GITHUB_TOKEN": "invented-not-a-credential", "THEHEAT_FEEDBACK_GIST_ID": FEEDBACK_GIST,
         "THEHEAT_GIST_WRITE_ROUTE": route, "GITHUB_RUN_ID": run_id,
         "THEHEAT_SERIALIZED_WRITER": f"{run_id}:consume", "GITHUB_REPOSITORY": "invented/theheat",
+        "THEHEAT_COMMAND_SEAL_KEY": TEST_SEAL_KEY, "THEHEAT_GIST_CREDENTIAL": "route",
+        "THEHEAT_LEGACY_CREDENTIALS_PRESENT": "false", "GH_DISPATCH_TOKEN": "invented-not-a-credential",
     }
     env.update(extra)
     return env

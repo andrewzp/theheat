@@ -1,16 +1,19 @@
 // P00c: every dashboard Gist writer is rerouted (command) or refuses in route mode, and is
 // unchanged in legacy mode. OFFLINE FIXTURE: in-process whole-file Gist; no network.
+// v2 (ROUTE-CONTRACT-v2 §3): a command is submitted only while the variable AND the record are
+// serialized; either one alone is the fail-closed activation/rollback window (route_not_active).
 import test from "node:test"
 import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 import { createHash } from "node:crypto"
 import { importFresh } from "./helpers/import-fresh.js"
-import { consumerMarker, installMemoryGist, routeEnv } from "./helpers/route-memory-gist.js"
+import { consumerMarker, installMemoryGist, routeConsumerEnv, routeEnv, TEST_SEAL_KEY } from "./helpers/route-memory-gist.js"
 import { policy, runtimeRun, initializeRevision, draftIdentity, textHash, fingerprint } from "./helpers/review-policy.js"
 import { consumeGistCommands } from "../lib/gist-command-consumer.js"
 import { assertDirectGistWrite, buildCommand, CODE_GENERATION, ROUTE_FILE } from "../lib/gist-write-route.js"
 import { reconcileDeliveryStore, updateDraftStore, writeStateStore } from "../lib/state-store.js"
 import { savePostFeedback } from "../lib/post-feedback.js"
+import { openEnvelope, parseEnvelope, sealKey } from "../lib/gist-command-seal.js"
 
 const VECTORS = JSON.parse(readFileSync(new URL("../../tests/fixtures/w14_delivery_reconciliation_vectors.json", import.meta.url), "utf8"))
 const sha = text => createHash("sha256").update(text, "utf8").digest("hex")
@@ -46,7 +49,7 @@ async function post(route, body, extraHeaders = {}) {
   return { status: response.status, body: await response.json() }
 }
 
-test("dashboard_editor: legacy PATCHes directly (unchanged); route mode by variable OR record submits a command; no submitter refuses", async () => {
+test("dashboard_editor: legacy PATCHes directly (unchanged); only variable AND record submit a command; either alone refuses; no submitter refuses", async () => {
   const initial = seed()
   const draft = initial.drafts[0]
   const body = { action: "reject", draftId: draft.id, expectedRevision: identity(draft) }
@@ -56,33 +59,42 @@ test("dashboard_editor: legacy PATCHes directly (unchanged); route mode by varia
     assert.deepEqual(gist.patches, [{ id: "routestategist", files: ["state.json"] }], "legacy: exactly today's single state PATCH")
     assert.deepEqual(gist.dispatches, [])
   })
-  for (const [env, files] of [[{ THEHEAT_GIST_WRITE_ROUTE: "serialized" }, {}], [{}, { [ROUTE_FILE]: ROUTE_ON }]]) {
+  for (const [env, files] of [[{ THEHEAT_GIST_WRITE_ROUTE: "serialized", THEHEAT_COMMAND_SEAL_KEY: TEST_SEAL_KEY }, {}],
+    [{ THEHEAT_COMMAND_SEAL_KEY: TEST_SEAL_KEY }, { [ROUTE_FILE]: ROUTE_ON }]]) {
     await scenario(env, { "state.json": JSON.stringify(initial), ...files }, async (gist) => {
       const response = await post("app/api/drafts/route.js", body)
-      assert.equal(response.status, 202)
+      assert.equal(response.status, 409)
+      assert.equal(response.body.code, "route_not_active")
       assert.deepEqual(gist.patches, [])
-      assert.equal(JSON.parse(gist.dispatches[0].body.inputs.command).producer.kind, "dashboard_editor")
-      await assert.rejects(updateDraftStore(draft.id, record => { record.status = "rejected"; return record }, { expectedRevision: identity(draft) }),
-        error => error.code === "direct_write_disabled_by_route" && error.status === 409)
-      assert.deepEqual(gist.patches, [])
+      assert.deepEqual(gist.dispatches, [])
     })
   }
+  await scenario({ THEHEAT_GIST_WRITE_ROUTE: "serialized", THEHEAT_COMMAND_SEAL_KEY: TEST_SEAL_KEY }, { "state.json": JSON.stringify(initial), [ROUTE_FILE]: ROUTE_ON }, async (gist) => {
+    const response = await post("app/api/drafts/route.js", body)
+    assert.equal(response.status, 202)
+    assert.deepEqual(gist.patches, [])
+    assert.equal(JSON.parse(gist.dispatches[0].body.inputs.command).producer.kind, "dashboard_editor")
+    await assert.rejects(updateDraftStore(draft.id, record => { record.status = "rejected"; return record }, { expectedRevision: identity(draft) }),
+      error => error.code === "direct_write_disabled_by_route" && error.status === 409)
+    assert.deepEqual(gist.patches, [])
+  })
 })
 
 test("dashboard_editor: route-mode bulk rejection is ONE all-or-nothing command", async () => {
   const initial = seed(3)
-  await scenario({ THEHEAT_GIST_WRITE_ROUTE: "serialized" }, { "state.json": JSON.stringify(initial) }, async (gist) => {
+  await scenario({ THEHEAT_GIST_WRITE_ROUTE: "serialized", THEHEAT_COMMAND_SEAL_KEY: TEST_SEAL_KEY }, { "state.json": JSON.stringify(initial), [ROUTE_FILE]: ROUTE_ON }, async (gist) => {
     const expectedRevisions = Object.fromEntries(initial.drafts.map(d => [d.id, identity(d)]))
     const response = await post("app/api/drafts/route.js", { action: "bulk_reject_below", delayMinutes: 100, expectedRevisions })
     assert.equal(response.status, 202)
     assert.equal(gist.dispatches.length, 1)
     const command = JSON.parse(response.body.command)
-    assert.equal(command.payload.updates.length, 3)
+    assert.equal(command.operation, "bulk_reject_below")
+    assert.equal(openEnvelope(parseEnvelope(response.body.command), sealKey()).payload.updates.length, 3)
     // A conflicting edit to one target refuses the whole command: no partial bulk outcome.
     const changed = JSON.parse(gist.store.routestategist["state.json"])
     changed.drafts[2].score = { total: 13 }
     gist.store.routestategist["state.json"] = JSON.stringify(changed)
-    Object.assign(process.env, consumerMarker)
+    Object.assign(process.env, routeConsumerEnv)
     const report = await consumeGistCommands([entry(response.body.command)])
     assert.deepEqual(report.refused.map(row => row.code), ["revision_conflict"])
     assert.ok(JSON.parse(gist.store.routestategist["state.json"]).drafts.every(d => d.status === "pending"))
@@ -111,6 +123,10 @@ test("dashboard_reconciliation: legacy unchanged; route mode submits the CAS dec
     assert.deepEqual(gist.patches.map(row => row.files), [["state.json"]])
   })
   await scenario({ THEHEAT_GIST_WRITE_ROUTE: "serialized" }, { "state.json": JSON.stringify(VECTORS.state) }, async (gist) => {
+    await assert.rejects(reconcileDeliveryStore(request, { actor: "dashboard-operator", at, routeCommand: async payload => ({ payload }) }),
+      error => error.code === "route_not_active")
+  })
+  await scenario({ THEHEAT_GIST_WRITE_ROUTE: "serialized" }, { "state.json": JSON.stringify(VECTORS.state), [ROUTE_FILE]: ROUTE_ON }, async (gist) => {
     await assert.rejects(reconcileDeliveryStore(request, { actor: "dashboard-operator", at }), error => error.code === "direct_write_disabled_by_route")
     const submitted = await reconcileDeliveryStore(request, { actor: "dashboard-operator", at, routeCommand: async payload => ({ payload }) })
     assert.equal(submitted.status, "submitted")
@@ -131,6 +147,11 @@ test("post_feedback: legacy writes only its record file; route mode submits; a d
     assert.deepEqual(gist.patches, [{ id: "routefeedbackgist", files: [`editorial-feedback-${value.request_id}.json`] }])
   })
   await scenario({}, { "state.json": JSON.stringify(initial), [ROUTE_FILE]: ROUTE_ON }, async (gist) => {
+    await assert.rejects(savePostFeedback(value), error => error.code === "direct_write_disabled_by_route")
+    await assert.rejects(savePostFeedback(value, { routeSubmit: async input => ({ status: "pending", input }) }), error => error.code === "route_not_active")
+    assert.deepEqual(gist.patches, [])
+  })
+  await scenario({ THEHEAT_GIST_WRITE_ROUTE: "serialized" }, { "state.json": JSON.stringify(initial), [ROUTE_FILE]: ROUTE_ON }, async (gist) => {
     await assert.rejects(savePostFeedback(value), error => error.code === "direct_write_disabled_by_route")
     const routed = await savePostFeedback(value, { routeSubmit: async input => ({ status: "pending", input }) })
     assert.equal(routed.submitted.input.request_id, value.request_id)

@@ -1,15 +1,20 @@
 // P00c: the ONE serialized consumer re-verifies dashboard decisions with the exact existing
 // checks and writes state + results in one PATCH. OFFLINE FIXTURE: in-process whole-file Gist.
 // Real routes submit the commands; the Python admission is exercised by tests/real_closure.
+// v2 (ROUTE-CONTRACT-v2): commands are sealed and bound to the active route activation, so the
+// fixture seeds an active route record and an invented test seal key; approvals hand their sender
+// follow-up to the durable outbox (runSenderOutbox) instead of an in-memory follow-up list.
 import test from "node:test"
 import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 import { createHash } from "node:crypto"
 import { importFresh } from "./helpers/import-fresh.js"
-import { consumerMarker, installMemoryGist, routeEnv } from "./helpers/route-memory-gist.js"
+import { consumerMarker, installMemoryGist, routeConsumerEnv, routeEnv, routeRecord, TEST_SEAL_KEY } from "./helpers/route-memory-gist.js"
 import { policy, runtimeRun, initializeRevision, draftIdentity, textHash, fingerprint } from "./helpers/review-policy.js"
-import { consumeGistCommands, dispatchFollowups, retainResults } from "../lib/gist-command-consumer.js"
-import { buildCommand, CODE_GENERATION, producerGenerationCode, RESULTS_FILE, ROUTE_FILE, validateCommandRaw } from "../lib/gist-write-route.js"
+import { consumeGistCommands, retainResults, runSenderOutbox } from "../lib/gist-command-consumer.js"
+import { buildCommand, CODE_GENERATION, producerGenerationCode, RESULTS_FILE, ROUTE_FILE, routeRecordFromFiles, validateCommandRaw } from "../lib/gist-write-route.js"
+import { openEnvelope, parseEnvelope, sealKey } from "../lib/gist-command-seal.js"
+import { buildSealedCommand } from "../lib/gist-route-submit.js"
 
 const VECTORS = JSON.parse(readFileSync(new URL("../../tests/fixtures/w14_delivery_reconciliation_vectors.json", import.meta.url), "utf8"))
 const sha = text => createHash("sha256").update(text, "utf8").digest("hex")
@@ -45,15 +50,18 @@ async function submit(body, route = "app/api/drafts/route.js") {
 }
 
 async function withRoute(initial, run, options = {}) {
-  const restore = routeEnv({ THEHEAT_GIST_WRITE_ROUTE: "serialized" })
-  const gist = installMemoryGist({ gists: { routestategist: { "state.json": JSON.stringify(initial), ...(options.files || {}) },
+  const restore = routeEnv({ THEHEAT_GIST_WRITE_ROUTE: "serialized", THEHEAT_COMMAND_SEAL_KEY: TEST_SEAL_KEY })
+  const gist = installMemoryGist({ gists: { routestategist: { "state.json": JSON.stringify(initial),
+    ...(options.record === false ? {} : { [ROUTE_FILE]: routeRecord() }), ...(options.files || {}) },
     routefeedbackgist: options.feedback || {} } })
   try { await run(gist) } finally { gist.restore(); restore() }
 }
 
 async function consume(entries, env = {}) {
-  Object.assign(process.env, consumerMarker, env)
-  try { return await consumeGistCommands(entries) } finally { delete process.env.THEHEAT_SERIALIZED_WRITER; delete process.env.GITHUB_RUN_ID }
+  Object.assign(process.env, routeConsumerEnv, env)
+  try { return await consumeGistCommands(entries) } finally {
+    for (const key of [...Object.keys(routeConsumerEnv)]) delete process.env[key]
+  }
 }
 
 test("route mode: the drafts route submits a CAS command (no PATCH); the consumer applies it in ONE PATCH with its result", async () => {
@@ -110,8 +118,12 @@ test("duplicate command is never reapplied; a reused id with other bytes is refu
     const first = await submit({ action: "reject", draftId: draft.id, expectedRevision: identity(draft) })
     const raw = first.body.command
     const parsed = JSON.parse(raw)
-    const reused = buildCommand({ action: "draft_update", producerKind: "dashboard_editor", actorSubject: "dashboard-operator",
-      targets: parsed.targets, payload: parsed.payload, commandId: parsed.command_id, lifetimeMs: 1800000,
+    // The server issues a second, different sealed envelope under the same id (never happens in
+    // production: ids are random per command) — the consumer must refuse it as a reused id.
+    const body = openEnvelope(parseEnvelope(raw), sealKey())
+    const reused = buildSealedCommand({ action: "draft_update", operation: parsed.operation, producerKind: "dashboard_editor",
+      actorSubject: "dashboard-operator", route: routeRecordFromFiles({ [ROUTE_FILE]: { content: gist.store.routestategist[ROUTE_FILE] } }),
+      targets: body.targets, payload: body.payload, commandId: parsed.command_id, lifetimeMs: 1800000,
       now: new Date(Date.parse(parsed.requested_at) + 1000) }).raw
     assert.notEqual(reused, raw)
     const report = await consume([entry(raw), entry(raw), entry(reused)])
@@ -149,7 +161,7 @@ test("expiry, producer generations, the marker and a stale consumer generation a
     const draft = initial.drafts[0]
     const response = await submit({ action: "reject", draftId: draft.id, expectedRevision: identity(draft) })
     const later = new Date(Date.now() + 2 * 3600000)
-    Object.assign(process.env, consumerMarker)
+    Object.assign(process.env, routeConsumerEnv)
     const report = await consumeGistCommands([entry(response.body.command)], { now: () => later })
     assert.deepEqual(report.refused, [{ command_id: response.body.command_id, code: "expired" }])
     assert.equal(state(gist).drafts[0].status, "pending")
@@ -176,6 +188,12 @@ test("activation follows the repository variable; deactivation only after it ret
     const off = await consume([entry(command("activate_route"))], { THEHEAT_GIST_WRITE_ROUTE: "legacy" })
     assert.equal(off.refused[0].code, "route_variable_not_serialized")
     assert.equal(gist.store.routestategist[ROUTE_FILE], undefined)
+    // Old-SHA fence: activation needs the route-era writer name AND no legacy secret name left.
+    const legacyName = await consume([entry(command("activate_route"))], { THEHEAT_GIST_WRITE_ROUTE: "serialized", THEHEAT_GIST_CREDENTIAL: "legacy" })
+    assert.equal(legacyName.refused[0].code, "route_writer_credential_legacy")
+    const legacyPresent = await consume([entry(command("activate_route"))], { THEHEAT_GIST_WRITE_ROUTE: "serialized", THEHEAT_LEGACY_CREDENTIALS_PRESENT: "true" })
+    assert.equal(legacyPresent.refused[0].code, "route_legacy_credentials_present")
+    assert.equal(gist.store.routestategist[ROUTE_FILE], undefined)
     const on = await consume([entry(command("activate_route"))], { THEHEAT_GIST_WRITE_ROUTE: "serialized" })
     assert.equal(on.applied.length, 1)
     const record = JSON.parse(gist.store.routestategist[ROUTE_FILE])
@@ -187,7 +205,7 @@ test("activation follows the repository variable; deactivation only after it ret
     assert.equal(back.applied.length, 1)
     assert.equal(JSON.parse(gist.store.routestategist[ROUTE_FILE]).mode, "legacy")
     assert.equal(gist.store.routestategist["state.json"], JSON.stringify(initial))
-  })
+  }, { record: false })
 })
 
 test("feedback commands write only the feedback Gist; state commands never touch it", async () => {
@@ -229,13 +247,20 @@ test("approve: the consumer repeats the policy confirmation and requests the man
     assert.equal(report.applied.length, 1)
     const saved = byId(gist, draft.id)
     assert.equal(saved.status, "approved")
-    assert.deepEqual(report.followups, [{ command_id: approve.body.command_id, mode: "manual_tweet", tweet_text: saved.text,
-      draft_id: saved.id, publish_intent_id: saved.publish_intent_id }])
-    assert.equal(results(gist)[approve.body.command_id].follow_up, "manual_sender_dispatch_requested")
-    const sent = await dispatchFollowups(report.followups, { token: "invented", repo: "invented/theheat" })
-    assert.deepEqual(sent.map(row => row.status), ["dispatched"])
+    // v2: the follow-up is a durable outbox entry written in the approval's own PATCH (no text).
+    assert.deepEqual(report.outbox_queued, [{ command_id: approve.body.command_id, publish_intent_id: saved.publish_intent_id }])
+    assert.deepEqual(results(gist)[approve.body.command_id].follow_up, { publish_intent_id: saved.publish_intent_id })
+    const queued = JSON.parse(gist.store.routestategist[RESULTS_FILE]).outbox[saved.publish_intent_id]
+    assert.equal(queued.state, "queued")
+    assert.ok(!JSON.stringify(queued).includes(saved.text), "the outbox holds ids and states, never text")
+    Object.assign(process.env, routeConsumerEnv)
+    try {
+      const sent = await runSenderOutbox({ token: "invented", repo: "invented/theheat" })
+      assert.deepEqual(sent.dispatches.map(row => row.state), ["dispatched"])
+    } finally { for (const key of Object.keys(routeConsumerEnv)) delete process.env[key] }
     assert.deepEqual(gist.dispatches.at(-1), { workflow: "bot.yml", body: { ref: "main", inputs: { mode: "manual_tweet",
       tweet_text: saved.text, draft_id: saved.id, publish_intent_id: saved.publish_intent_id } } })
+    assert.equal(JSON.parse(gist.store.routestategist[RESULTS_FILE]).outbox[saved.publish_intent_id].state, "dispatched")
   })
   const second = seed()
   await withRoute(second, async (gist) => {
@@ -247,14 +272,14 @@ test("approve: the consumer repeats the policy confirmation and requests the man
     const report = await consume([entry(approve.body.command)])
     assert.deepEqual(report.refused.map(row => row.code), ["editorial_policy_changed"])
     assert.equal(byId(gist, draft.id).status, "pending")
-    assert.deepEqual(report.followups, [])
+    assert.deepEqual(report.outbox_queued, [])
   })
 })
 
 test("delivery reconciliation: the consumer re-runs the snapshot checks and the same decision", async () => {
   const request = VECTORS.cases[0].steps[0].request
-  const restore = routeEnv({ THEHEAT_GIST_WRITE_ROUTE: "serialized", THEHEAT_DELIVERY_RECONCILIATION_ENABLED: "1" })
-  const gist = installMemoryGist({ gists: { routestategist: { "state.json": JSON.stringify(VECTORS.state) } } })
+  const restore = routeEnv({ THEHEAT_GIST_WRITE_ROUTE: "serialized", THEHEAT_DELIVERY_RECONCILIATION_ENABLED: "1", THEHEAT_COMMAND_SEAL_KEY: TEST_SEAL_KEY })
+  const gist = installMemoryGist({ gists: { routestategist: { "state.json": JSON.stringify(VECTORS.state), [ROUTE_FILE]: routeRecord() } } })
   try {
     process.env.THEHEAT_DELIVERY_RECONCILIATION_ENABLED = "1"
     const handler = await importFresh("app/api/delivery-reconciliation/route.js")

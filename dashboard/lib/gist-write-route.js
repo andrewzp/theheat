@@ -4,13 +4,18 @@
 // record in the state Gist, every direct writer behaves exactly as before.
 import { createHash, randomUUID } from "node:crypto"
 import { canonical } from "./local-command-recovery.js"
+import { CLOCK_SKEW_MS, ENVELOPE_SCHEMA, MAX_LIFETIME_MS, parseEnvelope } from "./gist-command-seal.js"
 
 export const ROUTE_ENV = "THEHEAT_GIST_WRITE_ROUTE"
 export const MARKER_ENV = "THEHEAT_SERIALIZED_WRITER"
 export const ROUTE_FILE = "gist-write-route.json"
 export const RESULTS_FILE = "gist-command-results.json"
 export const CODE_GENERATION = 1
-export const MAX_COMMAND_BYTES = 65535
+// v1 plaintext form: route control only (no private content). Sealed v2 bounds: gist-command-seal.js.
+export const MAX_COMMAND_BYTES = 4096
+export const CREDENTIAL_ENV = "THEHEAT_GIST_CREDENTIAL"
+export const LEGACY_CREDENTIALS_ENV = "THEHEAT_LEGACY_CREDENTIALS_PRESENT"
+export const ROUTE_CONTROL_ACTIONS = new Set(["activate_route", "deactivate_route"])
 export const COMMAND_WORKFLOW = "gist-commands.yml"
 export const ARTIFACT_PREFIX = "theheat-command-"
 export const REFUSAL_PREFIX = "theheat-admission-refused-"
@@ -62,16 +67,28 @@ export function routeRecordFromFiles(files) {
   return decodeRouteRecord(meta.content)
 }
 
-export function resultsFromFiles(files) {
-  if (!files || typeof files !== "object" || !Object.hasOwn(files, RESULTS_FILE)) return {}
+const plainObject = value => value && typeof value === "object" && !Array.isArray(value)
+
+// The consumer's results file: {schema_version: 1, results, outbox?, rejected_envelopes?}.
+export function resultsDocumentFromFiles(files) {
+  if (!files || typeof files !== "object" || !Object.hasOwn(files, RESULTS_FILE)) return { results: {}, outbox: {}, rejected: {} }
   const meta = files[RESULTS_FILE]
   let value
   try {
     if (!meta || meta.truncated || typeof meta.content !== "string") throw new Error()
     value = JSON.parse(meta.content)
   } catch { refuse("command_results_unreadable", 503) }
-  if (!value || value.schema_version !== 1 || !value.results || typeof value.results !== "object" || Array.isArray(value.results)) refuse("command_results_unreadable", 503)
-  return value.results
+  if (!value || value.schema_version !== 1 || !plainObject(value.results)
+      || (Object.hasOwn(value, "outbox") && !plainObject(value.outbox))
+      || (Object.hasOwn(value, "rejected_envelopes") && !plainObject(value.rejected_envelopes))) refuse("command_results_unreadable", 503)
+  return { results: value.results, outbox: value.outbox ?? {}, rejected: value.rejected_envelopes ?? {} }
+}
+
+export function resultsFromFiles(files) { return resultsDocumentFromFiles(files).results }
+
+export function resultsFileContent({ results, outbox = {}, rejected = {} }) {
+  return JSON.stringify({ schema_version: 1, results, ...(Object.keys(outbox).length ? { outbox } : {}),
+    ...(Object.keys(rejected).length ? { rejected_envelopes: rejected } : {}) })
 }
 
 export function serializedWriterMarker(env = process.env) {
@@ -84,6 +101,35 @@ export function serializedWriterMarker(env = process.env) {
 
 export function routeEffective(record, env = process.env) {
   return configuredRouteMode(env) === "serialized" || record?.mode === "serialized"
+}
+
+// ROUTE-CONTRACT-v2 §3: ordinary commands are submitted and applied only while the variable
+// AND the authoritative record both say serialized; the record's activation command id is the
+// route generation a command is bound to. Any disagreement refuses (fail closed).
+export function routeActive(record, env = process.env) {
+  return configuredRouteMode(env) === "serialized" && record?.mode === "serialized"
+}
+
+export function activeRouteActivation(record, env = process.env) {
+  if (!routeActive(record, env)) refuse("route_not_active", 409)
+  return record.command_id
+}
+
+// Old-SHA fence (ROUTE-CONTRACT-v2 §6, amended 2026-11-02): route-era writes require the Gist
+// writer token from its route-era secret name AND the workflow's presence check showing that no
+// legacy Gist-writer or sender secret name still exists (reruns of old SHAs read only those).
+// The workflow exports booleans only (`secrets.X != ''`), never values. Unset = fail closed.
+export function routeCredentialCode(env = process.env) {
+  if (env[CREDENTIAL_ENV] !== "route") return "route_writer_credential_legacy"
+  if (env[LEGACY_CREDENTIALS_ENV] !== "false") return "route_legacy_credentials_present"
+  return null
+}
+
+// Apply-time gate for one sealed command (terminal codes; null when it may apply).
+export function routeApplyCode(envelope, record, env = process.env) {
+  if (!routeActive(record, env)) return "route_not_active"
+  if (record.command_id !== envelope.route_activation) return "route_generation_not_current"
+  return null
 }
 
 // The exact Python check_writer rule: route mode requires the group marker and a code
@@ -101,8 +147,8 @@ function exactKeys(value, keys) {
   return value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).sort().join() === [...keys].sort().join()
 }
 
-// Structural mirror of the Python admission (src/commands/gist_commands.parse_command).
-// The consumer and resubmission endpoint re-run it; payload semantics are re-verified at apply.
+// Structural mirror of the Python admission for the v1 plaintext form, which since v2 carries
+// route control only (src/commands/gist_commands.parse_command). Anything else is refused.
 export function validateCommandRaw(raw, { now = new Date() } = {}) {
   if (typeof raw !== "string" || Buffer.byteLength(raw) > MAX_COMMAND_BYTES) refuse("command_too_large", 413)
   let value
@@ -111,6 +157,7 @@ export function validateCommandRaw(raw, { now = new Date() } = {}) {
   try { text = canonical(value) } catch { refuse("unsafe_number", 400) }
   if (text !== raw) refuse("non_canonical_command", 400)
   if (!exactKeys(value, ENVELOPE_KEYS) || value.schema_version !== 1) refuse("invalid_command", 400)
+  if (!ROUTE_CONTROL_ACTIONS.has(value.action)) refuse("plaintext_command_refused", 400)
   if (!UUID.test(value.command_id)) refuse("invalid_command_id", 400)
   const allowed = PRODUCERS[value.producer?.kind]
   if (!exactKeys(value.producer, ["kind", "generation"]) || !allowed || !allowed.includes(value.action)
@@ -121,6 +168,16 @@ export function validateCommandRaw(raw, { now = new Date() } = {}) {
   if (typeof value.actor_subject !== "string" || !value.actor_subject || value.actor_subject.length > 200) refuse("invalid_command", 400)
   if (!Array.isArray(value.targets) || !value.payload || typeof value.payload !== "object" || Array.isArray(value.payload)) refuse("invalid_command", 400)
   return { command: value, raw, digest: commandDigest(raw), expired: expires <= now.getTime() }
+}
+
+// Either form: {kind: "sealed", envelope, raw, digest, expired} or {kind: "control", command, ...}.
+export function parseCommandRaw(raw, { now = new Date() } = {}) {
+  let schema = null
+  try { schema = JSON.parse(raw)?.schema_version } catch { /* reported by the strict parser below */ }
+  if (schema === ENVELOPE_SCHEMA) return { kind: "sealed", ...parseEnvelope(raw, { now }) }
+  if (typeof raw === "string" && Buffer.byteLength(raw) > MAX_COMMAND_BYTES && schema !== 1) refuse("command_too_large", 413)
+  const item = validateCommandRaw(raw, { now })
+  return { kind: "control", ...item }
 }
 
 // Producer generation against the authoritative route record (consumer side).
@@ -150,8 +207,9 @@ function githubHeaders(token) {
 // Durable intake = a workflow_dispatch of gist-commands.yml with the exact canonical bytes.
 // A lost response is reported as uncertain with the retained body; never as success.
 export async function submitCommand(raw, { fetchImpl = globalThis.fetch, token = process.env.GITHUB_TOKEN, repo = REPO } = {}) {
-  const { command, digest } = validateCommandRaw(raw)
-  const base = { command_id: command.command_id, digest, command: raw }
+  const parsed = parseCommandRaw(raw)
+  const commandId = parsed.kind === "sealed" ? parsed.envelope.command_id : parsed.command.command_id
+  const base = { command_id: commandId, digest: parsed.digest, command: raw }
   let response
   try {
     response = await fetchImpl(`https://api.github.com/repos/${repo}/actions/workflows/${COMMAND_WORKFLOW}/dispatches`, {
@@ -172,23 +230,55 @@ async function gistFiles(id, { fetchImpl, token }) {
   return gist?.files ?? {}
 }
 
-// applied | refused(code) | pending (admitted, not yet consumed) | unknown. Never synthesized.
+// The authoritative route record, read fresh from the state Gist (secret-Gist GET needs no write).
+export async function readRouteRecord({ fetchImpl = globalThis.fetch, token = process.env.GITHUB_TOKEN, gistId = process.env.GIST_ID } = {}) {
+  if (!/^[A-Za-z0-9_]+$/.test(gistId || "")) refuse("route_record_unavailable", 503)
+  return routeRecordFromFiles(await gistFiles(gistId, { fetchImpl, token }))
+}
+
+async function artifactsNamed(name, { fetchImpl, token, repo }) {
+  const response = await fetchImpl(`https://api.github.com/repos/${repo}/actions/artifacts?name=${encodeURIComponent(name)}&per_page=100`,
+    { headers: githubHeaders(token), cache: "no-store" })
+  if (!response.ok) refuse("command_status_unavailable", 503)
+  const rows = (await response.json())?.artifacts
+  return Array.isArray(rows) ? rows.filter(row => row?.name === name) : []
+}
+
+// Safe follow-up projection of the sender outbox entry an approval created (ids/codes only).
+export function followUpOf(outbox, commandId) {
+  const entry = Object.values(outbox || {}).find(row => row?.command_id === commandId)
+  return entry ? { state: entry.state, code: entry.code ?? null, attempts: entry.attempts ?? 0, publish_intent_id: entry.publish_intent_id } : null
+}
+
+// applied | refused(code) | pending (admitted, not yet consumed) | unknown. Never synthesized:
+// persisted results first, then EXACT-name artifact queries (no bounded scan can hide a command).
 export async function commandStatus(commandId, { fetchImpl = globalThis.fetch, token = process.env.GITHUB_TOKEN, repo = REPO,
-  gistId = process.env.GIST_ID, feedbackGistId = process.env.THEHEAT_FEEDBACK_GIST_ID, digest = null } = {}) {
+  gistId = process.env.GIST_ID, feedbackGistId = process.env.THEHEAT_FEEDBACK_GIST_ID, digest = null, now = new Date() } = {}) {
   if (!UUID.test(commandId || "")) refuse("invalid_command_id", 400)
+  const rejected = {}
   for (const id of [gistId, feedbackGistId].filter(value => /^[A-Za-z0-9_]+$/.test(value || ""))) {
-    const result = resultsFromFiles(await gistFiles(id, { fetchImpl, token }))[commandId]
+    const document = resultsDocumentFromFiles(await gistFiles(id, { fetchImpl, token }))
+    const result = document.results[commandId]
     if (result) {
       if (digest && result.digest !== digest) return { command_id: commandId, status: "refused", code: "command_id_reused", digest: result.digest }
+      const followUp = followUpOf(document.outbox, commandId)
       return { command_id: commandId, status: result.status, code: result.code ?? null, digest: result.digest,
-        consumed_at: result.consumed_at, ...(result.follow_up ? { follow_up: result.follow_up } : {}) }
+        consumed_at: result.consumed_at, ...(followUp ? { follow_up: followUp } : {}) }
     }
+    Object.assign(rejected, document.rejected)
   }
-  const response = await fetchImpl(`https://api.github.com/repos/${repo}/actions/artifacts?per_page=100`, { headers: githubHeaders(token), cache: "no-store" })
-  if (!response.ok) refuse("command_status_unavailable", 503)
-  const artifacts = (await response.json())?.artifacts ?? []
-  const refusal = artifacts.find(row => typeof row?.name === "string" && row.name.startsWith(`${REFUSAL_PREFIX}${commandId}-`))
-  if (refusal) return { command_id: commandId, status: "refused", code: refusal.name.slice(`${REFUSAL_PREFIX}${commandId}-`.length) || "admission_refused" }
-  if (artifacts.some(row => row?.name === `${ARTIFACT_PREFIX}${commandId}` && row.expired !== true)) return { command_id: commandId, status: "pending" }
+  if (digest && rejected[digest]) return { command_id: commandId, status: "refused", code: rejected[digest].code, digest }
+  const admitted = await artifactsNamed(`${ARTIFACT_PREFIX}${commandId}`, { fetchImpl, token, repo })
+  const live = admitted.filter(row => row.expired !== true)
+  const created = live.map(row => Date.parse(row.created_at)).filter(Number.isFinite)
+  // A command lives at most 24 h after its request, which precedes admission by at most the skew.
+  if (live.length && created.length === live.length && Math.min(...created) + MAX_LIFETIME_MS + CLOCK_SKEW_MS < now.getTime()) {
+    return { command_id: commandId, status: "refused", code: "expired" }
+  }
+  if (live.length) return { command_id: commandId, status: "pending" }
+  if (admitted.length) return { command_id: commandId, status: "refused", code: "expired" }
+  if ((await artifactsNamed(`${REFUSAL_PREFIX}${commandId}`, { fetchImpl, token, repo })).length) {
+    return { command_id: commandId, status: "refused", code: "admission_refused" }
+  }
   return { command_id: commandId, status: "unknown" }
 }

@@ -24,6 +24,18 @@ import {
 } from "./draft-revisions.js"
 
 export const DRAFT_ACTIONS = ["approve", "reject", "edit", "review", "auto_approve", "cancel_auto_approve", "select_candidate", "bulk_reject_below", "attach_graphic", "remove_graphic"]
+export const CONFIRM_ACTIONS = ["review", "approve", "auto_approve"]
+// The request fields each operation reads (route mode seals exactly these, nothing else).
+export const OPERATION_PARAMS = Object.freeze({
+  approve: [], reject: [], cancel_auto_approve: [], remove_graphic: [],
+  edit: ["editedText", "operator_claim_references"],
+  select_candidate: ["candidateRank"],
+  auto_approve: ["delayMinutes"],
+  review: ["reviewConfirmed", "mediaReviewConfirmed", "expectedPolicySha256", "publishedAttestations", "expectedMediaSha256"],
+  attach_graphic: ["expectedMediaSha256", "retainedInputSha256"],
+  bulk_reject_below: ["threshold"],
+})
+
 export function fail(message, status = 409, code = "revision_conflict") {
   throw Object.assign(new Error(message), { status, code })
 }
