@@ -2,6 +2,10 @@
 
 Living plan for closing the gap between the bot's current voice quality and the **resumption bar** (majority A-grade rate per cycle). Refined daily by the autonomous grading agent (cron `0 15 * * *`), reviewed and implemented by the human operator.
 
+> **Nov 2: 0 fresh drafts — queue is an exact match to Oct 31's 4 graded drafts; no re-grading, no
+> proposal evidence updates.** 3 strict staleness candidates now (Riyadh ×2, Urumqi; 69–84h, Oct 30
+> forecasts elapsed); gist write blocked, skipped. Intake quiet since Oct 31 03:28 UTC.
+>
 > **Oct 31: 4 fresh drafts, 0% A-rate (0 A / 0 B / 3 B- / 1 C+).** Queue turned over; intake resumed
 > Oct 30. P_close +1 cycle (0/4 positive; disclaimer close on Urumqi). P_dust counter-evidence
 > cycle 2 (2/2 dust drafts carry WHO multiples). P_event_sat +1 (Riyadh ×2 same day). P4: tilde on
