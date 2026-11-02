@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 import unicodedata
 
-from src.data.air_quality_evidence import is_air_quality
+from src.data.air_quality_evidence import bundle_failures, is_air_quality
 
 
 _AQ = r"(?:dust|pm\s*(?:2\s*\.\s*5|25|10)|particulate(?: matter| pollution)?|air pollution|pollution|aqi|air quality)"
@@ -47,7 +47,7 @@ def _normalized(text: str) -> str:
 
 _DUST = re.compile(r"\bdust\b")
 _PERIOD_COMPARISON = re.compile(
-    r"\b(?:who|guidelines?|limits?|standards?)\b|\b\d+(?:\.\d+)?\s*(?:x|times)\b|\b(?:twice|triple|double)\b"
+    r"\b(?:who|guidelines?|limits?|standards?)\b|\b\d+(?:\.\d+)?\s*(?:(?:x|times)\b|×)|\b(?:twice|triple|double)\b"
     r"|\b(?:24 hour|daily|day long) (?:mean|average)\b"
 )
 _NEGATED_PERIOD = re.compile(r"\b(?:not|no|never|without) (?:a |an |any )?(?:24 hour |daily |day long )?(?:mean|average)\b")
@@ -60,9 +60,21 @@ _PM10_COMPARISON_SPAN = re.compile(
     r"(?:the\s+)?who\s+(?:24 hour\s+)?(?:guideline|limit|standard)s?\b)?"
     r"|cross(?:es|ed)?\s+(?:the\s+)?(?:who\s+(?:24 hour\s+)?)?(?:guideline|limit|standard)s?\b)"
 )
+_PM10_MEAN_RATIO_SPAN = re.compile(
+    r"\bpm\s*10(?:'s)?\s+"
+    r"(?:(?:is\s+)?(?:also\s+)?forecast\s+(?:to\s+)?|(?:is\s+)?)"
+    r"(?:averag(?:e|ing)|(?:24 hour|daily)\s+(?:mean|average))\s+(?:(?:of|is)\s+)?"
+    r"(?:(?:about|roughly|around|approximately)\s+|[~≈]\s*)?"
+    r"(?:\d+(?:\.\d+)?\s*(?:(?:times|x)\b|×)|twice|double|triple)\s+"
+    r"(?:the\s+)?who\s+(?:24 hour\s+)?(?:guideline|limit|standard)s?\b"
+)
 _SHARED_DUST_SUBJECT = re.compile(
     rf"\bdust\b(?:[\s,/'\"“”«»&():\[\]]+|\b(?:and|or|plus|with|as well as|along with)\b|\b{_AQ}\b)*$"
 )
+# The new ratio-only exemption is deliberately narrower than the existing
+# absolute-concentration form: a completed quantity, then a comma and a new
+# PM10 adjunct. Do not infer independence from a list of dust-subject nouns.
+_PM10_RATIO_BOUNDARY = re.compile(r"\d[\d,.]*\s*(?:μg|ug)/m3\s*,\s*(?:with|and)\s*$")
 
 
 def dust_comparison_failures(tweet: str, bundle) -> list[str]:
@@ -74,6 +86,12 @@ mixed comparisons hold. An explicit negation ("a peak, not a daily mean") is not
 """
     if getattr(bundle, "signal_kind", None) != "dust_event" or not isinstance(tweet, str):
         return []
+    facts = getattr(bundle, "current_facts", None)
+    # Ratio-only wording still needs the independently supplied PM10 daily mean.
+    # An absent, altered or malformed source cannot create this narrow exemption.
+    supplied_pm10 = isinstance(facts, list) and any(
+        isinstance(fact, dict) and fact.get("label") == "who_pm10_multiple" for fact in facts
+    ) and not bundle_failures(bundle)
     for clause in re.split(r"[!?;。]|\.(?!\d)|(?<!\d)\.", _normalized(tweet)):
         if not _DUST.search(clause):
             continue
@@ -85,6 +103,10 @@ mixed comparisons hold. An explicit negation ("a peak, not a daily mean") is not
         scan = _PM10_COMPARISON_SPAN.sub(
             lambda match: match.group() if _SHARED_DUST_SUBJECT.search(match.string[:match.start()]) else " ", scan,
         )
+        if supplied_pm10:
+            scan = _PM10_MEAN_RATIO_SPAN.sub(
+                lambda match: " " if _PM10_RATIO_BOUNDARY.search(match.string[:match.start()]) else match.group(), scan,
+            )
         if _PERIOD_COMPARISON.search(scan):
             return ["dust_peak_comparison: a forecast dust peak cannot be compared with a 24-hour mean, "
                     "WHO period or multiple; only supplied PM10 carries the PM10 anchor"]

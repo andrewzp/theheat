@@ -1,6 +1,10 @@
 release=thresholds-latest
-sha256=9fd9c660aff1dabd122361eef32cb3464ec10d2b32a9e5683d6ad6f06546a44d
-bytes=957243392
-last_diff_date=
-active_stations=11907
-threshold_rows=9285790
+sha256=432b041bb1fb1738c2b7a02e23e91ecbb662ee1821b3f393ceeb517b9715153f
+bytes=1582645248
+active_stations=12627
+threshold_rows=9831840
+last_diff_date=2026-10-24
+format=sqlite-gzip
+asset=station_thresholds-432b041bb1fb1738c2b7a02e23e91ecbb662ee1821b3f393ceeb517b9715153f.sqlite.gz
+asset_sha256=1d10117f724c531fc4819bc1d15276c7470a3593d9151dc874c894ad3599d6c2
+asset_bytes=268772173

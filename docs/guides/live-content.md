@@ -33,9 +33,11 @@ checks, final safety and every unknown-delivery fence still apply first.
   nothing is drafted.
 - **Final boundary.** The send holds when the retained bulletin changed, its
   leader's local day ended or its capture is over 12 hours old.
-- **Rollout dependency.** The checked-in `data/normals.csv` is legacy, so
-  production Hot10 holds until root runs `scripts/build_normals.py` (a live
-  Meteostat retrieval) and lands its output.
+- **Installed baseline.** `data/normals.csv` contains qualified Meteostat point
+  normals for 440 sampled catalogue locations, acquired 2 November 2026. The
+  other 193 locations remain excluded. See `data/NORMALS.md` and the bound
+  manifest and installation plan. A fresh forecast still needs at least ten
+  qualified places before the bulletin can reach the writer.
 
 ## PM2.5 and dust forecasts (default off)
 
@@ -87,11 +89,12 @@ checks, final safety and every unknown-delivery fence still apply first.
   example: access expired, baseline unavailable, too few qualified inputs,
   selector/budget hold, checked copy rejected, no event). It also shows checked
   sampled denominators. Unknown stays unknown, and nothing claims global recall.
-- **Named blocks.** GPM's expired Earthdata token is a named access block; a
-  stored key is not recovery.
-- **Threshold baseline.** Release `thresholds-latest` has no
-  `station_thresholds.sqlite` asset (957,243,392 bytes pinned), so the GHCN leg
-  holds until root rebuilds and uploads it.
+- **Named blocks.** Earthdata access refusal is a named access block; a stored
+  key or successful download does not establish qualified rainfall evidence.
+- **Threshold baseline.** The manifest now selects the verified, immutable
+  compressed GHCN-derived asset. The next production run still must download
+  and verify it before the GHCN leg can operate. See `data/STATION_THRESHOLDS.md`
+  for source scope and the initial incremental catch-up requirement.
 - **Draft counts.** Posted and rejected drafts are retained history, not a
   backlog.
 
@@ -100,7 +103,7 @@ checks, final safety and every unknown-delivery fence still apply first.
 1. Regenerate the generated artifacts (source registry → editorial policy →
    graphic runtime), review the change and run Linux CI. Include
    `tests/test_live_content_native_journeys.py`.
-2. Land qualified Hot10 normals and the station-thresholds asset (both live
-   retrievals).
+2. Observe production loading the installed Hot10 normals and station thresholds;
+   complete the initial bounded threshold catch-up, then verify weekly refresh.
 3. Decide on the PM2.5 flag, then the dust flag, each under the standing
    automatic authority. Watch the Sources view outcome rows after each run.

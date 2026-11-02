@@ -13,6 +13,7 @@ import json
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 import subprocess
+import shutil
 import sys
 from typing import Any
 
@@ -27,8 +28,10 @@ ROOT = Path(__file__).resolve().parents[2]
 NOW = "2026-10-30T12:00:00Z"
 
 
-def _cli(script: str, *args: str, env: dict[str, str] | None = None) -> tuple[int, Any]:
-    done = subprocess.run([sys.executable, str(ROOT / script), *args], cwd=ROOT, capture_output=True, text=True,
+def _cli(script: str, *args: str, env: dict[str, str] | None = None,
+         repository: Path | None = None) -> tuple[int, Any]:
+    repository = repository or ROOT
+    done = subprocess.run([sys.executable, str(repository / script), *args], cwd=repository, capture_output=True, text=True,
                           timeout=180, check=False,
                           env={"PATH": "/usr/bin:/bin", "LC_ALL": "C", "TZ": "UTC", "PYTHONDONTWRITEBYTECODE": "1",
                                **(env or {})})
@@ -76,12 +79,22 @@ def unavailable_source(tmp_path: Path) -> dict:
 
 
 def missing_baseline(tmp_path: Path) -> dict:
-    code, report = _cli("scripts/theheat_onboard.py", "preflight", "--skip-generators")
+    # Exercise the same real CLI bytes against an explicitly broken fixture,
+    # rather than requiring the production checkout's baseline to stay broken.
+    repository = tmp_path / "missing-baseline-checkout"
+    (repository / "scripts").mkdir(parents=True)
+    (repository / "data").mkdir()
+    for script in ("theheat_onboard.py", "build_normals.py"):
+        shutil.copyfile(ROOT / "scripts" / script, repository / "scripts" / script)
+    (repository / "src").symlink_to(ROOT / "src", target_is_directory=True)
+    shutil.copyfile(ROOT / "data/cities.csv", repository / "data/cities.csv")
+    (repository / "data/normals.csv").write_text("city,month,avg_high_c\nInventedtown,1,21.5\n")
+    code, report = _cli("scripts/theheat_onboard.py", "preflight", "--skip-generators", repository=repository)
     assert code == 1 and report["repository"]["normals"]["status"] == "legacy_unqualified"
     assert report["features"]["hot10"].startswith("holds")
     plan_code, _ = _cli("scripts/build_normals.py", "plan", "--cities", "data/cities.csv", "--installed",
                         "data/normals.csv", "--output", str(tmp_path / "normals-plan.json"),
-                        "--result", str(tmp_path / "normals-result.json"))
+                        "--result", str(tmp_path / "normals-result.json"), repository=repository)
     result = json.loads((tmp_path / "normals-result.json").read_text())
     assert plan_code in (0, 1) and json.dumps(result).count("missing") >= 1
     return rehearsal.status_row("missing_baseline", consumer="scripts/theheat_onboard.py preflight; scripts/build_normals.py plan",
