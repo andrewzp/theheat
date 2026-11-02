@@ -26,6 +26,19 @@ Merge rules (main thread, deterministic, all-or-nothing per worker):
     exceed its cap by the other appenders' rows until its next capped write
     (bounded; nothing is lost). A side that removed every base row replaced
     the list: conflict;
+  - a keyed window log (``windowed_logs()``: the candidate log, whose only
+    writer is ``state.record_candidate_observation``) merges by that writer's
+    own contract instead. Each side may remove a base row only by
+    re-observing its key (the key is in that side's tail) or because the
+    row's date had left the window by the side's latest possible observation
+    time (the worker's completion stamp; for live, the latest completion
+    stamp promoted in this batch), so removing every base row after a quiet
+    week, or re-observing the only row, is a log edit. Its tail must hold
+    unique new keys, and every row it keeps must be inside the window at its
+    earliest possible observation time. The merge is the base rows neither
+    side removed, then live's tail without the keys this worker re-observed,
+    then the worker's tail: like serial in promotion order, one row per key.
+    Anything else the writer cannot produce is a conflict;
   - anything else, including a scalar set to an equal value (two increments
     from one base look equal), is a conflict: nothing of that worker is
     applied and the scheduler records the conflict (fail closed).
@@ -50,6 +63,7 @@ from collections.abc import Callable
 from contextvars import ContextVar
 from copy import deepcopy
 import dataclasses
+from datetime import UTC, datetime, timedelta
 import secrets
 import threading
 import time
@@ -68,6 +82,15 @@ DEADLINE_REASON = "runner_budget_exceeded"
 # Monotonic clock for budgets/deadlines/completion stamps; tests may replace it.
 clock: Callable[[], float] = time.perf_counter
 
+
+def _utc_now() -> datetime:
+    return datetime.now(UTC)
+
+
+# UTC wall clock bracketing when a stage could have written a dated log row
+# (the clock the state writers date rows with); tests may replace it.
+wall_clock: Callable[[], datetime] = _utc_now
+
 _MISSING = object()
 _ACTIVE: ContextVar["WorkerStage | None"] = ContextVar("theheat_worker_stage", default=None)
 _LATE_LOCK = threading.Lock()
@@ -76,6 +99,10 @@ _LATE: list[dict] = []
 
 def now() -> float:
     return clock()
+
+
+def wall_now() -> datetime:
+    return wall_clock()
 
 
 class StagingConflict(Exception):
@@ -125,6 +152,10 @@ class Batch:
     base_state: dict
     base_run: dict | None
     promoted: int = 0
+    # Wall-clock bracket of every live edit since the base: the snapshot, then
+    # the latest completion stamp among this batch's promoted stages.
+    opened_wall: datetime = field(default_factory=wall_now)
+    promoted_until: datetime | None = None
 
     def stage(self, source: str, budget_seconds: float) -> "WorkerStage":
         live = self.owner.live_state
@@ -143,7 +174,7 @@ class Batch:
             owner=self.owner, batch=self, source=source, started_at=started_at, deadline=deadline,
             cancel=CancelToken(source, deadline=deadline, clock=now, deadline_reason=DEADLINE_REASON),
             base_generation=self.base_generation, base_queue=base_queue,
-            state=state, run=deepcopy(self.base_run),
+            state=state, run=deepcopy(self.base_run), started_wall=wall_now(),
         )
         self.owner.stages.append(stage)
         return stage
@@ -161,8 +192,10 @@ class WorkerStage:
     base_queue: tuple | None
     state: dict
     run: dict | None
+    started_wall: datetime  # Before the worker can run; its completion follows every write it made.
     deferred: list[tuple[str, Callable[..., Any], tuple]] = field(default_factory=list)
     completed_at: float | None = None
+    completed_wall: datetime | None = None
     outcome: str | None = None
     error_class: str | None = None
     disposition: str | None = None
@@ -213,6 +246,7 @@ def execute(stage: WorkerStage, run: Callable[[dict, dict | None], None]) -> Wor
         raise
     finally:
         stage.completed_at = now()
+        stage.completed_wall = wall_now()
         _ACTIVE.reset(marker)
         # Decided by the completion stamp and an already-recorded cancellation
         # only; re-reading the clock here could disagree with the stamp.
@@ -316,7 +350,12 @@ def promote(owner: Owner, stage: WorkerStage, batch: Batch) -> str:
         return f"refused:{reason}"
     try:
         ops: list = []
-        _plan_dict(batch.base_state, _without_transient(stage.state), owner.live_state, "", ops)
+        windows = _Windows(
+            logs=windowed_logs(),
+            worker=(stage.started_wall, stage.completed_wall or stage.started_wall),
+            live=(batch.opened_wall, batch.promoted_until or batch.opened_wall),
+        )
+        _plan_dict(batch.base_state, _without_transient(stage.state), owner.live_state, "", ops, windows)
         if stage.run is not None and owner.live_run is not None:
             _plan_dict(batch.base_run or {}, stage.run, owner.live_run, "current_run.", ops)
         new_rows = _queue_delta(stage)
@@ -330,6 +369,8 @@ def promote(owner: Owner, stage: WorkerStage, batch: Batch) -> str:
     _add_sink(owner.live_state, sink)
     stage.disposition = "promoted"
     batch.promoted += 1
+    completed = stage.completed_wall or stage.started_wall
+    batch.promoted_until = completed if batch.promoted_until is None else max(batch.promoted_until, completed)
     for name, fn, args in stage.deferred:
         try:
             fn(*args)
@@ -358,7 +399,8 @@ def _same(a: Any, b: Any) -> bool:
         return False
 
 
-def _plan_dict(base: dict, staged: dict, live: dict, path: str, ops: list) -> None:
+def _plan_dict(base: dict, staged: dict, live: dict, path: str, ops: list,
+               windows: _Windows | None = None) -> None:
     for key in list(staged) + [k for k in base if k not in staged]:
         b = base.get(key, _MISSING)
         s = staged.get(key, _MISSING)
@@ -369,9 +411,9 @@ def _plan_dict(base: dict, staged: dict, live: dict, path: str, ops: list) -> No
         if b is _MISSING and type(s) is type(current) and isinstance(s, (dict, list)):
             b = type(s)()  # Both sides created the same container since the base.
         if isinstance(b, dict) and isinstance(s, dict) and isinstance(current, dict):
-            _plan_dict(b, s, current, here + ".", ops)
+            _plan_dict(b, s, current, here + ".", ops, windows)
         elif isinstance(b, list) and isinstance(s, list) and isinstance(current, list):
-            _plan_list(b, s, current, here, ops)
+            _plan_list(b, s, current, here, ops, windows)
         elif _same(current, b):
             ops.append(_setter(live, key, s))
         else:
@@ -389,6 +431,17 @@ def _setter(container: dict, key: Any, value: Any) -> Callable[[], None]:
     return apply
 
 
+def _kept_then_appended(base: list, other: list) -> tuple[list[int], list]:
+    """Base positions ``other`` keeps in order as its head, and the rows it appends after them."""
+    kept: list[int] = []
+    j = 0
+    for i, row in enumerate(base):
+        if j < len(other) and _same(other[j], row):
+            kept.append(i)
+            j += 1
+    return kept, other[j:]
+
+
 def _log_shape(base: list, other: list) -> tuple[list[int], list] | None:
     """(kept base positions, appended tail) when ``other`` keeps base rows in order, then appends.
 
@@ -396,25 +449,98 @@ def _log_shape(base: list, other: list) -> tuple[list[int], list] | None:
     (a re-observed row moves to the end). Removing every row of a non-empty
     base is a replacement, not a log edit: None.
     """
-    kept: list[int] = []
-    j = 0
-    for i, row in enumerate(base):
-        if j < len(other) and _same(other[j], row):
-            kept.append(i)
-            j += 1
+    kept, tail = _kept_then_appended(base, other)
     if base and not kept:
         return None
-    return kept, other[j:]
+    return kept, tail
 
 
-def _plan_list(base: list, staged: list, live: list, path: str, ops: list) -> None:
+@dataclass(frozen=True)
+class WindowedLog:
+    """A log whose one writer dedups on ``key`` and keeps a ``window_days`` window of ``date_field``.
+
+    Exactly ``state.record_candidate_observation``: drop the rows of the
+    observed key, append the new row last, then drop every row whose
+    ``str(row[date_field] or "")`` is before ``(now - window_days).date()``
+    (ISO dates compare as strings; UTC ``now``).
+    """
+
+    key: str
+    date_field: str
+    window_days: int
+
+    def cutoff(self, at: datetime) -> str:
+        return (at.astimezone(UTC) - timedelta(days=self.window_days)).date().isoformat()
+
+    def day(self, row: dict) -> str:
+        return str(row.get(self.date_field) or "")
+
+    def key_of(self, row: dict) -> str | None:
+        value = row.get(self.key)
+        return value if isinstance(value, str) else None
+
+
+def windowed_logs() -> dict[str, WindowedLog]:
+    """Top-level state lists merged by their writer's window/dedup contract.
+
+    ``coverage_log`` is deliberately absent: its writer appends the event's own
+    date, so re-observing an old event can drop the key entirely, which the
+    final lists cannot tell from an unrelated removal; it keeps the generic
+    rule (and only the serial open_meteo runner writes it).
+    """
+    from src import state  # Read only: the writer's own window.
+
+    return {"candidates_log": WindowedLog("event_id", "date", state.CANDIDATES_WINDOW_DAYS)}
+
+
+@dataclass(frozen=True)
+class _Windows:
+    """The windowed logs, and when each side could have observed: (earliest, latest) wall clock."""
+
+    logs: dict[str, WindowedLog]
+    worker: tuple[datetime, datetime]
+    live: tuple[datetime, datetime]
+
+
+def _window_edit(log: WindowedLog, base: list, other: list, since: datetime,
+                 until: datetime) -> tuple[list[int], list] | None:
+    """(kept base positions, appended tail) when ``log``'s writer, observing between
+    ``since`` and ``until``, can turn ``base`` into ``other``; otherwise None.
+    """
+    if not all(isinstance(row, dict) for row in (*base, *other)):
+        return None
+    kept, tail = _kept_then_appended(base, other)
+    appended = [log.key_of(row) for row in tail]
+    if None in appended or len(set(appended)) != len(appended):
+        return None  # One new row per observed key.
+    reobserved = set(appended)
+    retained = set(kept)
+    if any(log.key_of(base[i]) in reobserved for i in kept):
+        return None  # The writer drops a key's rows before appending that key.
+    expired = log.cutoff(until)
+    for i, row in enumerate(base):
+        if i not in retained and log.key_of(row) not in reobserved and not log.day(row) < expired:
+            return None  # An in-window row removed without re-observation: not this writer.
+    window_start = log.cutoff(since)
+    if any(log.day(row) < window_start for row in other):
+        return None  # The writer leaves no row outside its window.
+    return kept, tail
+
+
+def _plan_list(base: list, staged: list, live: list, path: str, ops: list,
+               windows: _Windows | None = None) -> None:
     if _same(live, base):
         def replace() -> None:
             live[:] = staged
         ops.append(replace)
         return
-    worker = _log_shape(base, staged)
-    other = _log_shape(base, live)
+    log = windows.logs.get(path) if windows is not None else None
+    if log is None or windows is None:
+        worker = _log_shape(base, staged)
+        other = _log_shape(base, live)
+    else:
+        worker = _window_edit(log, base, staged, *windows.worker)
+        other = _window_edit(log, base, live, *windows.live)
     if worker is None or other is None:
         raise StagingConflict(path)
     # Rows either side removed stay removed; live's own row objects are kept;
@@ -422,6 +548,10 @@ def _plan_list(base: list, staged: list, live: list, path: str, ops: list) -> No
     worker_kept = set(worker[0])
     live_kept, live_tail = other
     survivors = [row for i, row in zip(live_kept, live) if i in worker_kept]
+    if log is not None:
+        # This worker writes later: a key both appended keeps only its row, last (serial re-observation).
+        mine = {log.key_of(row) for row in worker[1]}
+        live_tail = [row for row in live_tail if log.key_of(row) not in mine]
     merged = survivors + list(live_tail) + list(worker[1])
 
     def merge() -> None:
