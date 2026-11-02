@@ -101,7 +101,7 @@ jobs:
       # only means the report was read; the separate positive gate stays visible.
       - name: Read retained writer operating evidence
         env:
-          GH_TOKEN: ${{ secrets.GH_GIST_TOKEN }}
+          GH_TOKEN: ${{ secrets.THEHEAT_GIST_WRITER_TOKEN || secrets.GH_GIST_TOKEN }}
           GIST_ID: ${{ secrets.GIST_ID }}
         run: |
           set -euo pipefail

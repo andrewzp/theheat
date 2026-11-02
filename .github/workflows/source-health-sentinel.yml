@@ -38,7 +38,7 @@ jobs:
 
       - name: Fetch state.json from gist
         env:
-          GH_TOKEN: ${{ secrets.GH_GIST_TOKEN }}
+          GH_TOKEN: ${{ secrets.THEHEAT_GIST_WRITER_TOKEN || secrets.GH_GIST_TOKEN }}
         run: gh gist view "${{ secrets.GIST_ID }}" -f state.json > /tmp/state.json
 
       # Opens an issue for each currently-failing source, closes the issue of any

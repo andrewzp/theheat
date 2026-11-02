@@ -1,4 +1,8 @@
 name: theheat-bot
+# ROUTE-CONTRACT-v2 §5: a manual_tweet run is titled by its publish intent (a UUID, no text) so the
+# durable sender outbox can observe it, e.g. a pending run cancelled/replaced before it started.
+# Every other run keeps GitHub's default name (a whitespace-only run-name falls back to it).
+run-name: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'manual_tweet' && format('theheat-bot manual_tweet {0}', inputs.publish_intent_id) || ' ' }}
 
 on:
   # Schedules RESTORED 2026-07-16 (Andrew: "restore") after the 2026-07-14
@@ -280,7 +284,13 @@ jobs:
         working-directory: dashboard
         env:
           GIST_ID: ${{ secrets.GIST_ID }}
-          GITHUB_TOKEN: ${{ secrets.GH_GIST_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.THEHEAT_GIST_WRITER_TOKEN || secrets.GH_GIST_TOKEN }}
+          # ROUTE-CONTRACT-v2 §6 old-SHA fence: which secret NAME supplied the writer token, and whether
+          # any legacy Gist-writer/sender NAME still exists (booleans only, never values or lengths).
+          THEHEAT_GIST_CREDENTIAL: ${{ secrets.THEHEAT_GIST_WRITER_TOKEN != '' && 'route' || 'legacy' }}
+          THEHEAT_LEGACY_CREDENTIALS_PRESENT: ${{ secrets.GH_GIST_TOKEN != '' || secrets.TWITTER_API_KEY != '' || secrets.TWITTER_API_SECRET != '' || secrets.TWITTER_ACCESS_TOKEN != '' || secrets.TWITTER_ACCESS_SECRET != '' || secrets.BLUESKY_HANDLE != '' || secrets.BLUESKY_APP_PASSWORD != '' }}
+          # Opens sealed commands (ROUTE-CONTRACT-v2 §1); held only by consume/drain jobs and the dashboard.
+          THEHEAT_COMMAND_SEAL_KEY: ${{ secrets.THEHEAT_COMMAND_SEAL_KEY }}
           THEHEAT_FEEDBACK_GIST_ID: ${{ secrets.THEHEAT_FEEDBACK_GIST_ID }}
           THEHEAT_GIST_WRITE_ROUTE: ${{ vars.THEHEAT_GIST_WRITE_ROUTE }}
           THEHEAT_SERIALIZED_WRITER: ${{ github.run_id }}:commands-before
@@ -382,16 +392,18 @@ jobs:
           THEHEAT_GHCN_THRESHOLD_VERIFICATION: ${{ steps.thresholds-verify.outcome || 'unknown' }}
           # Keep already-written output visible if the runner exits abruptly.
           PYTHONUNBUFFERED: "1"
-          TWITTER_API_KEY: ${{ secrets.TWITTER_API_KEY }}
-          TWITTER_API_SECRET: ${{ secrets.TWITTER_API_SECRET }}
-          TWITTER_ACCESS_TOKEN: ${{ secrets.TWITTER_ACCESS_TOKEN }}
-          TWITTER_ACCESS_SECRET: ${{ secrets.TWITTER_ACCESS_SECRET }}
+          TWITTER_API_KEY: ${{ secrets.THEHEAT_X_API_KEY || secrets.TWITTER_API_KEY }}
+          TWITTER_API_SECRET: ${{ secrets.THEHEAT_X_API_SECRET || secrets.TWITTER_API_SECRET }}
+          TWITTER_ACCESS_TOKEN: ${{ secrets.THEHEAT_X_ACCESS_TOKEN || secrets.TWITTER_ACCESS_TOKEN }}
+          TWITTER_ACCESS_SECRET: ${{ secrets.THEHEAT_X_ACCESS_SECRET || secrets.TWITTER_ACCESS_SECRET }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GIST_ID: ${{ secrets.GIST_ID }}
-          GITHUB_TOKEN: ${{ secrets.GH_GIST_TOKEN }}
-          BLUESKY_HANDLE: ${{ secrets.BLUESKY_HANDLE }}
-          BLUESKY_APP_PASSWORD: ${{ secrets.BLUESKY_APP_PASSWORD }}
+          # ROUTE-CONTRACT-v2 §6: route-era secret names first; the legacy names remain only until root
+          # deletes them (deleting a NAME is what fences reruns of older workflow SHAs).
+          GITHUB_TOKEN: ${{ secrets.THEHEAT_GIST_WRITER_TOKEN || secrets.GH_GIST_TOKEN }}
+          BLUESKY_HANDLE: ${{ secrets.THEHEAT_BLUESKY_HANDLE || secrets.BLUESKY_HANDLE }}
+          BLUESKY_APP_PASSWORD: ${{ secrets.THEHEAT_BLUESKY_APP_PASSWORD || secrets.BLUESKY_APP_PASSWORD }}
           NASA_FIRMS_API_KEY: ${{ secrets.NASA_FIRMS_API_KEY }}
           OPENAQ_API_KEY: ${{ secrets.OPENAQ_API_KEY }}
           # Required for GPM IMERG precipitation and GRACE-FO ice mass.
@@ -596,7 +608,13 @@ jobs:
         working-directory: dashboard
         env:
           GIST_ID: ${{ secrets.GIST_ID }}
-          GITHUB_TOKEN: ${{ secrets.GH_GIST_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.THEHEAT_GIST_WRITER_TOKEN || secrets.GH_GIST_TOKEN }}
+          # ROUTE-CONTRACT-v2 §6 old-SHA fence: which secret NAME supplied the writer token, and whether
+          # any legacy Gist-writer/sender NAME still exists (booleans only, never values or lengths).
+          THEHEAT_GIST_CREDENTIAL: ${{ secrets.THEHEAT_GIST_WRITER_TOKEN != '' && 'route' || 'legacy' }}
+          THEHEAT_LEGACY_CREDENTIALS_PRESENT: ${{ secrets.GH_GIST_TOKEN != '' || secrets.TWITTER_API_KEY != '' || secrets.TWITTER_API_SECRET != '' || secrets.TWITTER_ACCESS_TOKEN != '' || secrets.TWITTER_ACCESS_SECRET != '' || secrets.BLUESKY_HANDLE != '' || secrets.BLUESKY_APP_PASSWORD != '' }}
+          # Opens sealed commands (ROUTE-CONTRACT-v2 §1); held only by consume/drain jobs and the dashboard.
+          THEHEAT_COMMAND_SEAL_KEY: ${{ secrets.THEHEAT_COMMAND_SEAL_KEY }}
           THEHEAT_FEEDBACK_GIST_ID: ${{ secrets.THEHEAT_FEEDBACK_GIST_ID }}
           THEHEAT_GIST_WRITE_ROUTE: ${{ vars.THEHEAT_GIST_WRITE_ROUTE }}
           THEHEAT_SERIALIZED_WRITER: ${{ github.run_id }}:commands-after

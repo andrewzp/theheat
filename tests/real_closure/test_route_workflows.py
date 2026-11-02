@@ -3,6 +3,11 @@
 Exact-head CI establishes GitHub syntax. These tests recognise only the narrow approved
 expression shape ``${{ vars.THEHEAT_GIST_WRITE_ROUTE == 'serialized' && A || B }}`` and
 evaluate it for both variable values; they prove legacy keeps every existing default.
+
+v2 (ROUTE-CONTRACT-v2, deliberate expectation changes): the Gist writer and sender credentials are
+read from route-era secret names first (``secrets.NEW || secrets.OLD``, identical to today while NEW is
+unset); consume/drain jobs export the writer-name and legacy-name-presence booleans and the seal key;
+bot.yml titles manual_tweet runs by publish intent; admission refusal markers use an exact name.
 """
 from __future__ import annotations
 
@@ -18,6 +23,18 @@ ROOT = Path(__file__).resolve().parents[2]
 BASE = "7d3ad7ce57cd021d7b3919dad42ec402b5c742c2"
 WF = ROOT / ".github/workflows"
 ROUTE = re.compile(r"\$\{\{ vars\.THEHEAT_GIST_WRITE_ROUTE == 'serialized' && (.+?) \|\| (.+?) \}\}")
+# Legacy secret name -> its route-era name (ROUTE-CONTRACT-v2 §6).
+RENAMED = {"GH_GIST_TOKEN": "THEHEAT_GIST_WRITER_TOKEN", "TWITTER_API_KEY": "THEHEAT_X_API_KEY",
+           "TWITTER_API_SECRET": "THEHEAT_X_API_SECRET", "TWITTER_ACCESS_TOKEN": "THEHEAT_X_ACCESS_TOKEN",
+           "TWITTER_ACCESS_SECRET": "THEHEAT_X_ACCESS_SECRET", "BLUESKY_HANDLE": "THEHEAT_BLUESKY_HANDLE",
+           "BLUESKY_APP_PASSWORD": "THEHEAT_BLUESKY_APP_PASSWORD"}
+PRESENCE = "${{ " + " || ".join(f"secrets.{name} != ''" for name in RENAMED) + " }}"
+ROUTE_DRAIN_ENV = {
+    "GITHUB_TOKEN": "${{ secrets.THEHEAT_GIST_WRITER_TOKEN || secrets.GH_GIST_TOKEN }}",
+    "THEHEAT_GIST_CREDENTIAL": "${{ secrets.THEHEAT_GIST_WRITER_TOKEN != '' && 'route' || 'legacy' }}",
+    "THEHEAT_LEGACY_CREDENTIALS_PRESENT": PRESENCE,
+    "THEHEAT_COMMAND_SEAL_KEY": "${{ secrets.THEHEAT_COMMAND_SEAL_KEY }}",
+}
 
 
 def load(text: str) -> dict:
@@ -49,13 +66,16 @@ def test_gist_commands_admits_outside_the_group_and_consumes_inside_it():
     assert step["env"] == {"THEHEAT_COMMAND_INPUT": "${{ inputs.command }}"} and "inputs." not in step["run"]
     upload = next(s for s in admit["steps"] if s.get("name") == "Upload the immutable admitted command")
     assert upload["with"]["name"] == "theheat-command-${{ steps.admit.outputs.command_id }}"
+    marker = next(s for s in admit["steps"] if s.get("name") == "Upload the admission refusal marker")
+    assert marker["with"]["name"] == "theheat-admission-refused-${{ steps.admit.outputs.command_id }}", "exact-name status lookup"
+    assert all("secrets." not in str(step) for step in admit["steps"]), "admission holds no key or token"
     assert upload["with"]["retention-days"] == "2" and upload["if"] == "steps.admit.outputs.admitted == 'true'"
     assert consume["needs"] == "admit"
     assert consume["concurrency"] == {"group": "theheat-bot", "cancel-in-progress": "false"}
     assert consume["permissions"] == {"contents": "read", "actions": "write"}
     run = next(s for s in consume["steps"] if s.get("name") == "Consume serially inside theheat-bot")
     assert run["env"]["THEHEAT_SERIALIZED_WRITER"] == "${{ github.run_id }}:consume"
-    assert run["env"]["GITHUB_TOKEN"] == "${{ secrets.GH_GIST_TOKEN }}" and run["env"]["GIST_ID"] == "${{ secrets.GIST_ID }}"
+    assert {key: run["env"][key] for key in ROUTE_DRAIN_ENV} == ROUTE_DRAIN_ENV and run["env"]["GIST_ID"] == "${{ secrets.GIST_ID }}"
     assert run["run"].startswith("node scripts/consume-gist-commands.mjs")
     assert "schedule" not in doc["on"]
 
@@ -67,6 +87,9 @@ def test_bot_drains_only_in_route_mode_and_keeps_every_existing_default():
         assert "vars.THEHEAT_GIST_WRITE_ROUTE == 'serialized'" in job["if"] and "github.event_name != 'pull_request'" in job["if"]
         assert job["permissions"] == {"contents": "read", "actions": "write"}
         assert "concurrency" not in job, "inside bot.yml's workflow-level theheat-bot group"
+        drain = job["steps"][-1]
+        assert drain["run"].startswith("node scripts/consume-gist-commands.mjs")
+        assert {key: drain["env"][key] for key in ROUTE_DRAIN_ENV} == ROUTE_DRAIN_ENV
     assert doc["jobs"]["commands-after"]["needs"] == ["commands-before", "run"]
     assert doc["jobs"]["run"]["needs"] == ["test", "commands-before"]
     assert doc["jobs"]["run"]["if"].startswith("always()")
@@ -75,7 +98,16 @@ def test_bot_drains_only_in_route_mode_and_keeps_every_existing_default():
     assert doc["jobs"]["run"]["permissions"] == old["jobs"]["run"]["permissions"]
     step = next(s for s in doc["jobs"]["run"]["steps"] if s.get("name") == "Run bot")
     old_step = next(s for s in old["jobs"]["run"]["steps"] if s.get("name") == "Run bot")
-    assert {k: v for k, v in step["env"].items() if k in old_step["env"]} == old_step["env"]
+    # Every pre-existing value is unchanged except the seven credentials, which read the route-era
+    # NAME first and otherwise exactly the old secret (identical while the new name is unset).
+    renamed = {"GITHUB_TOKEN": "GH_GIST_TOKEN", **{name: name for name in RENAMED if name != "GH_GIST_TOKEN"}}
+    for env_key, legacy in renamed.items():
+        assert old_step["env"][env_key] == "${{ secrets.%s }}" % legacy
+        assert step["env"][env_key] == "${{ secrets.%s || secrets.%s }}" % (RENAMED[legacy], legacy)
+    assert {k: v for k, v in step["env"].items() if k in old_step["env"] and k not in renamed} == \
+        {k: v for k, v in old_step["env"].items() if k not in renamed}
+    assert doc["run-name"] == ("${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'manual_tweet' && "
+                               "format('theheat-bot manual_tweet {0}', inputs.publish_intent_id) || ' ' }}") and "run-name" not in old
     # Composed candidate: the route adds exactly its two keys; the Hot10 product selector is the
     # supply stream's own mirror (legacy default, asserted by its own tests). Nothing else is new.
     assert set(step["env"]) - set(old_step["env"]) == {"THEHEAT_GIST_WRITE_ROUTE", "THEHEAT_SERIALIZED_WRITER",
@@ -102,7 +134,7 @@ def test_other_gist_writer_workflows_join_the_group_only_in_route_mode():
     assert "nhc_advisory_import" not in trial and "PATCH" not in trial and "gist edit" not in trial
 
 
-def test_the_only_new_secret_name_is_the_root_provided_feedback_gist_id():
+def test_new_secret_names_are_exactly_the_root_provided_route_era_names():
     secrets = re.compile(r"secrets\.([A-Z0-9_]+)")
     now = set().union(*(set(secrets.findall(path.read_text())) for path in WF.glob("*.yml")))
     listed = subprocess.run(["git", "ls-tree", "--name-only", BASE, ".github/workflows/"], cwd=ROOT, capture_output=True, text=True)
@@ -111,5 +143,15 @@ def test_the_only_new_secret_name_is_the_root_provided_feedback_gist_id():
     before = set()
     for name in listed.stdout.split():
         before |= set(secrets.findall(subprocess.run(["git", "show", f"{BASE}:{name}"], cwd=ROOT, capture_output=True, text=True).stdout))
-    assert now - before == {"THEHEAT_FEEDBACK_GIST_ID"}, "no existing secret renamed; one new root-provided secret"
+    assert now - before == {"THEHEAT_FEEDBACK_GIST_ID", "THEHEAT_COMMAND_SEAL_KEY", *RENAMED.values()}, \
+        "root-provided: feedback Gist id, seal key, and the route-era names of the seven legacy credentials"
     assert before <= now
+    # Every remaining legacy reference is a NEW || OLD fallback or a presence boolean (never alone),
+    # except the generated runtime-report workflow, which the generator rebuilds from bot.yml.
+    for path in WF.glob("*.yml"):
+        if path.name == "runtime-report.yml":
+            continue
+        for line in path.read_text().splitlines():
+            for name in RENAMED:
+                if f"secrets.{name}" in line:
+                    assert f"secrets.{RENAMED[name]} || secrets.{name}" in line or f"secrets.{name} != ''" in line, (path.name, line)

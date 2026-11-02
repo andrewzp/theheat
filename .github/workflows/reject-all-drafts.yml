@@ -32,7 +32,7 @@ jobs:
       - name: Reject all pending drafts
         env:
           GIST_ID: ${{ secrets.GIST_ID }}
-          GITHUB_TOKEN: ${{ secrets.GH_GIST_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.THEHEAT_GIST_WRITER_TOKEN || secrets.GH_GIST_TOKEN }}
           THEHEAT_GIST_WRITE_ROUTE: ${{ vars.THEHEAT_GIST_WRITE_ROUTE }}
           THEHEAT_SERIALIZED_WRITER: ${{ vars.THEHEAT_GIST_WRITE_ROUTE == 'serialized' && format('{0}:reject', github.run_id) || '' }}
         run: python scripts/reject_all_drafts.py
