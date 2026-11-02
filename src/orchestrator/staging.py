@@ -20,12 +20,20 @@ Merge rules (main thread, deterministic, all-or-nothing per worker):
 * if live also changed the same path since the base:
   - dicts recurse key by key;
   - log-shaped lists (worker and live each keep base rows in order, minus
-    any removed, then append a tail: appends, capped/windowed head drops,
+    any removed, then append a tail: appends, head drops,
     remove-then-append dedup) merge as the base rows neither side removed,
-    then live's tail, then the worker's tail. A count-capped log may then
-    exceed its cap by the other appenders' rows until its next capped write
-    (bounded; nothing is lost). A side that removed every base row replaced
-    the list: conflict;
+    then live's tail, then the worker's tail. A side that removed every base
+    row replaced the list: conflict;
+  - a count-capped log (``capped_logs()``: ``errors`` and ``suppressions``,
+    whose writers append one row, then keep the last N, never dedup) merges
+    by that contract instead. Each side must be ``(base + its rows)[-N:]``:
+    a contiguous run of base rows dropped from the head only, then its own
+    rows; any head drop leaves exactly N rows, otherwise at most N. So a side
+    whose own rows push out every base row is a log edit. The merge is serial
+    in promotion order: (the base rows neither side dropped, then live's
+    tail, then the worker's tail)[-N:], never N + 1. Anything else (a middle
+    removal, a reorder, a drop without an append, a short or over-long list)
+    is a conflict;
   - a keyed window log (``windowed_logs()``: the candidate log, whose only
     writer is ``state.record_candidate_observation``) merges by that writer's
     own contract instead. Each side may remove a base row only by
@@ -350,12 +358,13 @@ def promote(owner: Owner, stage: WorkerStage, batch: Batch) -> str:
         return f"refused:{reason}"
     try:
         ops: list = []
-        windows = _Windows(
-            logs=windowed_logs(),
+        contracts = _LogContracts(
+            windowed=windowed_logs(),
+            capped=capped_logs(),
             worker=(stage.started_wall, stage.completed_wall or stage.started_wall),
             live=(batch.opened_wall, batch.promoted_until or batch.opened_wall),
         )
-        _plan_dict(batch.base_state, _without_transient(stage.state), owner.live_state, "", ops, windows)
+        _plan_dict(batch.base_state, _without_transient(stage.state), owner.live_state, "", ops, contracts)
         if stage.run is not None and owner.live_run is not None:
             _plan_dict(batch.base_run or {}, stage.run, owner.live_run, "current_run.", ops)
         new_rows = _queue_delta(stage)
@@ -400,7 +409,7 @@ def _same(a: Any, b: Any) -> bool:
 
 
 def _plan_dict(base: dict, staged: dict, live: dict, path: str, ops: list,
-               windows: _Windows | None = None) -> None:
+               contracts: _LogContracts | None = None) -> None:
     for key in list(staged) + [k for k in base if k not in staged]:
         b = base.get(key, _MISSING)
         s = staged.get(key, _MISSING)
@@ -411,9 +420,9 @@ def _plan_dict(base: dict, staged: dict, live: dict, path: str, ops: list,
         if b is _MISSING and type(s) is type(current) and isinstance(s, (dict, list)):
             b = type(s)()  # Both sides created the same container since the base.
         if isinstance(b, dict) and isinstance(s, dict) and isinstance(current, dict):
-            _plan_dict(b, s, current, here + ".", ops, windows)
+            _plan_dict(b, s, current, here + ".", ops, contracts)
         elif isinstance(b, list) and isinstance(s, list) and isinstance(current, list):
-            _plan_list(b, s, current, here, ops, windows)
+            _plan_list(b, s, current, here, ops, contracts)
         elif _same(current, b):
             ops.append(_setter(live, key, s))
         else:
@@ -493,11 +502,32 @@ def windowed_logs() -> dict[str, WindowedLog]:
     return {"candidates_log": WindowedLog("event_id", "date", state.CANDIDATES_WINDOW_DAYS)}
 
 
-@dataclass(frozen=True)
-class _Windows:
-    """The windowed logs, and when each side could have observed: (earliest, latest) wall clock."""
+# state.log_error keeps ``errors[-50:]`` (a literal there); a test pins this to the writer.
+ERRORS_CAP = 50
 
-    logs: dict[str, WindowedLog]
+
+def capped_logs() -> dict[str, int]:
+    """Top-level state lists whose writers append one row, then keep only the last N; no dedup.
+
+    ``errors``: ``state.log_error``. ``suppressions``: every writer in
+    ``suppression.py`` and ``triage.py`` appends under ``_SUPPRESSIONS_LOCK`` and
+    keeps the last ``MAX_SUPPRESSIONS``. Other capped lists a source writes
+    (``source_health.<source>.runs``, ``cyclone_wind_history.<storm>``) are keyed
+    by the writing source, so two concurrent sources never write the same one.
+    """
+    from src import state  # Read only: the writers' own caps.
+
+    return {"errors": ERRORS_CAP, "suppressions": state.MAX_SUPPRESSIONS}
+
+
+@dataclass(frozen=True)
+class _LogContracts:
+    """Logs merged by their writer's contract, and when each side could have observed:
+    (earliest, latest) wall clock.
+    """
+
+    windowed: dict[str, WindowedLog]
+    capped: dict[str, int]
     worker: tuple[datetime, datetime]
     live: tuple[datetime, datetime]
 
@@ -527,20 +557,60 @@ def _window_edit(log: WindowedLog, base: list, other: list, since: datetime,
     return kept, tail
 
 
+def _capped_edit(cap: int, base: list, other: list) -> tuple[int, list] | None:
+    """(base rows dropped from the head, appended tail) when ``other`` is
+    ``(base + rows)[-cap:]`` for some non-empty ``rows``; otherwise None.
+
+    The writer only appends, and truncates only past the cap: the kept base
+    rows are a contiguous suffix of ``base`` at the head of ``other``; any drop
+    leaves exactly ``cap`` rows, otherwise there are at most ``cap``.
+    """
+    dropped = next(d for d in range(len(base) + 1)
+                   if len(other) >= len(base) - d and all(_same(a, b) for a, b in zip(base[d:], other)))
+    tail = other[len(base) - dropped:]
+    if not tail:
+        return None  # It never drops a row without appending one.
+    if len(other) > cap or (dropped and len(other) != cap):
+        return None
+    return dropped, tail
+
+
+def _plan_capped(cap: int, base: list, staged: list, live: list, path: str, ops: list) -> None:
+    worker = _capped_edit(cap, base, staged)
+    other = _capped_edit(cap, base, live)
+    if worker is None or other is None:
+        raise StagingConflict(path)
+    live_dropped, live_tail = other
+    worker_dropped, worker_tail = worker
+    # Serial in promotion order: (base rows neither side dropped, live's rows,
+    # this worker's rows)[-cap:]; live's own row objects are kept.
+    first = max(live_dropped, worker_dropped)
+    survivors = live[first - live_dropped:len(base) - live_dropped]
+    merged = (survivors + list(live_tail) + list(worker_tail))[-cap:]
+
+    def merge() -> None:
+        live[:] = merged
+    ops.append(merge)
+
+
 def _plan_list(base: list, staged: list, live: list, path: str, ops: list,
-               windows: _Windows | None = None) -> None:
+               contracts: _LogContracts | None = None) -> None:
     if _same(live, base):
         def replace() -> None:
             live[:] = staged
         ops.append(replace)
         return
-    log = windows.logs.get(path) if windows is not None else None
-    if log is None or windows is None:
+    cap = contracts.capped.get(path) if contracts is not None else None
+    if cap is not None:
+        _plan_capped(cap, base, staged, live, path, ops)
+        return
+    log = contracts.windowed.get(path) if contracts is not None else None
+    if log is None or contracts is None:
         worker = _log_shape(base, staged)
         other = _log_shape(base, live)
     else:
-        worker = _window_edit(log, base, staged, *windows.worker)
-        other = _window_edit(log, base, live, *windows.live)
+        worker = _window_edit(log, base, staged, *contracts.worker)
+        other = _window_edit(log, base, live, *contracts.live)
     if worker is None or other is None:
         raise StagingConflict(path)
     # Rows either side removed stay removed; live's own row objects are kept;
