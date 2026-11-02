@@ -112,9 +112,14 @@ def hot10_graphic_spec(bundle: dict, *, expected_bundle_sha256: str, synthetic: 
     return {"template": TEMPLATE, "expected_evidence_sha256": fingerprint(evidence), "evidence": evidence}
 
 
+def _measurement(value: float) -> float:
+    # JSON has one zero; do not give its Python sign bit a different description.
+    return 0.0 if value == 0 else float(value)
+
+
 def signed(value: float, *, minus: str = "\N{MINUS SIGN}") -> str:
     """The provider's 0.1 °C precision with an explicit sign; never rounded to fit."""
-    return f"{value:+.1f}".replace("-", minus)
+    return f"{_measurement(value):+.1f}".replace("-", minus)
 
 
 def full_description(evidence: dict) -> str:
@@ -129,8 +134,8 @@ def full_description(evidence: dict) -> str:
     ]
     for row in evidence["rows"]:
         lines.append(
-            f"{row['rank']}. {row['city']}, {row['country']}: forecast daily high {row['forecast_high_c']!r} °C vs "
-            f"normal {row['normal_high_c']!r} °C ({row['normal_period']}), departure {signed(row['departure_c'], minus='-')} °C; "
+            f"{row['rank']}. {row['city']}, {row['country']}: forecast daily high {_measurement(row['forecast_high_c'])!r} °C vs "
+            f"normal {_measurement(row['normal_high_c'])!r} °C ({row['normal_period']}), departure {signed(row['departure_c'], minus='-')} °C; "
             f"local day {row['valid_date']} ({row['timezone']}, UTC {row['valid_start']} to {row['valid_end']}); "
             f"retrieved {row['retrieved_at']}; place {row['place_id']}.")
     lines.append("Model run time is not supplied by the forecast source. Not observations, records or the world's "

@@ -124,7 +124,7 @@ def _bundle_unit(raw):
 @pytest.mark.parametrize(("mutate", "code"), [
     (_drop, "media_hot10_slate_size"), (_duplicate, "media_hot10_duplicate_location"),
     (_swap, "media_hot10_ranking_order"), (_unit, "media_hot10_unit_unsupported"),
-    (_month, "media_hot10_normal_incompatible"), (_period, "media_hot10_normal_incompatible"),
+    (_month, "media_hot10_normal_incompatible"), (_period, "media_hot10_integer_metadata"),
     (_days, "media_hot10_universe"), (_bundle_unit, "media_hot10_unit_unsupported"),
 ], ids=["missing-row", "duplicate-row", "changed-ranking", "row-unit", "normal-month", "normal-period",
         "universe-days", "bulletin-unit"])

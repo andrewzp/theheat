@@ -633,7 +633,7 @@
   ],
   "referenced_code_sha256": {
     "src/data/air_quality_availability.py": "fe4ec7eba42a0b41d296407c54d168e73b76def9f58739a48ecda94a9f6eb536",
-    "src/data/air_quality_contract.py": "77f6c126359f491cbfd3a49634e625f8d7515af40964936a5e4db904d6cfb145",
+    "src/data/air_quality_contract.py": "7f9de8f7fcd6836a3e4fb32ea8c1a35a3c9981bcede6aea2d74770f12539d667",
     "src/data/climate_indices.py": "ee020029a91261d26ece8dd5ed27859b963e8cc8321d27c51afdce6ce3dc74d7",
     "src/data/co2.py": "63d9578eb77bcc56b438ef85ee56fc7a1695982a46f2b3133e04b65adefa3d5f",
     "src/data/copernicus_ems.py": "9e2c512e7ccb022a44190c6ea17ab10f18fa6232c7dcd2de51d1bc91fedcde95",
@@ -710,5 +710,5 @@
     "src/two_bot/intern/warnings.py": "04e0a4506ffbb29124c8d2960a5e5025305699297fcf8f9178b23caac2cd7a37"
   },
   "evidence_scope": "Referenced local code inventory; not live/provider/transitive-source qualification.",
-  "registry_sha256": "5e3a74aac18746bf7f5d5c6fb51802d45abc6fb30d9c75c987e6b9125aa39c09"
+  "registry_sha256": "82fca23299cf415f478c29382feaf542dd2f19bc7da4e79fc995ee65d9019fd9"
 }

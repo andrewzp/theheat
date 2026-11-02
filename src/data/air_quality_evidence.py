@@ -3,10 +3,10 @@ from __future__ import annotations
 
 from copy import deepcopy
 from dataclasses import asdict, fields, replace
-import json
 from typing import Any
 
 from src.data import air_quality_contract as contract
+from src.data.json_evidence import fingerprint
 from src.data.source_status import SourceFetchError
 
 KINDS = frozenset({"air_quality_hazard", "dust_event"})
@@ -35,7 +35,7 @@ def window_facts(packet: Any) -> list[dict]:
 
 
 def _same(a: Any, b: Any) -> bool:
-    return json.dumps(a, sort_keys=True, allow_nan=False) == json.dumps(b, sort_keys=True, allow_nan=False)
+    return fingerprint(a, profile="theheat.air-quality-equality/v2") == fingerprint(b, profile="theheat.air-quality-equality/v2")
 
 
 def _expected(raw: Any, kind: str):
@@ -46,6 +46,10 @@ def _expected(raw: Any, kind: str):
 
     if type(raw) is not dict or not isinstance(kind, str) or kind not in KINDS:
         contract.reject("wrong_signal")
+    if type(raw.get("tier")) is not int:
+        contract.reject("integer_metadata")
+    if raw.get("us_aqi_daily_max") is not None and type(raw["us_aqi_daily_max"]) is not int:
+        contract.reject("integer_metadata")
     cls = DustEvent if kind == "dust_event" else PM25HazardEvent
     event = cls(**{f.name: raw[f.name] for f in fields(cls) if f.name in raw})
     packet = event.forecast_window
@@ -79,6 +83,11 @@ def _expected(raw: Any, kind: str):
 
 def validate_bundle(bundle: Any):
     expected = _expected(bundle.raw_signal_dump, bundle.signal_kind)
+    facts = bundle.current_facts
+    if isinstance(facts, list) and any(isinstance(row, dict)
+            and row.get("label") in {"tier", "us_aqi_daily_max"}
+            and row.get("value") is not None and type(row["value"]) is not int for row in facts):
+        contract.reject("integer_metadata")
     for key in ("event_id", "where", "when", "country", "headline_metric", "current_facts",
                 "historical_context", "raw_signal_dump"):
         if not _same(getattr(bundle, key), getattr(expected, key)):

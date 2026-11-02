@@ -61,7 +61,7 @@ FAMILIES = {
         files=("src/media/gist_media.py", "src/media/gist_hazard_media.py", "src/media/canonical_png.py", FONT,
                "src/media/evidence_graphic.py", "src/media/temperature_graphic_adapter.py",
                "src/media/air_quality_graphic_adapter.py", "src/data/air_quality_contract.py",
-               "src/data/air_quality_evidence.py"),
+               "src/data/air_quality_evidence.py", "src/data/json_evidence.py", "src/editorial/revisions.py"),
     ),
     MODIS: dict(
         template=locator.TEMPLATE, template_version=locator.TEMPLATE_VERSION,
@@ -94,7 +94,8 @@ FAMILIES = {
         signal_kind="hot10", products=(HOT10_PRODUCT,),
         files=("src/media/gist_media.py", "src/media/gist_hazard_media.py", "src/media/canonical_png.py", FONT,
                "src/media/evidence_graphic.py", "src/media/hot10_graphic_adapter.py",
-               "src/editorial/hot10_contract.py", "src/data/temperature_evidence.py"),
+               "src/editorial/hot10_contract.py", "src/data/temperature_evidence.py",
+               "src/data/json_evidence.py", "src/editorial/revisions.py"),
     ),
 }
 # Bundle signals this module owns; any other signal keeps the temperature path.

@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from copy import deepcopy
 from datetime import UTC, date, datetime, timedelta
-import hashlib
 import json
 import math
 import re
@@ -12,11 +11,14 @@ from typing import Any, NoReturn, TypeGuard
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from src.data.source_status import SourceFetchError
+from src.data.json_evidence import fingerprint
 
 SOURCE_URL = "https://air-quality-api.open-meteo.com/v1/air-quality"
 PRODUCT = "open-meteo-cams-air-quality-auto"
 SOURCE_NAME = "CAMS air-quality forecast via Open-Meteo (automatic domain)"
 LIMIT = 32_768
+SCHEMA_VERSION = 2
+IDENTITY_PROFILE = "theheat.air-quality-window/v2"
 MAX_GRID_OFFSET_DEG = 0.75
 VARIABLES = ("pm2_5", "pm10", "dust", "aerosol_optical_depth", "us_aqi")
 UNITS = dict(pm2_5="μg/m³", pm10="μg/m³", dust="μg/m³",
@@ -104,7 +106,7 @@ def build_window(data: dict, *, city: str, country: str, lat: float, lon: float,
             raise ValueError("incomplete requested day")
         start, end = _bounds(day, data["timezone"], data["utc_offset_seconds"])
         core = dict(
-            schema_version=1, source_product=PRODUCT, source_url=SOURCE_URL,
+            schema_version=SCHEMA_VERSION, source_product=PRODUCT, source_url=SOURCE_URL,
             domain_selection="auto", evidence_type="model_forecast", method=METHOD,
             requested_location=dict(city=city, country=country, lat=lat, lon=lon),
             grid_location=[data["latitude"], data["longitude"]], date=day,
@@ -113,7 +115,7 @@ def build_window(data: dict, *, city: str, country: str, lat: float, lon: float,
             hours=deepcopy(hourly["time"]),
             series={key: _series(hourly.get(key), units.get(key), key) for key in VARIABLES},
         )
-        packet = {**core, "selected_record_sha256": hashlib.sha256(_encoded(core)).hexdigest()}
+        packet = {**core, "selected_record_sha256": fingerprint(core, profile=IDENTITY_PROFILE)}
         validate_window(packet)
         return packet
     except (KeyError, TypeError, ValueError, AttributeError, OverflowError, RecursionError,
@@ -145,11 +147,13 @@ def validate_window(packet: Any) -> dict[str, float | int | None]:
     try:
         if type(packet) is not dict or set(packet) != _KEYS | {"selected_record_sha256"}:
             raise ValueError
+        if type(packet["schema_version"]) is not int or packet["schema_version"] != SCHEMA_VERSION:
+            raise ValueError("legacy_or_unknown_source_profile")
         _encoded(packet)
         core = {k: packet[k] for k in _KEYS}
-        if hashlib.sha256(_encoded(core)).hexdigest() != packet["selected_record_sha256"]:
+        if fingerprint(core, profile=IDENTITY_PROFILE) != packet["selected_record_sha256"]:
             raise ValueError
-        if (type(core["schema_version"]) is not int or core["schema_version"] != 1
+        if (type(core["schema_version"]) is not int or core["schema_version"] != SCHEMA_VERSION
                 or core["source_product"] != PRODUCT or core["source_url"] != SOURCE_URL
                 or core["domain_selection"] != "auto" or core["evidence_type"] != "model_forecast"
                 or core["method"] != METHOD):

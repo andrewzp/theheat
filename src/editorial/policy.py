@@ -85,7 +85,7 @@ POLICY_FILES = (
     "src/two_bot/source_links.py", "src/orchestrator/two_bot_dispatch.py",
     "src/two_bot/multisignal.py",
     "src/two_bot/rejected_candidate.py",
-    "src/voice/safety.py", "src/data/temperature_evidence.py",
+    "src/voice/safety.py", "src/data/temperature_evidence.py", "src/data/json_evidence.py",
     "src/editorial/approval.py", "src/data/world_thresholds.py", "src/data/open_meteo.py",
     "src/editorial/hot10_contract.py", "src/editorial/automatic_text.py",
     "src/data/air_quality_current.py", "src/editorial/delegated_media_review.py",
