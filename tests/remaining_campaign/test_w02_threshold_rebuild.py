@@ -218,8 +218,17 @@ def test_wrong_asset_and_unrelated_sqlite_fail_before_use(package, tmp_path):
     assert rebuild.verify_package(package["db"], manifest)["reasons"] == ["threshold_database_digest_mismatch"]
 
 
-def test_checked_in_legacy_manifest_and_empty_release_stay_unavailable(tmp_path):
-    legacy = ROOT / "data" / "station_thresholds.version"
+def _legacy_manifest(tmp_path):
+    legacy = tmp_path / "invented-legacy.version"
+    # Retain the former public manifest as a fixture after installing V2.
+    legacy.write_text("release=thresholds-latest\n"
+                      "sha256=9fd9c660aff1dabd122361eef32cb3464ec10d2b32a9e5683d6ad6f06546a44d\n"
+                      "bytes=957243392\nlast_diff_date=\nactive_stations=11907\nthreshold_rows=9285790\n")
+    return legacy
+
+
+def test_legacy_manifest_and_empty_release_stay_unavailable(tmp_path):
+    legacy = _legacy_manifest(tmp_path)
     fields = artifacts.read_manifest(legacy)
     assert (artifacts._asset(fields)[0], fields["bytes"], fields["last_diff_date"]) == (
         "station_thresholds.sqlite", "957243392", "")
@@ -237,7 +246,7 @@ def test_checked_in_legacy_manifest_and_empty_release_stay_unavailable(tmp_path)
 
 def test_upload_plan_is_explicit_never_executed_and_keeps_legacy_rollback(package, tmp_path, capsys):
     installed = tmp_path / "installed.version"
-    installed.write_bytes((ROOT / "data" / "station_thresholds.version").read_bytes())
+    installed.write_bytes(_legacy_manifest(tmp_path).read_bytes())
     verified = rebuild.verify_package(package["db"], package["manifest"], asset=package["asset"],
                                       release_assets={"assets": []})
     plan = rebuild.upload_plan(verified, asset=package["asset"], manifest_path=package["manifest"],
