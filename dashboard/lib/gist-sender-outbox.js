@@ -14,7 +14,10 @@ export const OUTBOX_TERMINAL_RETENTION_MS = 3 * 86400000
 export const OUTBOX_UNSEEN_UNCERTAIN_MS = 6 * 3600000
 // A run is judged only after it settled: an in-flight claim PATCH lands well within this window.
 export const RUN_SETTLE_MS = 300000
-export const OUTBOX_MAX_LOOKUPS = 20
+// Every in-flight entry is observed each drain (active entries are bounded by OUTBOX_MAX_ACTIVE):
+// run ids by one GET each, everything else from ONE shared bounded listing of bot.yml runs.
+export const OUTBOX_MAX_LOOKUPS = OUTBOX_MAX_ACTIVE
+export const RUN_LISTING_PAGES = 5
 export const RUN_TITLE_PREFIX = "theheat-bot manual_tweet "
 export const TERMINAL_STATES = new Set(["completed", "superseded", "sender_refused", "sender_finished_without_claim", "exhausted", "route_generation_changed"])
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
@@ -112,37 +115,50 @@ export function lookupTargets(outbox) {
     .slice(0, OUTBOX_MAX_LOOKUPS).map(([id, entry]) => ({ id, entry }))
 }
 
-function headers(token) {
-  return { Accept: "application/vnd.github+json", ...(token ? { Authorization: `token ${token}` } : {}) }
+const runView = run => ({ id: run.id, status: run.status, conclusion: run.conclusion ?? null, updated_at: run.updated_at, created_at: run.created_at })
+
+// The run for each target: an attempt that is still running dominates; otherwise its newest run.
+export async function observeRuns(targets, { fetchImpl = globalThis.fetch, token, repo }) {
+  const runs = {}
+  let failed = 0
+  const titled = []
+  for (const { id, entry } of targets) {
+    if (Number.isSafeInteger(entry.run_id)) {
+      try {
+        const response = await fetchImpl(`https://api.github.com/repos/${repo}/actions/runs/${entry.run_id}`, { headers: headers(token), cache: "no-store" })
+        if (!response.ok) throw new Error("run lookup failed")
+        runs[id] = runView(await response.json())
+      } catch { failed += 1 }
+    } else if (UUID.test(entry.publish_intent_id) && Number.isFinite(Date.parse(entry.attempt_at))) titled.push({ id, entry })
+  }
+  if (!titled.length) return { runs, failed }
+  const oldest = Math.min(...titled.map(({ entry }) => Date.parse(entry.attempt_at)))
+  const since = new Date(oldest - 60000).toISOString().replace(/\.\d{3}Z$/, "Z")
+  const listed = []
+  try {
+    for (let page = 1; page <= RUN_LISTING_PAGES; page += 1) {
+      const response = await fetchImpl(`https://api.github.com/repos/${repo}/actions/workflows/bot.yml/runs?event=workflow_dispatch&per_page=100&page=${page}&created=${encodeURIComponent(`>=${since}`)}`,
+        { headers: headers(token), cache: "no-store" })
+      if (!response.ok) throw new Error("run listing failed")
+      const rows = (await response.json())?.workflow_runs
+      if (!Array.isArray(rows)) throw new Error("run listing failed")
+      listed.push(...rows)
+      if (rows.length < 100) break
+    }
+  } catch { return { runs, failed: failed + titled.length } }
+  for (const { id, entry } of titled) {
+    const title = `${RUN_TITLE_PREFIX}${entry.publish_intent_id}`
+    const after = Date.parse(entry.attempt_at) - 60000
+    const matches = listed.filter(run => run?.display_title === title && !(Date.parse(run.created_at) < after))
+    if (!matches.length) continue
+    const live = matches.find(run => run.status !== "completed")
+    runs[id] = runView(live ?? matches.sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))[0])
+  }
+  return { runs, failed }
 }
 
-// The bot.yml run for one intent: by the run id GitHub returned, else by the exact run-name
-// `theheat-bot manual_tweet <intent>` among workflow_dispatch runs created after the attempt.
-export async function findRun(entry, { fetchImpl = globalThis.fetch, token, repo }) {
-  if (Number.isSafeInteger(entry.run_id)) {
-    const response = await fetchImpl(`https://api.github.com/repos/${repo}/actions/runs/${entry.run_id}`, { headers: headers(token), cache: "no-store" })
-    if (!response.ok) throw Object.assign(new Error("run lookup failed"), { code: "run_lookup_failed" })
-    const run = await response.json()
-    return { id: run.id, status: run.status, conclusion: run.conclusion ?? null, updated_at: run.updated_at }
-  }
-  if (!UUID.test(entry.publish_intent_id) || !entry.attempt_at) return null
-  const since = new Date(Date.parse(entry.attempt_at) - 60000).toISOString().replace(/\.\d{3}Z$/, "Z")
-  const title = `${RUN_TITLE_PREFIX}${entry.publish_intent_id}`
-  const matches = []
-  for (let page = 1; page <= 3; page += 1) {
-    const response = await fetchImpl(`https://api.github.com/repos/${repo}/actions/workflows/bot.yml/runs?event=workflow_dispatch&per_page=100&page=${page}&created=${encodeURIComponent(`>=${since}`)}`,
-      { headers: headers(token), cache: "no-store" })
-    if (!response.ok) throw Object.assign(new Error("run lookup failed"), { code: "run_lookup_failed" })
-    const rows = (await response.json())?.workflow_runs
-    if (!Array.isArray(rows)) throw Object.assign(new Error("run lookup failed"), { code: "run_lookup_failed" })
-    matches.push(...rows.filter(run => run?.display_title === title))
-    if (rows.length < 100) break
-  }
-  if (!matches.length) return null
-  // An attempt that is still running dominates; otherwise the newest run decides.
-  const live = matches.find(run => run.status !== "completed")
-  const run = live ?? matches.sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))[0]
-  return { id: run.id, status: run.status, conclusion: run.conclusion ?? null, updated_at: run.updated_at }
+function headers(token) {
+  return { Accept: "application/vnd.github+json", ...(token ? { Authorization: `token ${token}` } : {}) }
 }
 
 // One bot.yml manual_tweet dispatch. 2xx accepted; 4xx (incl. 429) definitely not accepted;

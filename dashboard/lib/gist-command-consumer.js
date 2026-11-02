@@ -26,7 +26,7 @@ import { feedbackFilename, feedbackInputOf, loadFeedbackStores, patchFeedbackGis
 import { CODE_GENERATION, configuredRouteMode, FEEDBACK_ACTIONS, parseCommandRaw, producerGenerationCode, RESULTS_FILE, ROUTE_FILE,
   resultsDocumentFromFiles, resultsFileContent, RouteError, routeActive, routeApplyCode, routeCredentialCode, serializedWriterMarker } from "./gist-write-route.js"
 import { openEnvelope, sealKey } from "./gist-command-seal.js"
-import { activeOutboxCount, dispatchSender, findRun, lookupTargets, OUTBOX_MAX_ACTIVE, outboxEntry, planOutbox, pruneOutbox } from "./gist-sender-outbox.js"
+import { activeOutboxCount, dispatchSender, lookupTargets, observeRuns, OUTBOX_MAX_ACTIVE, outboxEntry, planOutbox, pruneOutbox } from "./gist-sender-outbox.js"
 
 export const RESULT_RETENTION_MS = 3 * 86400000 // > 1 day command lifetime + 2 day artifact retention.
 export const REJECTED_RETENTION_MS = 4 * 86400000
@@ -402,10 +402,9 @@ export async function runSenderOutbox({ env = process.env, now = () => new Date(
   const document0 = snapshot.resultsDocument
   if (!Object.keys(document0.outbox).length) return report
   const at = now()
-  const runs = {}
-  for (const { id, entry } of lookupTargets(document0.outbox)) {
-    try { const run = await findRun(entry, { fetchImpl, token, repo }); if (run) runs[id] = run } catch { report.lookups_failed += 1 }
-  }
+  const observed = await observeRuns(lookupTargets(document0.outbox), { fetchImpl, token, repo })
+  const runs = observed.runs
+  report.lookups_failed = observed.failed
   const pruned = pruneOutbox(document0.outbox, at)
   const plan = planOutbox({ outbox: pruned, state: snapshot.state, runtimeReport: snapshot.runtimeReport,
     activation: snapshot.route.command_id, runs, at })
