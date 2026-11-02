@@ -207,7 +207,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/storage/postgres_projection.py": "799e65ff2cacd359a04ee1901c715d78dc92869d0cfddd9619581c13f347875d",
     "src/storage/retained_reports.py": "3c4af19f61ec095803ee764ecde0971ea2d3aa0578d69ad4237be633fe660550",
     "src/storage/scientific_supply.py": "5c89128bcdc0f708477ff19579cb913f0b1081eee46ea170e3fc3979cce0896c",
-    "src/two_bot/air_quality_claims.py": "396d0459f46d65546b3079b96cbce15af89ae82b82987e316c72177731b0bbf6",
+    "src/two_bot/air_quality_claims.py": "2402043f68be96d7eb9d39c11948b09606d49a94d762a5e060a23ed964c4c388",
     "src/two_bot/batch_authority.py": "8274a5b7a00a9194668b40a65cf947455805011840d8ae24653e7a6682d3b768",
     "src/two_bot/batch_collector.py": "715af9bee384a3eaeaad7c08495baf66dfb0264b946786e36b745fdae8f41a02",
     "src/two_bot/batch_contract.py": "07ba61321b17607860b9d04f659aa6210574c1a4e114b032ad39a7fbb8ea5f30",
@@ -266,5 +266,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "8c4887f395618e343dafd55f5843987dfa6a7a620713c7c34bab9f419e4434fe"
   },
   "schema_version": 1,
-  "source_sha256": "e55b8caf6f146962f0b89cfd8a58d01ea0021b72653833d38e07ad3509e9b712"
+  "source_sha256": "0e41dea55835b5cf74b38ffb66a4606fdfc0159d67a5e3f515bf380f025d24f5"
 }

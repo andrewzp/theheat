@@ -1,5 +1,11 @@
 ## 0.9.109.52
 
+- Recognize a narrowly bounded, source-backed PM10 daily-mean ratio alongside
+  a separate dust peak. Shared or ambiguous dust comparisons stay rejected;
+  every accepted candidate still needs the ordinary mandatory model checks.
+- Replace only PG8's crashing timed native traceback diagnostic with a bounded
+  Python observer at the same 300 seconds. Preserve fatal-signal evidence,
+  required test groups, assertions and all execution deadlines.
 - Install the verified, immutable GHCN-derived threshold baseline for 12,627
   active catalogue stations (12,624 with comparators), with a source cutoff,
   checksum-bound compressed asset and attribution. Current observation and
