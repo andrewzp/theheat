@@ -24,6 +24,14 @@ never a record and never mixed with another product:
   years used and the source version; months of one place may use different
   stations, never different products.
 
+Each row also states its qualifying years (``qualifying_year_mask``: one character per year
+1991..2020), so its ``valid_days`` can be bounded exactly: the month's length in each qualifying
+year (leap Februaries included) minus at most ``MAX_MISSING_DAYS``. Rejected (flagged) values are
+never negative and never exceed the period's free day slots. Coordinates and elevations must be
+finite, in range and not the GHCN/Meteostat missing-value sentinels; the place elevation must be
+the registered catalogue point's; the station distance is recomputed (haversine) and the stored
+0.01 km rounding is the only tolerance.
+
 Install requires at least ``MIN_PLACES_PER_MONTH`` (10) distinct places for every
 calendar month, so the Hot10 can hold a full slate whatever the month. The
 derived file is for private use: publishing it as a public bulk asset is gated on
@@ -38,6 +46,7 @@ import calendar
 import csv
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from functools import lru_cache
 import hashlib
 import io
 import json
@@ -71,13 +80,16 @@ MIN_PLACES_PER_MONTH = 10
 EARTH_RADIUS_M = 6_371_000
 INSTALLED_NAME = "normals_ghcnd_mean_tmax.csv"
 DEFAULT_INSTALLED = Path("data") / INSTALLED_NAME
-CANDIDATE_SCHEMA = "theheat.ghcnd-normals-candidate/v1"
+CANDIDATE_SCHEMA = "theheat.ghcnd-normals-candidate/v2"  # v2: rows state their qualifying_year_mask
 INSTALL_SCHEMA = "theheat.ghcnd-normals-install-plan/v1"
 INPUTS_SCHEMA = "theheat.threshold-inputs/v1"
 INPUT_FILES = {"version": "ghcnd-version.txt", "stations": "ghcnd-stations.txt",
                "inventory": "ghcnd-inventory.txt", "archive": "ghcnd_all.tar.gz"}
 MAX_TEXT_BYTES = 128 * 1024 * 1024
 MAX_CANDIDATE_BYTES = 32 * 1024 * 1024
+UNITS = {"mean_tmax_c": "degC", "distance_km": "km", "elevation_m": "m"}
+DISTANCE_TOLERANCE_KM = 0.005  # distances are stored rounded to 0.01 km
+ELEVATION_RANGE_M = (-500.0, 9000.0)  # excludes the GHCN -999.9 and Meteostat -9999 missing-value sentinels
 DATASET = "gov.noaa.ncdc:C00861"
 ATTRIBUTION = ("NOAA National Centers for Environmental Information, Global Historical Climatology Network - "
                "Daily (GHCN-Daily), dataset gov.noaa.ncdc:C00861")
@@ -105,9 +117,11 @@ RULES = {
 }
 FIELDS = ("city", "country", "place_id", "sampling_point_id", "lat", "lon", "place_elevation_m", "month",
           "mean_tmax_c", "unit", "statistic", "source_product", "period_start", "period_end", "years_used",
-          "first_year", "last_year", "valid_days", "flagged_values", "station_id", "station_name", "station_lat",
-          "station_lon", "station_elevation_m", "distance_km", "source_version", "retrieved_at")
+          "first_year", "last_year", "qualifying_year_mask", "valid_days", "flagged_values", "station_id",
+          "station_name", "station_lat", "station_lon", "station_elevation_m", "distance_km", "source_version",
+          "retrieved_at")
 _STATION_ID = re.compile(r"[A-Z0-9]{11}\Z")
+
 
 
 class GhcndNormalsError(deps.AcquisitionError):
@@ -200,9 +214,43 @@ def station_climatology(text: str, station_id: str) -> dict[int, dict[str, Any]]
         if not finite(value) or not VALUE_RANGE_C[0] <= value <= VALUE_RANGE_C[1]:
             continue
         out[month] = {"mean_tmax_c": value, "years_used": len(years), "first_year": min(y for y, _m, _n in years),
-                      "last_year": max(y for y, _m, _n in years), "valid_days": sum(n for _y, _m, n in years),
-                      "flagged_values": flagged.get(month, 0)}
+                      "last_year": max(y for y, _m, _n in years),
+                      "qualifying_year_mask": year_mask(y for y, _m, _n in years),
+                      "valid_days": sum(n for _y, _m, n in years), "flagged_values": flagged.get(month, 0)}
     return out
+
+
+def year_mask(years: Any) -> str:
+    """One character per period year (1991 first): ``1`` where that year-month qualified."""
+    chosen = set(years)
+    return "".join("1" if year in chosen else "0" for year in range(PERIOD[0], PERIOD[1] + 1))
+
+
+def mask_years(mask: Any) -> list[int] | None:
+    """The qualifying years a mask names, or None when it is not a period mask."""
+    if type(mask) is not str or len(mask) != PERIOD[1] - PERIOD[0] + 1 or set(mask) - {"0", "1"}:
+        return None
+    return [PERIOD[0] + index for index, flag in enumerate(mask) if flag == "1"]
+
+
+def coverage_problem(month: int, years_used: int, first: int, last: int, mask: Any, valid_days: int,
+                     flagged: int) -> str | None:
+    """Exact possible-coverage check for one station-month row; None when the counts can be true.
+
+    Each qualifying year contributes between (days in that year's month - MAX_MISSING_DAYS) and the
+    month's days valid values (leap Februaries have 29 days); flagged values are counted over every
+    period year and share the period's day slots with the valid values.
+    """
+    years = mask_years(mask)
+    if years is None or len(years) != years_used or not years or (years[0], years[-1]) != (first, last):
+        return "coverage_impossible"
+    days = sum(calendar.monthrange(year, month)[1] for year in years)
+    if not days - MAX_MISSING_DAYS * len(years) <= valid_days <= days:
+        return "coverage_impossible"
+    slots = sum(calendar.monthrange(year, month)[1] for year in range(PERIOD[0], PERIOD[1] + 1))
+    if flagged < 0 or valid_days + flagged > slots:
+        return "rejection_count_invalid"
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -371,7 +419,8 @@ def build_candidate(cities_path: Path, inputs_manifest: Path, inputs_dir: Path, 
                 "place_elevation_m": repr(point["elevation_m"]), "month": str(month),
                 "mean_tmax_c": repr(value["mean_tmax_c"]), "unit": UNIT, "statistic": STATISTIC,
                 "source_product": PRODUCT, "period_start": str(PERIOD[0]), "period_end": str(PERIOD[1]),
-                **{k: str(value[k]) for k in ("years_used", "first_year", "last_year", "valid_days", "flagged_values")},
+                **{k: str(value[k]) for k in ("years_used", "first_year", "last_year", "qualifying_year_mask",
+                                              "valid_days", "flagged_values")},
                 "station_id": pick["station_id"], "station_name": pick["name"], "station_lat": repr(pick["lat"]),
                 "station_lon": repr(pick["lon"]), "station_elevation_m": repr(pick["elevation_m"]),
                 "distance_km": repr(round(pick["distance_m"] / 1000, 2)), "source_version": version,
@@ -390,7 +439,7 @@ def build_candidate(cities_path: Path, inputs_manifest: Path, inputs_dir: Path, 
         "stations": {"candidates": len(wanted), "read": len(climatology), "refused": dict(sorted(refused.items())),
                      "with_any_qualified_month": sum(1 for v in climatology.values() if v)},
         "coverage": coverage, "attribution": ATTRIBUTION, "dataset": DATASET, "redistribution": REDISTRIBUTION,
-        "units": {"mean_tmax_c": "degC", "distance_km": "km", "elevation_m": "m"},
+        "units": dict(UNITS),
         "assembled_at": (now or _utc_now)(),
     }
     _atomic_write(out_dir / "candidate" / "normals.csv", body)
@@ -425,6 +474,30 @@ def population(rows: list[dict[str, Any]]) -> dict[str, Any]:
 # loader (the Hot10 consumer reads only this product's own file)
 # ---------------------------------------------------------------------------
 
+@lru_cache(maxsize=1)
+def _registered_points() -> dict[str, tuple[str, float | None]]:
+    out: dict[str, tuple[str, float | None]] = {}
+    for entry in places.registry():
+        elevation = entry.get("elevation_m")
+        out[entry["place_id"]] = (places.sampling_point_id(entry["lat"], entry["lon"]),
+                                  float(elevation) if finite(elevation) else None)
+    return out
+
+
+def registered_elevation(place_id: Any, lat: Any, lon: Any) -> float | None:
+    """The catalogue elevation of ``place_id``'s registered point when (lat, lon) is that point, else None."""
+    try:
+        point = places.sampling_point_id(lat, lon)
+    except (TypeError, ValueError):
+        return None
+    registered = _registered_points().get(place_id) if isinstance(place_id, str) else None
+    return registered[1] if registered is not None and registered[0] == point else None
+
+
+def _in_range(lat: float, lon: float) -> bool:
+    return finite(lat) and finite(lon) and -90 <= lat <= 90 and -180 <= lon <= 180
+
+
 def _row_problem(row: dict[str, str]) -> str | None:
     """None when one candidate/installed row satisfies the product contract, else a fixed reason."""
     if row.get("source_product") != PRODUCT:
@@ -437,8 +510,10 @@ def _row_problem(row: dict[str, str]) -> str | None:
         years, first, last = int(row["years_used"]), int(row["first_year"]), int(row["last_year"])
         distance = float(row["distance_km"])
         place_elevation, station_elevation = float(row["place_elevation_m"]), float(row["station_elevation_m"])
-        float(row["station_lat"]), float(row["station_lon"])
-        int(row["valid_days"]), int(row["flagged_values"])
+        lat, lon = float(row["lat"]), float(row["lon"])
+        station_lat, station_lon = float(row["station_lat"]), float(row["station_lon"])
+        valid_days, flagged = int(row["valid_days"]), int(row["flagged_values"])
+        mask = row["qualifying_year_mask"]
     except (KeyError, TypeError, ValueError):
         return "row_unparseable"
     if period != PERIOD:
@@ -448,13 +523,39 @@ def _row_problem(row: dict[str, str]) -> str | None:
         return "insufficient_coverage"
     if not 1 <= month <= 12 or not finite(value) or not VALUE_RANGE_C[0] <= value <= VALUE_RANGE_C[1]:
         return "value_invalid"
-    if not 0 <= distance <= MAX_DISTANCE_M / 1000 \
-            or abs(station_elevation - place_elevation) > MAX_ELEVATION_DIFF_M:
+    if not 0 <= distance <= MAX_DISTANCE_M / 1000:
         return "station_out_of_range"
+    if not _in_range(lat, lon) or not _in_range(station_lat, station_lon):
+        return "coordinates_invalid"
+    if not all(finite(v) and ELEVATION_RANGE_M[0] <= v <= ELEVATION_RANGE_M[1]
+               for v in (place_elevation, station_elevation)):
+        return "elevation_invalid"
+    actual_km = distance_m(lat, lon, station_lat, station_lon) / 1000
+    if abs(station_elevation - place_elevation) > MAX_ELEVATION_DIFF_M or actual_km > MAX_DISTANCE_M / 1000:
+        return "station_out_of_range"
+    if abs(actual_km - distance) > DISTANCE_TOLERANCE_KM + 1e-9:
+        return "station_distance_misstated"
+    problem = coverage_problem(month, years, first, last, mask, valid_days, flagged)
+    if problem is not None:
+        return problem
     if not _STATION_ID.fullmatch(row.get("station_id") or "") or not row.get("source_version") \
             or not row.get("retrieved_at"):
         return "provenance_missing"
     return None
+
+
+def _place_problem(row: dict[str, str]) -> tuple[str | None, dict[str, Any], str]:
+    """(problem, registry identity, location key) for a row whose own fields already passed ``_row_problem``."""
+    try:
+        identity = places.place_for_row(row)
+        key = places.event_location_key(row["city"], row["country"], row["lat"], row["lon"], place_id=row["place_id"])
+    except (KeyError, ValueError, TypeError):
+        return "unregistered_place", {}, ""
+    if identity["sampling_point_id"] != row["sampling_point_id"]:
+        return "point_identity_mismatch", identity, key
+    if registered_elevation(identity["place_id"], identity["lat"], identity["lon"]) != float(row["place_elevation_m"]):
+        return "place_elevation_unregistered", identity, key
+    return None, identity, key
 
 
 def provenance(row: dict[str, str], identity: dict[str, Any]) -> dict[str, Any]:
@@ -464,12 +565,13 @@ def provenance(row: dict[str, str], identity: dict[str, Any]) -> dict[str, Any]:
         "period_start": PERIOD[0], "period_end": PERIOD[1], "retrieved_at": row["retrieved_at"],
         "sampling_point_id": identity["sampling_point_id"], "unit": UNIT, "month": int(row["month"]),
         "years_used": int(row["years_used"]), "first_year": int(row["first_year"]),
-        "last_year": int(row["last_year"]), "valid_days": int(row["valid_days"]),
-        "flagged_values": int(row["flagged_values"]), "station_id": row["station_id"],
-        "station_name": row["station_name"], "station_lat": float(row["station_lat"]),
-        "station_lon": float(row["station_lon"]), "station_elevation_m": float(row["station_elevation_m"]),
-        "distance_km": float(row["distance_km"]), "source_version": row["source_version"],
-        "sample_count": int(row["valid_days"]),
+        "last_year": int(row["last_year"]), "qualifying_year_mask": row["qualifying_year_mask"],
+        "valid_days": int(row["valid_days"]), "flagged_values": int(row["flagged_values"]),
+        "station_id": row["station_id"], "station_name": row["station_name"],
+        "station_lat": float(row["station_lat"]), "station_lon": float(row["station_lon"]),
+        "station_elevation_m": float(row["station_elevation_m"]),
+        "place_elevation_m": float(row["place_elevation_m"]), "distance_km": float(row["distance_km"]),
+        "source_version": row["source_version"], "sample_count": int(row["valid_days"]),
         "coverage_fraction": round(int(row["years_used"]) / (PERIOD[1] - PERIOD[0] + 1), 4),
         "comparison_scope": COMPARISON_SCOPE,
     }
@@ -505,16 +607,9 @@ def load_normals(path: str | Path = DEFAULT_INSTALLED, report: dict[str, Any] | 
     for row in rows:
         problem = _row_problem(row)
         identity: dict[str, Any] = {}
+        key = ""
         if problem is None:
-            try:
-                identity = places.place_for_row(row)
-                key = places.event_location_key(row["city"], row["country"], row["lat"], row["lon"],
-                                                place_id=row["place_id"])
-            except (KeyError, ValueError, TypeError):
-                problem = "unregistered_place"
-            else:
-                if identity["sampling_point_id"] != row["sampling_point_id"]:
-                    problem = "point_identity_mismatch"
+            problem, identity, key = _place_problem(row)
         if problem is not None:
             refused[problem] = refused.get(problem, 0) + 1
             continue
@@ -563,6 +658,8 @@ def admit(candidate_dir: Path) -> dict[str, Any]:
     seen: set[tuple[str, str, str]] = set()
     for row in rows:
         problem = _row_problem(row)
+        if problem is None:
+            problem = _place_problem(row)[0]
         if problem is not None:
             reasons.append(problem)
         key = (row.get("place_id", ""), row.get("sampling_point_id", ""), row.get("month", ""))
@@ -652,8 +749,9 @@ def install_plan(candidate_dir: Path, installed_path: Path) -> dict[str, Any]:
     return plan
 
 
-__all__ = ["ATTRIBUTION", "CANDIDATE_SCHEMA", "COMPARISON_SCOPE", "DEFAULT_INSTALLED", "FIELDS", "GhcndNormalsError",
-           "INSTALLED_NAME", "MAX_CONSECUTIVE_MISSING", "MAX_DISTANCE_M", "MAX_ELEVATION_DIFF_M", "MAX_MISSING_DAYS",
-           "MIN_PLACES_PER_MONTH", "MIN_YEARS", "PERIOD", "PRODUCT", "REDISTRIBUTION", "RULES", "STATISTIC", "admit",
-           "build_candidate", "candidates", "install_plan", "load_normals", "load_points", "month_qualifies",
-           "parse_tmax", "population", "provenance", "station_climatology"]
+__all__ = ["ATTRIBUTION", "CANDIDATE_SCHEMA", "COMPARISON_SCOPE", "DEFAULT_INSTALLED", "DISTANCE_TOLERANCE_KM",
+           "ELEVATION_RANGE_M", "FIELDS", "GhcndNormalsError", "INSTALLED_NAME", "MAX_CONSECUTIVE_MISSING",
+           "MAX_DISTANCE_M", "MAX_ELEVATION_DIFF_M", "MAX_MISSING_DAYS", "MIN_PLACES_PER_MONTH", "MIN_YEARS", "PERIOD",
+           "PRODUCT", "REDISTRIBUTION", "RULES", "STATISTIC", "admit", "build_candidate", "candidates",
+           "coverage_problem", "install_plan", "load_normals", "load_points", "mask_years", "month_qualifies",
+           "parse_tmax", "population", "provenance", "registered_elevation", "station_climatology", "year_mask"]

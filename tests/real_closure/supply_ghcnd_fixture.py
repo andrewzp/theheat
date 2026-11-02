@@ -86,10 +86,12 @@ class Inputs:
         return {**places.place_for_row(row), "elevation_m": float(row["elevation_m"])}
 
     def add(self, station_id: str, near: str, *, north_km: float = 5.0, elevation_delta: float = 10.0,
-            text: str | None = None, first: int = 1985, last: int = 2024, base: float = 30.0) -> None:
+            text: str | None = None, first: int = 1985, last: int = 2024, base: float = 30.0,
+            at: tuple[float, float] | None = None) -> None:
+        """A station ``north_km`` north of ``near`` (or exactly ``at`` (lat, lon), 4-decimal like NOAA's)."""
         place = self.place(near)
-        lat = place["lat"] + north_km / 111.2
-        self.stations.append((station_id, lat, place["lon"], place["elevation_m"] + elevation_delta,
+        lat, lon = at if at is not None else (place["lat"] + north_km / 111.2, place["lon"])
+        self.stations.append((station_id, lat, lon, place["elevation_m"] + elevation_delta,
                               f"INVENTED {station_id[-4:]}", first, last))
         self.texts[station_id] = text if text is not None else station_text(
             station_id, lambda y, m: base + m / 10, years=range(first, last + 1))
@@ -142,7 +144,7 @@ def installed_rows(month: int, cities=h.CITIES, *, normal_c: float = h.NORMAL_C,
             "place_elevation_m": repr(float(row["elevation_m"])), "month": str(month), "mean_tmax_c": repr(normal_c),
             "unit": "C", "statistic": gn.STATISTIC, "source_product": gn.PRODUCT, "period_start": "1991",
             "period_end": "2020", "years_used": "30", "first_year": "1991", "last_year": "2020",
-            "valid_days": "900", "flagged_values": "0", "station_id": f"XQW000{index:05d}",
+            "qualifying_year_mask": "1" * 30, "valid_days": "900", "flagged_values": "0", "station_id": f"XQW000{index:05d}",
             "station_name": f"INVENTED {index}", "station_lat": repr(place["lat"] + 0.05),
             "station_lon": repr(place["lon"]), "station_elevation_m": repr(float(row["elevation_m"]) + 5.0),
             "distance_km": "5.56", "source_version": "3.35-upd-2026102817", "retrieved_at": RETRIEVED_AT,
