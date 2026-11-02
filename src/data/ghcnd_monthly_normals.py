@@ -30,7 +30,10 @@ year (leap Februaries included) minus at most ``MAX_MISSING_DAYS``. Rejected (fl
 never negative and never exceed the period's free day slots. Coordinates and elevations must be
 finite, in range and not the GHCN/Meteostat missing-value sentinels; the place elevation must be
 the registered catalogue point's; the station distance is recomputed (haversine) and the stored
-0.01 km rounding is the only tolerance.
+0.01 km rounding is the only tolerance. Admission and the install plan also require the
+manifest's complete, typed lineage (input product, dataset/attribution, the four input file
+identities, the source version bound to its version text, the catalogue identity and the
+retrieval) and bind every row's source version and retrieval to it.
 
 Install requires at least ``MIN_PLACES_PER_MONTH`` (10) distinct places for every
 calendar month, so the Hot10 can hold a full slate whatever the month. The
@@ -80,13 +83,17 @@ MIN_PLACES_PER_MONTH = 10
 EARTH_RADIUS_M = 6_371_000
 INSTALLED_NAME = "normals_ghcnd_mean_tmax.csv"
 DEFAULT_INSTALLED = Path("data") / INSTALLED_NAME
-CANDIDATE_SCHEMA = "theheat.ghcnd-normals-candidate/v2"  # v2: rows state their qualifying_year_mask
+CANDIDATE_SCHEMA = "theheat.ghcnd-normals-candidate/v2"  # v2: qualifying_year_mask; complete lineage
 INSTALL_SCHEMA = "theheat.ghcnd-normals-install-plan/v1"
 INPUTS_SCHEMA = "theheat.threshold-inputs/v1"
 INPUT_FILES = {"version": "ghcnd-version.txt", "stations": "ghcnd-stations.txt",
                "inventory": "ghcnd-inventory.txt", "archive": "ghcnd_all.tar.gz"}
 MAX_TEXT_BYTES = 128 * 1024 * 1024
 MAX_CANDIDATE_BYTES = 32 * 1024 * 1024
+MAX_INPUT_BYTES = 64 * 1024 ** 3  # bound on any recorded input size (the archive is ~3.8 GB)
+NOAA_BASE_URL = "https://www.ncei.noaa.gov/pub/data/ghcn/daily/"
+INPUT_IDENTITY_KEYS = ("name", "sha256", "bytes", "url", "retrieved_at", "last_modified", "etag")
+SOURCE_VERSION_KEYS = ("version", "update_started_at", "reprocessed_version", "text_sha256")
 UNITS = {"mean_tmax_c": "degC", "distance_km": "km", "elevation_m": "m"}
 DISTANCE_TOLERANCE_KM = 0.005  # distances are stored rounded to 0.01 km
 ELEVATION_RANGE_M = (-500.0, 9000.0)  # excludes the GHCN -999.9 and Meteostat -9999 missing-value sentinels
@@ -121,7 +128,10 @@ FIELDS = ("city", "country", "place_id", "sampling_point_id", "lat", "lon", "pla
           "station_name", "station_lat", "station_lon", "station_elevation_m", "distance_km", "source_version",
           "retrieved_at")
 _STATION_ID = re.compile(r"[A-Z0-9]{11}\Z")
-
+_SHA256 = re.compile(r"[0-9a-f]{64}\Z")
+_VERSION = re.compile(r"\d+\.\d+-(?:upd|por)-(?P<stamp>\d{10})\Z")  # as threshold_rebuild.parse_version
+_POR_VERSION = re.compile(r"\d+\.\d+-por-\d{10}\Z")
+_TIMESTAMP = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z\Z")
 
 
 class GhcndNormalsError(deps.AcquisitionError):
@@ -474,6 +484,29 @@ def population(rows: list[dict[str, Any]]) -> dict[str, Any]:
 # loader (the Hot10 consumer reads only this product's own file)
 # ---------------------------------------------------------------------------
 
+def _utc(value: Any) -> datetime | None:
+    """A ``YYYY-MM-DDTHH:MM:SSZ`` timestamp (the builder's and Root's format), else None."""
+    if type(value) is not str or not _TIMESTAMP.fullmatch(value):
+        return None
+    try:
+        return datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+    except ValueError:
+        return None
+
+
+def _version_start(version: Any) -> str | None:
+    """The update start a GHCN-Daily version string names (``3.35-upd-2026102817`` -> 2026-10-28T17:00:00Z)."""
+    match = _VERSION.fullmatch(version) if type(version) is str else None
+    if match is None:
+        return None
+    stamp = match["stamp"]
+    try:
+        started = datetime(int(stamp[:4]), int(stamp[4:6]), int(stamp[6:8]), int(stamp[8:10]), tzinfo=timezone.utc)
+    except ValueError:
+        return None
+    return started.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 @lru_cache(maxsize=1)
 def _registered_points() -> dict[str, tuple[str, float | None]]:
     out: dict[str, tuple[str, float | None]] = {}
@@ -541,6 +574,8 @@ def _row_problem(row: dict[str, str]) -> str | None:
     if not _STATION_ID.fullmatch(row.get("station_id") or "") or not row.get("source_version") \
             or not row.get("retrieved_at"):
         return "provenance_missing"
+    if _version_start(row["source_version"]) is None or _utc(row["retrieved_at"]) is None:
+        return "provenance_malformed"
     return None
 
 
@@ -583,7 +618,8 @@ def load_normals(path: str | Path = DEFAULT_INSTALLED, report: dict[str, Any] | 
     """This product's installed file -> the Hot10 normals mapping; a file holding any other product is refused whole.
 
     Same shape as ``open_meteo.load_normals``: ``{location_key: {month: value, "_meta": {month: provenance}}}``.
-    Never falls back to another product or file.
+    Never falls back to another product or file. One file is one build: rows naming more than one
+    source version or retrieval are refused whole as well.
     """
     report = report if report is not None else {}
     report.update(product=PRODUCT, path=str(path), rows=0, accepted=0, refused={}, status="absent")
@@ -602,6 +638,9 @@ def load_normals(path: str | Path = DEFAULT_INSTALLED, report: dict[str, Any] | 
     report["rows"] = len(rows)
     if any(row.get("source_product") != PRODUCT for row in rows):
         report["status"] = "refused_mixed_products"  # never a partial read of a mixed file
+        return normals
+    if len({(row.get("source_version"), row.get("retrieved_at")) for row in rows}) > 1:
+        report["status"] = "refused_mixed_lineage"
         return normals
     refused: dict[str, int] = {}
     for row in rows:
@@ -638,8 +677,85 @@ def _read_candidate(candidate_dir: Path) -> tuple[dict[str, Any], bytes]:
     return json.loads(manifest_path.read_bytes()), body_path.read_bytes()
 
 
+def _bounded_text(value: Any, limit: int = 256) -> bool:
+    return type(value) is str and 0 < len(value) <= limit
+
+
+def _input_identity_ok(role: str, identity: Any) -> bool:
+    """One input file as the builder records it from Root's verified inputs manifest."""
+    if not isinstance(identity, dict) or set(identity) != set(INPUT_IDENTITY_KEYS):
+        return False
+    size = identity["bytes"]
+    return (identity["name"] == INPUT_FILES[role] and type(identity["sha256"]) is str
+            and bool(_SHA256.fullmatch(identity["sha256"])) and type(size) is int and 0 < size <= MAX_INPUT_BYTES
+            and identity["url"] == NOAA_BASE_URL + INPUT_FILES[role] and _utc(identity["retrieved_at"]) is not None
+            and all(identity[key] is None or _bounded_text(identity[key]) for key in ("last_modified", "etag")))
+
+
+def _lineage_problems(manifest: dict[str, Any], rows: list[dict[str, str]]) -> list[str]:
+    """Missing, malformed or contradictory provenance in a candidate manifest (integrity, not truth)."""
+    required = ("inputs", "source_version", "input_product", "cities", "stations", "attribution", "dataset",
+                "units", "assembled_at", "coverage", "rows", "csv")
+    if any(key not in manifest for key in required) or not isinstance(manifest.get("inputs"), dict) \
+            or any(role not in manifest["inputs"] for role in INPUT_FILES):
+        return ["candidate_provenance_missing"]
+    problems: set[str] = set()
+    if (manifest["input_product"], manifest["dataset"], manifest["attribution"], manifest["units"]) \
+            != (INPUT_PRODUCT, DATASET, ATTRIBUTION, UNITS):
+        problems.add("candidate_source_mismatch")
+    inputs, version, cities, stations = (manifest["inputs"], manifest["source_version"], manifest["cities"],
+                                         manifest["stations"])
+    typed = (set(inputs) == set(INPUT_FILES) and all(_input_identity_ok(r, inputs[r]) for r in INPUT_FILES)
+             and isinstance(version, dict) and set(version) == set(SOURCE_VERSION_KEYS)
+             and _version_start(version["version"]) is not None and _utc(version["update_started_at"]) is not None
+             and (version["reprocessed_version"] is None or (type(version["reprocessed_version"]) is str
+                                                             and bool(_POR_VERSION.fullmatch(version["reprocessed_version"]))))
+             and type(version["text_sha256"]) is str and bool(_SHA256.fullmatch(version["text_sha256"]))
+             and isinstance(cities, dict) and set(cities) == {"sha256", "points"}
+             and type(cities["sha256"]) is str and bool(_SHA256.fullmatch(cities["sha256"]))
+             and type(cities["points"]) is int and cities["points"] > 0
+             and isinstance(stations, dict) and set(stations) == {"candidates", "read", "refused",
+                                                                  "with_any_qualified_month"}
+             and all(type(stations[k]) is int and stations[k] >= 0
+                     for k in ("candidates", "read", "with_any_qualified_month"))
+             and isinstance(stations["refused"], dict)
+             and all(type(k) is str and type(v) is str for k, v in stations["refused"].items())
+             and _utc(manifest["assembled_at"]) is not None and type(manifest["rows"]) is int
+             and manifest["csv"] == "normals.csv")
+    if not typed:
+        return sorted(problems | {"candidate_provenance_invalid"})
+    # The source version is the one the version text names and is bound to that text's bytes.
+    if version["text_sha256"] != inputs["version"]["sha256"] \
+            or _version_start(version["version"]) != version["update_started_at"]:
+        problems.add("candidate_version_text_unbound")
+    # Every input was retrieved after that version's update started, and assembled after retrieval.
+    started, assembled = _utc(version["update_started_at"]), _utc(manifest["assembled_at"])
+    retrieved = [moment for moment in (_utc(inputs[role]["retrieved_at"]) for role in INPUT_FILES) if moment]
+    if started is None or assembled is None or len(retrieved) != len(INPUT_FILES) \
+            or min(retrieved) < started or assembled < max(retrieved):
+        problems.add("candidate_retrieval_contradicted")
+    if any(row.get("source_version") != version["version"] for row in rows):
+        problems.add("candidate_rows_not_bound_to_source_version")
+    if any(row.get("retrieved_at") != inputs["archive"]["retrieved_at"] for row in rows):
+        problems.add("candidate_rows_not_bound_to_retrieval")
+    if len({row.get("place_id") for row in rows}) > cities["points"]:
+        problems.add("candidate_catalogue_contradicted")
+    used = {row.get("station_id") for row in rows}
+    if (stations["read"] + len(stations["refused"]) > stations["candidates"]
+            or stations["with_any_qualified_month"] > stations["read"]
+            or len(used) > stations["with_any_qualified_month"] or used & set(stations["refused"])):
+        problems.add("candidate_station_counts_contradicted")
+    try:
+        stated = population(rows)
+    except (KeyError, TypeError, ValueError):
+        stated = None
+    if manifest["rows"] != len(rows) or manifest["coverage"] != stated:
+        problems.add("candidate_coverage_misstated")
+    return sorted(problems)
+
+
 def admit(candidate_dir: Path) -> dict[str, Any]:
-    """Schema, binding, per-row product contract, mixed-product refusal and actual-loader acceptance."""
+    """Schema, binding, complete lineage, per-row product contract, mixed-product refusal and loader acceptance."""
     try:
         manifest, body = _read_candidate(candidate_dir)
     except (OSError, ValueError, deps.AcquisitionError):
@@ -666,6 +782,7 @@ def admit(candidate_dir: Path) -> dict[str, Any]:
         if key in seen:
             reasons.append("duplicate_point_month")
         seen.add(key)
+    reasons.extend(_lineage_problems(manifest, rows))
     coverage = population(rows) if not reasons else None
     accepted = 0
     if not reasons:
@@ -696,7 +813,11 @@ def _installed_rows(path: Path) -> list[dict[str, str]]:
 
 
 def install_plan(candidate_dir: Path, installed_path: Path) -> dict[str, Any]:
-    """Admitted candidate vs this product's own installed file; a retained rollback copy. Root installs."""
+    """Admitted candidate vs this product's own installed file; a retained rollback copy. Root installs.
+
+    The plan re-reads the candidate and re-checks its lineage itself: the admitted bytes must be the
+    ones planned, and a manifest that does not bind every row is refused even after admission.
+    """
     if installed_path.name != INSTALLED_NAME:
         raise GhcndNormalsError("ghcnd_install_target_not_product_path")  # never data/normals.csv
     admission = admit(candidate_dir)
@@ -706,6 +827,11 @@ def install_plan(candidate_dir: Path, installed_path: Path) -> dict[str, Any]:
     if coverage["min_places_per_month"] < MIN_PLACES_PER_MONTH:
         raise GhcndNormalsError("ghcnd_candidate_fewer_than_ten_places")
     manifest, body = _read_candidate(candidate_dir)
+    if hashlib.sha256(body).hexdigest() != admission["product"]["candidate_sha256"] \
+            or manifest.get("csv_sha256") != admission["product"]["candidate_sha256"]:
+        raise GhcndNormalsError("ghcnd_candidate_changed_since_admission")
+    if _lineage_problems(manifest, list(csv.DictReader(io.StringIO(body.decode("utf-8"))))):
+        raise GhcndNormalsError("ghcnd_candidate_provenance_invalid")
     previous = None
     old: dict[tuple[str, str, int], float] = {}
     if installed_path.exists():
@@ -724,7 +850,8 @@ def install_plan(candidate_dir: Path, installed_path: Path) -> dict[str, Any]:
     plan = {
         "schema": INSTALL_SCHEMA, "product": PRODUCT, "admission": admission["status"],
         "candidate": {"path": str(candidate_dir / "normals.csv"), "sha256": candidate_sha, "bytes": len(body),
-                      "source_version": manifest.get("source_version"), "inputs": manifest.get("inputs")},
+                      "source_version": manifest["source_version"], "inputs": manifest["inputs"],
+                      "catalogue": manifest["cities"]},
         "previous": previous, "coverage": coverage,
         "comparison": {"added": len(new.keys() - old.keys()), "removed": len(old.keys() - new.keys()),
                        "changed": sum(1 for k in old.keys() & new.keys() if old[k] != new[k])},
