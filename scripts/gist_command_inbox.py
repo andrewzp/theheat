@@ -117,8 +117,9 @@ def verify_provenance(repo: str, rows: list[dict], run: Runner, *, branch: str =
                 if not isinstance(detail, dict):
                     unverified += 1
                     continue
-                head = detail.get("head_repository") if isinstance(detail.get("head_repository"), dict) else {}
-                own = detail.get("repository") if isinstance(detail.get("repository"), dict) else {}
+                head_value, own_value = detail.get("head_repository"), detail.get("repository")
+                head: dict = head_value if isinstance(head_value, dict) else {}
+                own: dict = own_value if isinstance(own_value, dict) else {}
                 cache[run_id] = ("provenance_workflow" if detail.get("path") != COMMAND_WORKFLOW
                                  else "provenance_event" if detail.get("event") != COMMAND_EVENT
                                  # Branch and fork were checked on the listing; the run detail must not contradict them.
