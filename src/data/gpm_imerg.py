@@ -1243,16 +1243,37 @@ def _ascii_subset_url(
 
 
 def _parse_ascii_value(text: str, variable: str = "precipitation") -> float | None:
+    """Read one named data scalar, never an axis whose name contains the variable.
+
+    A DAP grid may label its array ``precipitation.precipitation`` and its
+    coordinates ``precipitation.lat``. Grid array selectors can name coordinate
+    values (``[precipitation.time=123][precipitation.lon=-118.25]``) rather than
+    integer offsets. Substring matching confuses data and coordinate fields.
+    Multiple target rows or a non-scalar/non-finite value are not a point read.
+    """
+    name = re.escape(variable)
+    number = r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?"
+    axis = rf"(?:{name}\.)?(?:time|lon|lat)={number}"
+    label_pattern = re.compile(rf"(?:{name}\.)?{name}(?:(?:\[\d+\]){{0,3}}|(?:\[{axis}\]){{1,3}})")
+    value: float | None = None
     for line in text.splitlines():
-        stripped = line.strip()
-        if variable not in stripped or "," not in stripped:
+        label, separator, raw = line.strip().partition(",")
+        if not separator or not label_pattern.fullmatch(label.strip()):
             continue
-        raw = stripped.rsplit(",", 1)[1].strip().rstrip(";")
+        selectors = re.findall(r"\[([^\[\]]+)\]", label)
+        named = [selector.split("=") for selector in selectors if "=" in selector]
+        if (len({selector[0].split(".")[-1] for selector in named}) != len(named)
+                or any(not math.isfinite(float(selector[1])) for selector in named)):
+            return None
+        if value is not None:
+            return None
         try:
-            return float(raw)
+            value = float(raw.strip().rstrip(";"))
         except ValueError:
-            continue
-    return None
+            return None
+        if not math.isfinite(value):
+            return None
+    return value
 
 
 def _fetch_daily_precip_grid(

@@ -1,3 +1,11 @@
+## 0.9.109.52
+
+- Parse one exact GPM OPeNDAP precipitation scalar, including coordinate-labelled
+  grid data. Coordinate arrays and similarly named variables cannot become a
+  rainfall amount; ambiguous, malformed and non-finite point results are refused.
+- Preserve source-provenance, rainfall-window and historical-comparison holds.
+  This change does not repair old tracking values or certify live source recovery.
+
 ## 0.9.109.51
 
 - Lead generated copy with the place and strongest supported fact. Reject clear
