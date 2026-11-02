@@ -130,12 +130,14 @@ test("B1 altered or rebound retry bytes are refused by /api/commands; nothing is
       operation: { ...envelope, operation: "approve" },
       actor: { ...envelope, actor_subject: "someone-else" },
       generation: { ...envelope, route_activation: "00000000-0000-4000-8000-0000000000ff" },
+      producer: { ...envelope, producer: { ...envelope.producer, generation: "2" } },
+      kid: { ...envelope, seal: { ...envelope.seal, kid: "k-test2" } },
       expiry: { ...envelope, expires_at: new Date(Date.parse(envelope.expires_at) - 60000).toISOString().replace(/\.\d{3}Z$/, "Z") },
     }
     for (const [label, value] of Object.entries(variants)) {
       const response = await post("app/api/commands/route.js", { command: canonical(value) })
       assert.notEqual(response.status, 202, label)
-      assert.equal(response.body.code, "command_seal_invalid", label)
+      assert.equal(response.body.code, label === "kid" ? "command_seal_key_unknown" : "command_seal_invalid", label)
     }
     assert.equal((await post("app/api/commands/route.js", { command: issued.body.command + " " })).status, 400)
     assert.equal((await post("app/api/commands/route.js", { command: "{" })).body.code, "invalid_json")
