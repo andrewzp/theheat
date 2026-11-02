@@ -1,3 +1,29 @@
+## 0.9.109.52
+
+- Recognize a narrowly bounded, source-backed PM10 daily-mean ratio alongside
+  a separate dust peak. Shared or ambiguous dust comparisons stay rejected;
+  every accepted candidate still needs the ordinary mandatory model checks.
+- Replace only PG8's crashing timed native traceback diagnostic with a bounded
+  Python observer at the same 300 seconds. Preserve fatal-signal evidence,
+  required test groups, assertions and all execution deadlines.
+- Install the verified, immutable GHCN-derived threshold baseline for 12,627
+  active catalogue stations (12,624 with comparators), with a source cutoff,
+  checksum-bound compressed asset and attribution. Current observation and
+  independent historical-comparison checks remain required before publication.
+- Restore the Hot10 baseline with newly acquired, attributable Meteostat point
+  normals for 440 catalogue locations across 135 countries and all 12 months.
+  Preserve the 193 unsupported locations as exclusions, the period/point rules,
+  source attribution and a hash-bound installation/rollback record.
+- Read year-only monthly inventory dates consistently with the pinned Meteostat
+  SDK; retain useful source diagnostics for missing and invalid point products.
+- Parse one exact GPM OPeNDAP precipitation scalar, including coordinate-labelled
+  grid data. Coordinate arrays and similarly named variables cannot become a
+  rainfall amount; ambiguous, malformed and non-finite point results are refused.
+- Preserve source-provenance, rainfall-window and historical-comparison holds.
+  This change does not repair old tracking values or certify live source recovery.
+- Tie invented regional-observation test packets to their fixture clock, including
+  the episode consumer; retain explicit stale/future-capture refusal checks.
+
 ## 0.9.109.51
 
 - Lead generated copy with the place and strongest supported fact. Reject clear

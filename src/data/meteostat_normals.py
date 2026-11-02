@@ -9,6 +9,9 @@ physical requests, transfer bytes, retries and on-disk cache, so it cannot be
 bounded (SOURCE-CLOSURE S3). Reproduced:
 
 - station list ``stations/slim.csv.gz`` (16 headerless columns), one GET per run;
+  its ``monthly_start``/``monthly_end`` columns ship as bare years (``2003``)
+  which the SDK's pandas ``parse_dates`` reads as that year's first day, so
+  they are read the same way here (ISO dates are also accepted);
 - ``Point`` without altitude: ``method='nearest'``, ``radius=35000`` m,
   ``alt_range=350`` m, ``max_count=4``, ``adapt_temp=False``; haversine
   distance (R=6,371,000 m); altitude guessed as the mean elevation of the four
@@ -76,7 +79,15 @@ MAX_STATION_ROWS = 200_000
 
 
 class ProductInvalid(ValueError):
-    """The provider answered with a product the contract cannot accept (point refused)."""
+    """The provider answered with a product the contract cannot accept (point refused).
+
+    ``detail`` names where (station, url, physical row, field) so a refused
+    point explains itself in its partition; the label itself stays fixed.
+    """
+
+    def __init__(self, label: str, detail: dict[str, Any] | None = None) -> None:
+        super().__init__(label)
+        self.detail: dict[str, Any] = dict(detail or {})
 
 
 class ProviderUnavailable(Exception):
@@ -133,9 +144,17 @@ def _float(text: str, *, low: float, high: float, optional: bool) -> float | Non
     return value
 
 
+_YEAR = re.compile(r"[0-9]{4}\Z")
+
+
 def _date(text: str) -> date | None:
+    """An inventory bound: empty, a bare year (pandas ``parse_dates``: YYYY-01-01) or an ISO date."""
     text = text.strip()
-    return date.fromisoformat(text) if text else None
+    if not text:
+        return None
+    if _YEAR.fullmatch(text):
+        return date(int(text), 1, 1)
+    return date.fromisoformat(text)
 
 
 def parse_stations(text: str) -> tuple[list[Station], dict[str, int]]:
@@ -205,20 +224,27 @@ def parse_normals(text: str, station: str) -> list[tuple[int, int, int, float | 
     """Headerless station normals rows -> (start, end, month, tmax). Any invalid row refuses the file."""
     rows = []
     seen: set[tuple[int, int, int]] = set()
-    for values in csv.reader(io.StringIO(text), strict=True):
+    reader = csv.reader(io.StringIO(text), strict=True)
+    for values in reader:
         if not values:
             continue
+        field = "column_count"
         try:
             if len(values) != _NORMALS_COLUMNS:
                 raise ValueError
+            field = "period_or_month"
             start, end, month = int(values[0]), int(values[1]), int(values[2])
             if not 1 <= month <= 12 or not 1800 <= start <= end <= 2100:
                 raise ValueError
+            field = "tmax"
             tmax = _float(values[4], low=-90, high=60, optional=True)
         except ValueError:
-            raise ProductInvalid("normals_station_file_invalid") from None
+            detail: dict[str, Any] = {"row": reader.line_num, "field": field}
+            if field == "column_count":
+                detail["columns"] = len(values)
+            raise ProductInvalid("normals_station_file_invalid", detail) from None
         if (start, end, month) in seen:
-            raise ProductInvalid("normals_station_file_duplicate_month")
+            raise ProductInvalid("normals_station_file_duplicate_month", {"row": reader.line_num, "field": "month"})
         seen.add((start, end, month))
         rows.append((start, end, month, tmax))
     return rows
@@ -287,11 +313,16 @@ class MeteostatBulkProvider:
                     raise  # retried inside the bounds already; the point stays pending
                 self._files[station] = ("missing", [], {"url": self.endpoint + path, "status": outcome.status})
             else:
+                where = {"station": station, "url": self.endpoint + path}
                 try:
                     text = raw.decode("utf-8")
                 except UnicodeDecodeError:
-                    raise ProductInvalid("normals_station_file_invalid") from None
-                self._files[station] = ("ok", parse_normals(text, station), {**receipt, "retrieved_at": _iso(self._now())})
+                    raise ProductInvalid("normals_station_file_invalid", {**where, "field": "encoding"}) from None
+                try:
+                    parsed = parse_normals(text, station)
+                except ProductInvalid as invalid:
+                    raise ProductInvalid(str(invalid), {**where, **invalid.detail}) from None
+                self._files[station] = ("ok", parsed, {**receipt, "retrieved_at": _iso(self._now())})
         return self._files[station]
 
     def fetch(self, lat: float, lon: float, start: int, end: int) -> NormalsFrame:

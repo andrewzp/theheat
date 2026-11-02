@@ -67,15 +67,16 @@ def world(tmp_path, names=("Riyadh", "Cairo", "Lima"), installed: str | None = "
     return cities, installed_path, plan
 
 
-def test_plan_on_checked_in_files_names_legacy_csv_and_exact_universe():
-    first = na.build_plan(ROOT / "data/cities.csv", ROOT / "data/normals.csv", dependency=UNAVAILABLE)
-    second = na.build_plan(ROOT / "data/cities.csv", ROOT / "data/normals.csv", dependency=None)
+def test_plan_names_legacy_csv_and_exact_universe_without_relabelling(tmp_path):
+    cities, installed, _ = world(tmp_path)
+    first = na.build_plan(cities, installed, dependency=UNAVAILABLE)
+    second = na.build_plan(cities, installed, dependency=None)
     assert first["plan_sha256"] == second["plan_sha256"]  # dependency/env never changes plan identity
     baseline = first["baseline"]
     assert baseline["format"] == "legacy_name_only" and baseline["loader_accepted_point_months"] == 0
     assert baseline["missing_columns"] and "sampling_point_id" in baseline["missing_columns"]
     assert "never relabelled" in baseline["explanation"]
-    assert first["universe"]["points"] == len(na.load_universe(ROOT / "data/cities.csv"))
+    assert first["universe"]["points"] == len(na.load_universe(cities))
     assert first["missing"]["point_months"] == first["universe"]["point_months"] == first["universe"]["points"] * 12
     assert first["next_command"][2:4] == ["acquire", "--plan"] and "--max-requests" in first["next_command"]
     outcome = na.plan_result(first)
@@ -84,7 +85,24 @@ def test_plan_on_checked_in_files_names_legacy_csv_and_exact_universe():
     assert outcome["source_health"]["error_class"] == "dependency"
     assert "installed_baseline_legacy_name_only" in outcome["reasons"]
     # the real loader refuses every legacy row
-    assert open_meteo.load_normals(str(ROOT / "data/normals.csv")) == {}
+    assert open_meteo.load_normals(str(installed)) == {}
+
+
+def test_installed_normals_match_the_acquisition_manifest_and_cover_twelve_months():
+    import hashlib
+
+    path = ROOT / "data/normals.csv"
+    manifest = json.loads((ROOT / "data/normals.manifest.json").read_text())
+    body = path.read_bytes()
+    assert hashlib.sha256(body).hexdigest() == manifest["csv_sha256"]
+    assert len(body) == manifest["csv_bytes"]
+    loaded = open_meteo.load_normals(str(path))
+    assert len(loaded) == len(manifest["points"]) == 440
+    assert sum(type(key) is int for entry in loaded.values() for key in entry) == manifest["rows"] == 5280
+    assert all({key for key in entry if type(key) is int} == set(range(1, 13)) for entry in loaded.values())
+    plan = na.build_plan(ROOT / "data/cities.csv", path)
+    assert plan["baseline"]["format"] == "qualified_point_normals"
+    assert plan["missing"] == {"points": 193, "point_months": 193 * 12}
 
 
 def test_plan_credits_existing_qualified_rows_and_lists_only_missing(tmp_path):

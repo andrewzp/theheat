@@ -44,20 +44,35 @@ class InventedRelease:
         (Path(directory) / name).write_bytes(b"invented bytes, not the pinned database")
 
 
-def manifest():
-    return artifacts.read_manifest(ROOT / "data/station_thresholds.version")
+def manifest(tmp_path):
+    # E1 replays the historical missing-asset failure. Preserve the former
+    # public manifest explicitly instead of requiring production to stay broken.
+    path = tmp_path / "retained-legacy.version"
+    path.write_text("release=thresholds-latest\n"
+                    "sha256=9fd9c660aff1dabd122361eef32cb3464ec10d2b32a9e5683d6ad6f06546a44d\n"
+                    "bytes=957243392\nlast_diff_date=\nactive_stations=11907\nthreshold_rows=9285790\n")
+    return artifacts.read_manifest(path)
 
 
-def test_pinned_manifest_is_the_legacy_single_sqlite_asset():
-    pinned = manifest()
+def test_retained_legacy_manifest_names_the_single_sqlite_asset(tmp_path):
+    pinned = manifest(tmp_path)
     assert pinned["release"] == "thresholds-latest" and "format" not in pinned
     assert artifacts._asset(pinned) == ("station_thresholds.sqlite", pinned["sha256"], 957_243_392)
+
+
+def test_installed_manifest_selects_the_immutable_compressed_asset():
+    pinned = artifacts.read_manifest(ROOT / "data/station_thresholds.version")
+    assert pinned["release"] == "thresholds-latest" and pinned["format"] == "sqlite-gzip"
+    assert artifacts._asset(pinned) == (
+        f"station_thresholds-{pinned['sha256']}.sqlite.gz", pinned["asset_sha256"], int(pinned["asset_bytes"]))
+    assert 0 < int(pinned["asset_bytes"]) < int(pinned["bytes"])
+    assert pinned["last_diff_date"] and int(pinned["active_stations"]) >= 1000
 
 
 def test_retained_outcome_is_a_missing_release_asset_not_a_consumer_fault(tmp_path):
     release, diagnostics = InventedRelease([]), cast(dict[str, str], {})
     with pytest.raises(artifacts.ArtifactError, match="threshold_baseline_asset_unavailable"):
-        artifacts.ensure_database(tmp_path / "station_thresholds.sqlite", manifest(), cast(Any, release),
+        artifacts.ensure_database(tmp_path / "station_thresholds.sqlite", manifest(tmp_path), cast(Any, release),
                                   diagnostics=diagnostics)
     assert diagnostics == {"cache_validation": "missing"} and release.calls == [("assets", "thresholds-latest")]
 
@@ -70,14 +85,14 @@ def test_retained_outcome_is_a_missing_release_asset_not_a_consumer_fault(tmp_pa
 def test_any_mismatched_asset_is_withheld_before_download(tmp_path, asset):
     release = InventedRelease([asset])
     with pytest.raises(artifacts.ArtifactError, match="threshold_baseline_asset_unavailable"):
-        artifacts.ensure_database(tmp_path / "station_thresholds.sqlite", manifest(), cast(Any, release))
+        artifacts.ensure_database(tmp_path / "station_thresholds.sqlite", manifest(tmp_path), cast(Any, release))
     assert ("download", "thresholds-latest", "station_thresholds.sqlite") not in release.calls
 
 
 def test_a_matching_asset_is_downloaded_and_still_checksum_bound(tmp_path):
     release = InventedRelease([{"name": "station_thresholds.sqlite", "state": "uploaded", "size": 957_243_392}])
     with pytest.raises(artifacts.ArtifactError, match="threshold_download_digest_mismatch"):
-        artifacts.ensure_database(tmp_path / "station_thresholds.sqlite", manifest(), cast(Any, release))
+        artifacts.ensure_database(tmp_path / "station_thresholds.sqlite", manifest(tmp_path), cast(Any, release))
     assert release.calls[-1] == ("download", "thresholds-latest", "station_thresholds.sqlite")
     assert not (tmp_path / "station_thresholds.sqlite").exists()  # Never a fabricated baseline.
 

@@ -511,6 +511,9 @@ def _counters(run: dict) -> dict[str, Any]:
 def _fetch_point(plan, point, provider, limits, run, started, clock, now, journal, bounded=False) -> dict | None:
     key = f"{point['place_id']}-{point['sampling_point_id']}"
     attempted: list[list[Any]] = []
+    # What each period that answered without data actually considered (stations, files): a
+    # point that never completes still explains itself instead of an empty no_data shell.
+    considered: list[dict[str, Any]] = []
     # A bounded provider retries inside its physical allowance; never multiply retries here.
     attempts = 1 if bounded else limits.max_retries + 1
     for start, end in (tuple(period) for period in plan["periods"]):
@@ -539,8 +542,14 @@ def _fetch_point(plan, point, provider, limits, run, started, clock, now, journa
                 run["status"], run["reasons"] = "incomplete", [f"provider_{unavailable.outcome}"]
                 return None
             except (_ProductInvalid, meteostat_normals.ProductInvalid) as error:
-                return _partition(plan, point, provider, now, "invalid_product", start, end, {}, b"",
-                                  attempted + [[start, end, str(error)]], run, None)
+                record = _partition(plan, point, provider, now, "invalid_product", start, end, {}, b"",
+                                    attempted + [[start, end, str(error)]], run, None)
+                detail = getattr(error, "detail", None)
+                if detail:
+                    record["invalid_detail"] = dict(detail)
+                if considered:
+                    record["attempt_provenance"] = considered
+                return record
             except TimeoutError:
                 run["status"], run["reasons"] = "incomplete", ["deadline"]
                 return None
@@ -557,6 +566,8 @@ def _fetch_point(plan, point, provider, limits, run, started, clock, now, journa
             provenance = getattr(response, "provenance", None)
             if not values:
                 attempted.append([start, end, "no_data"])
+                if isinstance(provenance, dict):
+                    considered.append(provenance)
                 break  # explicit next period, never a relabel
             wanted = {month: values[month] for month in point["missing_months"] if month in values}
             status = "complete" if len(wanted) == len(point["missing_months"]) else "incomplete_source"
@@ -564,7 +575,10 @@ def _fetch_point(plan, point, provider, limits, run, started, clock, now, journa
                               attempted + [[start, end, "data"]], run, provenance)
         else:
             return None  # retries exhausted: failure stays in the journal, the point stays pending
-    return _partition(plan, point, provider, now, "no_data", None, None, {}, b"", attempted, run, None)
+    record = _partition(plan, point, provider, now, "no_data", None, None, {}, b"", attempted, run, None)
+    if considered:
+        record["attempt_provenance"] = considered
+    return record
 
 
 def _partition(plan, point, provider, now, status, start, end, values, payload, attempted, run,

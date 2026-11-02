@@ -1,0 +1,50 @@
+{
+  "admission": "ready",
+  "candidate": {
+    "bytes": 636686,
+    "git_blob_sha1": "3559df3ab7bd88ed9076dc1fe17136cd473a052d",
+    "name": "normals.csv",
+    "sha256": "d63cb3175d5616a4029b0b13ac0cb0ec56da15fff582710dc890903ba17eb46e"
+  },
+  "comparison": {
+    "added": 5280,
+    "changed": 0,
+    "largest_changes": [],
+    "removed": 0,
+    "unchanged": 0
+  },
+  "install": {
+    "performed_by": "root",
+    "steps": [
+      "Verify the candidate SHA256 recorded here and in normals.manifest.json.",
+      "Copy the admitted candidate normals.csv to data/normals.csv.",
+      "Commit the installed CSV, candidate manifest, installation plan and attribution."
+    ],
+    "target": "data/normals.csv"
+  },
+  "plan_sha256": "05943cde02dde7acf2cfea59fa69a63eccf5a1c493e10a0ce4b6d76972fcc25f",
+  "previous": {
+    "bytes": 52136,
+    "format": "legacy_name_only",
+    "git_blob_sha1": "240726a9e94e06acf322c3ff5f8b3e9f02cf2734",
+    "name": "normals.csv",
+    "sha256": "145c217d0e5fe07235bf5723fc6a3a758d0afd631293b01cfd69caabf8042eb8"
+  },
+  "public_export": {
+    "original_plan_sha256": "e3c62b6aefe9f973080080d5d40b8846aeecefcb725fbcf30dc4b02fadb4663e",
+    "redactions": [
+      "Private acquisition paths in copy and rollback instructions."
+    ]
+  },
+  "rollback": {
+    "git_blob_sha1": "240726a9e94e06acf322c3ff5f8b3e9f02cf2734",
+    "retained_copy": "<private acquisition evidence>/candidate/rollback/normals-145c217d0e5fe072.csv",
+    "sha256": "145c217d0e5fe07235bf5723fc6a3a758d0afd631293b01cfd69caabf8042eb8",
+    "steps": [
+      "Restore the prior committed data/normals.csv blob 240726a9e94e06acf322c3ff5f8b3e9f02cf2734.",
+      "Retain this acquisition evidence; do not relabel prior baseline values."
+    ]
+  },
+  "schema": "theheat.normals-install-plan/v1",
+  "scientific_qualification": "not_established_by_loader_acceptance"
+}
