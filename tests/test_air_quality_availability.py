@@ -2,7 +2,6 @@
 from copy import deepcopy
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
-import hashlib
 import json
 from pathlib import Path
 import subprocess
@@ -13,6 +12,7 @@ import pytest
 from src.data import air_quality as source
 from src.data import air_quality_availability as availability
 from src.data import air_quality_contract as contract
+from src.data.json_evidence import fingerprint as source_fingerprint
 from src.orchestrator.sources.air_quality import run_air_quality
 from src.state import DEFAULT_STATE, record_source_health
 from scripts.source_health_sentinel import classify_source
@@ -191,8 +191,8 @@ def test_rehashed_wrong_place_packet_does_not_match_requested_slot():
     obs = observation()
     obs.forecast_window["requested_location"]["city"] = "Other"
     packet = obs.forecast_window
-    packet["selected_record_sha256"] = hashlib.sha256(contract._encoded(
-        {k: v for k, v in packet.items() if k != "selected_record_sha256"})).hexdigest()
+    packet["selected_record_sha256"] = source_fingerprint(
+        {k: v for k, v in packet.items() if k != "selected_record_sha256"}, profile=contract.IDENTITY_PROFILE)
     contract.validate_window(packet)  # Internally consistent is not request identity.
     _, summary = assess([city()], [replace(obs, city="Other")])
     assert availability.source_status(summary) == "failed"

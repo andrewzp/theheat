@@ -18,6 +18,7 @@ from PIL import Image
 import pytest
 
 from src.data import air_quality_contract
+from src.data.json_evidence import fingerprint as source_fingerprint
 from src.editorial import revisions
 from src.media import gist_hazard_media as hazard, gist_media
 from src.media.evidence_graphic import build_alt_text
@@ -56,7 +57,7 @@ def rehash(bundle):
     """Recompute the selected-record digest after an invented mutation."""
     packet = window(bundle)
     core = {k: v for k, v in packet.items() if k != "selected_record_sha256"}
-    packet["selected_record_sha256"] = hashlib.sha256(air_quality_contract._encoded(core)).hexdigest()
+    packet["selected_record_sha256"] = source_fingerprint(core, profile=air_quality_contract.IDENTITY_PROFILE)
     return bundle
 
 

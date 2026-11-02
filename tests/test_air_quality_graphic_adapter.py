@@ -1,12 +1,13 @@
 """Invented forecast-to-chart claims and adversarial bindings; no provider calls."""
 
 from copy import deepcopy
-import hashlib
 import json
 import math
 
 import pytest
 
+from src.data.air_quality_contract import IDENTITY_PROFILE
+from src.data.json_evidence import fingerprint as source_fingerprint
 from src.editorial.revisions import fingerprint
 from src.media.air_quality_graphic_adapter import TEMPLATE, forecast_axis, pm25_graphic_spec
 from src.media.evidence_graphic import build_alt_text, validate_graphic
@@ -28,11 +29,7 @@ def adapt(bundle, **changes):
 
 def reseal(window):
     core = {k: v for k, v in window.items() if k != "selected_record_sha256"}
-    window["selected_record_sha256"] = hashlib.sha256(
-        json.dumps(
-            core, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False
-        ).encode()
-    ).hexdigest()
+    window["selected_record_sha256"] = source_fingerprint(core, profile=IDENTITY_PROFILE)
 
 
 def test_exact_sample_mean_and_distinct_grid_local_time_are_retained():
