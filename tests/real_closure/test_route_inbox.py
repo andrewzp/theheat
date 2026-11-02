@@ -1,9 +1,11 @@
 """P00c inbox drain input: only unexpired, exactly-shaped admitted artifacts reach the consumer.
 
 OFFLINE FIXTURE: an injected ``gh api`` runner returning invented listings and zips.
+v2: the scan takes an explicit clock (horizon filter) and also writes ``scan.json``.
 """
 from __future__ import annotations
 
+from datetime import UTC, datetime
 import io
 import json
 import zipfile
@@ -14,6 +16,7 @@ from scripts import gist_command_inbox as inbox
 
 ID = "11111111-2222-4333-8444-555555555555"
 OTHER = "21111111-2222-4333-8444-555555555555"
+NOW = datetime(2026, 10, 30, 13, 0, tzinfo=UTC)
 
 
 def blob(files: dict[str, bytes]) -> bytes:
@@ -48,8 +51,9 @@ def test_only_unexpired_admitted_artifacts_are_fetched_in_creation_order(tmp_pat
         {"id": 5, "name": "encrypted-nhc-advisory-trial-9", "expired": False},
     ]
     run, calls = runner(listing, {1: good(ID), 3: good(OTHER)})
-    assert inbox.fetch("invented/theheat", tmp_path, run) == {"fetched": 2, "skipped": []}
-    assert sorted(p.name for p in tmp_path.iterdir()) == [f"{ID}-1", f"{OTHER}-3"]
+    result = inbox.fetch("invented/theheat", tmp_path, run, now=NOW)
+    assert (result["fetched"], result["skipped"], result["scan_complete"]) == (2, [], True)
+    assert sorted(p.name for p in tmp_path.iterdir() if p.is_dir()) == [f"{ID}-1", f"{OTHER}-3"]
     assert [c for c in calls if c.endswith("/zip")] == ["repos/invented/theheat/actions/artifacts/1/zip",
                                                          "repos/invented/theheat/actions/artifacts/3/zip"]
     assert (tmp_path / f"{ID}-1" / "command.json").read_bytes() == b"{}"
@@ -64,9 +68,9 @@ def test_only_unexpired_admitted_artifacts_are_fetched_in_creation_order(tmp_pat
 def test_a_malformed_artifact_is_skipped_and_never_reaches_the_consumer(tmp_path, payload, code):
     listing = [{"id": 1, "name": f"theheat-command-{ID}", "expired": False}, {"id": 2, "name": f"theheat-command-{OTHER}", "expired": False}]
     run, _ = runner(listing, {1: payload, 2: good(OTHER)})
-    result = inbox.fetch("invented/theheat", tmp_path, run)
-    assert result == {"fetched": 1, "skipped": [{"artifact_id": 1, "code": code}]}
-    assert [p.name for p in tmp_path.iterdir()] == [f"{OTHER}-2"]
+    result = inbox.fetch("invented/theheat", tmp_path, run, now=NOW)
+    assert (result["fetched"], result["skipped"]) == (1, [{"artifact_id": 1, "code": code}])
+    assert [p.name for p in tmp_path.iterdir() if p.is_dir()] == [f"{OTHER}-2"]
 
 
 def test_listing_is_bounded_and_repository_is_validated(tmp_path):
@@ -77,5 +81,5 @@ def test_listing_is_bounded_and_repository_is_validated(tmp_path):
     def run(args):
         pages.append(args[0])
         return json.dumps({"artifacts": [{"id": i, "name": "other", "expired": False} for i in range(100)]}).encode()
-    assert inbox.list_admitted("invented/theheat", run) == []
+    assert inbox.list_admitted("invented/theheat", run, now=NOW) == []
     assert len(pages) == inbox.MAX_PAGES
