@@ -1,7 +1,8 @@
 """Observe a CI pytest SIGSEGV without replaying it or publishing core memory.
 
-Only the held Linux PG2 and PG8 jobs load this CI plugin. The original pytest command,
-output, 300-second diagnostic and original job deadline remain unchanged.
+Only the Linux PG2 and PG8 jobs load this CI plugin. All test selections and
+execution limits remain unchanged. PG8's 300-second diagnostic uses normal Python
+frame references after a retained core proved the asynchronous native dump crashed.
 Core files stay in a private runner directory and are deleted after one bounded
 GDB read. Only sanitized function names, frame counts and statuses reach stdout;
 arguments, locals, addresses, environment and raw debugger output never do.
@@ -188,6 +189,12 @@ def pytest_configure(config: Any) -> None:
     _write(directory / "interpreter.json", {
         "pid": os.getpid(), "executable": str(Path(sys.executable).resolve()),
     })
+    if config.getoption("--ci-postgres-shard") == "8":
+        from scripts.ci_wait_diagnostic import SafeWaitPlugin
+
+        if os.environ.get("THEHEAT_CI_SAFE_DIAGNOSTIC") != "1":
+            raise ValueError("required_safe_diagnostic_missing")
+        config.pluginmanager.register(SafeWaitPlugin(config), "theheat-safe-wait-diagnostic")
 
 
 def finish(directory: Path, outcome: str) -> int:

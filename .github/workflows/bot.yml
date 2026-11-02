@@ -209,11 +209,15 @@ jobs:
         timeout-minutes: 3
         run: python scripts/ci_native_crash.py prepare
 
-      - run: python -m pytest tests/ -v -m "not voice_replay" --ci-partition=${{ matrix.partition }} --ci-postgres-shard=${{ matrix.postgres-shard }} --ci-critical-first --maxfail=1 --durations=20 -o faulthandler_timeout=300
+      # A retained PG8 core identified the 300s asynchronous diagnostic itself as
+      # the SIG11 recipient. Only PG8 replaces it with a GIL-held Python 300s
+      # witness. Fatal handling, every test and the 45min job deadline stay intact.
+      - run: python -m pytest tests/ -v -m "not voice_replay" --ci-partition=${{ matrix.partition }} --ci-postgres-shard=${{ matrix.postgres-shard }} --ci-critical-first --maxfail=1 --durations=20 -o faulthandler_timeout=${{ matrix.partition == 'postgres' && matrix.postgres-shard == '8' && '0' || '300' }}
         id: offline-suite
         env:
           THEHEAT_TEST_POSTGRES: "1"
           THEHEAT_POSTGRES_BINDIR: /usr/lib/postgresql/17/bin
+          THEHEAT_CI_SAFE_DIAGNOSTIC: ${{ matrix.partition == 'postgres' && matrix.postgres-shard == '8' && '1' || '0' }}
 
       - name: Observe and remove private PG2/PG8 crash evidence
         if: always() && matrix.partition == 'postgres' && (matrix.postgres-shard == '2' || matrix.postgres-shard == '8') && env.THEHEAT_CI_CORE_DIR != ''
