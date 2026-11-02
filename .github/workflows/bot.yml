@@ -291,6 +291,8 @@ jobs:
           THEHEAT_LEGACY_CREDENTIALS_PRESENT: ${{ secrets.GH_GIST_TOKEN != '' || secrets.TWITTER_API_KEY != '' || secrets.TWITTER_API_SECRET != '' || secrets.TWITTER_ACCESS_TOKEN != '' || secrets.TWITTER_ACCESS_SECRET != '' || secrets.BLUESKY_HANDLE != '' || secrets.BLUESKY_APP_PASSWORD != '' }}
           # Opens sealed commands (ROUTE-CONTRACT-v2 §1); held only by consume/drain jobs and the dashboard.
           THEHEAT_COMMAND_SEAL_KEY: ${{ secrets.THEHEAT_COMMAND_SEAL_KEY }}
+          # Verifies root's HMAC on activate/deactivate (root and these jobs only; never the dashboard).
+          THEHEAT_ROUTE_CONTROL_KEY: ${{ secrets.THEHEAT_ROUTE_CONTROL_KEY }}
           THEHEAT_FEEDBACK_GIST_ID: ${{ secrets.THEHEAT_FEEDBACK_GIST_ID }}
           THEHEAT_GIST_WRITE_ROUTE: ${{ vars.THEHEAT_GIST_WRITE_ROUTE }}
           THEHEAT_SERIALIZED_WRITER: ${{ github.run_id }}:commands-before
@@ -615,6 +617,8 @@ jobs:
           THEHEAT_LEGACY_CREDENTIALS_PRESENT: ${{ secrets.GH_GIST_TOKEN != '' || secrets.TWITTER_API_KEY != '' || secrets.TWITTER_API_SECRET != '' || secrets.TWITTER_ACCESS_TOKEN != '' || secrets.TWITTER_ACCESS_SECRET != '' || secrets.BLUESKY_HANDLE != '' || secrets.BLUESKY_APP_PASSWORD != '' }}
           # Opens sealed commands (ROUTE-CONTRACT-v2 §1); held only by consume/drain jobs and the dashboard.
           THEHEAT_COMMAND_SEAL_KEY: ${{ secrets.THEHEAT_COMMAND_SEAL_KEY }}
+          # Verifies root's HMAC on activate/deactivate (root and these jobs only; never the dashboard).
+          THEHEAT_ROUTE_CONTROL_KEY: ${{ secrets.THEHEAT_ROUTE_CONTROL_KEY }}
           THEHEAT_FEEDBACK_GIST_ID: ${{ secrets.THEHEAT_FEEDBACK_GIST_ID }}
           THEHEAT_GIST_WRITE_ROUTE: ${{ vars.THEHEAT_GIST_WRITE_ROUTE }}
           THEHEAT_SERIALIZED_WRITER: ${{ github.run_id }}:commands-after

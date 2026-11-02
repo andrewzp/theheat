@@ -34,6 +34,7 @@ ROUTE_DRAIN_ENV = {
     "THEHEAT_GIST_CREDENTIAL": "${{ secrets.THEHEAT_GIST_WRITER_TOKEN != '' && 'route' || 'legacy' }}",
     "THEHEAT_LEGACY_CREDENTIALS_PRESENT": PRESENCE,
     "THEHEAT_COMMAND_SEAL_KEY": "${{ secrets.THEHEAT_COMMAND_SEAL_KEY }}",
+    "THEHEAT_ROUTE_CONTROL_KEY": "${{ secrets.THEHEAT_ROUTE_CONTROL_KEY }}",
 }
 
 
@@ -63,7 +64,9 @@ def test_gist_commands_admits_outside_the_group_and_consumes_inside_it():
     admit, consume = doc["jobs"]["admit"], doc["jobs"]["consume"]
     assert "concurrency" not in admit, "admission must never be a cancellable pending group entry"
     step = next(s for s in admit["steps"] if s.get("id") == "admit")
-    assert step["env"] == {"THEHEAT_COMMAND_INPUT": "${{ inputs.command }}"} and "inputs." not in step["run"]
+    # Review P3-1/P2-1: admission also receives the configured key ids (non-secret variables).
+    assert step["env"] == {"THEHEAT_COMMAND_INPUT": "${{ inputs.command }}", "THEHEAT_COMMAND_SEAL_KID": "${{ vars.THEHEAT_COMMAND_SEAL_KID }}",
+                           "THEHEAT_ROUTE_CONTROL_KID": "${{ vars.THEHEAT_ROUTE_CONTROL_KID }}"} and "inputs." not in step["run"]
     upload = next(s for s in admit["steps"] if s.get("name") == "Upload the immutable admitted command")
     assert upload["with"]["name"] == "theheat-command-${{ steps.admit.outputs.command_id }}"
     marker = next(s for s in admit["steps"] if s.get("name") == "Upload the admission refusal marker")
@@ -143,8 +146,8 @@ def test_new_secret_names_are_exactly_the_root_provided_route_era_names():
     before = set()
     for name in listed.stdout.split():
         before |= set(secrets.findall(subprocess.run(["git", "show", f"{BASE}:{name}"], cwd=ROOT, capture_output=True, text=True).stdout))
-    assert now - before == {"THEHEAT_FEEDBACK_GIST_ID", "THEHEAT_COMMAND_SEAL_KEY", *RENAMED.values()}, \
-        "root-provided: feedback Gist id, seal key, and the route-era names of the seven legacy credentials"
+    assert now - before == {"THEHEAT_FEEDBACK_GIST_ID", "THEHEAT_COMMAND_SEAL_KEY", "THEHEAT_ROUTE_CONTROL_KEY", *RENAMED.values()}, \
+        "root-provided: feedback Gist id, seal key, route-control key and the route-era names of the seven legacy credentials"
     assert before <= now
     # Every remaining legacy reference is a NEW || OLD fallback or a presence boolean (never alone),
     # except the generated runtime-report workflow, which the generator rebuilds from bot.yml.
