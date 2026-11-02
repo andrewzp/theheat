@@ -60,8 +60,11 @@ if (entries.some(row => row.artifact_id !== null)) {
   try { acknowledged = await acknowledgeArtifacts(entries, { token, repo }) } catch (error) { acknowledged = { status: "failed", code: codeOf(error), deleted: [], failed: [] } }
 }
 // Configuration that leaves commands pending (no/other seal key, legacy writer credential) is visible.
-if (report.skipped.some(row => ["command_seal_key_missing", "command_seal_key_invalid", "command_seal_key_unknown", "route_writer_credential_legacy",
-  "route_legacy_credentials_present"].includes(row.code))) exit = 3
+// Every skip leaves a command unconsumed (configuration, capacity): always visible, never silent.
+const VISIBLE_SKIPS = ["command_seal_key_missing", "command_seal_key_invalid", "command_seal_key_unknown", "route_writer_credential_legacy",
+  "route_legacy_credentials_present", "command_results_capacity", "control_results_capacity", "route_control_key_missing",
+  "route_control_key_invalid", "route_control_key_unknown"]
+if (report.skipped.some(row => VISIBLE_SKIPS.includes(row.code))) exit = 3
 if (!["ok", "idle", "route_not_active"].includes(outbox.status)) exit = 3
 if (scan && scan.scan_complete === false) exit = 3
 writeFileSync(reportPath, JSON.stringify({ status: "consumed", ...report, outbox, acknowledged, scan }) + "\n")
