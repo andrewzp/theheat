@@ -266,8 +266,11 @@ def test_value_copy_reaches_a_reviewable_draft_and_source_change_invalidates_rev
 def test_record_copy_is_refused_at_the_real_local_check(offline):
     state, _run, _details, sent = _produce(offline, [aemet_packet()], copy=RECORD_COPY)
     assert not [d for d in state["drafts"] if (d.get("review_context") or {}).get("source_key") == "regional_observed"]
-    # Both candidates reached the writer; the real local floor stopped each before safety/fact/critic.
-    assert sent == ["writer", "writer"]
-    bundle, _reason = ro.build_candidate(ro.parse_packet(aemet_packet())["observations"][0])
-    rejected = pipeline.fact_check.local_rejection(RECORD_COPY, [], bundle, state)
-    assert rejected is not None and "national-service observed value" in json.dumps(rejected.failures)
+    # The unregistered place is now refused before spend. The registered
+    # candidate still reaches the real copy floor before safety/fact/critic.
+    assert sent == ["writer"]
+    assert any(row["stage"] == "unregistered_place" for row in state["suppressions"])
+    for observation in ro.parse_packet(aemet_packet())["observations"]:
+        bundle, _reason = ro.build_candidate(observation)
+        rejected = pipeline.fact_check.local_rejection(RECORD_COPY, [], bundle, state)
+        assert rejected is not None and "national-service observed value" in json.dumps(rejected.failures)
