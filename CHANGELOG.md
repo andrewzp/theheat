@@ -1,3 +1,11 @@
+## 0.9.109.54
+
+- Preserve supplied negative temperatures and signed departures in Hot10 copy
+  checks, including Unicode minus and Fahrenheit conversions. Wrong values,
+  units and excess precision remain rejected.
+- Supply the leader's source-local weekday and reject a conflicting weekday
+  when copy names one ranked city. Keep mandatory factual, safety and critic checks.
+
 ## 0.9.109.53
 
 - Keep new air-quality and Hot10 evidence identities stable across Python and

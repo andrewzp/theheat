@@ -660,6 +660,7 @@ def _hot10_bulletin_bundle(cities: list[dict], *, changes: list[str], event_id: 
         current_facts=[
             {"label": "leader_city", "value": leader["city"]},
             {"label": "leader_country", "value": leader["country"]},
+            {"label": "leader_local_weekday", "value": contract.local_weekday(leader["valid_date"])},
             {"label": "leader_forecast_high_c", "value": round(leader["temp_high_c"], 1)},
             {"label": "leader_normal_high_c", "value": round(leader["normal_high_c"], 1)},
             {"label": "leader_departure_c", "value": round(leader["anomaly_c"], 1)},
