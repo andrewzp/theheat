@@ -12,7 +12,7 @@ to fill the slate.
 from __future__ import annotations
 
 from collections import Counter
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -37,6 +37,12 @@ UNIVERSE_SCOPE = ("Ranks only the sampled catalogue cities with qualified foreca
 _FORECAST_KEYS = ("source_product", "model", "unit", "aggregation", "provider_grid", "revision_id")
 _BASELINE_KEYS = ("source_product", "period_start", "period_end", "retrieved_at", "sampling_point_id", "month",
                   "revision_id")
+_WEEKDAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+
+
+def local_weekday(valid_date: str) -> str:
+    """English weekday of an already-qualified provider-local ISO date."""
+    return _WEEKDAYS[date.fromisoformat(valid_date).weekday()]
 
 
 def instant(value: Any) -> datetime | None:
