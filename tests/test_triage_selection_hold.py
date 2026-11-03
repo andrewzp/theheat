@@ -105,3 +105,18 @@ def test_explicit_legacy_mode_still_writes_every_candidate(triage, monkeypatch):
     drafted, run = _run(state)
     assert drafted == 3 and triage.writer_events() == ids  # Queue order, no selector.
     assert [d["status"] for d in state["drafts"]] == ["pending"] * 3
+
+
+def test_existing_draft_does_not_take_only_ranked_slot(triage, monkeypatch):
+    from freezegun import freeze_time
+
+    monkeypatch.setenv("THEHEAT_MAX_DRAFTS_PER_CYCLE", "1")
+    state = fresh_state()
+    with freeze_time("2026-11-03T21:00:00Z"):
+        already_drafted, eligible = enqueue_fires(state, 2)
+        state["drafts"].append({"event_id": already_drafted, "type": "fire", "status": "pending"})
+        drafted, _run_row = _run(state)
+    assert drafted == 1
+    assert triage.writer_events() == [eligible]
+    assert any(row["event_id"] == already_drafted and row["stage"] == "duplicate_draft"
+               for row in state["suppressions"])
