@@ -15,7 +15,7 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, cast
 
 from src.orchestrator.candidate_budget import CandidateBudget, writer_started
-from src.orchestrator.common import _utc_now_iso
+from src.orchestrator.common import _utc_now, _utc_now_iso
 from src.orchestrator.suppression import (
     _current_suppression_ctx,
     _record_billing_cycle_abort_suppression,
@@ -410,6 +410,14 @@ def _record_negcache_kill_if_eligible(
     record_result(bot_state, candidate.event_id, candidate.bundle, cand_result)
 
 
+def _ended_air_quality_window(candidate: TriageCandidateBundle) -> bool:
+    from src.data.air_quality_current import KINDS, static_hold
+
+    bundle = candidate.bundle
+    return (getattr(bundle, "signal_kind", None) in KINDS
+            and static_hold(bundle, _utc_now(), automatic=False) == "air_quality_window_ended")
+
+
 def _refill_drain(
     bot_state: BotState,
     current_run: dict | None,
@@ -606,6 +614,11 @@ def _refill_drain(
             if capped:
                 _pre_writer_kill(candidate, "annual_cap", "pre-writer: annual cap reached in-cycle")
                 continue
+
+        if _ended_air_quality_window(candidate):
+            _bump_source_field_in_run(current_run, candidate.source, "triaged_out")
+            _pre_writer_kill(candidate, "air_quality_source", "pre-writer: air_quality_window_ended")
+            continue
 
         # Deterministic pre-writer predicate ($0 LLM) — cooldown / dedup / dup-event.
         can_draft, reason = can_draft_candidate(bot_state, candidate)
@@ -965,6 +978,10 @@ def _drain_and_write_triage_queue(
     live_event_ids: set[str] = set()
     live_queue: list = []
     for candidate in queue:
+        if _ended_air_quality_window(candidate):
+            _bump_source_field_in_run(current_run, candidate.source, "triaged_out")
+            _legacy_pre_writer_row(candidate, "air_quality_source", "pre-writer: air_quality_window_ended")
+            continue
         if candidate.event_id and candidate.event_id in live_event_ids:
             _bump_source_field_in_run(current_run, candidate.source, "triaged_out")
             _legacy_pre_writer_row(

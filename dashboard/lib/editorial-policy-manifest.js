@@ -188,7 +188,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/orchestrator/sources/open_meteo.py": "379e7f3d3d990eb8368863f169f46b95e5bb8a12b5de7fbdb75ed7c9690aa0db",
     "src/orchestrator/sources/regional_observed.py": "ed3eb40b8f5d167262c3cf6bbfe706b2bbd68cf318804dfb817f5171178b65b2",
     "src/orchestrator/sources/synthesis.py": "e1e101948dde8a2ac07be65d78e37ed0cd8e080c43523ea0ded1b1071cd31522",
-    "src/orchestrator/triage_queue.py": "3160dcc6f5ca0f5b67a36170168ada780aeb07fe18f918e682fe8c31cfa5f84b",
+    "src/orchestrator/triage_queue.py": "ce2f193a26e4935b4cf04cdb79cac26965d89c3fdc925384d52af34ed999300d",
     "src/orchestrator/two_bot_dispatch.py": "40271d86e46a5d9ac675fdf54c2e47838630282a106a42cada11449f8e194de2",
     "src/posting/bluesky.py": "30333265f7978e905a4f4c45039c7bdae997cb192811e9e93701bf31976105a4",
     "src/posting/delivery_receipts.py": "c944f22458726d02bcdbbf70d274d4831486013dc2eb1e47fd6f2a569abd4147",
@@ -270,5 +270,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "8c4887f395618e343dafd55f5843987dfa6a7a620713c7c34bab9f419e4434fe"
   },
   "schema_version": 1,
-  "source_sha256": "228c6fee5bdad8559162b418a65a9406b18f51737c403ef91c66b237d33ea475"
+  "source_sha256": "e69f9c0d7a91a7bd93b77d92b627bc7963f2bc4add41b20ad5d2fbb5b6b1f23e"
 }
