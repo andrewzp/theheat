@@ -27,7 +27,7 @@ const FAMILIES = Object.freeze({
     products: ["open-meteo-cams-air-quality-auto"],
     files: ["src/media/gist_media.py", "src/media/gist_hazard_media.py", CODEC_FILE, FONT, "src/media/evidence_graphic.py",
       "src/media/temperature_graphic_adapter.py", "src/media/air_quality_graphic_adapter.py",
-      "src/data/air_quality_contract.py", "src/data/air_quality_evidence.py"],
+      "src/data/air_quality_contract.py", "src/data/air_quality_evidence.py", "src/data/json_evidence.py", "src/editorial/revisions.py"],
     source: ["bundle_sha256", "evidence_sha256", "source_product", "window_sha256", "selected_record_sha256",
       "valid_date", "timezone", "valid_start", "valid_end", "requested_at", "retrieved_at"] }),
   [MODIS]: Object.freeze({ template: "modis_thermal_detection_map", templateVersion: "p31-modis-locator-2-social",
@@ -50,7 +50,8 @@ const FAMILIES = Object.freeze({
     adapterVersion: "w01-hot10-bulletin-1", derivation: "hot10_delivery_v1", signalKind: "hot10",
     products: ["openmeteo-best-match-forecast-daily-v1"],
     files: ["src/media/gist_media.py", "src/media/gist_hazard_media.py", CODEC_FILE, FONT, "src/media/evidence_graphic.py",
-      "src/media/hot10_graphic_adapter.py", "src/editorial/hot10_contract.py", "src/data/temperature_evidence.py"],
+      "src/media/hot10_graphic_adapter.py", "src/editorial/hot10_contract.py", "src/data/temperature_evidence.py",
+      "src/data/json_evidence.py", "src/editorial/revisions.py"],
     source: ["bundle_sha256", "evidence_sha256", "source_product", "baseline_product", "rows_sha256", "local_days"] }),
 })
 // Bundle signals the hazard families own; any other signal keeps the temperature path.

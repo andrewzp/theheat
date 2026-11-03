@@ -17,10 +17,11 @@ from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from src.data import places
-from src.data.temperature_evidence import FORECAST_PRODUCT, fingerprint, finite
+from src.data.temperature_evidence import FORECAST_PRODUCT, finite
+from src.data.json_evidence import fingerprint
 from src.two_bot.strict_contract import valid_date as _valid_timestamp
 
-SCHEMA = "theheat.hot10-bulletin/v1"
+SCHEMA = "theheat.hot10-bulletin/v2"
 SIZE = 10
 SOURCE_NAME = "Open-Meteo"
 FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
@@ -59,7 +60,8 @@ def _qualify_one(ct: Any, normals: dict, now: datetime) -> tuple[str | None, dic
     evidence = getattr(ct, "evidence", None)
     if not isinstance(evidence, dict) or evidence.get("evidence_type") != "forecast" \
             or evidence.get("source_product") != FORECAST_PRODUCT or not evidence.get("revision_id") \
-            or not finite(getattr(ct, "temp_high_c", None)) or evidence.get("unit") != "C":
+            or not finite(getattr(ct, "temp_high_c", None)) or evidence.get("unit") != "C" \
+            or type(evidence.get("utc_offset_seconds")) is not int:
         return "forecast_unqualified", None
     valid_date = getattr(ct, "signal_date", None)
     zone = evidence.get("timezone")
@@ -90,6 +92,7 @@ def _qualify_one(ct: Any, normals: dict, now: datetime) -> tuple[str | None, dic
         return ("ambiguous_normal" if isinstance(meta, dict) and meta.get("conflict") else "missing_normal"), None
     if not isinstance(meta, dict) or meta.get("source_product") != BASELINE_PRODUCT \
             or meta.get("sampling_point_id") != place["sampling_point_id"] or meta.get("month") != month \
+            or any(type(meta.get(key)) is not int for key in ("month", "period_start", "period_end")) \
             or not _valid_timestamp(meta.get("retrieved_at")) or not finite(entry[month]):
         return "unqualified_normal", None
     anomaly = float(ct.temp_high_c) - float(entry[month])
@@ -109,7 +112,7 @@ def _qualify_one(ct: Any, normals: dict, now: datetime) -> tuple[str | None, dic
 
 
 def row_fingerprint(row: dict) -> str:
-    return fingerprint({key: value for key, value in row.items() if key not in ("rank", "row_fingerprint")})
+    return fingerprint({key: value for key, value in row.items() if key not in ("rank", "row_fingerprint")}, profile=SCHEMA)
 
 
 def qualify(temps: list, normals: dict, *, sampled: int, now: datetime) -> dict:
@@ -164,11 +167,21 @@ def validate_bundle(bundle: Any) -> list[str]:
     if len({row.get("place_id") for row in rows}) != SIZE:
         failures.append("duplicate_location")
     for rank, row in enumerate(rows, start=1):
-        if row.get("rank") != rank or row.get("row_fingerprint") != row_fingerprint(row):
+        try:
+            row_identity = row_fingerprint(row)
+        except (ValueError, TypeError, OverflowError, RecursionError):
+            failures.append("row_fingerprint")
+            break
+        if type(row.get("rank")) is not int or row["rank"] != rank or row.get("row_fingerprint") != row_identity:
             failures.append("row_fingerprint")
             break
         temp, normal, anomaly = row.get("temp_high_c"), row.get("normal_high_c"), row.get("anomaly_c")
         forecast, baseline = row.get("forecast") or {}, row.get("baseline") or {}
+        if (type(row.get("utc_offset_seconds")) is not int
+                or not isinstance(baseline, dict)
+                or any(type(baseline.get(key)) is not int for key in ("month", "period_start", "period_end"))):
+            failures.append("integer_metadata")
+            break
         retrieved = instant(row.get("retrieved_at"))
         if (not all(finite(value) for value in (temp, normal, anomaly)) or abs(temp - normal - anomaly) > 1e-9
                 or abs(anomaly) > MAX_ANOMALY_C or forecast.get("source_product") != FORECAST_PRODUCT

@@ -305,7 +305,7 @@ def test_qualified_leaderboard_reaches_a_pending_draft_through_every_required_ch
     from src.two_bot.writer import WRITER_MODEL
     assert writer_request["model"] == WRITER_MODEL and writer_request["max_tokens"] == 1024
     assert writer_request["output_config"]["format"]["type"] == "json_schema"
-    assert '"schema": "theheat.hot10-bulletin/v1"' in writer_request["messages"][0]["content"]
+    assert '"schema": "theheat.hot10-bulletin/v2"' in writer_request["messages"][0]["content"]
     assert [d["type"] for d in state["drafts"]] == ["hot10"]
     draft = state["drafts"][0]
     assert draft["text"] == GOOD_COPY and draft["status"] == "pending"

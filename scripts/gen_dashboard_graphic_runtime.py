@@ -38,6 +38,7 @@ SOURCES = (
     'src/data/ghcn.py',
     'src/data/ghcn_db.py',
     'src/data/ghcn_format.py',
+    'src/data/json_evidence.py',
     'src/data/open_meteo.py',
     'src/data/openmeteo_budget.py',
     'src/data/places.py',

@@ -230,14 +230,15 @@ def test_legacy_evidence_blocks_direct_model_entry_points(related, monkeypatch):
 
 
 def test_rehashed_changed_samples_still_require_matching_aggregates():
-    import hashlib
+    from src.data.json_evidence import fingerprint
 
     b, _ = bundles()
     packet = b.raw_signal_dump["forecast_window"]
     packet["series"]["pm2_5"]["values"][0] += 24
-    packet["selected_record_sha256"] = hashlib.sha256(contract._encoded(
-        {k: v for k, v in packet.items() if k != "selected_record_sha256"}
-    )).hexdigest()
+    packet["selected_record_sha256"] = fingerprint(
+        {k: v for k, v in packet.items() if k != "selected_record_sha256"},
+        profile=contract.IDENTITY_PROFILE,
+    )
     assert contract.validate_window(packet)["pm2_5"] == 251.
     assert not audit_story_bundle(b).prompt_ready
 

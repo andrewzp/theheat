@@ -1,3 +1,12 @@
+## 0.9.109.53
+
+- Keep new air-quality and Hot10 evidence identities stable across Python and
+  JavaScript JSON storage. Version the new profiles explicitly; legacy packets
+  remain held. Preserve strict metadata types, source checks and exact numeric
+  values while accepting equivalent integer and floating representations.
+- Recognize dated independent PM10 mean comparisons without clearing shared
+  dust comparisons, changing source evidence or bypassing mandatory checks.
+
 ## 0.9.109.52
 
 - Recognize a narrowly bounded, source-backed PM10 daily-mean ratio alongside

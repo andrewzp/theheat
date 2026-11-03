@@ -128,7 +128,7 @@ export function firePreviewSourceStatus(draft) {
 export function hot10PreviewSourceStatus(draft) {
   const bundle = draft?.review_context?.two_bot?.bundle, raw = bundle?.raw_signal_dump
   if (!bundle || !raw || typeof raw !== "object") return "missing"
-  return draft.type === "hot10" && bundle.signal_kind === "hot10" && raw.schema === "theheat.hot10-bulletin/v1"
+  return draft.type === "hot10" && bundle.signal_kind === "hot10" && raw.schema === "theheat.hot10-bulletin/v2"
     && Array.isArray(raw.cities) && raw.cities.length === 10 ? "bulletin" : "unsupported"
 }
 
@@ -252,7 +252,8 @@ const HAZARD_FILES = ["src/media/gist_media.py", "src/media/gist_hazard_media.py
 const HAZARD_MEDIA = {
   gist_pm25_forecast_v1: { template: "pm25_forecast_day", templateVersion: "p31-pm25-forecast-1",
     adapterVersion: "p31-cams-pm25-1", derivation: "pm25_delivery_v1",
-    files: [...HAZARD_FILES, "src/media/air_quality_graphic_adapter.py", "src/data/air_quality_contract.py", "src/data/air_quality_evidence.py"] },
+    files: [...HAZARD_FILES, "src/media/air_quality_graphic_adapter.py", "src/data/air_quality_contract.py", "src/data/air_quality_evidence.py",
+      "src/data/json_evidence.py", "src/editorial/revisions.py"] },
   gist_modis_locator_v1: { template: "modis_thermal_detection_map", templateVersion: "p31-modis-locator-2-social",
     adapterVersion: "p31-firms-modis-map-2", derivation: "modis_delivery_v1",
     files: [...HAZARD_FILES, "src/media/fire_graphic_adapter.py", "src/media/fire_map_graphic_adapter.py",
@@ -268,7 +269,7 @@ HAZARD_MEDIA.gist_hot10_bulletin_v1 = { template: "hot10_departure_table", templ
   adapterVersion: "w01-hot10-bulletin-1", derivation: "hot10_delivery_v1",
   files: ["src/media/gist_media.py", "src/media/gist_hazard_media.py", "src/media/canonical_png.py", "src/media/fonts/DejaVuSansMono.ttf",
     "src/media/evidence_graphic.py", "src/media/hot10_graphic_adapter.py", "src/editorial/hot10_contract.py",
-    "src/data/temperature_evidence.py"] }
+    "src/data/temperature_evidence.py", "src/data/json_evidence.py", "src/editorial/revisions.py"] }
 // CRW is a native sampled-cell chart (schema 4) rebuilt from a retained source packet.
 HAZARD_MEDIA.gist_crw_anomaly_v1 = { template: "crw_sampled_cells", templateVersion: "p31-crw-gist-cells-1",
   adapterVersions: ["p31-crw-erddap-1", "p31-crw-erddap-2"], derivation: "crw_delivery_v1", rendererVersion: "gist-crw-png-1",

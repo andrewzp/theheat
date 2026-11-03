@@ -84,6 +84,10 @@ test("hot10: the saved-source panel offers the bulletin family; a legacy Hot10 s
   const html = render(React.createElement(GraphicPreview, { draft }))
   assert.match(html, /Build the ten-row table from the saved qualified Hot 10 bulletin/)
   assert.match(html, /Preview graphic/)
+  const oldProfile = structuredClone(draft)
+  oldProfile.review_context.two_bot.bundle.raw_signal_dump.schema = "theheat.hot10-bulletin/v1"
+  assert.equal(hot10PreviewSourceStatus(oldProfile), "unsupported")
+  assert.equal(render(React.createElement(GraphicPreview, { draft: oldProfile })), "")
   const legacy = structuredClone(draft)
   legacy.review_context.two_bot.bundle.raw_signal_dump = { cities: legacy.hot10_rows, changes: [], event_id: legacy.event_id }
   assert.equal(hot10PreviewSourceStatus(legacy), "unsupported")

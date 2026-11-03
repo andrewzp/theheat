@@ -37,12 +37,13 @@ _BACKGROUND = re.compile(
 _CONTRACTIONS = re.compile(r"\b(does|do|did|is|are|was|were|would|could|has|have|had)n't\b")
 
 
-def _normalized(text: str) -> str:
+def _normalized(text: str, *, preserve_clause_dash: bool = False) -> str:
     text = unicodedata.normalize("NFKC", text).lower().replace("’", "'").replace("‘", "'")
     text = _CONTRACTIONS.sub(r"\1 not", text)
     text = re.sub(r"\bcan't\b", "cannot", text)
     text = re.sub(r"\bwon't\b", "will not", text)
-    return re.sub(r"[\s\-\u2010-\u2015\u2212]+", " ", text)
+    pattern = r"[\s\-\u2010-\u2013\u2015\u2212]+" if preserve_clause_dash else r"[\s\-\u2010-\u2015\u2212]+"
+    return re.sub(pattern, " ", text)
 
 
 _DUST = re.compile(r"\bdust\b")
@@ -61,20 +62,28 @@ _PM10_COMPARISON_SPAN = re.compile(
     r"|cross(?:es|ed)?\s+(?:the\s+)?(?:who\s+(?:24 hour\s+)?)?(?:guideline|limit|standard)s?\b)"
 )
 _PM10_MEAN_RATIO_SPAN = re.compile(
-    r"\bpm\s*10(?:'s)?\s+"
+    r"\b(?:(?:a|the)\s+)?(?:pm\s*10(?:'s)?\s+"
     r"(?:(?:is\s+)?(?:also\s+)?forecast\s+(?:to\s+)?|(?:is\s+)?)"
-    r"(?:averag(?:e|ing)|(?:24 hour|daily)\s+(?:mean|average))\s+(?:(?:of|is)\s+)?"
+    r"(?:averag(?:e|ing)|(?:24 hour|daily)\s+(?:mean|average))"
+    r"|(?:24 hour|daily)\s+(?:(?:mean|average)\s+pm\s*10|pm\s*10\s+(?:mean|average)))"
+    r"\s+(?:(?:of|is|averaging)\s+|forecast\s+at\s+)?"
     r"(?:(?:about|roughly|around|approximately)\s+|[~≈]\s*)?"
     r"(?:\d+(?:\.\d+)?\s*(?:(?:times|x)\b|×)|twice|double|triple)\s+"
-    r"(?:the\s+)?who\s+(?:24 hour\s+)?(?:guideline|limit|standard)s?\b"
+    r"(?:the\s+)?who\s+(?:(?:24 hour|daily)\s+)?(?:guideline|limit|standard)s?\b"
 )
 _SHARED_DUST_SUBJECT = re.compile(
     rf"\bdust\b(?:[\s,/'\"“”«»&():\[\]]+|\b(?:and|or|plus|with|as well as|along with)\b|\b{_AQ}\b)*$"
 )
 # The new ratio-only exemption is deliberately narrower than the existing
-# absolute-concentration form: a completed quantity, then a comma and a new
-# PM10 adjunct. Do not infer independence from a list of dust-subject nouns.
-_PM10_RATIO_BOUNDARY = re.compile(r"\d[\d,.]*\s*(?:μg|ug)/m3\s*,\s*(?:with|and)\s*$")
+# absolute-concentration form: a completed quantity, optional weekday/time,
+# then an explicit comma adjunct or em dash. Causal scans keep their original
+# dash normalization. Never infer independence from dust-subject noun lists.
+_PM10_RATIO_BOUNDARY = re.compile(
+    r"\d[\d,.]*\s*(?:μg|ug)/m3\s*"
+    r"(?:(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)"
+    r"(?:\s+(?:morning|afternoon|evening|night))?\s*)?"
+    r"(?:,\s*(?:with|and)\s+|—\s*)$"
+)
 
 
 def dust_comparison_failures(tweet: str, bundle) -> list[str]:
@@ -92,7 +101,7 @@ mixed comparisons hold. An explicit negation ("a peak, not a daily mean") is not
     supplied_pm10 = isinstance(facts, list) and any(
         isinstance(fact, dict) and fact.get("label") == "who_pm10_multiple" for fact in facts
     ) and not bundle_failures(bundle)
-    for clause in re.split(r"[!?;。]|\.(?!\d)|(?<!\d)\.", _normalized(tweet)):
+    for clause in re.split(r"[!?;。]|\.(?!\d)|(?<!\d)\.", _normalized(tweet, preserve_clause_dash=True)):
         if not _DUST.search(clause):
             continue
         scan = _NEGATED_PERIOD.sub(" ", clause)
@@ -101,7 +110,7 @@ mixed comparisons hold. An explicit negation ("a peak, not a daily mean") is not
         # A coordinated dust/PM10 subject shares the predicate and comparison;
         # retain it. A preceding independent dust predicate does not match.
         scan = _PM10_COMPARISON_SPAN.sub(
-            lambda match: match.group() if _SHARED_DUST_SUBJECT.search(match.string[:match.start()]) else " ", scan,
+            lambda match: match.group() if _SHARED_DUST_SUBJECT.search(_normalized(match.string[:match.start()])) else " ", scan,
         )
         if supplied_pm10:
             scan = _PM10_MEAN_RATIO_SPAN.sub(

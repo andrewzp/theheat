@@ -1667,7 +1667,7 @@ class TestRunLeaderboard:
         mock_om.rank_hot10.assert_not_called()
         mock_two_bot.assert_called_once()
         bundle = mock_two_bot.call_args.args[0]
-        assert bundle.raw_signal_dump["schema"] == "theheat.hot10-bulletin/v1"
+        assert bundle.raw_signal_dump["schema"] == "theheat.hot10-bulletin/v2"
         assert len(bundle.raw_signal_dump["cities"]) == 10
         assert result is not None
 
