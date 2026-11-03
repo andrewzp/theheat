@@ -31,7 +31,7 @@ from contextlib import closing
 import sqlite3
 import sys
 import time
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import requests
@@ -86,13 +86,16 @@ def _fetch_diff(start: date, end: date, timeout: int = 120) -> bytes | None:
     return resp.content
 
 
-def _fetch_station_thresholds(station_id: str, timeout: int = 120):
-    """Recompute one station from its full .dly file after update/delete diffs."""
+def _fetch_station_thresholds(station_id: str, *, through: date, timeout: int = 120):
+    """Recompute from full .dly observations through the connected watermark."""
     url = STATION_DLY_URL.format(station_id=station_id)
     _consume_acquisition()
     resp = requests.get(url, timeout=timeout)
     resp.raise_for_status()
-    return compute_thresholds(parse_dly_bytes(resp.content))
+    observations = parse_dly_bytes(resp.content)
+    if any(row.station_id != station_id for row in observations):
+        raise ArtifactError("threshold_station_archive_identity_mismatch")
+    return compute_thresholds(observations, before=through + timedelta(days=1))
 
 
 def _resolve_new_watermark(
@@ -255,7 +258,7 @@ def main(argv: list[str] | None = None) -> int:
     with open_db(args.db) as conn:
         for i, station_id in enumerate(sorted(recompute_station_ids), 1):
             try:
-                t = _fetch_station_thresholds(station_id)
+                t = _fetch_station_thresholds(station_id, through=new_watermark)
             except requests.RequestException as e:
                 print(f"ERROR: Failed to fetch full .dly for {station_id}: {e}", file=sys.stderr)
                 return 1
@@ -276,7 +279,7 @@ def main(argv: list[str] | None = None) -> int:
                 continue
             existing = load_thresholds(conn, station_id)
             if existing is None:
-                t = _fetch_station_thresholds(station_id)
+                t = _fetch_station_thresholds(station_id, through=new_watermark)
                 if t is None:
                     print("ERROR: New station returned no usable thresholds.", file=sys.stderr)
                     return 1
