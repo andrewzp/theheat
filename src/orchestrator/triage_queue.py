@@ -968,7 +968,7 @@ def _drain_and_write_triage_queue(
     #      would only reclaim after selection (codex r12 P1).
     #   2. Identical facts to a cache-skipped row → duplicate_draft (never
     #      a second savings-inflating negative_cache row, codex r10).
-    #   3. Certain save-time refusal → pre-writer suppression.
+    #   3. Already handled or certain save-time refusal → pre-writer suppression.
     #   4. Cache-dead → negative_cache row + fingerprint skip memory.
     #   5. Otherwise live — the event's one contender for a cap slot.
     # Partition rows LEFT triage — bump triaged_out for them (codex r12
@@ -999,6 +999,12 @@ def _drain_and_write_triage_queue(
             _bump_source_field_in_run(current_run, candidate.source, "triaged_out")
             _legacy_pre_writer_row(
                 candidate, "duplicate_draft", "pre-writer: duplicate event in slate"
+            )
+            continue
+        if budget.seen(CandidateBudget.key_for(candidate)):
+            _bump_source_field_in_run(current_run, candidate.source, "triaged_out")
+            _legacy_pre_writer_row(
+                candidate, "duplicate_draft", "pre-writer: event already handled this operation"
             )
             continue
         # Apply the same certain save-time refusals as the refill drain

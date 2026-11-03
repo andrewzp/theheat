@@ -10,6 +10,7 @@ import pytest
 from src.two_bot import writer
 from src.two_bot.types import RelatedSignal
 from tests.two_bot.conftest import _bundle, _memory
+from tests.two_bot.test_short_content_contract import _forecast_bundle
 
 
 def response_text():
@@ -37,6 +38,7 @@ def test_prompt_preserves_serialization_and_guidance_order(monkeypatch, related,
     expected += "\nMEMORY=" + json.dumps(memory.to_dict(), sort_keys=True, allow_nan=False)
     if related:
         expected += "\n\nRELATED"
+    expected += "\n\n" + writer.THERMAL_TIME_GUIDANCE
     if impact:
         expected += "\n\nIMPACT"
     if revision:
@@ -44,6 +46,19 @@ def test_prompt_preserves_serialization_and_guidance_order(monkeypatch, related,
     before = deepcopy((bundle, memory))
     assert writer.build_writer_user_prompt(bundle, memory, revision_constraint=revision) == expected
     assert (bundle, memory) == before
+
+
+@pytest.mark.parametrize(("kind", "rank", "thermal"), [
+    ("hot10", True, False),
+    ("fire", False, True),
+    ("temperature", False, False),
+])
+def test_writer_guidance_applies_only_to_matching_evidence(kind, rank, thermal):
+    bundle = _bundle() if thermal else _forecast_bundle()
+    bundle.signal_kind = kind
+    prompt = writer.build_writer_user_prompt(bundle, _memory())
+    assert ("HOT 10 RANK:" in prompt) == rank
+    assert ("SATELLITE TIMING:" in prompt) == thermal
 
 
 def test_actual_anthropic_boundary_retains_kwargs_and_transport_configuration(monkeypatch):

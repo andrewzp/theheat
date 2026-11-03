@@ -1,3 +1,10 @@
+## 0.9.109.57
+
+- Keep already-handled and deterministically inadmissible candidates out of
+  ranked writer slots.
+- Give thermal and Hot10 drafts scoped timing and rank guidance while
+  preserving existing factual checks and the shared writer system prompt.
+
 ## 0.9.109.56
 
 - Exclude ended air-quality forecasts before triage allocates the writer slot.

@@ -120,3 +120,26 @@ def test_existing_draft_does_not_take_only_ranked_slot(triage, monkeypatch):
     assert triage.writer_events() == [eligible]
     assert any(row["event_id"] == already_drafted and row["stage"] == "duplicate_draft"
                for row in state["suppressions"])
+
+
+def test_refunded_repeat_does_not_take_only_ranked_slot(triage, monkeypatch):
+    from freezegun import freeze_time
+
+    from src.orchestrator.candidate_budget import CandidateBudget
+
+    monkeypatch.setenv("THEHEAT_MAX_DRAFTS_PER_CYCLE", "1")
+    state = fresh_state()
+    with freeze_time("2026-11-03T21:00:00Z"):
+        repeat, eligible = enqueue_fires(state, 2)
+        budget = CandidateBudget.for_operation("alerts")
+        key = budget.key_for(state["_triage_queue"][0])
+        assert budget.reserve(key)
+        budget.settle(key, writer_started=False)
+        assert budget.remaining == 1
+        run = {"id": "run-o1-repeat", "sources": []}
+        drafted = triage_queue._drain_and_write_triage_queue(state, run, candidate_budget=budget)
+    assert drafted == 1
+    assert triage.writer_events() == [eligible]
+    assert (budget.attempts, budget.refused_before_writer) == (1, 1)
+    assert any(row["event_id"] == repeat and row["stage"] == "duplicate_draft"
+               for row in state["suppressions"])

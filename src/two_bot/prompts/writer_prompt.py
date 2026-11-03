@@ -71,6 +71,20 @@ Enumeration may clarify scale; never invent a connection. Keep this bundle's
 headline primary. Omit context that adds words without news.
 """
 
+HOT10_RANK_GUIDANCE = """\
+HOT 10 RANK:
+Lead with the strongest qualified city. One city is enough. If you mention
+other cities, do not imply consecutive ranks across an omitted city. Name
+their actual ranks or report their values without an implied order.
+"""
+
+THERMAL_TIME_GUIDANCE = """\
+SATELLITE TIMING:
+A shared source minute or satellite platform does not establish simultaneous
+detections or a shared overpass. Give each detection's sourced time if useful,
+or omit timing. Omit extra detections if the main signal is stronger alone.
+"""
+
 IMPACT_GUIDANCE = """\
 SOURCED HUMAN IMPACT:
 Use human_impact only when claim, value, source_name, url and as_of support this
