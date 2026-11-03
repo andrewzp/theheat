@@ -115,6 +115,48 @@ def test_real_prepass_sees_six_stations_before_changed_individual_caps(monkeypat
     assert state["heat_records_cluster_fired"] == {}
 
 
+@pytest.mark.parametrize(("provider", "expected_station_count"), [("both", 0), ("both_global", 2)])
+def test_world_station_reaches_real_runner_without_replacing_forecast_supply(
+    monkeypatch, supply_inputs, provider, expected_station_count,
+):
+    calls = []
+    for station in supply_inputs["stations"]:
+        station.update(country_code="FR", country_name="France", state="")
+
+    def station_source(**kwargs):
+        calls.append("station")
+        return qualify(**supply_inputs, metrics_out=kwargs["metrics_out"])
+
+    def world_source(cities, metrics_out, *, bot_state):
+        calls.append("forecast")
+        assert cities == [{"country": "FR"}]
+        metrics_out.update(status="success", world_total=1)
+        return [], []
+
+    qualify = ghcn.check_extreme_signals_for_stations
+    monkeypatch.setattr(ghcn, "check_extreme_signals_for_stations", station_source)
+    monkeypatch.setattr(source, "_run_world_cached_half", world_source)
+    monkeypatch.setattr(source, "_should_draft", lambda *args, **kwargs: True)
+    monkeypatch.setattr(caps, "GHCN_INDIVIDUALS_PER_COUNTRY", 2)
+    monkeypatch.setenv("THEHEAT_SIGNALS_PROVIDER", provider)
+    monkeypatch.setenv("THEHEAT_GHCN_THRESHOLD_VERIFICATION", "success")
+    monkeypatch.setenv("THEHEAT_RECORDS_CLUSTER_ENABLED", "0")
+    state = deepcopy(DEFAULT_STATE)
+    run = {"id": "invented-world-station-routing", "sources": []}
+    source.run_extreme_signals(state, run, [{"country": "US"}, {"country": "FR"}], {}, {})
+    assert calls == ["station", "forecast"]
+    candidates = [row for row in state.get("_triage_queue", []) if row.legacy_type == "all_time_high"]
+    assert len(candidates) == expected_station_count
+    for row in candidates:
+        evidence = row.bundle.raw_signal_dump["evidence"]
+        assert row.bundle.raw_signal_dump["country"] == "France"
+        assert evidence["evidence_type"] == "observed"
+        assert evidence["valid_date"] == DAY.isoformat()
+        assert "observed high" in row.review_context["headline"]
+        assert "Observed high" in {fact["label"] for fact in row.review_context["facts"]}
+    assert run["sources"][0]["details"]["provider"] == provider
+
+
 @pytest.mark.parametrize("corruption", [
     "missing_day", "different_day", "nan", "coordinates", "missing_evidence",
     "baseline_shape", "baseline_unverified", "station_mismatch", "qc_rejected",

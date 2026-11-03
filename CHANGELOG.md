@@ -4,6 +4,8 @@
   ranked writer slots.
 - Give thermal and Hot10 drafts scoped timing and rank guidance while
   preserving existing factual checks and the shared writer system prompt.
+- Add an opt-in global station lane beside existing world forecasts, retaining
+  current country aggregate ownership and source labels.
 
 ## 0.9.109.56
 
