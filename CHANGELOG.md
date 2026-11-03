@@ -6,6 +6,8 @@
   preserving existing factual checks and the shared writer system prompt.
 - Add an opt-in global station lane beside existing world forecasts, retaining
   current country aggregate ownership and source labels.
+- Check weekday and temperature-unit text as separate material spans without
+  exempting either from claim coverage.
 
 ## 0.9.109.56
 
