@@ -258,7 +258,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/two_bot/provider_preflight.py": "9a6aa6b4834c04266acdde286a3ccae991a070ab9411a0d56e7b9ab519422021",
     "src/two_bot/rejected_candidate.py": "4c4c843c14a52e5eb3f955b055d637476a94cf8bdaa0e98bab60c7c702f1ed53",
     "src/two_bot/retained_usage.py": "48fbca8c9c9868a258c5bfdd0966234b4a7f07b4e21577cb1c3cfa0d9bfeeda9",
-    "src/two_bot/scientific_claims.py": "732815d008c48ffc3c359eda41b053bde4c011dde023b7d9cef35e13e570d08b",
+    "src/two_bot/scientific_claims.py": "e46611b33fe24fd8ec710c94be3b576da90a822419219c2b1a9a2d212f1d7883",
     "src/two_bot/source_links.py": "d0cc31547cd714aa7760f7a2ff3659076c4198ce868bf9fa96aa313f98e5e0a0",
     "src/two_bot/sourced_generation.py": "1603b6508156e14dadb0138cfa123c5c8302b09261545cfa0434c585c3bb20f2",
     "src/two_bot/strict_contract.py": "ff7af7a1a2a88202db854df9984c768cfdd0ef641ec05695b37e27f151f3463e",
@@ -270,5 +270,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "8c4887f395618e343dafd55f5843987dfa6a7a620713c7c34bab9f419e4434fe"
   },
   "schema_version": 1,
-  "source_sha256": "15a47ac7b4f272b454b506ebfb049d6a4c019ec9908517d6d19f97d8a94c8b24"
+  "source_sha256": "228c6fee5bdad8559162b418a65a9406b18f51737c403ef91c66b237d33ea475"
 }

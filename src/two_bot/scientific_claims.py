@@ -26,12 +26,20 @@ _UNAVAILABLE_INCIDENT_CLAUSE = re.compile(
     r"(?=[.;]|\Z)"
 )
 
-# Ignore only this complete immediate disclaimer in the observation-word scan.
+# Ignore only complete immediate disclaimers in the observation-word scan.
 # Every other clause and every other scientific check still sees the full text.
 _NEGATED_STATION_MEASUREMENT_CLAUSE = re.compile(
     r"(?:^|[.;,][ \t]+)"
     r"(?P<clause>not[ \t]+station(?:-|[ \t]+)measured)"
     r"(?=[.;]|\Z)"
+)
+_NEGATED_OBSERVATION_CLAUSE = re.compile(
+    r"(?:^|[.;,][ \t]+)(?P<clause>not[ \t]+observed)(?=[.;]|\Z)"
+)
+_PARENTHETICAL_FORECAST_DENIAL = re.compile(
+    r"(?:\d°[cf][ \t]+\([ \t]*(?:forecast,[ \t]+)?|"
+    r"\b(?:sampled cities|sampled locations)[ \t]+\([ \t]*forecast,[ \t]+)"
+    r"(?P<clause>not[ \t]+observed)[ \t]*\)(?=[ \t]*(?:[.;]|\Z))"
 )
 
 
@@ -47,15 +55,17 @@ def _incident_classification_scan(text: str) -> str:
 
 
 def _forecast_observation_scan(text: str) -> str:
-    """Mask the bounded disclaimer, without treating quoted text as a denial."""
+    """Mask bounded disclaimers, without treating quoted text as a denial."""
     # Possessive/contraction apostrophes do not quote the disclaimer.
     quote_scan = re.sub(r"(?<=\w)['’](?=\w)", "", text)
     if any(char in quote_scan for char in "\"'‘’“”«»‹›\r\n"):
         return text
     chars = list(text)
-    for match in _NEGATED_STATION_MEASUREMENT_CLAUSE.finditer(text):
-        start, end = match.span("clause")
-        chars[start:end] = " " * (end - start)
+    for pattern in (_NEGATED_STATION_MEASUREMENT_CLAUSE, _NEGATED_OBSERVATION_CLAUSE,
+                    _PARENTHETICAL_FORECAST_DENIAL):
+        for match in pattern.finditer(text):
+            start, end = match.span("clause")
+            chars[start:end] = " " * (end - start)
     return "".join(chars)
 
 
