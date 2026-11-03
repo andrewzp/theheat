@@ -4,6 +4,7 @@ import { draftIdentity } from "../../../lib/draft-revisions.js"
 import { EPISODE_ACTIONS, applyEpisodeCommand, episodeView } from "../../../lib/hazard-episodes.js"
 import { readJsonObject } from "../../../lib/request-json.js"
 import { readStateStore, updateDraftStore } from "../../../lib/state-store.js"
+import { submitDraftUpdates, submittedResponse } from "../../../lib/gist-route-submit.js"
 
 // Physical-episode inspection and correction for one draft (W07.2/07.3/07.6).
 // Same authority as the drafts route: dashboard auth + same-origin mutation rule,
@@ -56,12 +57,18 @@ export async function POST(request) {
   if (!DRAFT_ID.test(draftId || "")) return refuse("Name one draft.", 400, "invalid_draft_id")
   if (!validIdentity(expectedRevision)) return refuse("Refresh the draft before changing it.", 400, "missing_revision")
   try {
-    const { draft, state } = await updateDraftStore(draftId, (record, current) => {
+    const { draft, state, submitted } = await updateDraftStore(draftId, (record, current) => {
       if (!sameRevision(record, expectedRevision)) {
         throw Object.assign(new Error("This draft changed. Review the latest version and try again."), { status: 409, code: "revision_conflict" })
       }
       return applyEpisodeCommand(record, body, { state: current, actor: "dashboard" })
-    }, { expectedRevision })
+    }, { expectedRevision, routeCommand: (updates, route) => {
+      // P00c route mode: the sealed episode correction (its exact request fields) is re-applied by the
+      // serialized consumer with the same applyEpisodeCommand; the dashboard never PATCHes.
+      const { draftId: _draft, expectedRevision: _expected, ...params } = body
+      return submitDraftUpdates(request, updates, route, { operation: "episode", params })
+    } })
+    if (submitted) return submittedResponse(submitted, headers)
     if (!draft) return refuse("Draft not found.", 404, "draft_not_found")
     return Response.json({ ok: true, action, revision_identity: { ...draftIdentity(draft), decision_revision: draft.decision_revision ?? 0 },
       view: episodeView(state, draftId) }, { headers })

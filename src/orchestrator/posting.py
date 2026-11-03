@@ -471,17 +471,34 @@ def post_approved(draft_or_text: dict | str, bot_state: BotState) -> str:
 
 
 def run_manual_tweet(bot_state: BotState, current_run: dict | None = None) -> BotState:
-    """Post an approved tweet from the TWEET_TEXT env var."""
+    """Post an approved tweet from the TWEET_TEXT env var.
+
+    P00c route sender (THEHEAT_SENDER_TEXT_SOURCE=state): the dispatch carries only the draft id and
+    publish intent; the exact approved bytes are resolved privately from the authoritative state
+    read by this run and are never logged. Every check below (approval under that intent, revision
+    and text binding, source/media/safety, write-first claim, unknown-delivery fences) is unchanged.
+    """
     manual_start = time.perf_counter()
     tweet_text = os.environ.get("TWEET_TEXT", "")
     draft_id = os.environ.get("DRAFT_ID", "").strip()
     publish_intent_id = os.environ.get("PUBLISH_INTENT_ID", "").strip()
+    text_source = os.environ.get("THEHEAT_SENDER_TEXT_SOURCE", "").strip()
     _reconcile_publish_ledger(bot_state)
     if not draft_id:
         _record_source_run(current_run, bot_state, "manual_publish", manual_start,
                            status="failed", error="Untracked text cannot publish; review a sourced draft first")
         return bot_state
+    if text_source not in ("", "state") or (text_source == "state" and tweet_text):
+        # A reference dispatch never carries text, and no other source exists.
+        reason = "Invalid sender text source; nothing sent"
+        print(f"[manual] {reason}")
+        _record_source_run(current_run, bot_state, "manual_publish", manual_start, status="failed", error=reason)
+        return bot_state
     draft = _find_draft(bot_state, draft_id=draft_id, tweet_text=tweet_text)
+    if text_source == "state":
+        # Only the draft with this exact id supplies text; the checks below bind it to the intent.
+        exact = draft if draft and draft.get("id") == draft_id else None
+        tweet_text = exact["text"] if exact and isinstance(exact.get("text"), str) else ""
     if not tweet_text.strip():
         print("[manual] No TWEET_TEXT provided, skipping")
         _record_source_run(
@@ -577,7 +594,8 @@ def run_manual_tweet(bot_state: BotState, current_run: dict | None = None) -> Bo
         return bot_state
     if not passed:
         reason = safety_reason or "Safety pipeline rejected tweet"
-        print(f"[manual] Safety rejected tweet: {reason}")
+        # A reason can quote the text: route (state-sourced) sends keep it in the private state only.
+        print(f"[manual] Safety rejected tweet: {reason}" if text_source != "state" else f"[manual] Safety rejected draft {draft_id}")
         if draft:
             draft["status"] = "pending"
             draft["post_error"] = reason
@@ -589,7 +607,10 @@ def run_manual_tweet(bot_state: BotState, current_run: dict | None = None) -> Bo
         )
         return bot_state
 
-    print(f"[manual] Posting: {tweet_text}")
+    if text_source == "state":
+        print(f"[manual] Posting draft {draft_id} under intent {publish_intent_id} (text resolved from state; not logged)")
+    else:
+        print(f"[manual] Posting: {tweet_text}")
     publish_draft = draft or {"text": tweet_text}
     requested_identity = draft_identity(publish_draft)
     result = post_approved(publish_draft, bot_state)

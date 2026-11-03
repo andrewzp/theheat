@@ -110,12 +110,36 @@ def publish_report(report: dict, api) -> dict:
             "state_json_written": False, "provider_calls": 0}
 
 
+def route_guard(api, env: dict[str, str]) -> None:
+    """P00c: refuse the PATCH in route mode unless this is a serialized-group job.
+
+    Legacy (variable unset, no marker): no extra request, the sequence is unchanged. In
+    route mode the route record is read first so a stale code generation also refuses.
+    """
+    from src.commands import gist_route
+    try:
+        mode, marker = gist_route.configured_mode(env), gist_route.serialized_writer_marker(env)
+        if mode == "legacy" and marker is None:
+            return
+        if marker is None:
+            raise gist_route.RouteRefused("direct_write_disabled_by_route")
+        meta = api("ROUTE", None)
+        record = gist_route.record_from_files({} if meta is None else {gist_route.ROUTE_FILENAME: meta})
+        gist_route.check_writer(record, writer="runtime_report", env=env)
+    except gist_route.RouteRefused as refused:
+        raise ReportError(refused.code) from None
+
+
 def github_api(gist: str, env: dict[str, str]):
     child = dict(env, GH_TOKEN=env["GITHUB_TOKEN"])
     def call(method: str, payload):
         if method == "GET":
             args = ["gh", "api", "--hostname", "github.com", f"gists/{gist}",
                     "--jq", f'{{runtime_report_file:(.files["{FILENAME}"] // null)}}']
+            data = None
+        elif method == "ROUTE" and payload is None:
+            args = ["gh", "api", "--hostname", "github.com", f"gists/{gist}",
+                    "--jq", '{gist_write_route_file:(.files["gist-write-route.json"] // null)}']
             data = None
         elif (method == "PATCH" and isinstance(payload, dict) and set(payload) == {"files"}
               and isinstance(payload["files"], dict) and set(payload["files"]) == {FILENAME}
@@ -130,6 +154,15 @@ def github_api(gist: str, env: dict[str, str]):
         response = subprocess.run(args, input=data, text=True, capture_output=True, timeout=30, env=child, check=True)
         if len(response.stdout.encode()) > MAX_BYTES * 2:
             raise ReportError("runtime_report_response_size_limit")
+        if method == "ROUTE":
+            try:
+                envelope = json.loads(response.stdout)
+            except (TypeError, ValueError) as exc:
+                raise ReportError("runtime_report_response_invalid") from exc
+            if (not isinstance(envelope, dict) or set(envelope) != {"gist_write_route_file"}
+                    or envelope["gist_write_route_file"] is not None and not isinstance(envelope["gist_write_route_file"], dict)):
+                raise ReportError("runtime_report_response_invalid")
+            return envelope["gist_write_route_file"]
         if method == "GET":
             try:
                 envelope = json.loads(response.stdout)
@@ -149,7 +182,10 @@ def main() -> int:
         gist = env.get("GIST_ID", "")
         if not re.fullmatch(r"[a-f0-9]{20,64}", gist) or not env.get("GITHUB_TOKEN"):
             raise ReportError("runtime_report_storage_unconfigured")
-        result = publish_report(build_report(env), github_api(gist, env))
+        report = build_report(env)
+        api = github_api(gist, env)
+        route_guard(api, env)
+        result = publish_report(report, api)
         print(json.dumps(result))
         return 0
     except Exception as exc:

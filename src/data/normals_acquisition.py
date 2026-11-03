@@ -25,6 +25,11 @@ path to a qualified replacement:
 4. ``install_plan`` — bounded local comparison with the installed artifact's
    identity and a retained rollback copy. Root performs installation.
 
+``admit`` and ``install_plan`` dispatch on the candidate manifest's product: a
+``noaa-ghcnd-monthly-mean-tmax-v1`` candidate (``ghcnd_monthly_normals``) gets its
+own validator and install plan into its own file, and neither product's install
+plan accepts the other product's installed file.
+
 Loader acceptance proves the path, not climate-normal quality.
 """
 
@@ -44,7 +49,7 @@ import time
 from typing import Any, Callable, Iterable, Protocol
 
 from src.data import acquisition_dependencies as deps
-from src.data import bounded_http, meteostat_normals, open_meteo, places
+from src.data import bounded_http, ghcnd_monthly_normals, meteostat_normals, open_meteo, places
 
 PRODUCT = "meteostat-normals-point-v1"
 PLAN_SCHEMA = "theheat.normals-acquisition-plan/v1"
@@ -651,8 +656,20 @@ def assemble_candidate(plan: dict[str, Any], out_dir: Path, *, installed_path: P
 # 02.3 admission, comparison and install plan
 # ---------------------------------------------------------------------------
 
+def candidate_product(candidate_dir: Path) -> str | None:
+    """The product a candidate manifest declares (None when unreadable)."""
+    try:
+        manifest = _read_json(candidate_dir / "manifest.json", MAX_FILE_BYTES)
+    except (OSError, ValueError, deps.AcquisitionError):
+        return None
+    product = manifest.get("product") if isinstance(manifest, dict) else None
+    return product if isinstance(product, str) else None
+
+
 def admit(candidate_dir: Path, *, partitions_dir: Path | None = None) -> dict[str, Any]:
     """Reject schema drift, duplicates, altered provenance and incomplete periods; prove loader acceptance."""
+    if candidate_product(candidate_dir) == ghcnd_monthly_normals.PRODUCT:
+        return ghcnd_monthly_normals.admit(candidate_dir)
     reasons: list[str] = []
     try:
         manifest = _read_json(candidate_dir / "manifest.json", MAX_FILE_BYTES)
@@ -750,6 +767,10 @@ class _scratch_copy:
 
 def install_plan(candidate_dir: Path, installed_path: Path, *, max_changes_listed: int = 50) -> dict[str, Any]:
     """Compare an admitted candidate with the installed artifact; retain a rollback copy. No installation."""
+    if candidate_product(candidate_dir) == ghcnd_monthly_normals.PRODUCT:
+        return ghcnd_monthly_normals.install_plan(candidate_dir, installed_path)
+    if installed_path.name == ghcnd_monthly_normals.INSTALLED_NAME:
+        raise NormalsError("normals_install_target_holds_another_product")
     admission = admit(candidate_dir, partitions_dir=candidate_dir.parent / "partitions")
     if admission["status"] != "ready":
         raise NormalsError("normals_candidate_not_admitted")
@@ -800,5 +821,6 @@ def install_plan(candidate_dir: Path, installed_path: Path, *, max_changes_liste
 
 __all__ = ["CANDIDATE_SCHEMA", "FIELDS", "LEGACY_EXPLANATION", "Limits", "MeteostatProvider", "NormalsError",
            "PERIODS", "PLAN_SCHEMA", "PRODUCT", "acquire", "admit", "assemble_candidate", "build_plan",
+           "candidate_product",
            "file_identity", "inspect_baseline", "install_plan", "load_universe", "normalize_response",
            "plan_result", "validate_plan"]

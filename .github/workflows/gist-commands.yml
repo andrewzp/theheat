@@ -1,0 +1,127 @@
+name: gist-commands
+run-name: Gist command ${{ github.run_id }}
+
+# P00c serialized Gist write route. Default-off: nothing submits here until root sets
+# THEHEAT_GIST_WRITE_ROUTE=serialized and dispatches the one-time activate_route command.
+# ROUTE-CONTRACT-v2: every dashboard command is a SEALED envelope (AES-256-GCM, public ids and
+# codes only); plaintext appears in no input, artifact, log or summary. Only root's route
+# control (activate/deactivate: a generation number) is plaintext.
+#
+# admit   — no concurrency group (never pending-cancelled). Validates the exact public envelope
+#           (shape, sizes, expiry, producer generation; it holds NO key) and uploads the
+#           immutable artifact theheat-command-<command_id>. It never reads or writes a Gist.
+# consume — job-level concurrency group theheat-bot (the same group bot.yml holds), so at most
+#           one Gist writer job runs at a time across all runners. It drains EVERY admitted
+#           artifact, not only its own: a cancelled pending consumer loses no command. It needs
+#           actions: write to dispatch the manual sender and to delete acknowledged artifacts.
+on:
+  workflow_dispatch:
+    inputs:
+      command:
+        description: 'Exact sealed command envelope (dashboard route mode) or root route-control JSON'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  admit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      admitted: ${{ steps.admit.outputs.admitted }}
+      command_id: ${{ steps.admit.outputs.command_id }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+      - run: pip install -r requirements.txt
+      - name: Admit the command (never touches a Gist)
+        id: admit
+        env:
+          THEHEAT_COMMAND_INPUT: ${{ inputs.command }}
+          # Non-secret key ids admission accepts (unset = every sealed/control command refused).
+          THEHEAT_COMMAND_SEAL_KID: ${{ vars.THEHEAT_COMMAND_SEAL_KID }}
+          THEHEAT_ROUTE_CONTROL_KID: ${{ vars.THEHEAT_ROUTE_CONTROL_KID }}
+        run: python -m src.commands.gist_commands admit --out "$RUNNER_TEMP/command"
+      - name: Upload the immutable admitted command
+        if: steps.admit.outputs.admitted == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: theheat-command-${{ steps.admit.outputs.command_id }}
+          path: ${{ runner.temp }}/command/
+          if-no-files-found: error
+          retention-days: 2
+      - name: Record the admission refusal code
+        if: steps.admit.outputs.admitted != 'true' && steps.admit.outputs.command_id != ''
+        env:
+          REFUSED: ${{ steps.admit.outputs.code }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/refusal"
+          printf '%s\n' "$REFUSED" > "$RUNNER_TEMP/refusal/code.txt"
+      - name: Upload the admission refusal marker
+        if: steps.admit.outputs.admitted != 'true' && steps.admit.outputs.command_id != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: theheat-admission-refused-${{ steps.admit.outputs.command_id }}
+          path: ${{ runner.temp }}/refusal/code.txt
+          if-no-files-found: error
+          retention-days: 2
+      - name: Fail visibly on refusal
+        if: steps.admit.outputs.admitted != 'true'
+        env:
+          REFUSED: ${{ steps.admit.outputs.code }}
+        run: |
+          echo "Command refused at admission: $REFUSED"
+          exit 1
+
+  consume:
+    needs: admit
+    if: needs.admit.outputs.admitted == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: write
+    concurrency:
+      group: theheat-bot
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - name: Fetch every admitted command artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          THEHEAT_REPOSITORY: ${{ github.repository }}
+          # Reads the consumer's settled-run continuation from the state Gist (read only; review R1).
+          GIST_ID: ${{ secrets.GIST_ID }}
+          THEHEAT_GIST_READ_TOKEN: ${{ secrets.THEHEAT_GIST_WRITER_TOKEN || secrets.GH_GIST_TOKEN }}
+        run: python scripts/gist_command_inbox.py fetch --repo "$THEHEAT_REPOSITORY" --out "$RUNNER_TEMP/inbox"
+      - name: Consume serially inside theheat-bot
+        working-directory: dashboard
+        env:
+          GIST_ID: ${{ secrets.GIST_ID }}
+          GITHUB_TOKEN: ${{ secrets.THEHEAT_GIST_WRITER_TOKEN || secrets.GH_GIST_TOKEN }}
+          # ROUTE-CONTRACT-v2 §6 old-SHA fence: which secret NAME supplied the writer token, and whether
+          # any legacy Gist-writer/sender NAME still exists (booleans only, never values or lengths).
+          THEHEAT_GIST_CREDENTIAL: ${{ secrets.THEHEAT_GIST_WRITER_TOKEN != '' && 'route' || 'legacy' }}
+          THEHEAT_LEGACY_CREDENTIALS_PRESENT: ${{ secrets.GH_GIST_TOKEN != '' || secrets.TWITTER_API_KEY != '' || secrets.TWITTER_API_SECRET != '' || secrets.TWITTER_ACCESS_TOKEN != '' || secrets.TWITTER_ACCESS_SECRET != '' || secrets.BLUESKY_HANDLE != '' || secrets.BLUESKY_APP_PASSWORD != '' }}
+          # Opens sealed commands (ROUTE-CONTRACT-v2 §1); held only by consume/drain jobs and the dashboard.
+          THEHEAT_COMMAND_SEAL_KEY: ${{ secrets.THEHEAT_COMMAND_SEAL_KEY }}
+          # Verifies root's HMAC on activate/deactivate (root and these jobs only; never the dashboard).
+          THEHEAT_ROUTE_CONTROL_KEY: ${{ secrets.THEHEAT_ROUTE_CONTROL_KEY }}
+          THEHEAT_FEEDBACK_GIST_ID: ${{ secrets.THEHEAT_FEEDBACK_GIST_ID }}
+          THEHEAT_GIST_WRITE_ROUTE: ${{ vars.THEHEAT_GIST_WRITE_ROUTE }}
+          THEHEAT_SERIALIZED_WRITER: ${{ github.run_id }}:consume
+          THEHEAT_AUTOMATIC_PUBLICATION_ENABLED: ${{ vars.THEHEAT_AUTOMATIC_PUBLICATION_ENABLED || '0' }}
+          THEHEAT_AUTOMATIC_PUBLICATION_EPOCH: ${{ vars.THEHEAT_AUTOMATIC_PUBLICATION_EPOCH }}
+          GH_DISPATCH_TOKEN: ${{ github.token }}
+        run: node scripts/consume-gist-commands.mjs --inbox "$RUNNER_TEMP/inbox" --report "$RUNNER_TEMP/consume-report.json"

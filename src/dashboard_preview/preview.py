@@ -107,9 +107,9 @@ def qualified_spec(bundle, *, synthetic=False, include_viirs=False, include_temp
             **{key: evidence[key] for key in ("valid_date", "timezone", "valid_start", "valid_end")},
             **{key: window[key] for key in ("requested_at", "retrieved_at")}}
     if bundle["signal_kind"] == "hot10":
-        from src.media.hot10_graphic_adapter import SOURCE_LABEL, hot10_graphic_spec
+        from src.media.hot10_graphic_adapter import hot10_graphic_spec, source_label
         spec = hot10_graphic_spec(bundle, expected_bundle_sha256=fingerprint(bundle), synthetic=synthetic)
-        return spec, SOURCE_LABEL, hot10_source_context(spec["evidence"])
+        return spec, source_label(spec["evidence"]["baseline_product"]), hot10_source_context(spec["evidence"])
     if include_temperature:
         # The adapter already replays this retained read-only StoryBundle facade;
         # it independently audits every field and warrant before projecting it.
@@ -126,8 +126,14 @@ def qualified_spec(bundle, *, synthetic=False, include_viirs=False, include_temp
 
 
 def hot10_source_context(evidence):
-    """Presentation copy of the ten qualified rows; the PNG and descriptor stay the binding."""
-    return {"kind": "hot10_bulletin", "local_days": list(evidence["local_days"]),
+    """Presentation copy of the ten qualified rows; the PNG and descriptor stay the binding.
+
+    A bulletin ranked against the GHCN-Daily mean daily maximum names that product and
+    its wording; the default product's context is unchanged.
+    """
+    named = ({"baseline_product": evidence["baseline_product"], "baseline_wording": evidence["baseline_wording"]}
+             if "baseline_wording" in evidence else {})
+    return {"kind": "hot10_bulletin", **named, "local_days": list(evidence["local_days"]),
             "qualified_cities": evidence["qualified_cities"], "sampled_cities": evidence["sampled_cities"],
             "rows": [{"rank": row["rank"], "city": row["city"], "country": row["country"],
                       "valid_date": row["valid_date"], "timezone": row["timezone"],

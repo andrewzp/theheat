@@ -237,7 +237,7 @@ def test_actual_top_level_both_calls_forward_capture(capture, monkeypatch, concu
         raise StopAfterJoin
     monkeypatch.setattr(top, "run_extreme_signals", boundary)
     if concurrent:
-        monkeypatch.setattr(top, "run_stage1_then_synthesis", lambda *a, **kw: kw["serial_runners"][0].run())
+        monkeypatch.setattr(top, "run_stage1_then_synthesis", lambda *a, **kw: kw["serial_runners"][0].run(a[0], a[1]))
     with pytest.raises(StopAfterJoin):
         top.run_alerts(deepcopy(DEFAULT_STATE), None, ghcn_supply=capture)
     assert seen == [capture]

@@ -1470,7 +1470,11 @@ def _consume_gist_request() -> None:
     consume("gist_state", join=False)
 
 
-def _read_gist_state(*, strict: bool = False) -> BotState:
+def _read_gist_state(*, strict: bool = False, route_sink: list | None = None) -> BotState:
+    """Read state.json; ``route_sink`` (P00c) receives the route file entry of the SAME GET.
+
+    No extra request: the Gist envelope already carries every file. Absent file -> None.
+    """
     if not GIST_ID and not GITHUB_TOKEN:
         return _fresh_state()
     if not GIST_ID or not GITHUB_TOKEN:
@@ -1487,6 +1491,9 @@ def _read_gist_state(*, strict: bool = False) -> BotState:
         )
         resp.raise_for_status()
         gist = resp.json()
+        if route_sink is not None:
+            from src.commands.gist_route import ROUTE_FILENAME
+            route_sink.append(gist["files"].get(ROUTE_FILENAME))
         file_meta = gist["files"][STATE_FILENAME]
         # GitHub Gists REST API truncates the inline ``content`` field at
         # ~900 KB. When that happens the API sets ``truncated: true`` and
@@ -1677,9 +1684,19 @@ def write_state(state: BotState, *, expected_draft: dict | None = None, expected
             )
         except (TypeError, ValueError):
             return False
+    route_sink: list = []
     try:
-        current = _read_gist_state(strict=True)
+        current = _read_gist_state(strict=True, route_sink=route_sink)
     except StateReadError:
+        return False
+    # P00c: in route mode only a serialized-group job (marker, current generation) may PATCH.
+    from src.commands import gist_route
+    try:
+        route_meta = route_sink[0] if route_sink else None
+        record = gist_route.record_from_files({} if route_meta is None else {gist_route.ROUTE_FILENAME: route_meta})
+        gist_route.check_writer(record, writer="bot_state")
+    except gist_route.RouteRefused as refused:
+        print(gist_route.refusal_line("bot_state", refused.code))
         return False
     if not _expected_draft_matches(current, expected_draft, expected_publish_ledger):
         return False

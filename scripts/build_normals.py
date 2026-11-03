@@ -11,9 +11,13 @@ reported as such; its values are never relabelled.
                 request cap (incl. retries/redirects), received-byte and
                 decompressed-byte caps, absolute deadline; SIGINT/SIGTERM cancel
                 and leave completed partitions resumable. Standard library only.
-  admit         candidate manifest + loader acceptance
+  admit         candidate manifest + loader acceptance (dispatches on the candidate's product)
   install-plan  comparison with the installed file and a retained rollback copy
   check-deps    isolated dependency compatibility (requirements-acquisition.txt)
+  ghcnd-build   offline: the noaa-ghcnd-monthly-mean-tmax-v1 candidate from Root's verified
+                GHCN-Daily inputs (theheat.threshold-inputs/v1 manifest; every file re-hashed).
+                No network. Install target is data/normals_ghcnd_mean_tmax.csv, never
+                data/normals.csv; install needs >= 10 distinct places in every month.
 
 Each command prints one ``theheat.acquisition-result/v1`` JSON document. Exit 0
 for ``planned``/``ready``, 1 for any other result status, 2 for a refused input.
@@ -32,6 +36,7 @@ import threading
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.data import acquisition_dependencies as deps  # noqa: E402
+from src.data import ghcnd_monthly_normals as ghcnd  # noqa: E402
 from src.data import normals_acquisition as normals  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[1]
@@ -68,8 +73,15 @@ def main(argv: list[str] | None = None, *, provider_factory=None) -> int:
     admit.add_argument("--candidate", type=Path, required=True)
     install = sub.add_parser("install-plan")
     install.add_argument("--candidate", type=Path, required=True)
-    install.add_argument("--installed", type=Path, default=NORMALS_PATH)
+    install.add_argument("--installed", type=Path, default=None,
+                         help="default: data/normals.csv, or data/normals_ghcnd_mean_tmax.csv for that product")
     sub.add_parser("check-deps")
+    build = sub.add_parser("ghcnd-build")
+    build.add_argument("--cities", type=Path, default=CITIES_PATH)
+    build.add_argument("--inputs-manifest", type=Path, required=True)
+    build.add_argument("--inputs-dir", type=Path, help="default: the manifest's directory")
+    build.add_argument("--out-dir", type=Path, required=True)
+    build.add_argument("--deadline-seconds", type=float, default=1200.0)
     for command in sub.choices.values():
         command.add_argument("--result", help="also write the result JSON here")
     args = parser.parse_args(argv)
@@ -111,10 +123,18 @@ def main(argv: list[str] | None = None, *, provider_factory=None) -> int:
                     signal.signal(signal.SIGTERM, previous)
             outcome["dependency"] = check
             return _emit(outcome, args.result)
+        if args.command == "ghcnd-build":
+            if args.out_dir.exists() and any(args.out_dir.iterdir()):
+                raise ghcnd.GhcndNormalsError("ghcnd_out_dir_not_empty")
+            return _emit(ghcnd.build_candidate(args.cities, args.inputs_manifest,
+                                               args.inputs_dir or args.inputs_manifest.parent, args.out_dir,
+                                               deadline_seconds=args.deadline_seconds), args.result)
         if args.command == "admit":
             return _emit(normals.admit(args.candidate, partitions_dir=args.candidate.parent / "partitions"),
                          args.result)
-        plan_document = normals.install_plan(args.candidate, args.installed)
+        installed = args.installed or (REPO / ghcnd.DEFAULT_INSTALLED
+                                       if normals.candidate_product(args.candidate) == ghcnd.PRODUCT else NORMALS_PATH)
+        plan_document = normals.install_plan(args.candidate, installed)
         print(json.dumps(plan_document, sort_keys=True, indent=2))
         return 0
     except (deps.AcquisitionError, OSError, ValueError) as error:

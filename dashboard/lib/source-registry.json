@@ -674,8 +674,8 @@
     "src/editorial/official_warning.py": "e37a232fe19e8ef90bfc825c92b95b89d9c9f9df7818b4a3352466ad2beeff87",
     "src/editorial/warning_runtime.py": "3d2cb7e2d449545d682728e4adf777a622a2f5139081e46e14398122864d5f38",
     "src/orchestrator/cyclones.py": "389c6441db0839763b6a9cd42146f75e3ab14d1179125d60a9c368eb1e03697d",
-    "src/orchestrator/hot10.py": "e89ac16a110036d14feb102df2774c827d30005fffb29ff66dacfcc3b0093e1b",
-    "src/orchestrator/run_alerts.py": "3b5cf6afd22dd51a0fcad42061e6270acfe71db1b4b39b0ce67587ff9bb6be04",
+    "src/orchestrator/hot10.py": "d54d41833d0bf91a0f8dae97970d2e5fac8a0794e4b2cfd3a5502db008baa40b",
+    "src/orchestrator/run_alerts.py": "ba41edf3188263a1d8d0316d10bec8e389f51c12f62044973e46375c2350cae9",
     "src/orchestrator/sources/air_quality.py": "6a829e8bed43f517c33ddb73204dd1c24566477b4342b9134705b7b448dce02b",
     "src/orchestrator/sources/climate_indices.py": "e46485639d62d426b5d55b6f02191a47b0434bb31eb23e8f4a6bece33e980208",
     "src/orchestrator/sources/co2.py": "2ed59676536ab5ff9fc45d3116c91ffad10986a5a4380687a7191f2bd518d4a6",
@@ -698,7 +698,7 @@
     "src/orchestrator/sources/ocean_sst.py": "2d7f803dfe21695b1595053ef9b7f9d17c37f5b4563bfda6dcd5fcfc52cc0a39",
     "src/orchestrator/sources/ocean_sst_anomaly.py": "495657e1684d67d9b56076084aa29c3bc6262108498ffd966839c74b6679757f",
     "src/orchestrator/sources/official_warning.py": "469554a569f33365b55e919c62438fc6f1cea41fe31c6aecb7681029512d5679",
-    "src/orchestrator/sources/open_meteo.py": "e3f535af7394f45c9d2e8abd7b1c31d4c01f0d510f325e37bbe14ebc915e2fc3",
+    "src/orchestrator/sources/open_meteo.py": "379e7f3d3d990eb8368863f169f46b95e5bb8a12b5de7fbdb75ed7c9690aa0db",
     "src/orchestrator/sources/ozone_hole.py": "04e8f94c2d73330ab7693ae5ff240693262468e7764076148c58841acfc7e77f",
     "src/orchestrator/sources/reanalysis_anomaly.py": "4d69825455870e1adeddbd106d3cccb5875cbd0ea36305bd9a01ae7d1518dde8",
     "src/orchestrator/sources/regional_observed.py": "ed3eb40b8f5d167262c3cf6bbfe706b2bbd68cf318804dfb817f5171178b65b2",
@@ -710,5 +710,5 @@
     "src/two_bot/intern/warnings.py": "04e0a4506ffbb29124c8d2960a5e5025305699297fcf8f9178b23caac2cd7a37"
   },
   "evidence_scope": "Referenced local code inventory; not live/provider/transitive-source qualification.",
-  "registry_sha256": "82fca23299cf415f478c29382feaf542dd2f19bc7da4e79fc995ee65d9019fd9"
+  "registry_sha256": "4cb1683434900bf85e289e00c833860915bd6e079b93c20128edda0ba5f1723a"
 }

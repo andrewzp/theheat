@@ -14,7 +14,9 @@ PROFILE_KEYS = {
     "THEHEAT_NHC_ADVISORY_AUTO_TEXT", "THEHEAT_OFFICIAL_WARNING_AUTO_TEXT", "THEHEAT_NWS_WARNING_AUTO_TEXT",
     "THEHEAT_REGIONAL_OBSERVED", "THEHEAT_RAINFALL_WINDOW_PROVENANCE", "THEHEAT_HAZARD_EPISODES",
     "THEHEAT_PORTFOLIO_SELECTION", "THEHEAT_RAINFALL_REGIONAL_SCAN",
-    "THEHEAT_HMS_PREVIOUS_DAY_FILE", "THEHEAT_EARTHDATA_REFUSAL_BACKOFF",
+    "THEHEAT_HMS_PREVIOUS_DAY_FILE", "THEHEAT_EARTHDATA_REFUSAL_BACKOFF", "THEHEAT_HOT10_NORMALS_PRODUCT",
+    # P00c serialized Gist route mirror (default empty = legacy; see .github/workflows/gist-commands.yml).
+    "THEHEAT_GIST_WRITE_ROUTE", "THEHEAT_SERIALIZED_WRITER",
 }
 
 
@@ -42,7 +44,8 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: theheat-runtime-report
+  # P00c: in serialized route mode this Gist writer joins the theheat-bot group; legacy unchanged.
+  group: ${{ vars.THEHEAT_GIST_WRITE_ROUTE == 'serialized' && 'theheat-bot' || 'theheat-runtime-report' }}
   cancel-in-progress: false
 jobs:
   report:

@@ -37,10 +37,10 @@ def test_stage1_concurrent_stage2_after():
         current_run,
         serial_runners=[],
         concurrent_runners=[
-            SourceRunner("source_a", lambda: order.append("source_a")),
-            SourceRunner("source_b", lambda: order.append("source_b")),
+            SourceRunner("source_a", lambda bs, run: order.append("source_a")),
+            SourceRunner("source_b", lambda bs, run: order.append("source_b")),
         ],
-        synthesis_runner=SourceRunner("synthesis_fire_drought_heat", lambda: order.append("synthesis")),
+        synthesis_runner=SourceRunner("synthesis_fire_drought_heat", lambda bs, run: order.append("synthesis")),
         budget_seconds=1,
     )
 
@@ -52,7 +52,7 @@ def test_runner_budget_timeout_records_failed():
     bot_state = _fresh_state()
     current_run = {"id": "run_1", "sources": []}
 
-    def slow_runner():
+    def slow_runner(bs, run):
         time.sleep(0.05)
 
     run_stage1_sources(
@@ -85,7 +85,7 @@ def test_breaker_skips_after_3_timeouts():
     current_run = {"id": "run_1", "sources": []}
     ran = False
 
-    def should_not_run():
+    def should_not_run(bs, run):
         nonlocal ran
         ran = True
 
@@ -119,7 +119,7 @@ def test_breaker_records_skipped_not_failed():
         bot_state,
         current_run,
         serial_runners=[],
-        concurrent_runners=[SourceRunner("slow_source", lambda: None)],
+        concurrent_runners=[SourceRunner("slow_source", lambda bs, run: None)],
         budget_seconds=1,
     )
 
@@ -151,7 +151,7 @@ def test_composite_runner_records_real_source_health_keys():
         concurrent_runners=[
             SourceRunner(
                 "sea_ice",
-                lambda: None,
+                lambda bs, run: None,
                 health_sources=("sea_ice_arctic", "sea_ice_antarctic"),
             )
         ],
@@ -175,7 +175,7 @@ def test_synthesis_component_writers_serialized():
     order: list[str] = []
 
     def serial_runner(name: str):
-        def run():
+        def run(bs, current):
             nonlocal active, max_active
             with lock:
                 active += 1
