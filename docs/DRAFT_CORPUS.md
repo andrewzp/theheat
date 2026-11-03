@@ -11,6 +11,26 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-11-03 — Daily corpus grading (0 fresh drafts; 1 carry-over from Oct 31, previously graded)
+
+**Context:** Gist read via git-clone path (success). 1 pending: `draft_20261031_032828_68` (Brazil fire,
+978.7 MW) — same text/id as Oct 31's [4], graded B- then. No re-grading; grade stands. The other 3 Nov 2
+carry-overs (Riyadh dust, Riyadh PM2.5, Urumqi) are no longer pending — removed by an operator
+reject/publish or sweep outside this routine (cause unconfirmed). Intake: nothing new since Oct 31
+03:28 UTC (~3.5 days; third dry-spell day in a row — check source health / suppression ledger).
+
+**Staleness (~15:00 UTC Nov 3):** Brazil fire is ~83.5h old, past-tense ("detected … 00:09 UTC Oct 31"),
+no forecast language — not a strict candidate, but a 3.5-day-old satellite pass has little news value;
+operator may reject. Gist write skipped (`gh` token invalid; not attempted further).
+
+**A-rate:** — (no fresh drafts). Last graded cycle: 0% (0/4, Oct 31).
+
+### Notes
+- No proposal evidence updates (P_close, P_dust, P_event_sat, P4, P_tier, P_nws unchanged).
+- Operator: `daily-plan-current` still unmerged; `main` has no graded cycles since 2026-06-08.
+
+---
+
 ## 2026-11-02 — Daily corpus grading (0 fresh drafts; 4 carry-overs from Oct 30–31, previously graded)
 
 **Context:** Gist read via git-clone path (success). 4 pending, identical to the Oct 31 queue (same
