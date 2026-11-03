@@ -2,6 +2,10 @@
 
 Living plan for closing the gap between the bot's current voice quality and the **resumption bar** (majority A-grade rate per cycle). Refined daily by the autonomous grading agent (cron `0 15 * * *`), reviewed and implemented by the human operator.
 
+> **Nov 3: 0 fresh drafts — 1 pending, Oct 31's Brazil fire (B-, already graded); no re-grading, no
+> proposal evidence updates.** Nov 2's other 3 carry-overs left the queue (cause unconfirmed). Intake
+> dry since Oct 31 03:28 UTC. Gist write skipped.
+>
 > **Nov 2: 0 fresh drafts — queue is an exact match to Oct 31's 4 graded drafts; no re-grading, no
 > proposal evidence updates.** 3 strict staleness candidates now (Riyadh ×2, Urumqi; 69–84h, Oct 30
 > forecasts elapsed); gist write blocked, skipped. Intake quiet since Oct 31 03:28 UTC.
