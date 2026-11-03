@@ -155,8 +155,14 @@ def run_leaderboard(bot_state: BotState, current_run: dict | None = None) -> Bot
     leaderboard_start = time.perf_counter()
     try:
         cast(dict, bot_state).pop("_triage_queue", None)
+        from src.data import hot10_baselines
+        # One explicit normals product per run (THEHEAT_HOT10_NORMALS_PRODUCT); an unknown value
+        # refuses before any forecast fetch, and the selected product never falls back to the other.
+        product = hot10_baselines.selected_product()
+        legacy = product == hot10_baselines.LEGACY
+        baseline_report: dict = {}
         cities = open_meteo.load_cities()
-        normals = open_meteo.load_normals()
+        normals = open_meteo.load_normals() if legacy else hot10_baselines.load_alternative(product, baseline_report)
         temps = open_meteo.fetch_all_city_temps(cities)
 
         if not temps:
@@ -169,7 +175,8 @@ def run_leaderboard(bot_state: BotState, current_run: dict | None = None) -> Bot
             return bot_state
 
         from src.editorial import hot10_contract
-        qualified = hot10_contract.qualify(temps, normals, sampled=len(cities), now=_utc_now())
+        qualified = hot10_contract.qualify(temps, normals, sampled=len(cities), now=_utc_now(),
+                                           **({} if legacy else {"product": product}))
         universe = qualified["universe"]
         if not qualified["complete"]:
             # Ten unique qualified places or no bulletin: never pad, substitute or estimate.
@@ -178,7 +185,8 @@ def run_leaderboard(bot_state: BotState, current_run: dict | None = None) -> Bot
                 current_run, bot_state, "leaderboard", leaderboard_start,
                 status="degraded", observed=len(temps), promoted=0, drafted=0,
                 note=(f"hot10_short_slate: {universe['qualified_cities']} of {hot10_contract.SIZE} required "
-                      f"qualified locations; excluded {universe['excluded']}"),
+                      f"qualified locations; excluded {universe['excluded']}"
+                      + ("" if legacy else f"; baseline {product} file {baseline_report.get('status')}")),
             )
             _run_twitter_metrics(bot_state, current_run)
             return bot_state
@@ -209,7 +217,8 @@ def run_leaderboard(bot_state: BotState, current_run: dict | None = None) -> Bot
         if daily_open and _should_draft(score, event_id):
             leader = rows[0]
             review_context = _review_context(
-                source="Open-Meteo forecast + Meteostat point normals",
+                source=("Open-Meteo forecast + Meteostat point normals" if legacy else
+                        "Open-Meteo forecast + NOAA GHCN-Daily station mean daily maximum, 1991-2020"),
                 source_key="leaderboard",
                 headline="Daily Hot 10 forecast-anomaly leaderboard",
                 current_run=current_run,
@@ -219,6 +228,10 @@ def run_leaderboard(bot_state: BotState, current_run: dict | None = None) -> Bot
                     _fact("Cities ranked", len(rows)),
                     _fact("Qualified universe", f"{universe['qualified_cities']} of {universe['sampled_cities']} sampled"),
                     _fact("Ranking changes", len(changes)),
+                    *([] if legacy else [
+                        _fact("Baseline product", product),
+                        _fact("Baseline", "mean daily maximum, 1991-2020 (station climatology; not a record)"),
+                    ]),
                 ],
             )
             from src.two_bot.intern import build_hot10_bundle

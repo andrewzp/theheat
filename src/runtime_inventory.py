@@ -38,7 +38,7 @@ def collect_runtime_inventory(mode: str, *, now: datetime | None = None, bot_sta
     Imports are local to avoid a CLI/common-module import cycle.
     """
     from src import state
-    from src.data import air_quality_current, firms, gpm_imerg, twitter_metrics
+    from src.data import air_quality_current, firms, gpm_imerg, hot10_baselines, twitter_metrics
     from src.editorial import approval, newsworthiness, warning_automatic
     from src.editorial.publication import automatic_publication_policy
     from src.orchestrator import caps, funnel, hot10, scheduler, triage_queue
@@ -110,6 +110,7 @@ def collect_runtime_inventory(mode: str, *, now: datetime | None = None, bot_sta
             "rainfall_regional_scan_enabled": os.environ.get("THEHEAT_RAINFALL_REGIONAL_SCAN") == "1",
             "hms_previous_day_file_enabled": os.environ.get("THEHEAT_HMS_PREVIOUS_DAY_FILE") == "1",
             "earthdata_refusal_backoff_enabled": os.environ.get("THEHEAT_EARTHDATA_REFUSAL_BACKOFF") == "1",
+            "hot10_normals_product": hot10_baselines.inventory_value(),
         },
         "credentials_present": {
             "anthropic": bool(os.environ.get("ANTHROPIC_API_KEY")),

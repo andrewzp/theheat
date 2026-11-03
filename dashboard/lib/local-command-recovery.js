@@ -4,7 +4,7 @@ export function recoveryKey(origin, subject) {
     ? `theheat-local-command-v1:${origin}:${encodeURIComponent(subject)}` : null
 }
 const sha = value => typeof value === "string" && /^[a-f0-9]{64}$/.test(value)
-function canonical(value) {
+export function canonical(value) {
   if (value === null || typeof value === "boolean") return JSON.stringify(value)
   if (typeof value === "number" && Number.isSafeInteger(value)) return JSON.stringify(value)
   if (typeof value === "string") {

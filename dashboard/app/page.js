@@ -16,6 +16,7 @@ import { RunsTable } from "./components/RunsTable.js"
 import { SourcesView } from "./components/SourcesView.js"
 import { SourceHealthContent } from "./health/page.js"
 import { ProductHealthPanel } from "./components/ProductHealthPanel.js"
+import { CredentialReminderBanner } from "./components/CredentialReminderBanner.js"
 import { CostPanel } from "./components/CostPanel.js"
 import DeliveryReconciliation from "./components/DeliveryReconciliation.js"
 import { COST_SCENARIO } from "../lib/usage-cost-contract.js"
@@ -24,6 +25,7 @@ import { hot10IsStale, hot10StaleDays, timeAgo, todayTweetCount } from "../lib/f
 import { draftReviewControls, draftTextLength, revisionKey, reviewQueueOrder, manualReviewLabel } from "../lib/draft-review-ui.js"
 import { createDraftCommand, createCandidateCommand, localCommandEndpoint } from "../lib/draft-command-request.js"
 import { recoveryKey, saveCommandReference, readCommandReference, clearCommandReference, withCommandReference, abandonmentBody } from "../lib/local-command-recovery.js"
+import { followRouteCommand, routeCommandMessage } from "../lib/route-command-recovery.js"
 import "./dashboard.css"
 
 export default function Dashboard() {
@@ -356,6 +358,12 @@ export default function Dashboard() {
         body: JSON.stringify({ action, draftId, ...payload, expectedRevision }),
       })
       const result = await res.json()
+      // P00c route mode: the decision was submitted to the serialized writer, not saved yet.
+      if (result.command_id && (result.status === "pending" || result.status === "submission_uncertain")) {
+        setDraftFeedback({ draftId, ...routeCommandMessage({ status: result.status === "pending" ? "pending" : "unknown" }) })
+        void followRouteCommand(result).then((outcome) => { setDraftFeedback({ draftId, ...routeCommandMessage(outcome) }); return fetchData() })
+        return
+      }
       if (!res.ok || result.ok === false) {
         setDraftFeedback({ type: "error", draftId, text: result.error || "Draft action failed" })
         if (res.status === 409 || action === "approve") await fetchData()
@@ -562,6 +570,8 @@ export default function Dashboard() {
             state read failed: {stateError}
           </div>
         )}
+
+        <CredentialReminderBanner credentialExpiry={credentialExpiry} nowMs={Date.now()} />
 
         {!loading && ["dashboard", "health"].includes(activeTab) && (
           <>

@@ -1,3 +1,16 @@
+## 0.9.109.55
+
+- Integrate the isolated source scheduler and its bounded worker-state merge
+  repairs. Concurrent collection remains opt-in.
+- Add explicit NOAA GHCN-Daily monthly-mean baseline support for Hot10 without
+  mixing or relabelling the default Meteostat product. Preserve storage-stable
+  source identities, graphics and descriptions for both products.
+- Recognize a complete, unquoted "not observed" forecast disclaimer without
+  clearing affirmative observations, incomplete denials or mandatory checks.
+- Add the default-off sealed Gist command route and reference-only sender
+  integration. Route activation remains held pending the inbox search-cap repair
+  and operational rollout; existing publication settings are unchanged.
+
 ## 0.9.109.54
 
 - Preserve supplied negative temperatures and signed departures in Hot10 copy

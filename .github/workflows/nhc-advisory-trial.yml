@@ -64,7 +64,7 @@ jobs:
         run: pip install -r requirements.txt
       - name: Read retained production state without mutation
         env:
-          GH_TOKEN: ${{ secrets.GH_GIST_TOKEN }}
+          GH_TOKEN: ${{ secrets.THEHEAT_GIST_WRITER_TOKEN || secrets.GH_GIST_TOKEN }}
           GIST_ID: ${{ secrets.GIST_ID }}
         run: |
           umask 077

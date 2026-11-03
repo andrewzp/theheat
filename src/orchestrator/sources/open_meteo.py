@@ -15,6 +15,7 @@ from src.orchestrator.common import *
 from src.orchestrator.signal_partition import is_us_location, partition_us_world
 from src.data import open_meteo, places
 from src.orchestrator import world_cache
+from src.orchestrator.staging import authority_current, defer_or_run
 from src.orchestrator.caps import select_individual_station_bundles
 from src.data.world_thresholds import CityThresholds, compute_city_thresholds, evaluate_city
 from src.data.openmeteo_budget import OpenMeteoBudget, OpenMeteoSaturated
@@ -357,7 +358,10 @@ def _run_world_cached_half(world_cities: list[dict], metrics_out: dict, bot_stat
     evaluated_ok = forecast_attempted - forecast_failures
     coverage_ratio = round(evaluated_ok / len(world_cities), 3) if world_cities else 1.0
     cache["_meta"].update({"cached_count": cached_count, "as_of": iso})
-    world_cache.write_cache(cache)
+    # Serial: written now, exactly as before. A deadline-bearing staged worker
+    # never PATCHes the Gist itself: the main thread writes this snapshot only
+    # after promoting the worker, and an expired worker's write is dropped.
+    defer_or_run("world_threshold_cache", world_cache.write_cache, cache)
 
     metrics_out.update({
         "record_comparisons_withheld": len(withheld), "withheld_record_candidates": withheld,
@@ -548,6 +552,10 @@ def _verified_ghcn_signals(bot_state: BotState, metrics: dict, *, ghcn_supply: S
         else:
             metrics["status"] = _classify_ghcn_source_status(metrics)
     if ghcn_supply is not None:
+        if not authority_current():
+            # An expired staged worker never starts a retained-supply write.
+            metrics.update(status="failed", error="scientific_supply_unavailable", supply_retention="unavailable")
+            return [], []
         try:
             receipt, bundles, countries, _ = ghcn_supply.capture(
                 result[0], result[1], metrics, orchestrator_run_id=(current_run or {}).get("id"),

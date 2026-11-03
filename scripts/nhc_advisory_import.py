@@ -411,11 +411,11 @@ def execute(proposal_raw: bytes, proposal_sha: str, *, expected_state_sha256: st
 class GitHub:
     """Normal authenticated CLI usage only; fixed gist/variables routes, no credential files."""
 
-    def __init__(self, gist_id: str, repository: str):
+    def __init__(self, gist_id: str, repository: str, *, writing: bool = False):
         if re.fullmatch(r"[a-f0-9]{20,64}", gist_id or "") is None or \
                 re.fullmatch(r"[A-Za-z0-9-]+/[A-Za-z0-9_.-]+", repository or "") is None:
             fail("invalid_gist_or_repository")
-        self.gist_id, self.repository, self.patches = gist_id, repository, 0
+        self.gist_id, self.repository, self.patches, self.writing = gist_id, repository, 0, writing
 
     def _api(self, args: list[str], body: bytes | None = None) -> bytes:
         result = subprocess.run(["gh", "api", *args], input=body, capture_output=True, timeout=60)
@@ -425,6 +425,14 @@ class GitHub:
 
     def read(self):
         gist = json.loads(self._api([f"gists/{self.gist_id}"]))
+        if self.writing:
+            # P00c: in route mode this operator import refuses (before any claim, backup or
+            # PATCH) unless it runs inside a serialized-group job; the route record rides this GET.
+            from src.commands import gist_route
+            try:
+                gist_route.check_writer(gist_route.record_from_files(gist.get("files")), writer="nhc_advisory_import")
+            except gist_route.RouteRefused as refused:
+                fail(refused.code)
         files = {}
         for name in ("state.json", "runtime-inventory.json"):
             entry = (gist.get("files") or {}).get(name)
@@ -475,7 +483,7 @@ def main() -> int:
         policy = current_editorial_policy()
         if policy is None:
             fail("policy_unavailable")
-        client = GitHub(args.gist_id, args.repository)
+        client = GitHub(args.gist_id, args.repository, writing=args.action == "apply")
         raw = args.proposal.read_bytes()
         clock = lambda: datetime.now(timezone.utc)  # noqa: E731
         if args.action == "check":

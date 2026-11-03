@@ -242,8 +242,11 @@ def _gist_request() -> None:
     consume("gist_state", join=False)
 
 
-def _read_remote() -> dict:
-    """Strict read: an absent file is empty; any failure or invalid content raises."""
+def _read_remote(route_sink: list | None = None) -> dict:
+    """Strict read: an absent file is empty; any failure or invalid content raises.
+
+    ``route_sink`` (P00c) receives the route file entry of the SAME GET (absent -> None).
+    """
     try:
         _gist_request()
         resp = requests.get(
@@ -253,6 +256,9 @@ def _read_remote() -> dict:
         envelope = resp.json()
         if not isinstance(envelope, dict) or not isinstance(envelope.get("files"), dict):
             raise CacheUnreadable("gist_files_invalid")
+        if route_sink is not None:
+            from src.commands.gist_route import ROUTE_FILENAME
+            route_sink.append(envelope["files"].get(ROUTE_FILENAME))
         if WORLD_CACHE_FILENAME not in envelope["files"]:
             return {}
         meta = envelope["files"][WORLD_CACHE_FILENAME]
@@ -292,10 +298,20 @@ def write_cache(cache: dict) -> bool:
     """
     if not GIST_ID or not GITHUB_TOKEN:
         return False
+    route_sink: list = []
     try:
-        current = _read_remote()
+        current = _read_remote(route_sink)
     except CacheUnreadable as exc:
         print(f"[world_cache] write refused: remote cache unreadable ({exc}); retained cache unchanged")
+        return False
+    # P00c: in route mode only a serialized-group job (marker, current generation) may PATCH.
+    from src.commands import gist_route
+    try:
+        meta = route_sink[0] if route_sink else None
+        gist_route.check_writer(gist_route.record_from_files({} if meta is None else {gist_route.ROUTE_FILENAME: meta}),
+                                writer="world_threshold_cache")
+    except gist_route.RouteRefused as refused:
+        print(gist_route.refusal_line("world_threshold_cache", refused.code))
         return False
     try:
         merged = merge_caches(current, cache)

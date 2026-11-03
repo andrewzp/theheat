@@ -53,6 +53,14 @@ def _waf_retry_eligible(url: str, status_code: int) -> bool:
     return status_code in (403, 429) and urlparse(url).hostname in _WAF_RETRY_HOSTS
 
 
+def _context_cancelled() -> bool:
+    """True when this work's deadline passed: it may not spend the shared WAF budget."""
+    from src.two_bot.call_inventory import current_cancel_token
+
+    token = current_cancel_token()
+    return token is not None and token.cancelled
+
+
 def _waf_sleep() -> None:
     time.sleep(random.uniform(15, 45))
 
@@ -101,6 +109,7 @@ def fetch_with_retry(
                 and not waf_retried
                 and attempt_index < attempts - 1
                 and _waf_budget.get("remaining", 0) > 0
+                and not _context_cancelled()
             ):
                 _waf_budget["remaining"] = max(int(_waf_budget.get("remaining", 0)) - 1, 0)
                 waf_retried = True

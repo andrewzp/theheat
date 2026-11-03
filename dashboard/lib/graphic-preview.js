@@ -164,7 +164,16 @@ const templates = {
   crw_sampled_cells: { version: "p31-crw-gist-cells-1", source: "NOAA Coral Reef Watch · daily 5 km SST anomaly v3.1",
     adapter: "src/media/crw_graphic_adapter.py", context: "crw_product_day" },
   hot10_departure_table: { version: "w01-hot10-table-1", source: "Open-Meteo forecast · Meteostat point normals",
-    adapter: "src/media/hot10_graphic_adapter.py", context: "hot10_bulletin" },
+    adapter: "src/media/hot10_graphic_adapter.py", context: "hot10_bulletin",
+    // A bulletin ranked against another normals product names it in its context (hot10_graphic_adapter.SOURCE_LABELS).
+    productSources: { "noaa-ghcnd-monthly-mean-tmax-v1": "Open-Meteo forecast · NOAA GHCN-Daily mean daily maximum 1991-2020" },
+    productWording: { "noaa-ghcnd-monthly-mean-tmax-v1": "mean daily maximum, 1991-2020" } },
+}
+// The source label a response must carry: the template's own, or its named product's (never mixed).
+function templateSource(value, template) {
+  const product = value?.source_context?.baseline_product
+  if (product === undefined) return template.source
+  return template.productSources && Object.hasOwn(template.productSources, product) ? template.productSources[product] : null
 }
 const exactKeys = (value, keys) => value && typeof value === "object" && !Array.isArray(value)
   && Object.keys(value).length === keys.length && keys.every(key => Object.hasOwn(value, key))
@@ -194,7 +203,11 @@ function sourceContext(value, template) {
     // Ten ranked rows exactly as Python projected them from the retained bulletin.
     const finite = value => typeof value === "number" && Number.isFinite(value)
     const label = value => typeof value === "string" && value.length > 0 && value.length <= 120 && value.isWellFormed()
-    return exactKeys(context, ["kind", "local_days", "qualified_cities", "sampled_cities", "rows"])
+    const named = Object.hasOwn(context, "baseline_product")
+    const keys = ["kind", "local_days", "qualified_cities", "sampled_cities", "rows"]
+    return exactKeys(context, named ? [...keys, "baseline_product", "baseline_wording"] : keys)
+      && (!named || (Object.hasOwn(template.productWording || {}, context.baseline_product)
+        && context.baseline_wording === template.productWording[context.baseline_product]))
       && Array.isArray(context.local_days) && context.local_days.length >= 1 && context.local_days.length <= 3
       && context.local_days.every(calendarDate) && Number.isSafeInteger(context.qualified_cities)
       && Number.isSafeInteger(context.sampled_cities) && context.qualified_cities >= 10
@@ -356,7 +369,7 @@ async function validateHazardPNGResponse(value, request, manifest) {
       || value.policy_source_sha256 !== request.expected_policy_source_sha256
       || value.preview_runtime_sha256 !== request.expected_preview_runtime_sha256
       || value.publication_approved !== false || value.attachment !== false
-      || value.width !== 1200 || value.height !== 1500 || value.source !== template.source
+      || value.width !== 1200 || value.height !== 1500 || value.source !== templateSource(value, template)
       || !sourceContext(value, template) || !postingWindow(value.posting_window)
       || ![value.title, value.scope].every(text => typeof text === "string" && text.length > 0 && text.length <= 1000)
       || typeof value.delivery_text !== "string" || !value.delivery_text.isWellFormed()
@@ -486,7 +499,7 @@ async function validatePNGResponse(value, request, manifest) {
       || value.policy_source_sha256 !== request.expected_policy_source_sha256
       || value.preview_runtime_sha256 !== request.expected_preview_runtime_sha256
       || value.publication_approved !== false || value.attachment !== false
-      || value.width !== 1200 || value.height !== 1500 || value.source !== template.source
+      || value.width !== 1200 || value.height !== 1500 || value.source !== templateSource(value, template)
       || !sourceContext(value, template)
       || ![value.title, value.alt_text, value.scope].every(text => typeof text === "string" && text.length > 0 && text.length <= 10000)
       || !isSHA(value.png_sha256) || !isSHA(value.media_descriptor_sha256)
@@ -524,7 +537,7 @@ export async function validateGraphicResponse(value, request, manifest) {
       || value.preview_runtime_sha256 !== request.expected_preview_runtime_sha256
       || value.publication_approved !== false || value.attachment !== false
       || value.width !== 1200 || value.height !== 1500
-      || !template || value.source !== template.source || !sourceContext(value, template)
+      || !template || value.source !== templateSource(value, template) || !sourceContext(value, template)
       || Object.hasOwn(value, "source_time")
       || ![value.title, value.alt_text, value.scope].every(text => typeof text === "string" && text.length > 0 && text.length <= 20000)
       || typeof value.svg_utf8 !== "string" || encoder.encode(value.svg_utf8).length > 1_000_000

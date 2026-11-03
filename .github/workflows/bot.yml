@@ -1,4 +1,8 @@
 name: theheat-bot
+# ROUTE-CONTRACT-v2 §5: a manual_tweet run is titled by its publish intent (a UUID, no text) so the
+# durable sender outbox can observe it, e.g. a pending run cancelled/replaced before it started.
+# Every other run keeps GitHub's default name (a whitespace-only run-name falls back to it).
+run-name: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'manual_tweet' && format('theheat-bot manual_tweet {0}', inputs.publish_intent_id) || ' ' }}
 
 on:
   # Schedules RESTORED 2026-07-16 (Andrew: "restore") after the 2026-07-14
@@ -38,6 +42,10 @@ on:
         type: string
       publish_intent_id:
         description: 'Idempotency token for approved draft posting'
+        required: false
+        type: string
+      text_source:
+        description: 'P00c route sender only: state = resolve the approved text from Gist state (no tweet_text input)'
         required: false
         type: string
 
@@ -255,8 +263,57 @@ jobs:
           PARTITION_RESULT: ${{ needs.test-partition.result }}
         run: test "$PARTITION_RESULT" = success
 
+  # P00c serialized Gist write route (default off): when the repository variable
+  # THEHEAT_GIST_WRITE_ROUTE is 'serialized', drain admitted dashboard commands at the
+  # start of every production run and again after its final save. These are separate jobs
+  # only because listing artifacts needs actions permission the run job does not hold;
+  # the workflow-level theheat-bot group keeps them inside the same serialized boundary.
+  commands-before:
+    if: github.event_name != 'pull_request' && vars.THEHEAT_GIST_WRITE_ROUTE == 'serialized'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - name: Fetch every admitted command artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          THEHEAT_REPOSITORY: ${{ github.repository }}
+          # Reads the consumer's settled-run continuation from the state Gist (read only; review R1).
+          GIST_ID: ${{ secrets.GIST_ID }}
+          THEHEAT_GIST_READ_TOKEN: ${{ secrets.THEHEAT_GIST_WRITER_TOKEN || secrets.GH_GIST_TOKEN }}
+        run: python scripts/gist_command_inbox.py fetch --repo "$THEHEAT_REPOSITORY" --out "$RUNNER_TEMP/inbox"
+      - name: Drain the command inbox before the run
+        working-directory: dashboard
+        env:
+          GIST_ID: ${{ secrets.GIST_ID }}
+          GITHUB_TOKEN: ${{ secrets.THEHEAT_GIST_WRITER_TOKEN || secrets.GH_GIST_TOKEN }}
+          # ROUTE-CONTRACT-v2 §6 old-SHA fence: which secret NAME supplied the writer token, and whether
+          # any legacy Gist-writer/sender NAME still exists (booleans only, never values or lengths).
+          THEHEAT_GIST_CREDENTIAL: ${{ secrets.THEHEAT_GIST_WRITER_TOKEN != '' && 'route' || 'legacy' }}
+          THEHEAT_LEGACY_CREDENTIALS_PRESENT: ${{ secrets.GH_GIST_TOKEN != '' || secrets.TWITTER_API_KEY != '' || secrets.TWITTER_API_SECRET != '' || secrets.TWITTER_ACCESS_TOKEN != '' || secrets.TWITTER_ACCESS_SECRET != '' || secrets.BLUESKY_HANDLE != '' || secrets.BLUESKY_APP_PASSWORD != '' }}
+          # Opens sealed commands (ROUTE-CONTRACT-v2 §1); held only by consume/drain jobs and the dashboard.
+          THEHEAT_COMMAND_SEAL_KEY: ${{ secrets.THEHEAT_COMMAND_SEAL_KEY }}
+          # Verifies root's HMAC on activate/deactivate (root and these jobs only; never the dashboard).
+          THEHEAT_ROUTE_CONTROL_KEY: ${{ secrets.THEHEAT_ROUTE_CONTROL_KEY }}
+          THEHEAT_FEEDBACK_GIST_ID: ${{ secrets.THEHEAT_FEEDBACK_GIST_ID }}
+          THEHEAT_GIST_WRITE_ROUTE: ${{ vars.THEHEAT_GIST_WRITE_ROUTE }}
+          THEHEAT_SERIALIZED_WRITER: ${{ github.run_id }}:commands-before
+          THEHEAT_AUTOMATIC_PUBLICATION_ENABLED: ${{ vars.THEHEAT_AUTOMATIC_PUBLICATION_ENABLED || '0' }}
+          THEHEAT_AUTOMATIC_PUBLICATION_EPOCH: ${{ vars.THEHEAT_AUTOMATIC_PUBLICATION_EPOCH }}
+          GH_DISPATCH_TOKEN: ${{ github.token }}
+        run: node scripts/consume-gist-commands.mjs --inbox "$RUNNER_TEMP/inbox" --report "$RUNNER_TEMP/consume-report.json"
+
   run:
-    needs: test
+    needs: [test, commands-before]
     permissions:
       contents: read
       issues: write
@@ -348,16 +405,18 @@ jobs:
           THEHEAT_GHCN_THRESHOLD_VERIFICATION: ${{ steps.thresholds-verify.outcome || 'unknown' }}
           # Keep already-written output visible if the runner exits abruptly.
           PYTHONUNBUFFERED: "1"
-          TWITTER_API_KEY: ${{ secrets.TWITTER_API_KEY }}
-          TWITTER_API_SECRET: ${{ secrets.TWITTER_API_SECRET }}
-          TWITTER_ACCESS_TOKEN: ${{ secrets.TWITTER_ACCESS_TOKEN }}
-          TWITTER_ACCESS_SECRET: ${{ secrets.TWITTER_ACCESS_SECRET }}
+          TWITTER_API_KEY: ${{ secrets.THEHEAT_X_API_KEY || secrets.TWITTER_API_KEY }}
+          TWITTER_API_SECRET: ${{ secrets.THEHEAT_X_API_SECRET || secrets.TWITTER_API_SECRET }}
+          TWITTER_ACCESS_TOKEN: ${{ secrets.THEHEAT_X_ACCESS_TOKEN || secrets.TWITTER_ACCESS_TOKEN }}
+          TWITTER_ACCESS_SECRET: ${{ secrets.THEHEAT_X_ACCESS_SECRET || secrets.TWITTER_ACCESS_SECRET }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GIST_ID: ${{ secrets.GIST_ID }}
-          GITHUB_TOKEN: ${{ secrets.GH_GIST_TOKEN }}
-          BLUESKY_HANDLE: ${{ secrets.BLUESKY_HANDLE }}
-          BLUESKY_APP_PASSWORD: ${{ secrets.BLUESKY_APP_PASSWORD }}
+          # ROUTE-CONTRACT-v2 §6: route-era secret names first; the legacy names remain only until root
+          # deletes them (deleting a NAME is what fences reruns of older workflow SHAs).
+          GITHUB_TOKEN: ${{ secrets.THEHEAT_GIST_WRITER_TOKEN || secrets.GH_GIST_TOKEN }}
+          BLUESKY_HANDLE: ${{ secrets.THEHEAT_BLUESKY_HANDLE || secrets.BLUESKY_HANDLE }}
+          BLUESKY_APP_PASSWORD: ${{ secrets.THEHEAT_BLUESKY_APP_PASSWORD || secrets.BLUESKY_APP_PASSWORD }}
           NASA_FIRMS_API_KEY: ${{ secrets.NASA_FIRMS_API_KEY }}
           OPENAQ_API_KEY: ${{ secrets.OPENAQ_API_KEY }}
           # Required for GPM IMERG precipitation and GRACE-FO ice mass.
@@ -461,6 +520,9 @@ jobs:
           # today's single current-day HMS read and today's GPM attempt on every scheduled run.
           THEHEAT_HMS_PREVIOUS_DAY_FILE: ${{ vars.THEHEAT_HMS_PREVIOUS_DAY_FILE || '0' }}
           THEHEAT_EARTHDATA_REFUSAL_BACKOFF: ${{ vars.THEHEAT_EARTHDATA_REFUSAL_BACKOFF || '0' }}
+          # Hot10 normals product (real closure, supply) — default the legacy Meteostat product; only the
+          # exact value noaa-ghcnd-monthly-mean-tmax-v1 ranks against Root's installed GHCN-Daily climatology.
+          THEHEAT_HOT10_NORMALS_PRODUCT: ${{ vars.THEHEAT_HOT10_NORMALS_PRODUCT || 'meteostat-normals-point-v1' }}
           # Throughput Initiative (2026-06-16). All default "0"/safe in code;
           # production controls them via repo variables. Activate in order
           # A->B->C->D per docs/2026-06-16_throughput-activation-runbook.md.
@@ -504,7 +566,13 @@ jobs:
           # "ghcn" = US-only stations; "open_meteo" = curated cities only.
           # Rollback: set back to "ghcn" and push — next cycle reverts instantly.
           THEHEAT_SIGNALS_PROVIDER: both
+          # P00c serialized Gist route (default off): in route mode this job is the serialized
+          # writer; outside route mode both stay empty and every writer behaves as before.
+          THEHEAT_GIST_WRITE_ROUTE: ${{ vars.THEHEAT_GIST_WRITE_ROUTE }}
+          THEHEAT_SERIALIZED_WRITER: ${{ vars.THEHEAT_GIST_WRITE_ROUTE == 'serialized' && format('{0}:run', github.run_id) || '' }}
           TWEET_TEXT: ${{ github.event.inputs.tweet_text }}
+          # P00c route sender: references only; the text is resolved privately from state (review R2).
+          THEHEAT_SENDER_TEXT_SOURCE: ${{ github.event.inputs.text_source }}
           DRAFT_ID: ${{ github.event.inputs.draft_id }}
           PUBLISH_INTENT_ID: ${{ github.event.inputs.publish_intent_id }}
           # Shared immutable media store (docs/GIST_POST_IMAGES.md). Unset values keep
@@ -529,3 +597,48 @@ jobs:
             --label "source-health-sentinel,ours" \
             --body "Scheduled run failed: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }} — mode schedule ${{ github.event.schedule }}. Investigate; close when resolved." \
             || true
+
+  commands-after:
+    needs: [commands-before, run]
+    if: always() && github.event_name != 'pull_request' && vars.THEHEAT_GIST_WRITE_ROUTE == 'serialized'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - name: Fetch every admitted command artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          THEHEAT_REPOSITORY: ${{ github.repository }}
+          # Reads the consumer's settled-run continuation from the state Gist (read only; review R1).
+          GIST_ID: ${{ secrets.GIST_ID }}
+          THEHEAT_GIST_READ_TOKEN: ${{ secrets.THEHEAT_GIST_WRITER_TOKEN || secrets.GH_GIST_TOKEN }}
+        run: python scripts/gist_command_inbox.py fetch --repo "$THEHEAT_REPOSITORY" --out "$RUNNER_TEMP/inbox"
+      - name: Drain the command inbox after the final save
+        working-directory: dashboard
+        env:
+          GIST_ID: ${{ secrets.GIST_ID }}
+          GITHUB_TOKEN: ${{ secrets.THEHEAT_GIST_WRITER_TOKEN || secrets.GH_GIST_TOKEN }}
+          # ROUTE-CONTRACT-v2 §6 old-SHA fence: which secret NAME supplied the writer token, and whether
+          # any legacy Gist-writer/sender NAME still exists (booleans only, never values or lengths).
+          THEHEAT_GIST_CREDENTIAL: ${{ secrets.THEHEAT_GIST_WRITER_TOKEN != '' && 'route' || 'legacy' }}
+          THEHEAT_LEGACY_CREDENTIALS_PRESENT: ${{ secrets.GH_GIST_TOKEN != '' || secrets.TWITTER_API_KEY != '' || secrets.TWITTER_API_SECRET != '' || secrets.TWITTER_ACCESS_TOKEN != '' || secrets.TWITTER_ACCESS_SECRET != '' || secrets.BLUESKY_HANDLE != '' || secrets.BLUESKY_APP_PASSWORD != '' }}
+          # Opens sealed commands (ROUTE-CONTRACT-v2 §1); held only by consume/drain jobs and the dashboard.
+          THEHEAT_COMMAND_SEAL_KEY: ${{ secrets.THEHEAT_COMMAND_SEAL_KEY }}
+          # Verifies root's HMAC on activate/deactivate (root and these jobs only; never the dashboard).
+          THEHEAT_ROUTE_CONTROL_KEY: ${{ secrets.THEHEAT_ROUTE_CONTROL_KEY }}
+          THEHEAT_FEEDBACK_GIST_ID: ${{ secrets.THEHEAT_FEEDBACK_GIST_ID }}
+          THEHEAT_GIST_WRITE_ROUTE: ${{ vars.THEHEAT_GIST_WRITE_ROUTE }}
+          THEHEAT_SERIALIZED_WRITER: ${{ github.run_id }}:commands-after
+          THEHEAT_AUTOMATIC_PUBLICATION_ENABLED: ${{ vars.THEHEAT_AUTOMATIC_PUBLICATION_ENABLED || '0' }}
+          THEHEAT_AUTOMATIC_PUBLICATION_EPOCH: ${{ vars.THEHEAT_AUTOMATIC_PUBLICATION_EPOCH }}
+          GH_DISPATCH_TOKEN: ${{ github.token }}
+        run: node scripts/consume-gist-commands.mjs --inbox "$RUNNER_TEMP/inbox" --report "$RUNNER_TEMP/consume-report.json"

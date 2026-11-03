@@ -4,10 +4,12 @@ import { mergeUsageObservations } from "./usage-observations.js"
 import { mergePublicationControl } from "./publication-control.js"
 import { mergeUsageLedgers } from "./usage-ledger.js"
 import { DatabaseSync } from "node:sqlite"
+import { createHash } from "node:crypto"
 import { parseGistDocument, stringifyGistDocument, assertGistEvidenceUnchanged, gistDraftNumericIdentity } from "./lossless-gist.js"
 import { STATE_DEFAULTS, METADATA_JSON_KEYS, DRAFT_RETENTION } from "./state-contract.js"
 import { decisionRevision, draftIdentity, fingerprint, mergePassiveMaps, passiveComparisonValue, normalizePassiveSnapshots } from "./draft-revisions.js"
 import { decideReconciliation } from "./delivery-reconciliation.js"
+import { activeRouteActivation, assertDirectGistWrite, resultsDocumentFromFiles, routeEffective, routeRecordFromFiles, RouteError } from "./gist-write-route.js"
 
 // Durable fields are generated from Python; this legacy dashboard-only queue
 // remains readable for older local fixtures, but the Python bot no longer uses it.
@@ -549,11 +551,11 @@ function mergeState(current, incoming) {
   })
 }
 
-async function readGistState({ preserveNumbers = false, includeRuntimeReport = false } = {}) {
+async function readGistState({ preserveNumbers = false, includeRuntimeReport = false, includeRoute = false, includeResults = false } = {}) {
   const gistId = configuredGistId()
   if (!gistId) {
     const state = structuredClone(DEFAULT_STATE)
-    return preserveNumbers ? { state, document: parseGistDocument(JSON.stringify(state)), ...(includeRuntimeReport ? { runtimeReport: null } : {}) }
+    return preserveNumbers ? { state, document: parseGistDocument(JSON.stringify(state)), ...(includeRuntimeReport ? { runtimeReport: null } : {}), ...(includeRoute ? { route: null } : {}), ...(includeResults ? { results: {}, resultsDocument: { results: {}, outbox: {}, rejected: {} } } : {}) }
       : includeRuntimeReport ? { state, runtimeReport: null } : state
   }
   const res = await fetch(`https://api.github.com/gists/${gistId}`, {
@@ -584,7 +586,10 @@ async function readGistState({ preserveNumbers = false, includeRuntimeReport = f
   if (preserveNumbers) {
     const document = parseGistDocument(content)
     return { state: normalizeState(structuredClone(document.value)), document,
-      ...(includeRuntimeReport ? { runtimeReport: decodeRuntimeReportFile(gist?.files?.[RUNTIME_REPORT_FILE]) } : {}) }
+      ...(includeRuntimeReport ? { runtimeReport: decodeRuntimeReportFile(gist?.files?.[RUNTIME_REPORT_FILE]) } : {}),
+      // P00c: the route record and results ride the same GET; absent files are the legacy state.
+      ...(includeRoute ? { route: routeRecordFromFiles(gist?.files) } : {}),
+      ...(includeResults ? (() => { const resultsDocument = resultsDocumentFromFiles(gist?.files); return { results: resultsDocument.results, resultsDocument } })() : {}) }
   }
   const state = normalizeState(JSON.parse(content))
   return includeRuntimeReport ? { state, runtimeReport: decodeRuntimeReportFile(gist?.files?.[RUNTIME_REPORT_FILE]) } : state
@@ -592,13 +597,16 @@ async function readGistState({ preserveNumbers = false, includeRuntimeReport = f
 
 async function writeGistState(state, document) {
   const content = stringifyGistDocument(state, document)
+  await patchStateGistFiles({ "state.json": { content } })
+}
+
+// One Gist PATCH of the named files (a single commit: state plus route/result files together).
+export async function patchStateGistFiles(files) {
   const gistId = configuredGistId()
   const res = await fetch(`https://api.github.com/gists/${gistId}`, {
     method: "PATCH",
     headers: { ...gistHeaders(), "Content-Type": "application/json" },
-    body: JSON.stringify({
-      files: { "state.json": { content } },
-    }),
+    body: JSON.stringify({ files }),
   })
   if (!res.ok) {
     const errorText = await res.text()
@@ -606,7 +614,20 @@ async function writeGistState(state, document) {
   }
 }
 
-function mergeDraftIntoState(state, draft) {
+// P00c consumer read: one GET with exact numbers, runtime report, route record and results.
+export async function readStateGistSnapshot() {
+  return readGistState({ preserveNumbers: true, includeRuntimeReport: true, includeRoute: true, includeResults: true })
+}
+
+// Model a persisted write followed by a re-read, so each queued command sees exactly the
+// document (numeric spellings included) it would have seen had the previous one been PATCHed.
+export function reparseGistState(state, document) {
+  const content = stringifyGistDocument(state, document)
+  const next = parseGistDocument(content)
+  return { state: normalizeState(structuredClone(next.value)), document: next, content }
+}
+
+export function mergeDraftIntoState(state, draft) {
   const merged = mergeState(state, { drafts: [draft] })
   const index = merged.drafts.findIndex((candidate) => candidate.id === draft.id)
   const updated = normalizePassiveSnapshots(draft)
@@ -932,18 +953,20 @@ export async function writeStateStore(state) {
       db.close()
     }
   }
-  const latest = await readGistState({ preserveNumbers: true })
+  const latest = await readGistState({ preserveNumbers: true, includeRoute: true })
+  // P00c: no production caller; in route mode this whole-state writer refuses before any PATCH.
+  assertDirectGistWrite(latest.route)
   if (Object.hasOwn(state, "drafts")) assertGistEvidenceUnchanged(latest.document, state.drafts)
   const merged = mergeState(latest.state, state)
   await writeGistState(merged, latest.document)
 }
 
-function reconciliationSnapshot(state, eventId) {
+export function reconciliationSnapshot(state, eventId) {
   return fingerprint({ row: state.publish_ledger?.[eventId] ?? null,
     drafts: (state.drafts || []).filter(draft => (draft?.event_id || draft?.id) === eventId) })
 }
 
-function reconciliationNumericSnapshot({ state, document }, eventId) {
+export function reconciliationNumericSnapshot({ state, document }, eventId) {
   const draft = state.drafts.find(candidate => (candidate?.event_id || candidate?.id) === eventId)
   return fingerprint({ draft: gistDraftNumericIdentity(document, draft.id),
     // Pin the complete attempt bytes as well: its numeric spellings are evidence.
@@ -952,7 +975,7 @@ function reconciliationNumericSnapshot({ state, document }, eventId) {
 
 // Reconcile on the actual snapshot used for persistence, never a stale patch.
 // Gist still has a GET-to-PATCH race; these checks are not a transaction.
-export async function reconcileDeliveryStore(request, { actor, at }) {
+export async function reconcileDeliveryStore(request, { actor, at, routeCommand } = {}) {
   if (previewConfigured()) throw new Error("Local preview requires a domain command")
   if (configuredBackend() === "sqlite") {
     const db = connectDb()
@@ -980,11 +1003,20 @@ export async function reconcileDeliveryStore(request, { actor, at }) {
       db.close()
     }
   }
-  const initial = await readGistState({ preserveNumbers: true })
+  const initial = await readGistState({ preserveNumbers: true, includeRoute: true })
   const { result: proposed } = decideReconciliation(initial.state, request, { actor, at })
   if (proposed.status !== "applied") return proposed
   const expected = reconciliationSnapshot(initial.state, request.event_id)
   const numeric = reconciliationNumericSnapshot(initial, request.event_id)
+  if (routeEffective(initial.route)) {
+    // P00c route mode: the serialized consumer re-runs these exact snapshot checks and the
+    // same decision on its single read, then writes state + result in one PATCH.
+    if (!routeCommand) throw new RouteError("direct_write_disabled_by_route")
+    // P00c v2: submission only while the variable AND the record say serialized (fail closed between).
+    activeRouteActivation(initial.route)
+    return { status: "submitted", submitted: await routeCommand({ event_id: request.event_id, request_json: JSON.stringify(request),
+      actor, at, expected_snapshot: expected, expected_numeric_sha256: sha256Hex(numeric) }, initial.route) }
+  }
   const check = snapshot => {
     if (reconciliationSnapshot(snapshot.state, request.event_id) !== expected
       || reconciliationNumericSnapshot(snapshot, request.event_id) !== numeric) throw revisionConflict()
@@ -992,15 +1024,16 @@ export async function reconcileDeliveryStore(request, { actor, at }) {
   // Keep all three existing observations, binding numeric evidence from the first.
   const observed = await readGistState({ preserveNumbers: true })
   check(observed)
-  const latest = await readGistState({ preserveNumbers: true })
+  const latest = await readGistState({ preserveNumbers: true, includeRoute: true })
   check(latest)
+  assertDirectGistWrite(latest.route)
   // Includes cross-event receipt ownership that may have changed independently.
   const { state: updated, result } = decideReconciliation(latest.state, request, { actor, at })
   if (result.status === "applied") await writeGistState(updated, latest.document)
   return result
 }
 
-function revisionConflict() {
+export function revisionConflict() {
   const error = new Error("This draft changed. Refresh it before applying this action.")
   error.status = 409
   error.statusCode = 409
@@ -1030,7 +1063,7 @@ function passiveGuardPayload(value) {
   return out
 }
 
-function draftMutationSnapshot(draft, state) {
+export function draftMutationSnapshot(draft, state) {
   const eventId = draft.event_id || draft.id
   return fingerprint({ draft: passiveGuardPayload(draft), publish_ledger: passiveGuardPayload(state.publish_ledger?.[eventId] ?? null) })
 }
@@ -1038,7 +1071,7 @@ function draftMutationSnapshot(draft, state) {
 // Keep the first complete raw tree and defensive state clone out of the second
 // read's lifetime. The updater never receives the authoritative raw baseline.
 async function prepareGistDraftUpdate(draftId, updater, expectedRevision) {
-  const initial = await readGistState({ preserveNumbers: true, includeRuntimeReport: true })
+  const initial = await readGistState({ preserveNumbers: true, includeRuntimeReport: true, includeRoute: true })
   const state = initial.state
   const drafts = state.drafts || []
   const draftIndex = drafts.findIndex((draft) => draft.id === draftId)
@@ -1047,6 +1080,7 @@ async function prepareGistDraftUpdate(draftId, updater, expectedRevision) {
   }
 
   const draft = structuredClone(drafts[draftIndex])
+  const original = structuredClone(drafts[draftIndex])
   checkExpectedRevision(draft, expectedRevision)
   const observedSnapshot = draftMutationSnapshot(draft, state)
   const nextDraft = await updater(draft, state, { runtimeReport: initial.runtimeReport })
@@ -1059,10 +1093,25 @@ async function prepareGistDraftUpdate(draftId, updater, expectedRevision) {
     nextDraft,
     observedSnapshot,
     observedNumericIdentity: gistDraftNumericIdentity(initial.document, draftId),
+    original,
+    route: initial.route,
+    state,
   }
 }
 
-export async function updateDraftStore(draftId, updater, { expectedRevision, confirmContext } = {}) {
+function sha256Hex(text) { return createHash("sha256").update(text, "utf8").digest("hex") }
+
+// P00c: the compare-and-swap identity of a prepared update (exact revision, guarded snapshot and
+// numeric digest). v2 carries NO draft content or patch: the consumer re-runs the operation itself.
+export function draftCommandUpdate({ original, observedSnapshot, observedNumericIdentity }) {
+  return { target: { draft_id: original.id, ...draftIdentity(original), decision_revision: decisionRevision(original) },
+    update: { draft_id: original.id, expected_snapshot: observedSnapshot, expected_numeric_sha256: sha256Hex(observedNumericIdentity) } }
+}
+
+export function numericIdentitySha256(document, draftId) { return sha256Hex(gistDraftNumericIdentity(document, draftId)) }
+export function reconciliationNumericSha256(snapshot, eventId) { return sha256Hex(reconciliationNumericSnapshot(snapshot, eventId)) }
+
+export async function updateDraftStore(draftId, updater, { expectedRevision, confirmContext, routeCommand } = {}) {
   if (previewConfigured()) throw new Error("Local preview requires a domain command")
   if (configuredBackend() === "sqlite") {
     const db = connectDb()
@@ -1103,9 +1152,17 @@ export async function updateDraftStore(draftId, updater, { expectedRevision, con
 
   const prepared = await prepareGistDraftUpdate(draftId, updater, expectedRevision)
   if (!prepared.nextDraft) return prepared
+  if (routeEffective(prepared.route)) {
+    // P00c route mode: never PATCH. Submit this exact decision as a compare-and-swap command;
+    // the serialized consumer re-runs the snapshot, numeric and confirmation checks below.
+    if (!routeCommand) throw new RouteError("direct_write_disabled_by_route")
+    // P00c v2: submission only while the variable AND the record say serialized (fail closed between).
+    activeRouteActivation(prepared.route)
+    return { state: prepared.state, draft: null, submitted: await routeCommand([draftCommandUpdate(prepared)], prepared.route) }
+  }
   const { nextDraft, observedSnapshot, observedNumericIdentity } = prepared
   nextDraft.updated_at = new Date().toISOString()
-  const latest = await readGistState({ preserveNumbers: true, includeRuntimeReport: true })
+  const latest = await readGistState({ preserveNumbers: true, includeRuntimeReport: true, includeRoute: true })
   const latestState = latest.state
   const latestDraft = latestState.drafts?.find((candidate) => candidate.id === draftId)
   // Reject changes visible at the second read, including approval revocation or
@@ -1114,6 +1171,7 @@ export async function updateDraftStore(draftId, updater, { expectedRevision, con
   if (!latestDraft || draftMutationSnapshot(latestDraft, latestState) !== observedSnapshot
     || observedNumericIdentity !== gistDraftNumericIdentity(latest.document, draftId)) throw revisionConflict()
   if (confirmContext) await confirmContext(latestState, { runtimeReport: latest.runtimeReport })
+  assertDirectGistWrite(latest.route)
   const mergedState = mergeDraftIntoState(latestState, nextDraft)
   await writeGistState(mergedState, latest.document)
   const mergedDraft = (mergedState.drafts || []).find((candidate) => candidate.id === draftId) || nextDraft
