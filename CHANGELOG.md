@@ -1,3 +1,8 @@
+## 0.9.109.56
+
+- Exclude ended air-quality forecasts before triage allocates the writer slot.
+  Preserve the one-attempt budget after a writer rejection.
+
 ## 0.9.109.55
 
 - Integrate the isolated source scheduler and its bounded worker-state merge
