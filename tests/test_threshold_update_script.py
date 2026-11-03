@@ -456,3 +456,42 @@ def test_full_station_archive_refuses_another_station(monkeypatch):
     monkeypatch.setattr(updater.requests, "get", lambda *args, **kwargs: response)
     with pytest.raises(ArtifactError, match="threshold_station_archive_identity_mismatch"):
         updater._fetch_station_thresholds("TESTST00001", through=through)
+
+
+@pytest.mark.parametrize("fail", [False, True])
+def test_full_station_prefetch_is_bounded_ordered_and_joined(monkeypatch, fail):
+    from threading import Barrier, Lock
+
+    station_ids = {f"S{index:02}" for index in range(8)}
+    through = date(2026, 9, 29)
+    first_window = Barrier(4, timeout=5)
+    lock = Lock()
+    calls = []
+    active = peak = 0
+
+    def fetch(station_id, *, through):
+        nonlocal active, peak
+        assert through == date(2026, 9, 29)
+        with lock:
+            calls.append(station_id)
+            active += 1
+            peak = max(peak, active)
+        try:
+            if station_id in {"S00", "S01", "S02", "S03"}:
+                first_window.wait()
+            if fail and station_id == "S00":
+                raise requests.RequestException("invented source failure")
+            return StationThresholds(station_id, all_time_max_c=25)
+        finally:
+            with lock:
+                active -= 1
+
+    monkeypatch.setattr(updater, "_fetch_station_thresholds", fetch)
+    with closing(updater._recompute_stations(station_ids, through=through)) as results:
+        if fail:
+            with pytest.raises(requests.RequestException, match="invented source failure"):
+                list(results)
+        else:
+            assert [row.station_id for row in results] == sorted(station_ids)
+    assert peak == 4 and active == 0
+    assert sorted(calls) == (sorted(station_ids)[:4] if fail else sorted(station_ids))
