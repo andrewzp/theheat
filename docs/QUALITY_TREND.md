@@ -78,6 +78,7 @@ We grade drafts on an A through F rubric in `docs/DRAFT_CORPUS.md` (the longitud
 | 2026-10-29 | 0 | — | — | — | — | **N/A** | — | No fresh drafts — queue is an exact match to Oct 28's 15 graded drafts (oldest 22 days, newest 12); no re-grading, grades stand. No proposal evidence updates. All 15 remain staleness bulk-reject candidates; gist write blocked (invalid `gh` token / 403), skipped. Nothing new has reached pending since Oct 17 — operator should check suppression ledger / source health. |
 | 2026-10-31 | 4 | 0 | 3 | 1 | 0 | **0%** | ✗ | 4 fresh, queue turned over (Oct 28's 15 gone; intake resumed Oct 30). 3 B- (Riyadh dust_event, Riyadh PM2.5 — same city/day duplicate, Brazil MODIS fire 978.7 MW), 1 C+ (Urumqi, disclaimer close). All PM drafts carry WHO multiples (P_dust counter-evidence, cycle 2). P_close 0/4 positive. No bulk-reject needed (oldest 35h); gist write blocked, skipped. |
 | 2026-11-02 | 0 | — | — | — | — | **N/A** | — | No fresh drafts — queue is an exact match to Oct 31's 4 graded drafts; no re-grading, grades stand. No proposal evidence updates. 3 strict staleness candidates (Riyadh ×2, Urumqi; 69–84h, Oct 30 forecasts elapsed); gist write blocked (invalid `gh` token / 403), skipped. Intake quiet since Oct 31 03:28 UTC. |
+| 2026-11-03 | 0 | — | — | — | — | **N/A** | — | No fresh drafts — 1 pending is Oct 31's Brazil fire (B-, graded). Other 3 Nov 2 carry-overs gone from queue (cause unconfirmed). No proposal evidence updates. Intake dry since Oct 31 03:28 UTC. |
 
 **Trend interpretation:**
 The Apr 25 jump to 43% was real but came from a small cohort (7 drafts) and didn't sustain into Apr 27. The Apr 27 regression has named causes (Sonnet rewrite path, verb-list gap in opener regex, era-anchor over-deployment, political anchor curation error). All four have proposed fixes documented in `docs/DRAFT_CORPUS.md` Apr 27 implications section. Next data point: tomorrow's scheduled grader (fires 2026-04-27 06:00 UTC) on the Apr 26-27 cycle output under v2.5 + post-humor-lens fixes.
@@ -87,6 +88,10 @@ We've been in the 9-43% band for three cycles. Need to clear 50% sustained.
 ## Rejection events
 
 Drafts that got rejected, with dates.
+
+### 2026-11-03 — Staleness bulk-reject: 0 strict candidates; write skipped
+
+1 pending (Brazil fire, ~83.5h, past-tense, no forecast language). Not a strict candidate; operator may reject as low-value. Gist write not available (token invalid).
 
 ### 2026-11-02 — Staleness bulk-reject: 3 of 4 candidates; write skipped (token invalid / gist API blocked)
 
