@@ -62,7 +62,7 @@ from scripts.threshold_artifacts import ArtifactError, pending_diff_dates
 BASE_URL = "https://www.ncei.noaa.gov/pub/data/ghcn/daily/superghcnd"
 STATION_DLY_URL = "https://www.ncei.noaa.gov/pub/data/ghcn/daily/all/{station_id}.dly"
 META_WATERMARK_KEY = "last_diff_date"
-FULL_STATION_WORKERS = 4
+FULL_STATION_WORKERS = 8
 
 
 def _consume_acquisition() -> None:
