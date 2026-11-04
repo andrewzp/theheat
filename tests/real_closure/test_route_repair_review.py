@@ -19,6 +19,7 @@ import json
 from pathlib import Path
 import subprocess
 import sys
+from urllib import parse
 import uuid
 import zipfile
 
@@ -58,7 +59,10 @@ def _raw_runner(runs: list[dict], failing: set[int] = frozenset()):  # type: ign
         url = args[0]
         calls.append(url)
         if "/actions/workflows/gist-commands.yml/runs?" in url:
-            return json.dumps({"total_count": len(runs), "workflow_runs": runs}).encode()
+            params = dict(parse.parse_qsl(parse.urlsplit(url).query))
+            size = int(params["per_page"])
+            start = (int(params["page"]) - 1) * size
+            return json.dumps({"total_count": len(runs), "workflow_runs": runs[start:start + size]}).encode()
         if "/actions/runs/" in url and url.endswith("/artifacts?per_page=100"):
             run_id = int(url.split("/runs/")[1].split("/")[0])
             if run_id in failing:
