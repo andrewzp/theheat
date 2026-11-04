@@ -22,7 +22,12 @@ from __future__ import annotations
 
 import argparse
 import csv
+from datetime import date
+from hashlib import sha256
+import json
+import os
 import sys
+from tempfile import NamedTemporaryFile
 import time
 from pathlib import Path
 
@@ -38,6 +43,7 @@ from src.data.ghcn_format import (
     parse_inventory_file,
     parse_stations_file,
 )
+from scripts.threshold_artifacts import ArtifactError
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -53,6 +59,8 @@ COUNTRIES_URL = f"{BASE_URL}/ghcnd-countries.txt"
 ACTIVE_YEAR_LAG = 1  # LASTYEAR >= current_year - ACTIVE_YEAR_LAG
 
 STATIONS_CSV_PATH = Path(__file__).parent.parent / "data" / "stations.csv"
+INVENTORY_FILE = "inventory.json"
+MAX_INVENTORY_BYTES = 128 * 1024**2
 
 
 # ---------------------------------------------------------------------------
@@ -70,29 +78,88 @@ def _fetch_text(url: str, timeout: int = 120) -> str:
     return resp.text
 
 
+def _inventory_inputs(directory: Path | None, active_cutoff: int) -> tuple[int, str, str, str]:
+    urls = (STATIONS_URL, INVENTORY_URL, COUNTRIES_URL)
+    if directory is None:
+        stations, inventory, countries = (_fetch_text(url) for url in urls)
+        return active_cutoff, stations, inventory, countries
+
+    directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+    if directory.is_symlink() or directory.stat().st_mode & 0o077:
+        raise ArtifactError("threshold_inventory_directory_not_private")
+    path = directory / INVENTORY_FILE
+    if path.is_symlink() or (path.exists() and not path.is_file()):
+        raise ArtifactError("threshold_inventory_snapshot_invalid")
+    if path.is_file():
+        if path.stat().st_size > MAX_INVENTORY_BYTES:
+            raise ArtifactError("threshold_inventory_snapshot_too_large")
+        envelope = json.loads(path.read_bytes())
+        payload = envelope["payload"]
+        if not isinstance(payload, list) or len(payload) != 5 or payload[0] != 1:
+            raise ArtifactError("threshold_inventory_snapshot_invalid")
+        raw = json.dumps(payload, separators=(",", ":"), ensure_ascii=False).encode()
+        if envelope["sha256"] != sha256(raw).hexdigest():
+            raise ArtifactError("threshold_inventory_snapshot_changed")
+        _, cutoff, stations, inventory, countries = payload
+        if (type(cutoff) is not int or not 1900 <= cutoff <= active_cutoff
+                or not all(isinstance(value, str) and value for value in (stations, inventory, countries))):
+            raise ArtifactError("threshold_inventory_snapshot_invalid")
+        return cutoff, stations, inventory, countries
+
+    if (directory / "refresh.sqlite").exists():
+        raise ArtifactError("threshold_inventory_snapshot_missing")
+    stations, inventory, countries = (_fetch_text(url) for url in urls)
+    if not all((stations, inventory, countries)):
+        raise ArtifactError("threshold_inventory_snapshot_invalid")
+    payload = [1, active_cutoff, stations, inventory, countries]
+    raw = json.dumps(payload, separators=(",", ":"), ensure_ascii=False).encode()
+    # One atomic file keeps the parse inputs and cutoff together.
+    envelope_bytes = json.dumps(
+        {"payload": payload, "sha256": sha256(raw).hexdigest()}, separators=(",", ":"), ensure_ascii=False,
+    ).encode()
+    if len(envelope_bytes) > MAX_INVENTORY_BYTES:
+        raise ArtifactError("threshold_inventory_snapshot_too_large")
+    with NamedTemporaryFile(dir=directory, delete=False) as temporary:
+        temporary_path = Path(temporary.name)
+        try:
+            temporary.write(envelope_bytes)
+            temporary.flush()
+            os.fsync(temporary.fileno())
+            os.link(temporary_path, path)
+        except FileExistsError:
+            raise ArtifactError("threshold_inventory_already_frozen") from None
+        finally:
+            temporary_path.unlink(missing_ok=True)
+    return active_cutoff, stations, inventory, countries
+
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Refresh GHCN-Daily station inventory.")
     parser.add_argument("--db", type=Path, default=DEFAULT_DB_PATH,
                         help="Path to station_thresholds.sqlite")
     parser.add_argument("--dry-run", action="store_true",
                         help="Download and parse but don't write to DB or CSV")
-    args = parser.parse_args()
+    parser.add_argument("--resume-dir", type=Path, help="Freeze or replay inventory in a private refresh directory")
+    args = parser.parse_args(argv)
+    if args.resume_dir is not None and args.dry_run:
+        parser.error("--resume-dir requires a writable refresh")
 
-    import datetime
-    active_cutoff = datetime.date.today().year - ACTIVE_YEAR_LAG
+    try:
+        active_cutoff, stations_text, inventory_text, countries_text = _inventory_inputs(
+            args.resume_dir, date.today().year - ACTIVE_YEAR_LAG,
+        )
+    except (KeyError, TypeError, ValueError) as error:
+        label = str(error) if isinstance(error, ArtifactError) else "threshold_inventory_snapshot_invalid"
+        print(f"ERROR: {label}", file=sys.stderr)
+        return 1
 
     print("=== GHCN-Daily station inventory refresh ===")
     print(f"DB:     {args.db}")
     print(f"Active cutoff: TMAX/TMIN LASTYEAR >= {active_cutoff}")
-
-    # 1. Fetch data
-    stations_text  = _fetch_text(STATIONS_URL)
-    inventory_text = _fetch_text(INVENTORY_URL)
-    countries_text = _fetch_text(COUNTRIES_URL)
 
     # 2. Parse
     print("\nParsing stations ...", flush=True)

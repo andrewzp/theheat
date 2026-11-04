@@ -1,3 +1,9 @@
+## 0.9.109.65
+
+- Resume an interrupted station-threshold refresh from an encrypted,
+  verified checkpoint. Publish the baseline only after every required
+  station is complete.
+
 ## 0.9.109.64
 
 - Stagger scheduled collection, the hourly sender and source health checks

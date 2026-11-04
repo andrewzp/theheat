@@ -30,7 +30,8 @@ import argparse
 from collections import deque
 from collections.abc import Generator
 from concurrent.futures import Future, ThreadPoolExecutor
-from contextlib import closing
+from contextlib import ExitStack, closing
+from hashlib import sha256
 import sqlite3
 import sys
 import time
@@ -58,6 +59,7 @@ from src.data.ghcn_format import (
     update_thresholds_with_obs,
 )
 from scripts.threshold_artifacts import ArtifactError, pending_diff_dates
+from scripts.threshold_refresh_checkpoint import RefreshCheckpoint, baseline_identity, lock_baseline, open_checkpoint
 
 BASE_URL = "https://www.ncei.noaa.gov/pub/data/ghcn/daily/superghcnd"
 STATION_DLY_URL = "https://www.ncei.noaa.gov/pub/data/ghcn/daily/all/{station_id}.dly"
@@ -100,7 +102,8 @@ def _fetch_station_thresholds(station_id: str, *, through: date, timeout: int = 
     observations = parse_dly_bytes(resp.content)
     if any(row.station_id != station_id for row in observations):
         raise ArtifactError("threshold_station_archive_identity_mismatch")
-    return compute_thresholds(observations, before=through + timedelta(days=1))
+    return compute_thresholds(observations, before=through + timedelta(days=1),
+                              source_revision=sha256(resp.content).hexdigest())
 
 
 def _recompute_stations(station_ids: set[str], *, through: date) -> Generator[StationThresholds | None, None, None]:
@@ -182,7 +185,10 @@ def main(argv: list[str] | None = None) -> int:
         help="Leave this many recent diff snapshot days out of the cache so the bot can detect them live",
     )
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--resume-dir", type=Path, help="Private checkpoint directory for an interrupted refresh")
     args = parser.parse_args(argv)
+    if args.resume_dir is not None and args.dry_run:
+        parser.error("--resume-dir requires a writable refresh")
 
     if not args.db.exists():
         print(
@@ -195,14 +201,27 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Days:  last {args.days} days")
     print(f"Lag:   {args.lag_days} days (recent diffs left for hot-path detection)")
 
+    with ExitStack() as ownership:
+        try:
+            ownership.enter_context(lock_baseline(args.db))
+        except (ArtifactError, OSError) as error:
+            label = str(error) if isinstance(error, ArtifactError) else "threshold_database_unavailable"
+            print(f"ERROR: {label}", file=sys.stderr)
+            return 1
+        return _locked_update(args)
+
+
+def _locked_update(args: argparse.Namespace) -> int:
     # 1. Validate lineage before any schema or threshold writes.
+    today = datetime.now(timezone.utc).date()
     try:
+        expected_digest = baseline_identity(args.db) if args.resume_dir is not None else None
         watermark_str, active_ids = _read_baseline(args.db)
         dates_to_fetch = pending_diff_dates(
             watermark_str,
             days=args.days,
             lag_days=args.lag_days,
-            today=datetime.now(timezone.utc).date(),
+            today=today,
         )
     except (ArtifactError, sqlite3.Error, OSError) as error:
         label = str(error) if isinstance(error, ArtifactError) else "threshold_database_unavailable"
@@ -211,6 +230,25 @@ def main(argv: list[str] | None = None) -> int:
     # A successful plan requires an exact nonempty checkpoint.
     assert watermark_str is not None
     watermark = date.fromisoformat(watermark_str)
+    if args.resume_dir is None:
+        return _update(args, watermark, active_ids, dates_to_fetch)
+    assert expected_digest is not None
+    try:
+        with open_checkpoint(args.resume_dir, args.db, today=today, days=args.days,
+                             lag_days=args.lag_days, updater=Path(__file__), expected_digest=expected_digest) as checkpoint:
+            if checkpoint.today > today:
+                raise ArtifactError("threshold_checkpoint_future_date")
+            frozen_dates = pending_diff_dates(watermark_str, days=args.days, lag_days=args.lag_days,
+                                              today=checkpoint.today)
+            return _update(args, watermark, active_ids, frozen_dates, checkpoint)
+    except (sqlite3.Error, OSError, ValueError) as error:
+        label = str(error) if isinstance(error, ArtifactError) else "threshold_checkpoint_unavailable"
+        print(f"ERROR: {label}", file=sys.stderr)
+        return 1
+
+
+def _update(args: argparse.Namespace, watermark: date, active_ids: frozenset[str],
+            dates_to_fetch: list[date], checkpoint: RefreshCheckpoint | None = None) -> int:
     print(f"Active stations: {len(active_ids):,}")
     print(f"Watermark:       {watermark}")
     if not dates_to_fetch:
@@ -225,7 +263,7 @@ def main(argv: list[str] | None = None) -> int:
     cursor = watermark
 
     for d in dates_to_fetch:
-        content = _fetch_diff(cursor, d)
+        content = _fetch_diff(cursor, d) if checkpoint is None else checkpoint.diff(cursor, d, _fetch_diff)
         if content is None:
             # Probe later endpoints from the SAME predecessor, never silently
             # choose a later start that would skip unprocessed changes.
@@ -271,7 +309,12 @@ def main(argv: list[str] | None = None) -> int:
     if not new_obs_by_station and not recompute_station_ids:
         print("No new observations to process.")
         if not args.dry_run:
-            with open_db(args.db) as conn:
+            connection = open_db(args.db) if checkpoint is None else closing(sqlite3.connect(args.db))
+            with connection as conn:
+                if checkpoint is not None:
+                    checkpoint.bind_plan(cutoff=new_watermark, stations=set())
+                    conn.execute("BEGIN IMMEDIATE")
+                    checkpoint.verify_baseline(args.db)
                 set_meta(conn, META_WATERMARK_KEY, new_watermark.isoformat())
                 conn.commit()
         return 0
@@ -288,9 +331,39 @@ def main(argv: list[str] | None = None) -> int:
     updated_count = 0
     new_station_count = 0
 
-    with open_db(args.db) as conn:
+    if checkpoint is not None:
+        # Include insert-only stations that have no comparator to patch. Capture
+        # all full archives before making any changes to the working baseline.
+        with closing(sqlite3.connect(args.db.resolve().as_uri() + "?mode=ro&immutable=1", uri=True)) as baseline:
+            recompute_station_ids.update(
+                station for station in new_obs_by_station
+                if baseline.execute("SELECT 1 FROM thresholds WHERE station_id = ? LIMIT 1",
+                                    (station,)).fetchone() is None
+            )
+        checkpoint.bind_plan(cutoff=new_watermark, stations=recompute_station_ids)
+        remaining = {station for station in recompute_station_ids if checkpoint.completed(station) is None}
+        print(f"  {len(recompute_station_ids) - len(remaining):,} full station results already verified", flush=True)
         try:
-            with closing(_recompute_stations(recompute_station_ids, through=new_watermark)) as recomputes:
+            with closing(_recompute_stations(remaining, through=new_watermark)) as recomputes:
+                for i, (station, result) in enumerate(zip(sorted(remaining), recomputes, strict=True), 1):
+                    if result is None or result.station_id != station:
+                        raise ArtifactError("threshold_checkpoint_station_result_invalid")
+                    checkpoint.save(result, new_watermark)
+                    if i % 50 == 0:
+                        print(f"  {i:,}/{len(remaining):,} remaining full station results saved", flush=True)
+        except requests.RequestException:
+            print("ERROR: Station fetch interrupted; completed results are retained.", file=sys.stderr)
+            return 1
+
+    connection = open_db(args.db) if checkpoint is None else closing(sqlite3.connect(args.db))
+    with connection as conn:
+        if checkpoint is not None:
+            conn.execute("BEGIN IMMEDIATE")
+            checkpoint.verify_baseline(args.db)
+        try:
+            results = (_recompute_stations(recompute_station_ids, through=new_watermark) if checkpoint is None
+                       else (checkpoint.completed(station) for station in sorted(recompute_station_ids)))
+            with closing(results) as recomputes:
                 for i, thresholds in enumerate(recomputes, 1):
                     if thresholds is None:
                         print("ERROR: Station recompute returned no usable thresholds.", file=sys.stderr)
@@ -298,7 +371,8 @@ def main(argv: list[str] | None = None) -> int:
                     upsert_thresholds(conn, thresholds)
                     updated_count += 1
                     if i % 50 == 0:
-                        conn.commit()
+                        if checkpoint is None:
+                            conn.commit()
                         print(
                             f"  {i:,}/{len(recompute_station_ids):,} full recomputes processed ...",
                             flush=True,
@@ -325,7 +399,8 @@ def main(argv: list[str] | None = None) -> int:
                     updated_count += 1
 
             if i % 200 == 0:
-                conn.commit()
+                if checkpoint is None:
+                    conn.commit()
                 print(f"  {i:,}/{len(new_obs_by_station):,} processed ...", flush=True)
 
         set_meta(conn, META_WATERMARK_KEY, new_watermark.isoformat())

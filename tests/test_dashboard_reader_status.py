@@ -33,16 +33,28 @@ def status_endpoint(monkeypatch):
     class Handler(RuntimeBase, reader_status.handler_type(policy_sha="a" * 64, runtime_sha="b" * 64)):
         pass
 
-    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    request_finished = threading.Event()
+
+    class StatusServer(ThreadingHTTPServer):
+        def finish_request(self, request, client_address):
+            try:
+                super().finish_request(request, client_address)
+            finally:
+                request_finished.set()
+
+    server = StatusServer(("127.0.0.1", 0), Handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
 
     def call(method="GET", *, body=None, headers=None, path="/api/graphic_reader_status"):
+        request_finished.clear()
         conn = http.client.HTTPConnection(*server.server_address, timeout=5)
         conn.request(method, path, body=body, headers=headers or {})
         response = conn.getresponse()
         status, result_headers, raw = response.status, dict(response.getheaders()), response.read()
         conn.close()
+        # The client can receive the full body before the handler's finally block.
+        assert request_finished.wait(timeout=5), "reader-status handler did not finish"
         assert result_headers["Cache-Control"] == "private, no-store"
         assert result_headers["X-Content-Type-Options"] == "nosniff"
         assert result_headers["X-Robots-Tag"] == "noindex, nofollow, noarchive"

@@ -11,6 +11,10 @@ on:
         required: false
         default: '12'
         type: string
+      resume_run_id:
+        description: 'Run ID of an interrupted refresh with a sealed checkpoint'
+        required: false
+        type: string
 
 concurrency:
   group: refresh-thresholds
@@ -18,11 +22,15 @@ concurrency:
 
 jobs:
   refresh:
-    if: vars.THEHEAT_PRODUCTION_PAUSED != '1'
+    if: vars.THEHEAT_PRODUCTION_PAUSED != '1' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # Provision the dedicated checkpoint key here with a main-only deployment
+    # branch policy before enabling checkpoint mode.
+    environment: threshold-maintenance
     permissions:
       contents: write  # needed for gh release upload
+      actions: read  # read only the explicitly selected interrupted run
 
     steps:
       - uses: actions/checkout@v6
@@ -57,16 +65,115 @@ jobs:
           THRESHOLD_DAYS: ${{ github.event.inputs.days || '12' }}
         run: python -m scripts.threshold_artifacts require-lineage --days "$THRESHOLD_DAYS"
 
-      - name: Refresh station inventory
-        run: python -m scripts.refresh_station_inventory --db data/station_thresholds.sqlite
-
-      - name: Apply incremental threshold updates
+      - name: Select private checkpoint mode
+        id: checkpoint
+        shell: bash
         env:
+          THEHEAT_THRESHOLD_CHECKPOINT_KEY: ${{ secrets.THEHEAT_THRESHOLD_CHECKPOINT_KEY }}
+          THRESHOLD_RESUME_RUN: ${{ inputs.resume_run_id }}
+        run: |
+          if [[ -z "$THEHEAT_THRESHOLD_CHECKPOINT_KEY" && -z "$THRESHOLD_RESUME_RUN" ]]; then
+            exit 0
+          fi
+          [[ "$GITHUB_REF" == refs/heads/main && "$GITHUB_RUN_ATTEMPT" == 1 ]]
+          python -m scripts.threshold_checkpoint_transport check-key
+          if [[ -n "$THRESHOLD_RESUME_RUN" ]]; then
+            [[ "$THRESHOLD_RESUME_RUN" =~ ^[1-9][0-9]{0,19}$ ]]
+            echo "restore=true" >> "$GITHUB_OUTPUT"
+          fi
+          echo "enabled=true" >> "$GITHUB_OUTPUT"
+
+      - name: Verify the selected interrupted run
+        if: steps.checkpoint.outputs.restore == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          THRESHOLD_RESUME_RUN: ${{ inputs.resume_run_id }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$THRESHOLD_RESUME_RUN" |
+            jq -e --arg repo "$GITHUB_REPOSITORY" '
+              (.path == ".github/workflows/refresh-thresholds.yml" or
+               .path == ".github/workflows/refresh-thresholds.yml@main" or
+               .path == ".github/workflows/refresh-thresholds.yml@refs/heads/main") and
+              .head_repository.full_name == $repo and .head_branch == "main" and
+              (.event == "schedule" or .event == "workflow_dispatch") and
+              .run_attempt == 1 and .status == "completed" and .conclusion == "failure"
+            ' > /dev/null
+
+      - name: Download one sealed checkpoint
+        if: steps.checkpoint.outputs.restore == 'true'
+        uses: actions/download-artifact@v8
+        with:
+          name: threshold-refresh-checkpoint
+          path: ${{ runner.temp }}/threshold-checkpoint-input
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.resume_run_id }}
+
+      - name: Verify and open the private checkpoint
+        if: steps.checkpoint.outputs.restore == 'true'
+        env:
+          THEHEAT_THRESHOLD_CHECKPOINT_KEY: ${{ secrets.THEHEAT_THRESHOLD_CHECKPOINT_KEY }}
+          THRESHOLD_RESUME_RUN: ${{ inputs.resume_run_id }}
           THRESHOLD_DAYS: ${{ github.event.inputs.days || '12' }}
         run: |
+          python -m scripts.threshold_checkpoint_transport unseal \
+            --directory "$RUNNER_TEMP/threshold-refresh-private" \
+            --archive "$RUNNER_TEMP/threshold-checkpoint-input/checkpoint.aead" \
+            --repository "$GITHUB_REPOSITORY" --run-id "$THRESHOLD_RESUME_RUN" --days "$THRESHOLD_DAYS"
+
+      - name: Refresh station inventory
+        shell: bash
+        env:
+          CHECKPOINT_ENABLED: ${{ steps.checkpoint.outputs.enabled }}
+        run: |
+          resume_args=()
+          if [[ "$CHECKPOINT_ENABLED" == true ]]; then
+            resume_args=(--resume-dir "$RUNNER_TEMP/threshold-refresh-private")
+          fi
+          python -m scripts.refresh_station_inventory --db data/station_thresholds.sqlite "${resume_args[@]}"
+
+      - name: Apply incremental threshold updates
+        id: update
+        shell: bash
+        env:
+          THRESHOLD_DAYS: ${{ github.event.inputs.days || '12' }}
+          CHECKPOINT_ENABLED: ${{ steps.checkpoint.outputs.enabled }}
+        run: |
+          resume_args=()
+          if [[ "$CHECKPOINT_ENABLED" == true ]]; then
+            resume_args=(--resume-dir "$RUNNER_TEMP/threshold-refresh-private")
+          fi
           timeout 900 python -m scripts.update_thresholds_incremental \
             --db data/station_thresholds.sqlite \
-            --days "$THRESHOLD_DAYS"
+            --days "$THRESHOLD_DAYS" "${resume_args[@]}" || {
+              code=$?
+              if [[ "$code" == 124 && "$CHECKPOINT_ENABLED" == true ]]; then
+                echo "timed_out=true" >> "$GITHUB_OUTPUT"
+              fi
+              exit "$code"
+            }
+
+      - name: Seal interrupted progress
+        id: seal
+        if: ${{ !cancelled() && steps.update.outputs.timed_out == 'true' }}
+        env:
+          THEHEAT_THRESHOLD_CHECKPOINT_KEY: ${{ secrets.THEHEAT_THRESHOLD_CHECKPOINT_KEY }}
+          THRESHOLD_DAYS: ${{ github.event.inputs.days || '12' }}
+        run: |
+          python -m scripts.threshold_checkpoint_transport seal \
+            --directory "$RUNNER_TEMP/threshold-refresh-private" \
+            --archive "$RUNNER_TEMP/checkpoint.aead" \
+            --repository "$GITHUB_REPOSITORY" --run-id "$GITHUB_RUN_ID" --days "$THRESHOLD_DAYS"
+
+      - name: Retain sealed progress for an explicit resume
+        if: ${{ !cancelled() && steps.seal.outcome == 'success' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: threshold-refresh-checkpoint
+          path: ${{ runner.temp }}/checkpoint.aead
+          if-no-files-found: error
+          retention-days: 2
+          compression-level: 0
 
       - name: Publish verified immutable threshold artifact
         env:
