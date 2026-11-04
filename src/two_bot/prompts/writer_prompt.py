@@ -73,9 +73,11 @@ headline primary. Omit context that adds words without news.
 
 HOT10_RANK_GUIDANCE = """\
 HOT 10 RANK:
-Lead with the strongest qualified city. One city is enough. If you mention
-other cities, do not imply consecutive ranks across an omitted city. Name
-their actual ranks or report their values without an implied order.
+Lead with the strongest qualified city's departure from its monthly normal.
+One city is enough. Keep the supplied decimal digits (22.1°C stays 22.1°C).
+Omit the absolute high if the departure tells the story. State forecast status
+once. If you mention other cities, name their actual ranks or report their
+values without implying consecutive ranks across an omitted city.
 """
 
 THERMAL_TIME_GUIDANCE = """\
