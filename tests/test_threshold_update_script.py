@@ -330,10 +330,12 @@ def test_failure_after_a_committed_chunk_retains_old_checkpoint_without_claiming
         assert load_thresholds(conn, "SYNTHETIC").all_time_max_c == 20
 
 
-@pytest.mark.parametrize("damage", [None, "station", "diff", "missing_diff", "baseline", "manifest", "date"])
+@pytest.mark.parametrize("damage", [None, "station", "diff", "missing_diff", "baseline", "manifest", "date", "inventory"])
 def test_resumable_capture_keeps_the_baseline_unchanged_and_skips_completed_reads(
     baseline, tmp_path, monkeypatch, capsys, damage,
 ):
+    from scripts import refresh_station_inventory as inventory, threshold_checkpoint_transport as transport
+
     stations = [f"S{i:03}" for i in range(1, 65)] if damage is None else ["S001"]
     with closing(sqlite3.connect(baseline)) as conn:
         conn.executemany("INSERT INTO stations(station_id,lat,lon,is_active) VALUES(?,0,0,1)",
@@ -356,6 +358,8 @@ def test_resumable_capture_keeps_the_baseline_unchanged_and_skips_completed_read
     monkeypatch.setattr(updater, "_fetch_station_thresholds", recompute)
     before = baseline.read_bytes()
     checkpoint = tmp_path / "checkpoint"
+    monkeypatch.setattr(inventory, "_fetch_text", lambda url: f"invented parser input for {url}")
+    inventory._inventory_inputs(checkpoint, 2025)
     manifest = baseline.with_suffix(".version")
     manifest.write_text("invented installed manifest\n")
     argv = ["--db", str(baseline), "--resume-dir", str(checkpoint)]
@@ -370,6 +374,8 @@ def test_resumable_capture_keeps_the_baseline_unchanged_and_skips_completed_read
                 conn.execute("UPDATE stations SET lat = 1 WHERE station_id = 'S001'")
         elif damage == "manifest":
             manifest.write_text("different installed manifest\n")
+        elif damage == "inventory":
+            (checkpoint / inventory.INVENTORY_FILE).write_text("different frozen inventory\n")
         else:
             mutations = {
                 "station": "UPDATE thresholds SET value_c = 99",
@@ -386,7 +392,15 @@ def test_resumable_capture_keeps_the_baseline_unchanged_and_skips_completed_read
         assert read_watermark(baseline) == "2026-09-25"
         assert diff_calls == first_calls and completed == ["S001"]
         return
-    assert updater.main(argv) == 0
+    # Reconstruct a separate runner directory from the sealed checkpoint.
+    archive = tmp_path / "checkpoint.aead"
+    restored = tmp_path / "restored"
+    cipher = transport._cipher("a2" * 32)
+    context = transport._context(manifest, "example/repo", "123", 12)
+    transport.seal(checkpoint, archive, cipher, context)
+    transport.unseal(archive, restored, cipher, context)
+    assert (restored / inventory.INVENTORY_FILE).read_bytes() == (checkpoint / inventory.INVENTORY_FILE).read_bytes()
+    assert updater.main(["--db", str(baseline), "--resume-dir", str(restored)]) == 0
     assert diff_calls == first_calls
     assert sorted(completed) == [*stations, "SYNTHETIC"]
     assert read_watermark(baseline) == "2026-09-30"

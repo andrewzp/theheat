@@ -49,20 +49,19 @@ def baseline_identity(path: Path) -> tuple[str, int]:
     return digest(path)
 
 
-def _manifest_identity(path: Path) -> tuple[str, int] | None:
-    manifest = path.with_suffix(".version")
-    if manifest.is_symlink() or (manifest.exists() and not manifest.is_file()):
-        raise ArtifactError("threshold_checkpoint_invalid_manifest")
-    return digest(manifest) if manifest.is_file() else None
+def _optional_identity(path: Path) -> tuple[str, int] | None:
+    if path.is_symlink() or (path.exists() and not path.is_file()):
+        raise ArtifactError("threshold_checkpoint_invalid_input")
+    return digest(path) if path.is_file() else None
 
 
 class RefreshCheckpoint:
     def __init__(self, conn: sqlite3.Connection, today: date, baseline_digest: tuple[str, int],
-                 manifest_digest: tuple[str, int] | None):
+                 inputs: dict[Path, tuple[str, int] | None]):
         self.conn = conn
         self.today = today
         self.baseline_digest = baseline_digest
-        self.manifest_digest = manifest_digest
+        self.inputs = inputs
 
     def diff(self, start: date, end: date, fetch: Callable[[date, date], bytes | None]) -> bytes | None:
         key = start.isoformat(), end.isoformat()
@@ -102,7 +101,8 @@ class RefreshCheckpoint:
         return _seal((get_meta(self.conn, "incremental_plan"), station_id, values, provenance))
 
     def verify_baseline(self, path: Path) -> None:
-        if baseline_identity(path) != self.baseline_digest or _manifest_identity(path) != self.manifest_digest:
+        if (baseline_identity(path) != self.baseline_digest
+                or any(_optional_identity(file) != expected for file, expected in self.inputs.items())):
             raise ArtifactError("threshold_checkpoint_scope_changed")
 
     def completed(self, station_id: str) -> StationThresholds | None:
@@ -149,9 +149,10 @@ def open_checkpoint(path: Path, baseline: Path, *, today: date, days: int, lag_d
     root = updater.resolve().parent.parent
     owner_files = (
         updater, Path(__file__), root / "scripts/threshold_artifacts.py",
+        root / "scripts/refresh_station_inventory.py",
         root / "src/data/ghcn_format.py", root / "src/data/ghcn_db.py",
     )
-    manifest_digest = _manifest_identity(baseline)
+    inputs = {file: _optional_identity(file) for file in (baseline.with_suffix(".version"), path / "inventory.json")}
     owner_digests = [sha256(owner.read_bytes()).hexdigest() for owner in owner_files]
     descriptor = os.open(path / ".lock", os.O_WRONLY | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK, 0o600)
     with os.fdopen(descriptor, "a") as lock:
@@ -167,11 +168,11 @@ def open_checkpoint(path: Path, baseline: Path, *, today: date, days: int, lag_d
             saved_today = get_meta(conn, "incremental_today") if saved_scope is not None else today.isoformat()
             if saved_today is None:
                 raise ArtifactError("threshold_checkpoint_date_missing")
-            scope = _seal((baseline_digest, manifest_digest, saved_today, days, lag_days, owner_digests))
+            scope = _seal((baseline_digest, list(inputs.values()), saved_today, days, lag_days, owner_digests))
             if saved_scope is None:
                 with conn:
                     set_meta(conn, "incremental_scope", scope)
                     set_meta(conn, "incremental_today", today.isoformat())
             elif saved_scope != scope:
                 raise ArtifactError("threshold_checkpoint_scope_changed")
-            yield RefreshCheckpoint(conn, date.fromisoformat(saved_today), baseline_digest, manifest_digest)
+            yield RefreshCheckpoint(conn, date.fromisoformat(saved_today), baseline_digest, inputs)
