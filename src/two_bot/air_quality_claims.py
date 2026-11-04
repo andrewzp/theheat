@@ -71,13 +71,21 @@ _PM10_MEAN_RATIO_SPAN = re.compile(
     r"(?:\d+(?:\.\d+)?\s*(?:(?:times|x)\b|×)|twice|double|triple)\s+"
     r"(?:the\s+)?who\s+(?:(?:24 hour|daily)\s+)?(?:guideline|limit|standard)s?\b"
 )
+_PM10_MEAN_DASH_RATIO_SPAN = re.compile(
+    r"\bpm\s*10\s+(?:averaging|(?:is\s+)?forecast\s+to\s+average)\s+"
+    r"(?:(?:about|roughly|around|approximately)\s+|[~≈]\s*)?"
+    r"\d[\d,.]*\s*(?:μg|ug)/m3\s*—\s*"
+    r"(?:(?:about|roughly|around|approximately)\s+)?"
+    r"(?:\d+(?:\.\d+)?\s*(?:(?:times|x)\b|×)|twice|double|triple)\s+"
+    r"(?:the\s+)?who\s+(?:(?:24 hour|daily)\s+)?(?:guideline|limit|standard)s?\b"
+    r"(?=\s*(?:\(cams model forecast, not station measured\)\s*)?$)"
+)
 _SHARED_DUST_SUBJECT = re.compile(
     rf"\bdust\b(?:[\s,/'\"“”«»&():\[\]]+|\b(?:and|or|plus|with|as well as|along with)\b|\b{_AQ}\b)*$"
 )
-# The new ratio-only exemption is deliberately narrower than the existing
-# absolute-concentration form: a completed quantity, optional weekday/time,
-# then an explicit comma adjunct or em dash. Causal scans keep their original
-# dash normalization. Never infer independence from dust-subject noun lists.
+# These ratio forms require a completed quantity, optional weekday/time,
+# then an explicit comma adjunct or em dash. Causal scans keep their
+# original dash normalization. Dust-subject lists do not establish independence.
 _PM10_RATIO_BOUNDARY = re.compile(
     r"\d[\d,.]*\s*(?:μg|ug)/m3\s*"
     r"(?:(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)"
@@ -105,6 +113,10 @@ mixed comparisons hold. An explicit negation ("a peak, not a daily mean") is not
         if not _DUST.search(clause):
             continue
         scan = _NEGATED_PERIOD.sub(" ", clause)
+        if supplied_pm10:
+            scan = _PM10_MEAN_DASH_RATIO_SPAN.sub(
+                lambda match: " " if _PM10_RATIO_BOUNDARY.search(match.string[:match.start()]) else match.group(), scan,
+            )
         # Remove only the recognized PM10 metric/comparison, never its trailing
         # clause or a dust comparison before/after a parenthetical PM10 mention.
         # A coordinated dust/PM10 subject shares the predicate and comparison;

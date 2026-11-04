@@ -1,3 +1,9 @@
+## 0.9.109.62
+
+- Let separately stated dust peaks and source-backed PM10 daily comparisons
+  reach the required checks. Recognize the explicit CAMS measurement disclaimer
+  while retaining holds for claims of observed conditions.
+
 ## 0.9.109.61
 
 - Keep satellite thermal copy within supplied place and proximity evidence.

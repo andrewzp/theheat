@@ -47,6 +47,13 @@ def test_explicit_negative_measurement_disclaimer_can_reach_required_checks(fore
     assert bundle.to_dict() == before
 
 
+@pytest.mark.parametrize("measurement", ["not station-measured", "not station measured"])
+def test_terminal_cams_forecast_parenthetical_does_not_assert_a_measurement(forecast, failures, measurement):
+    bundle, text = forecast
+    text = text.removesuffix(" on June 8") + f" (CAMS model forecast, {measurement})."
+    assert failures(text, bundle) == []
+
+
 @pytest.mark.parametrize("assertion", [
     "Invented City measured 250 μg/m³.",
     "Invented City observed 250 μg/m³.",
@@ -74,6 +81,9 @@ def test_disclaimer_does_not_hide_any_other_affirmative_claim(forecast, failures
     "'model-estimated, not station-measured.'",
     "“model-estimated, not station-measured.”",
     "‘model-estimated, not station-measured.’",
+    "(CAMS model forecast, not only station-measured).",
+    "(CAMS model forecast, not station-measured) is disputed.",
+    '"(CAMS model forecast, not station-measured)."',
 ])
 def test_distant_negation_quotation_and_near_misses_stay_conservative(forecast, failures, near_miss):
     bundle, text = forecast

@@ -47,6 +47,10 @@ CONTROLS = [
     "Dust is forecast at 2,000 µg/m³ and PM10 is forecast to average 90 µg/m³, twice the WHO 24-hour guideline.",
     "Luma's forecast dust peak is 2,000 µg/m³, with PM10 listed in the legend.",
 ]
+INDEPENDENT_PM10_CLAUSE = (
+    "Luma: dust is forecast to peak near 2,000 µg/m³ Friday, with PM10 averaging ~90 µg/m³ "
+    "— about 2× the WHO 24-hour guideline (CAMS model forecast, not station-measured)."
+)
 
 
 def _source(pm10=90.0):
@@ -95,6 +99,31 @@ def test_separate_pm10_anchor_and_narrow_negated_mean_still_need_the_normal_chec
     assert dust_comparison_failures(text, source) == []
     assert fact_check.local_rejection(text, [], source, {}) is None  # Not a completed factual pass.
     assert source.to_dict() == before
+
+
+@pytest.mark.parametrize("consumer", ["guard", "local-rejection"])
+@pytest.mark.parametrize("comparison", ["about 2×", "roughly 2 times"])
+def test_separate_approximate_pm10_mean_with_dash_ratio_reaches_required_checks(consumer, comparison):
+    source = _source()
+    before = deepcopy(source.to_dict())
+    assert _failures(consumer, INDEPENDENT_PM10_CLAUSE.replace("about 2×", comparison), source) == []
+    assert source.to_dict() == before
+
+
+@pytest.mark.parametrize("text", [
+    "Luma: dust and PM10 averaging ~90 µg/m³ — about 2× the WHO 24-hour guideline.",
+    "Luma: dust is forecast to peak near 2,000 µg/m³ Friday — about 2× the WHO 24-hour guideline, "
+    "with PM10 averaging ~90 µg/m³.",
+    INDEPENDENT_PM10_CLAUSE.replace(" (CAMS model forecast, not station-measured).", " for the dust peak."),
+    INDEPENDENT_PM10_CLAUSE.replace(" (CAMS model forecast, not station-measured).", ", including the dust peak."),
+])
+def test_approximate_pm10_mean_does_not_mask_a_dust_comparison(text):
+    assert any(code.startswith(CODE) for code in _failures("local-rejection", text, _source()))
+
+
+def test_new_pm10_comparison_form_still_needs_qualified_source_evidence():
+    assert any(code.startswith(CODE)
+               for code in dust_comparison_failures(INDEPENDENT_PM10_CLAUSE, _source(pm10=None)))
 
 
 def test_unit_corruption_is_not_fixed_or_exempted_by_a_valid_pm10_clause():

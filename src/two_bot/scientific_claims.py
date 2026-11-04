@@ -41,6 +41,11 @@ _PARENTHETICAL_FORECAST_DENIAL = re.compile(
     r"\b(?:sampled cities|sampled locations)[ \t]+\([ \t]*forecast,[ \t]+)"
     r"(?P<clause>not[ \t]+observed)[ \t]*\)(?=[ \t]*(?:[.;]|\Z))"
 )
+_PARENTHETICAL_CAMS_DENIAL = re.compile(
+    r"(?:[µμu]g/m[³3]|\bwho[ \t]+(?:24(?:-|[ \t]+)hour[ \t]+)?(?:guideline|limit|standard)s?)"
+    r"[ \t]+\([ \t]*cams[ \t]+model[ \t]+forecast,[ \t]+"
+    r"(?P<clause>not[ \t]+station(?:-|[ \t]+)measured)[ \t]*\)(?=[ \t]*(?:[.;]|\Z))"
+)
 
 
 def _incident_classification_scan(text: str) -> str:
@@ -62,7 +67,7 @@ def _forecast_observation_scan(text: str) -> str:
         return text
     chars = list(text)
     for pattern in (_NEGATED_STATION_MEASUREMENT_CLAUSE, _NEGATED_OBSERVATION_CLAUSE,
-                    _PARENTHETICAL_FORECAST_DENIAL):
+                    _PARENTHETICAL_FORECAST_DENIAL, _PARENTHETICAL_CAMS_DENIAL):
         for match in pattern.finditer(text):
             start, end = match.span("clause")
             chars[start:end] = " " * (end - start)
