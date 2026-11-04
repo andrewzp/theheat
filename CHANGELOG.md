@@ -1,3 +1,9 @@
+## 0.9.109.60
+
+- Check the already-due publication queue before scheduled collection when
+  automatic publication is enabled. Keep the existing sender checks and record
+  its result before collection starts.
+
 ## 0.9.109.59
 
 - Lead Hot10 copy with the strongest departure from normal and preserve

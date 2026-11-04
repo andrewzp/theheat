@@ -68,6 +68,53 @@ def test_all_manual_modes_share_that_same_non_cancelling_lock(workflow):
     assert _queue_policy(workflow, "workflow_dispatch") == ("theheat-bot", False)
 
 
+@pytest.mark.parametrize(
+    "event,mode,enabled,attempt,ref,sender_exit,expected",
+    [
+        ("schedule", "alerts", "1", "1", "refs/heads/main", 0, ["auto_publish_due", "alerts"]),
+        ("schedule", "both", "1", "1", "refs/heads/main", 0, ["auto_publish_due", "both"]),
+        ("schedule", "auto_publish_due", "1", "1", "refs/heads/main", 0, ["auto_publish_due"]),
+        ("schedule", "alerts", "0", "1", "refs/heads/main", 0, ["alerts"]),
+        ("schedule", "alerts", "1", "2", "refs/heads/main", 0, ["alerts"]),
+        ("schedule", "alerts", "1", "1", "refs/heads/feature", 0, ["alerts"]),
+        ("workflow_dispatch", "alerts", "1", "1", "refs/heads/main", 0, ["alerts"]),
+        ("workflow_dispatch", "both", "1", "1", "refs/heads/main", 0, ["both"]),
+        ("workflow_dispatch", "manual_tweet", "1", "1", "refs/heads/main", 0, ["manual_tweet"]),
+        ("schedule", "alerts", "1", "1", "refs/heads/main", 1, ["auto_publish_due"]),
+    ],
+)
+def test_bot_step_runs_existing_sender_only_before_enabled_scheduled_collection(
+    workflow, tmp_path, event, mode, enabled, attempt, ref, sender_exit, expected,
+):
+    step = next(step for step in workflow["jobs"]["run"]["steps"] if step.get("name") == "Run bot")
+    script = step["run"].replace("${{ steps.mode.outputs.mode }}", mode)
+    python = tmp_path / "python"
+    python.write_text(
+        '#!/bin/bash\n'
+        '[[ "$1" == -m && "$2" == src.main ]] || exit 99\n'
+        'printf "%s\\n" "$3"\n'
+        'if [[ "$3" == auto_publish_due ]]; then exit "$SENDER_EXIT"; fi\n'
+    )
+    python.chmod(0o755)
+    result = subprocess.run(
+        ["/bin/bash", "-e", "-o", "pipefail", "-c", script],
+        env={
+            "PATH": str(tmp_path),
+            "GITHUB_EVENT_NAME": event,
+            "GITHUB_RUN_ATTEMPT": attempt,
+            "GITHUB_REF": ref,
+            "THEHEAT_AUTOMATIC_PUBLICATION_ENABLED": enabled,
+            "SENDER_EXIT": str(sender_exit),
+        },
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=5,
+    )
+    assert result.stdout.splitlines() == expected
+    assert result.returncode == sender_exit
+
+
 @pytest.mark.parametrize("event", ["push", "repository_dispatch", "future_event"])
 def test_non_pr_fallback_never_splits_or_cancels_producers(workflow, event):
     assert _queue_policy(workflow, event) == ("theheat-bot", False)

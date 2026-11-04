@@ -582,7 +582,17 @@ jobs:
           THEHEAT_CRW_PACKET_RETENTION: ${{ steps.mode.outputs.mode != 'manual_tweet' && vars.THEHEAT_CRW_PACKET_RETENTION || '0' }}
           THEHEAT_MEDIA_WRITER_STORE: ${{ steps.mode.outputs.mode != 'manual_tweet' && vars.THEHEAT_CRW_PACKET_RETENTION == '1' && vars.THEHEAT_MEDIA_WRITER_STORE || '' }}
           THEHEAT_MEDIA_WRITER_DSN: ${{ steps.mode.outputs.mode != 'manual_tweet' && vars.THEHEAT_CRW_PACKET_RETENTION == '1' && secrets.THEHEAT_MEDIA_WRITER_DSN || '' }}
-        run: python -m src.main ${{ steps.mode.outputs.mode }}
+        run: |
+          mode="${{ steps.mode.outputs.mode }}"
+          # A delayed hourly run can miss the source window. Use the existing
+          # sender before scheduled collection, under the same workflow lock.
+          # Persist its result before collection opens a new state snapshot.
+          if [[ "$GITHUB_EVENT_NAME" == schedule && "$GITHUB_RUN_ATTEMPT" == 1 &&
+                "$GITHUB_REF" == refs/heads/main && "$THEHEAT_AUTOMATIC_PUBLICATION_ENABLED" == 1 &&
+                ( "$mode" == alerts || "$mode" == both ) ]]; then
+            python -m src.main auto_publish_due
+          fi
+          python -m src.main "$mode"
 
       - name: Open issue on scheduled-run failure
         if: failure() && github.event_name == 'schedule'
