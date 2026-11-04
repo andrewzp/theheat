@@ -154,18 +154,35 @@ def test_other_gist_writer_workflows_join_the_group_only_in_route_mode():
     assert "nhc_advisory_import" not in trial and "PATCH" not in trial and "gist edit" not in trial
 
 
-def test_new_secret_names_are_exactly_the_root_provided_route_era_names():
+def test_new_secret_names_are_exactly_the_approved_names():
     secrets = re.compile(r"secrets\.([A-Z0-9_]+)")
-    now = set().union(*(set(secrets.findall(path.read_text())) for path in WF.glob("*.yml")))
+    workflows = {path.name: path.read_text() for path in WF.glob("*.yml")}
+    now = set().union(*(set(secrets.findall(text)) for text in workflows.values()))
     listed = subprocess.run(["git", "ls-tree", "--name-only", BASE, ".github/workflows/"], cwd=ROOT, capture_output=True, text=True)
     if listed.returncode:
         pytest.skip("released base commit is not in this checkout's history (scratch regeneration copy)")
     before = set()
     for name in listed.stdout.split():
         before |= set(secrets.findall(subprocess.run(["git", "show", f"{BASE}:{name}"], cwd=ROOT, capture_output=True, text=True).stdout))
-    assert now - before == {"THEHEAT_FEEDBACK_GIST_ID", "THEHEAT_COMMAND_SEAL_KEY", "THEHEAT_ROUTE_CONTROL_KEY", *RENAMED.values()}, \
-        "root-provided: feedback Gist id, seal key, route-control key and the route-era names of the seven legacy credentials"
+    checkpoint = "THEHEAT_THRESHOLD_CHECKPOINT_KEY"
+    assert now - before == {
+        "THEHEAT_FEEDBACK_GIST_ID", "THEHEAT_COMMAND_SEAL_KEY", "THEHEAT_ROUTE_CONTROL_KEY",
+        *RENAMED.values(), checkpoint,
+    }
     assert before <= now
+    reference = f"secrets.{checkpoint}"
+    assert {name: text.count(reference) for name, text in workflows.items() if reference in text} == {
+        "refresh-thresholds.yml": 3,
+    }
+    refresh = load(workflows["refresh-thresholds.yml"])["jobs"]["refresh"]
+    assert refresh["environment"] == "threshold-maintenance"
+    assert refresh["if"] == "vars.THEHEAT_PRODUCTION_PAUSED != '1' && github.ref == 'refs/heads/main'"
+    expression = "${{ " + reference + " }}"
+    assert [(step["name"], step["env"][checkpoint]) for step in refresh["steps"] if checkpoint in step.get("env", {})] == [
+        ("Select private checkpoint mode", expression),
+        ("Verify and open the private checkpoint", expression),
+        ("Seal interrupted progress", expression),
+    ]
     # Every remaining legacy reference is a NEW || OLD fallback or a presence boolean (never alone),
     # except the generated runtime-report workflow, which the generator rebuilds from bot.yml.
     for path in WF.glob("*.yml"):
