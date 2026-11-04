@@ -233,7 +233,7 @@ def test_complete_window_uses_one_checkpoint_for_all_observation_paths(baseline,
     calls = fake_source(monkeypatch, records)
     recomputed = []
 
-    def recompute(station):
+    def recompute(station, *, through):
         recomputed.append(station)
         return StationThresholds(station, all_time_max_c=25, all_time_max_year=2001)
 
@@ -287,7 +287,7 @@ def test_failed_recompute_never_advances_checkpoint(baseline, monkeypatch, kind,
             conn.commit()
     fake_source(monkeypatch, [record("update" if kind == "update" else "insert")])
 
-    def broken(station):
+    def broken(station, *, through):
         if failure == "request":
             raise requests.RequestException("synthetic failure")
         if failure == "parse":
@@ -315,7 +315,7 @@ def test_failure_after_a_committed_chunk_retains_old_checkpoint_without_claiming
         conn.commit()
     fake_source(monkeypatch, [record("update", station) for station in [*stations, "SYNTHETIC"]])
 
-    def recompute(station):
+    def recompute(station, *, through):
         if station == "SYNTHETIC":
             return None
         return StationThresholds(station, all_time_max_c=25, all_time_max_year=2001)
@@ -409,3 +409,89 @@ def test_weekly_workflow_lookback_covers_prior_lagged_checkpoint(baseline, monke
     for needle in (" require-lineage ", "scripts.update_thresholds_incremental"):
         step = next(s for s in steps if needle in s.get("run", ""))
         assert step["env"]["THRESHOLD_DAYS"] == "${{ github.event.inputs.days || '12' }}"
+
+
+@pytest.mark.parametrize("kind", ["update", "delete", "new_station"])
+def test_full_station_archive_stops_at_connected_watermark(baseline, monkeypatch, kind):
+    from tests.test_ghcn_time_integrity import dly
+
+    station_id = "TESTST00001"
+    with open_db(baseline) as conn:
+        conn.execute("INSERT INTO stations(station_id,lat,lon,is_active) VALUES(?,0,0,1)", (station_id,))
+        conn.commit()
+    through = date(2026, 9, 29)
+    fake_source(monkeypatch, [record("insert" if kind == "new_station" else kind, station_id)],
+                missing=through + timedelta(days=1))
+    archive = dly([
+        (through, "TMAX", 350, "", "T"),
+        (through, "TMIN", 20, "", "T"),
+        (through + timedelta(days=1), "TMAX", 499, "", "T"),
+        (through + timedelta(days=1), "TMIN", -200, "", "T"),
+        (through - timedelta(days=1), "TMAX", 490, "X", "T"),
+    ], station_id)
+
+    def get(url, **_kwargs):
+        assert url == updater.STATION_DLY_URL.format(station_id=station_id)
+        response = requests.Response()
+        response.status_code = 200
+        response._content = archive
+        return response
+
+    monkeypatch.setattr(updater.requests, "get", get)
+    assert updater.main(["--db", str(baseline)]) == 0
+    assert read_watermark(baseline) == through.isoformat()
+    with open_db(baseline) as conn:
+        threshold = load_thresholds(conn, station_id)
+    assert threshold.all_time_max_c == 35
+    assert threshold.all_time_min_c == 2
+
+
+def test_full_station_archive_refuses_another_station(monkeypatch):
+    from tests.test_ghcn_time_integrity import dly
+
+    through = date(2026, 9, 29)
+    response = requests.Response()
+    response.status_code = 200
+    response._content = dly([(through, "TMAX", 350, "", "T")], "TESTST00002")
+    monkeypatch.setattr(updater.requests, "get", lambda *args, **kwargs: response)
+    with pytest.raises(ArtifactError, match="threshold_station_archive_identity_mismatch"):
+        updater._fetch_station_thresholds("TESTST00001", through=through)
+
+
+@pytest.mark.parametrize("fail", [False, True])
+def test_full_station_prefetch_is_bounded_ordered_and_joined(monkeypatch, fail):
+    from threading import Barrier, Lock
+
+    station_ids = {f"S{index:02}" for index in range(8)}
+    through = date(2026, 9, 29)
+    first_window = Barrier(4, timeout=5)
+    lock = Lock()
+    calls = []
+    active = peak = 0
+
+    def fetch(station_id, *, through):
+        nonlocal active, peak
+        assert through == date(2026, 9, 29)
+        with lock:
+            calls.append(station_id)
+            active += 1
+            peak = max(peak, active)
+        try:
+            if station_id in {"S00", "S01", "S02", "S03"}:
+                first_window.wait()
+            if fail and station_id == "S00":
+                raise requests.RequestException("invented source failure")
+            return StationThresholds(station_id, all_time_max_c=25)
+        finally:
+            with lock:
+                active -= 1
+
+    monkeypatch.setattr(updater, "_fetch_station_thresholds", fetch)
+    with closing(updater._recompute_stations(station_ids, through=through)) as results:
+        if fail:
+            with pytest.raises(requests.RequestException, match="invented source failure"):
+                list(results)
+        else:
+            assert [row.station_id for row in results] == sorted(station_ids)
+    assert peak == 4 and active == 0
+    assert sorted(calls) == (sorted(station_ids)[:4] if fail else sorted(station_ids))

@@ -1,3 +1,9 @@
+## 0.9.109.58
+
+- Limit full station recomputations to the verified diff watermark and check
+  the station identity. Prefetch up to four full archives while keeping writes
+  in station order and retaining the existing maintenance timeout.
+
 ## 0.9.109.57
 
 - Keep already-handled and deterministically inadmissible candidates out of
