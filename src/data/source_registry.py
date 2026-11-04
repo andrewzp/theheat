@@ -154,7 +154,7 @@ CONTRACTS = (
     _source("coral_dhw", "coral_dhw", "run_coral_dhw", "Configured coral-reef sites/regions in the CRW collector.", "satellite_analysis",
             "NOAA Coral Reef Watch heat-stress products and retained source leg.",
             "Heat stress is not observed bleaching, reef death or a measured local impact.",
-            support=("src/data/coral_source_contract.py", "src/data/coral_dhw.py")),
+            support=("src/data/coral_regional_contract.py", "src/data/coral_source_contract.py", "src/data/coral_dhw.py")),
     _source("water_levels", "co_ops", "run_water_levels", "Configured NOAA coastal-water-level stations.", "station_points",
             "NOAA CO-OPS station readings and their station/datum context.",
             "A station water level is not a supported regional inundation or damage claim.",

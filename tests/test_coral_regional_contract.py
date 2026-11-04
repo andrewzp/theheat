@@ -51,6 +51,52 @@ def test_qualified_packet_preserves_scope_dates_and_detached_receipts():
     assert not audit_story_bundle(b).prompt_ready
 
 
+@pytest.mark.parametrize("code,level,dhw", [(5, 3, 13.2), (6, 4, 17.4), (7, 5, 22.1)])
+def test_expanded_index_and_station_agree_through_required_fact_gate(code, level, dhw, monkeypatch):
+    p = packet(dhw, baa=code)
+    responses, calls = install_transport(monkeypatch, p)
+    r, = coral_dhw.fetch_coral_dhw(strict=True)
+    assert len(calls) == 3 and all(response.closed for response in responses)
+    assert c.qualified_provenance(r) and r.baa_7day_max == code
+    assert r.provenance["baa_scale"] == r.provenance["index"]["baa_scale"] == "expanded_0_to_7"
+    event, = coral_dhw.detect_dhw_thresholds([r])
+    from src.two_bot.intern.marine import build_coral_bleaching_bundle
+
+    b = build_coral_bleaching_bundle(event)
+    assert audit_story_bundle(b).prompt_ready
+    facts = {f["label"]: f["value"] for f in b.current_facts}
+    assert facts["baa_scale"] == "expanded_0_to_7"
+    assert "seven-day maximum" in facts["claim_limit"]
+    qualified = f"Invented Reef's seven-day maximum was Bleaching Alert Level {level}."
+    assert fact_check.local_rejection(qualified, [], b, {}) is None
+    assert any("unwarranted_coral_alert" in f for f in scientific_claim_failures(
+        qualified.replace("seven-day maximum", "current daily alert"), b
+    ))
+    assert any("unwarranted_coral_alert" in f for f in scientific_claim_failures(
+        qualified.replace(f"Level {level}", f"Level {level - 1}"), b
+    ))
+    b.raw_signal_dump["provenance"]["index"].pop("baa_scale")
+    assert_rejected_without_provider(b, monkeypatch)
+
+
+def test_same_day_expanded_index_cannot_relabel_a_heritage_station_tail():
+    p = packet(22.1, baa=4)
+    p["index"] = p["index"].replace(b"Bleaching Alert Level 2", b"Bleaching Alert Level 5")
+    with pytest.raises(SourceFetchError, match="tail date, completeness or index label mismatch"):
+        decode(p)
+
+
+def test_expanded_index_declares_its_scale_for_overlapping_labels():
+    p = packet(8.25, baa=4)
+    extended = packet(22.1, baa=7, region_id="other_reef", name="Other Reef")["index"]
+    row = extended[extended.index(b"<tr>"):extended.index(b"</tr>") + 5]
+    p["index"] = p["index"].replace(b"</table>", row + b"</table>")
+    receipt = decode(p)
+    assert receipt["baa_scale"] == "expanded_0_to_7"
+    assert receipt["baa_7day_max"] == 4
+    assert receipt["stress_level"] == "Bleaching Alert Level 2"
+
+
 @pytest.mark.parametrize(
     "value,tier", [(3.96, None), (4, 4), (7.96, 4), (8, 8), (11.96, 8), (12, 12), (101, 12)]
 )
@@ -86,7 +132,7 @@ def test_complete_primary_transport_has_three_requests_even_below_threshold(valu
     "bad,good",
     [
         (b"Version 3.2", b"Version 3.1"),
-        (b"Bleaching Alert Level 5", b"Bleaching Alert Level 1"),
+        (b"Bleaching Alert Level 6", b"Bleaching Alert Level 1"),
         (b"data/other.txt", b"data/invented_reef.txt"),
         (b"data/../invented_reef.txt", b"data/invented_reef.txt"),
         (b"gauges/other.php", b"gauges/invented_reef.php"),
@@ -320,7 +366,7 @@ def test_tail_rejects_every_malformed_record_not_only_latest(case):
         "negative_hotspot": (7, "-1"),
         "sst_order": (5, "40"),
         "fractional_baa": (9, "3.1"),
-        "high_baa": (9, "5"),
+        "high_baa": (9, "8"),
         "bad_date": (2, "40"),
         "index_label": (9, "2"),
     }

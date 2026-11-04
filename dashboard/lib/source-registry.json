@@ -421,6 +421,7 @@
       "claim_limit": "Heat stress is not observed bleaching, reef death or a measured local impact.",
       "evidence_files": [
         "src/orchestrator/sources/coral_dhw.py",
+        "src/data/coral_regional_contract.py",
         "src/data/coral_source_contract.py",
         "src/data/coral_dhw.py"
       ]
@@ -638,6 +639,7 @@
     "src/data/co2.py": "63d9578eb77bcc56b438ef85ee56fc7a1695982a46f2b3133e04b65adefa3d5f",
     "src/data/copernicus_ems.py": "9e2c512e7ccb022a44190c6ea17ab10f18fa6232c7dcd2de51d1bc91fedcde95",
     "src/data/coral_dhw.py": "fc9357d1019e67e69e66a24d90aa1771e05097a99db1f042f4adfee2e8fb9560",
+    "src/data/coral_regional_contract.py": "4d1bd7871d50c9e32036a338597184e76b7ffc3d0db018a40093c65f99db78d4",
     "src/data/coral_source_contract.py": "1809eeeb915f6dcf09bed99f67da998338360eafb11c976805679a1a87c5f310",
     "src/data/crw_contract.py": "6dde2bbf1e1d81cf61e8b6bcc959e6ed61555d7aedb8d3e36ecf4313e8891170",
     "src/data/drought.py": "f04b304f46a7bb0f2806242b1e640c7aad943656b39eb94fa545745dd34652ff",
@@ -665,7 +667,7 @@
     "src/data/regional_observations.py": "eef66077194e446991db077d558f3e2da664e6c1c7a1deb5e2b4ea9cec08d88e",
     "src/data/river_gauges.py": "7f7f5bfa89c84d95f6d8b872476a9512116047e86a62e4d4db0412c87ee7ee14",
     "src/data/sea_ice.py": "373dc72240b8ee7439995cf194b9b190b9a1940df393723119849cdeeff455f8",
-    "src/data/source_registry.py": "d53d996c39b6517fa5c653777caa2bb9b0e3b005d1895439b22d4518a1d79f71",
+    "src/data/source_registry.py": "faaea0905f5d44ed320cc9d9b10d4e8e444c971edac1b40ae8ad81ca506a588d",
     "src/data/temperature_evidence.py": "a258f8402418fe275ca32167850c32380452a6f6298faecd80b2f760793737e8",
     "src/data/usgs_quakes.py": "d074863aba46097e0aa31a0c16c48158a2769c1403cac51e1e2054b2deb96650",
     "src/data/water_levels.py": "2b77738fe2e5f4a246b29691879726873a48622ee26e6ffcd35713f07c505ab3",
@@ -710,5 +712,5 @@
     "src/two_bot/intern/warnings.py": "04e0a4506ffbb29124c8d2960a5e5025305699297fcf8f9178b23caac2cd7a37"
   },
   "evidence_scope": "Referenced local code inventory; not live/provider/transitive-source qualification.",
-  "registry_sha256": "8db96ff41ca7b0da715b50915c3958d3679ceea242bb5451bc11c0ed9d303e14"
+  "registry_sha256": "7d09d72f9bf321b33b2cd1c609a74ecb0f9c889e229e9038fb19eae7fcdfd5e4"
 }

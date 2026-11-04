@@ -6,6 +6,8 @@ from typing import Any
 import json
 import re
 
+from src.data.coral_regional_contract import EXPANDED_BAA_SCALE, LEGACY_BAA_SCALE
+
 REGIONAL_SCOPE = "Regional virtual-station statistic; coordinates are a map marker, not a sampled pixel"
 REGIONAL_LIMIT = (
     "DHW is regional 90th-percentile HotSpot accumulation over the preceding 12 weeks. "
@@ -13,6 +15,23 @@ REGIONAL_LIMIT = (
     "daily class or the expanded Alert Levels 3-to-5 product. Neither measurement proves "
     "observed bleaching or mortality. Marker coordinates do not define a sampled pixel."
 )
+REGIONAL_EXPANDED_LIMIT = (
+    "DHW is regional 90th-percentile HotSpot accumulation over the preceding 12 weeks. "
+    "The supplied BAA is the matching index and station seven-day maximum on the expanded "
+    "0-to-7 scale. It does not establish today's daily alert class or observed bleaching or "
+    "mortality. Marker coordinates do not define a sampled pixel."
+)
+
+
+def regional_baa_scale(provenance: Any) -> str:
+    if isinstance(provenance, dict) and provenance.get("baa_scale") == EXPANDED_BAA_SCALE:
+        return EXPANDED_BAA_SCALE
+    return LEGACY_BAA_SCALE
+
+
+def regional_claim_limit(provenance: Any) -> str:
+    return REGIONAL_EXPANDED_LIMIT if regional_baa_scale(provenance) == EXPANDED_BAA_SCALE else REGIONAL_LIMIT
+
 
 DHW_ONLY_STRESS_LEVEL = "Unavailable: HotSpot and bleaching alert data were not retrieved"
 DHW_POINT_SOURCE = "NOAA Coral Reef Watch ERDDAP DHW point sample"
@@ -123,6 +142,13 @@ _ALERT_LABEL = re.compile(
     re.IGNORECASE,
 )
 _ALERT_PREFIX = re.compile(r"\b(?:7|seven) day (?:maximum|max|peak)(?: (?:was|is|of)|[ \t]*:)[ \t]*\Z", re.IGNORECASE)
+_ALERT_LEVELS = {
+    "1": 3, "i": 3, "one": 3,
+    "2": 4, "ii": 4, "two": 4,
+    "3": 5, "iii": 5, "three": 5,
+    "4": 6, "iv": 6, "four": 6,
+    "5": 7, "v": 7, "five": 7,
+}
 
 
 def regional_alert_failures(tweet: str, bundle: Any) -> list[str]:
@@ -132,14 +158,17 @@ def regional_alert_failures(tweet: str, bundle: Any) -> list[str]:
     text = re.sub(r"[ \t\u00a0\-\u2010-\u2015\u2212]+", " ", tweet.lower())
     raw = bundle.raw_signal_dump if isinstance(bundle.raw_signal_dump, dict) else {}
     code = raw.get("baa_7day_max")
+    max_code = 7 if regional_baa_scale(raw.get("provenance")) == EXPANDED_BAA_SCALE else 4
     for match in _ALERT_LABEL.finditer(text):
         label = match.group()
+        expected: int | None
         if label in ("no stress", "bleaching watch", "bleaching warning"):
             expected = ("no stress", "bleaching watch", "bleaching warning").index(label)
         else:
             suffix = re.search(r"(\d+|[ivx]+|zero|one|two|three|four|five|six|seven|eight|nine|ten)$", label)
             level = suffix.group() if suffix else ""
-            expected = 3 if level in ("1", "i", "one") else 4 if level in ("2", "ii", "two") else None
-        if expected is None or type(code) is not int or code != expected or _ALERT_PREFIX.search(text[:match.start()]) is None:
-            return ["Regional coral alert labels require the matching supplied heritage seven-day maximum and an adjacent window qualifier"]
+            expected = _ALERT_LEVELS.get(level)
+        if (expected is None or expected > max_code or type(code) is not int
+                or code != expected or _ALERT_PREFIX.search(text[:match.start()]) is None):
+            return ["Regional coral alert labels require the matching supplied seven-day maximum and an adjacent window qualifier"]
     return []

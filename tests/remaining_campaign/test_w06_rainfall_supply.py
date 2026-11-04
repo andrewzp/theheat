@@ -117,6 +117,26 @@ def test_saved_bundle_rechecks_served_product_before_paid_checks(offline, change
     assert fact_check.local_rejection(CELL_COPY, [], bundle, deepcopy(DEFAULT_STATE)) is not None
 
 
+@pytest.mark.parametrize("change", ["shift_window", "raw_period", "bundle_day", "window_fact"])
+def test_saved_bundle_rechecks_window_binding_before_paid_checks(offline, change):
+    offline.setenv("THEHEAT_RAINFALL_WINDOW_PROVENANCE", "1")
+    bundle = build_precipitation_bundle(_event())
+    assert fact_check.local_rejection(CELL_COPY, [], bundle, deepcopy(DEFAULT_STATE)) is None
+    if change == "shift_window":
+        window = bundle.raw_signal_dump["rainfall_window"]
+        window.update(accumulation_start="2026-10-27T00:00:00Z", accumulation_end="2026-10-28T00:00:00Z")
+    elif change == "raw_period":
+        bundle.raw_signal_dump["period_days"] = 3
+    elif change == "bundle_day":
+        bundle.when = "2026-10-27"
+    else:
+        next(f for f in bundle.current_facts if f["label"] == "accumulation_window_utc")["value"] = (
+            "2026-10-27T00:00:00Z to 2026-10-28T00:00:00Z"
+        )
+    assert rs.packet_ready(bundle) == ["rainfall_window_event_mismatch"]
+    assert fact_check.local_rejection(CELL_COPY, [], bundle, deepcopy(DEFAULT_STATE)) is not None
+
+
 def test_claim_floor_refuses_national_total_and_gauge_wording():
     bundle = build_precipitation_bundle(_event(kind="country_precip_event", city_count=12, location="France"))
     assert any("not a national total" in f for f in rs.rainfall_claim_failures(NATIONAL_COPY, bundle))
