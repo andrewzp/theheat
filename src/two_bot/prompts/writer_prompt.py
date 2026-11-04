@@ -85,6 +85,14 @@ SATELLITE TIMING:
 A shared source minute or satellite platform does not establish simultaneous
 detections or a shared overpass. Give each detection's sourced time if useful,
 or omit timing. Omit extra detections if the main signal is stronger alone.
+
+SATELLITE LOCATION:
+Use the supplied nearest_region as written, preserving any "near" qualifier.
+The country may identify a reference city but does not locate the detection
+within its borders. Decline if there is no supported place label.
+Never infer a state or province from a city name, coordinates or memory.
+Lead with the supported location and measurement. Add consequences only when
+sourced for that detection.
 """
 
 IMPACT_GUIDANCE = """\

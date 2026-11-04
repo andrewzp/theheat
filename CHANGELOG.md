@@ -1,3 +1,10 @@
+## 0.9.109.61
+
+- Keep satellite thermal copy within supplied place and proximity evidence.
+- Bind rainfall accumulations and country summaries to the served dates and
+  products. Recheck retained rainfall packets and name Open-Meteo when it
+  serves the model fallback.
+
 ## 0.9.109.60
 
 - Check the already-due publication queue before scheduled collection when

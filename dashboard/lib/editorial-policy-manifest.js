@@ -100,7 +100,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/data/ghcn_db.py": "ccec1ad5673354de3dbadb07c637c294122d7f7c0ffcdfb7e8fd3e5090ee81d5",
     "src/data/ghcn_format.py": "fd3636069b477a484194c9debd6da2ede228ac1ca747746db60b5d9eb656ea18",
     "src/data/ghcnd_monthly_normals.py": "d8bea306ae035da31204f9dd7bd8f9ed360d8bb8e38958a61d55316a7fdd959d",
-    "src/data/gpm_imerg.py": "0d91c5286c884079d1ede927ae078b9299af2b054eb0809b22c92c657e68228d",
+    "src/data/gpm_imerg.py": "abc8d6f7b55cad2e70c9c9c1107742f2411ffc699f96a5456dfb7d87751769ed",
     "src/data/hot10_baselines.py": "da5a303d15522578863080ad79c7b72bf53c978f2534e7700e53de357b0e377a",
     "src/data/json_evidence.py": "06cfc76cbb5aaa39348a5d437742c2c37fc2f06b9f6489ff2ba6b6dbe16c1624",
     "src/data/newsworthiness.py": "fed1facac4c5293b7b4e921a3c8e7beb4e4aabfec3ddb2dec8ffe9bb822e6e10",
@@ -110,6 +110,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/data/ocean_sst_anomaly.py": "78f0c70c0ce712b969042ffd2a1ac75d9fc0a71a0cee89535de5274fd2973f67",
     "src/data/open_meteo.py": "58fa0a9135a526370e2daa3a832b290203615187d165b47d95ac05025523d508",
     "src/data/places.py": "c66be0181393620b640f0354d2c7379e427aeacf4c80689b190489022bf2a870",
+    "src/data/rainfall_supply.py": "32476c6ac9a5161be96925479e476aed45d6ea82ab645fb954bde79e063041cf",
     "src/data/regional_observations.py": "eef66077194e446991db077d558f3e2da664e6c1c7a1deb5e2b4ea9cec08d88e",
     "src/data/temperature_evidence.py": "a258f8402418fe275ca32167850c32380452a6f6298faecd80b2f760793737e8",
     "src/data/temperature_history.py": "c1369f662d76b2a788e49f30bdc00a57377f686e08bcefd0e958322e3ed33d84",
@@ -126,7 +127,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/editorial/nhc_advisory_runtime.py": "aae58135f5f89026b01b9bcfe0e873bc48bbf25694d412af80643be23c9d242c",
     "src/editorial/official_warning.py": "e37a232fe19e8ef90bfc825c92b95b89d9c9f9df7818b4a3352466ad2beeff87",
     "src/editorial/operator_claim_references.py": "f7d1d14d75b55cc9f273d3a98459f158f57c533521d153b1e86ee5bc7d95d1fd",
-    "src/editorial/policy.py": "0452c9d966ae97df00334a71b1ac74b8bbe41d7db886278cd002f339423d0619",
+    "src/editorial/policy.py": "24415489dd4d5718d172ea7110544737139607e0e5fd1eb992bacb8458a92d20",
     "src/editorial/portfolio.py": "b8a3e7b5a6fc2a1f9843ef4382fa4901fbaf74f6c5834646740a1f65e99fabd5",
     "src/editorial/report_development.py": "e2ed39a9ff957683c8befff0f3b99533fdc9d90d84af88220ed13f2bf1489995",
     "src/editorial/report_supply.py": "37aa718804a9dce97c105769912c87e8f7513f1b69bdcc3240865eba810c01a6",
@@ -179,7 +180,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/orchestrator/sources/coral_dhw.py": "6596f95e1ba183c4833d365c9d1d1b009e299e28e555295351fb061899d37e2f",
     "src/orchestrator/sources/firms.py": "792f4c6334bca4df75fbcf47f00b28a40b4587d8947f131c09bb1afd233e6d08",
     "src/orchestrator/sources/gdacs.py": "89c9b0a96fee81b2079971dc2356dd0f272b5fb4a16f32ae408fdf9244081168",
-    "src/orchestrator/sources/gpm_imerg.py": "5fd738ad53971e7a7b46ae70eb484582e8575075ec3856087d3b306cc8603f58",
+    "src/orchestrator/sources/gpm_imerg.py": "4e814deeb2b0a287136c2f1b87cab57b9f6391fda43e984ad5664eafb638a6d8",
     "src/orchestrator/sources/newsworthiness.py": "cdbe7e22a95a5c9a7c0ec3b10343a4017ab4d913cf2c96ec7b61479947f57510",
     "src/orchestrator/sources/nhc_advisory.py": "e14956f0d72e576e851efec730ae97459d1f4ca10aaba14fedb3dd98d1c5a1e4",
     "src/orchestrator/sources/nws_alerts.py": "e558378491d43547ccef0c31fbb04bf2bb8b7575bbfce0efabc4d3c65f957e6c",
@@ -254,7 +255,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/two_bot/prompts/__init__.py": "b08ec3ae2e477637b1fa3aa7f04935b7744b5ea7548bb384965e20ade7fabd2b",
     "src/two_bot/prompts/critic_prompt.py": "a6993c558cd459c549f5a707aa51e034e4bd2b458c9dd8ccd180041303760439",
     "src/two_bot/prompts/fact_check_prompt.py": "2a8372a576ee76dae2b29d79d3b68b7e2ac9e68e22334a7b488dcc994a34e83a",
-    "src/two_bot/prompts/writer_prompt.py": "2952e05f1ef9f317bdd7ec9c9a3f651277bb1d3c769d06034bc744a18c277260",
+    "src/two_bot/prompts/writer_prompt.py": "17437a5f4838b26030541b09e18c2eb2974d5b0bd963ec0ab7d73f7bb81115f4",
     "src/two_bot/provider_preflight.py": "9a6aa6b4834c04266acdde286a3ccae991a070ab9411a0d56e7b9ab519422021",
     "src/two_bot/rejected_candidate.py": "4c4c843c14a52e5eb3f955b055d637476a94cf8bdaa0e98bab60c7c702f1ed53",
     "src/two_bot/retained_usage.py": "48fbca8c9c9868a258c5bfdd0966234b4a7f07b4e21577cb1c3cfa0d9bfeeda9",
@@ -270,5 +271,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "8c4887f395618e343dafd55f5843987dfa6a7a620713c7c34bab9f419e4434fe"
   },
   "schema_version": 1,
-  "source_sha256": "a4ee782486d82b4e573cca4778a521317185e126f028b3aa1a0220320db9c067"
+  "source_sha256": "7a21eb08e4bda95c8a98edc05eaebabc090555c7f805bdb8dee788c80a0029dc"
 }

@@ -98,6 +98,7 @@ POLICY_FILES = (
     "src/commands/recovery_provenance.py", "src/commands/import_plan.py", "src/evaluation/file_boundary.py",
     "src/commands/command_roles.py", "src/commands/preview_worker.py",
     "src/editorial/report_supply.py", "src/data/gpm_imerg.py", "src/orchestrator/sources/gpm_imerg.py",
+    "src/data/rainfall_supply.py", "src/two_bot/intern/precipitation.py",
     "src/data/regional_observations.py", "src/orchestrator/sources/regional_observed.py",
     "src/data/ghcn.py", "src/data/ghcn_format.py", "src/data/gdacs.py", "src/data/nhc.py", "src/data/cyclones.py",
     "src/data/gdacs_intake.py", "src/orchestrator/sources/gdacs.py",
