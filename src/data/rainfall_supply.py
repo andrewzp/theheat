@@ -57,12 +57,16 @@ def _served_product(product_code: Any, source_leg: Any) -> dict[str, Any]:
     return {}
 
 
+def _accumulation_bounds(day: date, period_days: int) -> tuple[str, str]:
+    end_day = day + timedelta(days=1)
+    end = datetime(end_day.year, end_day.month, end_day.day, tzinfo=timezone.utc)
+    return _iso(end - timedelta(days=period_days)), _iso(end)
+
+
 def window_evidence(event: Any, *, retrieved_at: str | None = None) -> dict[str, Any]:
     """The explicit accumulation window and footprint for one GPM-derived event."""
-    end_day = date.fromisoformat(str(event.date)) + timedelta(days=1)
     period = int(event.period_days)
-    end = datetime(end_day.year, end_day.month, end_day.day, tzinfo=timezone.utc)
-    start = end - timedelta(days=period)
+    start, end = _accumulation_bounds(date.fromisoformat(str(event.date)), period)
     product = _served_product(getattr(event, "product_code", None), getattr(event, "source_leg", None))
     model = product.get("evidence_type") == "model_fallback"
     aggregate = event.kind == "country_precip_event"
@@ -71,7 +75,7 @@ def window_evidence(event: Any, *, retrieved_at: str | None = None) -> dict[str,
         "evidence_type": product.get("evidence_type"),
         "source_product": product.get("source_product"),
         "product_version": product.get("product_version"),
-        "accumulation_start": _iso(start), "accumulation_end": _iso(end), "integration_interval_hours": 24 * period,
+        "accumulation_start": start, "accumulation_end": end, "integration_interval_hours": 24 * period,
         "footprint": {
             "kind": "heaviest_member_cell" if aggregate else ("model_point" if model else "grid_cell"),
             "resolution_deg": product.get("resolution_deg"),
@@ -336,6 +340,8 @@ def packet_ready(bundle: Any) -> list[str]:
     if not isinstance(raw, dict):
         return ["bundle_raw_signal_missing"]
     window = raw.get("rainfall_window")
+    if not isinstance(window, Mapping):
+        return ["rainfall_window_missing"]
     failures = window_failures(window)
     if failures or getattr(bundle, "signal_kind", None) != "precipitation_extreme":
         return failures
@@ -351,6 +357,23 @@ def packet_ready(bundle: Any) -> list[str]:
     if any(f.get("value") != label for f in bundle.current_facts
            if isinstance(f, Mapping) and f.get("label") == "source_product"):
         return ["rainfall_product_mismatch"]
+
+    event_date = raw.get("date")
+    period = raw.get("period_days")
+    mismatch = ["rainfall_window_event_mismatch"]
+    if not isinstance(event_date, str) or bundle.when != event_date or type(period) is not int or period < 1:
+        return mismatch
+    try:
+        day = date.fromisoformat(event_date)
+        start, end = _accumulation_bounds(day, period)
+    except (ValueError, OverflowError):
+        return mismatch
+    if day.isoformat() != event_date or (window["accumulation_start"], window["accumulation_end"]) != (start, end):
+        return mismatch
+    bound_facts = {"date": event_date, "period_days": period, "accumulation_window_utc": f"{start} to {end}"}
+    if any(f.get("value") != bound_facts[f["label"]] for f in bundle.current_facts
+           if isinstance(f, Mapping) and isinstance(f.get("label"), str) and f["label"] in bound_facts):
+        return mismatch
     return []
 
 

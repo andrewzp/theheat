@@ -142,7 +142,8 @@ def structural_bundle(spec):
         from types import SimpleNamespace
         from src.data.rainfall_supply import window_evidence
         rain = SimpleNamespace(**spec["synthetic_rainfall_window"])
-        raw.update(product_code=rain.product_code, rainfall_window=window_evidence(rain))
+        raw.update(date=rain.date, period_days=rain.period_days, product_code=rain.product_code,
+                   rainfall_window=window_evidence(rain))
     return StoryBundle(
         signal_kind=signal, event_id=f"synthetic_{spec['case_id']}",
         where="Synthetic probe location", when="2026-07-01",

@@ -84,8 +84,8 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/data/air_quality_current.py": "29e1047e030df4e39d279ac36679de036a4104f68daeb3845235e0741b1bbc35",
     "src/data/air_quality_evidence.py": "677713bb8916c4bcd51d407a5b19072f54532f5f46db116914af6b3fcac9f4f7",
     "src/data/coral_dhw.py": "fc9357d1019e67e69e66a24d90aa1771e05097a99db1f042f4adfee2e8fb9560",
-    "src/data/coral_evidence.py": "6971edc855ae1f09a7b32fca66a8d7ec4bd67c9ddee10949adc1217b911ab910",
-    "src/data/coral_regional_contract.py": "5f5a3fb09ec827f144cde1a621e452598f8f96e0c571dc2eade57fc472e5efc6",
+    "src/data/coral_evidence.py": "723b04dc720538b5dab0ab6290f2f774c877796963a69aa46eb541e00bbf84ee",
+    "src/data/coral_regional_contract.py": "4d1bd7871d50c9e32036a338597184e76b7ffc3d0db018a40093c65f99db78d4",
     "src/data/coral_source_contract.py": "1809eeeb915f6dcf09bed99f67da998338360eafb11c976805679a1a87c5f310",
     "src/data/crw_contract.py": "6dde2bbf1e1d81cf61e8b6bcc959e6ed61555d7aedb8d3e36ecf4313e8891170",
     "src/data/crw_regions.py": "7a4afb9f8ad021357cc652b8b82e2a88026f6e68a2ad9a805ae5ae2962e7f2ce",
@@ -110,7 +110,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/data/ocean_sst_anomaly.py": "78f0c70c0ce712b969042ffd2a1ac75d9fc0a71a0cee89535de5274fd2973f67",
     "src/data/open_meteo.py": "58fa0a9135a526370e2daa3a832b290203615187d165b47d95ac05025523d508",
     "src/data/places.py": "c66be0181393620b640f0354d2c7379e427aeacf4c80689b190489022bf2a870",
-    "src/data/rainfall_supply.py": "32476c6ac9a5161be96925479e476aed45d6ea82ab645fb954bde79e063041cf",
+    "src/data/rainfall_supply.py": "ca68b5078f504437894fc19bffcdcf07e6b7b066f2649f640ea90f24458cde46",
     "src/data/regional_observations.py": "eef66077194e446991db077d558f3e2da664e6c1c7a1deb5e2b4ea9cec08d88e",
     "src/data/temperature_evidence.py": "a258f8402418fe275ca32167850c32380452a6f6298faecd80b2f760793737e8",
     "src/data/temperature_history.py": "c1369f662d76b2a788e49f30bdc00a57377f686e08bcefd0e958322e3ed33d84",
@@ -121,7 +121,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/editorial/draft_admission.py": "a726ca826cc564f43e3dd1169fa0f2a8d671be09d5f8ca80413587a64b857eb7",
     "src/editorial/hazard_episodes.py": "2359e93391c4f2ee3a5faf31f37bb153e03ec35ac0efa2f1b0b7022e4315ea08",
     "src/editorial/hot10_contract.py": "68dbb3c9081af24c7869ede677659a530a701a7270606307b122624a706fa534",
-    "src/editorial/marine_evidence.py": "7183f93f1068d75856063cf061a1dea8751bd4dd98cc1f1f34488bcf39296f5c",
+    "src/editorial/marine_evidence.py": "d6c9bb8c7ca12133eefa9ddf6283977c7a86da65ef50869d686c352263c1099d",
     "src/editorial/newsworthiness.py": "e7643f404fb9e2d75976e096b0b46bc1eac8a35fb9afd4acc30eaf107bbd83e9",
     "src/editorial/nhc_advisory.py": "ffa814251ed31011de5642d9fc3fc1a4aec92ea7ddd82d0a733ce49741400f7b",
     "src/editorial/nhc_advisory_runtime.py": "aae58135f5f89026b01b9bcfe0e873bc48bbf25694d412af80643be23c9d242c",
@@ -240,7 +240,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/two_bot/intern/disasters.py": "80c3dff56a13430f593fb610ae17115cefa6477c6406796f17c918ba6f519e4d",
     "src/two_bot/intern/drought.py": "2b6449d5ae3ae7dbdaafdcf47b2d56abab2cabda9d195bcfcdeac85345ee27ab",
     "src/two_bot/intern/fire.py": "c8b04dc71cfdccdcc8425af8275c66197773264a8ed4ad342e47c1d62316876d",
-    "src/two_bot/intern/marine.py": "e266aba07ad76cff8ed8091fb8eef336d79e9667f8f69a7d3f5faec34ba93001",
+    "src/two_bot/intern/marine.py": "2ab06c73acb56836f78be88d0fcee9daffcd639a91ba2120caf483fea1803c8d",
     "src/two_bot/intern/marine_crw.py": "b8d624e5e1607afcb2f3a6a5b0b04ce223b87553b0c5b4665a0830d4553d9050",
     "src/two_bot/intern/nhc_advisory.py": "61ffb8d8de787ecb0e7b9841ab3e25edafd45d4bafaf1a6fa54f8a329665793f",
     "src/two_bot/intern/precipitation.py": "5d5132edaa53ce57c2e18e39acf0e093d2621808a4210fe5fa2a63468f433723",
@@ -271,5 +271,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "8c4887f395618e343dafd55f5843987dfa6a7a620713c7c34bab9f419e4434fe"
   },
   "schema_version": 1,
-  "source_sha256": "a2dd550303f13ae1a25d1e71037ba82ad32abac8fcaca77ebe7e8e106ed2275c"
+  "source_sha256": "31a38ad9547ddf1cd804848d45ebed2c3da90c592e1a7b448a428784b70dba21"
 }

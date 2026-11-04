@@ -1,3 +1,11 @@
+## 0.9.109.63
+
+- Accept NOAA's expanded regional coral alerts when the index and station
+  data agree. Keep seven-day maximum alert levels distinct from daily readings
+  and observed impacts.
+- Require a retained rainfall window to match the event date, duration and
+  writer-facing accumulation facts before drafting or rechecking copy.
+
 ## 0.9.109.62
 
 - Let separately stated dust peaks and source-backed PM10 daily comparisons

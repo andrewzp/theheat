@@ -235,7 +235,7 @@ def build_bundle(payload: dict):
     coral, sst = _pair(payload)
     point = coral.source_leg == "crw_erddap"
     coral_scope = coral_evidence.DHW_POINT_SCOPE if point else coral_evidence.REGIONAL_SCOPE
-    coral_limit = coral_evidence.DHW_ONLY_LIMIT if point else coral_evidence.REGIONAL_LIMIT
+    coral_limit = coral_evidence.DHW_ONLY_LIMIT if point else coral_evidence.regional_claim_limit(coral.provenance)
     result = StoryBundle(
         signal_kind=SIGNAL_KIND, where=coral.region_full_name,
         when=payload["evaluation_at"][:10], event_id=payload["event_id"],
