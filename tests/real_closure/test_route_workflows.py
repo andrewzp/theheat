@@ -101,8 +101,13 @@ def test_bot_drains_only_in_route_mode_and_keeps_every_existing_default():
     assert doc["jobs"]["commands-after"]["needs"] == ["commands-before", "run"]
     assert doc["jobs"]["run"]["needs"] == ["test", "commands-before"]
     assert doc["jobs"]["run"]["if"].startswith("always()")
-    # Unchanged: schedules, top-level group, the run job's permissions and every pre-existing env value.
-    assert doc["on"]["schedule"] == old["on"]["schedule"] and doc["concurrency"] == old["concurrency"]
+    # The schedule stagger changes only minutes. Keep every slot and all other cron fields.
+    expected_schedules = [
+        {**entry, "cron": f"{minute} {entry['cron'].split(' ', 1)[1]}"}
+        for entry, minute in zip(old["on"]["schedule"], ("41", "11", "11"), strict=True)
+    ]
+    assert doc["on"]["schedule"] == expected_schedules
+    assert doc["concurrency"] == old["concurrency"]
     assert doc["jobs"]["run"]["permissions"] == old["jobs"]["run"]["permissions"]
     step = next(s for s in doc["jobs"]["run"]["steps"] if s.get("name") == "Run bot")
     old_step = next(s for s in old["jobs"]["run"]["steps"] if s.get("name") == "Run bot")
