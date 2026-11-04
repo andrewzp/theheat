@@ -344,11 +344,25 @@ jobs:
 
       - name: Determine mode
         id: mode
+        env:
+          # Read-only state copy for the hourly alerts-lane catch-up below (same read as the sentinel).
+          GIST_ID: ${{ github.event_name == 'schedule' && secrets.GIST_ID || '' }}
+          GH_TOKEN: ${{ github.event_name == 'schedule' && (secrets.THEHEAT_GIST_WRITER_TOKEN || secrets.GH_GIST_TOKEN) || '' }}
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "mode=${{ github.event.inputs.mode }}" >> $GITHUB_OUTPUT
           elif [ "${{ github.event.schedule }}" = "41 * * * *" ]; then
-            echo "mode=auto_publish_due" >> $GITHUB_OUTPUT
+            # GitHub skips many scheduled slots, so the 4-hour alert slots can be missed for
+            # half a day. If no alerts/both run has STARTED within the catch-up window, this
+            # hourly run collects instead; the run step services due drafts first. Any read
+            # or parse failure keeps the hourly sender role (scripts/alerts_lane_catchup.py).
+            mode=auto_publish_due
+            state_copy="${RUNNER_TEMP:-/tmp}/mode-state.json"
+            if [ -n "${GIST_ID:-}" ] && gh gist view "$GIST_ID" -f state.json > "$state_copy" \
+                && python scripts/alerts_lane_catchup.py "$state_copy"; then
+              mode=alerts
+            fi
+            echo "mode=$mode" >> $GITHUB_OUTPUT
           elif [ "${{ github.event.schedule }}" = "11 12 * * *" ]; then
             # Match the triggering schedule so a delayed run still handles
             # both the leaderboard and alerts.
