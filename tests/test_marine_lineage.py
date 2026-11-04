@@ -53,6 +53,21 @@ def test_complete_source_to_bundle_detached_and_dates_explicit(monkeypatch):
     assert s == before
 
 
+def test_expanded_coral_scale_survives_compound_selection_without_upgrading_claims(monkeypatch):
+    s = deepcopy(state.DEFAULT_STATE)
+    assert marine.record_reading(s, "coral", coral_reading(dhw=22.1, baa=7)) == "retained"
+    assert marine.record_reading(s, "sst_anomaly", sst_reading(monkeypatch)) == "retained"
+    signal, = synthesis.detect_marine_compound(s)
+    value = build_synthesis_bundle(signal.components["marine_payload"])
+    assert audit_story_bundle(value).prompt_ready
+    facts = {fact["label"]: fact["value"] for fact in value.current_facts}
+    assert "expanded 0-to-7 scale" in facts["coral_claim_limit"]
+    qualified = "The seven-day maximum was Bleaching Alert Level 5 in Great Nicobar."
+    assert marine.claim_failures(qualified, value) == []
+    assert marine.claim_failures(qualified.replace("seven-day maximum", "daily level"), value)
+    assert marine.claim_failures(qualified + " Observed bleaching spread across the Bay of Bengal.", value)
+
+
 def test_record_is_detached_and_duplicate_identity_is_exact(monkeypatch):
     reading = sst_reading(monkeypatch)
     s = deepcopy(state.DEFAULT_STATE)

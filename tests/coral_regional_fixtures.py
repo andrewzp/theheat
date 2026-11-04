@@ -9,10 +9,11 @@ from src.data import coral_regional_contract as contract
 
 def packet(dhw=8.25, baa=3, *, region_id="invented_reef", name="Invented Reef", day=None):
     day = day or (datetime.now(UTC).date() - timedelta(days=1))
+    label = f"Bleaching Alert Level {baa - 2}" if baa >= 5 else contract.LABELS[baa]
     index = (
         f"<html><p>Version 3.1</p><p>Latest Data Date: {day:%b}. {day.day}, {day.year}</p>"
         f'<table><tr><td><a href="timeseries/invented.php#{region_id}">{name}</a></td>'
-        f'<td><a href="gauges/{region_id}.php">{contract.LABELS[baa]}</a></td>'
+        f'<td><a href="gauges/{region_id}.php">{label}</a></td>'
         f'<td><a href="data/{region_id}.txt">txt</a></td></tr></table></html>'
     ).encode()
     head = (

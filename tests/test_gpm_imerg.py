@@ -11,6 +11,7 @@ from src.data.gpm_imerg import (
     DEFAULT_CITY_LIMIT,
     PrecipExtremeEvent,
     _ascii_subset_url,
+    _daily_record_key,
     _fetch_daily_precip_primary,
     _lat_index,
     _lon_index,
@@ -571,6 +572,18 @@ class TestPrecipDetection:
         assert rolling[0].period_days == 3
         assert rolling[0].mm_total == 165.0
 
+    def test_older_serving_day_never_includes_newer_retained_rain(self):
+        state = {}
+        update_precip_tracking(state, [
+            _reading(mm=55.0, day="2026-05-12"),
+            _reading(mm=50.0, day="2026-05-13"),
+            _reading(mm=90.0, day="2026-05-15"),
+        ])
+        events = detect_precip_records([_reading(mm=60.0, day="2026-05-14")], state)
+        assert [(event.kind, event.date, event.period_days, event.mm_total) for event in events] == [
+            ("multi_day_accumulation", "2026-05-14", 3, 165.0),
+        ]
+
     def test_stuck_sensor_window_never_mints_an_accumulation(self):
         # #372 regression, part 2: identical daily values across the whole
         # window (the Barrow 71.25-mm-eight-days-running artifact) are a stuck
@@ -642,6 +655,30 @@ class TestPrecipDetection:
         assert country[0].country == "France"
         assert country[0].location == "France"
         assert country[0].sample_cities[:2] == ["City 0", "City 1"]
+
+    def test_country_event_does_not_combine_dates(self):
+        readings = [_reading(city="City A", day="2026-05-14"), _reading(city="City B", day="2026-05-15")]
+        state = {"precip_daily_records": {
+            _daily_record_key(reading): {"mm": 20.0, "year": 2020} for reading in readings
+        }}
+        events = detect_precip_records(readings, state, min_country_records=2)
+        assert [event.kind for event in events] == ["daily_record", "daily_record"]
+
+    def test_country_event_counts_each_place_once_per_day(self):
+        readings = [
+            _reading(city=city, day=day)
+            for day in ("2026-05-14", "2026-05-15")
+            for city in ("City A", "City A", "City B")
+        ]
+        state = {"precip_daily_records": {
+            _daily_record_key(reading): {"mm": 20.0, "year": 2020} for reading in readings
+        }}
+        events = detect_precip_records(readings, state, min_country_records=2)
+        country = [event for event in events if event.kind == "country_precip_event"]
+        assert [(event.date, event.city_count, event.sample_cities) for event in country] == [
+            ("2026-05-14", 2, ["City A", "City B"]),
+            ("2026-05-15", 2, ["City A", "City B"]),
+        ]
 
     def test_update_precip_tracking_records_daily_and_recent_rows(self):
         state = {"precip_daily_records": {}, "precip_recent_by_city": {}}

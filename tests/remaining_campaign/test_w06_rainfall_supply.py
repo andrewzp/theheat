@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from contextlib import redirect_stdout
 from copy import deepcopy
+from dataclasses import replace
 from datetime import date
 import io
 import json
@@ -17,11 +18,11 @@ import sys
 import pytest
 
 from src.data import rainfall_supply as rs
-from src.data.gpm_imerg import CityPrecipReading, PrecipExtremeEvent
+from src.data.gpm_imerg import CityPrecipReading, PrecipExtremeEvent, detect_precip_records, update_precip_tracking
 from src.orchestrator.sources import gpm_imerg as gpm_runner
 from src.orchestrator.triage_queue import _drain_and_write_triage_queue
 from src.state import DEFAULT_STATE
-from src.two_bot import pipeline
+from src.two_bot import fact_check, pipeline
 from src.two_bot.intern import build_precipitation_bundle
 from tests.live_content_harness import trap_network
 from tests.nhc_advisory_pipeline_helpers import stage_fakes
@@ -34,7 +35,8 @@ NATIONAL_COPY = "France saw 75 mm of rain nationwide in 24 hours, NASA's IMERG s
 def _event(**change) -> PrecipExtremeEvent:
     base: dict = dict(kind="daily_record", location="Lyon", country="France", date="2026-10-28", mm_total=75.0,
                 period_days=1, deviation_from_record_mm=30.0, previous_record_mm=45.0, previous_record_year=2024,
-                lat=45.75, lon=4.85, city_count=None, sample_cities=[], event_id="gpm_precip_record_invented_2026-10-28")
+                lat=45.75, lon=4.85, city_count=None, sample_cities=[], event_id="gpm_precip_record_invented_2026-10-28",
+                product_code="late")
     base.update(change)
     return PrecipExtremeEvent(**base)
 
@@ -47,7 +49,7 @@ def test_window_and_footprint_are_explicit_and_mixed_windows_refuse():
     assert window["retrieved_at"] is None and window["retrieved_at_known"] is False and rs.window_failures(window) == []
     country = rs.window_evidence(_event(kind="country_precip_event", city_count=12))
     assert country["footprint"]["kind"] == "heaviest_member_cell"
-    model = rs.window_evidence(_event(source_leg="open_meteo"))
+    model = rs.window_evidence(_event(source_leg="open_meteo", product_code="open_meteo"))
     assert model["evidence_type"] == "model_fallback" and model["product_version"] is None
     with pytest.raises(ValueError, match="rainfall_mixed_windows"):
         rs.combine_windows([window, rs.window_evidence(_event())])
@@ -55,6 +57,84 @@ def test_window_and_footprint_are_explicit_and_mixed_windows_refuse():
         rs.combine_windows([rs.window_evidence(_event()), model])
     broken = {**window, "integration_interval_hours": 24}
     assert rs.window_failures(broken) == ["integration_interval_inconsistent"]
+
+
+@pytest.mark.parametrize(("product", "leg", "dataset", "evidence_type"), [
+    ("late", None, "IMERG Late daily (3IMERGDL)", "satellite_derived"),
+    ("final", None, "IMERG Final daily (3IMERGDF)", "satellite_derived"),
+    ("open_meteo", "open_meteo", "Open-Meteo multi-model forecast precipitation", "model_fallback"),
+    ("invented_product", None, None, None),
+    ("late", "open_meteo", None, None),
+])
+def test_window_uses_the_served_product_from_the_real_detector(product, leg, dataset, evidence_type):
+    current = CityPrecipReading("Lyon", "France", 45.75, 4.85, "2026-10-28", 75.0,
+                                product, "invented_reading", source_leg=leg)
+    state = {}
+    update_precip_tracking(state, [replace(current, date="2025-10-28", mm_total=30.0)])
+    event, = detect_precip_records([current], state)
+    bundle = build_precipitation_bundle(event)
+    window = bundle.raw_signal_dump["rainfall_window"]
+    assert window["source_product"] == dataset
+    assert window["evidence_type"] == evidence_type
+    assert rs.packet_ready(bundle) == ([] if dataset else ["evidence_type_unknown", "source_product_missing"])
+
+
+def test_unattributed_event_has_no_product_identity():
+    window = rs.window_evidence(_event(product_code=None))
+    assert window["source_product"] is None
+    assert "source_product_missing" in rs.window_failures(window)
+
+
+def test_country_window_refuses_mixed_products_even_at_a_duplicate_place():
+    primary = CityPrecipReading("Lyon", "France", 45.75, 4.85, "2026-10-28", 75.0, "late", "first")
+    readings = [
+        primary,
+        replace(primary, source_product="final", event_id="different_product"),
+        replace(primary, city="Paris", lat=48.85, lon=2.35, event_id="second_place"),
+    ]
+    state = {}
+    update_precip_tracking(state, [replace(row, date="2025-10-28", mm_total=30.0) for row in readings])
+    events = detect_precip_records(readings, state, min_country_records=2)
+    assert [event.kind for event in events] == ["daily_record", "daily_record", "daily_record"]
+
+
+@pytest.mark.parametrize("change,reason", [
+    ("missing_code", "rainfall_product_identity_missing"),
+    ("final_code", "rainfall_product_mismatch"),
+    ("wrong_fact", "rainfall_product_mismatch"),
+])
+def test_saved_bundle_rechecks_served_product_before_paid_checks(offline, change, reason):
+    offline.setenv("THEHEAT_RAINFALL_WINDOW_PROVENANCE", "1")
+    bundle = build_precipitation_bundle(_event())
+    assert fact_check.local_rejection(CELL_COPY, [], bundle, deepcopy(DEFAULT_STATE)) is None
+    if change == "missing_code":
+        bundle.raw_signal_dump.pop("product_code")
+    elif change == "final_code":
+        bundle.raw_signal_dump["product_code"] = "final"
+    else:
+        next(f for f in bundle.current_facts if f["label"] == "source_product")["value"] = "IMERG Final daily"
+    assert rs.packet_ready(bundle) == [reason]
+    assert fact_check.local_rejection(CELL_COPY, [], bundle, deepcopy(DEFAULT_STATE)) is not None
+
+
+@pytest.mark.parametrize("change", ["shift_window", "raw_period", "bundle_day", "window_fact"])
+def test_saved_bundle_rechecks_window_binding_before_paid_checks(offline, change):
+    offline.setenv("THEHEAT_RAINFALL_WINDOW_PROVENANCE", "1")
+    bundle = build_precipitation_bundle(_event())
+    assert fact_check.local_rejection(CELL_COPY, [], bundle, deepcopy(DEFAULT_STATE)) is None
+    if change == "shift_window":
+        window = bundle.raw_signal_dump["rainfall_window"]
+        window.update(accumulation_start="2026-10-27T00:00:00Z", accumulation_end="2026-10-28T00:00:00Z")
+    elif change == "raw_period":
+        bundle.raw_signal_dump["period_days"] = 3
+    elif change == "bundle_day":
+        bundle.when = "2026-10-27"
+    else:
+        next(f for f in bundle.current_facts if f["label"] == "accumulation_window_utc")["value"] = (
+            "2026-10-27T00:00:00Z to 2026-10-28T00:00:00Z"
+        )
+    assert rs.packet_ready(bundle) == ["rainfall_window_event_mismatch"]
+    assert fact_check.local_rejection(CELL_COPY, [], bundle, deepcopy(DEFAULT_STATE)) is not None
 
 
 def test_claim_floor_refuses_national_total_and_gauge_wording():
@@ -82,9 +162,10 @@ def offline(monkeypatch):
     return monkeypatch
 
 
-def _journey(patch, copy: str):
+def _journey(patch, copy: str, *, model: bool = False):
     reading = CityPrecipReading(city="Lyon", country="France", lat=45.75, lon=4.85, date="2026-10-28",
-                                mm_total=75.0, source_product="late", event_id="gpm_imerg_invented_lyon_2026-10-28")
+                                mm_total=75.0, source_product="open_meteo" if model else "late",
+                                source_leg="open_meteo" if model else None, event_id="gpm_imerg_invented_lyon_2026-10-28")
     patch.setattr(gpm_runner.gpm_imerg, "fetch_daily_precip", lambda **_k: [reading])
     sent: list[str] = []
     writer, safety, fact, critic = stage_fakes(sent, copy=copy)
@@ -94,13 +175,23 @@ def _journey(patch, copy: str):
     patch.setattr(pipeline.critic, "critic_review", critic)
     from src.data import places
     state = deepcopy(DEFAULT_STATE)
-    state["precip_daily_records"] = {"precip:late:" + places.event_location_key("Lyon", "France", 45.75, 4.85)
+    state["precip_daily_records"] = {f"precip:{reading.source_product}:" + places.event_location_key("Lyon", "France", 45.75, 4.85)
                                      + ":10-28": {"mm": 40.0, "year": 2024}}
     run: dict = {"id": "invented-run-w06", "started_at": "2026-10-29T06:00:00Z", "sources": []}
     with redirect_stdout(io.StringIO()) as out:
         gpm_runner.run_gpm_imerg(state, run, [{"city": "Lyon", "country": "France", "lat": "45.75", "lon": "4.85"}])
         _drain_and_write_triage_queue(state, run)
     return state, sent, out.getvalue()
+
+
+def test_model_witness_draft_uses_open_meteo_workbench_source(offline):
+    state, sent, _ = _journey(
+        offline, "Lyon's 24-hour rainfall is estimated at 75 mm by Open-Meteo, through midnight UTC.", model=True,
+    )
+    draft, = state["drafts"]
+    assert draft["review_context"]["source"] == "Open-Meteo"
+    assert draft["review_context"]["source_key"] == "gpm_imerg"
+    assert "writer" in sent
 
 
 def test_complete_packet_reaches_the_held_manual_path_and_the_real_floor_refuses_national_wording(offline):

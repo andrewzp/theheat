@@ -1,3 +1,35 @@
+## 0.9.109.65
+
+- Resume an interrupted station-threshold refresh from an encrypted,
+  verified checkpoint. Publish the baseline only after every required
+  station is complete.
+
+## 0.9.109.64
+
+- Stagger scheduled collection, the hourly sender and source health checks
+  without changing their cadence or publication rules.
+
+## 0.9.109.63
+
+- Accept NOAA's expanded regional coral alerts when the index and station
+  data agree. Keep seven-day maximum alert levels distinct from daily readings
+  and observed impacts.
+- Require a retained rainfall window to match the event date, duration and
+  writer-facing accumulation facts before drafting or rechecking copy.
+
+## 0.9.109.62
+
+- Let separately stated dust peaks and source-backed PM10 daily comparisons
+  reach the required checks. Recognize the explicit CAMS measurement disclaimer
+  while retaining holds for claims of observed conditions.
+
+## 0.9.109.61
+
+- Keep satellite thermal copy within supplied place and proximity evidence.
+- Bind rainfall accumulations and country summaries to the served dates and
+  products. Recheck retained rainfall packets and name Open-Meteo when it
+  serves the model fallback.
+
 ## 0.9.109.60
 
 - Check the already-due publication queue before scheduled collection when

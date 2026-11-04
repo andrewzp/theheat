@@ -5,6 +5,14 @@
     {
       "case_id": "alert_threshold_is_not_a_rain_record",
       "signal_kind": "precipitation_extreme",
+      "synthetic_rainfall_window": {
+        "date": "2026-07-01",
+        "period_days": 3,
+        "kind": "multi_day_accumulation",
+        "lat": 48.85,
+        "lon": 2.35,
+        "product_code": "late"
+      },
       "structural_evidence": {
         "alert_threshold_mm": 150,
         "previous_record_mm": 150
@@ -203,14 +211,14 @@
         "exact_windows_reconciled": false,
         "spatial_supports_reconciled": false
       },
-      "capability_limit": "No runtime cross-product reconciliation guard; original granules, masks, spatial support and integration windows remain missing.",
+      "capability_limit": "The missing window stops local recheck. Cross-product reconciliation remains unproven; original granules, masks, spatial support and integration windows remain missing.",
       "exact_text_expected_codes": [],
       "variants": [
         {
           "probe_id": "unreconciled_rain",
           "tweet": "Barrow received 356.2 mm of rain in seven days.",
-          "expected_codes": [],
-          "expected_outcome": "verification_required",
+          "expected_codes": ["rainfall_window_missing"],
+          "expected_outcome": "targeted_rejection",
           "required_capability": "product_disagreement_quarantine_not_yet_enforced"
         }
       ],

@@ -9,11 +9,11 @@ name: source-health-sentinel
 
 on:
   schedule:
-    # Hourly at :30. The reconciler is idempotent, so frequent runs never spam:
+    # Hourly at :23, separate from the bot. The reconciler is idempotent:
     # it only creates an issue a source doesn't already have, and it can now
     # detect a stale alerts lane within a few hours even if auto_publish_due runs
     # keep writing fresh state.
-    - cron: '30 * * * *'
+    - cron: '23 * * * *'
   workflow_dispatch: {}
 
 permissions:
