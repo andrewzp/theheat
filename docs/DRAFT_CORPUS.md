@@ -11,6 +11,38 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-11-04 — Daily corpus grading (1 fresh draft; 1 carry-over from Oct 31, previously graded)
+
+**Context:** Gist read via git-clone path (success). 2 pending: `draft_20261031_032828_68` (Brazil
+fire, 978.7 MW) — same id/text as Oct 31/Nov 3, graded B- then; no re-grading. **1 fresh:**
+`draft_20261104_022119_64`, `hot10` (created 02:21Z; first hot10 in this corpus section run).
+Intake resumed after the Oct 31 → Nov 4 dry spell.
+
+**Staleness (~15:00 UTC Nov 4):** Brazil fire ~98h old, past-tense, dated "Oct 31", no forecast
+language — not a strict candidate, but weak news value; operator may reject. Gist write skipped
+(`gh` token invalid; gist API blocked by sandbox proxy).
+
+**Grade distribution (fresh):** 0 A / 1 B. **A-rate 0% (n=1)**; bar not cleared.
+
+### B
+**[2] Verkhoyansk hot10 (score 87)** — "Verkhoyansk, Russia is forecast to reach −9.9°C Wednesday —
+20.2°C above its November normal of −30.1°C, the largest departure among 440 sampled cities
+(Open-Meteo/Meteostat, forecast)." Pure data delivery, valid register: exact figures, forecast
+status and sample scope stated, no Wodehouse violations, no banned opener. Capped at B: violation
+is real (a −30°C town forecast to 20° above normal) but the voice never takes a turn — ends on a
+parenthetical source tag, not a close. P_close failing (data stops at the comparison).
+
+### Patterns
+1. **P_close** +1 cycle (hot10 closeless). Other proposals untested (no dust/NWS/tier-jargon/
+   event-saturation content).
+2. No era-anchor, political-anchor, banned-opener or plant-comparison hits.
+
+### Followups
+- Operator: consider rejecting the Oct 31 Brazil fire (98h, dated).
+- Operator: `daily-plan-current` still unmerged; `main` lacks graded cycles since 2026-06-08.
+
+---
+
 ## 2026-11-03 — Daily corpus grading (0 fresh drafts; 1 carry-over from Oct 31, previously graded)
 
 **Context:** Gist read via git-clone path (success). 1 pending: `draft_20261031_032828_68` (Brazil fire,
