@@ -34,13 +34,17 @@ def partition_us_world(
     country_ghcn: list[CountryRecord],
     bundles_open_meteo: list[ExtremeSignalBundle],
     country_open_meteo: list[CountryRecord],
+    *,
+    global_stations: bool = False,
 ) -> tuple[list[ExtremeSignalBundle], list[CountryRecord]]:
     """Merge both providers into one (bundles, country_records) pair.
 
     US locations are taken from GHCN, non-US from Open-Meteo. GHCN US bundles
     keep their original order and lead; Open-Meteo world bundles follow.
+    With global_stations, retain non-US individual GHCN bundles too.
+    Country aggregates keep one owner per country because their IDs overlap.
     """
-    bundles = [b for b in bundles_ghcn if is_us_location(b.country)] + [
+    bundles = [b for b in bundles_ghcn if global_stations or is_us_location(b.country)] + [
         b for b in bundles_open_meteo if not is_us_location(b.country)
     ]
     country_records = [c for c in country_ghcn if is_us_location(c.country)] + [

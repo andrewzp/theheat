@@ -80,3 +80,17 @@ class TestPartitionUsWorld:
         bundles, records = partition_us_world([], [], [], [])
         assert bundles == []
         assert records == []
+
+
+def test_global_stations_preserves_forecast_country_aggregate_ownership():
+    stations = [_bundle("Calgary", "Canada"), _bundle("Miami", "United States")]
+    forecasts = [_bundle("Calgary", "Canada"), _bundle("Miami", "US")]
+    station_record = _country_record("Canada")
+    forecast_record = _country_record("Canada")
+    bundles, records = partition_us_world(
+        stations, [station_record], forecasts, [forecast_record], global_stations=True,
+    )
+    assert len(bundles) == 3
+    assert all(actual is expected for actual, expected in zip(bundles, [*stations, forecasts[0]], strict=True))
+    assert len(records) == 1
+    assert records[0] is forecast_record

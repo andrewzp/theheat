@@ -932,6 +932,7 @@ def _drain_and_write_triage_queue(
     # would have been cap-cut records negative_cache rather than triage_cap
     # on this path — the refill drain keeps exact last-$0-predicate
     # ordering; here the slot-backfill invariant wins.
+    from src.orchestrator.draft_save import can_draft_candidate
     from src.two_bot import negative_cache as _negcache
 
     _negcache.prune(bot_state)
@@ -967,8 +968,9 @@ def _drain_and_write_triage_queue(
     #      would only reclaim after selection (codex r12 P1).
     #   2. Identical facts to a cache-skipped row → duplicate_draft (never
     #      a second savings-inflating negative_cache row, codex r10).
-    #   3. Cache-dead → negative_cache row + fingerprint skip memory.
-    #   4. Otherwise live — the event's one contender for a cap slot.
+    #   3. Already handled or certain save-time refusal → pre-writer suppression.
+    #   4. Cache-dead → negative_cache row + fingerprint skip memory.
+    #   5. Otherwise live — the event's one contender for a cap slot.
     # Partition rows LEFT triage — bump triaged_out for them (codex r12
     # P2: funnel triage_cut = triaged_in - triaged_out; unbumped cache
     # resolutions read as editorial cap cuts, a cache-only slate showed
@@ -998,6 +1000,19 @@ def _drain_and_write_triage_queue(
             _legacy_pre_writer_row(
                 candidate, "duplicate_draft", "pre-writer: duplicate event in slate"
             )
+            continue
+        if budget.seen(CandidateBudget.key_for(candidate)):
+            _bump_source_field_in_run(current_run, candidate.source, "triaged_out")
+            _legacy_pre_writer_row(
+                candidate, "duplicate_draft", "pre-writer: event already handled this operation"
+            )
+            continue
+        # Apply the same certain save-time refusals as the refill drain
+        # before ranking can allocate the only slot to this row.
+        can_draft, reason = can_draft_candidate(bot_state, candidate)
+        if not can_draft:
+            _bump_source_field_in_run(current_run, candidate.source, "triaged_out")
+            _legacy_pre_writer_row(candidate, reason, f"pre-writer: {reason}")
             continue
         negcache_reason = _negcache.should_skip(
             bot_state, candidate.event_id, candidate.bundle

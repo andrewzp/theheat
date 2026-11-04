@@ -33,6 +33,11 @@ _INITIAL_ARTICLE_ACRONYM = re.compile(
     r"\A(?P<article>A|An)[ \t]+[A-Z]{2,10}[ \t]+(?=[a-z]+\b)"
 )
 
+_TEMPERATURE_WEEKDAY = re.compile(
+    r"(?P<reading>\d[ \t]*°[CF])(?P<gap>[ \t]+)"
+    r"(?=(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\b)"
+)
+
 
 def valid_date(value: Any) -> bool:
     if not isinstance(value, str):
@@ -296,6 +301,10 @@ def material_span_failures(tweet: str, claims: list, *, bundle: Any = None) -> l
         visible = visible[:left] + " " * (right - left) + visible[right:]
     material = [(match.start(), match.end(), match.group()) for match in re.finditer(r"(?<!\w)[+-]?\d+(?:[.,]\d+)*(?:[eE][+-]?\d+)?", visible)]
     entity_visible = _entity_sentence_scan(visible, tweet)
+    # The weekday and degree unit remain material, with separate spans.
+    entity_visible = _TEMPERATURE_WEEKDAY.sub(
+        lambda match: match["reading"] + ";" + match["gap"][1:], entity_visible,
+    )
     for match in re.finditer(r"\b[A-ZÀ-ÖØ-Þ][\wÀ-ÿ'’.-]*(?:\s+[A-ZÀ-ÖØ-Þ][\wÀ-ÿ'’.-]*)*", entity_visible):
         token = match.group().rstrip(".,")
         if token not in _OPENERS:

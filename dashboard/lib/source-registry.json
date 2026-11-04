@@ -698,7 +698,7 @@
     "src/orchestrator/sources/ocean_sst.py": "2d7f803dfe21695b1595053ef9b7f9d17c37f5b4563bfda6dcd5fcfc52cc0a39",
     "src/orchestrator/sources/ocean_sst_anomaly.py": "495657e1684d67d9b56076084aa29c3bc6262108498ffd966839c74b6679757f",
     "src/orchestrator/sources/official_warning.py": "469554a569f33365b55e919c62438fc6f1cea41fe31c6aecb7681029512d5679",
-    "src/orchestrator/sources/open_meteo.py": "379e7f3d3d990eb8368863f169f46b95e5bb8a12b5de7fbdb75ed7c9690aa0db",
+    "src/orchestrator/sources/open_meteo.py": "81a679ca4819300afb592fbc2f2f331a2cc65ea5058383a5a8902734ab115936",
     "src/orchestrator/sources/ozone_hole.py": "04e8f94c2d73330ab7693ae5ff240693262468e7764076148c58841acfc7e77f",
     "src/orchestrator/sources/reanalysis_anomaly.py": "4d69825455870e1adeddbd106d3cccb5875cbd0ea36305bd9a01ae7d1518dde8",
     "src/orchestrator/sources/regional_observed.py": "ed3eb40b8f5d167262c3cf6bbfe706b2bbd68cf318804dfb817f5171178b65b2",
@@ -710,5 +710,5 @@
     "src/two_bot/intern/warnings.py": "04e0a4506ffbb29124c8d2960a5e5025305699297fcf8f9178b23caac2cd7a37"
   },
   "evidence_scope": "Referenced local code inventory; not live/provider/transitive-source qualification.",
-  "registry_sha256": "4cb1683434900bf85e289e00c833860915bd6e079b93c20128edda0ba5f1723a"
+  "registry_sha256": "31441e4035e4410bb7e75b48e05590c065dab172dce90c6bcae0203dfb20fa5f"
 }

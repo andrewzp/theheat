@@ -9,12 +9,12 @@ def test_run_gpm_imerg_drafts_and_updates_tracking(monkeypatch, synthetic_bundle
 
     bot_state = _fresh_state()
     bot_state["precip_daily_records"] = {
-        "precip:late:" + places.event_location_key("Paris","France",48.85,2.35) + ":05-14": {"mm": 40.0, "year": 2024},
+        "precip:late:" + places.event_location_key("Paris","France",48.86,2.35) + ":05-14": {"mm": 40.0, "year": 2024},
     }
     reading = CityPrecipReading(
         city="Paris",
         country="France",
-        lat=48.85,
+        lat=48.86,
         lon=2.35,
         date="2026-05-14",
         mm_total=75.0,
@@ -28,18 +28,18 @@ def test_run_gpm_imerg_drafts_and_updates_tracking(monkeypatch, synthetic_bundle
     drafted = runner.run_gpm_imerg(
         bot_state,
         current_run,
-        [{"city": "Paris", "country": "France", "lat": "48.85", "lon": "2.35"}],
+        [{"city": "Paris", "country": "France", "lat": "48.86", "lon": "2.35"}],
     )
 
     assert drafted is None
     assert len(bot_state["_triage_queue"]) == 1
     assert bot_state["_triage_queue"][0].source == "gpm_imerg"
     assert "gpm_precip_record_france_paris_2026-05-14" not in bot_state["posted_events"]
-    assert bot_state["precip_daily_records"]["precip:late:" + places.event_location_key("Paris","France",48.85,2.35) + ":05-14"]["mm"] == 75.0
+    assert bot_state["precip_daily_records"]["precip:late:" + places.event_location_key("Paris","France",48.86,2.35) + ":05-14"]["mm"] == 75.0
 
     assert runner._drain_and_write_triage_queue(bot_state, current_run) == 1
     assert "gpm_precip_record_france_paris_2026-05-14" not in bot_state["posted_events"]
-    assert bot_state["precip_daily_records"]["precip:late:" + places.event_location_key("Paris","France",48.85,2.35) + ":05-14"]["mm"] == 75.0
+    assert bot_state["precip_daily_records"]["precip:late:" + places.event_location_key("Paris","France",48.86,2.35) + ":05-14"]["mm"] == 75.0
     assert bot_state["source_health"]["gpm_imerg"]["success"] == 1
     assert current_run["sources"][0]["drafted"] == 1
 

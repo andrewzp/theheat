@@ -559,13 +559,10 @@ jobs:
           # Activate: gh variable set THEHEAT_METRICS_ENABLED --body 1 --repo andrewzp/theheat
           # Rollback: gh variable set THEHEAT_METRICS_ENABLED --body 0 --repo andrewzp/theheat
           THEHEAT_METRICS_ENABLED: ${{ vars.THEHEAT_METRICS_ENABLED || '0' }}
-          # "both" = GHCN (deep US NOAA station records) + Open-Meteo (curated
-          # world cities incl. Europe), partitioned US/non-US in run_extreme_signals.
-          # GHCN alone is blind outside the US (it missed the deadly June 2026
-          # European heatwave); "both" restores global coverage without losing US depth.
-          # "ghcn" = US-only stations; "open_meteo" = curated cities only.
-          # Rollback: set back to "ghcn" and push — next cycle reverts instantly.
-          THEHEAT_SIGNALS_PROVIDER: both
+          # both: US GHCN plus the non-US Open-Meteo forecast lane.
+          # both_global: keep qualified non-US GHCN observations as well.
+          # ghcn: global station observations only; open_meteo: curated cities only.
+          THEHEAT_SIGNALS_PROVIDER: ${{ vars.THEHEAT_SIGNALS_PROVIDER || 'both' }}
           # P00c serialized Gist route (default off): in route mode this job is the serialized
           # writer; outside route mode both stay empty and every writer behaves as before.
           THEHEAT_GIST_WRITE_ROUTE: ${{ vars.THEHEAT_GIST_WRITE_ROUTE }}

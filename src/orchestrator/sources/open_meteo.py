@@ -582,7 +582,7 @@ class IndividualSignalSelection:
     simultaneous: list
 
 
-def _select_individual_signal(bot_state, bundle, records_cluster_suppressed_ids, city_elevations):
+def _select_individual_signal(bot_state, bundle, records_cluster_suppressed_ids, city_elevations, *, observed_labels=False):
     """The existing priority cascade; caller owns suppression scope and effects."""
     signal_counts = dict.fromkeys(("all_time", "monthly", "absolute_extreme", "anomaly", "calendar"), 0)
     simultaneous_record_stations = []
@@ -610,9 +610,13 @@ def _select_individual_signal(bot_state, bundle, records_cluster_suppressed_ids,
                 strongest_event_id = ev.event_id
                 strongest_type = "all_time_high"
                 strongest_city = ev.city
-                strongest_headline = f"{ev.city} on pace for its hottest in {ev.years_of_data}yr archive"
+                observed = observed_labels and ev.evidence.get("evidence_type") == "observed"
+                strongest_headline = (
+                    f"{ev.city}: observed high above its prior archive maximum"
+                    if observed else f"{ev.city} on pace for its hottest in {ev.years_of_data}yr archive"
+                )
                 strongest_facts = [
-                    _fact("Forecast high", _temp_pair_c(ev.new_temp_c)),
+                    _fact("Observed high" if observed else "Forecast high", _temp_pair_c(ev.new_temp_c)),
                     _fact("Prior archive max", _temp_pair_c(ev.old_record_c)),
                     _fact("Prior max year", ev.old_record_year),
                     _fact("Archive span", f"{ev.years_of_data} years"),
@@ -663,9 +667,13 @@ def _select_individual_signal(bot_state, bundle, records_cluster_suppressed_ids,
                 strongest_event_id = ev_mh.event_id
                 strongest_type = "monthly_high"
                 strongest_city = ev_mh.city
-                strongest_headline = f"{ev_mh.city} on pace for hottest {month_name} on record"
+                observed = observed_labels and ev_mh.evidence.get("evidence_type") == "observed"
+                strongest_headline = (
+                    f"{ev_mh.city}: observed high above its prior {month_name} maximum"
+                    if observed else f"{ev_mh.city} on pace for hottest {month_name} on record"
+                )
                 strongest_facts = [
-                    _fact("Forecast high", _temp_pair_c(ev_mh.new_temp_c)),
+                    _fact("Observed high" if observed else "Forecast high", _temp_pair_c(ev_mh.new_temp_c)),
                     _fact(f"Prior {month_name} max", _temp_pair_c(ev_mh.old_record_c)),
                     _fact("Prior year", ev_mh.old_record_year),
                     _fact("Archive span", f"{ev_mh.years_of_data} years"),
@@ -791,9 +799,13 @@ def _select_individual_signal(bot_state, bundle, records_cluster_suppressed_ids,
                 strongest_event_id = ev_cdh.event_id
                 strongest_type = "record"
                 strongest_city = ev_cdh.city
-                strongest_headline = f"{ev_cdh.city} is forecast to challenge a heat record"
+                observed = observed_labels and ev_cdh.evidence.get("evidence_type") == "observed"
+                strongest_headline = (
+                    f"{ev_cdh.city}: observed high challenges its calendar-day record"
+                    if observed else f"{ev_cdh.city} is forecast to challenge a heat record"
+                )
                 strongest_facts = [
-                    _fact("Forecast high", _temp_pair_c(ev_cdh.new_temp_c)),
+                    _fact("Observed high" if observed else "Forecast high", _temp_pair_c(ev_cdh.new_temp_c)),
                     _fact("Previous record", _temp_pair_c(ev_cdh.old_record_c)),
                     _fact("Old record year", ev_cdh.old_record_year),
                     _fact("Record gap", f"+{ev_cdh.new_temp_c - ev_cdh.old_record_c:.1f}C"),
@@ -848,9 +860,11 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
         ghcn_supply.validate(mode="capture")
     # 1. Extreme climate signals — dispatched by THEHEAT_SIGNALS_PROVIDER.
     # "open_meteo" (default): 638 curated cities via Open-Meteo archive API.
-    # "ghcn": ~9,449 active NOAA GHCN-Daily stations via superghcnd_diff + SQLite threshold cache.
+    # "ghcn": NOAA GHCN-Daily stations via superghcnd_diff + SQLite threshold cache.
     # Hot 10 leaderboard (run_leaderboard) always uses Open-Meteo regardless of this flag.
     _signals_provider = os.environ.get("THEHEAT_SIGNALS_PROVIDER", "open_meteo").lower()
+    global_stations = _signals_provider == "both_global"
+    combined = _signals_provider in {"both", "both_global"}
     print(f"[alerts] Checking extreme climate signals (provider={_signals_provider})...")
     signals_start = time.perf_counter()
     signal_counts = {
@@ -874,9 +888,9 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
     # whether it ended up as a draft, rejection, duplicate, or no-signal.
     ghcn_event_log: list[dict] = []
     try:
-        if _signals_provider not in {"open_meteo", "ghcn", "both"}:
+        if _signals_provider not in {"open_meteo", "ghcn", "both", "both_global"}:
             raise ValueError(
-                "THEHEAT_SIGNALS_PROVIDER must be 'open_meteo', 'ghcn', or 'both', "
+                "THEHEAT_SIGNALS_PROVIDER must be 'open_meteo', 'ghcn', 'both', or 'both_global', "
                 f"got {_signals_provider!r}"
             )
         if _signals_provider == "ghcn":
@@ -887,10 +901,8 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
                 open_meteo_pipeline_metrics,
             )
         else:
-            # "both": GHCN owns the US (deep NOAA station coverage); Open-Meteo
-            # owns the rest of the world (curated cities, incl. Europe). Run both
-            # and partition by country so every place is sourced from exactly one
-            # provider — no overlap, no fragile name/geo matching.
+            # Both modes share the same source calls. The global mode retains
+            # qualified non-US stations alongside the separate world forecast lane.
             ghcn_bundles, ghcn_country = _verified_ghcn_signals(bot_state, ghcn_pipeline_metrics, ghcn_supply=ghcn_supply, current_run=current_run)
             # Open-Meteo only needs the non-US cities — the US comes from GHCN —
             # so skip the US city fetches entirely.
@@ -900,6 +912,7 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
             )
             bundles, country_records = partition_us_world(
                 ghcn_bundles, ghcn_country, om_bundles, om_country,
+                global_stations=global_stations,
             )
         source_promoted = 0
 
@@ -912,7 +925,10 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
             # all-time > monthly > absolute-extreme > anomaly > calendar-date.
             # The strongest signal wins — we don't draft multiple tweets for the same city.
 
-            selected = _select_individual_signal(bot_state, bundle, records_cluster_suppressed_ids, city_elevations)
+            selected = _select_individual_signal(
+                bot_state, bundle, records_cluster_suppressed_ids, city_elevations,
+                observed_labels=global_stations and bool(bundle.station_id),
+            )
             strongest_signal, strongest_score, strongest_event_id = selected.signal, selected.score, selected.event_id
             strongest_headline, strongest_facts = selected.headline, selected.facts
             strongest_type, strongest_city = selected.legacy_type, selected.city
@@ -1124,7 +1140,7 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
             # show "X considered, Y drafted, Z rejected, W no-signal".
             # Only the GHCN provider exposes station_id; rows from the
             # Open-Meteo provider get an empty station_id and the city instead.
-            if _signals_provider in ("ghcn", "both"):
+            if _signals_provider == "ghcn" or combined:
                 if strongest_event_id and not candidate_queued:
                     decision = "rejected"
                 elif candidate_queued:
@@ -1206,7 +1222,7 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
         # Two formats available; flat summary is the default. Roll-call (per-station list with
         # elevations) fires only when the cluster shape qualifies — same country with a
         # meaningful elevation spread. See src/editorial/simultaneous_format.py.
-        if _signals_provider == "both":
+        if combined:
             _simultaneous_source = "NOAA GHCN-Daily + Open-Meteo"
         elif _signals_provider == "ghcn":
             _simultaneous_source = "NOAA GHCN-Daily"
@@ -1350,15 +1366,7 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
                 continue
             source_promoted += 1
             descriptor = "hottest" if cr.kind == "high" else "coldest"
-            if _signals_provider == "both":
-                # Country records are partitioned by country, so provenance
-                # follows the same US-from-GHCN / world-from-Open-Meteo rule.
-                country_source_label = (
-                    "NOAA GHCN-Daily station aggregate"
-                    if is_us_location(cr.country)
-                    else "Open-Meteo archive (country-wide aggregate)"
-                )
-            elif _signals_provider == "ghcn":
+            if _signals_provider == "ghcn" or combined and is_us_location(cr.country):
                 country_source_label = "NOAA GHCN-Daily station aggregate"
             else:
                 country_source_label = "Open-Meteo archive (country-wide aggregate)"
@@ -1436,7 +1444,7 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
         )
         source_status = "success"
         details: dict | None = None
-        if _signals_provider == "both":
+        if combined:
             ghcn_funnel = (
                 f"status:{ghcn_pipeline_metrics['status']} "
                 f"verification:{ghcn_pipeline_metrics['threshold_verification']} "
@@ -1448,7 +1456,7 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
             )
             m = open_meteo_pipeline_metrics
             note = (
-                f"provider:both ghcn[{ghcn_funnel}] "
+                f"provider:{_signals_provider} ghcn[{ghcn_funnel}] "
                 f"world[cached:{m.get('cached_count', 0)}/{m.get('world_total', 0)} "
                 f"identity_quarantine:{m.get('identity_quarantined', 0)} "
                 f"record_withheld:{m.get('record_comparisons_withheld', 0)} "
@@ -1463,7 +1471,7 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
                     else "degraded"
                 )
             details = {
-                "provider": "both",
+                "provider": _signals_provider,
                 "ghcn_pipeline_metrics": dict(ghcn_pipeline_metrics),
                 "open_meteo_pipeline_metrics": dict(open_meteo_pipeline_metrics),
                 "events": ghcn_event_log[:200],

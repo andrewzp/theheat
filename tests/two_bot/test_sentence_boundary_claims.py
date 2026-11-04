@@ -136,3 +136,19 @@ def test_sync_and_retained_results_keep_exact_inventory_and_model_verdict(monkey
         assert sync.failures == failures
     provider.assert_called_once_with(text, source, retry_suffix="")
     assert source.to_dict() == before_source and saved == before_saved
+
+
+@pytest.mark.parametrize("reading", ["22°C", "−4.2°C", "71 °F"])
+def test_temperature_unit_and_weekday_are_separate_material_spans(reading):
+    text = f"Luma is forecast to reach {reading} Tuesday."
+    claims = inventory("Luma", reading, "Tuesday")
+    assert material_span_failures(text, claims) == []
+    for index in range(len(claims)):
+        assert material_span_failures(text, claims[:index] + claims[index + 1:])
+    assert material_span_failures(text, inventory("Luma", reading[:-1], "Tuesday"))
+
+
+def test_single_letter_in_a_name_still_requires_full_coverage():
+    text = "Flooding reached District C Tuesday."
+    assert material_span_failures(text, inventory("Flooding", "District C", "Tuesday"))
+    assert material_span_failures(text, inventory("Flooding", "District C Tuesday")) == []

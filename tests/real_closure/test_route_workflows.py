@@ -112,8 +112,12 @@ def test_bot_drains_only_in_route_mode_and_keeps_every_existing_default():
     for env_key, legacy in renamed.items():
         assert old_step["env"][env_key] == "${{ secrets.%s }}" % legacy
         assert step["env"][env_key] == "${{ secrets.%s || secrets.%s }}" % (RENAMED[legacy], legacy)
-    assert {k: v for k, v in step["env"].items() if k in old_step["env"] and k not in renamed} == \
-        {k: v for k, v in old_step["env"].items() if k not in renamed}
+    # The opt-in station selector retains the exact old default.
+    assert old_step["env"]["THEHEAT_SIGNALS_PROVIDER"] == "both"
+    assert step["env"]["THEHEAT_SIGNALS_PROVIDER"] == "${{ vars.THEHEAT_SIGNALS_PROVIDER || 'both' }}"
+    checked = {*renamed, "THEHEAT_SIGNALS_PROVIDER"}
+    assert {k: v for k, v in step["env"].items() if k in old_step["env"] and k not in checked} == \
+        {k: v for k, v in old_step["env"].items() if k not in checked}
     assert doc["run-name"] == ("${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'manual_tweet' && "
                                "format('theheat-bot manual_tweet {0}', inputs.publish_intent_id) || ' ' }}") and "run-name" not in old
     # Composed candidate: the route adds exactly its two keys; the Hot10 product selector is the

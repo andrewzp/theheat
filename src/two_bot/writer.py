@@ -7,9 +7,12 @@ import os
 from copy import deepcopy
 
 from src.config import WRITER_MODEL as _DEFAULT_WRITER_MODEL
+from src.data.fire_evidence import is_thermal
 from src.two_bot.prompts.writer_prompt import (
+    HOT10_RANK_GUIDANCE,
     IMPACT_GUIDANCE,
     MULTISIGNAL_GUIDANCE,
+    THERMAL_TIME_GUIDANCE,
     WRITER_SYSTEM_PROMPT,
     WRITER_USER_PROMPT_TEMPLATE,
 )
@@ -167,6 +170,10 @@ def build_writer_user_prompt(
         prompt += "\n\nqualified_warning_consequence_view: " + json.dumps(consequence, sort_keys=True)
     if getattr(bundle, "related_signals", None):
         prompt = f"{prompt}\n\n{MULTISIGNAL_GUIDANCE}"
+    if bundle.signal_kind == "hot10":
+        prompt = f"{prompt}\n\n{HOT10_RANK_GUIDANCE}"
+    if is_thermal(bundle) or any(is_thermal(signal) for signal in (bundle.related_signals or [])):
+        prompt = f"{prompt}\n\n{THERMAL_TIME_GUIDANCE}"
     if getattr(bundle, "human_impact", None):
         prompt = f"{prompt}\n\n{IMPACT_GUIDANCE}"
     if revision_constraint:
