@@ -20,7 +20,7 @@ jobs:
   refresh:
     if: vars.THEHEAT_PRODUCTION_PAUSED != '1'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     permissions:
       contents: write  # needed for gh release upload
 
@@ -64,7 +64,7 @@ jobs:
         env:
           THRESHOLD_DAYS: ${{ github.event.inputs.days || '12' }}
         run: |
-          timeout 900 python -m scripts.update_thresholds_incremental \
+          timeout 2700 python -m scripts.update_thresholds_incremental \
             --db data/station_thresholds.sqlite \
             --days "$THRESHOLD_DAYS"
 

@@ -462,9 +462,11 @@ def test_full_station_archive_refuses_another_station(monkeypatch):
 def test_full_station_prefetch_is_bounded_ordered_and_joined(monkeypatch, fail):
     from threading import Barrier, Lock
 
-    station_ids = {f"S{index:02}" for index in range(8)}
+    window = updater.FULL_STATION_WORKERS
+    station_ids = {f"S{index:02}" for index in range(2 * window)}
+    first_window_ids = set(sorted(station_ids)[:window])
     through = date(2026, 9, 29)
-    first_window = Barrier(4, timeout=5)
+    first_window = Barrier(window, timeout=5)
     lock = Lock()
     calls = []
     active = peak = 0
@@ -477,7 +479,7 @@ def test_full_station_prefetch_is_bounded_ordered_and_joined(monkeypatch, fail):
             active += 1
             peak = max(peak, active)
         try:
-            if station_id in {"S00", "S01", "S02", "S03"}:
+            if station_id in first_window_ids:
                 first_window.wait()
             if fail and station_id == "S00":
                 raise requests.RequestException("invented source failure")
@@ -493,5 +495,5 @@ def test_full_station_prefetch_is_bounded_ordered_and_joined(monkeypatch, fail):
                 list(results)
         else:
             assert [row.station_id for row in results] == sorted(station_ids)
-    assert peak == 4 and active == 0
-    assert sorted(calls) == (sorted(station_ids)[:4] if fail else sorted(station_ids))
+    assert peak == window and active == 0
+    assert sorted(calls) == (sorted(station_ids)[:window] if fail else sorted(station_ids))
