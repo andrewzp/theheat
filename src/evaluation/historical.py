@@ -134,13 +134,21 @@ def structural_bundle(spec):
         bundle.raw_signal_dump["evidence"] = deepcopy(spec["structural_evidence"])
         return bundle
     unit = "MW" if signal == "fire" else "mm" if signal.startswith("precipitation") else "C"
+    raw = {"source_product": "synthetic-structural-probe",
+           "evidence": deepcopy(spec["structural_evidence"])}
+    if signal == "precipitation_extreme" and "synthetic_rainfall_window" in spec:
+        # The offline control exercises the same window gate as a fresh draft.
+        # This invented packet never replaces missing original rain evidence.
+        from types import SimpleNamespace
+        from src.data.rainfall_supply import window_evidence
+        rain = SimpleNamespace(**spec["synthetic_rainfall_window"])
+        raw.update(product_code=rain.product_code, rainfall_window=window_evidence(rain))
     return StoryBundle(
         signal_kind=signal, event_id=f"synthetic_{spec['case_id']}",
         where="Synthetic probe location", when="2026-07-01",
         headline_metric={"label": "synthetic_measurement", "value": 40, "unit": unit},
         current_facts=[{"label": "source", "value": "synthetic-structural-probe"}],
-        raw_signal_dump={"source_product": "synthetic-structural-probe",
-                         "evidence": deepcopy(spec["structural_evidence"])},
+        raw_signal_dump=raw,
     )
 
 
@@ -152,6 +160,8 @@ def failure_codes(failures):
             codes.add("temperature_forecast_as_observation")
         elif reason.startswith("temperature evidence:"):
             codes.add("temperature_scope_unqualified")
+        elif reason == "rainfall evidence: rainfall_window_missing":
+            codes.add("rainfall_window_missing")
         else:
             prefix = reason.split(":", 1)[0]
             if re.fullmatch(r"[a-z][a-z_]+", prefix):

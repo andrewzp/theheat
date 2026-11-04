@@ -33,6 +33,14 @@ PILOT_SCHEMA = "theheat.reference-gap-pilots/v1"
 HISTORICAL_LIMITS = ("barrow_original_imerg_granules_missing", "barrow_gauge_qc_chronology_missing")
 IMERG_LATE = {"source_product": "IMERG Late daily (3IMERGDL)", "product_version": "V07", "resolution_deg": 0.1,
               "day_basis": "utc_day"}
+_IMERG_PRODUCTS = {
+    "late": {**IMERG_LATE, "evidence_type": "satellite_derived"},
+    "final": {**IMERG_LATE, "evidence_type": "satellite_derived",
+              "source_product": "IMERG Final daily (3IMERGDF)"},
+}
+_MODEL_PRODUCT = {
+    "evidence_type": "model_fallback", "source_product": "Open-Meteo multi-model forecast precipitation",
+}
 EVIDENCE_TYPES = frozenset({"satellite_derived", "model_fallback", "gauge_observed", "official_flood_report",
                             "thermal_detection", "smoke_forecast", "measured_exposure"})
 
@@ -41,23 +49,32 @@ def _iso(moment: datetime) -> str:
     return moment.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
+def _served_product(product_code: Any, source_leg: Any) -> dict[str, Any]:
+    if source_leg == "open_meteo" and product_code == "open_meteo":
+        return _MODEL_PRODUCT
+    if source_leg is None and isinstance(product_code, str):
+        return _IMERG_PRODUCTS.get(product_code, {})
+    return {}
+
+
 def window_evidence(event: Any, *, retrieved_at: str | None = None) -> dict[str, Any]:
     """The explicit accumulation window and footprint for one GPM-derived event."""
     end_day = date.fromisoformat(str(event.date)) + timedelta(days=1)
     period = int(event.period_days)
     end = datetime(end_day.year, end_day.month, end_day.day, tzinfo=timezone.utc)
     start = end - timedelta(days=period)
-    model = getattr(event, "source_leg", None) == "open_meteo"
+    product = _served_product(getattr(event, "product_code", None), getattr(event, "source_leg", None))
+    model = product.get("evidence_type") == "model_fallback"
     aggregate = event.kind == "country_precip_event"
     return {
         "schema": WINDOW_SCHEMA, "domain": "precipitation",
-        "evidence_type": "model_fallback" if model else "satellite_derived",
-        "source_product": "Open-Meteo multi-model forecast precipitation" if model else IMERG_LATE["source_product"],
-        "product_version": None if model else IMERG_LATE["product_version"],
+        "evidence_type": product.get("evidence_type"),
+        "source_product": product.get("source_product"),
+        "product_version": product.get("product_version"),
         "accumulation_start": _iso(start), "accumulation_end": _iso(end), "integration_interval_hours": 24 * period,
         "footprint": {
             "kind": "heaviest_member_cell" if aggregate else ("model_point" if model else "grid_cell"),
-            "resolution_deg": None if model else IMERG_LATE["resolution_deg"],
+            "resolution_deg": product.get("resolution_deg"),
             "center": [event.lat, event.lon],
             "members": getattr(event, "city_count", None) if aggregate else 1,
         },
@@ -118,10 +135,15 @@ def rainfall_claim_failures(tweet: str, bundle: Any) -> list[str]:
     """Deterministic floor: window completeness, footprint scope and gauge wording."""
     raw = getattr(bundle, "raw_signal_dump", None)
     evidence = raw.get("rainfall_window") if isinstance(raw, dict) else None
-    if evidence is None or not isinstance(tweet, str):
+    is_gpm = getattr(bundle, "signal_kind", None) == "precipitation_extreme"
+    if (evidence is None and not is_gpm) or not isinstance(tweet, str):
         return []
-    failures = [f"rainfall evidence: {code}" for code in window_failures(evidence)]
-    if evidence.get("footprint", {}).get("kind") in {"grid_cell", "heaviest_member_cell", "model_point"} \
+    codes = packet_ready(bundle) if is_gpm else window_failures(evidence)
+    failures = [f"rainfall evidence: {code}" for code in codes]
+    if not isinstance(evidence, Mapping):
+        return failures
+    footprint = evidence.get("footprint")
+    if isinstance(footprint, Mapping) and footprint.get("kind") in {"grid_cell", "heaviest_member_cell", "model_point"} \
             and _NATIONAL.search(tweet):
         failures.append("rainfall evidence: a single heaviest cell/point value is not a national total or average")
     if evidence.get("evidence_type") != "gauge_observed" and _GAUGE.search(tweet):
@@ -313,7 +335,23 @@ def packet_ready(bundle: Any) -> list[str]:
     raw = getattr(bundle, "raw_signal_dump", None)
     if not isinstance(raw, dict):
         return ["bundle_raw_signal_missing"]
-    return window_failures(raw.get("rainfall_window"))
+    window = raw.get("rainfall_window")
+    failures = window_failures(window)
+    if failures or getattr(bundle, "signal_kind", None) != "precipitation_extreme":
+        return failures
+    product = _served_product(raw.get("product_code"), raw.get("source_leg"))
+    if not product:
+        return ["rainfall_product_identity_missing"]
+    if (any(window.get(key) != product.get(key) for key in ("source_product", "product_version", "evidence_type"))
+            or window["footprint"].get("resolution_deg") != product.get("resolution_deg")):
+        return ["rainfall_product_mismatch"]
+    label = product["source_product"]
+    if version := product.get("product_version"):
+        label = f"{label} {version}"
+    if any(f.get("value") != label for f in bundle.current_facts
+           if isinstance(f, Mapping) and f.get("label") == "source_product"):
+        return ["rainfall_product_mismatch"]
+    return []
 
 
 def readiness(run_history: Any) -> list[dict[str, Any]]:

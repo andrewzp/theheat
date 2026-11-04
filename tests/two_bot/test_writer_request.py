@@ -51,6 +51,7 @@ def test_prompt_preserves_serialization_and_guidance_order(monkeypatch, related,
 @pytest.mark.parametrize(("kind", "rank", "thermal"), [
     ("hot10", True, False),
     ("fire", False, True),
+    ("fire_footprint", False, False),
     ("temperature", False, False),
 ])
 def test_writer_guidance_applies_only_to_matching_evidence(kind, rank, thermal):
@@ -59,6 +60,12 @@ def test_writer_guidance_applies_only_to_matching_evidence(kind, rank, thermal):
     prompt = writer.build_writer_user_prompt(bundle, _memory())
     assert ("HOT 10 RANK:" in prompt) == rank
     assert ("SATELLITE TIMING:" in prompt) == thermal
+    assert ("SATELLITE LOCATION:" in prompt) == thermal
+    if thermal:
+        assert 'preserving any "near" qualifier' in prompt
+        assert "may identify a reference city" in prompt
+        assert "does not locate the detection" in prompt
+        assert "Never infer a state or province" in prompt
 
 
 def test_actual_anthropic_boundary_retains_kwargs_and_transport_configuration(monkeypatch):

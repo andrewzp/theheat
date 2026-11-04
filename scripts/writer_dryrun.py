@@ -309,6 +309,7 @@ def _build_bundle(args: argparse.Namespace) -> StoryBundle:
                 ],
                 event_id="dryrun_precip_country_kazakhstan",
                 alert_threshold_mm=None,
+                product_code="late",
             )
             return build_precipitation_bundle(event)
         record = bool(args.record_path)
@@ -328,6 +329,7 @@ def _build_bundle(args: argparse.Namespace) -> StoryBundle:
             sample_cities=[args.precip_location],
             event_id="dryrun_precip_astana",
             alert_threshold_mm=None if record else args.precip_threshold_mm,
+            product_code="late",
         )
         return build_precipitation_bundle(event)
     if args.type == "dust":

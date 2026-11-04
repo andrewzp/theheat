@@ -142,7 +142,7 @@ def run_gpm_imerg(
                 continue
             source_promoted += 1
             review_context = _review_context(
-                source="NASA GPM IMERG",
+                source="Open-Meteo" if event.source_leg == "open_meteo" else "NASA GPM IMERG",
                 source_key="gpm_imerg",
                 headline=f"{event.location}: {event.mm_total:.0f} mm rainfall signal",
                 current_run=current_run,
