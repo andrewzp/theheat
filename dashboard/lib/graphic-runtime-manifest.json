@@ -1,6 +1,6 @@
 {
   "identity": {
-    "archive_sha256": "b1fd5e7f8d1ed77165c799f156468b9ffc3830da2f507d670f415a8e90d4a8a0",
+    "archive_sha256": "93fdcf1b46f540984287030ed68631307fe6215112c277e1c56cf88750bdc790",
     "deployment_files": {
       "api/graphic_preview.py": "f7521adcbd618f4b65b2a0de30ea62aaff4cdd36f2254e9af38bf68646d361ad",
       "api/graphic_reader_status.py": "5e9685d699625a4eea9d5be884b6e266939a0ad344a2997351ba79bd114407ba",
@@ -25,8 +25,8 @@
       "src/data/air_quality.py": "89975b423632d9d6a0b3db767df8dae8cc4e7e7c496a350d396d7e303e820e33",
       "src/data/air_quality_contract.py": "7f9de8f7fcd6836a3e4fb32ea8c1a35a3c9981bcede6aea2d74770f12539d667",
       "src/data/air_quality_evidence.py": "677713bb8916c4bcd51d407a5b19072f54532f5f46db116914af6b3fcac9f4f7",
-      "src/data/coral_evidence.py": "6971edc855ae1f09a7b32fca66a8d7ec4bd67c9ddee10949adc1217b911ab910",
-      "src/data/coral_regional_contract.py": "5f5a3fb09ec827f144cde1a621e452598f8f96e0c571dc2eade57fc472e5efc6",
+      "src/data/coral_evidence.py": "723b04dc720538b5dab0ab6290f2f774c877796963a69aa46eb541e00bbf84ee",
+      "src/data/coral_regional_contract.py": "4d1bd7871d50c9e32036a338597184e76b7ffc3d0db018a40093c65f99db78d4",
       "src/data/coral_source_contract.py": "1809eeeb915f6dcf09bed99f67da998338360eafb11c976805679a1a87c5f310",
       "src/data/crw_contract.py": "6dde2bbf1e1d81cf61e8b6bcc959e6ed61555d7aedb8d3e36ecf4313e8891170",
       "src/data/crw_regions.py": "7a4afb9f8ad021357cc652b8b82e2a88026f6e68a2ad9a805ae5ae2962e7f2ce",
@@ -50,7 +50,7 @@
       "src/editorial/approval.py": "9cfbc42cd018f053e2d517f2f6b3c6fdc3db7ee5c5cbbbc86321fc7884f41118",
       "src/editorial/candidates.py": "80d50c488f44fd879c137751701a306cfae78eb376c3da33b9b7f3150cf9270d",
       "src/editorial/hot10_contract.py": "68dbb3c9081af24c7869ede677659a530a701a7270606307b122624a706fa534",
-      "src/editorial/marine_evidence.py": "7183f93f1068d75856063cf061a1dea8751bd4dd98cc1f1f34488bcf39296f5c",
+      "src/editorial/marine_evidence.py": "d6c9bb8c7ca12133eefa9ddf6283977c7a86da65ef50869d686c352263c1099d",
       "src/editorial/operator_claim_references.py": "f7d1d14d75b55cc9f273d3a98459f158f57c533521d153b1e86ee5bc7d95d1fd",
       "src/editorial/publication.py": "7fa23a8f51530dc7f128beacc23689f0df7a8c95b6888beb39afca4212f1a5fe",
       "src/editorial/revisions.py": "0b03cddf3d0a58f43ad6c8c45f70d55b33b25e086525f50cb88d2908a9141c22",
@@ -104,12 +104,12 @@
       "src/two_bot/types.py": "951044ca2582c8b96872bdd5b8ed8fc60546a58305aa8b06de50075206cc817e"
     },
     "format": "saved-source-svg-preview-v2",
-    "policy_source_sha256": "2c6c7ea5917c3917048b15d271ff6ae259892b3c9b85e005f99dcd1cd2cf1ac1",
+    "policy_source_sha256": "828502f0a8522cc7a49059cea1e7fd9e34670e3e35eb82dc3788044732bffd0d",
     "resource_sources": {
       "src/data/registry/country_codes.json": "data/country_codes.json",
       "src/data/registry/place_registry.json": "data/place_registry.json"
     },
     "schema_version": 1
   },
-  "runtime_sha256": "beefda2daac9ffe59c5dba0ff756dc3035f0f0bab0e8ba126055d450ee0a556e"
+  "runtime_sha256": "cf98350cfaa6cd0f57825c2f33839a499d3f90459f33e5b57403749585c082f4"
 }

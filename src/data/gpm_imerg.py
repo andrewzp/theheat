@@ -10,7 +10,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping, MutableMapping, Sequence
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from src.two_bot.call_inventory import submit_in_context
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from src.data import places
 from datetime import date, datetime, timedelta, timezone
 import base64
@@ -152,6 +152,7 @@ class PrecipExtremeEvent:
     # claim no downstream gate can catch (#372 — the tweet matches the
     # bundle, so BUNDLE_FACT passes). Record fields stay None for these.
     alert_threshold_mm: float | None = None
+    product_code: str | None = None
 
 
 # Actual rainfall-opportunity trace (P09a/P19). Observation only: it records what
@@ -975,16 +976,12 @@ def detect_precip_records(
                 sample_cities=[],
                 event_id="gpm_precip_record_"
                 f"{places.event_location_key(reading.city, reading.country, reading.lat, reading.lon)}_{reading.date}",
+                source_leg=reading.source_leg,
+                product_code=reading.source_product.lower(),
             ))
 
     events.extend(_detect_rolling_accumulations(readings, tracking))
     events.extend(_detect_country_events(events, min_country_records=min_country_records))
-    # R-03: readings are homogeneous per cycle (the whole fetch was served by one
-    # leg). If a witness served, stamp every derived event so the bundle builder
-    # can append the correct evidence_grade.
-    leg = source_leg_of(readings)
-    if leg:
-        events = [replace(event, source_leg=leg) for event in events]
     return events
 
 
@@ -1591,9 +1588,10 @@ def _detect_rolling_accumulations(
         rows: list[dict[str, Any]] = [
             {"date": str(row.get("date")), "mm": float(row.get("mm", 0.0))}
             for row in prior_rows
-            if isinstance(row, Mapping) and row.get("date")
+            # A fallback may serve an older day than a previous run. The
+            # accumulation must end on the current reading's date.
+            if isinstance(row, Mapping) and row.get("date") and str(row["date"]) < reading.date
         ]
-        rows = [row for row in rows if row["date"] != reading.date]
         rows.append({"date": reading.date, "mm": reading.mm_total})
         rows.sort(key=lambda row: row["date"])
         for period_days, threshold_mm in thresholds.items():
@@ -1637,6 +1635,8 @@ def _detect_rolling_accumulations(
                 sample_cities=[],
                 event_id=f"gpm_precip_{period_days}d_"
                 f"{places.event_location_key(reading.city, reading.country, reading.lat, reading.lon)}_{reading.date}",
+                source_leg=reading.source_leg,
+                product_code=reading.source_product.lower(),
             ))
     return events
 
@@ -1646,19 +1646,23 @@ def _detect_country_events(
     *,
     min_country_records: int,
 ) -> list[PrecipExtremeEvent]:
-    by_country: dict[str, list[PrecipExtremeEvent]] = {}
-    seen_places: set[str] = set()
+    by_country_day: dict[tuple[str, str], list[PrecipExtremeEvent]] = {}
+    products_by_country_day: dict[tuple[str, str], set[tuple[str | None, str | None]]] = {}
+    seen_place_days: set[tuple[str, str]] = set()
     for event in events:
         if event.kind == "daily_record" and event.country:
+            country_day = (places.country_key(event.country), event.date)
+            products_by_country_day.setdefault(country_day, set()).add((event.product_code, event.source_leg))
             place = places.resolve_place(event.location, event.country, event.lat, event.lon)["place_id"]
-            if place in seen_places:
+            place_day = (place, event.date)
+            if place_day in seen_place_days:
                 continue
-            seen_places.add(place)
-            by_country.setdefault(places.country_key(event.country), []).append(event)
+            seen_place_days.add(place_day)
+            by_country_day.setdefault(country_day, []).append(event)
 
     country_events: list[PrecipExtremeEvent] = []
-    for country, group in by_country.items():
-        if len(group) < min_country_records:
+    for (country, day), group in by_country_day.items():
+        if len(group) < min_country_records or len(products_by_country_day[(country, day)]) != 1:
             continue
         leader = max(group, key=lambda event: event.mm_total)
         sample_cities = [event.location for event in group[:12]]
@@ -1666,7 +1670,7 @@ def _detect_country_events(
             kind="country_precip_event",
             location=leader.country,
             country=leader.country,
-            date=leader.date,
+            date=day,
             mm_total=max(event.mm_total for event in group),
             period_days=1,
             deviation_from_record_mm=None,
@@ -1676,7 +1680,9 @@ def _detect_country_events(
             lon=leader.lon,
             city_count=len(group),
             sample_cities=sample_cities,
-            event_id=f"gpm_precip_country_{_safe_key(country)}_{leader.date}",
+            event_id=f"gpm_precip_country_{_safe_key(country)}_{day}",
+            source_leg=leader.source_leg,
+            product_code=leader.product_code,
         ))
     return country_events
 

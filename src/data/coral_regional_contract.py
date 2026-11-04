@@ -26,12 +26,17 @@ HEADER_BYTES = 2049
 MAX_AGE_DAYS = 5
 UNIT = "degree_Celsius_weeks"
 METHOD = "Regional 90th-percentile HotSpot accumulation over the preceding 12 weeks"
+LEGACY_BAA_SCALE = "heritage_0_to_4"
+EXPANDED_BAA_SCALE = "expanded_0_to_7"
 LABELS = (
     "No Stress",
     "Bleaching Watch",
     "Bleaching Warning",
     "Bleaching Alert Level 1",
     "Bleaching Alert Level 2",
+    "Bleaching Alert Level 3",
+    "Bleaching Alert Level 4",
+    "Bleaching Alert Level 5",
 )
 COLUMNS = "YYYY MM DD SST_MIN SST_MAX SST@90th_HS SSTA@90th_HS 90th_HS>0 DHW_from_90th_HS>1 BAA_7day_max".split()
 _RECEIPT_KEYS = {
@@ -259,13 +264,18 @@ def decode_index(
             stations[region_id] = station
         if not stations:
             reject("no station entries")
-        return list(stations.values()), {
+        receipt = {
             "source_url": INDEX_URL,
             "response_sha256": hashlib.sha256(body).hexdigest(),
             "response_bytes": len(body),
             "retrieved_at": retrieved_at,
             "index_date": latest.isoformat(),
         }
+        # The overlapping labels alone do not distinguish the two published
+        # scales. An expanded label in this exact index does.
+        if any(station.stress_level in LABELS[5:] for station in stations.values()):
+            receipt["baa_scale"] = EXPANDED_BAA_SCALE
+        return list(stations.values()), receipt
     except (UnicodeError, KeyError, ValueError, OverflowError):
         reject("malformed index")
 
@@ -376,7 +386,7 @@ def _tail(body: bytes, start: int, latest: date, station: StationLink) -> dict:
             if (
                 len(parts) != 10
                 or any(re.fullmatch(r"[0-9]+", v) is None for v in parts[:3])
-                or re.fullmatch(r"[0-4]", parts[9]) is None
+                or re.fullmatch(r"[0-7]", parts[9]) is None
             ):
                 reject("daily row schema")
             day = date(*map(int, parts[:3]))
@@ -448,7 +458,7 @@ def decode_station(
         "dhw_value": data.pop("dhw_value"),
         "unit": UNIT,
         "baa_7day_max": data.pop("baa_7day_max"),
-        "baa_scale": "heritage_0_to_4",
+        "baa_scale": index.get("baa_scale", LEGACY_BAA_SCALE),
         "baa_window_days": 7,
         "stress_level": station.stress_level,
         "marker_point": meta.pop("marker_point"),
@@ -501,7 +511,6 @@ def _receipt_valid(p: Any) -> bool:
             "source_leg": LEG,
             "evidence_type": "satellite_analysis",
             "unit": UNIT,
-            "baa_scale": "heritage_0_to_4",
             "baa_window_days": 7,
             "marker_role": "regional_map_marker",
             "method": METHOD,
@@ -515,11 +524,12 @@ def _receipt_valid(p: Any) -> bool:
             or p["dhw_value"] < 0
         ):
             return False
-        if (
-            type(p["baa_7day_max"]) is not int
-            or not 0 <= p["baa_7day_max"] <= 4
-            or p["stress_level"] != LABELS[p["baa_7day_max"]]
-        ):
+        scale = p["baa_scale"]
+        if type(scale) is not str or scale not in (LEGACY_BAA_SCALE, EXPANDED_BAA_SCALE):
+            return False
+        expanded = scale == EXPANDED_BAA_SCALE
+        code = p["baa_7day_max"]
+        if type(code) is not int or not 0 <= code <= (7 if expanded else 4) or p["stress_level"] != LABELS[code]:
             return False
         marker = p["marker_point"]
         if (
@@ -534,9 +544,10 @@ def _receipt_valid(p: Any) -> bool:
         if p["source_url"] != url:
             return False
         index, header, tail = p["index"], p["header"], p["tail"]
+        index_keys = _INDEX_KEYS | {"baa_scale"} if expanded else _INDEX_KEYS
         if any(
             type(r) is not dict or set(r) != keys
-            for r, keys in [(index, _INDEX_KEYS), (header, _HEADER_KEYS), (tail, _TAIL_KEYS)]
+            for r, keys in [(index, index_keys), (header, _HEADER_KEYS), (tail, _TAIL_KEYS)]
         ):
             return False
         if (
@@ -544,6 +555,7 @@ def _receipt_valid(p: Any) -> bool:
             or not _digest(index["response_sha256"])
             or type(index["response_bytes"]) is not int
             or not 0 < index["response_bytes"] <= INDEX_LIMIT
+            or (expanded and index["baa_scale"] != EXPANDED_BAA_SCALE)
         ):
             return False
         latest = _day(p["valid_date"])
