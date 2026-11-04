@@ -330,6 +330,108 @@ def test_failure_after_a_committed_chunk_retains_old_checkpoint_without_claiming
         assert load_thresholds(conn, "SYNTHETIC").all_time_max_c == 20
 
 
+@pytest.mark.parametrize("damage", [None, "station", "diff", "missing_diff", "baseline", "manifest", "date"])
+def test_resumable_capture_keeps_the_baseline_unchanged_and_skips_completed_reads(
+    baseline, tmp_path, monkeypatch, capsys, damage,
+):
+    stations = [f"S{i:03}" for i in range(1, 65)] if damage is None else ["S001"]
+    with closing(sqlite3.connect(baseline)) as conn:
+        conn.executemany("INSERT INTO stations(station_id,lat,lon,is_active) VALUES(?,0,0,1)",
+                         [(station,) for station in stations])
+        conn.commit()
+        conn.execute("PRAGMA journal_mode=DELETE")
+    diff_calls = fake_source(monkeypatch, [record("update", station) for station in (*stations, "SYNTHETIC")])
+    completed = []
+    fail = True
+
+    def recompute(station, *, through):
+        if station == "SYNTHETIC" and fail:
+            raise requests.ConnectionError("invented connection interruption")
+        completed.append(station)
+        return StationThresholds(
+            station, all_time_max_c=25, all_time_max_year=2001,
+            provenance={"source_payload_sha256": "a" * 64, "requested_comparison_cutoff": through.isoformat()},
+        )
+
+    monkeypatch.setattr(updater, "_fetch_station_thresholds", recompute)
+    before = baseline.read_bytes()
+    checkpoint = tmp_path / "checkpoint"
+    manifest = baseline.with_suffix(".version")
+    manifest.write_text("invented installed manifest\n")
+    argv = ["--db", str(baseline), "--resume-dir", str(checkpoint)]
+    assert updater.main(argv) == 1
+    assert baseline.read_bytes() == before
+    assert sorted(completed) == stations
+    first_calls = diff_calls.copy()
+    fail = False
+    if damage is not None:
+        if damage == "baseline":
+            with closing(sqlite3.connect(baseline)) as conn, conn:
+                conn.execute("UPDATE stations SET lat = 1 WHERE station_id = 'S001'")
+        elif damage == "manifest":
+            manifest.write_text("different installed manifest\n")
+        else:
+            mutations = {
+                "station": "UPDATE thresholds SET value_c = 99",
+                "diff": "UPDATE refresh_diffs SET payload = X'00'",
+                "missing_diff": "DELETE FROM refresh_diffs",
+                "date": "UPDATE meta SET value = '2026-10-03' WHERE key = 'incremental_today'",
+            }
+            with closing(sqlite3.connect(checkpoint / "refresh.sqlite")) as conn, conn:
+                conn.execute(mutations[damage])
+        before_resume = baseline.read_bytes()
+        assert updater.main(argv) == 1
+        assert "threshold_checkpoint_" in capsys.readouterr().err
+        assert baseline.read_bytes() == before_resume
+        assert read_watermark(baseline) == "2026-09-25"
+        assert diff_calls == first_calls and completed == ["S001"]
+        return
+    assert updater.main(argv) == 0
+    assert diff_calls == first_calls
+    assert sorted(completed) == [*stations, "SYNTHETIC"]
+    assert read_watermark(baseline) == "2026-09-30"
+    with closing(sqlite3.connect(baseline)) as conn:
+        assert load_thresholds(conn, "S001").all_time_max_c == 25
+        assert load_thresholds(conn, "SYNTHETIC").all_time_max_c == 25
+
+
+def test_resume_refuses_a_baseline_changed_after_metadata_read(baseline, tmp_path, monkeypatch, capsys):
+    calls = fake_source(monkeypatch, [record("update")])
+    original = updater._read_baseline
+
+    def concurrent_change(path):
+        retained = original(path)
+        set_watermark(path, "2026-09-30")
+        return retained
+
+    monkeypatch.setattr(updater, "_read_baseline", concurrent_change)
+    assert updater.main(["--db", str(baseline), "--resume-dir", str(tmp_path / "checkpoint")]) == 1
+    assert "threshold_checkpoint_scope_changed" in capsys.readouterr().err
+    assert not calls and read_watermark(baseline) == "2026-09-30"
+
+
+def test_refresh_owner_refuses_second_directory_before_egress(baseline, tmp_path, monkeypatch, capsys):
+    calls = fake_source(monkeypatch, [record("update")])
+    with updater.lock_baseline(baseline):
+        assert updater.main(["--db", str(baseline), "--resume-dir", str(tmp_path / "other")]) == 1
+    assert "threshold_refresh_already_owned" in capsys.readouterr().err
+    assert not calls and not (tmp_path / "other").exists()
+
+
+def test_checkpoint_database_cannot_be_the_baseline(baseline, tmp_path, monkeypatch, capsys):
+    from shutil import copyfile
+
+    calls = fake_source(monkeypatch, [record("update")])
+    directory = tmp_path / "checkpoint"
+    directory.mkdir(mode=0o700)
+    aliased = directory / "refresh.sqlite"
+    copyfile(baseline, aliased)
+    before = aliased.read_bytes()
+    assert updater.main(["--db", str(aliased), "--resume-dir", str(directory)]) == 1
+    assert "threshold_checkpoint_aliases_baseline" in capsys.readouterr().err
+    assert not calls and aliased.read_bytes() == before
+
+
 @pytest.mark.parametrize("has_records", [False, True])
 def test_explicit_multiday_bridge_completes_without_inventing_a_missing_snapshot(
     baseline, monkeypatch, has_records
@@ -412,8 +514,10 @@ def test_weekly_workflow_lookback_covers_prior_lagged_checkpoint(baseline, monke
 
 
 @pytest.mark.parametrize("kind", ["update", "delete", "new_station"])
-def test_full_station_archive_stops_at_connected_watermark(baseline, monkeypatch, kind):
+@pytest.mark.parametrize("resumable", [False, True])
+def test_full_station_archive_stops_at_connected_watermark(baseline, monkeypatch, tmp_path, kind, resumable):
     from tests.test_ghcn_time_integrity import dly
+    from hashlib import sha256
 
     station_id = "TESTST00001"
     with open_db(baseline) as conn:
@@ -438,12 +542,16 @@ def test_full_station_archive_stops_at_connected_watermark(baseline, monkeypatch
         return response
 
     monkeypatch.setattr(updater.requests, "get", get)
-    assert updater.main(["--db", str(baseline)]) == 0
+    argv = ["--db", str(baseline)]
+    if resumable:
+        argv.extend(["--resume-dir", str(tmp_path / "checkpoint")])
+    assert updater.main(argv) == 0
     assert read_watermark(baseline) == through.isoformat()
     with open_db(baseline) as conn:
         threshold = load_thresholds(conn, station_id)
     assert threshold.all_time_max_c == 35
     assert threshold.all_time_min_c == 2
+    assert threshold.provenance["source_payload_sha256"] == sha256(archive).hexdigest()
 
 
 def test_full_station_archive_refuses_another_station(monkeypatch):

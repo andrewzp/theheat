@@ -13,6 +13,7 @@ build/
 data/station_thresholds.sqlite
 data/station_thresholds.sqlite-shm
 data/station_thresholds.sqlite-wal
+data/station_thresholds.sqlite.refresh.lock
 data/_ghcnd_all.tar.gz
 data/stations.csv
 
