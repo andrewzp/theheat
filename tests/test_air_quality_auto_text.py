@@ -284,6 +284,30 @@ def test_flags_default_off_keep_air_quality_manual_with_no_extra_fetch(aq):
     assert "automatic_source_hold" not in draft and len(aq.transport.aq_calls) == 1  # The sweep only.
 
 
+@pytest.mark.parametrize("fact_passed", [True, False])
+def test_independent_dust_and_pm10_clauses_still_need_the_full_required_checks(aq, monkeypatch, fact_passed):
+    monkeypatch.setenv("THEHEAT_AQ_DUST_ENABLED", "1")
+    aq.transport.air_quality[LAHORE_KEY] = {**HAZARD, "pm25": 20.0}
+    aq.script.copies["dust_event"] = (
+        "Lahore: dust is forecast to peak near 2,000 µg/m³ Thursday, with PM10 averaging ~90 µg/m³ "
+        "— about 2× the WHO 24-hour guideline (CAMS model forecast, not station-measured)."
+    )
+    aq.script.fact_passed = fact_passed
+
+    state = alerts(aq)
+
+    stages = ["writer", "safety", "fact_check"]
+    assert aq.script.stages() == (stages + ["critic"] if fact_passed else stages)
+    assert not aq.transport.x_posts
+    if fact_passed:
+        draft, = state["drafts"]
+        assert draft["type"] == "dust_event" and draft["status"] == "pending"
+        assert draft["approval_policy"]["mode"] == "manual_only"
+        assert "auto_approve_at" not in draft
+    else:
+        assert state["drafts"] == []
+
+
 def test_pm25_flag_arms_policy_auto_only_for_pm25_after_three_bounded_reads(aq, monkeypatch):
     monkeypatch.setenv("THEHEAT_PM25_FORECAST_AUTO_TEXT", "1")
     monkeypatch.setenv("THEHEAT_AQ_DUST_ENABLED", "1")
