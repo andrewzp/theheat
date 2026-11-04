@@ -1,3 +1,8 @@
+## 0.9.109.59
+
+- Lead Hot10 copy with the strongest departure from normal and preserve
+  the supplied temperature precision.
+
 ## 0.9.109.58
 
 - Limit full station recomputations to the verified diff watermark and check
