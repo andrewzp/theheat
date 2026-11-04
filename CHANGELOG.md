@@ -1,3 +1,8 @@
+## 0.9.109.64
+
+- Stagger scheduled collection, the hourly sender and source health checks
+  without changing their cadence or publication rules.
+
 ## 0.9.109.63
 
 - Accept NOAA's expanded regional coral alerts when the index and station

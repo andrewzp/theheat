@@ -55,10 +55,37 @@ def test_prs_use_separate_queues_that_can_cancel_only_their_old_heads(workflow, 
 
 def test_every_existing_schedule_keeps_the_production_lock(workflow):
     assert {s["cron"] for s in workflow["on"]["schedule"]} == {
-        "30 * * * *", "0 12 * * *", "0 0,4,8,16,20 * * *",
+        "41 * * * *", "11 12 * * *", "11 0,4,8,16,20 * * *",
     }
     # No schedule or mode enters the expression: all use the same literal group.
     assert _queue_policy(workflow, "schedule") == ("theheat-bot", False)
+
+
+def test_sentinel_keeps_its_hourly_cadence_in_a_separate_slot(workflow):
+    sentinel_path = WORKFLOW.with_name("source-health-sentinel.yml")
+    sentinel = yaml.load(sentinel_path.read_text(), Loader=yaml.BaseLoader)
+    assert [entry["cron"] for entry in sentinel["on"]["schedule"]] == ["23 * * * *"]
+    assert "23" not in {entry["cron"].split()[0] for entry in workflow["on"]["schedule"]}
+
+
+@pytest.mark.parametrize(
+    "event,schedule,manual,expected",
+    [
+        ("schedule", "41 * * * *", "", "auto_publish_due"),
+        ("schedule", "11 12 * * *", "", "both"),
+        ("schedule", "11 0,4,8,16,20 * * *", "", "alerts"),
+        ("workflow_dispatch", "", "leaderboard", "leaderboard"),
+        ("workflow_dispatch", "", "manual_tweet", "manual_tweet"),
+    ],
+)
+def test_real_mode_selector_preserves_scheduled_and_manual_roles(workflow, tmp_path, event, schedule, manual, expected):
+    step = next(step for step in workflow["jobs"]["run"]["steps"] if step.get("id") == "mode")
+    script = (step["run"].replace("${{ github.event_name }}", event)
+              .replace("${{ github.event.schedule }}", schedule)
+              .replace("${{ github.event.inputs.mode }}", manual))
+    output = tmp_path / "github-output"
+    subprocess.run(["/bin/bash", "-e", "-c", script], env={"GITHUB_OUTPUT": str(output)}, check=True, timeout=5)
+    assert output.read_text() == f"mode={expected}\n"
 
 
 def test_all_manual_modes_share_that_same_non_cancelling_lock(workflow):

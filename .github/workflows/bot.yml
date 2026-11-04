@@ -10,13 +10,10 @@ on:
   # run under samples=1 + revise=0, the cycle billing breaker, and the usage
   # ledger. Expected run-rate ~$18–23/month (PLAN-ECONOMICS-MASTER-v3 §4).
   schedule:
-    # Auto-approval queue processing (hourly)
-    - cron: '30 * * * *'
-    # Daily leaderboard: 12:00 UTC (~8 AM ET)
-    - cron: '0 12 * * *'
-    # Alert polling: every 4 hours
-    - cron: '0 0,4,8,16,20 * * *'
-    # Note: the 12:00 UTC slot handles both leaderboard + alerts
+    # Keep collection off the hour and stagger it from the sender and sentinel.
+    - cron: '41 * * * *'           # Hourly auto-approval queue processing
+    - cron: '11 12 * * *'          # Daily leaderboard + alerts
+    - cron: '11 0,4,8,16,20 * * *' # Remaining four-hour alert slots
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -350,13 +347,11 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "mode=${{ github.event.inputs.mode }}" >> $GITHUB_OUTPUT
-          elif [ "${{ github.event.schedule }}" = "30 * * * *" ]; then
+          elif [ "${{ github.event.schedule }}" = "41 * * * *" ]; then
             echo "mode=auto_publish_due" >> $GITHUB_OUTPUT
-          elif [ "${{ github.event.schedule }}" = "0 12 * * *" ]; then
-            # 12:00 UTC slot = leaderboard + alerts. Match the schedule string,
-            # not the runner clock: GitHub can delay top-of-hour crons past the
-            # hour, and a wall-clock check ($(date -u +%H) = 12) then silently
-            # degraded the run to alerts-only, skipping the day's leaderboard.
+          elif [ "${{ github.event.schedule }}" = "11 12 * * *" ]; then
+            # Match the triggering schedule so a delayed run still handles
+            # both the leaderboard and alerts.
             echo "mode=both" >> $GITHUB_OUTPUT
           else
             echo "mode=alerts" >> $GITHUB_OUTPUT
