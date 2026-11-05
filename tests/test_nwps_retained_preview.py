@@ -1,9 +1,7 @@
 """Invented NWPS acquisition through checked saved draft and retained SVG preview."""
 from copy import deepcopy
-from contextlib import closing
 import json
 from pathlib import Path
-import sqlite3
 import subprocess
 
 import pytest
@@ -13,12 +11,13 @@ from src.dashboard_preview.preview import build_preview
 from src.dashboard_preview.reader import Budget
 from src.data import nwps_major_forecasts as nwps
 from src.editorial.revisions import decision_revision, draft_identity, fingerprint
-from src.media import gist_assets, nwps_capture
+from src.media import gist_assets, gist_media_export, nwps_capture
 from tests.test_nwps_major_forecasts import NOW, journey, run_collector, source  # noqa: F401
 
 POLICY, RUNTIME = "a" * 64, "b" * 64
 ORIGINAL_FETCH = nwps.fetch_major_forecasts
 ORIGINAL_GAUGE_READ = nwps.read_gauge_forecast
+ORIGINAL_WRITER = gist_assets.configured_writer
 
 
 @pytest.fixture
@@ -73,11 +72,16 @@ def test_acquired_capture_stays_outside_the_writer_bundle_and_survives_restore(s
     assert reference["capture_sha256"] == fingerprint(capture)
     before = deepcopy(state)
     body = preview(state, request, store)
-    restored_path = tmp_path / "restored.sqlite3"
-    restored_path.touch(mode=0o600)
-    with closing(sqlite3.connect(store.path)) as original, closing(sqlite3.connect(restored_path)) as restored:
-        original.backup(restored)
-    reader = gist_assets.SQLiteMediaStore(restored_path, writable=False)
+    plan = gist_media_export.plan(store, state)
+    assert plan["present"] == 1 and plan["held"] == 0
+    assert plan["export_batches"] == [["--nwps-capture", reference["artifact_sha256"]]]
+    assert plan["items"][0]["drafts"][0]["reasons"] == ["retained_source"]
+    target = tmp_path / "export"
+    gist_media_export.export(store, [("nwps_capture", reference["artifact_sha256"])], target)
+    restored_store = gist_assets.SQLiteMediaStore(tmp_path / "restored.sqlite3")
+    result = gist_media_export.restore(restored_store, target)
+    assert result == {"restored_items": 1, "restored_blobs": 1, "verified": True}
+    reader = gist_assets.SQLiteMediaStore(restored_store.path, writable=False)
     assert preview(json.loads(json.dumps(state)), request, reader) == body
     assert state == before
     value = json.loads(body)
@@ -87,6 +91,9 @@ def test_acquired_capture_stays_outside_the_writer_bundle_and_survives_restore(s
         "checked_at": NOW.isoformat(), "point_count": 3}
     assert "3 forecast points" in value["alt_text"]
     assert "Crossing time is uncertain" in value["alt_text"]
+    assert "Source checked 2026-07-01 16:00:00 UTC" in value["alt_text"]
+    assert "Source checked 2026-07-01 16:00:00 UTC" in value["svg_utf8"]
+    assert "currentness requires a new source check" in value["alt_text"]
     assert value["publication_approved"] is False and value["attachment"] is False
     assert "raw_signal_dump" not in value and "capture" not in value
     assert "Major threshold: 17.0 ft" in value["svg_utf8"]
@@ -132,7 +139,7 @@ def test_invalid_reference_is_refused_before_loading_a_store(saved_capture, monk
     assert error.value.code == "media_hold"
 
 
-def test_source_disagreement_is_refused_even_with_a_new_packet_identity(saved_capture):
+def test_source_disagreement_is_refused_even_with_a_new_packet_identity(saved_capture, tmp_path):
     state, request, store, _ = saved_capture
     draft = state["drafts"][0]
     bundle = draft["review_context"]["two_bot"]["bundle"]
@@ -142,10 +149,15 @@ def test_source_disagreement_is_refused_even_with_a_new_packet_identity(saved_ca
     ref["artifact_sha256"] = gist_assets.put_document(store, packet)
     ref["capture_sha256"] = fingerprint(packet["capture"])
     request["expected_revision"].update(draft_identity(draft))
-    assert nwps_capture.load(bundle, ref, store)["forecast"]["primaryUnits"] == "m"
+    with pytest.raises(gist_assets.MediaStoreError):
+        nwps_capture.load(bundle, ref, store)
     with pytest.raises(PreviewError) as error:
         preview(state, request, store)
-    assert error.value.code == "graphic_unavailable"
+    assert error.value.code == "media_hold"
+    target = tmp_path / "invalid-export"
+    with pytest.raises(gist_media_export.ExportError):
+        gist_media_export.export(store, [("nwps_capture", ref["artifact_sha256"])], target)
+    assert not target.exists()
 
 
 def test_png_has_no_unreviewed_attachment_route(saved_capture, monkeypatch):
@@ -225,3 +237,24 @@ def test_writer_configuration_failure_preserves_the_checked_text(saved_capture, 
     assert nwps_capture.CONTEXT_KEY not in draft["review_context"]
     assert journey[2] == ["writer", "safety", "fact_check", "critic"]
     assert draft["approval_policy"]["mode"] == "manual_only"
+
+
+def test_capture_roundtrip_through_the_operator_command(saved_capture, tmp_path, capsys, monkeypatch):
+    from scripts import retain_gist_media as command
+    state, request, store, _ = saved_capture
+    monkeypatch.setattr(gist_assets, "configured_writer", ORIGINAL_WRITER)
+    key = state["drafts"][0]["review_context"][nwps_capture.CONTEXT_KEY]["artifact_sha256"]
+    code = command.main(["--store", f"sqlite:{store.path}", "readback", "--nwps-capture", key], environ={})
+    result = json.loads(capsys.readouterr().out)
+    assert code == 0 and result["items"][0]["kind"] == "nwps_capture" and result["items"][0]["verified"]
+    target = tmp_path / "command-export"
+    code = command.main(["--store", f"sqlite:{store.path}", "export", "--nwps-capture", key,
+                         "--target", str(target)], environ={})
+    assert code == 0
+    capsys.readouterr()
+    restored = tmp_path / "command-restored.sqlite3"
+    code = command.main(["--store", f"sqlite:{restored}", "restore", "--source", str(target)], environ={})
+    assert code == 0
+    capsys.readouterr()
+    reader = gist_assets.SQLiteMediaStore(restored, writable=False)
+    assert preview(state, request, reader) == preview(state, request, store)

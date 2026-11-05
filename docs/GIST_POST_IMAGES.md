@@ -224,13 +224,32 @@ canonical RGBA PNG of the decoded original, never cropped, recoloured or rescale
 the original keeps its own identity. Nothing deletes retained assets: never remove
 one referenced by history, an unresolved delivery or a current review.
 
+## Saved river forecast previews
+
+NWPS major-river drafts can preview a retained forecast when collection uses
+`THEHEAT_NWPS_MAJOR_FORECASTS=1` and `THEHEAT_NWPS_PACKET_RETENTION=1` with
+the existing insert-only media writer. The dashboard needs the corresponding
+read-only media store. Both retention and the source route default off.
+
+The draft saves a small reference beside the writer's story. The referenced
+artifact holds the qualified story and the metadata and forecast documents from
+that acquisition. Preview rebuilds the chart from this exact artifact. The chart,
+description and caption show the source check time and identify the saved forecast.
+An edit or changed source reference discards an open preview.
+
+The preview is read-only. Attaching and sending a river image need a supported
+image recipe and joint review. Include the source artifact in recovery with
+`plan`, `export --nwps-capture SHA256`, `restore` and
+`readback --nwps-capture SHA256` through `scripts/retain_gist_media.py`.
+The same source qualification verifies these recovery paths.
+
 ## Named holds
 
 | Hold | Meaning and safe next action |
 |---|---|
 | `media_store_unavailable` | No media store here; native charts still work. Configure the store or post text only. |
 | `media_retained_input_required` | Paste the retained packet/asset identity. |
-| `media_source_packet_mismatch` | Not the CRW packet the collector retained for this draft; select the draft's own packet. |
+| `media_source_packet_mismatch` | The packet differs from the source saved for this draft. Select the draft's own packet. |
 | `media_source_packet_invalid` | The draft's packet reference is malformed; the image stays held (text is unaffected). |
 | `media_source_packet_missing`, `media_original_missing` | Retain the input locally again; nothing is fetched. |
 | `media_asset_changed`, `media_asset_invalid` | Bytes, rights, labels, times or format changed or are incomplete; retain again. |

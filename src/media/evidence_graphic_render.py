@@ -260,9 +260,10 @@ def _drawing(template, evidence):
         text(56, 1320, chart_title(template, evidence), 62)
         block(1240, evidence["location"], size=48, color="text", bottom=1060)
         text(56, 1000, "Issued " + evidence["issued_at"][:19].replace("T", " ") + " UTC", 40, "muted")
-        text(56, 930, "Gauge stage (ft)", 40, "muted")
-        drawing.add(Line(830, 943, 900, 943, strokeColor=colors["forecast"], strokeWidth=5))
-        text(1144, 930, "Forecast", 40, "forecast", "end")
+        text(56, 940, "Source checked " + evidence["evidence_as_of"][:19].replace("T", " ") + " UTC", 40, "muted")
+        text(56, 880, "Gauge stage (ft)", 40, "muted")
+        drawing.add(Line(830, 893, 900, 893, strokeColor=colors["forecast"], strokeWidth=5))
+        text(1144, 880, "Forecast", 40, "forecast", "end")
         points = evidence["points"]
         moments = [datetime.fromisoformat(point["valid_time"]) for point in points]
         values = [point["value"] for point in points]
@@ -272,7 +273,7 @@ def _drawing(template, evidence):
         low, high = low - pad, high + pad
 
         def plot_y(value):
-            return 500 + 370 * (value - low) / (high - low)
+            return 500 + 320 * (value - low) / (high - low)
 
         for tick in (low, (low + high) / 2, high):
             y = plot_y(tick)
@@ -292,7 +293,8 @@ def _drawing(template, evidence):
         text(56, 352, f"Major threshold: {threshold} ft", 40, "warm")
         text(56, 286, f"First major point: {evidence['first_major_ft']} ft", 40)
         text(56, 234, first.strftime("%Y-%m-%d %H:%M:%S UTC"), 40, "muted")
-        block(158, f"NOAA / NWS · Gauge {evidence['gauge']} · Forecast only. Crossing time is uncertain.")
+        block(158, f"NOAA / NWS · Gauge {evidence['gauge']} · Saved forecast. "
+              "Crossing time is uncertain. Currentness requires a new source check.")
     elif template == "pm25_forecast_day":
         from src.media.air_quality_graphic_adapter import concentration, forecast_axis
         from reportlab.graphics.shapes import Circle, Line

@@ -161,7 +161,7 @@ export function temperaturePreviewSourceStatus(draft) {
 }
 
 const templates = {
-  nwps_river_forecast: { version: "p31-nwps-river-1", source: "NOAA/NWS National Water Prediction Service",
+  nwps_river_forecast: { version: "p31-nwps-river-2", source: "NOAA/NWS National Water Prediction Service",
     adapter: "src/media/nwps_graphic_adapter.py", context: "nwps_forecast_points" },
   temperature_comparator: { version: "p31-preview-3-mobile", source: "NOAA GHCN-Daily · station observations",
     adapter: "src/media/temperature_graphic_adapter.py", context: "ghcn_station_day" },

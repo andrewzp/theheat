@@ -121,6 +121,8 @@ export function GraphicPreviewFigure({ value, url, originalURL = null }) {
     h("figcaption", null,
       h("strong", null, value.title),
       h("p", null, `${value.source} · ${timing}`),
+      context.kind === "nwps_forecast_points" && h("p", null,
+        `Source checked ${context.checked_at}. This preview uses that retained forecast; currentness requires a new source check.`),
       context.kind === "ghcn_station_day" && h("p", null, `Archive retrieved ${context.retrieved_at}; comparison uses accepted source samples, not a certified record.`),
       h("p", null, value.scope),
       value.schema_version === 3

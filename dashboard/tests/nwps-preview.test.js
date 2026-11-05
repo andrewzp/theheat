@@ -55,5 +55,7 @@ test("river figure labels the issued forecast and point count without assuming a
   assert.match(html, /Gauge FAKF1/)
   assert.match(html, /forecast issued 2026-07-01T14:00:00\+00:00/)
   assert.match(html, /3 supplied points in feet/)
+  assert.match(html, /Source checked 2026-07-01T16:00:00\+00:00/)
+  assert.match(html, /currentness requires a new source check/)
   assert.match(html, /Crossing time is uncertain/)
 })

@@ -18,7 +18,7 @@ MAX_PACKET_BYTES = 450_000
 OUTCOMES = ("retained", "capture_unavailable", "source_unqualified", "store_unavailable",
             "retention_unknown", "retention_error")
 REFERENCE_KEYS = {"schema_version", "artifact_sha256", "capture_sha256", "bundle_sha256"}
-PACKET_KEYS = {"schema_version", "capture", "bundle_sha256"}
+PACKET_KEYS = {"schema_version", "capture", "bundle", "bundle_sha256"}
 SHA = re.compile(r"[a-f0-9]{64}\Z")
 
 
@@ -48,7 +48,7 @@ def retain(bundle, capture, store):
         capture_sha = fingerprint(capture)
         nwps_graphic_spec(bundle, capture, expected_bundle_sha256=bundle_sha,
                           expected_capture_sha256=capture_sha)
-        packet = {"schema_version": 1, "capture": capture, "bundle_sha256": bundle_sha}
+        packet = {"schema_version": 1, "capture": capture, "bundle": deepcopy(bundle), "bundle_sha256": bundle_sha}
         encoded = gist_assets.encode_document(packet)
         if len(encoded) > MAX_PACKET_BYTES or capture["synthetic"] is not False:
             return None, "source_unqualified"
@@ -70,14 +70,32 @@ def retain(bundle, capture, store):
             "bundle_sha256": bundle_sha}, "retained"
 
 
+def read_packet(store, artifact_sha256):
+    """The same historical source qualification for preview and portable recovery."""
+    from src.media.nwps_graphic_adapter import nwps_graphic_spec
+
+    packet = gist_assets.get_document(store, artifact_sha256, limit=MAX_PACKET_BYTES)
+    if (type(packet) is not dict or set(packet) != PACKET_KEYS
+            or type(packet["schema_version"]) is not int or packet["schema_version"] != 1
+            or type(packet["bundle"]) is not dict or packet["bundle_sha256"] != fingerprint(packet["bundle"])):
+        raise gist_assets.MediaStoreError("media_source_packet_invalid", "the river source packet is malformed")
+    try:
+        if packet["capture"]["synthetic"] is not False:
+            raise ValueError("synthetic capture")
+        nwps_graphic_spec(packet["bundle"], packet["capture"],
+                          expected_bundle_sha256=packet["bundle_sha256"],
+                          expected_capture_sha256=fingerprint(packet["capture"]))
+    except (ValueError, KeyError, TypeError, AttributeError, OverflowError, RecursionError):
+        raise gist_assets.MediaStoreError("media_source_packet_invalid", "the river source packet is unqualified") from None
+    return packet
+
+
 def load(bundle, reference, store=None):
     """Read only the saved artifact. Never choose a newest or same-gauge packet."""
     reference = _reference(reference, bundle)
     store = gist_assets.configured() if store is None else store
-    packet = gist_assets.get_document(store, reference["artifact_sha256"], limit=MAX_PACKET_BYTES)
-    if (type(packet) is not dict or set(packet) != PACKET_KEYS
-            or type(packet["schema_version"]) is not int or packet["schema_version"] != 1
-            or packet["bundle_sha256"] != reference["bundle_sha256"]
+    packet = read_packet(store, reference["artifact_sha256"])
+    if (packet["bundle_sha256"] != reference["bundle_sha256"]
             or fingerprint(packet["capture"]) != reference["capture_sha256"]):
         raise gist_assets.MediaStoreError("media_source_packet_mismatch", "the retained river capture changed")
     return packet["capture"]
