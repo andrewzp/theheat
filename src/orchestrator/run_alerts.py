@@ -5,6 +5,7 @@ from __future__ import annotations
 from contextlib import nullcontext
 
 # ruff: noqa: F403,F405
+from src.data.nwps_major_forecasts import ENABLE_FLAG as NWPS_FORECAST_FLAG
 from src.orchestrator.common import *
 from src.orchestrator.finalize import _fire_surviving_draft_callbacks, _prune_weakest_cycle_drafts
 from src.orchestrator.scheduler import SourceRunner, concurrent_sources_enabled, run_stage1_then_synthesis
@@ -33,7 +34,7 @@ from src.orchestrator.sources.open_meteo import run_extreme_signals
 from src.orchestrator.sources.newsworthiness import run_newsworthiness
 from src.orchestrator.sources.reanalysis_anomaly import run_reanalysis_anomaly
 from src.orchestrator.sources.regional_observed import run_regional_observed
-from src.orchestrator.sources.river_gauges import run_river_gauges
+from src.orchestrator.sources.river_gauges import run_nwps_major_forecasts, run_river_gauges
 from src.orchestrator.sources.sea_ice import run_sea_ice
 from src.orchestrator.sources.synthesis import run_synthesis
 from src.orchestrator.sources.usgs_quakes import run_usgs_quakes
@@ -172,6 +173,8 @@ def run_alerts(bot_state: BotState, current_run: dict | None = None, *, ghcn_sup
                 SourceRunner("coral_dhw", lambda bs, run: run_coral_dhw(bs, run)),
                 SourceRunner("water_levels", lambda bs, run: run_water_levels(bs, run)),
                 SourceRunner("river_gauges", lambda bs, run: run_river_gauges(bs, run)),
+                *([SourceRunner("nwps_major_forecasts", lambda bs, run: run_nwps_major_forecasts(bs, run))]
+                  if os.environ.get(NWPS_FORECAST_FLAG) == "1" else []),
                 SourceRunner(
                     "ice_mass",
                     lambda bs, run: run_ice_mass(bs, run),
@@ -234,6 +237,7 @@ def run_alerts(bot_state: BotState, current_run: dict | None = None, *, ghcn_sup
         run_coral_dhw(bot_state, current_run)
         run_water_levels(bot_state, current_run)
         run_river_gauges(bot_state, current_run)
+        run_nwps_major_forecasts(bot_state, current_run)
         run_ice_mass(bot_state, current_run)
         run_gpm_imerg(bot_state, current_run, cities)
         run_regional_observed(bot_state, current_run)

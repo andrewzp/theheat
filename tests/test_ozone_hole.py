@@ -157,3 +157,40 @@ def fetch_ozone_hole_annual_peaks_from_text_for_test():
     with responses.RequestsMock() as rsps:
         rsps.add(responses.GET, OZONE_ANNUAL_PEAKS_URL, body=ANNUAL_SAMPLE, status=200)
         return fetch_ozone_hole_annual_peaks()
+
+
+def test_daily_maximum_is_not_a_published_annual_peak():
+    annual_peaks = fetch_ozone_hole_annual_peaks_from_text_for_test()[:-1]
+    readings = [_reading("2026-09-20", 26.3), _reading("2026-11-05", 18.5)]
+
+    assert detect_seasonal_peak(readings, annual_peaks, today=date(2026, 11, 5)) is None
+
+
+def test_collector_retains_daily_data_without_spending_an_annual_story_slot(monkeypatch, fresh_state):
+    from src.data import last_good
+    from src.orchestrator.sources import ozone_hole as runner
+
+    class November(date):
+        @classmethod
+        def today(cls):
+            return cls(2026, 11, 5)
+
+    readings = [_reading("2026-09-20", 26.3), _reading("2026-11-05", 18.5)]
+    annual_peaks = fetch_ozone_hole_annual_peaks_from_text_for_test()[:-1]
+    monkeypatch.setattr(runner, "date", November)
+    monkeypatch.setattr(runner.ozone_hole, "fetch_ozone_hole_data", lambda **_: readings)
+    monkeypatch.setattr(runner.ozone_hole, "fetch_ozone_hole_annual_peaks", lambda **_: annual_peaks)
+    enqueued = []
+    monkeypatch.setattr(runner, "_enqueue_story_candidate", lambda *_, **kwargs: enqueued.append(kwargs))
+    run = {"sources": []}
+
+    runner.run_ozone_hole(fresh_state, run)
+
+    assert enqueued == []
+    assert run["sources"][0]["status"] == "success"
+    assert run["sources"][0]["observed"] == 2
+    assert run["sources"][0]["promoted"] == 0
+    assert "annual peak" in run["sources"][0]["note"]
+    retained = last_good.read(fresh_state, "ozone_hole", max_age_days=100000)
+    assert retained is not None
+    assert retained.data_date == "2026-11-05"

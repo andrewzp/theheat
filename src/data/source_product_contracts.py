@@ -57,7 +57,7 @@ PROVIDER_KINDS = {
     "openaq": frozenset({"observed_station"}),
     "noaa_coops": frozenset({"observed_station"}),
     "usgs_nwis": frozenset({"observed_station"}),
-    "noaa_nwps": frozenset({"official_reference"}),
+    "noaa_nwps": frozenset({"official_reference", "forecast_model"}),
     "nasa_gesdisc": frozenset({"satellite_derived"}),
     "nasa_jpl_grace": frozenset({"satellite_derived"}),
     "nasa_ozone_watch": frozenset({"satellite_derived"}),
@@ -549,6 +549,15 @@ LEGS += (
             "GloFAS model discharge", "Explicitly mapped alternate points only.", "m3/s discharge (not stage)",
             "Open-Meteo flood (GloFAS) model.", ("src/data/river_gauges.py:_fetch_open_meteo_flood",),
             chain="river_gauges", role="witness", restrictions=_ALT, runtime="open_meteo_flood"),
+    _single("nwps_major_forecasts", "verified_stage_forecast", "noaa_nwps", "noaa_nwps.official_point_stage",
+            "forecast_model", "Official issued point forecast", "At most two verified gauges from the 72-hour shortlist.",
+            "ft gauge stage", "NOAA NWPS major-stage point forecast and conditional thresholds.",
+            ("src/data/nwps_major_forecasts.py:fetch_major_forecasts",
+             "src/data/nwps_major_forecasts.py:verify_major_forecast"),
+            restrictions=("region_sample_not_census", "forecast_not_outcome"),
+            time_limit="Current issue and first supplied major point within the next 72 hours.",
+            status="conditional", disposition="Default off; exact-gauge forecasts require manual review.",
+            bound="One shortlist read and at most two gauge/forecast pairs per collector run."),
     *(
         leg
         for region, key in (("greenland", "ice_mass_greenland"), ("antarctica", "ice_mass_antarctica"))

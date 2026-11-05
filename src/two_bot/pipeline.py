@@ -230,9 +230,18 @@ def _writer_sample_slate(
 def _warning_boundary(bundle, record_kill, *, candidate=None) -> bool:
     from src.editorial.official_warning import WarningHold
     from src.editorial.warning_runtime import guard_warning_generation_settings, guard_warning_story
+    from src.two_bot.intern.nwps_forecast import forecast_clock, forecast_source_hold, forecast_text_hold, is_nwps_forecast
     try:
         guard_warning_story(bundle, candidate=candidate)
-        if getattr(bundle, "signal_kind", None) in _CURRENT_SOURCE_KINDS:
+        nwps = is_nwps_forecast(bundle)
+        if nwps:
+            hold = forecast_source_hold(bundle.to_dict(), live=False, clock=forecast_clock)
+            if not hold and candidate is not None:
+                hold = forecast_text_hold(candidate)
+            if hold:
+                record_kill("nwps_source", hold)
+                return False
+        if nwps or getattr(bundle, "signal_kind", None) in _CURRENT_SOURCE_KINDS:
             guard_warning_generation_settings()
         return True
     except WarningHold as exc:
@@ -444,7 +453,13 @@ def generate_draft(
         request_archive.note_generation_input(bundle.event_id, bundle.signal_kind, checked_bundle, memory_slice)
         if not _warning_boundary(bundle, _record_kill):
             return None
-        samples = 1 if bundle.signal_kind in _CURRENT_SOURCE_KINDS else _writer_samples()
+        from src.two_bot.intern.nwps_forecast import forecast_clock, forecast_source_hold, is_nwps_forecast
+        nwps = is_nwps_forecast(bundle)
+        strict_source = nwps or bundle.signal_kind in _CURRENT_SOURCE_KINDS
+        if nwps and (hold := forecast_source_hold(checked_bundle.payload(), live=True, clock=forecast_clock)):
+            _record_kill("nwps_source", hold)
+            return None
+        samples = 1 if strict_source else _writer_samples()
         if result_out is not None:
             result_out["writer_started"] = True  # Set before the first paid writer call.
         # An opt-in air-quality forecast re-reads its one city/window here. A hold
@@ -530,7 +545,7 @@ def generate_draft(
         critic_result = None
         if _critic_enabled() and slate_critic_result is None:
             shipped_recent = memory_slice.shipped_tweet_texts[:10]
-            revise_enabled = False if bundle.signal_kind in _CURRENT_SOURCE_KINDS else _critic_revise_enabled()
+            revise_enabled = False if strict_source else _critic_revise_enabled()
             critic_input = capture_stage_input(bundle, checked_bundle) if result_out is not None else None
             critic_attempt = 1
             critic_text = writer_result.tweet

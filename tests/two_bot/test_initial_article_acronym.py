@@ -2,7 +2,7 @@
 from copy import deepcopy
 from dataclasses import asdict
 import json
-from unittest.mock import Mock
+from unittest.mock import ANY, Mock
 
 import pytest
 
@@ -43,7 +43,7 @@ def check(request, monkeypatch):
                 provider = Mock(return_value=raw)
                 monkeypatch.setattr(fact_check, "_call_gemini", provider)
                 result = fact_check.fact_check(text, [], source, {})
-                provider.assert_called_once_with(text, source, retry_suffix="")
+                provider.assert_called_once_with(text, source, retry_suffix="", verification_date=ANY)
                 assert source.to_dict() == before_source
             assert result.raw_response == raw and result.passed == (not result.failures)
             failures = result.failures
@@ -128,5 +128,5 @@ def test_raw_model_rejection_remains_authoritative(monkeypatch, consumer):
         provider = Mock(return_value=raw)
         monkeypatch.setattr(fact_check, "_call_gemini", provider)
         result = fact_check.fact_check(text, [], source, {})
-        provider.assert_called_once_with(text, source, retry_suffix="")
+        provider.assert_called_once_with(text, source, retry_suffix="", verification_date=ANY)
     assert not result.passed and result.failures == [refusal] and result.raw_response == raw

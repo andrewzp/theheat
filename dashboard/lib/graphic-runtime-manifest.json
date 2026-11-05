@@ -1,6 +1,6 @@
 {
   "identity": {
-    "archive_sha256": "93fdcf1b46f540984287030ed68631307fe6215112c277e1c56cf88750bdc790",
+    "archive_sha256": "548e3d1b723e6f1d41de745bceb7990198c97843e40913157e0bae8ddbb567d6",
     "deployment_files": {
       "api/graphic_preview.py": "f7521adcbd618f4b65b2a0de30ea62aaff4cdd36f2254e9af38bf68646d361ad",
       "api/graphic_reader_status.py": "5e9685d699625a4eea9d5be884b6e266939a0ad344a2997351ba79bd114407ba",
@@ -58,7 +58,7 @@
       "src/editorial/scoring/_shared.py": "ecfbe383674644f82223150fc3beb9761b0ec3942f31b93d245514721fee16f0",
       "src/editorial/scoring/air_quality.py": "973727e2037d76129d68283a0889e23fafc8034b993315fd35af3c6c894dd30b",
       "src/editorial/scoring/atmospheric.py": "e2b9835c8bc13bfeed3dd04d82b74d2808a13bf5e366d9c6b7eb1a6e7ba9269e",
-      "src/editorial/scoring/disasters.py": "f0a9c202a329d55ddf71221888b051a5498b63da734342ebcaddb0030357d448",
+      "src/editorial/scoring/disasters.py": "0b0c76d2b0fa2a014cef538d643f9591282fca00214e11b7d4455ed1b23bf2c8",
       "src/editorial/scoring/drought.py": "523458308d09a0bb9edc51baa54b2100d5e9ca3739e40d6825d1f888e06cefca",
       "src/editorial/scoring/fire.py": "b0ace1b831475ab0d5f915fb137cc7b52f9cc4bb3d55e384583fb30f2bba68d5",
       "src/editorial/scoring/hot10.py": "de2926e0eac2422c39a4023c407cd744b0ae6a617fd799b63dc9da0d8c277988",
@@ -104,12 +104,12 @@
       "src/two_bot/types.py": "951044ca2582c8b96872bdd5b8ed8fc60546a58305aa8b06de50075206cc817e"
     },
     "format": "saved-source-svg-preview-v2",
-    "policy_source_sha256": "c4e932e3e5fe0ddcf1e169830d466f2ebb2a011f8333cbe0b8e79297dcb890da",
+    "policy_source_sha256": "5e69611f34f8aa1c62e43e2137e75bfa4a26dcfb36dc886629dfa1c2b956f6a8",
     "resource_sources": {
       "src/data/registry/country_codes.json": "data/country_codes.json",
       "src/data/registry/place_registry.json": "data/place_registry.json"
     },
     "schema_version": 1
   },
-  "runtime_sha256": "17ba48b76a762223fae80ea6964b61cb019641909f3bd93649020a9efb371262"
+  "runtime_sha256": "a0f5af03154030b6db35955eddb871b5c0c80dc267fd4c65b83b9fb9a854cfcc"
 }

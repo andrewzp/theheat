@@ -1,3 +1,13 @@
+## 0.9.109.67
+
+- Require an annual NASA ozone record before an annual story can use a
+  writer slot. Bind the factual check to the run's UTC verification date.
+- Report missing station observations separately from a verified baseline.
+  Use one existing archive slot to grow global forecast coverage when an
+  uncached city is available.
+- Add a default-off NOAA major-river forecast lane and show the latest
+  weather collection separately from sender-only runs in Sources.
+
 ## 0.9.109.66
 
 - Add a default-off recovery path for missed alert collection. An eligible

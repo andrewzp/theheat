@@ -181,7 +181,7 @@ def _classify_ghcn_source_status(
     *,
     today: date | None = None,
 ) -> str:
-    """Classify GHCN source health while tolerating normal newest-diff lag."""
+    """Classify GHCN source health while tolerating usable newest-diff lag."""
     diff_missing = int(pipeline_metrics.get("diff_dates_missing", 0) or 0)
     if diff_missing <= 0:
         return "success"
@@ -201,6 +201,9 @@ def _classify_ghcn_source_status(
     except ValueError:
         return "degraded"
 
+    stations_with_obs = pipeline_metrics.get("stations_with_obs")
+    if type(stations_with_obs) is int and stations_with_obs == 0:
+        return "degraded"
     if parsed_missing.issubset(tolerated_missing_dates):
         return "success"
     return "degraded"

@@ -116,14 +116,9 @@ def detect_seasonal_peak(
     peaks_by_year = {peak.year: peak for peak in annual_peaks or []}
     current_peak = peaks_by_year.get(current_year)
     if current_peak is None:
-        max_reading = max(seasonal_readings, key=lambda reading: reading.area_million_km2)
-        current_peak = OzoneHoleAnnualPeak(
-            year=current_year,
-            peak_date=max_reading.date,
-            area_million_km2=max_reading.area_million_km2,
-            min_ozone_date=max_reading.date,
-            min_ozone_du=0.0,
-        )
+        # This lane writes an annual peak. Daily observations remain useful
+        # evidence, but their running maximum is a different product.
+        return None
 
     peak_date = date.fromisoformat(current_peak.peak_date)
     effective_today = today or latest_date

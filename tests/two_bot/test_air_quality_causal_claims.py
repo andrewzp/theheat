@@ -2,7 +2,7 @@
 from copy import deepcopy
 from dataclasses import asdict
 import json
-from unittest.mock import Mock
+from unittest.mock import ANY, Mock
 
 import pytest
 
@@ -198,7 +198,7 @@ def test_locally_eligible_text_can_still_fail_the_required_model(monkeypatch):
     assert fact_check.local_rejection(FACTUAL, [], source, {}) is None
     result = fact_check.fact_check(FACTUAL, [], source, {})
     assert not result.passed and "Invented independent checker rejection" in result.failures
-    provider.assert_called_once_with(FACTUAL, source, retry_suffix="")
+    provider.assert_called_once_with(FACTUAL, source, retry_suffix="", verification_date=ANY)
 
 
 @pytest.mark.parametrize("text", [CAUSAL, FACTUAL])

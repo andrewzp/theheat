@@ -272,6 +272,14 @@ def score_storm_surge(anomaly_m: float) -> EditorialScore:
         reasons=reasons,
     )
 
+def score_major_river_forecast() -> EditorialScore:
+    return _build_score(
+        "river_flood", severity=86, novelty=60, timeliness=88, confidence=90,
+        shareability=66, sensitivity=80, threshold=get_threshold("river_flood"),
+        reasons=["Official major flood-stage forecast at a verified gauge"],
+    )
+
+
 def score_river_flood(
     above_by_ft: float | None = None,
     *,

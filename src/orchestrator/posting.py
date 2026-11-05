@@ -37,11 +37,13 @@ def _current_nws_source(draft, *, live):
     # independently current input this family stops before paid safety/transport.
     from src.editorial.nhc_advisory_runtime import current_advisory_source
     from src.editorial.warning_runtime import current_warning_source
+    from src.two_bot.intern.nwps_forecast import current_nwps_forecast
     # An NHC advisory needs this process's own owner: static before intent,
     # a fresh fixed read at the live boundaries (manual entry, after intent).
     return (current_warning_source(draft) or current_advisory_source(draft, live=live)
             or _retained_nws_source(draft, live=live) or _current_hot10_source(draft)
-            or _current_air_quality_source(draft, live=live) or _current_warning_auto_source(draft))
+            or _current_air_quality_source(draft, live=live) or _current_warning_auto_source(draft)
+            or current_nwps_forecast(draft, live=live, clock=_utc_now))
 
 
 def _current_warning_auto_source(draft) -> str | None:

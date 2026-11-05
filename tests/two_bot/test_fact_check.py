@@ -1,3 +1,4 @@
+from datetime import UTC, date, datetime
 import json
 from unittest.mock import MagicMock
 
@@ -243,6 +244,21 @@ class TestJsonParseRetry:
 
         assert result.passed is True
         assert mock_gemini.call_count == 1
+
+    def test_calendar_reference_is_frozen_across_retry(self, mock_gemini, monkeypatch):
+        import src.two_bot.fact_check as module
+
+        clock = MagicMock()
+        clock.now.side_effect = [
+            datetime(2026, 11, 5, 23, 59, 59, tzinfo=UTC),
+            datetime(2026, 11, 6, 0, 0, 1, tzinfo=UTC),
+        ]
+        monkeypatch.setattr(module, "datetime", clock, raising=False)
+        mock_gemini.side_effect = ["", self._ok()]
+
+        assert fact_check("Some clean tweet.", [], _bundle(), _state_with_memory()).passed
+        assert [call.kwargs["verification_date"] for call in mock_gemini.call_args_list] == [date(2026, 11, 5)] * 2
+        clock.now.assert_called_once_with(UTC)
 
     def test_retry_passes_contract_reminder_suffix(self, mock_gemini):
         """The retry attempt must pass a non-empty ``retry_suffix`` that

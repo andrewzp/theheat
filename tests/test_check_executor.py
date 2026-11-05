@@ -2,6 +2,7 @@
 
 from contextlib import closing
 from copy import deepcopy
+from datetime import date
 import hashlib
 import json
 import multiprocessing
@@ -175,11 +176,13 @@ def test_exact_shared_requests_and_distinct_explicit_local_output_bound(case):
     )
     expected = {
         "safety": safety.prepare_request(TEXT),
-        "fact_check": fact_check.prepare_request(TEXT, bundle),
+        "fact_check": fact_check.prepare_request(TEXT, bundle, verification_date=date.fromisoformat(packet["check_date"])),
         "critic": critic.prepare_request(TEXT, bundle, pending, memory.shipped_tweet_texts),
     }
     for stage, original in expected.items():
         batch = check_requests.prepare_request(packet, stage)
+        if stage == "fact_check":
+            assert f'VERIFICATION DATE (UTC): {packet["check_date"]}' in batch["contents"]
         config = batch.pop("config")
         assert config.pop("max_output_tokens") == 4096
         original_config = original.pop("config", {})

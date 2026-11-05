@@ -154,6 +154,14 @@ def save_draft(
     from src.editorial.policy import current_editorial_policy
 
     clock = _utc_now()
+    if tweet_type == "river_flood":
+        from src.two_bot.intern.nwps_forecast import current_nwps_forecast
+
+        forecast_draft = {"type": tweet_type, "event_id": event_id,
+                          "text": tweet_text, "review_context": review_context}
+        if hold := current_nwps_forecast(forecast_draft, live=True, clock=_utc_now):
+            print(f"[draft] Not saved: {hold}")
+            return False
     if tweet_type == "official_warning":
         from src.editorial.official_warning import WarningHold
         from src.editorial.warning_runtime import guard_warning_story

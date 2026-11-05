@@ -12,6 +12,8 @@ Classify checked claims:
 - WORLD_KNOWLEDGE: a stable definition or uncontroversial general fact used narrowly. Accept clear paraphrase; literal quotation is unnecessary. Do not infer a local cause, seasonal event, current impact, exact facility output, trend or historical novelty. A specific claim needing a missing source fails.
 - UNVERIFIABLE: unsupported, conflicting, over-scoped or more certain than the evidence. Name the mismatch or missing warrant.
 
+Use the supplied UTC verification date as a calendar reference. Respect explicit source time zones and local dates. Keep observed, forecast and historical status grounded in source evidence. A past forecast date alone does not establish that it happened.
+
 Retain meaningful uncertainty and forecast/model labels. About with a supplied rounded value is precision discipline. Do not demand extra background or treat uncertainty as a style flaw. A record label, earlier passed check or familiar-sounding mechanism is never evidence on its own.
 
 """ + EVIDENCE_RULES + """

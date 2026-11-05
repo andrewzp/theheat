@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, date, datetime
 import json
 import os
 
@@ -134,15 +135,23 @@ def _parse_fact_check_json(
     )
 
 
-def prepare_request(tweet: str, bundle: StoryBundle, *, retry_suffix: str = "") -> dict:
+def prepare_request(
+    tweet: str, bundle: StoryBundle, *, verification_date: date, retry_suffix: str = "",
+) -> dict:
     """Pure request shared by synchronous and single-attempt check execution."""
+    if type(verification_date) is not date:
+        raise ValueError("invalid_fact_check_verification_date")
     user_prompt = FACT_CHECK_USER_PROMPT_TEMPLATE.format(
         tweet=tweet,
         bundle_json=json.dumps(bundle.to_dict(), sort_keys=True, default=_json_default, allow_nan=False),
     )
     return dict(
         model=FACT_CHECKER_MODEL,
-        contents=f"{FACT_CHECK_SYSTEM_PROMPT}\n\n{user_prompt}{retry_suffix}",
+        contents=(
+            f"{FACT_CHECK_SYSTEM_PROMPT}\n\n"
+            f"VERIFICATION DATE (UTC): {verification_date.isoformat()}\n\n"
+            f"{user_prompt}{retry_suffix}"
+        ),
         config=dict(response_mime_type="application/json", response_json_schema=FACT_CHECK_OUTPUT_SCHEMA),
     )
 
@@ -159,7 +168,9 @@ def interpret_response(
     )
 
 
-def _call_gemini(tweet: str, bundle: StoryBundle, *, retry_suffix: str = "") -> str:
+def _call_gemini(
+    tweet: str, bundle: StoryBundle, *, retry_suffix: str = "", verification_date: date | None = None,
+) -> str:
     """One Gemini fact-check call. Network-level retries handled by
     call_with_retries; JSON-parse retries handled by the caller (fact_check)
     via the ``retry_suffix`` kwarg, which appends a contract-reinforcement
@@ -179,7 +190,9 @@ def _call_gemini(tweet: str, bundle: StoryBundle, *, retry_suffix: str = "") -> 
     # killing every draft from 2026-05-03 onward (4-day production outage).
     # 90000 = 90 seconds, the original intent.
     client = genai.Client(api_key=api_key, http_options=genai_types.HttpOptions(timeout=90000, **google_trial_options()))
-    request = prepare_request(tweet, bundle, retry_suffix=retry_suffix)
+    if verification_date is None:
+        verification_date = datetime.now(UTC).date()
+    request = prepare_request(tweet, bundle, verification_date=verification_date, retry_suffix=retry_suffix)
     response = call_with_retries(
         "gemini fact-check",
         lambda: provider_call("fact_check", "google", dict(
@@ -224,7 +237,10 @@ def local_rejection(
         if isinstance(tweet, str):
             failures.extend(temperature_claim_failures(tweet, bundle))
             from src.data.rainfall_supply import rainfall_claim_failures
+            from src.two_bot.intern.nwps_forecast import forecast_text_hold, is_nwps_forecast
             failures.extend(rainfall_claim_failures(tweet, bundle))
+            if is_nwps_forecast(bundle) and (hold := forecast_text_hold(tweet)):
+                failures.append(hold)
     if not isinstance(tweet, str) or not tweet.strip() or len(tweet) > 280:
         failures.append("invalid_tweet: fact checking requires nonempty tweet text within 280 characters")
     elif isinstance(tweet, str):
@@ -278,6 +294,7 @@ def fact_check(
     # gate — better to block a draft than ship an unchecked one.
     last_parse_error: str | None = None
     raw = ""
+    verification_date = datetime.now(UTC).date()
     for parse_attempt in range(JSON_PARSE_RETRY_BUDGET + 1):
         retry_suffix = ""
         if parse_attempt > 0 and last_parse_error is not None:
@@ -289,7 +306,7 @@ def fact_check(
                 "with a supported kind, even when every claim passes. Never "
                 "replace extraction with an empty pass response.]"
             )
-        raw = _call_gemini(tweet, bundle, retry_suffix=retry_suffix)
+        raw = _call_gemini(tweet, bundle, retry_suffix=retry_suffix, verification_date=verification_date)
         try:
             # A prior extractor is context, not permission for this checker to
             # omit its inventory. Each completed factual check owns its claims.

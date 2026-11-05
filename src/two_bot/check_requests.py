@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from datetime import date
 import json
 from typing import Any, cast
 
@@ -41,7 +42,10 @@ def prepare_request(packet: dict, stage: str, *, resolved=None) -> dict:
     if stage == "safety":
         request = safety.prepare_request(tweet)
     elif stage == "fact_check":
-        request = fact_check.prepare_request(tweet, bundle)
+        verification_date = date.fromisoformat(packet["check_date"])
+        if verification_date.isoformat() != packet["check_date"]:
+            raise ValueError("invalid_retained_fact_check_date")
+        request = fact_check.prepare_request(tweet, bundle, verification_date=verification_date)
     elif stage == "critic":
         pending = critic._collect_pending_today(
             state, exclude_event_id=bundle.event_id, today=packet["check_date"]

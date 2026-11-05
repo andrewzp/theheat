@@ -3,7 +3,7 @@
 from copy import deepcopy
 from dataclasses import asdict, replace
 import json
-from unittest.mock import Mock
+from unittest.mock import ANY, Mock
 
 import pytest
 
@@ -142,7 +142,7 @@ def test_sync_and_retained_check_paths_agree_and_preserve_exact_inputs(monkeypat
     monkeypatch.setattr(fact_check, "_call_gemini", provider)
     assert fact_check.local_rejection(TEXT, [], source, {}) is None  # Not a completed check.
     sync = fact_check.fact_check(TEXT, [], source, {})
-    provider.assert_called_once_with(TEXT, source, retry_suffix="")
+    provider.assert_called_once_with(TEXT, source, retry_suffix="", verification_date=ANY)
     saved = packet(dict(candidate=asdict(WriterResult(
         tweet=TEXT, kill_reason=None, angle_chosen="synthetic", era_anchor_used=None,
         peer_comparison_used=None, reasoning="Invented parser control.")),
