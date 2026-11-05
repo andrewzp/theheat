@@ -1,3 +1,12 @@
+## 0.9.109.68
+
+- Account for each world archive request against the existing allowance.
+  Enforce an elapsed request deadline while preserving completed forecasts.
+- Resume the existing command inbox scan beyond its per-run search limit.
+  Keep command execution and acknowledgement guarded against duplicates.
+- Keep the collection cadence incident open when history is missing or
+  future-dated. Distinguish a recorded start from a successful collection.
+
 ## 0.9.109.67
 
 - Require an annual NASA ozone record before an annual story can use a
