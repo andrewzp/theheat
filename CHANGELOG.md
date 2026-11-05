@@ -1,3 +1,13 @@
+## 0.9.109.75
+
+- Add an optional automatic-only writer-selection request for operator alerts
+  and combined collection on main, using the existing automatic eligibility
+  and current-source filters before ranking allocates a writer slot.
+- Refuse unsupported requests or an inactive automatic program without falling
+  back to manual writing; retain ordinary operator drafting by default.
+- Record the requested selection intent with the runtime evidence. Existing
+  required checks, approval conditions, automatic delays and sender gates apply.
+
 ## 0.9.109.74
 
 - Hold expired or changed NWS evidence before scheduled automatic ranking can

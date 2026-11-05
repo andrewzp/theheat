@@ -29,6 +29,11 @@ on:
           - both
           - manual_tweet
           - auto_publish_due
+      automatic_only:
+        description: 'Select only candidates eligible for existing automatic arming (main alerts/both)'
+        required: false
+        default: false
+        type: boolean
       tweet_text:
         description: 'Exact reviewed draft text (manual_tweet requires draft_id and publish_intent_id)'
         required: false
@@ -346,6 +351,8 @@ jobs:
       - name: Determine mode
         id: mode
         env:
+          REQUESTED_MODE: ${{ inputs.mode }}
+          THEHEAT_AUTOMATIC_SELECTION_ONLY: ${{ github.event_name == 'workflow_dispatch' && inputs.automatic_only && '1' || '0' }}
           THEHEAT_SCHEDULED_ALERTS_CATCHUP: ${{ vars.THEHEAT_SCHEDULED_ALERTS_CATCHUP || '0' }}
           GIST_ID: >-
             ${{ github.event_name == 'schedule' && github.event.schedule == '41 * * * *'
@@ -357,8 +364,14 @@ jobs:
             && vars.THEHEAT_SCHEDULED_ALERTS_CATCHUP == '1'
             && (secrets.THEHEAT_GIST_WRITER_TOKEN || secrets.GH_GIST_TOKEN) || '' }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "mode=${{ github.event.inputs.mode }}" >> $GITHUB_OUTPUT
+          if [[ "${THEHEAT_AUTOMATIC_SELECTION_ONLY:-0}" == 1 ]] &&
+              [[ "${GITHUB_EVENT_NAME:-}" != workflow_dispatch || "${GITHUB_REF:-}" != refs/heads/main ||
+                 ( "${REQUESTED_MODE:-}" != alerts && "${REQUESTED_MODE:-}" != both ) ]]; then
+            echo "Automatic-only selection requires a main-branch alerts/both dispatch." >&2
+            exit 2
+          fi
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "mode=$REQUESTED_MODE" >> "$GITHUB_OUTPUT"
           elif [ "${{ github.event.schedule }}" = "41 * * * *" ]; then
             # Check for missed collection only on eligible hourly runs. A failed or
             # inconclusive read preserves the sender role. The existing alerts prelude
@@ -397,6 +410,8 @@ jobs:
       - name: Service hourly sender before catch-up
         if: steps.mode.outputs.catchup == '1'
         env: &bot_runtime_env
+          # Per-request writer selection only; never an approval or publishing switch.
+          THEHEAT_AUTOMATIC_SELECTION_ONLY: ${{ github.event_name == 'workflow_dispatch' && inputs.automatic_only && '1' || '0' }}
           # Only this verifier's actual outcome permits GHCN to read the file.
           THEHEAT_GHCN_THRESHOLD_VERIFICATION: ${{ steps.thresholds-verify.outcome || 'unknown' }}
           # Keep already-written output visible if the runner exits abruptly.

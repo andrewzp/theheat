@@ -96,6 +96,8 @@ def collect_runtime_inventory(mode: str, *, now: datetime | None = None, bot_sta
             "engagement_window_enabled": os.environ.get("THEHEAT_ENGAGEMENT_WINDOW_ENABLED", "0") == "1",
             "shadow_ab_enabled": os.environ.get("THEHEAT_SHADOW_AB_ENABLED") == "1",
             "signals_provider": signals_provider if signals_provider in {"open_meteo", "ghcn", "both", "both_global"} else None,
+            # Explicit operator request; scheduled selection has its independent trigger.
+            "automatic_only_requested": os.environ.get("THEHEAT_AUTOMATIC_SELECTION_ONLY") == "1",
             "gpm_source": gpm_imerg._gpm_source(),
             "aq_pm25_enabled": air_quality._enabled("THEHEAT_AQ_PM25_ENABLED"),
             "aq_dust_enabled": air_quality._enabled("THEHEAT_AQ_DUST_ENABLED"),

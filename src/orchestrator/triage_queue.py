@@ -468,6 +468,33 @@ def _scheduled_automatic_drain(bot_state: BotState, current_run: dict | None) ->
             and automatic_publication_policy(bot_state)["enabled"])
 
 
+def _automatic_selection_intent_hold(bot_state: BotState, current_run: dict | None) -> str | None:
+    """Explicit operator selection cannot silently fall back to manual writing.
+
+    This only constrains writer selection. Source acquisition/discovery retains
+    its own earlier bounds; no account-wide or zero-total-cost claim follows.
+    """
+    intent = os.environ.get("THEHEAT_AUTOMATIC_SELECTION_ONLY", "0")
+    if intent == "0":
+        return None
+    if intent != "1":
+        return "automatic_selection_intent_invalid"
+    if not (os.environ.get("GITHUB_EVENT_NAME") == "workflow_dispatch"
+            and os.environ.get("GITHUB_REF") == "refs/heads/main"
+            and os.environ.get("THEHEAT_PRODUCTION_PAUSED") != "1"
+            and isinstance(current_run, dict) and current_run.get("mode") in {"alerts", "both"}):
+        return "automatic_selection_context_invalid"
+    try:
+        from src.editorial.approval import autoship_on_critic_pass_enabled
+        from src.editorial.publication import automatic_publication_policy
+
+        if not (autoship_on_critic_pass_enabled() and automatic_publication_policy(bot_state)["enabled"]):
+            return "automatic_selection_inactive"
+    except Exception:  # noqa: BLE001 — fixed refusal, not private diagnostics or a paid fallback
+        return "automatic_selection_unavailable"
+    return None
+
+
 def _refill_drain(
     bot_state: BotState,
     current_run: dict | None,
@@ -1002,7 +1029,12 @@ def _drain_and_write_triage_queue(
             _funnel.record_slate_terminal(funnel_sink, candidate.event_id, "evidence_contract")
     queue = ready
 
-    if queue and _scheduled_automatic_drain(bot_state, current_run):
+    if intent_hold := _automatic_selection_intent_hold(bot_state, current_run):
+        return _hold_operation(bot_state, current_run, funnel_sink, queue, budget,
+                               note=intent_hold, error=intent_hold)
+
+    if queue and (os.environ.get("THEHEAT_AUTOMATIC_SELECTION_ONLY") == "1"
+                  or _scheduled_automatic_drain(bot_state, current_run)):
         try:
             # Classify the whole pool before recording any disposition. A broken
             # policy lookup cannot partially select or fall back to paid writing.
