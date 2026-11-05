@@ -12,6 +12,7 @@ hurricane-related (rare by definition).
 from collections import Counter
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
+import re
 
 import requests
 
@@ -54,9 +55,9 @@ class SevereWeatherAlert:
     source_evidence: dict | None = None
 
 
-def _typhoon_warning(props: dict) -> bool:
-    """Retain the official warning designation; never infer observed winds."""
-    if not (props.get("event") == "Typhoon Warning" and props.get("category") == "Met"
+def _referenced_warning(props: dict, event: str) -> bool:
+    """An actual CAP product; updates must identify their predecessors."""
+    if not (props.get("event") == event and props.get("category") == "Met"
             and props.get("status") == "Actual" and props.get("messageType") in ("Alert", "Update")
             and isinstance(props.get("id"), str) and props["id"]
             and isinstance(props.get("areaDesc"), str) and props["areaDesc"].strip()):
@@ -67,6 +68,26 @@ def _typhoon_warning(props: dict) -> bool:
                 and all(isinstance(r, dict) and isinstance(r.get("identifier"), str)
                         and bool(r["identifier"]) and r["identifier"] != props["id"] for r in refs))
     return True
+
+
+def _typhoon_warning(props: dict) -> bool:
+    """Retain the official warning designation; never infer observed winds."""
+    return _referenced_warning(props, "Typhoon Warning")
+
+
+def _flash_flood_emergency(props: dict) -> bool:
+    """A catastrophic NWS warning designation, never a claim of observed harm.
+
+    NWS issues this emergency inside the Flash Flood Warning product. Keep the
+    exact product name and require both structured threat and emergency wording.
+    """
+    parameters = props.get("parameters")
+    if not (_referenced_warning(props, "Flash Flood Warning") and isinstance(parameters, dict)
+            and parameters.get("flashFloodDamageThreat") == ["CATASTROPHIC"]):
+        return False
+    headlines = parameters.get("NWSheadline")
+    return (isinstance(headlines, list) and len(headlines) == 1 and isinstance(headlines[0], str)
+            and re.match(r"^\s*FLASH FLOOD EMERGENCY(?:\s|$)", headlines[0], re.IGNORECASE) is not None)
 
 
 def fetch_alerts(*, strict: bool = False) -> list[SevereWeatherAlert]:
@@ -100,28 +121,28 @@ def fetch_alerts(*, strict: bool = False) -> list[SevereWeatherAlert]:
         alerts: list[SevereWeatherAlert] = []
         payload_dates = []
         seen_events = set()
-        # CAP references, not feed order, identify replaced typhoon messages.
-        typhoon_features: dict[str, dict] = {}
-        typhoon_products = []
+        # CAP references, not feed order, identify replaced cyclone/emergency messages.
+        referenced_features: dict[str, dict] = {}
+        referenced_products = []
         conflicting_ids = set()
         for feature in features:
             props = feature["properties"]
-            if _typhoon_warning(props):
-                typhoon_products.append(props)
+            if _typhoon_warning(props) or _referenced_warning(props, "Flash Flood Warning"):
+                referenced_products.append(props)
                 identity = props["id"]
-                if identity in typhoon_features and feature != typhoon_features[identity]:
+                if identity in referenced_features and feature != referenced_features[identity]:
                     conflicting_ids.add(identity)
                 else:
-                    typhoon_features[identity] = feature
-        typhoons = [f["properties"] for identity, f in typhoon_features.items()
+                    referenced_features[identity] = feature
+        referenced = [f["properties"] for identity, f in referenced_features.items()
                     if identity not in conflicting_ids]
         # Conflicting updates still establish uncertainty about predecessors and
         # all affected areas. Excluding their admission must not resurrect old CAP.
-        superseded = {r["identifier"] for p in typhoon_products if p["messageType"] == "Update"
+        superseded = {r["identifier"] for p in referenced_products if p["messageType"] == "Update"
                       for r in p["references"]}
-        conflicting_areas = {p["areaDesc"] for p in typhoon_products if p["id"] in conflicting_ids}
-        typhoon_areas = Counter(p["areaDesc"]
-                               for p in typhoons if p["id"] not in superseded)
+        conflicting_areas = {(p["event"], p["areaDesc"]) for p in referenced_products if p["id"] in conflicting_ids}
+        referenced_areas = Counter((p["event"], p["areaDesc"])
+                               for p in referenced if p["id"] not in superseded)
 
         for feature in features:
             props = feature["properties"]
@@ -132,13 +153,14 @@ def fetch_alerts(*, strict: bool = False) -> list[SevereWeatherAlert]:
 
             emergency = rare_tornado(props)
             typhoon = _typhoon_warning(props)
-            if event == "Typhoon Warning" and (
-                not typhoon or props["id"] in superseded or props["id"] in conflicting_ids
-                or props["areaDesc"] in conflicting_areas
-                or typhoon_areas[props["areaDesc"]] != 1
+            flood_emergency = _flash_flood_emergency(props)
+            if event in {"Typhoon Warning", "Flash Flood Warning"} and (
+                not (typhoon or flood_emergency) or props["id"] in superseded or props["id"] in conflicting_ids
+                or (event, props["areaDesc"]) in conflicting_areas
+                or referenced_areas[(event, props["areaDesc"])] != 1
             ):
                 continue
-            if not emergency and not typhoon and (event not in TRACKED_EVENTS or props.get("messageType", "Alert") != "Alert"):
+            if not emergency and not typhoon and not flood_emergency and (event not in TRACKED_EVENTS or props.get("messageType", "Alert") != "Alert"):
                 continue
 
             severity = props.get("severity", "Unknown")

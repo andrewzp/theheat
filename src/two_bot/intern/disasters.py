@@ -49,7 +49,7 @@ def build_severe_weather_bundle(alert: SevereWeatherAlert) -> StoryBundle:
     discipline already in the prompt.
     """
 
-    from src.media.published_radar import RadarHold, interval, warning_times
+    from src.media.published_radar import ALERT_URL, RadarHold, interval, source_envelope, warning_times
     from src.commands.schema import utc_datetime
     raw = asdict(alert)
     when = ""
@@ -80,6 +80,25 @@ def build_severe_weather_bundle(alert: SevereWeatherAlert) -> StoryBundle:
         if envelope.get("source_alert_id") and envelope.get("feature_sha256"):
             raw["provenance"] = {k: envelope[k] for k in ("source_url", "source_alert_id", "feature_sha256")}
         extra.append({"label": "radar_evidence_status", "value": envelope.get("status", "held")})
+        # Copy gates consume explicitly attributed current-event warning prose.
+        # The generic description field alone is not a source warning. Bind the
+        # excerpt to the unchanged original CAP envelope, never arbitrary metadata.
+        try:
+            feature = envelope["feature"]
+            props = feature["properties"]
+            if (envelope == source_envelope(feature, envelope["captured_at"])
+                    and envelope["source_url"] == ALERT_URL
+                    and alert.event_id == "nws_" + envelope["source_alert_id"]
+                    and props.get("id") == envelope["source_alert_id"]
+                    and props.get("status") == "Actual" and props.get("category") == "Met"):
+                prose = "\n".join(props[key] for key in ("headline", "description", "instruction")
+                                  if isinstance(props.get(key), str) and props[key].strip())
+                if prose:
+                    extra.append({"label": "warning_text", "value": prose, "event_id": alert.event_id,
+                                  "source_url": ALERT_URL, "source_name": "National Weather Service"})
+        except (KeyError, TypeError, ValueError):
+            pass  # Missing/changed evidence cannot supply an attributed warning.
+
     extra.append({"label": "claim_limit", "value": "NWS warning designation; OBSERVED may be radar-derived and is not independent eyewitness or surface-impact evidence."})
     return StoryBundle(
         signal_kind="severe_weather",
