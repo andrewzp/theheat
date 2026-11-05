@@ -912,6 +912,46 @@ def _drain_and_write_triage_queue(
         return _hold_operation(bot_state, current_run, funnel_sink, list(queue), budget,
                                note="candidate_budget_config_invalid", error=budget.refusal)
 
+    # Admission checked the source bundle before optional enrichment. Recheck the
+    # actual writer evidence before ranking/caps: a certain $0 refusal must not
+    # take the only slot away from qualified evidence. The pipeline independently
+    # checks again after selection; this grants no check, approval or budget slot.
+    from src.two_bot.evidence_contract import audit_story_bundle, evidence_rejection_details
+
+    ready = []
+    for candidate in queue:
+        # Unenriched source packets already passed admission. The new check is
+        # for the two optional fields added after that boundary; avoid repeating
+        # every source-specific audit on the unchanged remainder of the slate.
+        if not (candidate.bundle.human_impact or candidate.bundle.related_signals):
+            ready.append(candidate)
+            continue
+        details = None
+        try:
+            audit = audit_story_bundle(candidate.bundle)
+            if audit.prompt_ready:
+                ready.append(candidate)
+                continue
+            reason = "; ".join(f"{issue.code} ({issue.field}): {issue.message}"
+                               for issue in audit.issues if issue.severity == "error")
+            details = evidence_rejection_details(candidate.bundle, audit)
+        except Exception:  # noqa: BLE001 — failed audit cannot pass; no private exception text
+            reason = "evidence_audit_unavailable"
+        _bump_source_field_in_run(current_run, candidate.source, "triaged_out")
+        _record_downstream_suppression(
+            bot_state=bot_state, source=candidate.source,
+            run_id=(_current_suppression_ctx() or {}).get("run_id"),
+            event_id=candidate.event_id, score=candidate.score,
+            kill_stage="evidence_contract", kill_reason=f"pre-writer: {reason}",
+            summary=getattr(candidate.bundle, "where", None) or candidate.city or None,
+            evidence_readiness=details,
+        )
+        if funnel_sink is not None and candidate.event_id not in funnel_sink.get("_slate_terminal", {}):
+            from src.orchestrator import funnel as _funnel
+
+            _funnel.record_slate_terminal(funnel_sink, candidate.event_id, "evidence_contract")
+    queue = ready
+
     # Phase C: generate-and-select refill loop (flag default OFF). Owns its own
     # ranking, success-aware caps, pre-writer predicate and stop condition.
     if refill_enabled:
