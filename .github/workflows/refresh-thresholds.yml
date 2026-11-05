@@ -34,6 +34,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-python@v6
         with:
@@ -181,17 +183,28 @@ jobs:
           THRESHOLD_REPO: ${{ github.repository }}
         run: python -m scripts.threshold_artifacts publish --repo "$THRESHOLD_REPO"
 
-      - name: Commit updated stations.csv and threshold cache version
+      - name: Pack exact candidate files for protected adoption
         run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -f data/stations.csv data/station_thresholds.version
-          git diff --cached --quiet || git commit -m "chore: refresh stations.csv [skip ci]"
-          # A concurrent main update must fail visibly; never force or hide it.
-          git push origin HEAD:main
+          python -m scripts.threshold_handoff pack \
+            --directory "$RUNNER_TEMP/verified-threshold-handoff" \
+            --repo "$GITHUB_REPOSITORY" --run-id "$GITHUB_RUN_ID" --base-sha "$GITHUB_SHA"
 
-      - name: Cache the committed threshold artifact
-        uses: actions/cache/save@v4
+      - name: Retain verified threshold handoff
+        id: handoff
+        uses: actions/upload-artifact@v7
         with:
-          path: data/station_thresholds.sqlite
-          key: ghcn-thresholds-${{ runner.os }}-${{ hashFiles('data/station_thresholds.version') }}
+          name: verified-threshold-handoff
+          path: |
+            ${{ runner.temp }}/verified-threshold-handoff/station_thresholds.version
+            ${{ runner.temp }}/verified-threshold-handoff/stations.csv
+            ${{ runner.temp }}/verified-threshold-handoff/handoff.json
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Report candidate awaiting protected adoption
+        env:
+          HANDOFF_DIGEST: ${{ steps.handoff.outputs.artifact-digest }}
+        run: |
+          printf '%s\n' 'Verified candidate awaiting protected pull request review.' \
+            'The installed threshold baseline is unchanged.' \
+            "Handoff artifact digest: $HANDOFF_DIGEST" >> "$GITHUB_STEP_SUMMARY"

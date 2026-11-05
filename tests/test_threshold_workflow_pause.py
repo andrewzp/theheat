@@ -36,7 +36,9 @@ def test_threshold_pause_is_a_job_guard_for_both_existing_entry_points():
         "group": "refresh-thresholds", "cancel-in-progress": "false",
     }
     # Job eligibility gates checkout as well as all later network/write steps.
-    assert job["steps"][0] == {"uses": "actions/checkout@v6"}
+    assert job["steps"][0] == {
+        "uses": "actions/checkout@v6", "with": {"persist-credentials": "false"},
+    }
     assert all("THEHEAT_PRODUCTION_PAUSED" not in str(step) for step in job["steps"])
     commands = "\n".join(step.get("run", "") for step in job["steps"])
     for operation in (
@@ -44,7 +46,7 @@ def test_threshold_pause_is_a_job_guard_for_both_existing_entry_points():
         "scripts.refresh_station_inventory",
         "scripts.update_thresholds_incremental",
         "scripts.threshold_artifacts publish",
-        "git push origin HEAD:main",
+        "scripts.threshold_handoff pack",
     ):
         assert operation in commands
 
@@ -54,7 +56,11 @@ def test_threshold_resume_uploads_only_sealed_timeout_progress():
     steps = workflow["jobs"]["refresh"]["steps"]
     update = next(step for step in steps if step.get("id") == "update")
     seal = next(step for step in steps if step.get("id") == "seal")
-    retain = next(step for step in steps if step.get("uses") == "actions/upload-artifact@v7")
+    retain = next(
+        step for step in steps
+        if step.get("uses") == "actions/upload-artifact@v7"
+        and step["with"]["name"] == "threshold-refresh-checkpoint"
+    )
     publish = next(step for step in steps if step.get("name") == "Publish verified immutable threshold artifact")
     assert 'timeout 900' in update["run"] and '"$code" == 124' in update["run"]
     assert 'exit "$code"' in update["run"]
