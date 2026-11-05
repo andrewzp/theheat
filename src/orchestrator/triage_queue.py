@@ -431,6 +431,30 @@ def _automatic_type_may_arm(kind: str, signal_total: int) -> bool:
         policy.mode == "armed_auto" and bool(policy.recommended_delay_minutes))
 
 
+def _automatic_source_hold(candidate: "TriageCandidateBundle") -> str | None:
+    """Known NWS source/time refusals only; never call a provider or refresh."""
+    from src.data.nws_alerts import NWS_URL
+
+    bundle = candidate.bundle
+    raw = getattr(bundle, "raw_signal_dump", None)
+    envelope = raw.get("source_evidence") if isinstance(raw, dict) else None
+    if not (candidate.legacy_type == "severe_weather" or bundle.signal_kind == "severe_weather"
+            or str(bundle.event_id).startswith("nws_")
+            or isinstance(envelope, dict) and envelope.get("source_url") == NWS_URL):
+        return None
+    from datetime import timedelta
+    from src.editorial.warning_automatic import AUTO_DELAY_MINUTES
+    from src.orchestrator.nws_publication import nws_generation_hold
+
+    try:
+        if candidate.event_id != bundle.event_id or candidate.legacy_type != bundle.signal_kind:
+            return "nws_source_identity_changed"
+        return nws_generation_hold(bundle.to_dict(), now=_utc_now(),
+                                   minimum_delay=timedelta(minutes=AUTO_DELAY_MINUTES))
+    except Exception:  # noqa: BLE001 — unreadable source is not a paid fallback
+        return "nws_source_unverified"
+
+
 def _scheduled_automatic_drain(bot_state: BotState, current_run: dict | None) -> bool:
     """Operator/manual runs keep their existing draft-generation contract."""
     from src.editorial.approval import autoship_on_critic_pass_enabled
@@ -982,38 +1006,51 @@ def _drain_and_write_triage_queue(
         try:
             # Classify the whole pool before recording any disposition. A broken
             # policy lookup cannot partially select or fall back to paid writing.
-            classified = [(candidate, _automatic_type_may_arm(candidate.legacy_type, candidate.score.total))
-                          for candidate in queue]
+            classified = []
+            for candidate in queue:
+                possible = _automatic_type_may_arm(candidate.legacy_type, candidate.score.total)
+                classified.append((candidate, possible, _automatic_source_hold(candidate) if possible else None))
         except Exception:  # noqa: BLE001 — fail closed without leaking private diagnostics
             return _hold_operation(bot_state, current_run, funnel_sink, queue, budget,
                                    note="automatic_policy_unavailable", error="automatic_policy_unavailable")
         ready = []
         held_types: Counter[str] = Counter()
-        for candidate, possible in classified:
-            if possible:
+        source_holds: Counter[str] = Counter()
+        for candidate, possible, source_hold in classified:
+            if possible and source_hold is None:
                 ready.append(candidate)
                 continue
-            held_types[candidate.legacy_type] += 1
+            if source_hold is None:
+                held_types[candidate.legacy_type] += 1
+            else:
+                source_holds[source_hold] += 1
+            stage = "nws_source" if source_hold else "automatic_policy"
+            reason = source_hold or "type_has_no_automatic_arming_route"
             _bump_source_field_in_run(current_run, candidate.source, "triaged_out")
             _record_downstream_suppression(
                 bot_state=bot_state, source=candidate.source,
                 run_id=(_current_suppression_ctx() or {}).get("run_id"),
                 event_id=candidate.event_id, score=candidate.score,
-                kill_stage="automatic_policy", kill_reason="pre-writer: type_has_no_automatic_arming_route",
+                kill_stage=stage, kill_reason=f"pre-writer: {reason}",
                 summary=getattr(candidate.bundle, "where", None) or candidate.city or None,
             )
             if funnel_sink is not None and candidate.event_id not in funnel_sink.get("_slate_terminal", {}):
                 from src.orchestrator import funnel as _funnel
 
-                _funnel.record_slate_terminal(funnel_sink, candidate.event_id, "automatic_policy")
+                _funnel.record_slate_terminal(funnel_sink, candidate.event_id, stage)
         # Workflow diagnostic, not a second source observation/promotion. Keep
         # counts in details so funnel/coverage denominators are not duplicated.
+        details = {"policy_only": True, "candidate_count": len(queue),
+                   "potential_type_count": sum(possible for _, possible, _ in classified),
+                   "held_manual_types": sum(held_types.values()), "held_types": dict(sorted(held_types.items()))}
+        note = f"automatic type preflight: {len(ready)} potential; {sum(held_types.values())} held; required checks still apply"
+        if source_holds:
+            details.update(policy_only=False, source_ready_count=len(ready),
+                           held_source_candidates=sum(source_holds.values()), source_holds=dict(sorted(source_holds.items())))
+            note = f"automatic preflight: {len(ready)} potential; {sum(held_types.values())} type holds; {sum(source_holds.values())} source holds; required checks still apply"
         _record_source_run(
             current_run, bot_state, "automatic_selection", time.perf_counter(),
-            status="success" if ready else "degraded",
-            note=f"automatic type preflight: {len(ready)} potential; {sum(held_types.values())} held; required checks still apply",
-            details={"policy_only": True, "candidate_count": len(queue), "potential_type_count": len(ready),
-                     "held_manual_types": sum(held_types.values()), "held_types": dict(sorted(held_types.items()))},
+            status="success" if ready else "degraded", note=note, details=details,
         )
         queue = ready
         if not queue:
