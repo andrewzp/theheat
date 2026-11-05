@@ -222,6 +222,7 @@ const journey = (name, steps) => withGist(family, async t => {
   const step = async (label, action, extra = {}) => {
     const result = await t.post(body(t.get(), action, extra))
     log.push({ label, status: result.status, code: result.body.code ?? null,
+      error: result.body.error ?? null,
       attached: Object.hasOwn(t.get(), "media_attachment"), status_after: t.get().status })
     return result
   }
@@ -299,6 +300,7 @@ def test_route_phase_failures_through_the_actual_handlers(family, tmp_path):
                           json.dumps(current_editorial_policy()), retained, str(tmp_path / "config.json")],
                          cwd=ROOT / "dashboard", env={**base_env(tmp_path), "THEHEAT_TEST_PYTHON": sys.executable},
                          capture_output=True, text=True, timeout=900)
+    (tmp_path / "route-worker.stderr").write_text(run.stderr)
     assert run.returncode == 0, run.stderr[-4000:]
     results = json.loads(out.read_text())
     holds = {row["label"]: row for row in results["preview_holds_and_text_only"]["log"]}
@@ -319,7 +321,7 @@ def test_route_phase_failures_through_the_actual_handlers(family, tmp_path):
     assert (steps["approve_down"]["status"], steps["approve_down"]["code"]) == (409, "review_required")
     reconnected = steps["approve_reconnected_without_review"]  # Reconnection inherits nothing.
     assert (reconnected["status"], reconnected["code"]) == (409, "review_required")
-    assert (steps["review_restored"]["status"], steps["approve_restored"]["status"]) == (200, 200)
+    assert (steps["review_restored"]["status"], steps["approve_restored"]["status"]) == (200, 200), steps
     assert results["before_joint_review"]["dispatches"] == 1
     steps = {r["label"]: r for r in results["edit_revert_remove_replace"]["log"]}
     assert [steps[k]["status"] for k in ("attach", "review", "edit")] == [200, 200, 200]
