@@ -53,6 +53,10 @@ def source_effect(state):
 
 
 def consuming(monkeypatch, *, action=ghcn.ACTION, alteration=None):
+    # Command creation and consume already use NOW. Bind the final clock too:
+    # an unrelated slow test must not spend this fixture's five-minute lease.
+    # Dedicated cases below still exercise real expiry/regression refusals.
+    monkeypatch.setattr(source, "completion_clock", lambda: NOW)
     original = draft()
     other = draft(sid="USW00000001")
     state = {"drafts": [original, other], "publish_ledger": {}}
@@ -91,6 +95,20 @@ def test_verified_source_invalidation_reaches_actual_authority_consumer(monkeypa
     # The source helper retains the old intent as evidence; it is not approval.
     assert affected["publish_intent_id"] == before["drafts"][0]["publish_intent_id"]
     assert other == before["drafts"][1]
+
+
+@pytest.mark.parametrize("offset,reason", [
+    (-1, "source_clock_regressed"),
+    (300, "source_command_expired"),
+    (301, "source_command_expired"),
+])
+def test_real_final_clock_still_refuses_regression_and_expiry(monkeypatch, offset, reason):
+    from src.storage.cyclone_supply import CycloneSupplyError
+
+    cmd = source_command()
+    monkeypatch.setattr(source, "completion_clock", lambda: NOW + timedelta(seconds=offset))
+    with pytest.raises(CycloneSupplyError, match=reason):
+        source.final_clock(cmd, NOW)
 
 
 def clear_proof(transition):

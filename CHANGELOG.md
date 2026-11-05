@@ -1,3 +1,12 @@
+## 0.9.109.71
+
+- Preserve the existing Copernicus activation link as primary source evidence
+  so qualified flood briefs can pass ordinary source admission.
+- Recheck optional related-event and impact evidence before ranking assigns
+  generation slots. Keep qualified runner-ups eligible when enrichment fails.
+- Preserve source repair details, the original attempt limits and independent
+  pipeline checks, including the first outcome through async handoff.
+
 ## 0.9.109.70
 
 - Add an optional saved-source river forecast preview with its source check

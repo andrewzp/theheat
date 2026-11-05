@@ -27,11 +27,15 @@ IMPACT = {"claim": "Invented: 40 homes evacuated in Ficta.", "value": 40, "sourc
 
 def candidate(event_id, *, total=80, kind="flood", country="FX", complete=True, created="2026-10-29T06:00:00Z",
               places=2, rp=30.0, days=4.0):
-    raw = {"evidence_type": "official_event_report"}
+    raw = {"evidence_type": "official_event_report", "source_name": "Invented portfolio report"}
     if complete:
         raw.update(return_period_years=rp, duration_days=days)
-    bundle = StoryBundle(signal_kind=kind, where=f"Ficta {event_id}", when="2026-10-29", event_id=event_id,
-                         headline_metric={"label": "area", "value": 10}, current_facts=[],
+    # This is a portfolio unit fixture, not a FIRMS thermal-source receipt. Its
+    # synthetic signal kinds keep distinct category buckets; physical hazards
+    # below still drive the real portfolio planner.
+    bundle = StoryBundle(signal_kind=f"portfolio_fixture_{kind}", where=f"Ficta {event_id}", when="2026-10-29", event_id=event_id,
+                         headline_metric={"label": "area", "value": 10},
+                         current_facts=[{"label": "source_name", "value": "Invented portfolio report"}],
                          human_impact=[dict(IMPACT)] if complete else [], raw_signal_dump=raw, country=country)
     review = {"physical_episode": {"episode_id": f"ep1:{kind}:gdacs:{event_id}", "source_revision": "a" * 64,
                                    "hazard": kind, "evidence_type": "official_event_report",
@@ -139,3 +143,9 @@ def test_plan_is_deterministic_and_reports_no_quota(drain):
     assert chosen[0] == chosen[1] and first["quota"] is None
     assert json.dumps(first["missing_dimensions"], sort_keys=True) == json.dumps(second["missing_dimensions"],
                                                                                  sort_keys=True)
+
+
+def test_portfolio_packets_really_clear_the_existing_evidence_contract():
+    from src.two_bot.evidence_contract import audit_story_bundle
+
+    assert all(audit_story_bundle(row.bundle).prompt_ready for row in slate())

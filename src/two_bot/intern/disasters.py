@@ -489,6 +489,7 @@ def build_global_flood_bundle(event: CopernicusFloodActivation) -> StoryBundle:
             {"label": "lon", "value": event.lon},
             {"label": "activation_date", "value": event.activation_date},
             {"label": "copernicus_url", "value": event.copernicus_url},
+            {"label": "source_url", "value": event.copernicus_url},
             {"label": "name", "value": event.name},
             *_climate_context_facts(event.lat, event.lon, category="flood"),
         ],

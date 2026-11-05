@@ -810,7 +810,11 @@ class TestDrainWiring:
         assert seen and seen[0].human_impact == []
 
     def test_flag_on_enriches_before_drafting(self, monkeypatch):
+        from dataclasses import replace
         from src.orchestrator.triage_queue import _drain_and_write_triage_queue
+        from src.two_bot.evidence_contract import audit_story_bundle
+        from src.two_bot.intern.fire import build_fire_bundle
+        from tests.fire_source_fixtures import fire_event
 
         monkeypatch.setenv("THEHEAT_NEWSWORTHINESS_ENABLED", "1")
         monkeypatch.setenv("THEHEAT_NEWS_ENRICH_ENABLED", "1")
@@ -821,6 +825,14 @@ class TestDrainWiring:
         )
         state = self._state_with_news()
         cand = _firms_fire_cand()
+        # This wiring test crosses the real evidence boundary. Matcher-only
+        # fixtures above intentionally omit acquisition receipts; use a complete
+        # invented FIRMS packet here rather than bypassing source validation.
+        bundle = build_fire_bundle(fire_event(
+            when=datetime(TODAY.year, TODAY.month, TODAY.day, tzinfo=UTC),
+            lat=39.0, lon=-105.5, country="United States", region="Colorado"))
+        assert audit_story_bundle(bundle).prompt_ready
+        cand = replace(cand, bundle=bundle, event_id=bundle.event_id)
         state["_triage_queue"] = [cand]
         _drain_and_write_triage_queue(state, None)
         assert seen and seen[0].human_impact
