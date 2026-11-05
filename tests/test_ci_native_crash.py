@@ -327,7 +327,7 @@ def test_original_suite_string_and_matrix_remain_exact():
     assert cleanup["if"] == "always() && matrix.partition == 'postgres' && (matrix.postgres-shard == '2' || matrix.postgres-shard == '8') && env.THEHEAT_CI_CORE_DIR != ''"
     assert cleanup["timeout-minutes"] == 2
     assert cleanup["env"]["THEHEAT_CI_TEST_OUTCOME"] == "${{ steps.offline-suite.outcome }}"
-    assert workflow["jobs"]["test"]["needs"] == "test-partition"
+    assert workflow["jobs"]["test"]["needs"] == ["test-partition", "test-dashboard"]
 
 
 @pytest.mark.parametrize("outcome", ["success", "failure"])

@@ -132,7 +132,7 @@
       ],
       "kind": "adapter",
       "entry_point": "src/orchestrator/sources/nws_alerts.py:run_nws_alerts",
-      "scope": "NWS warning areas returned by the active-alert feed.",
+      "scope": "Rare warnings selected from the saved NWS active-alert response.",
       "data_family": "official_warning",
       "provenance": "NWS issued alert products, including their issue, effective and expiry times.",
       "collection_rule": "Each eligible alerts run; existing deduplication and story limits still apply.",
@@ -677,7 +677,7 @@
     "src/data/nhc_advisory.py": "c54a764d194d376a39e98c87af40d1911dbc9f088817a2c36416b399b6e45acf",
     "src/data/nsidc_snow.py": "ab75c73ec88130ae5805b1c5cf33a9b3912922c74da72b281b34d9cb9c7ae535",
     "src/data/nwps_major_forecasts.py": "2ca37dd5e8f7162c4b9feb1c49ab1804fae38c8183d50fe3c02850308c72fef5",
-    "src/data/nws_alerts.py": "5c01bc73e40663915f410ecd77299a3772efc345673a12017b84b1ecfd9b5eb3",
+    "src/data/nws_alerts.py": "9ef63f03250055f5f9c5baab22885f16aa873fbfd176edf1985a1fd6617099bf",
     "src/data/ocean.py": "46987453207a69d4b6772d46de0c61235d4825eaa85b544ca5b61d340c669891",
     "src/data/ocean_sst.py": "7d62eefb7a6c657f014c756a62adb53d2e231e4d113bf2cb210cb213bf3fbeda",
     "src/data/ocean_sst_anomaly.py": "78f0c70c0ce712b969042ffd2a1ac75d9fc0a71a0cee89535de5274fd2973f67",
@@ -687,7 +687,7 @@
     "src/data/regional_observations.py": "eef66077194e446991db077d558f3e2da664e6c1c7a1deb5e2b4ea9cec08d88e",
     "src/data/river_gauges.py": "7f7f5bfa89c84d95f6d8b872476a9512116047e86a62e4d4db0412c87ee7ee14",
     "src/data/sea_ice.py": "373dc72240b8ee7439995cf194b9b190b9a1940df393723119849cdeeff455f8",
-    "src/data/source_registry.py": "9348f1bc4ccfd804164e55c539f3ad09c0797f051d906324063cdeee04fc8ec9",
+    "src/data/source_registry.py": "fec249403b688243a303fd81767e9ed564a6e03c8f2b4e405825c50ec55272da",
     "src/data/temperature_evidence.py": "a258f8402418fe275ca32167850c32380452a6f6298faecd80b2f760793737e8",
     "src/data/usgs_quakes.py": "d074863aba46097e0aa31a0c16c48158a2769c1403cac51e1e2054b2deb96650",
     "src/data/water_levels.py": "2b77738fe2e5f4a246b29691879726873a48622ee26e6ffcd35713f07c505ab3",
@@ -716,7 +716,7 @@
     "src/orchestrator/sources/nhc_advisory.py": "e14956f0d72e576e851efec730ae97459d1f4ca10aaba14fedb3dd98d1c5a1e4",
     "src/orchestrator/sources/nifc.py": "99801aa500b84c0fa2f587c4fa0fda4ffd2d5b53fa4a1f0703b03e645a66e026",
     "src/orchestrator/sources/nsidc_snow.py": "ddd091dae3900c5bce378010aab09709186c0c6774813bf2766026d269119a5d",
-    "src/orchestrator/sources/nws_alerts.py": "e558378491d43547ccef0c31fbb04bf2bb8b7575bbfce0efabc4d3c65f957e6c",
+    "src/orchestrator/sources/nws_alerts.py": "1990244b25454c4d5dc478494b02a580fd19634f3c79af13f8307739eaf94888",
     "src/orchestrator/sources/ocean_sst.py": "2d7f803dfe21695b1595053ef9b7f9d17c37f5b4563bfda6dcd5fcfc52cc0a39",
     "src/orchestrator/sources/ocean_sst_anomaly.py": "495657e1684d67d9b56076084aa29c3bc6262108498ffd966839c74b6679757f",
     "src/orchestrator/sources/official_warning.py": "469554a569f33365b55e919c62438fc6f1cea41fe31c6aecb7681029512d5679",
@@ -733,5 +733,5 @@
     "src/two_bot/intern/warnings.py": "04e0a4506ffbb29124c8d2960a5e5025305699297fcf8f9178b23caac2cd7a37"
   },
   "evidence_scope": "Referenced local code inventory; not live/provider/transitive-source qualification.",
-  "registry_sha256": "939a936eeea15341e73219492d6c3780b1348657ca2613f56ad220b4adb07d28"
+  "registry_sha256": "c522d53bfe1f64fe0238949e8dbad18f4c1efe610ac56a51c838672439cb0e85"
 }

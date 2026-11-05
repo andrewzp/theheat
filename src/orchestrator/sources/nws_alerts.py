@@ -13,6 +13,12 @@ def run_nws_alerts(bot_state: BotState, current_run: dict | None) -> None:
     nws_start = time.perf_counter()
     try:
         alerts = _fetch_strict(nws_alerts.fetch_alerts)
+        admission = None
+        if isinstance(alerts, nws_alerts.AlertBatch):
+            admission = {"nws_alert_admission": {
+                "response_features": alerts.response_features,
+                "adapter_selected": len(alerts),
+            }}
         source_promoted = 0
         for alert in alerts:
             if state.is_duplicate(bot_state, alert.event_id):
@@ -59,7 +65,8 @@ def run_nws_alerts(bot_state: BotState, current_run: dict | None) -> None:
             )
         _record_source_run(
             current_run, bot_state, "nws_alerts", nws_start,
-            status="success", observed=len(alerts), promoted=source_promoted, drafted=0
+            status="success", observed=len(alerts), promoted=source_promoted, drafted=0,
+            details=admission,
         )
     except Exception as e:
         print(f"[alerts] NWS error: {e}")
