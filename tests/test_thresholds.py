@@ -58,6 +58,11 @@ EXPECTED_THRESHOLD_KEYS_BY_FUNCTION = {
     "score_wet_bulb_extreme": {"wet_bulb_extreme"},
 }
 
+# Scoring entry points imported directly by source runners.
+EXPECTED_SOURCE_THRESHOLD_KEYS_BY_FUNCTION = {
+    "score_major_river_forecast": {"river_flood"},
+}
+
 
 def _scoring_modules() -> list[Path]:
     return sorted(
@@ -111,7 +116,8 @@ def test_registry_covers_every_public_score_function():
 def test_score_functions_use_registry_thresholds():
     keys_by_function = _threshold_keys_in_scoring_modules()
 
-    assert keys_by_function == EXPECTED_THRESHOLD_KEYS_BY_FUNCTION
+    expected = EXPECTED_THRESHOLD_KEYS_BY_FUNCTION | EXPECTED_SOURCE_THRESHOLD_KEYS_BY_FUNCTION
+    assert keys_by_function == expected
 
 
 def test_no_inline_score_gate_thresholds_remain():
