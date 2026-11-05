@@ -27,16 +27,25 @@ def test_threshold_pause_is_a_job_guard_for_both_existing_entry_points():
         "description": "Days to look back in superghcnd_diff",
         "required": "false", "default": "12", "type": "string",
     }
+    assert workflow["on"]["workflow_dispatch"]["inputs"]["catch_up"] == {
+        "description": "Allow 30 minutes for a manual catch-up (routine limit is 15 minutes)",
+        "required": "false", "default": "false", "type": "boolean",
+    }
     assert set(workflow["jobs"]) == {"refresh"}
     job = workflow["jobs"]["refresh"]
     assert job["if"] == "vars.THEHEAT_PRODUCTION_PAUSED != '1' && github.ref == 'refs/heads/main'"
     assert job["environment"] == "threshold-maintenance"
+    assert job["timeout-minutes"] == (
+        "${{ github.event_name == 'workflow_dispatch' && inputs.catch_up == true && 45 || 30 }}"
+    )
     assert job["permissions"] == {"contents": "write", "actions": "read"}
     assert workflow["concurrency"] == {
         "group": "refresh-thresholds", "cancel-in-progress": "false",
     }
     # Job eligibility gates checkout as well as all later network/write steps.
-    assert job["steps"][0] == {"uses": "actions/checkout@v6"}
+    assert job["steps"][0] == {
+        "uses": "actions/checkout@v6", "with": {"persist-credentials": "false"},
+    }
     assert all("THEHEAT_PRODUCTION_PAUSED" not in str(step) for step in job["steps"])
     commands = "\n".join(step.get("run", "") for step in job["steps"])
     for operation in (
@@ -44,7 +53,7 @@ def test_threshold_pause_is_a_job_guard_for_both_existing_entry_points():
         "scripts.refresh_station_inventory",
         "scripts.update_thresholds_incremental",
         "scripts.threshold_artifacts publish",
-        "git push origin HEAD:main",
+        "scripts.threshold_handoff pack",
     ):
         assert operation in commands
 
@@ -54,9 +63,16 @@ def test_threshold_resume_uploads_only_sealed_timeout_progress():
     steps = workflow["jobs"]["refresh"]["steps"]
     update = next(step for step in steps if step.get("id") == "update")
     seal = next(step for step in steps if step.get("id") == "seal")
-    retain = next(step for step in steps if step.get("uses") == "actions/upload-artifact@v7")
+    retain = next(
+        step for step in steps
+        if step.get("uses") == "actions/upload-artifact@v7"
+        and step["with"]["name"] == "threshold-refresh-checkpoint"
+    )
     publish = next(step for step in steps if step.get("name") == "Publish verified immutable threshold artifact")
-    assert 'timeout 900' in update["run"] and '"$code" == 124' in update["run"]
+    assert 'timeout "$THRESHOLD_TIMEOUT_SECONDS"' in update["run"] and '"$code" == 124' in update["run"]
+    assert update["env"]["THRESHOLD_TIMEOUT_SECONDS"] == (
+        "${{ github.event_name == 'workflow_dispatch' && inputs.catch_up == true && 1800 || 900 }}"
+    )
     assert 'exit "$code"' in update["run"]
     assert seal["if"] == "${{ !cancelled() && steps.update.outputs.timed_out == 'true' }}"
     assert retain["if"] == "${{ !cancelled() && steps.seal.outcome == 'success' }}"
@@ -68,17 +84,19 @@ def test_threshold_resume_uploads_only_sealed_timeout_progress():
 
 
 @pytest.mark.parametrize("enabled,exit_code", [("", 124), ("true", 124), ("true", 1), ("true", 0)])
-def test_update_shell_preserves_status_and_only_marks_checkpoint_timeout(tmp_path, enabled, exit_code):
+@pytest.mark.parametrize("timeout_seconds", ["900", "1800"])
+def test_update_shell_preserves_status_and_only_marks_checkpoint_timeout(tmp_path, enabled, exit_code, timeout_seconds):
     workflow = yaml.load((ROOT / ".github/workflows/refresh-thresholds.yml").read_text(), Loader=yaml.BaseLoader)
     update = next(step for step in workflow["jobs"]["refresh"]["steps"] if step.get("id") == "update")
     timeout = tmp_path / "timeout"
-    timeout.write_text('#!/bin/bash\n[[ "$1" == 900 ]] || exit 99\nshift\nprintf "%s\\n" "$@"\nexit "$FIXTURE_EXIT"\n')
+    timeout.write_text('#!/bin/bash\n[[ "$1" == "$FIXTURE_TIMEOUT" ]] || exit 99\nshift\nprintf "%s\\n" "$@"\nexit "$FIXTURE_EXIT"\n')
     timeout.chmod(0o700)
     output = tmp_path / "output"
     result = subprocess.run(
         ["/bin/bash", "-e", "-o", "pipefail", "-c", update["run"]],
         env={"PATH": str(tmp_path), "RUNNER_TEMP": str(tmp_path), "GITHUB_OUTPUT": str(output),
-             "THRESHOLD_DAYS": "12", "CHECKPOINT_ENABLED": enabled, "FIXTURE_EXIT": str(exit_code)},
+             "THRESHOLD_DAYS": "12", "CHECKPOINT_ENABLED": enabled, "FIXTURE_EXIT": str(exit_code),
+             "THRESHOLD_TIMEOUT_SECONDS": timeout_seconds, "FIXTURE_TIMEOUT": timeout_seconds},
         capture_output=True, text=True, timeout=5, check=False,
     )
     assert result.returncode == exit_code
@@ -87,6 +105,23 @@ def test_update_shell_preserves_status_and_only_marks_checkpoint_timeout(tmp_pat
         assert output.read_text() == "timed_out=true\n"
     else:
         assert not output.exists()
+
+
+def test_successful_candidate_summary_still_requires_operator_adoption(tmp_path):
+    workflow = yaml.load((ROOT / ".github/workflows/refresh-thresholds.yml").read_text(), Loader=yaml.BaseLoader)
+    step = workflow["jobs"]["refresh"]["steps"][-1]
+    summary = tmp_path / "summary"
+    result = subprocess.run(
+        ["/bin/bash", "-e", "-o", "pipefail", "-c", step["run"]],
+        env={"GITHUB_STEP_SUMMARY": str(summary), "HANDOFF_DIGEST": "fixture-digest"},
+        capture_output=True, text=True, timeout=5, check=False,
+    )
+    assert result.returncode == 0
+    assert "::warning title=Threshold adoption pending::" in result.stdout
+    assert "The installed threshold baseline is unchanged." in summary.read_text()
+    assert "fixture-digest" in summary.read_text()
+    assert "docs/runbooks/threshold-refresh.md" in summary.read_text()
+    assert (ROOT / "docs/runbooks/threshold-refresh.md").is_file()
 
 
 @pytest.mark.parametrize("path", [

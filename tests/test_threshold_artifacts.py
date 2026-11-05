@@ -442,25 +442,26 @@ def test_cli_reports_corrupt_deflate_without_provider_or_path_details(
     )
 
 
-def test_failed_workflow_push_is_not_reported_as_success(tmp_path):
-    # Exercise the exact workflow shell step against a synthetic failing git;
-    # no credentials, repository mutation or outbound Git operation is involved.
-    refresh = yaml.safe_load((ROOT / ".github/workflows/refresh-thresholds.yml").read_text())
-    command = next(
-        s["run"] for s in refresh["jobs"]["refresh"]["steps"] if "git push" in s.get("run", "")
-    )
-    git = tmp_path / "git"
-    git.write_text('#!/bin/sh\nif [ "$1" = push ]; then exit 73; fi\nexit 0\n')
-    git.chmod(0o700)
-    result = subprocess.run(
-        ["/bin/bash", "--noprofile", "--norc", "-eo", "pipefail", "-c", command],
-        cwd=tmp_path,
-        env={"PATH": str(tmp_path)},
-        capture_output=True,
-        timeout=5,
-    )
-    assert result.returncode == 73
-    assert not result.stdout
+def test_workflow_retains_only_the_exact_candidate_files_for_normal_review():
+    workflow = yaml.load((ROOT / ".github/workflows/refresh-thresholds.yml").read_text(), Loader=yaml.BaseLoader)
+    steps = workflow["jobs"]["refresh"]["steps"]
+    pack, upload, summary = steps[-3:]
+    assert pack["name"] == "Pack exact candidate files for protected adoption"
+    assert upload["uses"] == "actions/upload-artifact@v7"
+    assert upload["with"] == {
+        "name": "verified-threshold-handoff",
+        "path": "".join(
+            f"${{{{ runner.temp }}}}/verified-threshold-handoff/{name}\n"
+            for name in ("station_thresholds.version", "stations.csv", "handoff.json")
+        ),
+        "if-no-files-found": "error",
+        "retention-days": "7",
+    }
+    assert all("if" not in step and "continue-on-error" not in step for step in (pack, upload, summary))
+    assert "The installed threshold baseline is unchanged" in summary["run"]
+    commands = "\n".join(step.get("run", "") for step in steps)
+    assert "git push" not in commands and "git commit" not in commands
+    assert not any(step.get("uses") == "actions/cache/save@v4" for step in steps)
 
 
 def test_cli_upload_is_one_bounded_argv_call_without_clobber(baseline, monkeypatch):
@@ -508,10 +509,12 @@ def test_workflow_uses_exact_cache_and_guards_mutation_then_non_destructive_publ
         < index("scripts.refresh_station_inventory")
         < index("scripts.update_thresholds_incremental")
         < index(" publish ")
-        < index("git push")
+        < index("scripts.threshold_handoff pack")
     )
-    assert refresh["jobs"]["refresh"]["timeout-minutes"] == 30
-    assert "timeout 900" in commands[index("scripts.update_thresholds_incremental")]
+    assert refresh["jobs"]["refresh"]["timeout-minutes"] == (
+        "${{ github.event_name == 'workflow_dispatch' && inputs.catch_up == true && 45 || 30 }}"
+    )
+    assert 'timeout "$THRESHOLD_TIMEOUT_SECONDS"' in commands[index("scripts.update_thresholds_incremental")]
     assert '--days "$THRESHOLD_DAYS"' in commands[index("scripts.update_thresholds_incremental")]
     source = (ROOT / ".github/workflows/refresh-thresholds.yml").read_text()
     assert "--clobber" not in source and '|| echo "Nothing to push"' not in source
