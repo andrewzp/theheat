@@ -78,7 +78,8 @@ def _retained_bundle_json(bundle, *, code="graphic_unavailable"):
     return encoded
 
 
-def qualified_spec(bundle, *, synthetic=False, include_viirs=False, include_temperature=False):
+def qualified_spec(bundle, *, synthetic=False, include_viirs=False, include_temperature=False,
+                   nwps_source_capture=None):
     """Shared Python qualification; callers own authentication/currentness.
 
     VIIRS and temperature comparisons are separately opt-in. The saved-draft
@@ -88,6 +89,17 @@ def qualified_spec(bundle, *, synthetic=False, include_viirs=False, include_temp
     product; the selected adapter then validates every row, so a mixed set holds.
     """
     _retained_bundle_json(bundle)
+    if bundle["signal_kind"] == "river_flood" and "nwps_index_hint" in bundle.get("raw_signal_dump", {}):
+        from src.media.nwps_graphic_adapter import nwps_graphic_spec
+        if nwps_source_capture is None:
+            raise PreviewError("graphic_unavailable")
+        spec = nwps_graphic_spec(bundle, nwps_source_capture, expected_bundle_sha256=fingerprint(bundle),
+                                 expected_capture_sha256=fingerprint(nwps_source_capture))
+        evidence = spec["evidence"]
+        return spec, "NOAA/NWS National Water Prediction Service", {
+            "kind": "nwps_forecast_points", "gauge": evidence["gauge"], "unit": evidence["unit"],
+            "issued_at": evidence["issued_at"], "first_major_at": evidence["first_major_at"],
+            "checked_at": evidence["evidence_as_of"], "point_count": len(evidence["points"])}
     if bundle["signal_kind"] == "fire":
         receipts = [bundle["raw_signal_dump"]["acquisition_provenance"],
                     *[r["acquisition_evidence"] for r in bundle.get("related_signals", [])]]
@@ -314,6 +326,16 @@ def build_preview(request, *, policy_sha, runtime_sha, read_state, budget, synth
         # Bound the full retained story before canonical hashing and validation.
         retained_bundle = _retained_bundle_json(bundle)
         from src.media import gist_media
+        nwps_source_capture = None
+        if bundle.get("signal_kind") == "river_flood" and "nwps_index_hint" in bundle.get("raw_signal_dump", {}):
+            # Read-only preview. A river PNG has no reviewed attachment/sender recipe yet.
+            if "format" in request:
+                raise PreviewError("graphic_unavailable")
+            from src.media import gist_assets, nwps_capture
+            try:
+                nwps_source_capture = nwps_capture.load(bundle, draft["review_context"].get(nwps_capture.CONTEXT_KEY), store)
+            except gist_assets.MediaStoreError as exc:
+                raise PreviewError("media_hold", exc.code) from None
         store_backed = request.get("format") == "png" and gist_media.needs_retained_input(bundle)
         if store_backed:
             spec = source = context = None
@@ -321,7 +343,7 @@ def build_preview(request, *, policy_sha, runtime_sha, read_state, budget, synth
             if "retained_input_sha256" in request:
                 raise PreviewError("bad_request")
             spec, source, context = qualified_spec(bundle, synthetic=synthetic, include_viirs=True,
-                                                  include_temperature=True)
+                                                  include_temperature=True, nwps_source_capture=nwps_source_capture)
         budget.remaining()
         if request.get("format") == "png":
             prepared = gist_media.prepare_media(bundle, synthetic=synthetic, store=store,

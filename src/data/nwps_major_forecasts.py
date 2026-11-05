@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import Counter
 from collections.abc import Callable
+from copy import deepcopy
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import json
@@ -150,7 +151,8 @@ def read_gauge_forecast(row: dict, *, read_json: Callable[..., dict] = _read_jso
     return read_json(url), read_json(url + "/stageflow/forecast")
 
 
-def fetch_major_forecasts(now: datetime, *, read_json: Callable[..., dict] = _read_json) -> tuple[int, list[MajorRiverForecast]]:
+def fetch_major_forecasts(now: datetime, *, read_json: Callable[..., dict] = _read_json,
+                          captures: dict[str, dict] | None = None) -> tuple[int, list[MajorRiverForecast]]:
     """One nationwide shortlist and at most two exact gauge/forecast pairs."""
     index = read_json(INDEX_URL, params={
         "where": "status='major'", "outFields": INDEX_FIELDS, "returnGeometry": "false",
@@ -161,7 +163,11 @@ def fetch_major_forecasts(now: datetime, *, read_json: Callable[..., dict] = _re
     for row in shortlist[:MAX_DETAIL_GAUGES]:
         try:
             metadata, forecast = read_gauge_forecast(row, read_json=read_json)
-            qualified.append(verify_major_forecast(row, metadata, forecast, now))
+            event = verify_major_forecast(row, metadata, forecast, now)
+            qualified.append(event)
+            if captures is not None:
+                captures[event.lid] = {"metadata": deepcopy(metadata), "forecast": deepcopy(forecast),
+                                       "checked_at": now.isoformat(), "synthetic": False}
         except (RequestException, KeyError, TypeError, ValueError, OverflowError):
             continue
     return len(shortlist), qualified

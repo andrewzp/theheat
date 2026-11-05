@@ -98,11 +98,9 @@ MEDIA_HOLDS = {
     "media_store_unavailable": "No media store is configured here for published or retained-source images; "
                                "native charts are unaffected.",
     "media_retained_input_required": "Select the retained source packet or published asset for this image.",
-    "media_source_packet_missing": "The retained CRW source packet is not in the media store. Retain it locally "
-                                   "first; nothing is fetched.",
-    "media_source_packet_mismatch": "This is not the CRW source packet retained for this draft. Select the "
-                                    "draft's own packet; nothing is substituted.",
-    "media_source_packet_invalid": "The draft's retained CRW packet reference is malformed; the image is held.",
+    "media_source_packet_missing": "The source packet saved for this draft is missing from the media store.",
+    "media_source_packet_mismatch": "The source packet does not match the one saved for this draft.",
+    "media_source_packet_invalid": "The draft's saved source packet reference is malformed.",
     "media_original_missing": "The published original is not in the media store. Retain it again; nothing is "
                               "fetched.",
     "media_asset_missing": "A retained asset is missing from the media store.",

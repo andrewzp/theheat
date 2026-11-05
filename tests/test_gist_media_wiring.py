@@ -28,9 +28,11 @@ def test_sender_runs_are_read_only_and_retention_runs_insert_only():
     assert env["THEHEAT_MEDIA_STORE"] == f"${{{{ {sender} && vars.THEHEAT_MEDIA_STORE || '' }}}}"
     assert env["THEHEAT_MEDIA_STORE_DSN"] == f"${{{{ {sender} && secrets.THEHEAT_MEDIA_STORE_DSN || '' }}}}"
     assert env["THEHEAT_CRW_PACKET_RETENTION"] == f"${{{{ {collector} && vars.THEHEAT_CRW_PACKET_RETENTION || '0' }}}}"
+    assert env["THEHEAT_NWPS_PACKET_RETENTION"] == f"${{{{ {collector} && vars.THEHEAT_NWPS_PACKET_RETENTION || '0' }}}}"
     for name, source in (("THEHEAT_MEDIA_WRITER_STORE", "vars.THEHEAT_MEDIA_WRITER_STORE"),
                          ("THEHEAT_MEDIA_WRITER_DSN", "secrets.THEHEAT_MEDIA_WRITER_DSN")):
-        assert env[name] == (f"${{{{ {collector} && vars.THEHEAT_CRW_PACKET_RETENTION == '1' && {source} || '' }}}}")
+        assert env[name] == (f"${{{{ {collector} && (vars.THEHEAT_CRW_PACKET_RETENTION == '1' || "
+                             f"vars.THEHEAT_NWPS_PACKET_RETENTION == '1') && {source} || '' }}}}")
     # No other step or workflow receives a media credential.
     text = "\n".join(p.read_text() for p in (ROOT / ".github/workflows").glob("*.yml"))
     assert len(re.findall(r"secrets\.THEHEAT_MEDIA_(?:STORE|WRITER)_DSN", text)) == 2

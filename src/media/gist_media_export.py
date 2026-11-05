@@ -83,8 +83,8 @@ def _closure(store, item):
     from src.media.gist_hazard_media import MediaWithheld
 
     kind, sha = item
-    _require(kind in ("published", "crw_packet") and type(sha) is str and _SHA.fullmatch(sha),
-             "export_selection_invalid", "select published manifests or CRW packets by exact SHA256")
+    _require(kind in ("published", "crw_packet", "nwps_capture") and type(sha) is str and _SHA.fullmatch(sha),
+             "export_selection_invalid", "select published manifests or retained source packets by exact SHA256")
     try:
         if kind == "published":
             manifest, original, png = published.read(store, sha)
@@ -93,6 +93,10 @@ def _closure(store, item):
                      manifest["derivative"]["sha256"]: png}
             for row in (value["receipt"], *value["references"].values()):
                 blobs[row["sha256"]] = store.get(row["sha256"], limit=row["byte_count"])
+        elif kind == "nwps_capture":
+            from src.media import nwps_capture
+            nwps_capture.read_packet(store, sha)
+            blobs = {sha: store.get(sha, limit=nwps_capture.MAX_PACKET_BYTES)}
         else:
             adapter._packet(packet := crw.load_packet(store, sha), fingerprint(packet))  # Same structure rules.
             blobs = {sha: store.get(sha, limit=crw.MAX_PACKET_BYTES)}
@@ -120,6 +124,14 @@ def _media_references(draft):
         else:
             sha = (attachment.get("asset") or {}).get("manifest_sha256")
             yield ("published", sha), current
+    from src.media.nwps_capture import CONTEXT_KEY
+    snapshots = [(draft, True)] + [(row, False) for row in (history if type(history) is list else []) if type(row) is dict]
+    for snapshot, current in snapshots:
+        review = snapshot.get("review_context")
+        if type(review) is dict and CONTEXT_KEY in review:
+            reference = review[CONTEXT_KEY]
+            sha = reference.get("artifact_sha256") if type(reference) is dict else None
+            yield ("nwps_capture", sha), current
 
 
 def plan(store, state):
@@ -150,7 +162,7 @@ def plan(store, state):
                 reasons.add("delivered_history")
             if current and (draft.get("status") == "approved" or "media_review_binding" in draft):
                 reasons.add("current_review")
-            reasons.add("attached" if current else "revision_history")
+            reasons.add(("retained_source" if item[0] == "nwps_capture" else "attached") if current else "revision_history")
             entry = needed.setdefault(item, {})
             entry.setdefault(draft["id"], set()).update(reasons)
     items = []
@@ -164,7 +176,8 @@ def plan(store, state):
                       "drafts": [{"draft_id": draft_id, "reasons": sorted(reasons)}
                                  for draft_id, reasons in sorted(drafts.items())]})
     present = [row for row in items if row["status"] == "present"]
-    flags = [["--manifest" if row["kind"] == "published" else "--crw-packet", row["sha256"]] for row in present]
+    selectors = {"published": "--manifest", "crw_packet": "--crw-packet", "nwps_capture": "--nwps-capture"}
+    flags = [[selectors[row["kind"]], row["sha256"]] for row in present]
     batches = [[value for pair in flags[i:i + MAX_ITEMS] for value in pair] for i in range(0, len(flags), MAX_ITEMS)]
     return {"items": items, "present": len(present), "held": len(items) - len(present),
             "export_batches": batches, "publication_approved": False}

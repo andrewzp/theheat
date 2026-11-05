@@ -578,8 +578,9 @@ jobs:
           # Opt-in CRW packet retention (default off); the insert-only capability is
           # never present in a manual_tweet (sender) run.
           THEHEAT_CRW_PACKET_RETENTION: ${{ steps.mode.outputs.mode != 'manual_tweet' && vars.THEHEAT_CRW_PACKET_RETENTION || '0' }}
-          THEHEAT_MEDIA_WRITER_STORE: ${{ steps.mode.outputs.mode != 'manual_tweet' && vars.THEHEAT_CRW_PACKET_RETENTION == '1' && vars.THEHEAT_MEDIA_WRITER_STORE || '' }}
-          THEHEAT_MEDIA_WRITER_DSN: ${{ steps.mode.outputs.mode != 'manual_tweet' && vars.THEHEAT_CRW_PACKET_RETENTION == '1' && secrets.THEHEAT_MEDIA_WRITER_DSN || '' }}
+          THEHEAT_NWPS_PACKET_RETENTION: ${{ steps.mode.outputs.mode != 'manual_tweet' && vars.THEHEAT_NWPS_PACKET_RETENTION || '0' }}
+          THEHEAT_MEDIA_WRITER_STORE: ${{ steps.mode.outputs.mode != 'manual_tweet' && (vars.THEHEAT_CRW_PACKET_RETENTION == '1' || vars.THEHEAT_NWPS_PACKET_RETENTION == '1') && vars.THEHEAT_MEDIA_WRITER_STORE || '' }}
+          THEHEAT_MEDIA_WRITER_DSN: ${{ steps.mode.outputs.mode != 'manual_tweet' && (vars.THEHEAT_CRW_PACKET_RETENTION == '1' || vars.THEHEAT_NWPS_PACKET_RETENTION == '1') && secrets.THEHEAT_MEDIA_WRITER_DSN || '' }}
         run: python -m src.main auto_publish_due
 
       - name: Reserve additional catch-up

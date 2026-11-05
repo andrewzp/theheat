@@ -16,7 +16,7 @@ from urllib.parse import urlparse
 from src.editorial.revisions import fingerprint
 
 TEMPLATE_VERSION = "p31-preview-3-mobile"
-TEMPLATES = frozenset({"temperature_comparator", "temperature_trajectory", "crw_regional_anomaly", "pm25_forecast_day", "modis_thermal_detections", "modis_thermal_detection_map", "viirs_thermal_detection_map"})
+TEMPLATES = frozenset({"temperature_comparator", "temperature_trajectory", "crw_regional_anomaly", "pm25_forecast_day", "modis_thermal_detections", "modis_thermal_detection_map", "viirs_thermal_detection_map", "nwps_river_forecast"})
 MAP_TEMPLATES = frozenset({"modis_thermal_detection_map", "viirs_thermal_detection_map"})
 VARIABLE_LABELS = {"daily_maximum_temperature": "Daily maximum temperature",
                    "daily_minimum_temperature": "Daily minimum temperature"}
@@ -24,6 +24,9 @@ WIDTH, HEIGHT = 1200, 1500
 
 
 def template_version(template):
+    if template == "nwps_river_forecast":
+        from src.media.nwps_graphic_adapter import TEMPLATE_VERSION as version
+        return version
     if template == "viirs_thermal_detection_map":
         from src.media.viirs_map_graphic_adapter import TEMPLATE_VERSION as version
         return version
@@ -45,6 +48,8 @@ def template_version(template):
 
 
 def adapter_filename(template):
+    if template == "nwps_river_forecast":
+        return "nwps_graphic_adapter.py"
     if template == "viirs_thermal_detection_map":
         return "viirs_map_graphic_adapter.py"
     if template == "modis_thermal_detection_map":
@@ -140,6 +145,9 @@ def validate_graphic(template, evidence, *, expected_evidence_sha256):
         raise ValueError("Graphic evidence differs from the expected review binding")
     if type(evidence.get("synthetic")) is not bool:
         raise ValueError("Synthetic status must be explicit")
+    if template == "nwps_river_forecast":
+        from src.media.nwps_graphic_adapter import validate_nwps_adapter_binding
+        return validate_nwps_adapter_binding(evidence)
     if template == "viirs_thermal_detection_map":
         from src.media.viirs_map_graphic_adapter import validate_viirs_map_binding
         validate_viirs_map_binding(evidence)
@@ -237,6 +245,8 @@ def validate_graphic(template, evidence, *, expected_evidence_sha256):
 
 
 def chart_title(template, evidence):
+    if template == "nwps_river_forecast":
+        return "River flood forecast"
     if template in MAP_TEMPLATES:
         return "Satellite heat detections"
     if template == "modis_thermal_detections":
@@ -252,6 +262,9 @@ def chart_title(template, evidence):
 
 
 def build_alt_text(template, evidence):
+    if template == "nwps_river_forecast":
+        from src.media.nwps_graphic_adapter import nwps_alt_text
+        return nwps_alt_text(evidence)
     if template == "viirs_thermal_detection_map":
         from src.media.viirs_map_graphic_adapter import viirs_alt_text
         return viirs_alt_text(evidence)

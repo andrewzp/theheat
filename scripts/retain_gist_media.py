@@ -86,11 +86,13 @@ def main(argv=None, environ=None):
     exp.add_argument("--target", required=True)
     exp.add_argument("--manifest", action="append", default=[], help="published manifest SHA256 (repeatable)")
     exp.add_argument("--crw-packet", action="append", default=[], help="CRW packet artifact SHA256 (repeatable)")
+    exp.add_argument("--nwps-capture", action="append", default=[], help="Saved NWPS capture artifact SHA256 (repeatable)")
     commands.add_parser("restore").add_argument("--source", required=True)
     commands.add_parser("plan").add_argument("--state", required=True)
     back = commands.add_parser("readback")
     back.add_argument("--manifest", action="append", default=[])
     back.add_argument("--crw-packet", action="append", default=[])
+    back.add_argument("--nwps-capture", action="append", default=[])
     args = parser.parse_args(argv)
     env = dict(os.environ if environ is None else environ)
     if args.store:  # One explicit local store for this operator command (both capabilities).
@@ -118,15 +120,16 @@ def main(argv=None, environ=None):
                       "derivative_bytes": len(png), "verified": True}
         elif args.command == "export":
             from src.media import gist_media_export as portable
-            items = [("published", sha) for sha in args.manifest] + [("crw_packet", sha) for sha in args.crw_packet]
+            items = ([("published", sha) for sha in args.manifest] + [("crw_packet", sha) for sha in args.crw_packet]
+                     + [("nwps_capture", sha) for sha in args.nwps_capture])
             result = portable.export(store, items, args.target)
         elif args.command == "restore":
             from src.media import gist_media_export as portable
             result = portable.restore(store, args.source)
         elif args.command == "readback":
             from src.media import gist_crw_media as crw, gist_published_media as published
-            if not args.manifest and not args.crw_packet:
-                raise SystemExit("readback needs at least one --manifest or --crw-packet identity")
+            if not args.manifest and not args.crw_packet and not args.nwps_capture:
+                raise SystemExit("readback needs at least one --manifest, --crw-packet or --nwps-capture identity")
             read_items: list[dict] = []
             for sha in args.manifest:
                 manifest, original, png = published.read(store, sha)
@@ -136,6 +139,11 @@ def main(argv=None, environ=None):
                 packet = crw.load_packet(store, sha)
                 read_items.append({"kind": "crw_packet", "packet_artifact_sha256": sha,
                               "packet_bytes": len(gist_assets.encode_document(packet)), "verified": True})
+            for sha in args.nwps_capture:
+                from src.media import nwps_capture
+                packet = nwps_capture.read_packet(store, sha)
+                read_items.append({"kind": "nwps_capture", "packet_artifact_sha256": sha,
+                                   "packet_bytes": len(gist_assets.encode_document(packet)), "verified": True})
             result = {"capability": "reader", "store_kind": type(store).__name__, "items": read_items,
                       "credentials_printed": False, "publication_approved": False}
         elif args.command == "plan":
