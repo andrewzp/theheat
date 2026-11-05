@@ -114,14 +114,17 @@ def _select(tmp_path, *, schedule, gist_id="invented-gist", state=None, gh_fails
     timeout.chmod(0o755)
     (bin_dir / "python").unlink(missing_ok=True)
     (bin_dir / "python").symlink_to(sys.executable)
-    script = (_mode_step()["run"].replace("${{ github.event_name }}", event)
-              .replace("${{ github.event.schedule }}", schedule)
-              .replace("${{ github.event.inputs.mode }}", "alerts"))
+    step = _mode_step()
+    script = step["run"].replace("${{ github.event.schedule }}", schedule)
     output = tmp_path / "github-output"
     output.unlink(missing_ok=True)
     env = {"GITHUB_OUTPUT": str(output), "RUNNER_TEMP": str(tmp_path), "PATH": f"{bin_dir}:/usr/bin:/bin",
            "GITHUB_EVENT_NAME": event, "GITHUB_RUN_ATTEMPT": attempt, "GITHUB_REF": ref,
            "THEHEAT_SCHEDULED_ALERTS_CATCHUP": enabled, "FIXTURE_TIMEOUT": "1" if gist_timeout else "0"}
+    # Resolve the real workflow's mode input binding instead of inserting it in shell source.
+    for key, expression in step["env"].items():
+        if expression == "${{ inputs.mode }}":
+            env[key] = "alerts" if event == "workflow_dispatch" else ""
     if gist_id:
         env["GIST_ID"] = gist_id
     subprocess.run(["/bin/bash", "-e", "-c", script], env=env, cwd=ROOT, check=True, timeout=30)
