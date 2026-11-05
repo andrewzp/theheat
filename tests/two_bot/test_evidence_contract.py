@@ -596,7 +596,9 @@ def test_representative_source_bundle_migration_readiness(case, bundle):
 
     # This is a migration inventory, not a scientific certification. Preserve
     # the actual legacy fixtures: do not make them pass by inventing sources.
-    source_identity_present = {"fire", "ch4", "ozone", "cyclone_basin_record", "coral"}
+    # The global-flood builder exposes its already-retained activation URL as
+    # primary evidence. The source fixture itself is unchanged.
+    source_identity_present = {"fire", "ch4", "ozone", "cyclone_basin_record", "coral", "global_flood"}
     expected = set() if case in source_identity_present else {"missing_provenance"}
     if case == "temperature_simultaneous":
         expected.add("temperature_aggregate_unqualified")
