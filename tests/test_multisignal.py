@@ -21,7 +21,9 @@ def _bundle(*, signal_kind="drought", event_id="e", where="Place", when="2026-06
             country="", facts=None):
     return StoryBundle(
         signal_kind=signal_kind, where=where, when=when, event_id=event_id,
-        headline_metric={"label": "x", "value": 1}, current_facts=facts or [],
+        headline_metric={"label": "x", "value": 1},
+        current_facts=facts if facts is not None else [{"label": "source", "value": "Invented source"}],
+        raw_signal_dump={"source": "Invented source", "event_id": event_id},
         country=country,
     )
 

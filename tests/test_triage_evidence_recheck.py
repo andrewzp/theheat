@@ -151,11 +151,17 @@ def test_malformed_related_signal_does_not_take_the_only_slot(world):
 
 def test_unchanged_admitted_packets_do_not_repeat_the_source_audit(world, monkeypatch):
     state, _ = slate()
-    # The independent pipeline audit keeps its original binding. Only the new
-    # optional-enrichment check uses this module lookup during the drain.
-    monkeypatch.setattr("src.two_bot.evidence_contract.audit_story_bundle",
-                        lambda bundle: pytest.fail("unchanged admission needlessly re-audited"))
+    seen = []
+
+    def observed(bundle):
+        seen.append(bundle.event_id)
+        return audit_story_bundle(bundle)
+
+    monkeypatch.setattr("src.two_bot.evidence_contract.audit_story_bundle", observed)
     assert triage_queue._drain_and_write_triage_queue(state, {"sources": []}) == 1
+    # Dispatch retains its existing audit on the chosen packet. The new filter
+    # did not re-audit every unchanged contender or replace the pipeline audit.
+    assert seen == world.writer_events()
 
 
 @pytest.mark.parametrize("refill", [False, True])
