@@ -137,7 +137,7 @@ def classify_error(last_error: str | None) -> str:
     return "unknown"
 
 
-def _parse_ts(ts: str | None) -> datetime | None:
+def _parse_ts(ts: str | None, *, require_timezone: bool = False) -> datetime | None:
     if not ts:
         return None
     try:
@@ -145,6 +145,8 @@ def _parse_ts(ts: str | None) -> datetime | None:
     except ValueError:
         return None
     if parsed.tzinfo is None:
+        if require_timezone:
+            return None
         parsed = parsed.replace(tzinfo=timezone.utc)
     return parsed
 
@@ -167,12 +169,12 @@ def _alerts_liveness_verdict(
 
     newest_alerts: datetime | None = None
     for run in run_history or []:
-        if not isinstance(run, Mapping):
+        if not isinstance(run, Mapping) or run.get("configuration_only") is True:
             continue
         if run.get("mode") not in ("alerts", "both"):
             continue
-        parsed = _parse_ts(run.get("started_at"))
-        if parsed is None:
+        parsed = _parse_ts(run.get("started_at"), require_timezone=True)
+        if parsed is None or parsed > now:
             continue
         if newest_alerts is None or parsed > newest_alerts:
             newest_alerts = parsed
@@ -193,7 +195,7 @@ def _alerts_liveness_verdict(
     if newest_alerts is not None and now - newest_alerts <= max_age:
         return None
 
-    last_success = (
+    last_alert = (
         newest_alerts.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
         if newest_alerts is not None else None
     )
@@ -213,10 +215,12 @@ def _alerts_liveness_verdict(
             "alerts/both lane stale; hourly auto_publish_due can keep run_history fresh "
             f"without proving alert ingestion. Actions: {BOT_ACTIONS_URL}"
         ),
-        "last_success_ts": last_success,
-        "days_since_success": round((now - newest_alerts).total_seconds() / 86400.0, 1)
+        "last_alert_at": last_alert,
+        "days_since_alert": round((now - newest_alerts).total_seconds() / 86400.0, 1)
         if newest_alerts is not None else None,
-        "recent_success_rate": 0.0,
+        "last_success_ts": None,
+        "days_since_success": None,
+        "recent_success_rate": None,
     }
 
 
@@ -345,9 +349,8 @@ def run_sentinel(
         for name, health in sorted((source_health or {}).items())
         if isinstance(health, dict)
     ]
-    liveness = _alerts_liveness_verdict(
-        run_history, now=now, production_paused=production_paused,
-    )
+    history = run_history if isinstance(run_history, list) else None
+    liveness = _alerts_liveness_verdict(history, now=now, production_paused=production_paused)
     if liveness is not None:
         verdicts.append(liveness)
     failing = [v for v in verdicts if v["category"] == "failing"]
@@ -356,6 +359,7 @@ def run_sentinel(
     paused = [v for v in verdicts if v["category"] == "paused"]
     return {
         "has_failures": len(failing) > 0,
+        "liveness_history_available": history is not None,
         "failing": failing,
         "degraded": degraded,
         "healthy": healthy,
@@ -376,6 +380,8 @@ def plan_health_issue_actions(report: dict, open_issues: Mapping[str, Any]) -> l
     unresolved = {row["source"] for row in [*report["healthy"], *report["degraded"]]
                   if row.get("issue_resolution_unknown")}
     unresolved.update(row["source"] for row in report.get("paused", []))
+    if report.get("liveness_history_available") is not True:
+        unresolved.add(LIVENESS_SOURCE)
     return plan_issue_actions(failing, open_issues, resolution_unknown=unresolved)
 
 
@@ -479,9 +485,12 @@ def plan_issue_actions(
 
 def build_issue_body(v: dict[str, Any]) -> str:
     """Markdown body for a single failing source's issue."""
-    days = v["days_since_success"]
-    last_success = v["last_success_ts"] or "never"
-    when = f"{last_success} ({days} days ago)" if days is not None else last_success
+    liveness = v["source"] == LIVENESS_SOURCE
+    days = v.get("days_since_alert") if liveness else v["days_since_success"]
+    last_observation = (v.get("last_alert_at") or "unknown") if liveness else (v["last_success_ts"] or "never")
+    when = f"{last_observation} ({days} days ago)" if days is not None else last_observation
+    time_label = "Last alerts start" if liveness else "Last success"
+    recovery = "a recent alerts start is observed" if liveness else f"`{v['source']}` succeeds again"
     rate = v["recent_success_rate"]
     rate_str = f"{rate:.0%}" if rate is not None else "n/a"
     return "\n".join([
@@ -490,10 +499,10 @@ def build_issue_body(v: dict[str, Any]) -> str:
         f"- **Cause:** {v['cause']} ({v['error_class']})",
         f"- **What to do:** {v['suggested_action']}",
         f"- **Last error:** `{v['last_error']}`",
-        f"- **Last success:** `{when}`",
+        f"- **{time_label}:** `{when}`",
         f"- **Recent success rate:** {rate_str}",
         "",
-        f"_Auto-filed by the source-health sentinel. Auto-closes when `{v['source']}` succeeds again._",
+        f"_Auto-filed by the source-health sentinel. Auto-closes when {recovery}._",
     ])
 
 
@@ -526,6 +535,8 @@ def _print_report(report: dict[str, Any]) -> None:
     )
     if report.get("paused"):
         print("  PAUSED   Collection pause configured; freshness and recovery are not established.")
+    elif report.get("liveness_history_available") is not True:
+        print("  UNKNOWN  Retained run history unavailable; collection recovery is unverified.")
     for v in report["failing"]:
         print(f"  FAILING  {v['source']} [{v['cause']}]: {v['last_error'][:80]}")
     for v in report["degraded"]:
@@ -653,12 +664,18 @@ def _update_yield_watch_issue(action: Mapping[str, Any]) -> None:
 
 
 def _close_issue(number: int, source: str) -> None:
+    liveness = source == LIVENESS_SOURCE
+    observation = (
+        "A recent alerts run started. Collection success is unverified."
+        if liveness else f"`{source}` is succeeding again — recovered."
+    )
     _run_gh(
         ["issue", "close", str(number), "--comment",
-         f"`{source}` is succeeding again — recovered. Auto-closed by the source-health sentinel."],
+         f"{observation} Auto-closed by the source-health sentinel."],
         check=False,
     )
-    print(f"[sentinel] closed issue #{number} ({source} recovered)")
+    status = "recent alerts start observed" if liveness else f"{source} recovered"
+    print(f"[sentinel] closed issue #{number} ({status})")
 
 
 def _close_yield_watch_issue(number: int) -> None:
@@ -1519,7 +1536,7 @@ def main(argv: list[str] | None = None) -> int:
     source_health = state.get("source_health") or {}
     report = run_sentinel(
         source_health,
-        run_history=state.get("run_history") or [],
+        run_history=state.get("run_history"),
         production_paused=os.environ.get("THEHEAT_PRODUCTION_PAUSED") == "1",
     )
     watched = yield_watch_sources(source_health)

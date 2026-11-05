@@ -1,4 +1,4 @@
-from tests.temperature_helpers import snapshot, dated_forecast, complete_archive
+from tests.temperature_helpers import snapshot, dated_forecast, complete_archive, provider_payload
 from src.data import places
 
 def sample_identity(city, country, lat, lon):
@@ -16,6 +16,8 @@ The world cache, forecast map, and provisional stamp are all keyed by
 ``world_cache.world_key(city, country)``; ``bundle.city`` stays the bare display name.
 """
 from datetime import date, timedelta
+import json
+import responses
 
 from src.data.open_meteo import AbsoluteExtremeEvent
 from src.data.openmeteo_budget import OpenMeteoSaturated
@@ -75,8 +77,8 @@ def _fc_map(mapping):
     return f
 
 
-def _run(monkeypatch, world_cities, seed_cache, *, forecasts, archive,
-         abs_extreme=None, country=None, meta_prev=None, real_country=False):
+def _run(monkeypatch, world_cities, seed_cache, *, forecasts=None, archive=None,
+         abs_extreme=None, country=None, meta_prev=None, real_country=False, real_clock=False):
     """Run _run_world_cached_half with patched IO. seed_cache is keyed by world_key.
 
     Returns (om_bundles, om_country, store, metrics).
@@ -89,6 +91,14 @@ def _run(monkeypatch, world_cities, seed_cache, *, forecasts, archive,
     # Keep fixtures and the actual cache runner on one clock, including when
     # a full CI run crosses midnight between test collection and execution.
     monkeypatch.setattr(runner, "date", FixtureDate)
+    clock = [0.0]
+
+    def advance(seconds):
+        clock[0] += seconds
+
+    if not real_clock:
+        monkeypatch.setattr(runner.staging, "clock", lambda: clock[0])
+        monkeypatch.setattr(runner, "time", type("FixtureTime", (), {"sleep": staticmethod(advance)}))
     store = dict(seed_cache)
     for c in world_cities:
         key = world_cache.world_key(c["city"], c["country"], c["lat"], c["lon"])
@@ -104,8 +114,18 @@ def _run(monkeypatch, world_cities, seed_cache, *, forecasts, archive,
         return True
 
     monkeypatch.setattr(world_cache, "write_cache", _write)
-    monkeypatch.setattr("src.data.open_meteo.fetch_forecasts_batch", lambda cities: {key: dated_forecast(value, ISO) for key, value in forecasts(cities).items()})
-    monkeypatch.setattr(runner, "_fetch_city_archive", archive)
+    def fetch_forecast(cities, *, on_attempt):
+        on_attempt()
+        return {key: dated_forecast(value, ISO) for key, value in forecasts(cities).items()}
+
+    def fetch_archive(city, *, reserve_attempt, attempts, deadline_at):
+        reserve_attempt(235)
+        return archive(city)
+
+    if forecasts is not None:
+        monkeypatch.setattr("src.data.open_meteo.fetch_forecasts_batch", fetch_forecast)
+    if archive is not None:
+        monkeypatch.setattr(runner, "_fetch_city_archive", fetch_archive)
     monkeypatch.setattr("src.data.open_meteo.detect_absolute_extreme",
                         abs_extreme or (lambda *a, **k: None))
     if not real_country:
@@ -173,6 +193,7 @@ def test_eval_runs_despite_warm_archive_saturation(monkeypatch):
     assert m["coverage_ratio"] == round(2 / 4, 3)
     assert m["eval_saturated"] is False
     assert m["warm_saturated"] is True
+    assert m["warm_provider_saturated"] is True and m["warm_deferral"] is None
     assert m["saturated"] is True
     assert m["cached_count"] == 3                  # C1, C2 + warmed Aaa_ok
     assert m["status"] != "degraded"
@@ -423,12 +444,12 @@ def test_saturated_warming_reaches_one_uncached_city_after_top_record_refresh(mo
     class FourWarmSlots(OpenMeteoBudget):
         warm_waits = 0
 
-        def wait_until_can_spend(self, weight):
-            if weight == 43:
+        def next_available_delay(self, weight):
+            if weight == 235:
                 self.warm_waits += 1
                 if self.warm_waits > 4:
                     raise OpenMeteoSaturated("Invented four-attempt WARM budget")
-            return super().wait_until_can_spend(weight)
+            return super().next_available_delay(weight)
 
     monkeypatch.setattr(runner, "OpenMeteoBudget", FourWarmSlots)
     cached = ["A", "B", "C", "D", "E"]
@@ -452,3 +473,160 @@ def test_saturated_warming_reaches_one_uncached_city_after_top_record_refresh(mo
     assert K("F") in store and metrics["cached_count"] == 6
     assert {bundle.city for bundle in bundles if bundle.all_time_high} == {"A", "B", "C"}
     assert {row["city"] for row in metrics["withheld_record_candidates"]} == {"D", "E"}
+
+
+def _mock_archive_transport(monkeypatch, *statuses):
+    from src.data.bounded_http import BoundedTransport, Response, TransportOutcome
+
+    calls = []
+    remaining = iter(statuses)
+    body = json.dumps(provider_payload({"daily": _arch(max_c=46.0)})).encode()
+
+    def get(transport, url):
+        assert transport.limits.max_requests == 1 and transport.limits.max_redirects == 0
+        status = next(remaining)
+        calls.append((status, runner.staging.now(), url))
+        if status >= 500:
+            raise TransportOutcome("provider_error", status=status)
+        return Response(url, url, status, {}, body, len(body))
+
+    monkeypatch.setattr(BoundedTransport, "get", get)
+    return calls
+
+
+@responses.activate
+def test_transient_record_refresh_leaves_next_real_http_attempt_for_bootstrap(monkeypatch):
+    forecast_url = runner.open_meteo.BASE_URL + "/forecast"
+    seed = {K("Record"): _thresh("Record", STALE_ISO, all_time_max=(44.0, 2000))}
+    forecast = provider_payload({"daily": {"temperature_2m_max": [47.0]}}, ISO)
+    responses.get(forecast_url, json=forecast)
+    archives = _mock_archive_transport(monkeypatch, 503, 200)
+
+    bundles, _, store, metrics = _run(monkeypatch, [_city("Record"), _city("Missing")], seed)
+
+    assert [call.response.status_code for call in responses.calls] == [200]
+    assert [row[0] for row in archives] == [503, 200]
+    assert metrics["warm_attempt_reservations"] == metrics["warm_attempted"] == 2
+    assert metrics["warm_reserved_weight"] == 470 and metrics["warm_failures"] == 1
+    assert K("Missing") in store and store[K("Record")]["as_of"] == STALE_ISO
+    assert metrics["forecast_attempted"] == 1 and metrics["record_comparisons_withheld"] == 1
+    assert not any(bundle.all_time_high for bundle in bundles)
+
+
+@responses.activate
+def test_physical_archive_retry_is_reserved_and_paces_later_city(monkeypatch):
+    from src.data import _http
+
+    monkeypatch.setattr(_http, "_sleep_before_retry", lambda *_: None)
+    archives = _mock_archive_transport(monkeypatch, 503, 200, 200)
+
+    _, _, store, metrics = _run(monkeypatch, [_city("A"), _city("B")], {})
+
+    assert [row[1] for row in archives] == [0, 0, 60]
+    assert metrics["warm_attempted"] == 2 and metrics["warm_attempt_reservations"] == 3
+    assert metrics["warm_reserved_weight"] == 705
+    assert K("A") in store and K("B") in store
+
+
+@responses.activate
+def test_staged_deadline_defers_archive_and_keeps_forecast_result(monkeypatch):
+    from src.two_bot.call_inventory import CancelToken, run_cancellable
+
+    forecast = provider_payload({"daily": {"temperature_2m_max": [47.0]}}, ISO)
+    responses.get(runner.open_meteo.BASE_URL + "/forecast", json=forecast)
+    token = CancelToken("world_fixture", deadline=34, clock=runner.staging.now)
+    seed = {K("Record"): _thresh("Record", ISO, all_time_max=(44.0, 2000))}
+
+    bundles, _, store, metrics = run_cancellable(
+        token, _run, monkeypatch, [_city("Record"), _city("Missing")], seed,
+    )
+
+    assert len(responses.calls) == 1
+    assert metrics["warm_deferral"] == "elapsed" and metrics["warm_attempt_reservations"] == 0
+    assert metrics["warm_provider_saturated"] is False
+    assert metrics["forecast_attempted"] == 1 and K("Missing") not in store
+    assert any(bundle.all_time_high for bundle in bundles)
+
+
+@responses.activate
+def test_forecast_retry_weight_is_shared_with_archive_pacing(monkeypatch):
+    from src.data import _http
+
+    monkeypatch.setattr(_http, "_sleep_before_retry", lambda *_: None)
+    forecast_url = runner.open_meteo.BASE_URL + "/forecast"
+    cached = [f"Cached-{i}" for i in range(6)]
+    seed = {K(city): _thresh(city, ISO, all_time_max=(44.0, 2000)) for city in cached}
+    forecast = provider_payload({"daily": {"temperature_2m_max": [35.0]}}, ISO)
+    responses.get(forecast_url, status=503)
+    responses.get(forecast_url, json=[forecast] * len(cached))
+    archives = _mock_archive_transport(monkeypatch, 200, 200)
+
+    _, _, _, metrics = _run(monkeypatch, [_city(city) for city in [*cached, "A", "B"]], seed)
+
+    assert [call.response.status_code for call in responses.calls] == [503, 200]
+    assert [row[1] for row in archives] == [0, 60]
+    assert metrics["forecast_attempted"] == len(cached)
+    assert metrics["warm_attempt_reservations"] == 2 and metrics["warm_reserved_weight"] == 470
+
+
+@responses.activate
+def test_admitted_archive_trickle_stops_and_consolidates_without_retry(monkeypatch):
+    import socket
+    import threading
+
+    from src.data.bounded_http import BoundedTransport
+    from src.two_bot.call_inventory import CancelToken, run_cancellable
+
+    forecast = provider_payload({"daily": {"temperature_2m_max": [47.0]}}, ISO)
+    responses.get(runner.open_meteo.BASE_URL + "/forecast", json=forecast)
+    monkeypatch.setattr(runner.open_meteo, "ARCHIVE_URL", "http://127.0.0.1:1/v1")
+    monkeypatch.setattr(runner.open_meteo, "ARCHIVE_REQUEST_TIMEOUT", 0.15)
+    stop = threading.Event()
+    connection_attempts = []
+    requests_seen = []
+
+    client, server = socket.socketpair()
+    with client, server:
+        server.settimeout(1)
+
+        def connect(_transport, _addresses):
+            connection_attempts.append(True)
+            return client
+
+        def trickle():
+            try:
+                request = b""
+                while b"\r\n\r\n" not in request:
+                    chunk = server.recv(4096)
+                    if not chunk:
+                        return
+                    request += chunk
+                requests_seen.append(request)
+                server.sendall(b"HTTP/1.1 200 OK\r\nContent-Length: 500\r\n\r\n")
+                while not stop.wait(0.01):
+                    server.sendall(b" ")
+            except OSError:
+                return
+
+        monkeypatch.setattr(BoundedTransport, "_connect", connect)
+        fixture = threading.Thread(target=trickle)
+        fixture.start()
+        try:
+            seed = {K("Record"): _thresh("Record", ISO, all_time_max=(44.0, 2000))}
+            started = runner.staging.now()
+            token = CancelToken("world_fixture", deadline=started + 6, clock=runner.staging.now)
+            bundles, _, store, metrics = run_cancellable(
+                token, _run, monkeypatch, [_city("Record"), _city("Missing")], seed, real_clock=True,
+            )
+            assert runner.staging.now() - started < 1
+        finally:
+            stop.set()
+            fixture.join(timeout=2)
+
+    assert not fixture.is_alive()
+    assert len(connection_attempts) == len(requests_seen) == 1
+    assert requests_seen[0].startswith(b"GET /v1/archive?")
+    assert metrics["warm_deferral"] == "request_deadline"
+    assert metrics["warm_attempt_reservations"] == 1 and metrics["warm_reserved_weight"] == 235
+    assert not token.cancelled and K("Missing") not in store
+    assert any(bundle.all_time_high for bundle in bundles)

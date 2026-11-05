@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from collections.abc import Callable
 from dataclasses import dataclass
 from contextlib import contextmanager
 import threading
@@ -14,16 +15,27 @@ from src.storage.scientific_supply import ScientificSupplySession, SupplyError, 
 from src.orchestrator.common import *
 from src.orchestrator.signal_partition import is_us_location, partition_us_world
 from src.data import open_meteo, places
-from src.orchestrator import world_cache
+from src.orchestrator import staging, world_cache
 from src.orchestrator.staging import authority_current, defer_or_run
 from src.orchestrator.caps import select_individual_station_bundles
 from src.data.world_thresholds import CityThresholds, compute_city_thresholds, evaluate_city
 from src.data.openmeteo_budget import OpenMeteoBudget, OpenMeteoSaturated
+from src.two_bot.call_inventory import current_cancel_token
 
 
 WORLD_WARM_BUDGET = 8
 WORLD_CACHE_TTL_DAYS = 30
 WORLD_LEADERBOARD_RESERVE = 120
+WORLD_WARM_SECONDS = 90
+WORLD_CONSOLIDATE_RESERVE_SECONDS = 5
+
+
+class _WarmDeferred(OpenMeteoSaturated):
+    """A local pacing or elapsed limit, rather than a provider refusal."""
+
+
+class _ForecastRetryDeferred(Exception):
+    """The current batch cannot retry inside the remaining quota window."""
 
 
 def _records_cluster_enabled() -> bool:
@@ -173,10 +185,14 @@ def _records_cluster_member(
     return member
 
 
-def _fetch_city_archive(city: dict) -> dict | None:
+def _fetch_city_archive(city: dict, *, reserve_attempt: Callable[[int], None], attempts: int,
+                        deadline_at: float) -> dict | None:
     # Warming can precede a city's first forecast. This is a query bound only;
     # provider response dates define coverage and never become an observed date.
-    return open_meteo.fetch_archive_daily(city["lat"], city["lon"], date.fromisoformat(city["_archive_valid_date"]) if city.get("_archive_valid_date") else date.today())
+    valid_date = date.fromisoformat(city["_archive_valid_date"]) if city.get("_archive_valid_date") else date.today()
+    return open_meteo.fetch_archive_daily(city["lat"], city["lon"], valid_date,
+                                         reserve_attempt=reserve_attempt, attempts=attempts,
+                                         deadline_at=deadline_at, clock=staging.now)
 
 
 def _run_world_cached_half(world_cities: list[dict], metrics_out: dict, bot_state=None):
@@ -217,12 +233,16 @@ def _run_world_cached_half(world_cities: list[dict], metrics_out: dict, bot_stat
     prev_cached = len(active_keys & set(cache))
     budget = OpenMeteoBudget(
         per_minute=600, per_hour=5000, per_day=10000,
-        reserve=WORLD_LEADERBOARD_RESERVE, clock=time.monotonic, sleep=time.sleep,
+        reserve=WORLD_LEADERBOARD_RESERVE, clock=staging.now, sleep=time.sleep,
     )
     eval_saturated = False
     warm_saturated = False
     warm_attempted = 0
     warm_failures = 0
+    warm_attempt_reservations = 0
+    warm_reserved_weight = 0
+    warm_deferral = None
+    warm_provider_saturated = False
     forecast_attempted = 0
     forecast_failures = 0
 
@@ -257,13 +277,21 @@ def _run_world_cached_half(world_cities: list[dict], metrics_out: dict, bot_stat
                 break
             continue
         batch = cached_cities[i:i + size]
+
+        def reserve_forecast_attempt() -> None:
+            # The first attempt fits the batch size selected above. A retry
+            # can use remaining capacity, but cannot hold up the next batch.
+            if not budget.can_spend(size):
+                raise _ForecastRetryDeferred
+            budget.spend(size)
+
         try:
-            budget.wait_until_can_spend(len(batch))
-            forecasts = open_meteo.fetch_forecasts_batch(batch)
+            forecasts = open_meteo.fetch_forecasts_batch(batch, on_attempt=reserve_forecast_attempt)
+        except _ForecastRetryDeferred:
+            forecasts = {}
         except OpenMeteoSaturated:
             eval_saturated = True
             break
-        budget.spend(len(batch))
         for c in batch:
             forecast_attempted += 1
             fc = forecasts.get(world_cache.world_key(c["city"], c["country"], c["lat"], c["lon"]))
@@ -285,6 +313,7 @@ def _run_world_cached_half(world_cities: list[dict], metrics_out: dict, bot_stat
             refresh.append({**city, "_archive_valid_date": forecast["valid_date"]})
             seen_warm.add(key)
     metrics_out["record_refresh_candidates"] = len(refresh)
+    bootstrap_after_first = bool(refresh and uncached_cities and WORLD_WARM_BUDGET > 1)
     if uncached_cities and WORLD_WARM_BUDGET > 1:
         # Keep the first record refresh. Reserve the next attempt for a missing
         # city so saturation cannot repeatedly spend the whole budget on cached cities.
@@ -301,19 +330,53 @@ def _run_world_cached_half(world_cities: list[dict], metrics_out: dict, bot_stat
     # PHASE 2 — WARM (archive endpoint): refresh climatology for the stale/missing set.
     # Gated on ``not warm_saturated`` ONLY; CONSOLIDATE uses each complete fresh snapshot.
 
-    for c in stale:
+    warm_deadline = staging.now() + WORLD_WARM_SECONDS
+    token = current_cancel_token()
+    if token is not None and token.deadline is not None:
+        warm_deadline = min(warm_deadline, token.deadline - WORLD_CONSOLIDATE_RESERVE_SECONDS)
+
+    for index, c in enumerate(stale):
+        city_attempts = 0
+
+        def reserve_archive_attempt(weight: int) -> None:
+            nonlocal city_attempts, warm_attempted, warm_attempt_reservations, warm_reserved_weight
+            try:
+                delay = budget.next_available_delay(weight)
+            except OpenMeteoSaturated as exc:
+                raise _WarmDeferred("quota") from exc
+            if city_attempts and delay:
+                raise _WarmDeferred("retry_pacing")
+            if staging.now() + delay + open_meteo.ARCHIVE_REQUEST_TIMEOUT > warm_deadline:
+                raise _WarmDeferred("elapsed")
+            if delay:
+                time.sleep(delay)
+            if staging.now() + open_meteo.ARCHIVE_REQUEST_TIMEOUT > warm_deadline:
+                raise _WarmDeferred("elapsed")
+            if not budget.can_spend(weight):
+                raise _WarmDeferred("quota")
+            budget.spend(weight)
+            if not city_attempts:
+                warm_attempted += 1
+            city_attempts += 1
+            warm_attempt_reservations += 1
+            warm_reserved_weight += weight
+
         try:
-            budget.wait_until_can_spend(43)
+            # Give the uncached city the next available slot even if the first
+            # record refresh hits a transient error.
+            archive = _fetch_city_archive(c, reserve_attempt=reserve_archive_attempt,
+                                          attempts=1 if index == 0 and bootstrap_after_first else 3,
+                                          deadline_at=warm_deadline)
+        except (_WarmDeferred, open_meteo.ArchiveRequestDeadline) as exc:
+            warm_deferral = str(exc) if isinstance(exc, _WarmDeferred) else "request_deadline"
+            warm_saturated = True
+            if city_attempts:
+                warm_failures += 1
+            break
         except OpenMeteoSaturated:
+            warm_provider_saturated = True
             warm_saturated = True
             break
-        warm_attempted += 1
-        try:
-            archive = _fetch_city_archive(c)
-        except OpenMeteoSaturated:
-            warm_saturated = True
-            break
-        budget.spend(43)
         if not archive or not archive.get("time"):
             warm_failures += 1
             continue
@@ -382,6 +445,8 @@ def _run_world_cached_half(world_cities: list[dict], metrics_out: dict, bot_stat
         "identity_quarantined": cache["_meta"].get("quarantined_count", 0),
         "forecast_attempted": forecast_attempted, "forecast_failures": forecast_failures,
         "warm_attempted": warm_attempted, "warm_failures": warm_failures,
+        "warm_attempt_reservations": warm_attempt_reservations, "warm_reserved_weight": warm_reserved_weight,
+        "warm_deferral": warm_deferral, "warm_provider_saturated": warm_provider_saturated,
         "coverage_ratio": coverage_ratio,
         "eval_saturated": eval_saturated,
         "warm_saturated": warm_saturated,

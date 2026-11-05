@@ -1,6 +1,6 @@
 {
   "identity": {
-    "archive_sha256": "548e3d1b723e6f1d41de745bceb7990198c97843e40913157e0bae8ddbb567d6",
+    "archive_sha256": "fe26f6396d2d0115f99ee42fc101afdddc6705a25dade0cc74c733c87990b9c0",
     "deployment_files": {
       "api/graphic_preview.py": "f7521adcbd618f4b65b2a0de30ea62aaff4cdd36f2254e9af38bf68646d361ad",
       "api/graphic_reader_status.py": "5e9685d699625a4eea9d5be884b6e266939a0ad344a2997351ba79bd114407ba",
@@ -21,7 +21,7 @@
       "src/dashboard_preview/reader_status.py": "1f3d9d42dabebe1218eacd7133bd2477f58c85b53a6e2a719658846fbc5e96bb",
       "src/data/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "src/data/_freshness.py": "21e6f9bed82e769ad82a8b798e31e0faeb2851c4849fdaf99d90852fd8fa2c79",
-      "src/data/_http.py": "c5cbf6b3baa3754c8e5a18b95d1cb7d60ad195ca7b69fe38574a5e5d75223dfd",
+      "src/data/_http.py": "f8b4ade325bbd90f4498e27cd2a6adf932728fdcc2bee1de904c4f5ca263f4ae",
       "src/data/air_quality.py": "89975b423632d9d6a0b3db767df8dae8cc4e7e7c496a350d396d7e303e820e33",
       "src/data/air_quality_contract.py": "7f9de8f7fcd6836a3e4fb32ea8c1a35a3c9981bcede6aea2d74770f12539d667",
       "src/data/air_quality_evidence.py": "677713bb8916c4bcd51d407a5b19072f54532f5f46db116914af6b3fcac9f4f7",
@@ -37,7 +37,7 @@
       "src/data/ghcn_db.py": "ccec1ad5673354de3dbadb07c637c294122d7f7c0ffcdfb7e8fd3e5090ee81d5",
       "src/data/ghcn_format.py": "fd3636069b477a484194c9debd6da2ede228ac1ca747746db60b5d9eb656ea18",
       "src/data/json_evidence.py": "06cfc76cbb5aaa39348a5d437742c2c37fc2f06b9f6489ff2ba6b6dbe16c1624",
-      "src/data/open_meteo.py": "58fa0a9135a526370e2daa3a832b290203615187d165b47d95ac05025523d508",
+      "src/data/open_meteo.py": "914f9670aec2ce129ce26f45577f9cbf65c7ef3beb14f971319eac1304e745ce",
       "src/data/openmeteo_budget.py": "4cc3994e7c7f68f932ab7eeca1bc5bd3db4afc4d2894aab1a574ef99cefb1696",
       "src/data/places.py": "c66be0181393620b640f0354d2c7379e427aeacf4c80689b190489022bf2a870",
       "src/data/registry/country_codes.json": "563fd9c963633bb169c88bac593ec0ccb4694e31ae0613e37d31d1c07e276a9d",
@@ -104,12 +104,12 @@
       "src/two_bot/types.py": "951044ca2582c8b96872bdd5b8ed8fc60546a58305aa8b06de50075206cc817e"
     },
     "format": "saved-source-svg-preview-v2",
-    "policy_source_sha256": "5e69611f34f8aa1c62e43e2137e75bfa4a26dcfb36dc886629dfa1c2b956f6a8",
+    "policy_source_sha256": "1476f953481ef0caf5e84b827d46e732d05dfddaeb4d29b2a71c8783e4195140",
     "resource_sources": {
       "src/data/registry/country_codes.json": "data/country_codes.json",
       "src/data/registry/place_registry.json": "data/place_registry.json"
     },
     "schema_version": 1
   },
-  "runtime_sha256": "a0f5af03154030b6db35955eddb871b5c0c80dc267fd4c65b83b9fb9a854cfcc"
+  "runtime_sha256": "66b1831131565d34736b8c76c90f20359fdf327a835bfed5917b7769758ad59a"
 }

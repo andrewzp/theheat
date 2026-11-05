@@ -74,13 +74,15 @@ def fetch_with_retry(
     backoff_base: float = 1.0,
     call_stage: str = "source_http_get",
     on_attempt: Callable[[], None] | None = None,
+    request: Callable[..., requests.Response] | None = None,
     **kwargs: Any,
 ) -> requests.Response:
     """GET a URL, retrying transport failures and 5xx responses only.
 
     Each physical attempt consumes the declared ``call_stage`` (unknown price,
     never free) immediately before egress; ``on_attempt`` lets an operation
-    allowance count the same physical attempts. Neither changes retry policy.
+    allowance count the same physical attempts. A supplied request transport
+    owns one attempt and must return a response without following redirects.
     """
     if attempts < 1:
         raise ValueError("attempts must be >= 1")
@@ -98,7 +100,8 @@ def fetch_with_retry(
             on_attempt()
         consume(call_stage, join=False)
         try:
-            response = _get_session().get(
+            send = _get_session().get if request is None else request
+            response = send(
                 url,
                 headers=request_headers,
                 timeout=timeout,

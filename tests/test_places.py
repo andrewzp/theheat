@@ -61,7 +61,7 @@ def test_real_pair_end_to_end_without_network(name, monkeypatch):
     ]
     payload = provider_payload(payload)
     monkeypatch.setattr(
-        open_meteo, "fetch_with_retry", lambda *a, **k: SimpleNamespace(json=lambda: payload)
+        open_meteo, "fetch_with_retry", lambda *a, **k: SimpleNamespace(status_code=200, json=lambda: payload)
     )
     monkeypatch.setattr(world_cache, "read_cache", lambda: deepcopy(cache))
     saved = {}
