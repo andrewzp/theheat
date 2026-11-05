@@ -3,6 +3,7 @@
 from copy import deepcopy
 import json
 import os
+import re
 from datetime import UTC, date, datetime, timedelta
 from typing import Any, Callable, cast
 
@@ -31,6 +32,7 @@ from src.editorial.revisions import decision_revision, draft_identity, fingerpri
 GIST_ID = os.environ.get("GIST_ID", "")
 GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
 STATE_FILENAME = "state.json"
+ALERTS_CATCHUP_FILENAME = "scheduled-alerts-catchup.json"
 STATE_BACKEND = os.environ.get("THEHEAT_STATE_BACKEND", "").lower()
 DB_PATH = os.environ.get("THEHEAT_DB_PATH", "")
 MAX_DRAFTS = 200
@@ -1468,6 +1470,85 @@ def _consume_gist_request() -> None:
     """
     from src.two_bot.call_inventory import consume
     consume("gist_state", join=False)
+
+
+def reserve_scheduled_alerts_catchup(*, window: timedelta) -> bool:
+    """Reserve one extra collector under the existing non-cancelling bot workflow lock."""
+    from src.commands import gist_route
+
+    repository = os.environ.get("GITHUB_REPOSITORY", "")
+    run_id = os.environ.get("GITHUB_RUN_ID", "")
+    budget = {
+        "THEHEAT_TRIAGE_ENABLED": "1",
+        "THEHEAT_MAX_DRAFTS_PER_CYCLE": "1",
+        "THEHEAT_WRITER_SAMPLES": "1",
+        "THEHEAT_REFILL_ENABLED": "0",
+        "THEHEAT_CRITIC_REVISE_ENABLED": "0",
+    }
+    if (os.environ.get("THEHEAT_SCHEDULED_ALERTS_CATCHUP") != "1"
+            or os.environ.get("GITHUB_EVENT_NAME") != "schedule"
+            or os.environ.get("GITHUB_RUN_ATTEMPT") != "1"
+            or os.environ.get("GITHUB_REF") != "refs/heads/main"
+            or os.environ.get("GITHUB_WORKFLOW_REF") != f"{repository}/.github/workflows/bot.yml@refs/heads/main"
+            or not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository)
+            or not re.fullmatch(r"[1-9][0-9]{0,19}", run_id)
+            or not re.fullmatch(r"[0-9a-fA-F]{1,64}", GIST_ID) or not GITHUB_TOKEN
+            or any(os.environ.get(key) != value for key, value in budget.items())
+            or window <= timedelta(0)):
+        return False
+
+    url = f"https://api.github.com/gists/{GIST_ID}"
+    writer = "scheduled_alerts_catchup"
+
+    def read() -> dict:
+        _consume_gist_request()
+        response = requests.get(url, headers={**_headers(), "Cache-Control": "no-cache"}, timeout=5, allow_redirects=False)
+        if response.status_code != 200:
+            raise ValueError("gist read refused")
+        gist = response.json()
+        if (not isinstance(gist, dict) or gist.get("id") != GIST_ID or gist.get("public") is not False
+                or gist.get("truncated") or not isinstance(gist.get("files"), dict)):
+            raise ValueError("gist identity refused")
+        files = gist["files"]
+        gist_route.check_writer(gist_route.record_from_files(files), writer=writer)
+        metadata = files.get(ALERTS_CATCHUP_FILENAME)
+        if not isinstance(metadata, dict) or metadata.get("truncated") is not False:
+            raise ValueError("catch-up receipt missing or incomplete")
+        content = metadata.get("content")
+        if not isinstance(content, str) or len(content) > 512:
+            raise ValueError("catch-up receipt unreadable")
+        receipt = json.loads(content)
+        if (not isinstance(receipt, dict)
+                or set(receipt) != {"schema_version", "repository", "run_id", "reserved_at"}
+                or type(receipt["schema_version"]) is not int or receipt["schema_version"] != 1
+                or receipt["repository"] != repository
+                or json.dumps(receipt, sort_keys=True, separators=(",", ":")) != content):
+            raise ValueError("catch-up receipt invalid")
+        return receipt
+
+    try:
+        if _configured_backend() != "gist":
+            return False
+        previous = read()
+        now = datetime.now(UTC)
+        if previous["run_id"] is not None or previous["reserved_at"] is not None:
+            prior_run = previous["run_id"]
+            prior_time = previous["reserved_at"]
+            if (not isinstance(prior_run, str) or not re.fullmatch(r"[1-9][0-9]{0,19}", prior_run)
+                    or not isinstance(prior_time, str)):
+                return False
+            reserved_at = datetime.fromisoformat(prior_time)
+            if reserved_at.utcoffset() != timedelta(0) or reserved_at > now or prior_run == run_id or now - reserved_at < window:
+                return False
+        receipt = {"schema_version": 1, "repository": repository, "run_id": run_id, "reserved_at": now.isoformat()}
+        _consume_gist_request()
+        response = requests.patch(
+            url, headers=_headers(), timeout=5, allow_redirects=False,
+            json={"files": {ALERTS_CATCHUP_FILENAME: {"content": json.dumps(receipt, sort_keys=True, separators=(",", ":"))}}},
+        )
+        return response.status_code == 200 and read() == receipt
+    except (requests.RequestException, ValueError, TypeError, StateReadError, gist_route.RouteRefused):
+        return False
 
 
 def _read_gist_state(*, strict: bool = False, route_sink: list | None = None) -> BotState:

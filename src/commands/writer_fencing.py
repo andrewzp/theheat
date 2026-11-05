@@ -48,6 +48,8 @@ class Writer:
 WRITERS: tuple[Writer, ...] = (
     Writer("bot_state", "source", "src.state:write_state", "gist_state", "expected_draft_get_then_patch", False,
            "group_job"),
+    Writer("scheduled_alerts_catchup", "source", "src.state:reserve_scheduled_alerts_catchup", "gist_state",
+           "bot_workflow_group_owned_reservation_readback", False, "group_job"),
     Writer("draft_save", "source", "src.orchestrator.draft_save:save_draft", "gist_state", "via_write_state", False,
            "group_job"),
     Writer("nhc_advisory_import", "source", "scripts/nhc_advisory_import.py:execute", "gist_state",
