@@ -507,6 +507,8 @@ jobs:
           # Rainfall window/product provenance on GPM bundles (W06) — default OFF; Root decides
           # after Earthdata access is renewed. Off keeps today's admission behaviour.
           THEHEAT_RAINFALL_WINDOW_PROVENANCE: ${{ vars.THEHEAT_RAINFALL_WINDOW_PROVENANCE || '0' }}
+          # Draft-only official NOAA point forecasts, with explicit manual review.
+          THEHEAT_NWPS_MAJOR_FORECASTS: ${{ vars.THEHEAT_NWPS_MAJOR_FORECASTS || '0' }}
           # Physical-episode keys, importance portfolio selection and the bounded regional rainfall
           # scan (W06/W07/W08) — each default OFF; exactly '1' enables. Off keeps today's behaviour byte-identical.
           THEHEAT_HAZARD_EPISODES: ${{ vars.THEHEAT_HAZARD_EPISODES || '0' }}

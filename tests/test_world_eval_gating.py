@@ -415,3 +415,40 @@ def test_record_refresh_cap_withholds_unreconciled_candidate_with_visible_reason
     assert metrics["withheld_record_candidates"][0]["city"] == "B"
     assert metrics["withheld_record_candidates"][0]["reason"] == "unreconciled_archive_cutoff"
     assert metrics["status"] == "degraded"
+
+
+def test_saturated_warming_reaches_one_uncached_city_after_top_record_refresh(monkeypatch):
+    from src.data.openmeteo_budget import OpenMeteoBudget
+
+    class FourWarmSlots(OpenMeteoBudget):
+        warm_waits = 0
+
+        def wait_until_can_spend(self, weight):
+            if weight == 43:
+                self.warm_waits += 1
+                if self.warm_waits > 4:
+                    raise OpenMeteoSaturated("Invented four-attempt WARM budget")
+            return super().wait_until_can_spend(weight)
+
+    monkeypatch.setattr(runner, "OpenMeteoBudget", FourWarmSlots)
+    cached = ["A", "B", "C", "D", "E"]
+    cities = [_city(name) for name in [*cached, "F"]]
+    seed = {K(name): _thresh(name, STALE_ISO, all_time_max=(44.0, 2000)) for name in cached}
+    archives = []
+
+    def archive(city):
+        archives.append(city["city"])
+        return _arch(max_c=46.0)
+
+    bundles, _, store, metrics = _run(
+        monkeypatch, cities, seed,
+        forecasts=_fc_map({name: {"max_c": 47.0, "min_c": 12.0} for name in cached}),
+        archive=archive,
+    )
+
+    assert archives == ["A", "F", "B", "C"]
+    assert metrics["warm_attempted"] == 4 and metrics["warm_saturated"]
+    assert metrics["forecast_attempted"] == metrics["record_refresh_candidates"] == 5
+    assert K("F") in store and metrics["cached_count"] == 6
+    assert {bundle.city for bundle in bundles if bundle.all_time_high} == {"A", "B", "C"}
+    assert {row["city"] for row in metrics["withheld_record_candidates"]} == {"D", "E"}

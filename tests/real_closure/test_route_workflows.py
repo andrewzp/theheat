@@ -129,10 +129,12 @@ def test_bot_drains_only_in_route_mode_and_keeps_every_existing_default():
     # supply stream's own mirror (legacy default, asserted by its own tests). Nothing else is new.
     # Root checkpoint R2 (deliberate): + the route sender's text source (references-only dispatch).
     assert set(step["env"]) - set(old_step["env"]) == {"THEHEAT_GIST_WRITE_ROUTE", "THEHEAT_SERIALIZED_WRITER",
-                                                       "THEHEAT_HOT10_NORMALS_PRODUCT", "THEHEAT_SENDER_TEXT_SOURCE"}
+                                                       "THEHEAT_HOT10_NORMALS_PRODUCT", "THEHEAT_SENDER_TEXT_SOURCE",
+                                                       "THEHEAT_NWPS_MAJOR_FORECASTS"}
     assert step["env"]["THEHEAT_SENDER_TEXT_SOURCE"] == "${{ github.event.inputs.text_source }}"
     assert set(doc["on"]["workflow_dispatch"]["inputs"]) - set(old["on"]["workflow_dispatch"]["inputs"]) == {"text_source"}
     assert step["env"]["THEHEAT_HOT10_NORMALS_PRODUCT"] == "${{ vars.THEHEAT_HOT10_NORMALS_PRODUCT || 'meteostat-normals-point-v1' }}"
+    assert step["env"]["THEHEAT_NWPS_MAJOR_FORECASTS"] == "${{ vars.THEHEAT_NWPS_MAJOR_FORECASTS || '0' }}"
     marker = step["env"]["THEHEAT_SERIALIZED_WRITER"]
     assert evaluate(marker, "") == "" and evaluate(marker, "serialized") == "format('{0}:run', github.run_id)"
     assert set(old["jobs"]) == set(doc["jobs"]) - {"commands-before", "commands-after"}

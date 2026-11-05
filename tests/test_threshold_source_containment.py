@@ -95,6 +95,40 @@ def test_verified_source_preserves_results_and_reports_ghcn_health(monkeypatch, 
     assert "private provider body" not in str(run)
 
 
+@pytest.mark.parametrize("provider", ["ghcn", "both"])
+@pytest.mark.parametrize(("with_obs", "expected"), [(0, "degraded"), (42, "success")])
+def test_newest_diff_lag_distinguishes_empty_and_usable_station_supply(monkeypatch, provider, with_obs, expected):
+    monkeypatch.setenv("THEHEAT_SIGNALS_PROVIDER", provider)
+    monkeypatch.setenv("THEHEAT_GHCN_THRESHOLD_VERIFICATION", "success")
+
+    def ghcn(*, metrics_out, **kwargs):
+        metrics_out.update(
+            stations_active=800, stations_with_obs=with_obs, stations_checked=with_obs,
+            diff_dates_attempted=3, diff_dates_fetched=2, diff_dates_missing=1,
+            diff_missing_dates=[(date.today() - timedelta(days=1)).isoformat()],
+        )
+        return [], []
+
+    def world(cities, metrics, **kwargs):
+        metrics.update(status="success", coverage_ratio=1.0)
+        return [], []
+
+    monkeypatch.setattr(runner.ghcn, "check_extreme_signals_for_stations", ghcn)
+    monkeypatch.setattr(runner, "_run_world_cached_half", world)
+    bot, run = _fresh_state(), {"sources": []}
+    runner.run_extreme_signals(bot, run, [], {}, {})
+
+    record, = run["sources"]
+    metrics_key = "ghcn_pipeline_metrics" if provider == "both" else "pipeline_metrics"
+    station = record["details"][metrics_key]
+    assert station["threshold_verification"] == "success"
+    assert station["status"] == record["status"] == expected
+    assert station["stations_with_obs"] == with_obs
+    assert "diffs:2/3" in record["note"] and "diff_missing:1" in record["note"]
+    assert record["promoted"] == record["drafted"] == 0
+    assert bot["source_health"]["open_meteo_extreme_signals"][expected] == 1
+
+
 def test_open_meteo_only_does_not_require_ghcn_verification(monkeypatch):
     monkeypatch.setenv("THEHEAT_SIGNALS_PROVIDER", "open_meteo")
     monkeypatch.setenv("THEHEAT_GHCN_THRESHOLD_VERIFICATION", "failure")

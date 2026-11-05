@@ -69,7 +69,15 @@ export function SourcesView({ sources, stats, trace = null }) {
             <p className="source-history-note" data-testid="selection-trace">
               Coverage to selection (retained only; not recall):{" "}
               {Object.entries(trace.counts).map(([key, n]) => `${key.replaceAll("_", " ")} ${n}`).join(" · ")}
-              {trace.not_fetched_sources?.length ? `. Not fetched last run: ${trace.not_fetched_sources.join(", ")}` : ""}
+            </p>
+          )}
+          {trace?.collection_run && (
+            <p className="source-history-note" data-testid="selection-collection-run">
+              Latest retained collection
+              {trace.collection_run.started_at && <>{" at "}<time dateTime={trace.collection_run.started_at}>
+                {trace.collection_run.started_at.slice(0, 16).replace("T", " ")} UTC
+              </time></>}
+              {trace.not_fetched_sources?.length ? `. Not fetched: ${trace.not_fetched_sources.join(", ")}` : ""}
             </p>
           )}
           {trace?.source_gaps?.length > 0 && (

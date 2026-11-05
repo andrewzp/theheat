@@ -11,7 +11,8 @@ OZONE_HOLE_ANNUAL_CAP = 2
 
 
 def run_ozone_hole(bot_state: BotState, current_run: dict | None) -> None:
-    if date.today().month not in {8, 9, 10, 11}:
+    today = date.today()
+    if today.month not in {8, 9, 10, 11}:
         skipped_start = time.perf_counter()
         _record_source_run(
             current_run, bot_state, "ozone_hole", skipped_start,
@@ -90,6 +91,11 @@ def run_ozone_hole(bot_state: BotState, current_run: dict | None) -> None:
             observed=len(readings),
             promoted=source_promoted,
             drafted=0,
+            note=(
+                "Current-year NASA annual peak row unavailable. Daily observations retained."
+                if readings and not any(peak.year == today.year for peak in annual_peaks)
+                else None
+            ),
         )
     except Exception as e:
         print(f"[alerts] Ozone hole error: {e}")

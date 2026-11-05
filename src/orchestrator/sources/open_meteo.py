@@ -229,10 +229,13 @@ def _run_world_cached_half(world_cities: list[dict], metrics_out: dict, bot_stat
     # Snapshot eval targets + the stale set off the PRE-mutation cache. ``cached_cities``
     # is stable because EVAL never adds cache entries (only WARM does); ``stale`` must be
     # selected before warming. Forecast activity does not advance archive freshness.
-    cached_cities = [
-        c for c in world_cities
-        if world_cache.world_key(c.get("city"), c.get("country"), c.get("lat"), c.get("lon")) in cache
-    ]
+    cached_cities, uncached_cities = [], []
+    for city in world_cities:
+        key = world_cache.world_key(city.get("city"), city.get("country"), city.get("lat"), city.get("lon"))
+        if key in cache:
+            cached_cities.append(city)
+        else:
+            uncached_cities.append(city)
     stale = world_cache.select_stale_cities(
         cache, world_cities, ttl_days=WORLD_CACHE_TTL_DAYS, budget=WORLD_WARM_BUDGET,
         today=iso, urgent_order=open_meteo.URGENT_WORLD_HEAT_CITIES,
@@ -270,19 +273,29 @@ def _run_world_cached_half(world_cities: list[dict], metrics_out: dict, bot_stat
             pending.append((c, fc))    # forecast carried into CONSOLIDATE (single carrier)
         i += size
 
-    # Refresh candidates before routine warming, within the SAME existing cap.
+    # Refresh candidates before routine warming, within the same existing cap.
     # A current forecast may nominate a source read but cannot alter the baseline.
     from src.data.world_thresholds import potential_record_variables, record_comparison_qualification
-    refresh, seen_refresh = [], set()
+    refresh, seen_warm = [], set()
     for city, forecast in pending:
         key = world_cache.world_key(city["city"], city["country"], city["lat"], city["lon"])
         baseline = cache[key]["baseline"]
         if any(not record_comparison_qualification(baseline, date.fromisoformat(forecast["valid_date"]), var)[0]
                for var in potential_record_variables(forecast, cache[key])):
             refresh.append({**city, "_archive_valid_date": forecast["valid_date"]})
-            seen_refresh.add(key)
-    stale = (refresh + [city for city in stale if world_cache.world_key(city["city"], city["country"], city["lat"], city["lon"]) not in seen_refresh])[:WORLD_WARM_BUDGET]
+            seen_warm.add(key)
     metrics_out["record_refresh_candidates"] = len(refresh)
+    if uncached_cities and WORLD_WARM_BUDGET > 1:
+        # Keep the first record refresh. Reserve the next attempt for a missing
+        # city so saturation cannot repeatedly spend the whole budget on cached cities.
+        bootstrap, = world_cache.select_stale_cities(
+            cache, uncached_cities, ttl_days=WORLD_CACHE_TTL_DAYS, budget=1,
+            today=iso, urgent_order=open_meteo.URGENT_WORLD_HEAT_CITIES,
+        )
+        first_available = min(1, len(refresh))
+        refresh.insert(first_available, bootstrap)
+        seen_warm.add(world_cache.world_key(bootstrap["city"], bootstrap["country"], bootstrap["lat"], bootstrap["lon"]))
+    stale = (refresh + [city for city in stale if world_cache.world_key(city["city"], city["country"], city["lat"], city["lon"]) not in seen_warm])[:WORLD_WARM_BUDGET]
     withheld = []
 
     # PHASE 2 — WARM (archive endpoint): refresh climatology for the stale/missing set.
@@ -1444,6 +1457,11 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
         )
         source_status = "success"
         details: dict | None = None
+        diff_note = (
+            f"diffs:{ghcn_pipeline_metrics.get('diff_dates_fetched', '-')}/"
+            f"{ghcn_pipeline_metrics.get('diff_dates_attempted', '-')} "
+            f"diff_missing:{ghcn_pipeline_metrics.get('diff_dates_missing', '-')}"
+        )
         if combined:
             ghcn_funnel = (
                 f"status:{ghcn_pipeline_metrics['status']} "
@@ -1452,7 +1470,7 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
                 f"active:{ghcn_pipeline_metrics.get('stations_active', '-')} "
                 f"obs:{ghcn_pipeline_metrics.get('stations_with_obs', '-')} "
                 f"checked:{ghcn_pipeline_metrics.get('stations_checked', '-')} "
-                f"bundles:{ghcn_pipeline_metrics.get('bundles_after_dedup', '-')}"
+                f"bundles:{ghcn_pipeline_metrics.get('bundles_after_dedup', '-')} {diff_note}"
             )
             m = open_meteo_pipeline_metrics
             note = (
@@ -1478,9 +1496,6 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
             }
         elif _signals_provider == "ghcn" and ghcn_pipeline_metrics:
             source_status = ghcn_pipeline_metrics["status"]
-            diff_attempted = ghcn_pipeline_metrics.get("diff_dates_attempted", "-")
-            diff_fetched = ghcn_pipeline_metrics.get("diff_dates_fetched", "-")
-            diff_missing = ghcn_pipeline_metrics.get("diff_dates_missing", "-")
             funnel = (
                 f"verification:{ghcn_pipeline_metrics['threshold_verification']} "
                 f"error:{ghcn_pipeline_metrics.get('error', 'none')} "
@@ -1489,8 +1504,7 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
                 f"checked:{ghcn_pipeline_metrics.get('stations_checked', '-')} "
                 f"raw_signals:{ghcn_pipeline_metrics.get('raw_signals', '-')} "
                 f"bundles:{ghcn_pipeline_metrics.get('bundles_after_dedup', '-')} "
-                f"diffs:{diff_fetched}/{diff_attempted} "
-                f"diff_missing:{diff_missing} "
+                f"{diff_note} "
                 f"queued:{source_promoted}"
             )
             note = f"provider:ghcn {funnel} | {signal_breakdown}"

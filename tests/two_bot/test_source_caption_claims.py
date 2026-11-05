@@ -3,7 +3,7 @@
 from copy import deepcopy
 from dataclasses import asdict
 import json
-from unittest.mock import MagicMock
+from unittest.mock import ANY, MagicMock
 
 import pytest
 
@@ -198,7 +198,7 @@ def test_sync_and_retained_routes_use_same_bundle_without_extra_calls_or_mutatio
     original = deepcopy(bundle.to_dict())
     assert fact_check.local_rejection(TEXT, [], bundle, {}) is None  # Still requires a model.
     sync = fact_check.fact_check(TEXT, [], bundle, {})
-    provider.assert_called_once_with(TEXT, bundle, retry_suffix="")
+    provider.assert_called_once_with(TEXT, bundle, retry_suffix="", verification_date=ANY)
     inputs = dict(candidate=asdict(WriterResult(
         tweet=TEXT, kill_reason=None, angle_chosen="synthetic", era_anchor_used=None,
         peer_comparison_used=None, reasoning="Invented parser control.")),

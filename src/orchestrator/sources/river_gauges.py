@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 # ruff: noqa: F403,F405
+from src.data import nwps_major_forecasts as nwps
 from src.data._witness import degraded_via
+from src.editorial.scoring.disasters import score_major_river_forecast
 from src.orchestrator.common import *
 
 
@@ -81,3 +83,40 @@ def run_river_gauges(bot_state: BotState, current_run: dict | None) -> None:
             status="failed", error=str(e)
         )
     return
+
+
+def run_nwps_major_forecasts(bot_state: BotState, current_run: dict | None) -> None:
+    if os.environ.get(nwps.ENABLE_FLAG) != "1":
+        return
+    from src.two_bot.intern.nwps_forecast import build_nwps_forecast_bundle
+
+    source = "nwps_major_forecasts"
+    started = time.perf_counter()
+    try:
+        shortlist, forecasts = nwps.fetch_major_forecasts(_utc_now())
+        promoted = 0
+        for forecast in forecasts:
+            bundle = build_nwps_forecast_bundle(forecast)
+            if state.is_duplicate(bot_state, bundle.event_id):
+                continue
+            score = score_major_river_forecast()
+            if not _should_draft(score, bundle.event_id):
+                continue
+            review = _review_context(
+                source="NOAA/NWS National Water Prediction Service", source_key=source,
+                headline=f"Major flood stage forecast at {bundle.where}", current_run=current_run,
+                facts=[_fact("Gauge", forecast.lid), _fact("Forecast issue (UTC)", forecast.issued_at.isoformat()),
+                       _fact("First major point (UTC)", forecast.first_major_at.isoformat()),
+                       _fact("Forecast stage", f"{forecast.forecast_ft:g} ft")],
+            )
+            if _enqueue_story_candidate(bot_state, bundle=bundle, score=score, source=source,
+                                        legacy_type="river_flood", event_id=bundle.event_id, review_context=review):
+                promoted += 1
+        bounded = min(shortlist, nwps.MAX_DETAIL_GAUGES)
+        _record_source_run(current_run, bot_state, source, started,
+                           status="degraded" if len(forecasts) < bounded else "success",
+                           observed=shortlist, promoted=promoted,
+                           note=f"Major forecast shortlist {shortlist}; verified {len(forecasts)} of {bounded}")
+    except (ValueError, OSError) as exc:
+        _record_source_run(current_run, bot_state, source, started, status="failed",
+                           error=f"NWPS forecast intake failed ({type(exc).__name__})")

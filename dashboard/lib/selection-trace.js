@@ -1,8 +1,11 @@
 import { sourceOutcome } from "./live-content-status.js"
+import { reportTimestamp } from "./runtime-report.js"
+import { sourceContract } from "./source-registry.js"
 
 // Source gaps: why a source supplied nothing in the latest run, with its owner/next action.
 const GAP_STATES = new Set(["access_expired", "access_refused", "baseline_unavailable", "unqualified_input",
   "endpoint_missing", "regional_hold", "unavailable", "reachable_unqualified", "alternate_served", "stale_data"])
+const COLLECTION_MODES = new Set(["alerts", "both", "leaderboard"])
 
 // Coverage-to-selection trace (W08.6) from retained state only. Each event gets
 // exactly one of six distinct outcomes; unknown denominators stay null and a
@@ -47,14 +50,20 @@ export function selectionTrace(state, { referenceOpportunities = null } = {}) {
   }
   const notFetched = []
   const gaps = []
-  for (const run of list(state?.run_history).slice(0, 1)) {
-    for (const s of list(run?.sources)) {
-      if (s?.status === "failed" || s?.status === "skipped") notFetched.push(s?.source)
-      const why = sourceOutcome(s)
-      if (GAP_STATES.has(why.state)) {
-        gaps.push({ source: why.source, status: why.status, state: why.state, reason: why.label, detail: why.detail,
-          next_action: why.next_action })
-      }
+  const collection = list(state?.run_history).find(run => {
+    if (run?.configuration_only === true) return false
+    if (COLLECTION_MODES.has(run?.mode)) return true
+    // Legacy records without a mode need a recognizable source witness.
+    return run?.mode == null && list(run?.sources).some(row => sourceContract(row?.source).registered)
+  })
+  const startedAt = reportTimestamp(collection?.started_at)
+  for (const s of list(collection?.sources)) {
+    if (typeof s?.source !== "string" || !s.source.trim() || sourceContract(s.source).kind === "internal") continue
+    if (s.status === "failed" || s.status === "skipped") notFetched.push(s.source)
+    const why = sourceOutcome(s)
+    if (GAP_STATES.has(why.state)) {
+      gaps.push({ source: why.source, status: why.status, state: why.state, reason: why.label, detail: why.detail,
+        next_action: why.next_action })
     }
   }
   const reference = Array.isArray(referenceOpportunities) ? referenceOpportunities : null
@@ -64,6 +73,11 @@ export function selectionTrace(state, { referenceOpportunities = null } = {}) {
   return {
     events: [...rows.values()].sort((a, b) => a.event_id.localeCompare(b.event_id)),
     counts,
+    collection_run: collection ? {
+      id: typeof collection.id === "string" ? collection.id : null,
+      mode: collection.mode ?? null,
+      started_at: Number.isFinite(startedAt) ? new Date(startedAt).toISOString() : null,
+    } : null,
     not_fetched_sources: notFetched.sort(),
     // Miss reasons for the coverage view and weekly cadence; a gap is not a count of missed events.
     source_gaps: gaps.sort((a, b) => String(a.source).localeCompare(String(b.source))),

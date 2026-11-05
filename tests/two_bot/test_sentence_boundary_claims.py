@@ -3,7 +3,7 @@
 from copy import deepcopy
 from dataclasses import asdict
 import json
-from unittest.mock import Mock
+from unittest.mock import ANY, Mock
 
 import pytest
 
@@ -134,7 +134,7 @@ def test_sync_and_retained_results_keep_exact_inventory_and_model_verdict(monkey
     assert sync.passed == (outcome == "pass")
     if failures:
         assert sync.failures == failures
-    provider.assert_called_once_with(text, source, retry_suffix="")
+    provider.assert_called_once_with(text, source, retry_suffix="", verification_date=ANY)
     assert source.to_dict() == before_source and saved == before_saved
 
 

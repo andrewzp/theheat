@@ -92,7 +92,11 @@ def _advisory(bundle: object) -> bool:
 
 def begin_warning_provider_scope(bundle: StoryBundle, captured: BundleCapture, *,
                                  generating: bool = True) -> Token:
-    return _PROVIDER_INPUT.set((captured, generating) if is_warning(bundle) or _advisory(bundle) else None)
+    from src.two_bot.intern.nwps_forecast import is_nwps_forecast
+
+    return _PROVIDER_INPUT.set(
+        (captured, generating) if is_warning(bundle) or _advisory(bundle) or is_nwps_forecast(bundle) else None
+    )
 
 
 def end_warning_provider_scope(token: Token | None) -> None:
@@ -108,7 +112,12 @@ def guard_warning_provider_attempt() -> None:
     captured, generating = bound
     # Use the immutable original capture, not a callback-mutated live bundle.
     original = StoryBundle(**captured.payload())
-    if _advisory(original):
+    from src.two_bot.intern.nwps_forecast import forecast_clock, forecast_source_hold, is_nwps_forecast
+
+    if is_nwps_forecast(original):
+        if hold := forecast_source_hold(captured.payload(), live=False, clock=forecast_clock):
+            raise WarningHold(hold)
+    elif _advisory(original):
         from src.editorial.nhc_advisory_runtime import guard_advisory_story
         guard_advisory_story(original, generating=generating, live=True)
     else:
@@ -119,11 +128,13 @@ def guard_warning_provider_attempt() -> None:
 
 @contextmanager
 def warning_final_safety_scope(draft: dict | None) -> Iterator[None]:
+    from src.two_bot.intern.nwps_forecast import EVENT_PREFIX
+
     context = (draft or {}).get("review_context")
     two = context.get("two_bot") if isinstance(context, dict) else None
     raw = two.get("bundle") if isinstance(two, dict) else None
     warning = ((draft or {}).get("type") in ("official_warning", "nhc_advisory")
-        or str((draft or {}).get("event_id", "")).startswith(("official_warning:", "nhc_advisory:"))
+        or str((draft or {}).get("event_id", "")).startswith(("official_warning:", "nhc_advisory:", EVENT_PREFIX))
         or (isinstance(raw, dict) and raw.get("signal_kind") in ("official_warning", "nhc_advisory")))
     bound = None
     if warning:

@@ -591,25 +591,17 @@ class TestBundleJsonHandlesDates:
 
     def test_fact_check_bundle_json_handles_date(self, monkeypatch):
         """Same fix in fact_check.py — uses the shared _json_default."""
-        import datetime
-        import json
+        from src.two_bot import fact_check
 
-        # Stub _call_gemini so we can capture the bundle_json string it builds.
         captured = {}
 
-        def fake_call(tweet, bundle, *, retry_suffix: str = ""):
-            from src.two_bot.fact_check import _json_default
-            from src.two_bot.prompts.fact_check_prompt import FACT_CHECK_USER_PROMPT_TEMPLATE
-            user_prompt = FACT_CHECK_USER_PROMPT_TEMPLATE.format(
-                tweet=tweet,
-                bundle_json=json.dumps(
-                    bundle.to_dict(), sort_keys=True, default=_json_default
-                ),
+        def fake_call(tweet, bundle, *, verification_date, retry_suffix: str = ""):
+            request = fact_check.prepare_request(
+                tweet, bundle, verification_date=verification_date, retry_suffix=retry_suffix,
             )
-            captured["prompt"] = user_prompt + retry_suffix
+            captured["prompt"] = request["contents"]
             return '{"passed": true, "extracted_claims": [{"text": "test tweet", "kind": "comparison"}], "failures": []}'
 
-        from src.two_bot import fact_check
         monkeypatch.setattr(fact_check, "_call_gemini", fake_call)
 
         bundle = self._bundle_with_date()
