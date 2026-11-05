@@ -1,3 +1,9 @@
+## 0.9.109.66
+
+- Add a default-off recovery path for missed alert collection. An eligible
+  hourly run handles due drafts first and must record a bounded attempt
+  before collecting.
+
 ## 0.9.109.65
 
 - Resume an interrupted station-threshold refresh from an encrypted,
