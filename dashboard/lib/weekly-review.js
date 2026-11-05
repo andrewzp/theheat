@@ -3,6 +3,7 @@ import { fingerprint, textHash } from "./draft-revisions.js"
 import { summarizeUsage } from "./usage-ledger.js"
 import { buildProductHealth } from "./product-health.js"
 import { reportTimestamp } from "./runtime-report.js"
+import { postOutcomes } from "./post-outcomes.js"
 import { coverageRow, sourceOutcome } from "./live-content-status.js"
 
 const DAY = 86400000
@@ -25,7 +26,7 @@ const CHECK_STAGES = ["writer", "safety", "fact_check", "critic", "honesty_gate"
 const OWNER_STATES = new Set(["access_expired", "access_refused"]), INPUT_STATES = new Set(["baseline_unavailable", "unqualified_input"])
 
 // W16.1: joins retained source outcomes, stage failures, post-age samples and supplied cost reconciliation.
-function weeklyEvidence(state, posts, inWindow, costReconciliation) {
+function weeklyEvidence(state, posts, inWindow, end, costReconciliation) {
   const latestRun = Array.isArray(state.run_history) ? state.run_history.find(run => object(run) && Array.isArray(run.sources)) : null
   const sources = latestRun ? latestRun.sources.filter(object).map(row => {
     const outcome = sourceOutcome(row, Array.isArray(state.suppressions) ? state.suppressions.slice(-200) : [])
@@ -41,16 +42,23 @@ function weeklyEvidence(state, posts, inWindow, costReconciliation) {
     if (Object.hasOwn(failures, row.stage)) failures[row.stage]++
     else otherHolds++
   }
-  const metrics = object(state.tweet_metrics) ? state.tweet_metrics : {}
+  const retained = postOutcomes(state, { now: end, strictObservationCutoff: true })
+  const outcomes = new Map(retained.posts.map(row => [row.tweet_id, row]))
   const postAge = posts.map(post => {
-    const samples = Object.values(object(metrics[post.tweet_id]?.samples) ? metrics[post.tweet_id].samples : {}).filter(object)
-    const aged = samples.filter(sample => Number.isFinite(sample.post_age_seconds))
+    const outcome = outcomes.get(post.tweet_id)
+    const samples = outcome?.revision_status === "recorded" ? outcome.observations.filter(sample =>
+      sample.kind === "sample" && sample.association === "recorded" && sample.age_status === "recorded" &&
+      !sample.conflict
+    ) : []
+    const clockConflict = new Set(samples.map(sample => sample.platform_created_at)).size > 1
+    const aged = clockConflict ? [] : samples.filter(sample => Object.values(sample.counts).some(value => value !== null))
       .sort((a, b) => a.post_age_seconds - b.post_age_seconds)
     const at = hours => aged.filter(sample => sample.post_age_seconds <= hours * 3600).at(-1) ?? null
-    const pick = sample => sample === null ? null : { post_age_hours: Math.round(sample.post_age_seconds / 360) / 10,
-      counts: object(sample.counts) ? Object.fromEntries(Object.entries(sample.counts).map(([k, v]) => [k, Number.isInteger(v) ? v : null])) : null }
+    const pick = sample => sample === null ? null : {
+      post_age_hours: Math.round(sample.post_age_seconds / 360) / 10, counts: sample.counts,
+    }
     return { tweet_id: post.tweet_id, samples: aged.length, within_24h: pick(at(24)), within_72h: pick(at(72)),
-      status: aged.length ? "observed_samples" : "unavailable" }
+      status: clockConflict ? "conflict" : aged.length ? "observed_samples" : "unavailable" }
   })
   const reconciliation = object(costReconciliation) ? {
     status: "supplied", coverage: costReconciliation.coverage ?? null, discrepancies: costReconciliation.discrepancies ?? null,
@@ -60,7 +68,7 @@ function weeklyEvidence(state, posts, inWindow, costReconciliation) {
     source_outcomes: sources === null ? { status: "unavailable", rows: null } : { status: "latest_retained_run", started_at: latestRun.started_at ?? null, rows: sources },
     stage_failures: { counts: failures, other_holds: otherHolds, scope: "Suppressions timestamped inside the window; one row per recorded kill, not unique events." },
     post_age_outcomes: { posts: postAge, metrics_available: postAge.some(row => row.status === "observed_samples"),
-      scope: "Latest supplied sample at or before each post age; unavailable metrics are not zero reach." },
+      scope: "Latest validated sample at or before each post age and before the report cutoff. Unavailable metrics are not zero reach." },
     cost_reconciliation: reconciliation }
 }
 
@@ -148,7 +156,7 @@ export function buildWeeklyReview({state, feedbackRecords = null, asOf, costReco
   const lengths=posts.map(p=>p.characters).sort((a,b)=>a-b),n=lengths.length
   const cost=summarizeUsage(state,{now:end}),health=buildProductHealth(state,{now:end})
   const costKeys=["coverage","pricing_coverage","known_cost_usd","legacy_estimate_usd","recorded_estimate_usd","recorded_calls","priced_calls","unpriced_calls","missing_usage_calls","legacy_calls","inconsistent_rows","excluded_rows"]
-  const evidence=weeklyEvidence(state,posts,inWindow,costReconciliation)
+  const evidence=weeklyEvidence(state,posts,inWindow,end,costReconciliation)
   const report={schema_version:1,kind:"weekly_retained_outcome_review",reader_contract:"retained_weekly_v1",as_of:new Date(end).toISOString(),
     evidence,corrections:correctionSummary(correctionReport),improvement:{...improvementSelection(evidence,posts),automatic_changes:false,publication_authorized:false},
     window:{start:new Date(start).toISOString(),end:new Date(end).toISOString(),end_exclusive:true,hours:168},

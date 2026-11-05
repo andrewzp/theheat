@@ -117,6 +117,7 @@ function observation(raw, kind, key, tweetId, now) {
   return {
     id: key, kind, association: valid ? "recorded" : "unusable",
     collected_at: time?.iso ?? null,
+    platform_created_at: ageMatches ? posted.iso : null,
     post_age_seconds: ageMatches ? age : null,
     age_status: age !== null && !ageMatches ? "conflict" : ageMatches ? "recorded" : "unknown",
     counts: Object.fromEntries(OUTCOME_METRICS.map(field => [field, count(counts[field])])),
@@ -199,11 +200,13 @@ function costFor(eventIds, window) {
     window_truncated: window.truncated === true }
 }
 
-export function postOutcomes(rawState, { now = Date.now(), feedbackRecords = null, correctionReport = null } = {}) {
+export function postOutcomes(
+  rawState, { now = Date.now(), feedbackRecords = null, correctionReport = null, strictObservationCutoff = false } = {},
+) {
   const clock = now instanceof Date ? now.getTime() : now
   if (!Number.isFinite(clock) || !Number.isFinite(new Date(clock).getTime())) throw new TypeError("Outcome history requires a valid clock")
   const state = object(rawState) ? rawState : {}
-  const clockMicroseconds = BigInt(Math.floor(clock * 1000))
+  const clockMicroseconds = BigInt(Math.floor(clock * 1000)) - (strictObservationCutoff ? 1n : 0n)
   let inventoryKnown = Array.isArray(state.drafts) && state.drafts.every(object) && object(state.publish_ledger)
   const posts = new Map(), receipts = new Map(), contexts = retainedContexts(state.drafts)
   const ensure = id => {
@@ -252,6 +255,9 @@ export function postOutcomes(rawState, { now = Date.now(), feedbackRecords = nul
       try { key = `${kind}:${fingerprint(raw)}` } catch { key = `${kind}:unreadable:${storageKey}` }
       if (retained.has(key)) return
       const item = observation(raw, kind, key, tweet_id, clockMicroseconds)
+      // Historical reviews exclude out-of-window samples before they can
+      // contribute publication identity or same-time conflict evidence.
+      if (strictObservationCutoff && item.collected_at === null) return
       if (object(raw) && Object.hasOwn(raw, "publication_context_sha256")) {
         item.writer_context_status = writerContext.status === "conflict" ? "conflict"
           : item.association === "recorded" && kind === "sample" && writerContext.status === "recorded" && raw.publication_context_sha256 === writerContext.sha256 ? "recorded" : "unknown"

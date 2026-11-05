@@ -1,3 +1,9 @@
+## 0.9.109.69
+
+- Verify engagement sample times against confirmed X posts in the weekly
+  outcome review. Exclude future and conflicting observations, and preserve
+  known zero counts and unavailable metrics separately.
+
 ## 0.9.109.68
 
 - Account for each world archive request against the existing allowance.
