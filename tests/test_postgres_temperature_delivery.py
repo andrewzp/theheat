@@ -310,17 +310,9 @@ def test_genuine_compact_temperature_delivery_recovery_history_and_cost(compact_
         current = temperature.media_view(case, case["draft_id"])
         assert current["delivery"]["intents"][0]["current"] is True
         assert all_application_rows(case["params"]) == before
-        negative = isolated_refusals(case, path)
-        refusals, negative_failures = negative["refusals"], [negative["failure"]] if negative["failure"] else []
         original = case["authority"].read()
         result = run_delivery(case, path["intent"], "upload")
         assert result["outcome"] == "confirmed", result
-        with case["authority"].projections._connection() as connection:
-            saved = delivery.attempt(connection, delivery.read(connection, path["intent"]), "x", "upload")
-        negative = isolated_refusals(case, path, boundaries=("before_call",))
-        refusals.extend(negative["refusals"])
-        if negative["failure"]:
-            negative_failures.append(negative["failure"])
         # A real grant cannot send after a source outage. The no-call raw
         # observation is retained independently of any new scientific context.
         held = run_delivery(case, path["intent"], "upload", platform="bluesky", postgrant_outage=True)
@@ -405,11 +397,44 @@ def test_genuine_compact_temperature_delivery_recovery_history_and_cost(compact_
             trace = [{**row, "body": None, "body_sha256": hashlib.sha256(row["body"]).hexdigest()} if "body" in row else row for row in path["trace"]]
             receipt = dict(native_png_sha256=hashlib.sha256(path["png"]).hexdigest(), native_png_bytes=len(path["png"]),
                 alt_utf8_bytes=len(expected["media"]["alt_text"].encode()), alt_sha256=expected["media"]["alt_text_sha256"],
-                description_derivation=path["description"]["record"]["derivation"], transport=trace, refusals=refusals, negative_fixture_failures=negative_failures,
+                description_derivation=path["description"]["record"]["derivation"], transport=trace,
+                source_refusal_scope=dict(test="test_genuine_compact_temperature_delivery_source_refusal_matrix",
+                    separate_approval=True, included_in_this_receipt=False),
                 initial_requests=4, post_media_requests=7, final_requests=7, unknown_create=unknown, reconciliation=recovered,
                 historical_and_restored_rows_preserved=True, model_posts=[row for row in temperature.trace_rows(case) if row["kind"] == "model_post"])
             (Path(evidence) / "connected-receipt.json").write_text(json.dumps(receipt, sort_keys=True, indent=2))
-        assert not negative_failures, json.dumps(negative_failures, sort_keys=True)
+
+
+@pytest.mark.parametrize("compact_case", [("all_time_low",)], indirect=True)
+def test_genuine_compact_temperature_delivery_source_refusal_matrix(compact_case, tmp_path, monkeypatch):
+    """All 33 refusals share a real approval without spending the positive journey's window."""
+    evidence = os.environ.get("THEHEAT_T4_EVIDENCE")
+    if evidence:
+        # Keep both cases' original packets and cost records; never overwrite
+        # the positive journey's evidence with another fixture's approval.
+        folder = Path(evidence) / "source-refusal-matrix"
+        folder.mkdir(parents=True, exist_ok=True)
+        monkeypatch.setenv("THEHEAT_T4_EVIDENCE", str(folder))
+    case = compact_case
+    with diagnostic_workers(case), ready_delivery(case, tmp_path) as path:
+        first = isolated_refusals(case, path)
+        assert first["failure"] is None, first["failure"]
+        assert path["trace"] == []
+        result = run_delivery(case, path["intent"], "upload")
+        assert result["outcome"] == "confirmed", result
+        last = isolated_refusals(case, path, boundaries=("before_call",))
+        assert last["failure"] is None, last["failure"]
+        rows = first["refusals"] + last["refusals"]
+        faults = {"role", "source", "baseline", "station", "day", "field", "policy", "draft", "profile",
+                  "description", "checkpoint"}
+        assert len(rows) == 33
+        assert {(row["boundary"], row["fault"]) for row in rows} == {
+            (boundary, fault) for boundary in ("acquire", "begin", "before_call") for fault in faults}
+        assert len(path["trace"]) == 1 and path["trace"][0]["method"] == "POST"
+        if evidence:
+            receipt = dict(intent_id=path["intent"], refusals=rows, negative_fixture_failures=[],
+                           same_approval_for_all_refusals=True, fixture_uploads=1, real_platform_calls=0)
+            (folder / "source-refusals.json").write_text(json.dumps(receipt, sort_keys=True, indent=2))
 
 
 @pytest.mark.parametrize("compact_case", [("all_time_high",)], indirect=True)
