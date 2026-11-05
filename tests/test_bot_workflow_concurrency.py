@@ -151,6 +151,7 @@ def test_non_pr_fallback_never_splits_or_cancels_producers(workflow, event):
 def test_pr_and_display_branch_job_exclusions_remain_explicit(workflow):
     test, run = workflow["jobs"]["test-partition"], workflow["jobs"]["run"]
     assert test["if"] == "github.event_name == 'pull_request' && github.head_ref != 'daily-plan-current'"
+    assert workflow["jobs"]["test-dashboard"]["if"] == test["if"]
     assert " ".join(run["if"].split()) == (
         "always() && github.event_name != 'pull_request'"
         " && (vars.THEHEAT_PRODUCTION_PAUSED != '1'"
@@ -171,9 +172,7 @@ def test_required_offline_suite_and_own_production_smoke_gate_remain(workflow):
     assert suite["run"] == 'python -m pytest tests/ -v -m "not voice_replay" --ci-partition=${{ matrix.partition }} --ci-postgres-shard=${{ matrix.postgres-shard }} --ci-critical-first --maxfail=1 --durations=20 -o faulthandler_timeout=${{ matrix.partition == \'postgres\' && (matrix.postgres-shard == \'2\' || matrix.postgres-shard == \'8\') && \'0\' || \'300\' }}'
     assert suite["env"]["THEHEAT_CI_SAFE_DIAGNOSTIC"] == "${{ matrix.partition == 'postgres' && matrix.postgres-shard == '8' && '1' || '0' }}"
     assert suite["env"]["THEHEAT_TEST_POSTGRES"] == "1"
-    assert {step.get("name") for step in test["steps"]} >= {
-        "SQLite backend smoke", "Test dashboard", "Build dashboard",
-    }
+    assert any(step.get("name") == "SQLite backend smoke" for step in test["steps"])
     assert any(step.get("name") == "Smoke gate" for step in run["steps"])
     assert test["timeout-minutes"] == "45"
     assert run["timeout-minutes"] == "20"
@@ -196,18 +195,25 @@ def test_native_capture_smoke_is_early_media_only_and_does_not_replace_full_suit
 
 def test_required_check_fails_for_unsuccessful_or_skipped_partition(workflow):
     gate = workflow["jobs"]["test"]
-    assert gate["needs"] == "test-partition"
+    assert gate["needs"] == ["test-partition", "test-dashboard"]
     assert gate["if"] == (
         "always() && github.event_name == 'pull_request' && github.head_ref != 'daily-plan-current'"
     )
     step, = gate["steps"]
-    assert step["env"] == {"PARTITION_RESULT": "${{ needs.test-partition.result }}"}
-    assert step["run"] == 'test "$PARTITION_RESULT" = success'
+    assert step["env"] == {
+        "PARTITION_RESULT": "${{ needs.test-partition.result }}",
+        "DASHBOARD_RESULT": "${{ needs.test-dashboard.result }}",
+    }
+    assert step["run"] == 'test "$PARTITION_RESULT" = success && test "$DASHBOARD_RESULT" = success'
     # Exercise the actual gate, including GitHub's skipped dependency outcome.
     import subprocess
-    for result in ("success", "failure", "cancelled", "skipped", ""):
-        completed = subprocess.run(["sh", "-c", step["run"]], env={"PARTITION_RESULT": result})
-        assert (completed.returncode == 0) == (result == "success")
+    results = ("success", "failure", "cancelled", "skipped", "")
+    for partition_result in results:
+        for dashboard_result in results:
+            completed = subprocess.run(["sh", "-c", step["run"]], env={
+                "PARTITION_RESULT": partition_result, "DASHBOARD_RESULT": dashboard_result,
+            })
+            assert (completed.returncode == 0) == (partition_result == dashboard_result == "success")
 
 
 def test_partitions_preserve_every_check_without_repeating_dashboard(workflow):
@@ -220,10 +226,26 @@ def test_partitions_preserve_every_check_without_repeating_dashboard(workflow):
         ]},
     }
     for step in worker["steps"]:
-        if step.get("name") in {"SQLite backend smoke", "Test dashboard", "Build dashboard"}:
+        assert step.get("name") not in {"Test dashboard", "Build dashboard"}
+        if step.get("name") == "SQLite backend smoke":
             assert step["if"] == "matrix.partition == 'core'"
     suite = next(s for s in worker["steps"] if s.get("run", "").startswith("python -m pytest tests/ -v "))
     assert "if" not in suite and "continue-on-error" not in worker
+
+
+def test_dashboard_checks_have_a_separate_bounded_offline_job(workflow):
+    dashboard = workflow["jobs"]["test-dashboard"]
+    assert dashboard["timeout-minutes"] == "10"
+    assert "env" not in dashboard and "continue-on-error" not in dashboard
+    steps = dashboard["steps"]
+    assert [step.get("run") for step in steps if "run" in step] == [
+        "pip install -r requirements.txt -r requirements-postgres.txt -r requirements-graphics.txt",
+        "npm ci",
+        "npm test -- --test-concurrency=4",
+        "npm run build",
+    ]
+    assert all(step.get("working-directory") == "dashboard" for step in steps[-3:])
+    assert all("if" not in step and "continue-on-error" not in step and "env" not in step for step in steps)
 
 
 def test_postgres_ingress_has_node_and_dashboard_dependencies(workflow):

@@ -72,7 +72,7 @@ jobs:
     # DISPLAY PR that is never merged to main, so gating it on the Python +
     # dashboard suite is pointless — and its routine appends without rebasing
     # onto main, so it re-ran stale code and emailed a CI failure every day.
-    # Skipping the test job here leaves both jobs skipped on that PR (run is
+    # Skipping offline checks here leaves them skipped on that PR (run is
     # PR-excluded), so the run is neutral and sends no failure email.
     if: github.event_name == 'pull_request' && github.head_ref != 'daily-plan-current'
     runs-on: ubuntu-24.04
@@ -243,20 +243,39 @@ jobs:
           source .venv/bin/activate 2>/dev/null || true
           THEHEAT_DB_PATH=/tmp/theheat-smoke.sqlite python -m pytest tests/test_state.py -q -k "Sqlite" --tb=short
 
-      - name: Test dashboard
-        if: matrix.partition == 'core'
+  test-dashboard:
+    # The complete Python core suite can consume most of its 45-minute window.
+    # Run the dashboard checks in parallel with their own bounded deadline.
+    if: github.event_name == 'pull_request' && github.head_ref != 'daily-plan-current'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: dashboard/package-lock.json
+      # Dashboard fixtures invoke the real Python preview and state readers.
+      - run: pip install -r requirements.txt -r requirements-postgres.txt -r requirements-graphics.txt
+      - name: Install dashboard dependencies
         working-directory: dashboard
-        run: npm test
-
+        run: npm ci
+      - name: Test dashboard
+        working-directory: dashboard
+        run: npm test -- --test-concurrency=4
       - name: Build dashboard
-        if: matrix.partition == 'core'
         working-directory: dashboard
         run: npm run build
 
   test:
     # Preserve the existing required-check name. A failed, cancelled or skipped
     # partition must not turn the merge gate green through dependency skipping.
-    needs: test-partition
+    needs: [test-partition, test-dashboard]
     if: always() && github.event_name == 'pull_request' && github.head_ref != 'daily-plan-current'
     runs-on: ubuntu-24.04
     timeout-minutes: 2
@@ -264,7 +283,8 @@ jobs:
       - name: Require every offline partition
         env:
           PARTITION_RESULT: ${{ needs.test-partition.result }}
-        run: test "$PARTITION_RESULT" = success
+          DASHBOARD_RESULT: ${{ needs.test-dashboard.result }}
+        run: test "$PARTITION_RESULT" = success && test "$DASHBOARD_RESULT" = success
 
   # P00c serialized Gist write route (default off): when the repository variable
   # THEHEAT_GIST_WRITE_ROUTE is 'serialized', drain admitted dashboard commands at the
