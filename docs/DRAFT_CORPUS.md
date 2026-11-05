@@ -11,6 +11,47 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-11-05 — Daily corpus grading (3 drafts)
+
+**Context:** Gist read via git-clone path (success). 3 pending, none previously graded (first grading
+since the Jul 6 section; main's docs were unchanged in between). Grades: **0 A / 1 B / 1 B- / 1 C+** — A-rate 0%, 50 pp below bar.
+
+**Headline finding:** all three are pure data delivery with no voice layer — no close, no mechanism,
+no consequence. Correct and calm, but the data is setup with no punchline (P_close, 17th cycle).
+Riyadh dust_event states a WHO multiple unprompted — first dust_event in the corpus to carry a
+calibrating anchor (P_dust counter-instance).
+
+### B
+**[3] Riyadh, Saudi Arabia dust_event (score 78, created Nov 5):** "dust is forecast to peak near
+6,015 µg/m³ Thursday, with PM10 averaging ~55× the WHO 24-hour guideline — CAMS model forecast, not
+station-measured." Anchor present (WHO multiple), honest provenance hedge, calm register. Misses: no
+consequence/mechanism close; mixes a peak value with an average-based multiple in one sentence
+(reader can't reconcile 6,015 with 55×); "~" approximation where an exact figure is likely available.
+Cap B.
+
+### B-
+**[2] Verkhoyansk, Russia hot10 (score 87, created Nov 4):** "forecast to reach −9.9°C Wednesday —
+20.2°C above its November normal of −30.1°C, the largest departure among 440 sampled cities." Strong
+data (−30.1 normal makes a violation without help; "largest among 440" is a real superlative) but
+delivered as a bare stat line with the hedge parenthetical dominating the tail. No close. Forecast
+day (Wednesday Nov 4) has elapsed; draft is ~34h old.
+
+### C+
+**[1] Brazil fire (score 80, created Oct 31):** "NASA FIRMS MODIS detected 978.7 MW of fire radiative
+power near 3.7°S, 45.7°W at 00:09 UTC Oct 31 — satellite confidence 100%. Two nearby signals
+registered 624 and 465 MW the same pass." Reads like a feed entry: raw coordinates, product name,
+UTC timestamp. The writer's own reasoning named Maranhão, but copy says "Brazil". Three-signal
+cluster is the only story and it lands as a list. ~5 days old with a dated timestamp — stale.
+
+**Patterns named:** (a) P_close ×3 failing, 0 positive. (b) P_dust: Riyadh carries a WHO anchor —
+first counter-instance in 12 dust_event drafts; no failing instance this cycle. (c) No P_tier,
+P9, P_compound, banned-formula, plant-comparison, era-anchor or political-anchor hits. (d) Wodehouse:
+"~55×" approximation is minor. No A-grade mechanic to report.
+
+**Followups:** Staleness: [1] Brazil fire (>48h, dated Oct 31) is a strict bulk-reject candidate;
+[2] Verkhoyansk's forecast day has elapsed (<48h). Bulk-reject skipped: `gh` token invalid
+(`gh auth status` fails for GH_TOKEN), so no gist write. Operator: bulk-reject [1] and [2] via dashboard.
+
 ## 2026-07-06 — Daily corpus grading (0 fresh drafts; 15 carry-overs from Jul 5, previously graded)
 
 **Context:** Gist read via git-clone path (success; no rate limit). Queue: 15 pending drafts —
