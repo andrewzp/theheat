@@ -67,7 +67,12 @@ if (entries.some(row => row.artifact_id !== null)) {
 // Inbox continuation (root checkpoint R1): runs whose command artifacts are all acknowledged, and runs
 // that completed without one, are recorded settled and never examined again.
 let settled = { recorded: 0 }
-try { settled = await recordSettledRuns(settledRunsFrom(entries, acknowledged.deleted, scan?.empty_completed_runs ?? [])) }
+try {
+  const incompleteRuns = new Set(scan?.incomplete_artifact_runs ?? [])
+  const examined = entries.filter(entry => !incompleteRuns.has(entry.run_id))
+  settled = await recordSettledRuns(settledRunsFrom(examined, acknowledged.deleted, scan?.empty_completed_runs ?? []),
+    { discovery: scan?.discovery_cursor })
+}
 catch (error) { settled = { status: "failed", code: codeOf(error) }; exit = 3 }
 // Configuration that leaves commands pending (no/other seal key, legacy writer credential) is visible.
 // Every skip leaves a command unconsumed (configuration, capacity): always visible, never silent.

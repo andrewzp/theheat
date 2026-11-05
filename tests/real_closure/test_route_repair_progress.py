@@ -14,11 +14,14 @@ from datetime import UTC, datetime, timedelta
 import json
 from pathlib import Path
 import subprocess
+from urllib import parse
+
+import pytest
 
 from scripts import gist_command_inbox as inbox
 from src.commands import gist_commands
 from tests.real_closure import route_harness as h
-from tests.real_closure.route_inbox_fixture import FakeActions
+from tests.real_closure.route_inbox_fixture import FakeActions, GENUINE, stamp
 
 REPO = "invented/theheat"
 
@@ -66,7 +69,10 @@ def _settled(root: Path) -> set[int]:
 def _drain(root: Path, gh: FakeActions, *, name: str, expect: int | None = 0, **env: str) -> tuple[dict, dict | None]:
     """``expect=None``: exit 0, or 3 exactly when the scan reported itself partial (visible, not silent)."""
     out = root / f"inbox-{name}"
-    scan = inbox.fetch(REPO, out, gh, settled=_settled(root))
+    files = {name: {"content": content} for name, content in h.gist_files(root).items()}
+    env_for_read = {"GIST_ID": h.STATE_GIST, "THEHEAT_GIST_READ_TOKEN": "invented"}
+    settled, cursor = inbox.load_inbox_progress(env_for_read, lambda _gist: files)
+    scan = inbox.fetch(REPO, out, gh, settled=settled, cursor=cursor)
     report_path = root / f"report-{name}.json"
     if expect is not None:
         return scan, h.run_consumer(root, h.consumer_env(root, run_id="3001", **env), report_path, expect=expect, inbox=out)
@@ -180,3 +186,95 @@ def test_more_unsettled_runs_than_the_drain_examines_are_reported_as_deferred(tm
     assert (scan["runs_examined"], scan["deferred_runs"], scan["scan_complete"]) == (inbox.MAX_RUNS_EXAMINED, 7, False)
     examined = [int(c.split("/runs/")[1].split("/")[0]) for c in gh.calls if c.endswith("/artifacts?per_page=100")]
     assert examined == sorted(examined), "oldest runs first"
+
+
+@pytest.mark.parametrize(("run_count", "same_second", "older_count"), [(1001, False, 0), (2000, True, 0), (2000, True, 200)])
+def test_filtered_workflow_limit_cannot_hide_a_live_command(tmp_path, run_count, same_second, older_count):
+    root = h.make_root(tmp_path)
+    seed = _seed(root, 1)
+    now = datetime.now(UTC).replace(microsecond=0)
+
+    class CappedActions(FakeActions):
+        def __call__(self, args):
+            url = args[0]
+            path, _, query = url.partition("?")
+            if not path.endswith("/actions/workflows/gist-commands.yml/runs"):
+                return super().__call__(args)
+            self.calls.append(url)
+            params = dict(parse.parse_qsl(query))
+            rows = self.runs()
+            if "created" in params:
+                window = params["created"]
+                if window.startswith(">="):
+                    rows = [row for row in rows if row["created_at"] >= window[2:]]
+                else:
+                    start, end = window.split("..")
+                    rows = [row for row in rows if start <= row["created_at"] <= end]
+            if "branch" in params:
+                rows = [row for row in rows if row["head_branch"] == params["branch"]]
+            if "event" in params:
+                rows = [row for row in rows if row["event"] == params["event"]]
+            if older_count:
+                # Model a stable ordering with unrelated history before the live row.
+                rows.sort(key=lambda row: row["id"], reverse=True)
+            else:
+                rows.sort(key=lambda row: (row["created_at"], row["id"]), reverse=True)
+            total = len(rows)
+            if {"created", "branch", "event"} & params.keys():
+                rows = rows[:1000]
+            offset = (int(params["page"]) - 1) * int(params["per_page"])
+            return json.dumps({"total_count": total, "workflow_runs": rows[offset:offset + int(params["per_page"])]}).encode()
+
+    gh = CappedActions(root)
+    _admit(root, gh, _submit(root, _rejects(seed, 1)))
+    live = gh.runs()[0]
+    live["created_at"] = stamp(now - timedelta(minutes=40))
+    other_runs = [
+        {
+            **GENUINE,
+            "id": live["id"] + index,
+            "status": "completed",
+            "created_at": live["created_at"] if same_second else stamp(now - timedelta(seconds=index)),
+        }
+        for index in range(1, run_count)
+    ]
+    historical_runs = [
+        {**GENUINE, "id": live["id"] + run_count + index, "status": "completed",
+         "created_at": stamp(now - timedelta(days=2))}
+        for index in range(older_count)
+    ]
+    (root / "runs.json").write_text(json.dumps([*reversed(historical_runs), live, *reversed(other_runs)]))
+    files = h.gist_files(root)
+    files[inbox.RESULTS_FILE] = json.dumps({
+        "schema_version": 1,
+        "results": {},
+        "inbox_settled_runs": {str(row["id"]): row["created_at"] for row in other_runs},
+    })
+    h.seed_gist(root, h.STATE_GIST, files)
+    applied, scans = [], []
+    for drain in range(4):
+        if drain == 2 and older_count:
+            gh.add_run(now)  # An arriving empty run shifts the unfiltered page boundary.
+        first_call = len(gh.calls)
+        scan, report = _drain(root, gh, name=f"ceiling-{drain}", expect=None)
+        scans.append(scan)
+        assert sum("/actions/workflows/" in call for call in gh.calls[first_call:]) <= inbox.MAX_RUN_PAGES
+        assert scan["runs_examined"] <= inbox.MAX_RUNS_EXAMINED
+        assert report is not None
+        applied.extend(report["applied"])
+        if not _commands_left(gh):
+            break
+    assert len(applied) == 1 and _commands_left(gh) == 0
+    assert live["id"] in _settled(root)
+    assert scans[0]["listing_code"] == "filtered_search_capped"
+    if older_count:
+        assert scans[1]["listing_code"] == "unfiltered_scan_pending"
+        assert scans[1]["discovery_cursor"]["page"] == inbox.MAX_RUN_PAGES
+        assert scans[2]["scan_complete"] is False  # Resumed pages prove progress, never whole-scan completeness.
+        assert not ({row["id"] for row in historical_runs} & _settled(root))
+    else:
+        assert scans[1]["scan_complete"] is True
+    _, after_restart = _drain(root, gh, name="ceiling-after-ack", expect=None)
+    assert after_restart is not None
+    assert after_restart["applied"] == [] and after_restart["acknowledged"]["deleted"] == []
+    assert list(h.results(root)) == [applied[0]["command_id"]]

@@ -489,15 +489,31 @@ export function settledRunsFrom(entries, acknowledged, emptyCompleted = []) {
   return settled
 }
 
-export async function recordSettledRuns(settled, { now = () => new Date() } = {}) {
-  if (!Object.keys(settled).length) return { recorded: 0 }
-  const document0 = (await readStateGistSnapshot()).resultsDocument
-  const cutoff = now().getTime() - SETTLED_RUNS_RETENTION_MS
-  const merged = Object.entries({ ...document0.settled, ...settled })
-    .filter(([, created]) => !(Date.parse(created) < cutoff))
-    .sort((a, b) => String(b[1]).localeCompare(String(a[1]))).slice(0, MAX_SETTLED_RUNS)
-  await patchStateGistFiles({ [RESULTS_FILE]: { content: resultsFileContent({ ...document0, settled: Object.fromEntries(merged) }) } })
-  return { recorded: Object.keys(settled).length }
+export async function recordSettledRuns(settled, { now = () => new Date(), discovery } = {}) {
+  const count = Object.keys(settled).length
+  const files = {}
+  // This position records discovery work only. It can neither settle a run
+  // nor create an acknowledgement or terminal result.
+  if (discovery !== undefined) {
+    if (discovery !== null && (!exactKeys(discovery, ["repo", "branch", "page", "started_at"])
+        || typeof discovery.repo !== "string" || !/^[A-Za-z0-9-]+\/[A-Za-z0-9_.-]+$/.test(discovery.repo)
+        || typeof discovery.branch !== "string" || !discovery.branch
+        || !Number.isSafeInteger(discovery.page) || discovery.page < 1
+        || typeof discovery.started_at !== "string" || !Number.isFinite(Date.parse(discovery.started_at)))) {
+      throw new RouteError("inbox_discovery_invalid")
+    }
+    files["gist-command-discovery.json"] = { content: JSON.stringify(discovery) }
+  }
+  if (count) {
+    const document0 = (await readStateGistSnapshot()).resultsDocument
+    const cutoff = now().getTime() - SETTLED_RUNS_RETENTION_MS
+    const merged = Object.entries({ ...document0.settled, ...settled })
+      .filter(([, created]) => !(Date.parse(created) < cutoff))
+      .sort((a, b) => String(b[1]).localeCompare(String(a[1]))).slice(0, MAX_SETTLED_RUNS)
+    files[RESULTS_FILE] = { content: resultsFileContent({ ...document0, settled: Object.fromEntries(merged) }) }
+  }
+  if (Object.keys(files).length) await patchStateGistFiles(files)
+  return { recorded: count }
 }
 
 // B.2 acknowledgement: an inbox artifact may be deleted only when a FRESH read of the Gists shows
