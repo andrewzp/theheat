@@ -1,3 +1,12 @@
+## 0.9.109.70
+
+- Add an optional saved-source river forecast preview with its source check
+  time, issue time, threshold, units and complete forecast series.
+- Keep the NWPS capture in the existing artifact store with a small reference
+  beside the writer's story. Refuse changed draft and capture identities.
+- Preserve those source packets through the existing media export and restore
+  commands, with the same source qualification before recovery.
+
 ## 0.9.109.69
 
 - Verify engagement sample times against confirmed X posts in the weekly
