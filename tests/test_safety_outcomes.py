@@ -104,6 +104,40 @@ def test_provider_failure_is_uncertainty_not_a_tone_rejection_or_cached_pass(sdk
     assert generate.call_count == 2 and not usage_ledger._BUFFER and not safety._SAFETY_CACHE
 
 
+@pytest.mark.parametrize("status", [400, 402, 403, 404, 429, 503])
+def test_retains_only_provider_http_status_from_sdk_response(sdk, capsys, status):
+    from google.genai.errors import APIError
+
+    generate, _ = sdk
+    response = httpx.Response(status, request=httpx.Request(
+        "POST", "https://example.test/check?key=invented-private-key"))
+    # A conflicting body code must not become the transport diagnostic.
+    generate.side_effect = APIError(status, {"error": {"code": 418, "message": "invented-private-body"}}, response)
+    result = safety.check_llm_result(TEXT)
+    assert result.reason == f"safety_unavailable: google_http_{status}"
+    assert result.execution_status == "unavailable" and result.verdict is None and not result.allowed
+    assert "invented-private" not in repr(result) + capsys.readouterr().out
+    assert generate.call_count == 1 and not usage_ledger._BUFFER and not safety._SAFETY_CACHE
+
+
+@pytest.mark.parametrize("case", ["body_only", "success_status", "forged_non_sdk"])
+def test_no_http_diagnostic_from_body_only_or_untrusted_error(sdk, case):
+    from google.genai.errors import ClientError
+
+    generate, _ = sdk
+    body = {"error": {"code": 402, "message": "invented-private-body"}}
+    if case == "forged_non_sdk":
+        error = RuntimeError("invented-private-body")
+        error.response = httpx.Response(402)
+    else:
+        error = ClientError(402, body, None if case == "body_only" else httpx.Response(200))
+    generate.side_effect = error
+    result = safety.check_llm_result(TEXT)
+    assert result.reason == f"safety_unavailable: {type(error).__name__}"
+    assert result.execution_status == "unavailable" and result.verdict is None and not result.allowed
+    assert generate.call_count == 1 and not usage_ledger._BUFFER and not safety._SAFETY_CACHE
+
+
 def test_returned_response_is_accounted_even_if_text_access_fails(sdk):
     generate, _ = sdk
 
@@ -222,7 +256,8 @@ def test_invalid_direct_input_never_calls_provider(sdk, text):
     generate.assert_not_called()
 
 
-def test_real_sdk_uses_bounded_timeout_and_one_transport_attempt(monkeypatch):
+@pytest.mark.parametrize("status", [402, 503])
+def test_real_sdk_uses_bounded_timeout_and_one_transport_attempt(monkeypatch, status):
     from google import genai
 
     real_client = genai.Client
@@ -232,12 +267,12 @@ def test_real_sdk_uses_bounded_timeout_and_one_transport_attempt(monkeypatch):
     def handler(request):
         requests.append(request)
         return httpx.Response(
-            503,
+            status,
             json={
                 "error": {
-                    "code": 503,
+                    "code": status,
                     "message": "synthetic temporary error",
-                    "status": "UNAVAILABLE",
+                    "status": "RESOURCE_EXHAUSTED" if status == 402 else "UNAVAILABLE",
                 }
             },
         )
@@ -256,6 +291,7 @@ def test_real_sdk_uses_bounded_timeout_and_one_transport_attempt(monkeypatch):
         assert (
             not result.allowed and result.execution_status == "unavailable" and len(requests) == 1
         )
+        assert result.reason == f"safety_unavailable: google_http_{status}"
     finally:
         for client in clients:
             client.close()

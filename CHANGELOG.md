@@ -1,3 +1,8 @@
+## 0.9.109.76
+
+- Retain the HTTP status when the required safety provider returns an HTTP
+  failure. Keep response bodies private and continue to hold affected drafts.
+
 ## 0.9.109.75
 
 - Add an optional automatic-only writer-selection request for operator alerts

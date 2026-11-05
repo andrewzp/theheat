@@ -255,6 +255,20 @@ def interpret_response(raw: str) -> str:
 from src.two_bot.trial_budget import google_trial_options, provider_call
 
 
+def _unavailable_reason(exc: Exception) -> str:
+    """Retain a transport status, never a provider body or inferred verdict."""
+    try:
+        from google.genai.errors import APIError
+
+        if isinstance(exc, APIError):
+            status = getattr(exc.response, "status_code", None)
+            if type(status) is int and 400 <= status <= 599:
+                return f"safety_unavailable: google_http_{status}"
+    except Exception:  # noqa: BLE001 — diagnostics cannot break the existing refusal
+        pass
+    return f"safety_unavailable: {type(exc).__name__}"
+
+
 def check_llm_result(tweet: str) -> SafetyCheckResult:
     """A check must complete explicitly; unavailable is never a passing verdict.
 
@@ -337,8 +351,8 @@ def check_llm_result(tweet: str) -> SafetyCheckResult:
     except Exception as exc:
         # A transport/parser failure is operational uncertainty, never "NO".
         # Do not expose provider exception bodies or cache an unavailable check.
-        return SafetyCheckResult("unavailable", None,
-            f"safety_unavailable: {type(exc).__name__}", model, text_sha, prompt_sha, at)
+        return SafetyCheckResult("unavailable", None, _unavailable_reason(exc),
+                                 model, text_sha, prompt_sha, at)
 
 
 def check_llm(tweet: str) -> tuple[bool, str | None]:
