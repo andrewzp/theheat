@@ -70,7 +70,7 @@ def facade(tmp_path, monkeypatch):
         return directory
 
     config = types.SimpleNamespace(getoption=lambda name: {
-        "--ci-partition": "postgres", "--ci-postgres-shard": "2"}[name],
+        "--ci-partition": "postgres", "--ci-postgres-shard": "8"}[name],
         pluginmanager=types.SimpleNamespace(register=lambda *_: None))
     return root, environment_file, calls, state, prepare, config
 
@@ -319,7 +319,7 @@ def test_original_suite_string_and_matrix_remain_exact():
     suite = next(step for step in job["steps"] if step.get("run", "").startswith("python -m pytest tests/ -v "))
     assert suite["run"] == 'python -m pytest tests/ -v -m "not voice_replay" --ci-partition=${{ matrix.partition }} --ci-postgres-shard=${{ matrix.postgres-shard }} --ci-critical-first --maxfail=1 --durations=20 -o faulthandler_timeout=${{ matrix.partition == \'postgres\' && (matrix.postgres-shard == \'2\' || matrix.postgres-shard == \'8\') && \'0\' || \'300\' }}'
     assert "continue-on-error" not in suite
-    assert suite["env"] == {"THEHEAT_TEST_POSTGRES": "1", "THEHEAT_POSTGRES_BINDIR": "/usr/lib/postgresql/17/bin", "THEHEAT_CI_SAFE_DIAGNOSTIC": "${{ matrix.partition == 'postgres' && (matrix.postgres-shard == '2' || matrix.postgres-shard == '8') && '1' || '0' }}"}
+    assert suite["env"] == {"THEHEAT_TEST_POSTGRES": "1", "THEHEAT_POSTGRES_BINDIR": "/usr/lib/postgresql/17/bin", "THEHEAT_CI_SAFE_DIAGNOSTIC": "${{ matrix.partition == 'postgres' && matrix.postgres-shard == '8' && '1' || '0' }}"}
     prepare = next(step for step in job["steps"] if step.get("name") == "Prepare private PG2/PG8 crash evidence")
     assert prepare["if"] == "matrix.partition == 'postgres' && (matrix.postgres-shard == '2' || matrix.postgres-shard == '8')"
     assert prepare["timeout-minutes"] == 3
@@ -337,15 +337,16 @@ def test_selected_shard_records_its_owned_interpreter_and_keeps_outcome(facade, 
     directory = prepare()
     registered = []
     replacement = object()
-    monkeypatch.setenv("THEHEAT_CI_SAFE_DIAGNOSTIC", "1")
+    monkeypatch.setenv("THEHEAT_CI_SAFE_DIAGNOSTIC", "1" if shard == "8" else "0")
     monkeypatch.setattr(ci_wait_diagnostic, "SafeWaitPlugin", lambda config: replacement)
     config = types.SimpleNamespace(getoption=lambda name: {
         "--ci-partition": "postgres", "--ci-postgres-shard": shard}[name],
+        getini=lambda name: 0,
         pluginmanager=types.SimpleNamespace(register=lambda *args: registered.append(args)))
     observer.pytest_configure(config)
     identity = observer._read(directory / "interpreter.json")
     assert identity == {"pid": observer.os.getpid(), "executable": str(Path(sys.executable).resolve())}
-    assert registered == [(replacement, "theheat-safe-wait-diagnostic")]
+    assert registered == ([(replacement, "theheat-safe-wait-diagnostic")] if shard == "8" else [])
     (directory / f"core.{identity['pid']}").write_bytes(b"invented, not a core")
     assert observer.finish(directory, outcome) == 0
     debugger = [command for command, _ in calls if isinstance(command, list)
@@ -355,14 +356,31 @@ def test_selected_shard_records_its_owned_interpreter_and_keeps_outcome(facade, 
     assert rows(capsys)[-1] == {"status": "finished", "test_outcome": outcome, "cleanup_failed": False}
 
 
-@pytest.mark.parametrize("shard", ["2", "8"])
-def test_selected_shard_cannot_disable_the_required_replacement(facade, capsys, monkeypatch, shard):
+def test_pg8_cannot_disable_the_required_replacement(facade, capsys, monkeypatch):
     _, _, _, _, prepare, _ = facade
     directory = prepare()
     monkeypatch.delenv("THEHEAT_CI_SAFE_DIAGNOSTIC", raising=False)
     config = types.SimpleNamespace(getoption=lambda name: {
-        "--ci-partition": "postgres", "--ci-postgres-shard": shard}[name])
+        "--ci-partition": "postgres", "--ci-postgres-shard": "8"}[name])
     with pytest.raises(ValueError, match="required_safe_diagnostic_missing"):
+        observer.pytest_configure(config)
+    assert observer.finish(directory, "failure") == 0
+    assert rows(capsys)[-1]["test_outcome"] == "failure"
+
+
+@pytest.mark.parametrize(("thread_witness", "native_timeout", "error"), [
+    ("1", 0, "pg2_thread_diagnostic_refused"),
+    ("0", 300, "unsafe_native_timer_still_enabled"),
+])
+def test_pg2_refuses_both_in_process_diagnostic_timers(facade, capsys, monkeypatch, thread_witness, native_timeout, error):
+    _, _, _, _, prepare, _ = facade
+    directory = prepare()
+    monkeypatch.setenv("THEHEAT_CI_SAFE_DIAGNOSTIC", thread_witness)
+    config = types.SimpleNamespace(getoption=lambda name: {
+        "--ci-partition": "postgres", "--ci-postgres-shard": "2"}[name],
+        getini=lambda name: native_timeout,
+        pluginmanager=types.SimpleNamespace(register=lambda *_: pytest.fail("PG2 diagnostic thread registered")))
+    with pytest.raises(ValueError, match=error):
         observer.pytest_configure(config)
     assert observer.finish(directory, "failure") == 0
     assert rows(capsys)[-1]["test_outcome"] == "failure"
