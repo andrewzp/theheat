@@ -12,6 +12,7 @@ import pytest
 import yaml
 
 from scripts import ci_native_crash as observer
+from scripts import ci_wait_diagnostic
 
 
 @pytest.fixture
@@ -59,6 +60,8 @@ def facade(tmp_path, monkeypatch):
     monkeypatch.setattr(observer.sys, "platform", "linux")
     monkeypatch.setenv("GITHUB_ACTIONS", "true")
     monkeypatch.delenv("PYTEST_PLUGINS", raising=False)
+    monkeypatch.setenv("THEHEAT_CI_SAFE_DIAGNOSTIC", "1")
+    monkeypatch.setattr(ci_wait_diagnostic, "SafeWaitPlugin", lambda config: object())
 
     def prepare():
         observer.prepare(root, environment_file)
@@ -67,7 +70,8 @@ def facade(tmp_path, monkeypatch):
         return directory
 
     config = types.SimpleNamespace(getoption=lambda name: {
-        "--ci-partition": "postgres", "--ci-postgres-shard": "2"}[name])
+        "--ci-partition": "postgres", "--ci-postgres-shard": "2"}[name],
+        pluginmanager=types.SimpleNamespace(register=lambda *_: None))
     return root, environment_file, calls, state, prepare, config
 
 
@@ -120,7 +124,6 @@ def test_missing_debugger_install_is_bounded_and_only_requests_gdb(facade, monke
 
 
 def test_prepare_preserves_existing_plugins_and_exports_only_to_pg2(facade, monkeypatch, capsys):
-    # Retain this original PG2 node; the separate PG8 cases cover the new scope.
     _, environment, _, _, prepare, _ = facade
     monkeypatch.setenv("PYTEST_PLUGINS", "invented_existing")
     directory = prepare()
@@ -314,9 +317,9 @@ def test_original_suite_string_and_matrix_remain_exact():
     assert job["timeout-minutes"] == 45
     assert len(job["strategy"]["matrix"]["include"]) == 14
     suite = next(step for step in job["steps"] if step.get("run", "").startswith("python -m pytest tests/ -v "))
-    assert suite["run"] == 'python -m pytest tests/ -v -m "not voice_replay" --ci-partition=${{ matrix.partition }} --ci-postgres-shard=${{ matrix.postgres-shard }} --ci-critical-first --maxfail=1 --durations=20 -o faulthandler_timeout=${{ matrix.partition == \'postgres\' && matrix.postgres-shard == \'8\' && \'0\' || \'300\' }}'
+    assert suite["run"] == 'python -m pytest tests/ -v -m "not voice_replay" --ci-partition=${{ matrix.partition }} --ci-postgres-shard=${{ matrix.postgres-shard }} --ci-critical-first --maxfail=1 --durations=20 -o faulthandler_timeout=${{ matrix.partition == \'postgres\' && (matrix.postgres-shard == \'2\' || matrix.postgres-shard == \'8\') && \'0\' || \'300\' }}'
     assert "continue-on-error" not in suite
-    assert suite["env"] == {"THEHEAT_TEST_POSTGRES": "1", "THEHEAT_POSTGRES_BINDIR": "/usr/lib/postgresql/17/bin", "THEHEAT_CI_SAFE_DIAGNOSTIC": "${{ matrix.partition == 'postgres' && matrix.postgres-shard == '8' && '1' || '0' }}"}
+    assert suite["env"] == {"THEHEAT_TEST_POSTGRES": "1", "THEHEAT_POSTGRES_BINDIR": "/usr/lib/postgresql/17/bin", "THEHEAT_CI_SAFE_DIAGNOSTIC": "${{ matrix.partition == 'postgres' && (matrix.postgres-shard == '2' || matrix.postgres-shard == '8') && '1' || '0' }}"}
     prepare = next(step for step in job["steps"] if step.get("name") == "Prepare private PG2/PG8 crash evidence")
     assert prepare["if"] == "matrix.partition == 'postgres' && (matrix.postgres-shard == '2' || matrix.postgres-shard == '8')"
     assert prepare["timeout-minutes"] == 3
@@ -328,17 +331,16 @@ def test_original_suite_string_and_matrix_remain_exact():
 
 
 @pytest.mark.parametrize("outcome", ["success", "failure"])
-def test_pg8_records_its_owned_interpreter_and_keeps_original_outcome(facade, capsys, monkeypatch, outcome):
+@pytest.mark.parametrize("shard", ["2", "8"])
+def test_selected_shard_records_its_owned_interpreter_and_keeps_outcome(facade, capsys, monkeypatch, outcome, shard):
     _, _, calls, _, prepare, _ = facade
     directory = prepare()
-    from scripts import ci_wait_diagnostic
-
     registered = []
     replacement = object()
     monkeypatch.setenv("THEHEAT_CI_SAFE_DIAGNOSTIC", "1")
     monkeypatch.setattr(ci_wait_diagnostic, "SafeWaitPlugin", lambda config: replacement)
     config = types.SimpleNamespace(getoption=lambda name: {
-        "--ci-partition": "postgres", "--ci-postgres-shard": "8"}[name],
+        "--ci-partition": "postgres", "--ci-postgres-shard": shard}[name],
         pluginmanager=types.SimpleNamespace(register=lambda *args: registered.append(args)))
     observer.pytest_configure(config)
     identity = observer._read(directory / "interpreter.json")
@@ -353,12 +355,13 @@ def test_pg8_records_its_owned_interpreter_and_keeps_original_outcome(facade, ca
     assert rows(capsys)[-1] == {"status": "finished", "test_outcome": outcome, "cleanup_failed": False}
 
 
-def test_pg8_cannot_silently_disable_the_required_replacement(facade, capsys, monkeypatch):
+@pytest.mark.parametrize("shard", ["2", "8"])
+def test_selected_shard_cannot_disable_the_required_replacement(facade, capsys, monkeypatch, shard):
     _, _, _, _, prepare, _ = facade
     directory = prepare()
     monkeypatch.delenv("THEHEAT_CI_SAFE_DIAGNOSTIC", raising=False)
     config = types.SimpleNamespace(getoption=lambda name: {
-        "--ci-partition": "postgres", "--ci-postgres-shard": "8"}[name])
+        "--ci-partition": "postgres", "--ci-postgres-shard": shard}[name])
     with pytest.raises(ValueError, match="required_safe_diagnostic_missing"):
         observer.pytest_configure(config)
     assert observer.finish(directory, "failure") == 0
@@ -366,11 +369,9 @@ def test_pg8_cannot_silently_disable_the_required_replacement(facade, capsys, mo
 
 
 def test_nested_pg8_never_installs_a_second_timer(facade, capsys, monkeypatch):
-    from scripts import ci_wait_diagnostic
-
     _, _, _, _, prepare, config = facade
     directory = prepare()
-    observer.pytest_configure(config)  # Parent identity, without an invented timer.
+    observer.pytest_configure(config)  # Parent identity and its only diagnostic.
     monkeypatch.setattr(ci_wait_diagnostic, "SafeWaitPlugin", lambda config: pytest.fail("nested timer"))
     nested = types.SimpleNamespace(getoption=lambda name: {
         "--ci-partition": "postgres", "--ci-postgres-shard": "8"}[name])
