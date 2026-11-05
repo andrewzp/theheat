@@ -107,7 +107,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/data/nhc.py": "2cfa04ab49bd13c1231e298fa2d0e08fd833e649b93f265199ffe5a4071a7ab1",
     "src/data/nhc_advisory.py": "c54a764d194d376a39e98c87af40d1911dbc9f088817a2c36416b399b6e45acf",
     "src/data/nwps_major_forecasts.py": "2ca37dd5e8f7162c4b9feb1c49ab1804fae38c8183d50fe3c02850308c72fef5",
-    "src/data/nws_alerts.py": "f96c74c51bedaefc6e667c5d93e00d3ff08de8dcf1f3ecdb16dacad68a4bf402",
+    "src/data/nws_alerts.py": "5c01bc73e40663915f410ecd77299a3772efc345673a12017b84b1ecfd9b5eb3",
     "src/data/ocean_sst_anomaly.py": "78f0c70c0ce712b969042ffd2a1ac75d9fc0a71a0cee89535de5274fd2973f67",
     "src/data/open_meteo.py": "914f9670aec2ce129ce26f45577f9cbf65c7ef3beb14f971319eac1304e745ce",
     "src/data/places.py": "c66be0181393620b640f0354d2c7379e427aeacf4c80689b190489022bf2a870",
@@ -174,7 +174,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/orchestrator/draft_save.py": "0572b8a86e0627d1deb69419c53780bd2bf4b9c1ae430264251964f6c7beefc8",
     "src/orchestrator/ghcn_source_result_client.py": "d30d22b50ffd270f647187e11fc8b17fe7f7dff28368e492b1d86fc0131cf1cd",
     "src/orchestrator/hot10.py": "d54d41833d0bf91a0f8dae97970d2e5fac8a0794e4b2cfd3a5502db008baa40b",
-    "src/orchestrator/nws_publication.py": "a41593f9b1e11216a250c84cf2f4002f68cbd315dcfe3b0d16ca7d8fdaa4f25b",
+    "src/orchestrator/nws_publication.py": "d5541ac8478ff0c8e18e81c191ba52272bd012110f24e7f4fe940247d36201dc",
     "src/orchestrator/portfolio_selection.py": "1ffd9496e71b155e250255e90664410637474d708b9951a863f08b4e9dd99d4c",
     "src/orchestrator/posting.py": "96ea8761355a96ed22ef12e6768798083a717f6c79390dd6cc6bf6091bebf294",
     "src/orchestrator/run_alerts.py": "144eba3db84e67edb975956dcff06cb83ca664137d4d8489774b3e6ae0689676",
@@ -241,7 +241,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/two_bot/intern/_shared.py": "1296c3f3520ed3862d8d3c9d2d0437a21f1999efbaf9808fd829674f9a054a53",
     "src/two_bot/intern/air_quality.py": "f4fc20d4c197d4f604e1fa53e43ef02b658613940863eb5f4d41e0995d6c8ff0",
     "src/two_bot/intern/atmospheric.py": "6c7448b2e0e6bd2a45f447c9a29e5dd3cc295932b9482550eb9f76e5993ce572",
-    "src/two_bot/intern/disasters.py": "14783e30b811447cf0aa3131c19cea85030861c43681c225081485362c3370c1",
+    "src/two_bot/intern/disasters.py": "5c3f7fabe1aff79b0253e228c3dcd45d377c069cb717ccb9102dd28a0e38518e",
     "src/two_bot/intern/drought.py": "2b6449d5ae3ae7dbdaafdcf47b2d56abab2cabda9d195bcfcdeac85345ee27ab",
     "src/two_bot/intern/fire.py": "c8b04dc71cfdccdcc8425af8275c66197773264a8ed4ad342e47c1d62316876d",
     "src/two_bot/intern/marine.py": "2ab06c73acb56836f78be88d0fcee9daffcd639a91ba2120caf483fea1803c8d",
@@ -276,5 +276,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "8c4887f395618e343dafd55f5843987dfa6a7a620713c7c34bab9f419e4434fe"
   },
   "schema_version": 1,
-  "source_sha256": "47db06a770579492cf4a20c651a1ed331b39397fdf4b2f3c1b8218b3ca110658"
+  "source_sha256": "6e3a9a1f24f48ae21ac170806e2cb330fe08925a4e1e20ef8b2637d712b0a569"
 }

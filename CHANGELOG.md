@@ -1,3 +1,12 @@
+## 0.9.109.73
+
+- Retain explicitly catastrophic NWS flash-flood emergency products, including
+  referenced updates, while keeping ordinary flood warnings out of discovery.
+- Preserve original CAP product names, source bytes and replacement/conflict
+  handling through the existing current-source publication checks.
+- Bind warning prose to its exact NWS source envelope so supported consequence
+  wording can reach the required factual, safety and editorial checks.
+
 ## 0.9.109.72
 
 - Before scheduled automatic alerts allocate a writer slot, hold story types

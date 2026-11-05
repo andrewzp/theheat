@@ -7,7 +7,7 @@ import re
 from typing import Any
 
 from src.data._http import fetch_with_retry
-from src.data.nws_alerts import NWS_URL, TRACKED_EVENTS, _typhoon_warning
+from src.data.nws_alerts import NWS_URL, TRACKED_EVENTS, _flash_flood_emergency, _referenced_warning, _typhoon_warning
 from src.media.published_radar import encoded, rare_tornado, source_envelope, warning_times
 
 MAX_FEED_BYTES = 32 * 1024 * 1024
@@ -82,7 +82,7 @@ def _retained(draft: dict, now: datetime) -> dict | None:
         "source_url", "source_alert_id", "feature_sha256")}, "nws_source_provenance_changed")
     props = envelope["feature"]["properties"]
     _require(props.get("status") == "Actual" and props.get("category") == "Met"
-             and (_typhoon_warning(props) or rare_tornado(props) or _manual_cyclone_cancellation(draft, props) or (
+             and (_typhoon_warning(props) or _flash_flood_emergency(props) or rare_tornado(props) or _manual_cyclone_cancellation(draft, props) or (
                  props.get("event") in TRACKED_EVENTS and props.get("event") != "Typhoon Warning"
                  and props.get("messageType") == "Alert")), "nws_source_product_unsupported")
     sent = _utc(envelope["times"]["sent"]["utc"])
@@ -145,13 +145,13 @@ def _unchanged(envelope: dict, feed: dict) -> None:
         if props.get("messageType") in ("Update", "Cancel") and isinstance(references, list):
             _require(not any(isinstance(row, dict) and row.get("identifier") == identity
                              for row in references), "nws_source_superseded")
-        if _typhoon_warning(props):
+        if _typhoon_warning(props) or _referenced_warning(props, "Flash Flood Warning"):
             products.append(props)
     _require(len(matches) == 1 and encoded(matches[0]) == encoded(envelope["feature"]),
              "nws_source_changed_or_missing")
     props = envelope["feature"]["properties"]
-    if props["event"] == "Typhoon Warning":
-        _require(sum(row["areaDesc"] == props["areaDesc"] for row in products) == 1,
+    if props["event"] in {"Typhoon Warning", "Flash Flood Warning"}:
+        _require(sum((row["event"], row["areaDesc"]) == (props["event"], props["areaDesc"]) for row in products) == 1,
                  "nws_source_area_conflict")
 
 
