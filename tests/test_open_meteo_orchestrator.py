@@ -560,11 +560,11 @@ def test_both_provider_runs_ghcn_for_us_and_open_meteo_for_world(monkeypatch):
     store = {key: snapshot(row) for key, row in store.items()}   # world cache keyed by world_key
     monkeypatch.setattr(world_cache, "read_cache", lambda: dict(store))
     monkeypatch.setattr(world_cache, "write_cache", lambda c: store.update(c) or True)
-    monkeypatch.setattr(runner, "_fetch_city_archive", lambda c: {
+    monkeypatch.setattr(runner, "_fetch_city_archive", lambda c, **_: {
         "time": ["1996-06-01"], "temperature_2m_max": [40.0], "temperature_2m_min": [10.0],
         "wet_bulb_temperature_2m_max": [24.0]})
     monkeypatch.setattr("src.data.open_meteo.fetch_forecasts_batch",
-        lambda cities: {places.cache_key(c["city"], c["country"], c["lat"], c["lon"]): dated_forecast({"max_c": 46.0, "min_c": 12.0, "tw_max_c": 10.0}, date.today().isoformat()) for c in cities})
+        lambda cities, **_: {places.cache_key(c["city"], c["country"], c["lat"], c["lon"]): dated_forecast({"max_c": 46.0, "min_c": 12.0, "tw_max_c": 10.0}, date.today().isoformat()) for c in cities})
     monkeypatch.setattr(runner, "_should_draft", lambda *args, **kwargs: True)
     monkeypatch.setattr(
         runner, "_enqueue_story_candidate",
@@ -699,11 +699,16 @@ def test_both_world_half_warms_then_evaluates_and_surfaces_metrics(monkeypatch):
     # Explicit receipt for the injected offline GHCN source fixture.
     monkeypatch.setenv("THEHEAT_GHCN_THRESHOLD_VERIFICATION", "success")
     monkeypatch.setattr(runner.ghcn, "check_extreme_signals_for_stations", lambda metrics_out, **kwargs: ([], []))
-    monkeypatch.setattr(runner, "_fetch_city_archive", lambda c: {
-        "time": ["1996-06-01"], "temperature_2m_max": [40.0], "temperature_2m_min": [10.0],
-        "wet_bulb_temperature_2m_max": [24.0]})
+    def fetch_archive(_city, *, reserve_attempt, attempts, deadline_at):
+        reserve_attempt(235)
+        return {
+            "time": ["1996-06-01"], "temperature_2m_max": [40.0], "temperature_2m_min": [10.0],
+            "wet_bulb_temperature_2m_max": [24.0],
+        }
+
+    monkeypatch.setattr(runner, "_fetch_city_archive", fetch_archive)
     monkeypatch.setattr("src.data.open_meteo.fetch_forecasts_batch",
-        lambda cities: {places.cache_key(c["city"], c["country"], c["lat"], c["lon"]): dated_forecast({"max_c": 46.0, "min_c": 12.0, "tw_max_c": 10.0}, date.today().isoformat()) for c in cities})
+        lambda cities, **_: {places.cache_key(c["city"], c["country"], c["lat"], c["lon"]): dated_forecast({"max_c": 46.0, "min_c": 12.0, "tw_max_c": 10.0}, date.today().isoformat()) for c in cities})
     cities = [{"city": "Cairo", "country": "Egypt", "lat": "30.0", "lon": "31.2"},
               {"city": "Madrid", "country": "Spain", "lat": "40.4", "lon": "-3.7"}]
     run = {"id": "r", "mode": "alerts", "started_at": "2026-06-26T00:00:00Z", "sources": []}

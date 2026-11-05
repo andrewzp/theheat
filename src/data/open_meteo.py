@@ -3,10 +3,16 @@ from __future__ import annotations
 """Open-Meteo data fetching for current temps and historical record detection."""
 
 import csv
+import io
 import os
 import random
+import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date, timedelta
+from functools import partial
+from math import ceil
+from urllib.parse import urlencode
 
 import requests
 
@@ -17,6 +23,13 @@ from src.data.openmeteo_budget import OpenMeteoSaturated
 
 BASE_URL = "https://api.open-meteo.com/v1"
 ARCHIVE_URL = "https://archive-api.open-meteo.com/v1"
+ARCHIVE_DAILY_FIELDS = ("temperature_2m_max", "temperature_2m_min", "wet_bulb_temperature_2m_max")
+ARCHIVE_REQUEST_TIMEOUT = 30
+ARCHIVE_RESPONSE_BYTES = 4 * 1024 * 1024
+
+
+class ArchiveRequestDeadline(Exception):
+    """The cached-world archive request used its elapsed allowance."""
 
 
 @dataclass
@@ -572,7 +585,41 @@ def detect_absolute_extreme(
     return None
 
 
-def fetch_archive_daily(lat, lon, valid_date: date, *, archive_years=30) -> dict | None:
+def _bounded_archive_get(url: str, *, params: dict, timeout: float,
+                         deadline_at: float, clock: Callable[[], float], **_ignored) -> requests.Response:
+    # This transport performs one request. The caller still owns retry policy
+    # and consumes the physical attempt before the transport is entered.
+    from src.data.bounded_http import BoundedTransport, Limits, TransportOutcome, TransportStop
+
+    transport = BoundedTransport(
+        Limits(max_requests=1, max_transfer_bytes=ARCHIVE_RESPONSE_BYTES + 32 * 1024,
+               max_decoded_bytes=ARCHIVE_RESPONSE_BYTES, max_response_bytes=ARCHIVE_RESPONSE_BYTES,
+               deadline_seconds=timeout, max_retries=0, max_redirects=0),
+        allowed_origins=[ARCHIVE_URL], deadline_at=min(deadline_at, clock() + timeout), clock=clock,
+    )
+    response = requests.Response()
+    response.url = url
+    try:
+        result = transport.get(f"{url}?{urlencode(params)}")
+    except TransportStop as exc:
+        if exc.reason == "deadline":
+            raise ArchiveRequestDeadline from None
+        raise requests.RequestException("archive response exceeded its bounds") from None
+    except TransportOutcome as exc:
+        if exc.outcome == "transport_failure":
+            raise requests.ConnectionError("archive transport failed") from None
+        if exc.status is None or exc.status < 400:
+            raise requests.RequestException("archive response refused") from None
+        response.status_code = exc.status
+        return response
+    response.status_code = result.status
+    response.raw = io.BytesIO(result.body)
+    return response
+
+
+def fetch_archive_daily(lat, lon, valid_date: date, *, archive_years=30,
+                        attempts: int = 3, reserve_attempt: Callable[[int], None] | None = None,
+                        deadline_at: float | None = None, clock: Callable[[], float] = time.monotonic) -> dict | None:
     """Fetch one consistent reanalysis product; retain the actual archive cutoff.
 
     ERA5 is delayed. Forecast/past_days values never fill its recent gap.
@@ -583,22 +630,32 @@ def fetch_archive_daily(lat, lon, valid_date: date, *, archive_years=30) -> dict
     except ValueError:
         start = valid_date.replace(year=valid_date.year - archive_years, day=28)
     end = valid_date - timedelta(days=5)
+
+    def reserve_archive_attempt() -> None:
+        if reserve_attempt is not None:
+            # Open-Meteo's public weight formula for one location/model.
+            fields = len(ARCHIVE_DAILY_FIELDS)
+            days = (end - start).days + 1
+            reserve_attempt(ceil(max(1, fields / 10, fields * days / 140)))
+
     try:
         response = fetch_with_retry(
             f"{ARCHIVE_URL}/archive",
             params={
                 "latitude": lat,
                 "longitude": lon,
-                "daily": "temperature_2m_max,temperature_2m_min,wet_bulb_temperature_2m_max",
+                "daily": ",".join(ARCHIVE_DAILY_FIELDS),
                 "start_date": start.isoformat(),
                 "end_date": end.isoformat(),
                 "timezone": "auto",
                 "temperature_unit": "celsius",
                 "models": ARCHIVE_MODEL,
             },
-            timeout=30,
-            attempts=3,
+            timeout=ARCHIVE_REQUEST_TIMEOUT,
+            attempts=attempts,
             backoff_base=1.0,
+            on_attempt=reserve_archive_attempt if reserve_attempt is not None else None,
+            request=partial(_bounded_archive_get, deadline_at=deadline_at, clock=clock) if deadline_at is not None else None,
         )
         payload = response.json()
         timing = daily_time(payload)
@@ -938,7 +995,7 @@ def check_record_lows_for_cities(
     return records
 
 
-def fetch_forecasts_batch(cities: list[dict]) -> dict[str, dict]:
+def fetch_forecasts_batch(cities: list[dict], *, on_attempt: Callable[[], None] | None = None) -> dict[str, dict]:
     """Fetch forecast data for multiple cities in one Open-Meteo request.
 
     Returns a mapping of product-qualified sampling key to {max_c, min_c, tw_max_c}. Raises
@@ -962,12 +1019,16 @@ def fetch_forecasts_batch(cities: list[dict]) -> dict[str, dict]:
             timeout=30,
             attempts=3,
             backoff_base=1.0,
+            on_attempt=on_attempt,
+            allow_redirects=on_attempt is None,
         )
     except requests.HTTPError as exc:
         if getattr(exc.response, "status_code", None) == 429:
             raise OpenMeteoSaturated("forecast 429") from exc
         return {}
     except requests.RequestException:
+        return {}
+    if on_attempt is not None and not 200 <= resp.status_code < 300:
         return {}
     try:
         payload = resp.json()

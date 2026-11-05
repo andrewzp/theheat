@@ -109,7 +109,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/data/nwps_major_forecasts.py": "093a764c2f91e08e35f8563e3b978b7a8e0cb5d2fc9cbb54c2b1282043a14473",
     "src/data/nws_alerts.py": "f96c74c51bedaefc6e667c5d93e00d3ff08de8dcf1f3ecdb16dacad68a4bf402",
     "src/data/ocean_sst_anomaly.py": "78f0c70c0ce712b969042ffd2a1ac75d9fc0a71a0cee89535de5274fd2973f67",
-    "src/data/open_meteo.py": "58fa0a9135a526370e2daa3a832b290203615187d165b47d95ac05025523d508",
+    "src/data/open_meteo.py": "914f9670aec2ce129ce26f45577f9cbf65c7ef3beb14f971319eac1304e745ce",
     "src/data/places.py": "c66be0181393620b640f0354d2c7379e427aeacf4c80689b190489022bf2a870",
     "src/data/rainfall_supply.py": "ca68b5078f504437894fc19bffcdcf07e6b7b066f2649f640ea90f24458cde46",
     "src/data/regional_observations.py": "eef66077194e446991db077d558f3e2da664e6c1c7a1deb5e2b4ea9cec08d88e",
@@ -188,7 +188,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/orchestrator/sources/nws_alerts.py": "e558378491d43547ccef0c31fbb04bf2bb8b7575bbfce0efabc4d3c65f957e6c",
     "src/orchestrator/sources/ocean_sst_anomaly.py": "495657e1684d67d9b56076084aa29c3bc6262108498ffd966839c74b6679757f",
     "src/orchestrator/sources/official_warning.py": "469554a569f33365b55e919c62438fc6f1cea41fe31c6aecb7681029512d5679",
-    "src/orchestrator/sources/open_meteo.py": "a8784c3b63253920189e1242491035eeb8d0cc81ea7ad7d1bc04fd01f44d5702",
+    "src/orchestrator/sources/open_meteo.py": "ded0b6069993b886dfbd138799bce01c44ba1c05c298becaaaf6d407331f9ba4",
     "src/orchestrator/sources/regional_observed.py": "ed3eb40b8f5d167262c3cf6bbfe706b2bbd68cf318804dfb817f5171178b65b2",
     "src/orchestrator/sources/river_gauges.py": "00508664871b1b01bd9b737f6d4123e9ee00e848e96327156e93d1490ef1a13f",
     "src/orchestrator/sources/synthesis.py": "e1e101948dde8a2ac07be65d78e37ed0cd8e080c43523ea0ded1b1071cd31522",
@@ -275,5 +275,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "8c4887f395618e343dafd55f5843987dfa6a7a620713c7c34bab9f419e4434fe"
   },
   "schema_version": 1,
-  "source_sha256": "5e69611f34f8aa1c62e43e2137e75bfa4a26dcfb36dc886629dfa1c2b956f6a8"
+  "source_sha256": "1476f953481ef0caf5e84b827d46e732d05dfddaeb4d29b2a71c8783e4195140"
 }
