@@ -174,7 +174,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/orchestrator/draft_save.py": "0572b8a86e0627d1deb69419c53780bd2bf4b9c1ae430264251964f6c7beefc8",
     "src/orchestrator/ghcn_source_result_client.py": "d30d22b50ffd270f647187e11fc8b17fe7f7dff28368e492b1d86fc0131cf1cd",
     "src/orchestrator/hot10.py": "d54d41833d0bf91a0f8dae97970d2e5fac8a0794e4b2cfd3a5502db008baa40b",
-    "src/orchestrator/nws_publication.py": "d5541ac8478ff0c8e18e81c191ba52272bd012110f24e7f4fe940247d36201dc",
+    "src/orchestrator/nws_publication.py": "36874ce12091624ddd37f607685d7137f3e64fb1ceae6ec1fa9c8476936460e7",
     "src/orchestrator/portfolio_selection.py": "1ffd9496e71b155e250255e90664410637474d708b9951a863f08b4e9dd99d4c",
     "src/orchestrator/posting.py": "96ea8761355a96ed22ef12e6768798083a717f6c79390dd6cc6bf6091bebf294",
     "src/orchestrator/run_alerts.py": "144eba3db84e67edb975956dcff06cb83ca664137d4d8489774b3e6ae0689676",
@@ -193,7 +193,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/orchestrator/sources/regional_observed.py": "ed3eb40b8f5d167262c3cf6bbfe706b2bbd68cf318804dfb817f5171178b65b2",
     "src/orchestrator/sources/river_gauges.py": "cf8e08b50ce78297f1138319a0f8ac91b91bcfc08c597538b011934fb80ae943",
     "src/orchestrator/sources/synthesis.py": "e1e101948dde8a2ac07be65d78e37ed0cd8e080c43523ea0ded1b1071cd31522",
-    "src/orchestrator/triage_queue.py": "87b6c3ecf390248ba3517a8ac0f2b5672656b9eb59f6e4e8ee565073e091eb4a",
+    "src/orchestrator/triage_queue.py": "65471148fa31bd900489909c096186013e89d0f24abdb277882fbc792300cefa",
     "src/orchestrator/two_bot_dispatch.py": "40271d86e46a5d9ac675fdf54c2e47838630282a106a42cada11449f8e194de2",
     "src/posting/bluesky.py": "30333265f7978e905a4f4c45039c7bdae997cb192811e9e93701bf31976105a4",
     "src/posting/delivery_receipts.py": "c944f22458726d02bcdbbf70d274d4831486013dc2eb1e47fd6f2a569abd4147",
@@ -276,5 +276,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "8c4887f395618e343dafd55f5843987dfa6a7a620713c7c34bab9f419e4434fe"
   },
   "schema_version": 1,
-  "source_sha256": "6e3a9a1f24f48ae21ac170806e2cb330fe08925a4e1e20ef8b2637d712b0a569"
+  "source_sha256": "32dd0ed08c2d06802190b1456be4aaa01e9fe3732b25cf24adde78a6d401a229"
 }

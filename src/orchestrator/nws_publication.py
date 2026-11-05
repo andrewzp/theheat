@@ -96,6 +96,31 @@ def _retained(draft: dict, now: datetime) -> dict | None:
     return envelope
 
 
+def nws_generation_hold(payload: dict, *, now: datetime, minimum_delay: timedelta) -> str | None:
+    """Pure automatic-selection refusal; never a source refresh or approval.
+
+    Even zero-latency generation cannot use a warning ending at/before its
+    mandatory delay. More remaining time grants no latency or send guarantee.
+    """
+    try:
+        _require(now.utcoffset() is not None and minimum_delay >= timedelta(0), "nws_source_time_invalid")
+        prototype = {"type": payload.get("signal_kind"), "event_id": payload.get("event_id"),
+                     "review_context": {"two_bot": {"bundle": payload}}}
+        envelope = _retained(prototype, now)
+        if envelope is None:
+            raise NwsPublicationHold("nws_source_missing")
+        timing = warning_times(envelope["times"])
+        ends = [_utc(timing["message_end_utc"])]
+        if timing["event_end_utc"] is not None:
+            ends.append(_utc(timing["event_end_utc"]))
+        _require(min(ends) > now + minimum_delay, "nws_source_automatic_window_unavailable")
+        return None
+    except NwsPublicationHold as exc:
+        return str(exc)
+    except Exception:
+        return "nws_source_unverified"
+
+
 def _object(pairs: list[tuple[str, Any]]) -> dict:
     value: dict = {}
     for key, item in pairs:

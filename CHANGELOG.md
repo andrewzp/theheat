@@ -1,3 +1,11 @@
+## 0.9.109.74
+
+- Hold expired or changed NWS evidence before scheduled automatic ranking can
+  allocate the sole writer slot. Hold warnings that cannot survive the existing
+  automatic delay, leaving eligible alternatives available without a paid call.
+- Keep manual generation and independent factual, current-source, review and
+  sender checks unchanged. A preflight pass grants no publication approval.
+
 ## 0.9.109.73
 
 - Retain explicitly catastrophic NWS flash-flood emergency products, including
