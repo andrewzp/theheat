@@ -11,14 +11,18 @@ view of what is currently broken.
 
 from datetime import datetime, timedelta, timezone
 
+import pytest
+
 from scripts.source_health_sentinel import (
     LABEL,
+    LIVENESS_SOURCE,
     YIELD_WATCH_MARKER,
     build_issue_body,
     build_yield_watch_body,
     classify_error,
     classify_source,
     parse_served_via,
+    plan_health_issue_actions,
     plan_issue_actions,
     plan_yield_watch_action,
     run_sentinel,
@@ -284,6 +288,38 @@ class TestRunSentinel:
 
         assert "_pipeline_liveness" not in {v["source"] for v in report["failing"]}
         assert report["has_failures"] is False
+
+    @pytest.mark.parametrize("invalid_run", [
+        {"mode": "alerts", "started_at": "2026-06-04T18:00:01Z"},
+        {"mode": "alerts", "started_at": "2026-06-04T17:59:00"},
+        {"mode": "both", "started_at": "2026-06-04T17:59:00Z", "configuration_only": True},
+    ])
+    def test_invalid_alert_evidence_cannot_close_a_stale_incident(self, invalid_run):
+        stale = {"mode": "alerts", "started_at": "2026-06-04T11:00:00Z", "status": "failed"}
+        report = run_sentinel({}, now=NOW, run_history=[invalid_run, stale])
+        verdict, = report["failing"]
+        assert verdict["source"] == LIVENESS_SOURCE
+        assert "Last alerts start" in build_issue_body(verdict)
+        action, = plan_health_issue_actions(report, {LIVENESS_SOURCE: 999})
+        assert action["action"] == "update"
+
+    @pytest.mark.parametrize("history", [None, {}, "unavailable"])
+    def test_unavailable_history_holds_open_liveness_incident(self, history):
+        report = run_sentinel({}, now=NOW, run_history=history)
+        assert plan_health_issue_actions(report, {LIVENESS_SOURCE: 999}) == []
+        assert report["liveness_history_available"] is False
+        assert report["has_failures"] is False
+
+    def test_explicit_empty_history_differs_from_a_recent_failed_alert_run(self):
+        no_runs = run_sentinel({}, now=NOW, run_history=[])
+        assert no_runs["liveness_history_available"] is True
+        assert plan_health_issue_actions(no_runs, {})[0]["action"] == "create"
+        recent = run_sentinel({}, now=NOW, run_history=[
+            {"mode": "alerts", "started_at": "2026-06-04T18:00:00Z", "status": "failed"},
+        ])
+        assert plan_health_issue_actions(recent, {LIVENESS_SOURCE: 999}) == [
+            {"action": "close", "source": LIVENESS_SOURCE, "number": 999},
+        ]
 
 
 class TestYieldWatch:

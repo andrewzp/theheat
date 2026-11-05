@@ -304,27 +304,42 @@ def test_production_pause_reason_takes_precedence_and_selfheal_stays_independent
     assert "FAILING" in stdout
 
 
-def test_source_apply_holds_liveness_issue_without_stopping_real_failure_actions(tmp_path, monkeypatch):
+@pytest.mark.parametrize("liveness", ["paused", "missing", "recent_failed_alert"])
+def test_source_apply_distinguishes_cadence_and_source_recovery(tmp_path, monkeypatch, liveness):
     monkeypatch.setenv("GITHUB_ACTIONS", "true")
-    monkeypatch.setenv("THEHEAT_PRODUCTION_PAUSED", "1")
+    monkeypatch.setenv("THEHEAT_PRODUCTION_PAUSED", "1" if liveness == "paused" else "0")
     path = tmp_path / "invented-state.json"
-    path.write_text(json.dumps({"run_history": [], "source_health": {"invented_source": {
+    state = {"source_health": {"invented_source": {
         "failed": 5, "runs": [{"status": "failed"}] * 5, "last_error": "401 Unauthorized",
-    }}}))
+    }}}
+    if liveness == "paused":
+        state["run_history"] = []
+    elif liveness == "recent_failed_alert":
+        state["run_history"] = [{"mode": "alerts", "status": "failed",
+                                 "started_at": datetime.now(timezone.utc).isoformat()}]
+    path.write_text(json.dumps(state))
     labels = []
+    closures = []
 
-    def only_labels(args, **kwargs):
+    def label_or_close(args, **kwargs):
+        if args[:2] == ["issue", "close"]:
+            closures.append(args[2:])
+            return
         assert args[:2] == ["label", "create"], "unexpected external issue request"
         labels.append(args[2])
 
-    monkeypatch.setattr(source, "_run_gh", only_labels)
+    monkeypatch.setattr(source, "_run_gh", label_or_close)
     monkeypatch.setattr(source, "_list_open_sentinel_issues", lambda: {source.LIVENESS_SOURCE: 999})
+    monkeypatch.setattr(source, "coverage_watch", lambda *args, **kwargs: [])
     for name in ("yield_watch", "coverage_watch", "writer_watch", "queue_watch", "editor_brief", "news_gap"):
         monkeypatch.setattr(source, f"_open_{name}_issue", lambda: None)
     actions = []
     monkeypatch.setattr(source, "_create_issue", lambda v: actions.append(("create", v["source"])))
     monkeypatch.setattr(source, "_update_issue", lambda a: actions.append(("update", a["source"])))
-    monkeypatch.setattr(source, "_close_issue", lambda n, name: actions.append(("close", name)))
     assert source.main([str(path)]) == 0
     assert actions == [("create", "invented_source")]
     assert labels == [source.LABEL, "ours", "external", "unknown"]
+    if liveness == "recent_failed_alert":
+        assert closures == [["999", "--comment", "A recent alerts run started. Collection success is unverified. Auto-closed by the source-health sentinel."]]
+    else:
+        assert closures == []
