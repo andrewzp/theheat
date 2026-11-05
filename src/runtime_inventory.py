@@ -106,6 +106,7 @@ def collect_runtime_inventory(mode: str, *, now: datetime | None = None, bot_sta
             "regional_observed_enabled": os.environ.get("THEHEAT_REGIONAL_OBSERVED") == "1",
             "rainfall_window_provenance_enabled": os.environ.get("THEHEAT_RAINFALL_WINDOW_PROVENANCE") == "1",
             "nwps_major_forecasts_enabled": os.environ.get("THEHEAT_NWPS_MAJOR_FORECASTS") == "1",
+            "nwps_packet_retention_enabled": os.environ.get("THEHEAT_NWPS_PACKET_RETENTION") == "1",
             "hazard_episodes_enabled": os.environ.get("THEHEAT_HAZARD_EPISODES") == "1",
             "portfolio_selection_enabled": os.environ.get("THEHEAT_PORTFOLIO_SELECTION") == "1",
             "rainfall_regional_scan_enabled": os.environ.get("THEHEAT_RAINFALL_REGIONAL_SCAN") == "1",

@@ -253,6 +253,48 @@ def _drawing(template, evidence):
             *(["Illustrative values; not actual weather."] if evidence["synthetic"] else []),
         ]:
             y = block(y, note)
+    elif template == "nwps_river_forecast":
+        from reportlab.graphics.shapes import Circle, Line
+
+        colors["forecast"] = HexColor("#65D7F3")
+        text(56, 1320, chart_title(template, evidence), 62)
+        block(1240, evidence["location"], size=48, color="text", bottom=1060)
+        text(56, 1000, "Issued " + evidence["issued_at"][:19].replace("T", " ") + " UTC", 40, "muted")
+        text(56, 940, "Source checked " + evidence["evidence_as_of"][:19].replace("T", " ") + " UTC", 40, "muted")
+        text(56, 880, "Gauge stage (ft)", 40, "muted")
+        drawing.add(Line(830, 893, 900, 893, strokeColor=colors["forecast"], strokeWidth=5))
+        text(1144, 880, "Forecast", 40, "forecast", "end")
+        points = evidence["points"]
+        moments = [datetime.fromisoformat(point["valid_time"]) for point in points]
+        values = [point["value"] for point in points]
+        threshold = evidence["major_threshold_ft"]
+        low, high = min(*values, threshold), max(*values, threshold)
+        pad = max((high - low) / 8, 0.1)
+        low, high = low - pad, high + pad
+
+        def plot_y(value):
+            return 500 + 320 * (value - low) / (high - low)
+
+        for tick in (low, (low + high) / 2, high):
+            y = plot_y(tick)
+            drawing.add(Line(215, y, 1110, y, strokeColor=colors["grid"], strokeWidth=2))
+            text(195, y - 12, f"{tick:.1f}", 40, "muted", "end")
+        y = plot_y(threshold)
+        drawing.add(Line(215, y, 1110, y, strokeColor=colors["warm"], strokeWidth=3, strokeDashArray=[12, 8]))
+        plotted = [(215 + 895 * (moment - moments[0]) / (moments[-1] - moments[0]), plot_y(value))
+                   for moment, value in zip(moments, values)]
+        for start, end in zip(plotted, plotted[1:]):
+            drawing.add(Line(*start, *end, strokeColor=colors["forecast"], strokeWidth=5))
+        first = datetime.fromisoformat(evidence["first_major_at"])
+        x, y = plotted[moments.index(first)]
+        drawing.add(Circle(x, y, 10, fillColor=colors["warm"], strokeColor=None))
+        text(56, 435, moments[0].strftime("%b %d %H:%M UTC"), 40, "muted")
+        text(1144, 435, moments[-1].strftime("%b %d %H:%M UTC"), 40, "muted", "end")
+        text(56, 352, f"Major threshold: {threshold} ft", 40, "warm")
+        text(56, 286, f"First major point: {evidence['first_major_ft']} ft", 40)
+        text(56, 234, first.strftime("%Y-%m-%d %H:%M:%S UTC"), 40, "muted")
+        block(158, f"NOAA / NWS · Gauge {evidence['gauge']} · Saved forecast. "
+              "Crossing time is uncertain. Currentness requires a new source check.")
     elif template == "pm25_forecast_day":
         from src.media.air_quality_graphic_adapter import concentration, forecast_axis
         from reportlab.graphics.shapes import Circle, Line

@@ -132,6 +132,14 @@ export function hot10PreviewSourceStatus(draft) {
     && Array.isArray(raw.cities) && raw.cities.length === 10 ? "bulletin" : "unsupported"
 }
 
+// Display affordance. Python resolves this draft's exact capture and qualifies it.
+export function riverPreviewSourceStatus(draft) {
+  const bundle = draft?.review_context?.two_bot?.bundle
+  if (draft?.type !== "river_flood" || bundle?.signal_kind !== "river_flood"
+      || !bundle.raw_signal_dump?.nwps_index_hint) return "unsupported"
+  return draft.review_context.nwps_point_capture ? "retained" : "missing"
+}
+
 const temperatureKinds = {
   all_time_high: "open_meteo_archive_high", all_time_low: "open_meteo_archive_low",
   monthly_high: "monthly_high", monthly_low: "monthly_low",
@@ -153,6 +161,8 @@ export function temperaturePreviewSourceStatus(draft) {
 }
 
 const templates = {
+  nwps_river_forecast: { version: "p31-nwps-river-2", source: "NOAA/NWS National Water Prediction Service",
+    adapter: "src/media/nwps_graphic_adapter.py", context: "nwps_forecast_points" },
   temperature_comparator: { version: "p31-preview-3-mobile", source: "NOAA GHCN-Daily · station observations",
     adapter: "src/media/temperature_graphic_adapter.py", context: "ghcn_station_day" },
   modis_thermal_detection_map: { version: "p31-modis-locator-2-social", source: "NASA FIRMS · MODIS",
@@ -191,6 +201,11 @@ function utcTimestamp(value) {
 function sourceContext(value, template) {
   const context = value.source_context
   if (context?.kind !== template.context) return false
+  if (template.context === "nwps_forecast_points")
+    return exactKeys(context, ["kind", "gauge", "unit", "issued_at", "first_major_at", "checked_at", "point_count"])
+      && typeof context.gauge === "string" && /^[A-Z0-9]{5}$/.test(context.gauge) && context.unit === "ft"
+      && [context.issued_at, context.first_major_at, context.checked_at].every(utcTimestamp)
+      && Number.isSafeInteger(context.point_count) && context.point_count >= 2 && context.point_count <= 400
   if (template.context === "modis_acquisition" || template.context === "viirs_acquisition")
     return exactKeys(context, ["kind", "acquired_at"])
     && utcTimestamp(context.acquired_at) && context.acquired_at.slice(17, 19) === "00"
@@ -305,9 +320,9 @@ export const GIST_POST_IMAGE_KINDS = Object.freeze(["gist_temperature_comparator
 export const MEDIA_HOLD_MESSAGES = Object.freeze({
   media_store_unavailable: "No media store is configured here for published or retained-source images; native charts are unaffected.",
   media_retained_input_required: "Select the retained source packet or published asset for this image.",
-  media_source_packet_missing: "The retained CRW source packet is not in the media store. Retain it locally first; nothing is fetched.",
-  media_source_packet_mismatch: "This is not the CRW source packet retained for this draft. Select the draft's own packet; nothing is substituted.",
-  media_source_packet_invalid: "The draft's retained CRW packet reference is malformed; the image is held.",
+  media_source_packet_missing: "The source packet saved for this draft is missing from the media store.",
+  media_source_packet_mismatch: "The source packet does not match the one saved for this draft.",
+  media_source_packet_invalid: "The draft's saved source packet reference is malformed.",
   media_original_missing: "The published original is not in the media store. Retain it again; nothing is fetched.",
   media_asset_missing: "A retained asset is missing from the media store.",
   media_asset_changed: "Retained bytes no longer match their identity. Retain the asset again.",
