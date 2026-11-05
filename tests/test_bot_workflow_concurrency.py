@@ -114,7 +114,8 @@ def test_bot_step_runs_existing_sender_only_before_enabled_scheduled_collection(
     workflow, tmp_path, event, mode, enabled, attempt, ref, sender_exit, expected,
 ):
     step = next(step for step in workflow["jobs"]["run"]["steps"] if step.get("name") == "Run bot")
-    script = step["run"].replace("${{ steps.mode.outputs.mode }}", mode)
+    script = (step["run"].replace("${{ steps.mode.outputs.mode }}", mode)
+              .replace("${{ steps.mode.outputs.catchup }}", ""))
     python = tmp_path / "python"
     python.write_text(
         '#!/bin/bash\n'
@@ -167,7 +168,7 @@ def test_pr_and_display_branch_job_exclusions_remain_explicit(workflow):
 def test_required_offline_suite_and_own_production_smoke_gate_remain(workflow):
     test, run = workflow["jobs"]["test-partition"], workflow["jobs"]["run"]
     suite = next(step for step in test["steps"] if step.get("run", "").startswith("python -m pytest tests/ -v "))
-    assert suite["run"] == 'python -m pytest tests/ -v -m "not voice_replay" --ci-partition=${{ matrix.partition }} --ci-postgres-shard=${{ matrix.postgres-shard }} --ci-critical-first --maxfail=1 --durations=20 -o faulthandler_timeout=${{ matrix.partition == \'postgres\' && matrix.postgres-shard == \'8\' && \'0\' || \'300\' }}'
+    assert suite["run"] == 'python -m pytest tests/ -v -m "not voice_replay" --ci-partition=${{ matrix.partition }} --ci-postgres-shard=${{ matrix.postgres-shard }} --ci-critical-first --maxfail=1 --durations=20 -o faulthandler_timeout=${{ matrix.partition == \'postgres\' && (matrix.postgres-shard == \'2\' || matrix.postgres-shard == \'8\') && \'0\' || \'300\' }}'
     assert suite["env"]["THEHEAT_CI_SAFE_DIAGNOSTIC"] == "${{ matrix.partition == 'postgres' && matrix.postgres-shard == '8' && '1' || '0' }}"
     assert suite["env"]["THEHEAT_TEST_POSTGRES"] == "1"
     assert {step.get("name") for step in test["steps"]} >= {
@@ -331,7 +332,7 @@ def test_dependency_shell_steps_fail_closed_without_system_access(workflow, tmp_
         assert json.loads((tmp_path / "packages.json").read_text()) == ["postgresql-17", "postgresql-client-17", "poppler-utils"]
 
 
-def test_immediate_python_output_is_scoped_to_the_bot_step(workflow):
+def test_immediate_python_output_is_scoped_to_bot_invocations(workflow):
     assert "PYTHONUNBUFFERED" not in workflow.get("env", {})
     locations = []
     for job_name, job in workflow["jobs"].items():
@@ -339,7 +340,7 @@ def test_immediate_python_output_is_scoped_to_the_bot_step(workflow):
         for step in job["steps"]:
             if "PYTHONUNBUFFERED" in step.get("env", {}):
                 locations.append((job_name, step["name"], step["env"]["PYTHONUNBUFFERED"]))
-    assert locations == [("run", "Run bot", "1")]
+    assert locations == [("run", "Service hourly sender before catch-up", "1"), ("run", "Run bot", "1")]
 
 
 @pytest.mark.parametrize("use_workflow_setting", [True, False], ids=["unbuffered", "buffered-control"])

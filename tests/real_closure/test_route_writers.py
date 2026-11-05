@@ -226,6 +226,7 @@ def test_nhc_advisory_import_apply_refuses_in_route_mode_before_any_claim(monkey
 # ---- inventory: every Gist writer has a disposition and a route test --------------------------
 
 ROUTE_TESTS = {
+    "scheduled_alerts_catchup": "tests/test_alerts_catchup_reservation.py::test_reservation_obeys_serialized_route_writer_fence",
     "bot_state": "tests/real_closure/test_route_writers.py::test_bot_state_legacy_unchanged_and_route_mode_refuses_without_the_group_marker",
     "draft_save": "tests/real_closure/test_route_writers.py::test_in_process_writers_persist_only_through_write_state",
     "metrics": "tests/real_closure/test_route_writers.py::test_in_process_writers_persist_only_through_write_state",

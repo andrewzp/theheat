@@ -214,10 +214,11 @@ jobs:
         timeout-minutes: 3
         run: python scripts/ci_native_crash.py prepare
 
-      # A retained PG8 core identified the 300s asynchronous diagnostic itself as
-      # the SIG11 recipient. Only PG8 replaces it with a GIL-held Python 300s
-      # witness. Fatal handling, every test and the 45min job deadline stay intact.
-      - run: python -m pytest tests/ -v -m "not voice_replay" --ci-partition=${{ matrix.partition }} --ci-postgres-shard=${{ matrix.postgres-shard }} --ci-critical-first --maxfail=1 --durations=20 -o faulthandler_timeout=${{ matrix.partition == 'postgres' && matrix.postgres-shard == '8' && '0' || '300' }}
+      # Retained PG2 and PG8 cores identified the asynchronous diagnostic as
+      # the SIG11 recipient. PG8 uses the GIL-held Python 300s witness.
+      # PG2's retained-supply replay requires a single-threaded process.
+      # Fatal handling, every test and the 45min job deadline stay intact.
+      - run: python -m pytest tests/ -v -m "not voice_replay" --ci-partition=${{ matrix.partition }} --ci-postgres-shard=${{ matrix.postgres-shard }} --ci-critical-first --maxfail=1 --durations=20 -o faulthandler_timeout=${{ matrix.partition == 'postgres' && (matrix.postgres-shard == '2' || matrix.postgres-shard == '8') && '0' || '300' }}
         id: offline-suite
         env:
           THEHEAT_TEST_POSTGRES: "1"
@@ -344,11 +345,37 @@ jobs:
 
       - name: Determine mode
         id: mode
+        env:
+          THEHEAT_SCHEDULED_ALERTS_CATCHUP: ${{ vars.THEHEAT_SCHEDULED_ALERTS_CATCHUP || '0' }}
+          GIST_ID: >-
+            ${{ github.event_name == 'schedule' && github.event.schedule == '41 * * * *'
+            && github.ref == 'refs/heads/main' && github.run_attempt == '1'
+            && vars.THEHEAT_SCHEDULED_ALERTS_CATCHUP == '1' && secrets.GIST_ID || '' }}
+          GH_TOKEN: >-
+            ${{ github.event_name == 'schedule' && github.event.schedule == '41 * * * *'
+            && github.ref == 'refs/heads/main' && github.run_attempt == '1'
+            && vars.THEHEAT_SCHEDULED_ALERTS_CATCHUP == '1'
+            && (secrets.THEHEAT_GIST_WRITER_TOKEN || secrets.GH_GIST_TOKEN) || '' }}
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "mode=${{ github.event.inputs.mode }}" >> $GITHUB_OUTPUT
           elif [ "${{ github.event.schedule }}" = "41 * * * *" ]; then
-            echo "mode=auto_publish_due" >> $GITHUB_OUTPUT
+            # Check for missed collection only on eligible hourly runs. A failed or
+            # inconclusive read preserves the sender role. The existing alerts prelude
+            # services due drafts before any eligible catch-up collection.
+            mode=auto_publish_due
+            if [[ "${THEHEAT_SCHEDULED_ALERTS_CATCHUP:-0}" == 1 &&
+                  "${GITHUB_EVENT_NAME:-}" == schedule && "${GITHUB_REF:-}" == refs/heads/main &&
+                  "${GITHUB_RUN_ATTEMPT:-}" == 1 && -n "${GIST_ID:-}" ]] &&
+                state_copy=$(mktemp "${RUNNER_TEMP:-/tmp}/theheat-alerts-state.XXXXXX"); then
+              trap 'rm -f -- "$state_copy"' EXIT
+              if timeout -k 1s 8s gh gist view "$GIST_ID" -f state.json > "$state_copy" &&
+                  python scripts/alerts_lane_catchup.py "$state_copy"; then
+                mode=alerts
+                echo "catchup=1" >> "$GITHUB_OUTPUT"
+              fi
+            fi
+            echo "mode=$mode" >> $GITHUB_OUTPUT
           elif [ "${{ github.event.schedule }}" = "11 12 * * *" ]; then
             # Match the triggering schedule so a delayed run still handles
             # both the leaderboard and alerts.
@@ -356,33 +383,6 @@ jobs:
           else
             echo "mode=alerts" >> $GITHUB_OUTPUT
           fi
-
-      - name: Restore station thresholds cache
-        id: thresholds-cache
-        if: steps.mode.outputs.mode == 'alerts' || steps.mode.outputs.mode == 'both'
-        continue-on-error: true
-        uses: actions/cache/restore@v4
-        with:
-          path: data/station_thresholds.sqlite
-          key: ghcn-thresholds-${{ runner.os }}-${{ hashFiles('data/station_thresholds.version') }}
-
-      - name: Validate or download checksum-bound station thresholds
-        id: thresholds-verify
-        if: steps.mode.outputs.mode == 'alerts' || steps.mode.outputs.mode == 'both'
-        continue-on-error: true
-        timeout-minutes: 5
-        env:
-          GH_TOKEN: ${{ github.token }}
-          THRESHOLD_REPO: ${{ github.repository }}
-        run: python -m scripts.threshold_artifacts ensure --repo "$THRESHOLD_REPO"
-
-      - name: Save verified station thresholds cache
-        if: steps.thresholds-verify.outcome == 'success' && steps.thresholds-cache.outputs.cache-hit != 'true'
-        continue-on-error: true
-        uses: actions/cache/save@v4
-        with:
-          path: data/station_thresholds.sqlite
-          key: ghcn-thresholds-${{ runner.os }}-${{ hashFiles('data/station_thresholds.version') }}
 
       # Fast, deterministic guard that replaces the full-suite gate for production
       # runs: a genuinely broken main (syntax / bad import / circular import) still
@@ -394,8 +394,9 @@ jobs:
           ruff check src/
           python -c "import src.main"
 
-      - name: Run bot
-        env:
+      - name: Service hourly sender before catch-up
+        if: steps.mode.outputs.catchup == '1'
+        env: &bot_runtime_env
           # Only this verifier's actual outcome permits GHCN to read the file.
           THEHEAT_GHCN_THRESHOLD_VERIFICATION: ${{ steps.thresholds-verify.outcome || 'unknown' }}
           # Keep already-written output visible if the runner exits abruptly.
@@ -577,12 +578,66 @@ jobs:
           THEHEAT_CRW_PACKET_RETENTION: ${{ steps.mode.outputs.mode != 'manual_tweet' && vars.THEHEAT_CRW_PACKET_RETENTION || '0' }}
           THEHEAT_MEDIA_WRITER_STORE: ${{ steps.mode.outputs.mode != 'manual_tweet' && vars.THEHEAT_CRW_PACKET_RETENTION == '1' && vars.THEHEAT_MEDIA_WRITER_STORE || '' }}
           THEHEAT_MEDIA_WRITER_DSN: ${{ steps.mode.outputs.mode != 'manual_tweet' && vars.THEHEAT_CRW_PACKET_RETENTION == '1' && secrets.THEHEAT_MEDIA_WRITER_DSN || '' }}
+        run: python -m src.main auto_publish_due
+
+      - name: Reserve additional catch-up
+        id: catchup-reservation
+        if: steps.mode.outputs.catchup == '1'
+        env:
+          GIST_ID: ${{ secrets.GIST_ID }}
+          GITHUB_TOKEN: ${{ secrets.THEHEAT_GIST_WRITER_TOKEN || secrets.GH_GIST_TOKEN }}
+          THEHEAT_GIST_WRITE_ROUTE: ${{ vars.THEHEAT_GIST_WRITE_ROUTE }}
+          THEHEAT_SERIALIZED_WRITER: ${{ vars.THEHEAT_GIST_WRITE_ROUTE == 'serialized' && format('{0}:run', github.run_id) || '' }}
+          THEHEAT_SCHEDULED_ALERTS_CATCHUP: ${{ vars.THEHEAT_SCHEDULED_ALERTS_CATCHUP || '0' }}
+          THEHEAT_TRIAGE_ENABLED: ${{ vars.THEHEAT_TRIAGE_ENABLED || '1' }}
+          THEHEAT_MAX_DRAFTS_PER_CYCLE: ${{ vars.THEHEAT_MAX_DRAFTS_PER_CYCLE || '3' }}
+          THEHEAT_WRITER_SAMPLES: ${{ vars.THEHEAT_WRITER_SAMPLES || '1' }}
+          THEHEAT_REFILL_ENABLED: ${{ vars.THEHEAT_REFILL_ENABLED || '0' }}
+          THEHEAT_CRITIC_REVISE_ENABLED: ${{ vars.THEHEAT_CRITIC_REVISE_ENABLED || '0' }}
+        run: |
+          if timeout -k 1s 20s python -m scripts.alerts_lane_catchup --reserve; then
+            echo "confirmed=1" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Restore station thresholds cache
+        id: thresholds-cache
+        if: >-
+          (steps.mode.outputs.mode == 'alerts' || steps.mode.outputs.mode == 'both')
+          && (steps.mode.outputs.catchup != '1' || steps.catchup-reservation.outputs.confirmed == '1')
+        continue-on-error: true
+        uses: actions/cache/restore@v4
+        with:
+          path: data/station_thresholds.sqlite
+          key: ghcn-thresholds-${{ runner.os }}-${{ hashFiles('data/station_thresholds.version') }}
+
+      - name: Validate or download checksum-bound station thresholds
+        id: thresholds-verify
+        if: >-
+          (steps.mode.outputs.mode == 'alerts' || steps.mode.outputs.mode == 'both')
+          && (steps.mode.outputs.catchup != '1' || steps.catchup-reservation.outputs.confirmed == '1')
+        continue-on-error: true
+        timeout-minutes: 5
+        env:
+          GH_TOKEN: ${{ github.token }}
+          THRESHOLD_REPO: ${{ github.repository }}
+        run: python -m scripts.threshold_artifacts ensure --repo "$THRESHOLD_REPO"
+
+      - name: Save verified station thresholds cache
+        if: steps.thresholds-verify.outcome == 'success' && steps.thresholds-cache.outputs.cache-hit != 'true'
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: data/station_thresholds.sqlite
+          key: ghcn-thresholds-${{ runner.os }}-${{ hashFiles('data/station_thresholds.version') }}
+
+      - name: Run bot
+        if: steps.mode.outputs.catchup != '1' || steps.catchup-reservation.outputs.confirmed == '1'
+        env: *bot_runtime_env
         run: |
           mode="${{ steps.mode.outputs.mode }}"
-          # A delayed hourly run can miss the source window. Use the existing
-          # sender before scheduled collection, under the same workflow lock.
-          # Persist its result before collection opens a new state snapshot.
-          if [[ "$GITHUB_EVENT_NAME" == schedule && "$GITHUB_RUN_ATTEMPT" == 1 &&
+          # Ordinary alerts/both preserve their due prelude. Catch-up already ran the hourly sender.
+          if [[ "${{ steps.mode.outputs.catchup }}" != 1 &&
+                "$GITHUB_EVENT_NAME" == schedule && "$GITHUB_RUN_ATTEMPT" == 1 &&
                 "$GITHUB_REF" == refs/heads/main && "$THEHEAT_AUTOMATIC_PUBLICATION_ENABLED" == 1 &&
                 ( "$mode" == alerts || "$mode" == both ) ]]; then
             python -m src.main auto_publish_due

@@ -1,8 +1,8 @@
 """Observe a CI pytest SIGSEGV without replaying it or publishing core memory.
 
 Only the Linux PG2 and PG8 jobs load this CI plugin. All test selections and
-execution limits remain unchanged. PG8's 300-second diagnostic uses normal Python
-frame references after a retained core proved the asynchronous native dump crashed.
+execution limits remain unchanged. PG2's replay checks require a single-threaded
+process. PG8's 300-second diagnostic uses normal Python frame references.
 Core files stay in a private runner directory and are deleted after one bounded
 GDB read. Only sanitized function names, frame counts and statuses reach stdout;
 arguments, locals, addresses, environment and raw debugger output never do.
@@ -167,11 +167,11 @@ def pytest_configure(config: Any) -> None:
     if sys.platform != "linux" or os.environ.get("GITHUB_ACTIONS") != "true":
         return
     try:
-        selected = (config.getoption("--ci-partition") == "postgres"
-                    and config.getoption("--ci-postgres-shard") in {"2", "8"})
+        partition = config.getoption("--ci-partition")
+        shard = config.getoption("--ci-postgres-shard")
     except ValueError:
         return  # A nested pytest need not load this repository's conftest.
-    if not selected:
+    if partition != "postgres" or shard not in {"2", "8"}:
         return
     directory = Path(os.environ["THEHEAT_CI_CORE_DIR"])
     _directory(directory)
@@ -189,12 +189,18 @@ def pytest_configure(config: Any) -> None:
     _write(directory / "interpreter.json", {
         "pid": os.getpid(), "executable": str(Path(sys.executable).resolve()),
     })
-    if config.getoption("--ci-postgres-shard") == "8":
-        from scripts.ci_wait_diagnostic import SafeWaitPlugin
+    thread_diagnostic = os.environ.get("THEHEAT_CI_SAFE_DIAGNOSTIC")
+    if shard == "2":
+        if thread_diagnostic != "0":
+            raise ValueError("pg2_thread_diagnostic_refused")
+        if float(config.getini("faulthandler_timeout")) != 0:
+            raise ValueError("unsafe_native_timer_still_enabled")
+        return
+    if thread_diagnostic != "1":
+        raise ValueError("required_safe_diagnostic_missing")
+    from scripts.ci_wait_diagnostic import SafeWaitPlugin
 
-        if os.environ.get("THEHEAT_CI_SAFE_DIAGNOSTIC") != "1":
-            raise ValueError("required_safe_diagnostic_missing")
-        config.pluginmanager.register(SafeWaitPlugin(config), "theheat-safe-wait-diagnostic")
+    config.pluginmanager.register(SafeWaitPlugin(config), "theheat-safe-wait-diagnostic")
 
 
 def finish(directory: Path, outcome: str) -> int:
