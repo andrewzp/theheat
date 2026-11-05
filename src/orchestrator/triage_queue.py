@@ -418,6 +418,32 @@ def _ended_air_quality_window(candidate: TriageCandidateBundle) -> bool:
             and static_hold(bundle, _utc_now(), automatic=False) == "air_quality_window_ended")
 
 
+def _automatic_type_may_arm(kind: str, signal_total: int) -> bool:
+    """Potential arming path only; no source, copy, check or approval verdict.
+
+    Mirror save_draft's two branches without inventing a future copy score.
+    suggested_auto/can_auto_approve alone does not schedule a draft.
+    """
+    from src.editorial.approval import AUTOSHIP_ALLOWLIST, recommend_approval_policy
+
+    policy = recommend_approval_policy(kind, signal_total=signal_total)
+    return kind in AUTOSHIP_ALLOWLIST or (
+        policy.mode == "armed_auto" and bool(policy.recommended_delay_minutes))
+
+
+def _scheduled_automatic_drain(bot_state: BotState, current_run: dict | None) -> bool:
+    """Operator/manual runs keep their existing draft-generation contract."""
+    from src.editorial.approval import autoship_on_critic_pass_enabled
+    from src.editorial.publication import automatic_publication_policy
+
+    return (os.environ.get("GITHUB_EVENT_NAME") == "schedule"
+            and os.environ.get("GITHUB_REF") == "refs/heads/main"
+            and os.environ.get("THEHEAT_PRODUCTION_PAUSED") != "1"
+            and isinstance(current_run, dict) and current_run.get("mode") in {"alerts", "both"}
+            and autoship_on_critic_pass_enabled()
+            and automatic_publication_policy(bot_state)["enabled"])
+
+
 def _refill_drain(
     bot_state: BotState,
     current_run: dict | None,
@@ -951,6 +977,47 @@ def _drain_and_write_triage_queue(
 
             _funnel.record_slate_terminal(funnel_sink, candidate.event_id, "evidence_contract")
     queue = ready
+
+    if queue and _scheduled_automatic_drain(bot_state, current_run):
+        try:
+            # Classify the whole pool before recording any disposition. A broken
+            # policy lookup cannot partially select or fall back to paid writing.
+            classified = [(candidate, _automatic_type_may_arm(candidate.legacy_type, candidate.score.total))
+                          for candidate in queue]
+        except Exception:  # noqa: BLE001 — fail closed without leaking private diagnostics
+            return _hold_operation(bot_state, current_run, funnel_sink, queue, budget,
+                                   note="automatic_policy_unavailable", error="automatic_policy_unavailable")
+        ready = []
+        held_types: Counter[str] = Counter()
+        for candidate, possible in classified:
+            if possible:
+                ready.append(candidate)
+                continue
+            held_types[candidate.legacy_type] += 1
+            _bump_source_field_in_run(current_run, candidate.source, "triaged_out")
+            _record_downstream_suppression(
+                bot_state=bot_state, source=candidate.source,
+                run_id=(_current_suppression_ctx() or {}).get("run_id"),
+                event_id=candidate.event_id, score=candidate.score,
+                kill_stage="automatic_policy", kill_reason="pre-writer: type_has_no_automatic_arming_route",
+                summary=getattr(candidate.bundle, "where", None) or candidate.city or None,
+            )
+            if funnel_sink is not None and candidate.event_id not in funnel_sink.get("_slate_terminal", {}):
+                from src.orchestrator import funnel as _funnel
+
+                _funnel.record_slate_terminal(funnel_sink, candidate.event_id, "automatic_policy")
+        # Workflow diagnostic, not a second source observation/promotion. Keep
+        # counts in details so funnel/coverage denominators are not duplicated.
+        _record_source_run(
+            current_run, bot_state, "automatic_selection", time.perf_counter(),
+            status="success" if ready else "degraded",
+            note=f"automatic type preflight: {len(ready)} potential; {sum(held_types.values())} held; required checks still apply",
+            details={"policy_only": True, "candidate_count": len(queue), "potential_type_count": len(ready),
+                     "held_manual_types": sum(held_types.values()), "held_types": dict(sorted(held_types.items()))},
+        )
+        queue = ready
+        if not queue:
+            return 0
 
     # Phase C: generate-and-select refill loop (flag default OFF). Owns its own
     # ranking, success-aware caps, pre-writer predicate and stop condition.

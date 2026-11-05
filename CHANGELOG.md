@@ -1,3 +1,12 @@
+## 0.9.109.72
+
+- Before scheduled automatic alerts allocate a writer slot, hold story types
+  that cannot enter the existing automatic arming paths under current flags.
+- Report a zero-writer policy/supply hold when no such type is available,
+  retaining source counters and manual dispatch behaviour.
+- Keep all independent evidence, model checks, review and sender requirements;
+  policy classification grants no approval or source qualification.
+
 ## 0.9.109.71
 
 - Preserve the existing Copernicus activation link as primary source evidence
