@@ -200,3 +200,22 @@ test("Andrew's optional post feedback stays separate from automated critic detai
   for (const source of [route, lib]) assert.equal(/critic|quality_note|quality/.test(source), false)
   assert.equal(draftStatusCounts({ drafts: [{ status: "posted", review_context: { two_bot: { critic: { quality: { focus: "single" } } } } }] }).posted, 1)
 })
+
+test("NWS outcome distinguishes response products from adapter-selected warnings", () => {
+  const row = {
+    source: "nws_alerts", status: "success", observed: 0, promoted: 0,
+    details: { nws_alert_admission: { response_features: 494, adapter_selected: 0 } },
+  }
+  assert.equal(sourceOutcome(row).state, "no_event")
+  assert.equal(sourceOutcome(row).detail,
+    "Saved NWS response contained 494 alert entries. The adapter selected 0 under its warning criteria")
+  assert.equal(sourceOutcome({ ...row, details: {} }).detail, null)
+  assert.equal(sourceOutcome({ ...row, status: "failed" }).detail, null)
+  assert.equal(sourceOutcome({ ...row, observed: 1 }).detail, null)
+  assert.equal(sourceOutcome({ ...row, source: "another_source" }).detail, null)
+  const current = buildSourceHealthPayload({ run_history: [
+    { started_at: "2026-11-05T22:41:00Z", sources: [] },
+    { started_at: "2026-11-05T22:12:00Z", sources: [row] },
+  ] })
+  assert.equal(current.sources.find(item => item.source === row.source).outcome.detail, sourceOutcome(row).detail)
+})

@@ -55,6 +55,14 @@ class SevereWeatherAlert:
     source_evidence: dict | None = None
 
 
+class AlertBatch(list[SevereWeatherAlert]):
+    """Selected warnings with the size of their validated source response."""
+
+    def __init__(self, alerts: list[SevereWeatherAlert], *, response_features: int) -> None:
+        super().__init__(alerts)
+        self.response_features = response_features
+
+
 def _referenced_warning(props: dict, event: str) -> bool:
     """An actual CAP product; updates must identify their predecessors."""
     if not (props.get("event") == event and props.get("category") == "Met"
@@ -204,7 +212,7 @@ def fetch_alerts(*, strict: bool = False) -> list[SevereWeatherAlert]:
 
         if newest_date := newest_freshness_date(payload_dates):
             assert_freshness(newest_date, "nws_alerts", max_age_days=1)
-        return alerts
+        return AlertBatch(alerts, response_features=len(features))
 
     except (requests.RequestException, ValueError, KeyError) as exc:
         if strict:

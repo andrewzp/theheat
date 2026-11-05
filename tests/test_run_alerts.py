@@ -194,3 +194,30 @@ def test_nws_error_object_records_failure_without_drafting(monkeypatch):
     assert "invented private source detail" not in source["error"]
     assert bot_state["drafts"] == drafts and bot_state["publish_ledger"] == ledger
     assert get.call_count == 1
+
+
+def test_nws_source_counts_response_products_before_rare_warning_selection(monkeypatch):
+    from unittest.mock import Mock
+
+    from src.data import nws_alerts
+    from src.orchestrator.sources import nws_alerts as runner
+
+    ordinary_warning = {"properties": {"event": "Gale Warning"}}
+    response = Mock()
+    response.json.return_value = {"features": [ordinary_warning, ordinary_warning]}
+    get = Mock(return_value=response)
+    monkeypatch.setattr(nws_alerts, "fetch_with_retry", get)
+    enqueue = Mock()
+    monkeypatch.setattr(runner, "_enqueue_story_candidate", enqueue)
+
+    bot_state = _fresh_state()
+    current_run = {"sources": []}
+    runner.run_nws_alerts(bot_state, current_run)
+
+    row = current_run["sources"][-1]
+    assert row["status"] == "success"
+    assert row["observed"] == row["promoted"] == 0
+    assert row["details"]["nws_alert_admission"] == {"response_features": 2, "adapter_selected": 0}
+    assert bot_state["source_health"]["nws_alerts"]["total_observed"] == 0
+    enqueue.assert_not_called()
+    get.assert_called_once()

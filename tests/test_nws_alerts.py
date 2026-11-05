@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from src.data.nws_alerts import (
+    AlertBatch,
     SevereWeatherAlert,
     fetch_alerts,
     _simplify_area,
@@ -117,6 +118,7 @@ class TestFetchAlerts:
             status=200,
         )
         alerts = fetch_alerts()
+        assert isinstance(alerts, AlertBatch) and alerts.response_features == len(SAMPLE_RESPONSE["features"])
         assert len(alerts) == 2
         types = {a.event_type for a in alerts}
         assert types == {"Hurricane Warning", "Tornado Warning"}

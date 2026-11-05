@@ -25,6 +25,14 @@ const OUTCOMES = Object.freeze({
 function text(value) { return typeof value === "string" ? value : "" }
 function count(value) { return Number.isInteger(value) && value >= 0 ? value : null }
 
+function nwsAdmissionDetail(row) {
+  if (row.source !== "nws_alerts" || row.status !== "success") return null
+  const { response_features: received, adapter_selected: selected } = row.details?.nws_alert_admission ?? {}
+  if (!Number.isSafeInteger(received) || !Number.isSafeInteger(selected)
+      || selected < 0 || received < selected || selected !== row.observed) return null
+  return `Saved NWS response contained ${received} alert entries. The adapter selected ${selected} under its warning criteria`
+}
+
 export function sourceOutcome(row, rejections = []) {
   if (!row || typeof row !== "object") return outcome("unknown", row)
   const error = text(row.error), note = text(row.note), details = row.details && typeof row.details === "object" ? row.details : {}
@@ -53,12 +61,13 @@ export function sourceOutcome(row, rejections = []) {
     : []
   if (held.length && !((count(row.promoted) ?? 0) > 0)) return outcome("regional_hold", row, held.join("; "))
   if (row.status === "failed") return outcome("unavailable", row, named)
+  const admission = nwsAdmissionDetail(row)
   if (rejections.some(r => r?.source === row.source && ["writer", "safety", "fact_check", "critic", "honesty_gate", "copy_gate"].includes(r?.stage))) {
-    return outcome("writer_or_check_rejection", row)
+    return outcome("writer_or_check_rejection", row, admission)
   }
-  if ((count(row.promoted) ?? 0) > 0) return outcome("supplying", row)
+  if ((count(row.promoted) ?? 0) > 0) return outcome("supplying", row, admission)
   if (incident?.product_state === "alternate_served") return outcome("alternate_served", row, named)
-  if (["success", "degraded", "partial_failure"].includes(row.status)) return outcome("no_event", row)
+  if (["success", "degraded", "partial_failure"].includes(row.status)) return outcome("no_event", row, admission)
   return outcome("unknown", row)
 }
 

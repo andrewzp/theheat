@@ -78,7 +78,7 @@ CONTRACTS = (
     _source("ch4_milestone", "methane", "run_methane", "NOAA GML series used for methane milestones.", "derived_index",
             "NOAA GML dated methane series.", "A series milestone is not a local extreme-weather incident.",
             support=("src/data/methane.py",)),
-    _source("nws_alerts", "nws_alerts", "run_nws_alerts", "NWS warning areas returned by the active-alert feed.", "official_warning",
+    _source("nws_alerts", "nws_alerts", "run_nws_alerts", "Rare warnings selected from the saved NWS active-alert response.", "official_warning",
             "NWS issued alert products, including their issue, effective and expiry times.",
             "A warning or forecast does not prove the forecast impact occurred.",
             support=("src/data/nws_alerts.py",)),

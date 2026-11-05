@@ -107,7 +107,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/data/nhc.py": "2cfa04ab49bd13c1231e298fa2d0e08fd833e649b93f265199ffe5a4071a7ab1",
     "src/data/nhc_advisory.py": "c54a764d194d376a39e98c87af40d1911dbc9f088817a2c36416b399b6e45acf",
     "src/data/nwps_major_forecasts.py": "2ca37dd5e8f7162c4b9feb1c49ab1804fae38c8183d50fe3c02850308c72fef5",
-    "src/data/nws_alerts.py": "5c01bc73e40663915f410ecd77299a3772efc345673a12017b84b1ecfd9b5eb3",
+    "src/data/nws_alerts.py": "9ef63f03250055f5f9c5baab22885f16aa873fbfd176edf1985a1fd6617099bf",
     "src/data/ocean_sst_anomaly.py": "78f0c70c0ce712b969042ffd2a1ac75d9fc0a71a0cee89535de5274fd2973f67",
     "src/data/open_meteo.py": "914f9670aec2ce129ce26f45577f9cbf65c7ef3beb14f971319eac1304e745ce",
     "src/data/places.py": "c66be0181393620b640f0354d2c7379e427aeacf4c80689b190489022bf2a870",
@@ -186,7 +186,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/orchestrator/sources/gpm_imerg.py": "4e814deeb2b0a287136c2f1b87cab57b9f6391fda43e984ad5664eafb638a6d8",
     "src/orchestrator/sources/newsworthiness.py": "cdbe7e22a95a5c9a7c0ec3b10343a4017ab4d913cf2c96ec7b61479947f57510",
     "src/orchestrator/sources/nhc_advisory.py": "e14956f0d72e576e851efec730ae97459d1f4ca10aaba14fedb3dd98d1c5a1e4",
-    "src/orchestrator/sources/nws_alerts.py": "e558378491d43547ccef0c31fbb04bf2bb8b7575bbfce0efabc4d3c65f957e6c",
+    "src/orchestrator/sources/nws_alerts.py": "1990244b25454c4d5dc478494b02a580fd19634f3c79af13f8307739eaf94888",
     "src/orchestrator/sources/ocean_sst_anomaly.py": "495657e1684d67d9b56076084aa29c3bc6262108498ffd966839c74b6679757f",
     "src/orchestrator/sources/official_warning.py": "469554a569f33365b55e919c62438fc6f1cea41fe31c6aecb7681029512d5679",
     "src/orchestrator/sources/open_meteo.py": "ded0b6069993b886dfbd138799bce01c44ba1c05c298becaaaf6d407331f9ba4",
@@ -276,5 +276,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "d9273f9ec1f0a26cf63b211ccdaf8813d4548405c81527eae773e498038f6dad"
   },
   "schema_version": 1,
-  "source_sha256": "994e9c21594aeb590ded3f90e575a76e6bd92d90960e595511a8aabfbf1bde9f"
+  "source_sha256": "cbebb91445c4eb4fca69f9853640084a24e27314755549f98b042b1ce09428b5"
 }

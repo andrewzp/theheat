@@ -1,3 +1,8 @@
+## 0.9.109.77
+
+- Show how many alert entries a saved NWS response contained and how many
+  the existing adapter selected. Keep the selection and posting rules in place.
+
 ## 0.9.109.76
 
 - Retain the HTTP status when the required safety provider returns an HTTP
