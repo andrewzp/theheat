@@ -1,3 +1,10 @@
+## 0.9.109.71
+
+- Recheck optional related-event and impact evidence before ranking assigns
+  generation slots. Keep qualified runner-ups eligible when enrichment fails.
+- Preserve source repair details, the original attempt limits and independent
+  pipeline checks, including the first outcome through async handoff.
+
 ## 0.9.109.70
 
 - Add an optional saved-source river forecast preview with its source check
