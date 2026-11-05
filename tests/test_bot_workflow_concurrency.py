@@ -80,11 +80,11 @@ def test_sentinel_keeps_its_hourly_cadence_in_a_separate_slot(workflow):
 )
 def test_real_mode_selector_preserves_scheduled_and_manual_roles(workflow, tmp_path, event, schedule, manual, expected):
     step = next(step for step in workflow["jobs"]["run"]["steps"] if step.get("id") == "mode")
-    script = (step["run"].replace("${{ github.event_name }}", event)
-              .replace("${{ github.event.schedule }}", schedule)
-              .replace("${{ github.event.inputs.mode }}", manual))
+    script = step["run"].replace("${{ github.event.schedule }}", schedule)
     output = tmp_path / "github-output"
-    subprocess.run(["/bin/bash", "-e", "-c", script], env={"GITHUB_OUTPUT": str(output)}, check=True, timeout=5)
+    env = {"GITHUB_OUTPUT": str(output), "GITHUB_EVENT_NAME": event}
+    env.update({key: manual for key, expression in step["env"].items() if expression == "${{ inputs.mode }}"})
+    subprocess.run(["/bin/bash", "-e", "-c", script], env=env, check=True, timeout=5)
     assert output.read_text() == f"mode={expected}\n"
 
 
