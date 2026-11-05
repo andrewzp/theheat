@@ -3,7 +3,7 @@
 import React, { useEffect, useRef, useState } from "react"
 import manifest from "../../lib/graphic-runtime-manifest.json" with { type: "json" }
 import { createGraphicPreviewController, firePreviewSourceStatus, graphicRequest, graphicRequestKey, hot10PreviewSourceStatus,
-  isTemperaturePreviewType, mediaPNGRequest, retainedPacketReference, storeFamilyFor, temperaturePNGRequest,
+  isTemperaturePreviewType, mediaPNGRequest, retainedPacketReference, riverPreviewSourceStatus, storeFamilyFor, temperaturePNGRequest,
   temperaturePreviewSourceStatus } from "../../lib/graphic-preview.js"
 import { LANE_TEXT, draftGraphicRequirement } from "../../lib/graphic-availability.js"
 import { textGraphicAgreement } from "../../lib/text-graphic-agreement.js"
@@ -89,6 +89,8 @@ export function GraphicPreviewFigure({ value, url, originalURL = null }) {
   if (value.schema_version === 5) return h(PublishedFigure, { value, url, originalURL })
   const context = value.source_context
   const timing = context.kind === "hot10_bulletin" ? `${localDays(context.local_days)} · forecast daily highs`
+    : context.kind === "nwps_forecast_points"
+    ? `Gauge ${context.gauge} · forecast issued ${context.issued_at} · ${context.point_count} supplied points in feet`
     : context.kind === "crw_product_day"
     ? `Product day ${context.product_date} · L4 satellite analysis · ${context.valid_cells} of ${context.total_cells} sampled cells valid`
     : context.kind === "pm25_forecast_day"
@@ -292,6 +294,7 @@ function SavedPreview({ request, family, fireSource, draft, onAction, storeFamil
       ? "Build a chart from the saved PM2.5 model forecast. No new source fetch or AI generation."
       : family === "hot10" ? "Build the ten-row table from the saved qualified Hot 10 bulletin. No new source fetch, re-ranking or AI generation."
       : family === "temperature" ? "Compare the saved observed station reading with its qualified archive samples. No new source fetch or AI generation."
+      : draft.type === "river_flood" ? "Build the river forecast chart from the source packet saved for this draft."
       : `Preview the saved ${FIRE_LABELS[fireSource]} detections. Source and display checks can still withhold the graphic. No new source fetch or AI generation.`),
     h("button", { type: "button", className: "btn sm", disabled: preview.status === "loading" || !startRequest,
       onClick: () => controller.current?.start(startRequest) }, preview.status === "ready" ? "Rebuild preview" : "Preview graphic"),
@@ -335,7 +338,8 @@ export function GraphicPreview({ draft, editing = false, updating = false, onAct
   const family = postImageFamily(draft)
   const present = Object.hasOwn(draft ?? {}, "media_attachment")
   const storeFamily = storeFamilyFor(draft)
-  if (!["fire", "air_quality_hazard"].includes(draft?.type) && !family) {
+  const riverSource = riverPreviewSourceStatus(draft)
+  if (!["fire", "air_quality_hazard"].includes(draft?.type) && !family && riverSource === "unsupported") {
     // A present attachment on a draft without a reviewed image path stays removable.
     return present && !editing && !updating ? h("section", { className: "graphic-preview", "aria-label": "Saved-source graphic preview" },
       h("h3", null, "Saved-source preview"),
@@ -359,6 +363,7 @@ export function GraphicPreview({ draft, editing = false, updating = false, onAct
       : editing ? h("p", null, "Save or cancel your text edit before building a preview.")
       : !request ? h("p", null, "Refresh the saved draft and resolve any conflicting versions before previewing.")
         : missingWindow ? h("p", null, "The hourly forecast was not saved with this draft. A graphic is unavailable.")
+          : riverSource === "missing" ? h("p", null, "The river forecast packet was not saved with this draft. A graphic is unavailable.")
           : family === "temperature" && temperatureSource !== "ghcn" ? h("p", null, "Qualified observed GHCN station evidence was not retained with this draft. No comparison preview is available.")
           : fireSource === "missing" ? h("p", null, "Saved fire source receipts are missing or incomplete. No graphic preview is available for this draft.")
           : fireSource === "unsupported" ? h("p", null, "This fire preview supports MODIS or NOAA-20/NOAA-21 VIIRS receipts from one product only. The saved source set is unsupported; no preview is available.")

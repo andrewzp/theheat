@@ -89,11 +89,26 @@ def run_nwps_major_forecasts(bot_state: BotState, current_run: dict | None) -> N
     if os.environ.get(nwps.ENABLE_FLAG) != "1":
         return
     from src.two_bot.intern.nwps_forecast import build_nwps_forecast_bundle
+    from src.media import gist_assets, nwps_capture
+    from collections import Counter
 
     source = "nwps_major_forecasts"
     started = time.perf_counter()
     try:
-        shortlist, forecasts = nwps.fetch_major_forecasts(_utc_now())
+        retention = nwps_capture.enabled()
+        captures: dict = {}
+        if retention:
+            shortlist, forecasts = nwps.fetch_major_forecasts(_utc_now(), captures=captures)
+        else:
+            shortlist, forecasts = nwps.fetch_major_forecasts(_utc_now())
+        store = None
+        if retention:
+            try:
+                store = gist_assets.configured_writer()
+            except Exception:
+                # Unavailable graphic retention cannot discard a qualified text story.
+                pass
+        retention_outcomes: Counter[str] = Counter()
         promoted = 0
         for forecast in forecasts:
             bundle = build_nwps_forecast_bundle(forecast)
@@ -109,6 +124,11 @@ def run_nwps_major_forecasts(bot_state: BotState, current_run: dict | None) -> N
                        _fact("First major point (UTC)", forecast.first_major_at.isoformat()),
                        _fact("Forecast stage", f"{forecast.forecast_ft:g} ft")],
             )
+            if retention:
+                reference, outcome = nwps_capture.retain(bundle.to_dict(), captures.get(forecast.lid), store)
+                retention_outcomes[outcome] += 1
+                if reference is not None:
+                    review[nwps_capture.CONTEXT_KEY] = reference
             if _enqueue_story_candidate(bot_state, bundle=bundle, score=score, source=source,
                                         legacy_type="river_flood", event_id=bundle.event_id, review_context=review):
                 promoted += 1
@@ -116,7 +136,10 @@ def run_nwps_major_forecasts(bot_state: BotState, current_run: dict | None) -> N
         _record_source_run(current_run, bot_state, source, started,
                            status="degraded" if len(forecasts) < bounded else "success",
                            observed=shortlist, promoted=promoted,
-                           note=f"Major forecast shortlist {shortlist}; verified {len(forecasts)} of {bounded}")
+                           note=f"Major forecast shortlist {shortlist}; verified {len(forecasts)} of {bounded}",
+                           details={"media_retention": {"enabled": True,
+                               **{code: retention_outcomes[code] for code in nwps_capture.OUTCOMES}}}
+                           if retention else None)
     except (ValueError, OSError) as exc:
         _record_source_run(current_run, bot_state, source, started, status="failed",
                            error=f"NWPS forecast intake failed ({type(exc).__name__})")

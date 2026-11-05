@@ -120,7 +120,7 @@ def test_bot_drains_only_in_route_mode_and_keeps_every_existing_default():
     # The opt-in station selector retains the exact old default.
     assert old_step["env"]["THEHEAT_SIGNALS_PROVIDER"] == "both"
     assert step["env"]["THEHEAT_SIGNALS_PROVIDER"] == "${{ vars.THEHEAT_SIGNALS_PROVIDER || 'both' }}"
-    checked = {*renamed, "THEHEAT_SIGNALS_PROVIDER"}
+    checked = {*renamed, "THEHEAT_SIGNALS_PROVIDER", "THEHEAT_MEDIA_WRITER_STORE", "THEHEAT_MEDIA_WRITER_DSN"}
     assert {k: v for k, v in step["env"].items() if k in old_step["env"] and k not in checked} == \
         {k: v for k, v in old_step["env"].items() if k not in checked}
     assert doc["run-name"] == ("${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'manual_tweet' && "
@@ -130,7 +130,7 @@ def test_bot_drains_only_in_route_mode_and_keeps_every_existing_default():
     # Root checkpoint R2 (deliberate): + the route sender's text source (references-only dispatch).
     assert set(step["env"]) - set(old_step["env"]) == {"THEHEAT_GIST_WRITE_ROUTE", "THEHEAT_SERIALIZED_WRITER",
                                                        "THEHEAT_HOT10_NORMALS_PRODUCT", "THEHEAT_SENDER_TEXT_SOURCE",
-                                                       "THEHEAT_NWPS_MAJOR_FORECASTS"}
+                                                       "THEHEAT_NWPS_MAJOR_FORECASTS", "THEHEAT_NWPS_PACKET_RETENTION"}
     assert step["env"]["THEHEAT_SENDER_TEXT_SOURCE"] == "${{ github.event.inputs.text_source }}"
     assert set(doc["on"]["workflow_dispatch"]["inputs"]) - set(old["on"]["workflow_dispatch"]["inputs"]) == {"text_source"}
     assert step["env"]["THEHEAT_HOT10_NORMALS_PRODUCT"] == "${{ vars.THEHEAT_HOT10_NORMALS_PRODUCT || 'meteostat-normals-point-v1' }}"

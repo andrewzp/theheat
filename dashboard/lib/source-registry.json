@@ -676,7 +676,7 @@
     "src/data/nhc.py": "2cfa04ab49bd13c1231e298fa2d0e08fd833e649b93f265199ffe5a4071a7ab1",
     "src/data/nhc_advisory.py": "c54a764d194d376a39e98c87af40d1911dbc9f088817a2c36416b399b6e45acf",
     "src/data/nsidc_snow.py": "ab75c73ec88130ae5805b1c5cf33a9b3912922c74da72b281b34d9cb9c7ae535",
-    "src/data/nwps_major_forecasts.py": "093a764c2f91e08e35f8563e3b978b7a8e0cb5d2fc9cbb54c2b1282043a14473",
+    "src/data/nwps_major_forecasts.py": "2ca37dd5e8f7162c4b9feb1c49ab1804fae38c8183d50fe3c02850308c72fef5",
     "src/data/nws_alerts.py": "f96c74c51bedaefc6e667c5d93e00d3ff08de8dcf1f3ecdb16dacad68a4bf402",
     "src/data/ocean.py": "46987453207a69d4b6772d46de0c61235d4825eaa85b544ca5b61d340c669891",
     "src/data/ocean_sst.py": "7d62eefb7a6c657f014c756a62adb53d2e231e4d113bf2cb210cb213bf3fbeda",
@@ -724,7 +724,7 @@
     "src/orchestrator/sources/ozone_hole.py": "2eb954d7c1a529c5a04c27711888eabb5df814f791feb2ec0885c75bdcadf623",
     "src/orchestrator/sources/reanalysis_anomaly.py": "4d69825455870e1adeddbd106d3cccb5875cbd0ea36305bd9a01ae7d1518dde8",
     "src/orchestrator/sources/regional_observed.py": "ed3eb40b8f5d167262c3cf6bbfe706b2bbd68cf318804dfb817f5171178b65b2",
-    "src/orchestrator/sources/river_gauges.py": "00508664871b1b01bd9b737f6d4123e9ee00e848e96327156e93d1490ef1a13f",
+    "src/orchestrator/sources/river_gauges.py": "cf8e08b50ce78297f1138319a0f8ac91b91bcfc08c597538b011934fb80ae943",
     "src/orchestrator/sources/sea_ice.py": "5160beb235d00b6dcc91653bd41712c165d6c713ea9b76af08e3ca13ac2057dd",
     "src/orchestrator/sources/synthesis.py": "e1e101948dde8a2ac07be65d78e37ed0cd8e080c43523ea0ded1b1071cd31522",
     "src/orchestrator/sources/usgs_quakes.py": "8ce82d003a52235fb92750c9f1e5450a672ff942ab71268a78d77f2ac8aa5c05",
@@ -733,5 +733,5 @@
     "src/two_bot/intern/warnings.py": "04e0a4506ffbb29124c8d2960a5e5025305699297fcf8f9178b23caac2cd7a37"
   },
   "evidence_scope": "Referenced local code inventory; not live/provider/transitive-source qualification.",
-  "registry_sha256": "e9a6f17f582b3f439fb8600464410b77d1c7a94aba1fe753844e0ae9f0cef0c4"
+  "registry_sha256": "f54e963d6c1bce8b22b0baedd3718191df13450ebea94aec1e872119c4ee319f"
 }
