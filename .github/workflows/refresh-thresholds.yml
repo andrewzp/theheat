@@ -15,6 +15,11 @@ on:
         description: 'Run ID of an interrupted refresh with a sealed checkpoint'
         required: false
         type: string
+      catch_up:
+        description: 'Allow 30 minutes for a manual catch-up (routine limit is 15 minutes)'
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
   group: refresh-thresholds
@@ -24,7 +29,9 @@ jobs:
   refresh:
     if: vars.THEHEAT_PRODUCTION_PAUSED != '1' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # Leave 15 minutes beyond acquisition for sealing or publication.
+    # Schedules and ordinary manual refreshes retain their existing limits.
+    timeout-minutes: ${{ github.event_name == 'workflow_dispatch' && inputs.catch_up == true && 45 || 30 }}
     # Provision the dedicated checkpoint key here with a main-only deployment
     # branch policy before enabling checkpoint mode.
     environment: threshold-maintenance
@@ -140,12 +147,13 @@ jobs:
         env:
           THRESHOLD_DAYS: ${{ github.event.inputs.days || '12' }}
           CHECKPOINT_ENABLED: ${{ steps.checkpoint.outputs.enabled }}
+          THRESHOLD_TIMEOUT_SECONDS: ${{ github.event_name == 'workflow_dispatch' && inputs.catch_up == true && 1800 || 900 }}
         run: |
           resume_args=()
           if [[ "$CHECKPOINT_ENABLED" == true ]]; then
             resume_args=(--resume-dir "$RUNNER_TEMP/threshold-refresh-private")
           fi
-          timeout 900 python -m scripts.update_thresholds_incremental \
+          timeout "$THRESHOLD_TIMEOUT_SECONDS" python -m scripts.update_thresholds_incremental \
             --db data/station_thresholds.sqlite \
             --days "$THRESHOLD_DAYS" "${resume_args[@]}" || {
               code=$?
@@ -207,4 +215,6 @@ jobs:
         run: |
           printf '%s\n' 'Verified candidate awaiting protected pull request review.' \
             'The installed threshold baseline is unchanged.' \
+            'Operator action: follow docs/runbooks/threshold-refresh.md before the handoff expires in 7 days.' \
             "Handoff artifact digest: $HANDOFF_DIGEST" >> "$GITHUB_STEP_SUMMARY"
+          echo '::warning title=Threshold adoption pending::Candidate retained; main is unchanged. Follow docs/runbooks/threshold-refresh.md to verify and adopt through a protected PR.'

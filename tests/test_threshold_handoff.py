@@ -40,6 +40,7 @@ def test_handoff_round_trip_preserves_exact_candidate_bytes(handoff):
     assert (packet / MANIFEST).read_bytes() == (data / MANIFEST).read_bytes()
     assert (packet / INVENTORY).read_bytes() == (data / INVENTORY).read_bytes()
     assert set(p.name for p in packet.iterdir()) == {MANIFEST, INVENTORY, RECEIPT}
+    assert json.loads((packet / RECEIPT).read_bytes())["adoption_status"] == "pending_protected_pull_request"
     assert main(["pack", *args]) == 1
     assert main(["verify", *args]) == 1
     (data / MANIFEST).write_bytes(b"installed\n")

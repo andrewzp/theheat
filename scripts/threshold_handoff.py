@@ -43,6 +43,7 @@ def _receipt(
 ) -> bytes:
     value = {
         "schema_version": 1,
+        "adoption_status": "pending_protected_pull_request",
         "repository": repo,
         "run_id": run_id,
         "base_sha": base,

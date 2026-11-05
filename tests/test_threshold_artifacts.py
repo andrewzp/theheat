@@ -511,8 +511,10 @@ def test_workflow_uses_exact_cache_and_guards_mutation_then_non_destructive_publ
         < index(" publish ")
         < index("scripts.threshold_handoff pack")
     )
-    assert refresh["jobs"]["refresh"]["timeout-minutes"] == 30
-    assert "timeout 900" in commands[index("scripts.update_thresholds_incremental")]
+    assert refresh["jobs"]["refresh"]["timeout-minutes"] == (
+        "${{ github.event_name == 'workflow_dispatch' && inputs.catch_up == true && 45 || 30 }}"
+    )
+    assert 'timeout "$THRESHOLD_TIMEOUT_SECONDS"' in commands[index("scripts.update_thresholds_incremental")]
     assert '--days "$THRESHOLD_DAYS"' in commands[index("scripts.update_thresholds_incremental")]
     source = (ROOT / ".github/workflows/refresh-thresholds.yml").read_text()
     assert "--clobber" not in source and '|| echo "Nothing to push"' not in source
