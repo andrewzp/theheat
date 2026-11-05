@@ -187,3 +187,34 @@ def test_async_submission_reserves_only_the_valid_candidate(world, monkeypatch, 
     assert calls == [eligible] and world.calls == [] and not state["drafts"]
     assert budget.attempts == 1 and not budget.seen("event:" + invalid)
     assert sink["_slate_terminal"][eligible] == "generation_queued"
+
+
+@pytest.mark.parametrize("mode", ["triage", "legacy", "refill"])
+def test_async_same_event_replacement_keeps_first_terminal(world, monkeypatch, mode):
+    from src.orchestrator import common, two_bot_dispatch
+
+    if mode == "legacy":
+        monkeypatch.setenv("THEHEAT_TRIAGE_ENABLED", "0")
+    if mode == "refill":
+        monkeypatch.setenv("THEHEAT_REFILL_ENABLED", "1")
+    monkeypatch.setenv("THEHEAT_DRAFTS_TARGET_PER_CYCLE", "1")
+    state, (event, _) = slate()
+    original = deepcopy(state["_triage_queue"][0])
+    invalidate(state["_triage_queue"][0])
+    state["_triage_queue"] = [state["_triage_queue"][0], original]
+    calls = []
+
+    class Client:
+        def submit(self, bundle, **save):
+            calls.append(save["event_id"])
+            return {"generation_status": "queued", "job_id": "invented-same-event-generation"}
+
+    monkeypatch.setattr(common, "_try_two_bot_draft", two_bot_dispatch._try_two_bot_draft)
+    budget = CandidateBudget("invented", 1)
+    sink = funnel.new_funnel()
+    assert triage_queue._drain_and_write_triage_queue(
+        state, {"sources": []}, generation_client=Client(), candidate_budget=budget, funnel_sink=sink) == 0
+    assert calls == [event] and world.calls == [] and not state["drafts"]
+    assert budget.attempts == 1
+    assert sink["_slate_terminal"][event] == "evidence_contract"
+    assert state["suppressions"][0]["stage"] == "evidence_contract"

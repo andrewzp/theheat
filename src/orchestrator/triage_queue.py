@@ -682,7 +682,7 @@ def _refill_drain(
                 success_by_country[country] = success_by_country.get(country, 0) + 1
             if draft_type:
                 pending_by_type[draft_type] = pending_by_type.get(draft_type, 0) + 1
-            if funnel_sink is not None:
+            if funnel_sink is not None and candidate.event_id not in funnel_sink.get("_slate_terminal", {}):
                 _funnel.record_slate_terminal(funnel_sink, candidate.event_id, "generation_queued")
             continue
         if sink_active:
@@ -1175,7 +1175,7 @@ def _drain_and_write_triage_queue(
         _settle_attempt(budget, budget_key, drafted, cand_result, current_run, candidate,
                         counted=generation_client is None)
         if cand_result.get("generation_status") in {"queued", "reused"}:
-            if funnel_sink is not None:
+            if funnel_sink is not None and candidate.event_id not in funnel_sink.get("_slate_terminal", {}):
                 from src.orchestrator import funnel as _funnel
                 _funnel.record_slate_terminal(funnel_sink, candidate.event_id, "generation_queued")
             continue
