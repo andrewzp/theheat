@@ -33,6 +33,7 @@ from src.data.source_status import SourceFetchError
 
 KIND_FLAGS = {"air_quality_hazard": "THEHEAT_PM25_FORECAST_AUTO_TEXT", "dust_event": "THEHEAT_DUST_FORECAST_AUTO_TEXT"}
 KINDS = frozenset(KIND_FLAGS)
+AUTO_DELAY_MINUTES = 30
 REQUEST_TIMEOUT_S = 10.0
 MAX_BODY_BYTES = 65_536
 MAX_SOURCE_AGE = timedelta(hours=6)
@@ -49,6 +50,7 @@ HOLD_MESSAGES = {
     "air_quality_window_ended": "The forecast's local day has ended.",
     "air_quality_source_stale": "The retained forecast is too old for automatic publication.",
     "air_quality_source_future": "The retained forecast has a retrieval time in the future.",
+    "air_quality_automatic_window_unavailable": "The forecast will expire before automatic sending can start.",
     "air_quality_source_unavailable": "The current forecast could not be re-read.",
     "air_quality_source_oversize": "The current forecast response exceeded its size bound.",
     "air_quality_source_shape": "The current forecast no longer matches the retained day, zone or grid.",
@@ -83,8 +85,8 @@ def _instant(value: Any) -> datetime:
     return contract._utc(value).astimezone(UTC)
 
 
-def static_hold(bundle: Any, now: datetime, *, automatic: bool) -> str | None:
-    """Rules that need no fetch: intact evidence, unexpired window and (automatic) source age."""
+def static_hold(bundle: Any, now: datetime, *, automatic: bool, minimum_delay: timedelta = timedelta(0)) -> str | None:
+    """Check retained identity and time, including the earliest possible automatic send."""
     try:
         packet = _story(bundle).raw_signal_dump["forecast_window"]
         end, retrieved = _instant(packet["valid_end"]), _instant(packet["retrieved_at"])
@@ -97,6 +99,10 @@ def static_hold(bundle: Any, now: datetime, *, automatic: bool) -> str | None:
         return "air_quality_source_future"
     if automatic and now - retrieved > MAX_SOURCE_AGE:
         return "air_quality_source_stale"
+    if automatic and minimum_delay:
+        earliest = now + minimum_delay
+        if earliest >= end or earliest - retrieved > MAX_SOURCE_AGE:
+            return "air_quality_automatic_window_unavailable"
     return None
 
 
