@@ -2,6 +2,41 @@
 
 Living plan for closing the gap between the bot's current voice quality and the **resumption bar** (majority A-grade rate per cycle). Refined daily by the autonomous grading agent (cron `0 15 * * *`), reviewed and implemented by the human operator.
 
+> **Nov 6: 1 fresh draft (Riyadh dust_event, B-) + 2 carry-overs (Brazil fire B-, Verkhoyansk B; not
+> re-graded). A-rate 0% (n=1).** WHO multiple stated (55×) — P_dust counter-evidence cycle 3. Strong
+> peak/mean setup closed on a source disclaimer — P_close +1. P_event_sat +1 (4th Riyadh dust draft
+> since Oct 28). Verkhoyansk is now a strict staleness candidate (109h); gist write skipped.
+>
+> **Nov 4: 1 fresh draft (hot10 Verkhoyansk, B) + Oct 31 Brazil fire carry-over (B-, not
+> re-graded). A-rate 0% (n=1).** Clean exact-figure data, no close — P_close +1 cycle. Other
+> proposals untested. Gist write skipped (invalid token).
+>
+> **Nov 3: 0 fresh drafts — 1 pending, Oct 31's Brazil fire (B-, already graded); no re-grading, no
+> proposal evidence updates.** Nov 2's other 3 carry-overs left the queue (cause unconfirmed). Intake
+> dry since Oct 31 03:28 UTC. Gist write skipped.
+>
+> **Nov 2: 0 fresh drafts — queue is an exact match to Oct 31's 4 graded drafts; no re-grading, no
+> proposal evidence updates.** 3 strict staleness candidates now (Riyadh ×2, Urumqi; 69–84h, Oct 30
+> forecasts elapsed); gist write blocked, skipped. Intake quiet since Oct 31 03:28 UTC.
+>
+> **Oct 31: 4 fresh drafts, 0% A-rate (0 A / 0 B / 3 B- / 1 C+).** Queue turned over; intake resumed
+> Oct 30. P_close +1 cycle (0/4 positive; disclaimer close on Urumqi). P_dust counter-evidence
+> cycle 2 (2/2 dust drafts carry WHO multiples). P_event_sat +1 (Riyadh ×2 same day). P4: tilde on
+> an exact figure. No stale drafts (oldest 35h); gist write still blocked, skipped. No proposals retired
+> (Jul–Oct gap makes the 3-cycle rule unreliable); no new proposals.
+>
+> **Oct 29: 0 fresh drafts — queue is an exact match to Oct 28's 15 graded drafts; no
+> re-grading, no active-proposal evidence updates.** Nothing has reached pending since Oct 17.
+> All 15 remain staleness bulk-reject candidates (12–22 days old); gist write still blocked
+> (invalid `gh` token), skipped. Operator: bulk-reject via dashboard and check the suppression
+> ledger / source health for the 12-day intake drought.
+>
+> **Oct 28: 15 fresh drafts, 0% A-rate (0 A / 2 B / 5 B- / 6 C+ / 2 D).** No documented cycles on
+> `main` between Jul 6 and today. Findings: P_tier +5 instances (cyclone threshold/advisory
+> jargon, VIIRS "top tier"); P_close 0 positive of 15; P_dust first partial counter-evidence
+> (3 of 3 dust drafts carry WHO multiples); 2 new proposals (P_nws, P_event_sat). Staleness: all
+> 15 are 11–21 days old; gist write blocked (invalid token / 403), skipped.
+>
 > **Jul 6: 0 fresh drafts — queue is an exact match to Jul 5's 15 graded drafts (same
 > `draft_id`s, scores, text); no re-grading performed, all grades stand at Jul 5's levels.**
 > No active-proposal evidence updates: P_close (16 cycles), P_tier (7 cycles/10 instances),
@@ -185,9 +220,9 @@ Living plan for closing the gap between the bot's current voice quality and the 
 |---|---|
 | Bot commit | `0.9.81.0`+ per BRIEFING.md 2026-06-28 (reganom recency window + honesty-gating, PR #347; world-half eval-gating fix, PR #345; reganom writer-voice upgrade, PR #349. Prior: 0.9.67.0, R-02 NOAA HMS independent fire witness; 30-item audit backlog complete [S-01..S-35]; source-redundancy lane R-00..R-09; bot active since 2026-06-01) |
 | Voice engine version | **two-bot + Attenborough/Economist voice + all-sources triage + evidence contract + diversity gate + automation dashboard** (Sonnet 4.6 writer prompt-cached + Gemini 2.5 Flash fact-checker [skips unknown kinds] + Gemini 2.5 Pro critic [assesses relative to available data]; all 23 sources on triage path via PR #150; evidence contract gates writer via 0.9.0.0; pending-type cap default 3 + per-type TTL sweep [fast 7d, coral/DHW 21d] via 0.9.6.0/0.9.16.0; `THEHEAT_TRIAGE_ENABLED=1` in CI; `THEHEAT_WRITER_SAMPLES=1` + `THEHEAT_CRITIC_REVISE_ENABLED=0` since 2026-07-14 (economics P0 paired flip; was 2/1 from 2026-06-13); reganom (`reanalysis_anomaly`) enabled `manual_only` since 2026-06-27 with 2-day recency + honesty-gating [PR #347]; routine beacon writes the `ROUTINE_BEACON` repo variable via `gh variable set` each cycle) |
-| Last cycle A-rate | **— (0 fresh drafts, Jul 6).** Most recent measured: **20% (1/5 fresh, Jul 5)** — eastern Siberia fire A- (4th confirmation of the permafrost-carbon fire mechanic), 1 B+, 1 B, 1 B-, 1 C+. Prior: 20% (2/10, Jul 4); 33% (1/3, Jul 3); 0% (0/3, Jul 2); 0% (0/4, Jul 1); 22% (2/9 non-stale, Jun 30); 80% Jun 29 [BAR CLEARED]. |
+| Last cycle A-rate | **0% (0/1, Nov 6; Riyadh dust B-).** Prior: 0% (0/1, Nov 4; hot10 B). Prior: 0% (0/4, Oct 31). Prior: 0% (0/15, Oct 28). Prior measured: **— (0 fresh drafts, Jul 6).** Most recent measured: **20% (1/5 fresh, Jul 5)** — eastern Siberia fire A- (4th confirmation of the permafrost-carbon fire mechanic), 1 B+, 1 B, 1 B-, 1 C+. Prior: 20% (2/10, Jul 4); 33% (1/3, Jul 3); 0% (0/3, Jul 2); 0% (0/4, Jul 1); 22% (2/9 non-stale, Jun 30); 80% Jun 29 [BAR CLEARED]. |
 | Resumption bar | majority A (>50%) sustained — **cleared Jun 29 (80%, n=5); Jun 30 returned 22%; Jul 1 0% (n=4); Jul 2 0% (n=3); Jul 3 33% (n=3); Jul 4 20% (n=10); Jul 5 20% (n=5); Jul 6 no fresh drafts to measure**. |
-| Gap | **30 pp below bar** (50% − 20%, most recent measured cycle Jul 5, n=5). No fresh measurement Jul 6. Seven cycles since the Jun 29 peak have ranged 0–33% depending on signal mix. P_tier and P_close remain the two most active-capping levers, both unchanged since Jul 5 (no fresh evidence Jul 6). |
+| Gap | **50 pp below bar (Nov 6, 0%, n=1; Nov 4, 0%, n=1; Oct 31, 0%, n=4; Oct 28 also 0%, n=15).** Prior: **30 pp below bar** (50% − 20%, most recent measured cycle Jul 5, n=5). No fresh measurement Jul 6. Seven cycles since the Jun 29 peak have ranged 0–33% depending on signal mix. P_tier and P_close remain the two most active-capping levers, both unchanged since Jul 5 (no fresh evidence Jul 6). |
 | Posting | paused; operator decision pending — Jun 29 cleared bar (80%), Jun 30–Jul 5 all below, Jul 6 no fresh drafts. **Queue unchanged at 15 pending as of Jul 6** (exact match to Jul 5's graded batch) — zero new drafts entered between the Jul 5 and Jul 6 pulls. |
 | Coverage | **638 cities × 180 countries** (was 613 × 179; +25 via PR #81) |
 | Queue status | **15 pending as of Jul 6 grading, unchanged from Jul 5** (10 carry-overs from Jul 4: 2 A- [Typhoon Bavi, Loxahatchee FL], 2 B+ [Island Pond VT, Antwerpen], 6 B [Barrow, Astana, Basrah, Al Başrah al Qadīmah, Rocky Mountains CO fire, Urumqi Jul 4 reading]; 5 from Jul 5: 1 A- eastern Siberia fire, 1 B+ Johannesburg air_quality_hazard, 1 B Doha absolute_extreme, 1 B- Urumqi Jul 5 reading, 1 C+ Phalodi dust_event). **2 of the 15 ([4] Basrah, [6] Al Başrah al Qadīmah) are now strict staleness bulk-reject candidates** (>48h old, forecast date July 4 elapsed) — flagged for operator, write unavailable this session. Bot at 0.9.81.0+ (no newer BRIEFING.md handoff confirmed this cycle); reganom enabled post-PR #347 with writer-voice upgrade (PR #349); `THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live. |
@@ -419,6 +454,7 @@ what the mechanism does. The corpus A-grade closers state the consequence flatly
 "persistence is what kills" (Madagascar), "nowhere to drain" (Costa Rica), "It is April"
 (Mali). None defer to implication; none stop at mechanism.
 
+**Nov 6 update:** Riyadh dust_event close = "CAMS model forecast, not station-measured" (disclaimer subtype, 0 positive; also Nov 4 Verkhoyansk hot10 ended on a source tag, no close) — +1 cycle beyond the count below.
 **Cycles observed:** 11 active (Jun 7 pending; Jun 10 approved voice observation; Jun 13 Red Dog Mine;
 Jun 15 retroactive; Jun 18 Barrow + Amsterdam; Jun 23 Columbus GA + Mediterranean SST failing,
 Cope Rch TX positive; Jun 24 Randolph UT + Al Aḥmadī Kuwait both failing; Jun 25 Taiz ×2 +
@@ -534,7 +570,7 @@ FAILING, same subtype as every prior dust_event close). Urumqi dust_event, 3rd i
 ("the topography traps it" = resolution-form, FAILING, near-verbatim repeat of its own prior
 two closes). P_close now confirmed across 14 signal types (unchanged — no new type this
 cycle).
-**Last seen:** Jul 5 (2 positive, 3 failing).
+**Last seen:** Nov 4 (hot10 Verkhoyansk closeless, +1 cycle). Prior Oct 31 (0 positive of 4; disclaimer close on Urumqi [3], none on the rest; cycle count +1). Prior Oct 28 (0 positive, 12 failing across 15 drafts: disclaimer closes [4]/[6]/[8], source-credit closes [2]/[3], no close on the rest). Cycle count +1.
 
 **Proposed fix (PROMPT LANGUAGE — surgical):** Add to `src/two_bot/prompts/writer_prompt.py`
 in the system-clause / second-sentence guidance section (near the "delete the system clause"
@@ -626,8 +662,7 @@ without it. The split between these two adjacent PM-signal types is the cleanest
 the corpus that the gap is specific to `dust_event`'s bundle construction, not a categorical
 "the writer doesn't reach for WHO multiples" problem — it demonstrably does, for a sibling
 signal type, unprompted.
-**Last seen:** Jul 5 (9 cycles: Jun 13/17/25/28/30 ×2/Jul 1/Jul 4/Jul 5; template convergence
-11 of 11).
+**Last seen:** Jul 5 (9 cycles). **Oct 28: PARTIAL COUNTER-EVIDENCE** — Quetta (3.8× WHO), Arequipa (2.7×), Riyadh (10.7×) all state a WHO multiple; first 3 dust_event drafts with an anchor after 11 of 11 without. Unknown whether a fix shipped during the Jul 7 – Oct 27 gap. **Oct 31: cycle 2** — Riyadh (35× WHO) and Urumqi (5.8×) both anchored. Hold open; archive if the anchor holds 3 cycles. Remaining gap: closes are source credits/disclaimers (P_close). **Nov 6: cycle 3** — Riyadh (55× WHO) anchored again; anchor has now held 3 consecutive dust cycles (Oct 28, Oct 31, Nov 6) — meets the 3-cycle archive condition; recommend moving to Resolved next cycle if Nov 7+ dust drafts also anchor (or the operator confirms a fix shipped).
 
 **Status:** Drafted. **9 cycles confirmed** (Jun 13/17/25/28/30 ×2/Jul 1/Jul 4/Jul 5); template
 convergence 11 of 11 `dust_event` drafts. The `air_quality_hazard` sibling type doing this
@@ -704,7 +739,7 @@ ingestion or a regional quirk. Doha's close is also the best `absolute_extreme` 
 instance in the corpus ("closing off the evaporative cooling that makes extreme dry heat
 survivable") and it still caps at B — reconfirms P_tier overrides close quality entirely,
 unlike P_close or P_compound which are soft caps.
-**Last seen:** Jul 5 (7 cycles / 10 instances / 4 signal types; 1st cross-location
+**Last seen:** Oct 28 (8 cycles / 15 instances: +5 today — "NHC rapid intensification threshold" in [5], [11], [12]; "top tier of VIIRS detections" in [13]; "very-high-intensity" in [1]. Now spans cyclone_rapid_intensification and fire; tier/threshold names leak as the "so what"). Prior: Jul 5 (7 cycles / 10 instances / 4 signal types; 1st cross-location
 confirmation within `absolute_extreme`; 1 clean counter-instance remains, from Jul 4's
 Typhoon Bavi).
 
@@ -963,6 +998,32 @@ load-bearing. If it leaves them thinking "oh, fair enough", expository.
 **Status:** SHIPPED in PR #85 second commit. Empirical test: next graded cycle —
 do system clauses do work (consequence/contrast/causal/rate) rather than just
 describing geography?
+
+### P_nws — severe_weather drafts paraphrase the NWS alert: panic register, no figure
+
+**Observed:** Oct 28 — two identical manual-proposal severe_weather drafts: "Guam's preparation
+window is closing: life-threatening winds could arrive tonight as Typhoon Champi approaches, the
+NWS warns." No number, no distance, urgency language, wire-service register; violates the calm
+benign-violation spec (HUMOR_RESEARCH §8.4). Graded D ×2. First severe_weather type in corpus.
+**Cycles observed:** Oct 28 (1 cycle, 2 drafts).
+**Last seen:** Oct 28.
+**Proposed fix (PROMPT LANGUAGE — surgical):** In the severe_weather writer clause: require one
+sourced figure (wind speed, distance, rainfall) and ban "closing", "life-threatening", "tonight"
+urgency phrasing; state facts in the calm register.
+**Expected impact:** D → B range for the type.
+**Status:** Drafted. Needs a second cycle.
+
+### P_event_sat — same event produces multiple drafts across types and cycles
+
+**Observed:** Oct 28 — Isaias ×3 ([5], [10], [11] across rapid_intensification and tier_crossing),
+Shah Alam + Klang (identical ~152 µg/m³ forecast), Guam ×2 (identical text), Quetta/Arequipa
+template twins. 7 of 15 drafts redundant with another in the queue.
+**Cycles observed:** Oct 28, Oct 31, Nov 6 (3 cycles; Oct 31 = Riyadh dust_event + air_quality_hazard, same city/day; Nov 6 = 4th Riyadh dust draft since Oct 28, cross-day repeat).
+**Last seen:** Nov 6.
+**Proposed fix (PROMPT/CONFIG LANGUAGE — surgical):** Widen the per-event dedupe key so one named
+storm / one metro-area forecast yields at most one pending draft regardless of signal subtype.
+**Expected impact:** Queue clarity; removes ~half of the redundant drafts.
+**Status:** Drafted. Needs a second cycle.
 
 ## Awaiting evidence
 
