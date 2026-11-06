@@ -88,6 +88,10 @@ def test_expanded_file_shards_partition_all_modules_and_parameters_without_chang
                 "tests/test_postgres_platform_description.py": 6,
                 "tests/test_postgres_temperature_editor_media.py": 8,
                 "tests/test_postgres_temperature_delivery.py": 0,
+                "tests/test_postgres_candidate_admission.py": 3,
+                "tests/test_postgres_preview_editor_media.py": 3,
+                "tests/test_postgres_delivery_history.py": 11,
+                "tests/test_postgres_viirs_joint_media.py": 11,
                 "tests/test_postgres_editor_media.py": 11,
             }
             if relative in assigned:
@@ -101,13 +105,22 @@ def test_expanded_file_shards_partition_all_modules_and_parameters_without_chang
     assert any(item.path.name == "test_postgres_platform_description.py" for item in shards[6])
     assert {item.path.name for item in shards[8]} == {"test_postgres_temperature_editor_media.py"}
     assert any(item.path.name == "test_postgres_temperature_delivery.py" for item in shards[0])
-    assert {item.path.name for item in shards[11]} == {"test_postgres_editor_media.py"}
+    assert {item.path.name for item in shards[11]} == {
+        "test_postgres_delivery_history.py", "test_postgres_editor_media.py", "test_postgres_viirs_joint_media.py",
+    }
     assert not any(item.path.name == "test_postgres_editor_media.py" for item in shards[5])
     legacy = [select(items, partition) for partition in ("core", "postgres", "media")]
     assert sorted(id(item) for group in legacy for item in group) == sorted(id(item) for item in select(items, "all"))
     original = [_ci_postgres_shard(path) for path in files]
     monkeypatch.chdir(tmp_path)
     assert [_ci_postgres_shard(path) for path in files] == original
+
+
+def test_moved_local_media_modules_are_kept_only_by_media_worker():
+    for name in ("test_delivery_begin_passes.py", "test_gist_png_portability.py", "test_joint_media_review.py"):
+        item = SimpleNamespace(path=ROOT / "tests" / name, nodeid=f"tests/{name}::invented")
+        assert select([item], "media") == [item]
+        assert select([item], "core") == select([item], "postgres") == []
 
 
 def test_stage_function_defaults_partition_cases_without_explicit_fault_metadata():

@@ -117,11 +117,13 @@ _CI_GHCN_FINAL_FAULT_SHARDS = {
     "policy": "4",
 }
 
-# Whole local-media modules measured at ~816s in CI40953371063. Moving them to
-# the existing media worker keeps every node while leaving time for the core
-# worker's dashboard checks inside the unchanged 45-minute job limit.
+# Keep measured local-media modules on the existing media worker so core has
+# time for its dashboard checks inside the unchanged 45-minute job limit.
 _CI_LOCAL_MEDIA_MODULES = frozenset(
     Path(__file__).resolve().parent / name for name in (
+        "test_delivery_begin_passes.py",
+        "test_gist_png_portability.py",
+        "test_joint_media_review.py",
         "test_retained_temperature_calculation.py",
         "test_parked_media_inspection.py",
         "test_media_replay_reuse.py",
@@ -153,6 +155,12 @@ def _ci_postgres_shard(path, test_name=None, parameters=None):
         "tests/test_postgres_platform_description.py": "6",
         "tests/test_postgres_temperature_editor_media.py": "8",
         "tests/test_postgres_temperature_delivery.py": "0",
+        # Move whole modules to lighter existing jobs. Keep the PG2/PG8
+        # diagnostic suites and explicit stage/fault cohorts where they are.
+        "tests/test_postgres_candidate_admission.py": "3",
+        "tests/test_postgres_preview_editor_media.py": "3",
+        "tests/test_postgres_delivery_history.py": "11",
+        "tests/test_postgres_viirs_joint_media.py": "11",
         "tests/test_postgres_editor_media.py": "11",
     }
     if relative in assigned:
