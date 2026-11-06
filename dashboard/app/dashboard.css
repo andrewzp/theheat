@@ -779,6 +779,9 @@ h1 span { color: #666; font-weight: 400; font-size: 14px; margin-left: 8px; }
 .graphic-kind { color: #f6c792; font-weight: 600; }
 .graphic-posting-window { color: #eee; border-left: 3px solid #f6c792; padding-left: 10px; }
 .graphic-full-size-open { justify-self: start; margin-top: 10px; }
+.graphic-river-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
+.graphic-river-controls .graphic-full-size-open { margin-top: 0; }
+.graphic-river-controls a { display: inline-flex; align-items: center; min-height: 44px; }
 .graphic-state { color: #eee; border-left: 3px solid #8ab4f8; padding-left: 10px; overflow-wrap: anywhere; }
 .hot10-preview-rows { display: grid; gap: 8px; min-width: 0; overflow-wrap: anywhere; }
 .hot10-preview-rows ol { margin: 0; padding-left: 2.2em; display: grid; gap: 6px; }

@@ -28,7 +28,9 @@ def check_request(request, policy_sha, runtime_sha):
     if (not isinstance(request, dict)
             or set(request) not in (REQUEST_KEYS, REQUEST_KEYS | {"format"}, REQUEST_KEYS | {"format", "retained_input_sha256"},
                                     REQUEST_KEYS | {"format", "delivered"})
-            or ("format" in request and request["format"] != "png")
+            or ("format" in request and request["format"] not in ("png", "river_png"))
+            or (request.get("format") == "river_png" and
+                ("retained_input_sha256" in request or "delivered" in request))
             or ("delivered" in request and request["delivered"] is not True)
             or ("retained_input_sha256" in request and not (isinstance(request["retained_input_sha256"], str)
                                                             and SHA.fullmatch(request["retained_input_sha256"])))):
@@ -327,15 +329,18 @@ def build_preview(request, *, policy_sha, runtime_sha, read_state, budget, synth
         retained_bundle = _retained_bundle_json(bundle)
         from src.media import gist_media
         nwps_source_capture = None
+        river_png = request.get("format") == "river_png"
         if bundle.get("signal_kind") == "river_flood" and "nwps_index_hint" in bundle.get("raw_signal_dump", {}):
-            # Read-only preview. A river PNG has no reviewed attachment/sender recipe yet.
-            if "format" in request:
+            # The attachment format is separate from the saved-source inspection image.
+            if request.get("format") == "png":
                 raise PreviewError("graphic_unavailable")
             from src.media import gist_assets, nwps_capture
             try:
                 nwps_source_capture = nwps_capture.load(bundle, draft["review_context"].get(nwps_capture.CONTEXT_KEY), store)
             except gist_assets.MediaStoreError as exc:
                 raise PreviewError("media_hold", exc.code) from None
+        elif river_png:
+            raise PreviewError("graphic_unavailable")
         store_backed = request.get("format") == "png" and gist_media.needs_retained_input(bundle)
         if store_backed:
             spec = source = context = None
@@ -349,6 +354,10 @@ def build_preview(request, *, policy_sha, runtime_sha, read_state, budget, synth
             prepared = gist_media.prepare_media(bundle, synthetic=synthetic, store=store,
                                                 retained_input_sha256=request.get("retained_input_sha256"))
             rendered = None
+        elif river_png:
+            from src.media.nwps_forecast_png import render_nwps_png
+            assert spec is not None
+            rendered = render_nwps_png(spec, context)
         else:
             assert spec is not None
             rendered = render_svg(**spec)
@@ -390,6 +399,16 @@ def build_preview(request, *, policy_sha, runtime_sha, read_state, budget, synth
                 "alt_text": descriptor["alt_text"], "scope": spec["evidence"]["scope"],
                 "source": source, "source_context": context, "width": 1200, "height": 1500,
                 "publication_approved": False, "attachment": False}
+        elif river_png:
+            assert rendered is not None
+            result = {"schema_version": 7, "draft_id": request["draft_id"],
+                      "revision_identity": deepcopy(request["expected_revision"]),
+                      "policy_source_sha256": policy_sha, "preview_runtime_sha256": runtime_sha,
+                      "binding": rendered["binding"], "cache_key": rendered["cache_key"],
+                      "png_base64": base64.b64encode(rendered["png"]).decode("ascii"),
+                      **{key: rendered[key] for key in ("title", "alt_text", "scope", "width", "height")},
+                      "source": source, "source_context": context,
+                      "publication_approved": False, "attachment": False}
         else:
             assert rendered is not None
             result = {"schema_version": 2, "draft_id": request["draft_id"],

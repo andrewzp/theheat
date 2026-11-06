@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import test from "node:test"
 import React from "react"
 import { renderToStaticMarkup } from "react-dom/server"
-import { GraphicPreview, GraphicPreviewFigure } from "../app/components/GraphicPreview.js"
+import { GraphicPreview, GraphicPreviewFigure, TextGraphicAgreement } from "../app/components/GraphicPreview.js"
 import { riverPreviewSourceStatus } from "../lib/graphic-preview.js"
 
 function draft() {
@@ -21,6 +21,7 @@ test("a saved river capture offers its read-only preview without attachment cont
   assert.equal(riverPreviewSourceStatus(value), "retained")
   const html = renderToStaticMarkup(React.createElement(GraphicPreview, { draft: value }))
   assert.match(html, /Preview graphic/)
+  assert.match(html, /Preview forecast PNG/)
   assert.match(html, /river forecast chart/)
   assert.doesNotMatch(html, /Attach graphic|Review text and graphic|retained-input-/)
 })
@@ -41,6 +42,7 @@ test("editing a river draft hides the old preview action", () => {
   const html = renderToStaticMarkup(React.createElement(GraphicPreview, { draft: draft(), editing: true }))
   assert.match(html, /Save or cancel your text edit/)
   assert.doesNotMatch(html, /Preview graphic/)
+  assert.doesNotMatch(html, /Preview forecast PNG/)
 })
 
 test("river figure labels the issued forecast and point count without assuming an acquisition timestamp", () => {
@@ -58,4 +60,20 @@ test("river figure labels the issued forecast and point count without assuming a
   assert.match(html, /Source checked 2026-07-01T16:00:00\+00:00/)
   assert.match(html, /currentness requires a new source check/)
   assert.match(html, /Crossing time is uncertain/)
+})
+
+test("river PNG exposes download and full-size inspection, with an advisory stage comparison", () => {
+  const value = { schema_version: 7, source: "NOAA/NWS National Water Prediction Service",
+    title: "Invented river forecast", alt_text: "The first major point is 17.0 feet. Major threshold 16.0 feet.",
+    width: 1200, height: 1500, scope: "Crossing time is uncertain.",
+    source_context: { kind: "nwps_forecast_points", gauge: "FAKF1", unit: "ft",
+      issued_at: "2026-07-01T14:00:00Z", checked_at: "2026-07-01T16:00:00Z",
+      first_major_at: "2026-07-02T18:00:00Z", point_count: 3 } }
+  const html = renderToStaticMarkup(React.createElement(GraphicPreviewFigure, { value, url: "blob:invented" }))
+  assert.match(html, /download="river-forecast.png"/)
+  assert.match(html, /View full size/)
+  assert.doesNotMatch(html, /Attach graphic|Review text and graphic/)
+  const agreement = text => renderToStaticMarkup(React.createElement(TextGraphicAgreement, { text, value }))
+  assert.match(agreement("The gauge is forecast to reach 17 ft."), /data-status="matched"/)
+  assert.match(agreement("The gauge is forecast to reach 18 ft."), /data-status="unmatched"/)
 })

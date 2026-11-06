@@ -1,3 +1,11 @@
+## 0.9.109.78
+
+- Preview and download a river forecast PNG from the exact NOAA source packet
+  saved with the draft. Show the issue and checked times, threshold, first
+  supplied major point, units and accessibility description.
+- Keep the SVG inspection and all existing review, attachment and posting
+  controls in place.
+
 ## 0.9.109.77
 
 - Show how many alert entries a saved NWS response contained and how many

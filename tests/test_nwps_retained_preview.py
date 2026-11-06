@@ -1,10 +1,13 @@
 """Invented NWPS acquisition through checked saved draft and retained SVG preview."""
 from copy import deepcopy
+import base64
+from io import BytesIO
 import json
 from pathlib import Path
 import subprocess
 
 import pytest
+from PIL import Image
 
 from src.dashboard_preview.errors import PreviewError
 from src.dashboard_preview.preview import build_preview
@@ -83,8 +86,19 @@ def test_acquired_capture_stays_outside_the_writer_bundle_and_survives_restore(s
     assert result == {"restored_items": 1, "restored_blobs": 1, "verified": True}
     reader = gist_assets.SQLiteMediaStore(restored_store.path, writable=False)
     assert preview(json.loads(json.dumps(state)), request, reader) == body
+    png_request = {**request, "format": "river_png"}
+    png = preview(state, png_request, reader)
+    assert preview(json.loads(json.dumps(state)), png_request, store) == png
     assert state == before
     value = json.loads(body)
+    raster = json.loads(png)
+    assert raster["schema_version"] == 7 and raster["attachment"] is raster["publication_approved"] is False
+    assert "media_descriptor" not in raster
+    assert raster["source_context"] == value["source_context"] and raster["alt_text"] == value["alt_text"]
+    assert raster["binding"]["source_evidence_sha256"] == value["binding"]["source_evidence_sha256"]
+    with Image.open(BytesIO(base64.b64decode(raster["png_base64"]))) as image:
+        image.load()
+        assert (image.format, image.size, image.mode) == ("PNG", (1200, 1500), "RGB")
     assert value["source_context"] == {
         "kind": "nwps_forecast_points", "gauge": "FAKF1", "unit": "ft",
         "issued_at": "2026-07-01T14:00:00+00:00", "first_major_at": "2026-07-02T18:00:00+00:00",
@@ -100,8 +114,11 @@ def test_acquired_capture_stays_outside_the_writer_bundle_and_survives_restore(s
 
 
 @pytest.mark.parametrize("change", ["text", "capture_reference", "bundle", "draft_switch"])
-def test_change_during_render_never_returns_the_old_preview(saved_capture, change):
+@pytest.mark.parametrize("format", [None, "river_png"])
+def test_change_during_render_never_returns_the_old_preview(saved_capture, change, format):
     state, request, store, _ = saved_capture
+    if format:
+        request["format"] = format
     changed = deepcopy(state)
     draft = changed["drafts"][0]
     if change == "text":
@@ -168,25 +185,54 @@ def test_png_has_no_unreviewed_attachment_route(saved_capture, monkeypatch):
     assert error.value.code == "graphic_unavailable"
 
 
-def test_real_python_response_passes_browser_contract(saved_capture, tmp_path):
+@pytest.mark.parametrize("format", [None, "river_png"])
+def test_real_python_response_passes_browser_contract(saved_capture, tmp_path, format):
     state, request, store, _ = saved_capture
     root = Path(__file__).resolve().parents[1]
     manifest = json.loads((root / "dashboard/lib/graphic-runtime-manifest.json").read_text())
     policy, runtime = manifest["identity"]["policy_source_sha256"], manifest["runtime_sha256"]
     request.update(expected_policy_source_sha256=policy, expected_preview_runtime_sha256=runtime)
+    if format:
+        request["format"] = format
     body = build_preview(request, policy_sha=policy, runtime_sha=runtime,
                          read_state=lambda: state, budget=Budget(), store=store)
     (tmp_path / "response.json").write_bytes(body)
     (tmp_path / "request.json").write_text(json.dumps(request))
     code = """
-import fs from 'node:fs'; import {pathToFileURL} from 'node:url';
+import fs from 'node:fs'; import assert from 'node:assert/strict'; import {pathToFileURL} from 'node:url';
 const [root,temp]=process.argv.slice(1);
-const {validateGraphicResponse}=await import(pathToFileURL(root+'/dashboard/lib/graphic-preview.js'));
+const {createGraphicPreviewController,validateGraphicResponse}=await import(pathToFileURL(root+'/dashboard/lib/graphic-preview.js'));
 const read=name=>JSON.parse(fs.readFileSync(name));
-await validateGraphicResponse(read(temp+'/response.json'),read(temp+'/request.json'),read(root+'/dashboard/lib/graphic-runtime-manifest.json'));
+const value=read(temp+'/response.json'), request=read(temp+'/request.json'), manifest=read(root+'/dashboard/lib/graphic-runtime-manifest.json');
+await validateGraphicResponse(value,request,manifest);
+if (request.format === 'river_png') {
+    for (const change of [
+        v => { v.source_context.point_count++; },
+        v => { v.alt_text += 'changed'; },
+        v => { v.binding.renderer_sha256 = '0'.repeat(64); },
+        v => { v.png_base64 = v.png_base64.slice(0, -4); },
+        v => { v.attachment = true; },
+    ]) {
+        const changed=structuredClone(value);
+        change(changed);
+        await assert.rejects(validateGraphicResponse(changed,request,manifest));
+    }
+    await assert.rejects(validateGraphicResponse(value,{...request, format:'png'},manifest));
+    let url, rendered, revoked;
+    const controller = createGraphicPreviewController({manifest, onChange: state => { rendered = state; },
+      fetcher: async () => new Response(JSON.stringify(value), {headers: {'Content-Type': 'application/json'}}),
+      createURL: blob => { assert.equal(blob.type, 'image/png'); return url = 'blob:local'; },
+      revokeURL: value => { revoked = value; }});
+    await controller.start(request);
+    assert.equal(rendered.status, 'ready');
+    assert.equal(rendered.url, url);
+    controller.dispose();
+    assert.equal(revoked, url);
+}
 """
-    subprocess.run(["node", "--input-type=module", "-e", code, str(root), str(tmp_path)],
-                   check=True, timeout=15, capture_output=True, text=True)
+    completed = subprocess.run(["node", "--input-type=module", "-e", code, str(root), str(tmp_path)],
+                               timeout=15, capture_output=True, text=True)
+    assert completed.returncode == 0, completed.stderr
 
 
 @pytest.mark.parametrize("outcome", ["off", "unavailable_capture"])

@@ -118,6 +118,9 @@ export function GraphicPreviewFigure({ value, url, originalURL = null }) {
   return h("figure", { className: "graphic-preview-figure" },
     h("img", { src: url, alt: value.alt_text, width: value.width, height: value.height }),
     value.schema_version === 3 && h(FullSizeImage, { url, alt: value.alt_text, title: value.title }),
+    value.schema_version === 7 && h("div", { className: "graphic-river-controls" },
+      h(FullSizeImage, { url, alt: value.alt_text, title: value.title }),
+      h("a", { href: url, className: "btn sm", download: "river-forecast.png" }, "Download forecast PNG")),
     h("figcaption", null,
       h("strong", null, value.title),
       h("p", null, `${value.source} · ${timing}`),
@@ -138,7 +141,7 @@ export function TextGraphicAgreement({ text, value }) {
     return h("p", { className: "graphic-agreement", "data-status": "published" },
       "Software does not read a published image; compare its labels with the text yourself.")
   }
-  const result = textGraphicAgreement(text, value.schema_version >= 4 ? value.delivery_text : value.alt_text)
+  const result = textGraphicAgreement(text, value.delivery_text ?? value.alt_text)
   if (result.status !== "compared") return h("p", { className: "graphic-agreement", "data-status": result.status },
     "No measured values in the text to compare with the graphic description.")
   return h("p", { className: "graphic-agreement", "data-status": result.unmatched.length ? "unmatched" : "matched" },
@@ -300,11 +303,16 @@ function SavedPreview({ request, family, fireSource, draft, onAction, storeFamil
       : `Preview the saved ${FIRE_LABELS[fireSource]} detections. Source and display checks can still withhold the graphic. No new source fetch or AI generation.`),
     h("button", { type: "button", className: "btn sm", disabled: preview.status === "loading" || !startRequest,
       onClick: () => controller.current?.start(startRequest) }, preview.status === "ready" ? "Rebuild preview" : "Preview graphic"),
+    draft.type === "river_flood" && h("button", { type: "button", className: "btn sm",
+      disabled: preview.status === "loading" || !startRequest,
+      onClick: () => controller.current?.start({ ...startRequest, format: "river_png" }) }, "Preview forecast PNG"),
     h("div", { role: "status", "aria-live": "polite" },
       preview.status === "loading" ? "Building the saved-source preview…" : preview.status === "error" ? preview.message : ""),
     preview.status === "ready" && (!storeFamily || preview.value.media_descriptor && retainedInput
       === (preview.value.media_descriptor.source?.packet_artifact_sha256 ?? preview.value.media_descriptor.asset?.manifest_sha256))
       && h(GraphicPreviewFigure, { value: preview.value, url: preview.url, originalURL: preview.originalURL }),
+    preview.status === "ready" && preview.value.schema_version === 7
+      && h(TextGraphicAgreement, { text: draft.text, value: preview.value }),
     family && h(MediaControls, { draft, onAction, reviewConfirmed, onConfirm: setReviewConfirmed,
       // A preview for a different retained input is never offered for attachment or review.
       preview: offered, retainedInput: storeFamily && validInput ? retainedInput : null, attestations,
