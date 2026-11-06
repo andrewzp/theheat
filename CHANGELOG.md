@@ -1,3 +1,8 @@
+## 0.9.109.84
+
+- Install the required crash debugger with the two selected CI workers'
+  other dependencies, before the private crash observer starts.
+
 ## 0.9.109.83
 
 - Hold air-quality forecasts before automatic writer selection when the source
