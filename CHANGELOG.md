@@ -1,3 +1,8 @@
+## 0.9.109.82
+
+- Ask the writer to credit CAMS via Open-Meteo in air-quality forecast copy.
+  Automatic arming and delivery hold copy without that credit for review.
+
 ## 0.9.109.81
 
 - Redistribute measured slow test files among the existing required CI jobs.

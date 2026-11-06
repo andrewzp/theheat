@@ -28,7 +28,7 @@ T0 = datetime(2026, 10, 29, 9, 0, tzinfo=UTC)
 EPOCH = "invented-journey-epoch-0001"
 HOT10_OVER = ("Riyadh's forecast high of 39.2°C runs 9.2°C above its October normal, the largest departure among "
               "15 sampled cities, ahead of Baghdad at 8.1°C and Cairo at 7.4°C above their own monthly normals, today.")
-PM25_COPY = "Lahore's PM2.5 is forecast to average 250 µg/m³ today, about 17 times the WHO 24-hour guideline, per CAMS model data."
+PM25_COPY = "Lahore's PM2.5 is forecast to average 250 µg/m³ today, about 17 times the WHO 24-hour guideline (CAMS via Open-Meteo)."
 NAMES = [name for name, _zone, _kind in h.CITIES] + ["Lahore"]
 
 

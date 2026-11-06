@@ -10,8 +10,8 @@ another city, day, provider or retry, and a changed source invalidates the
 draft instead of updating its evidence. Manual sends keep their existing gates.
 
 A complete historical day is not current eligibility; neither is a passed
-check. Automatic eligibility also needs text only, a forecast qualifier in the
-copy, the first publication or a tier rise for its city/day episode and no
+check. Automatic eligibility needs text only, a forecast qualifier and source
+credit, the first publication or a tier rise for its city/day episode, and no
 unknown earlier delivery in that episode.
 """
 from __future__ import annotations
@@ -38,11 +38,13 @@ MAX_BODY_BYTES = 65_536
 MAX_SOURCE_AGE = timedelta(hours=6)
 FUTURE_TOLERANCE = timedelta(minutes=5)
 _FORECAST = re.compile(r"\b(?:forecasts?|forecasted|model(?:led|ed)?|projected|expected)\b", re.I)
+_SOURCE_CREDIT = re.compile(r"\bCAMS\s+via\s+Open-Meteo\b", re.I)
 _EVENT = re.compile(r"^(?P<episode>(?:pm25|dust)_.+_\d{4}-\d{2}-\d{2})_tier(?P<tier>[1-3])$")
 HOLD_MESSAGES = {
     "air_quality_auto_text_disabled": "Automatic text for this air-quality forecast is switched off.",
     "air_quality_auto_text_only": "Air-quality forecasts publish automatically as text only.",
     "air_quality_auto_missing_forecast_qualifier": "Automatic air-quality copy must say it is a forecast.",
+    "air_quality_auto_missing_source_credit": "Automatic air-quality copy must credit CAMS via Open-Meteo.",
     "air_quality_contract_invalid": "The retained air-quality forecast window is not intact.",
     "air_quality_window_ended": "The forecast's local day has ended.",
     "air_quality_source_stale": "The retained forecast is too old for automatic publication.",
@@ -320,8 +322,11 @@ def auto_text_hold(draft: dict, state: Any, now: datetime, *, live: bool) -> str
         return "air_quality_auto_text_disabled"
     if "media_attachment" in draft:
         return "air_quality_auto_text_only"
-    if not isinstance(draft.get("text"), str) or not _FORECAST.search(draft["text"]):
+    text = draft.get("text")
+    if not isinstance(text, str) or not _FORECAST.search(text):
         return "air_quality_auto_missing_forecast_qualifier"
+    if not _SOURCE_CREDIT.search(text):
+        return "air_quality_auto_missing_source_credit"
     hold = episode_hold(draft, state)
     if hold is not None:
         return hold
