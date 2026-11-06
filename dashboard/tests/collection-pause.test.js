@@ -2,7 +2,7 @@ import test from "node:test"
 import assert from "node:assert/strict"
 
 import { readCollectionPause } from "../lib/automation.js"
-import { collectionPauseSummary, dotColorForWorkflow, failingWorkflows } from "../lib/automation-status.js"
+import { collectionPauseSummary, dotColorForWorkflow, failingWorkflows, recordedBotLaneStarts } from "../lib/automation-status.js"
 
 const bot = { name: "theheat-bot", file: "bot.yml", state: "active", last_run_conclusion: "success" }
 const configured = { status: "configured", checked_at: "2026-10-11T12:00:00.000Z", reason: null }
@@ -140,4 +140,33 @@ test("visible collection and dashboard labels preserve mismatch and unknown stat
   assert.match(unknown.collection, /^Collection pause unknown;/)
   assert.equal(unknown.dashboard, "Dashboard generation pause configured.")
   assert.equal(unknown.mismatch, false)
+})
+
+test("a newer saved due-sender run cannot advance the alerts timestamp", () => {
+  const alerts = { mode: "alerts", started_at: "2026-11-05T21:57:41Z" }
+  const dueSender = { mode: "auto_publish_due", started_at: "2026-11-05T22:16:18Z" }
+  const older = { mode: "both", started_at: "2026-11-05T19:56:52Z" }
+  const now = Date.parse("2026-11-06T02:25:00Z")
+  assert.deepEqual(recordedBotLaneStarts([alerts, dueSender, older], now), {
+    alerts: "2026-11-05T21:57:41.000Z", dueSender: "2026-11-05T22:16:18.000Z",
+  })
+  assert.deepEqual(recordedBotLaneStarts([older, dueSender], now), {
+    alerts: "2026-11-05T19:56:52.000Z", dueSender: "2026-11-05T22:16:18.000Z",
+  })
+})
+
+test("unknown lanes stay unknown with no valid retained starts", () => {
+  const now = Date.parse("2026-11-06T02:25:00Z")
+  const history = [
+    { mode: "alerts", started_at: "2026-11-06T02:26:00Z" },
+    { mode: "both", started_at: "2026-11-05T21:57:41" },
+    { mode: "alerts", started_at: "2026-11-05T21:57:41Z", configuration_only: true },
+    { mode: "both", started_at: "2026-11-05T21:57:41Z", collection_paused: true },
+    { mode: "auto_publish_due", started_at: "2026-02-31T22:16:18Z" },
+    { mode: "manual_tweet", started_at: "2026-11-05T22:16:18Z" },
+    null,
+  ]
+  for (const input of [history, undefined, {}]) {
+    assert.deepEqual(recordedBotLaneStarts(input, now), { alerts: null, dueSender: null })
+  }
 })

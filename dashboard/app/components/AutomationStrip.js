@@ -4,8 +4,9 @@ import {
   dotColorForWorkflow,
   dotColorForSelfHeal,
   failingWorkflows,
-  isCollectorWorkflow,
+  isBotWorkflow,
   collectionPauseSummary,
+  recordedBotLaneStarts,
 } from "../../lib/automation-status.js"
 
 function AutomationDot({ name, color, tooltip }) {
@@ -32,7 +33,7 @@ function dotColorForRoutine(routine) {
   return "green"
 }
 
-export function AutomationStatusStrip({ status, error, localPreview = false }) {
+export function AutomationStatusStrip({ status, error, runHistory, localPreview = false }) {
   if (localPreview === true) {
     return (
       <div className="automation-strip">
@@ -63,7 +64,8 @@ export function AutomationStatusStrip({ status, error, localPreview = false }) {
   const pm = status.posting_mode_summary
   const failing = failingWorkflows(status)
   const pause = collectionPauseSummary(status)
-  const collector = workflows.find(isCollectorWorkflow)
+  const botWorkflow = workflows.find(isBotWorkflow)
+  const starts = recordedBotLaneStarts(runHistory)
 
   return (
     <>
@@ -125,13 +127,19 @@ export function AutomationStatusStrip({ status, error, localPreview = false }) {
       <div className="automation-pause-status">
         <p>{pause.collection}</p>
         <p>{pause.dashboard}{pause.mismatch ? " Collection and dashboard settings differ." : ""}</p>
-        {collector && (
+        {botWorkflow && (
           <p className="automation-retained-run">
-            Last recorded collector workflow: {collector.last_run_conclusion || "no decisive result"}
-            {collector.last_run_at ? ` · ${new Date(collector.last_run_at).toUTCString()}` : " · no run time"}.
-            {collector.error ? ` Check error: ${collector.error}` : ""}
+            Last recorded bot workflow: {botWorkflow.last_run_conclusion || "no decisive result"}
+            {botWorkflow.last_run_at ? ` · ${new Date(botWorkflow.last_run_at).toUTCString()}` : " · no run time"}.
+            {botWorkflow.error ? ` Check error: ${botWorkflow.error}` : ""}
           </p>
         )}
+        <p className="automation-retained-run">
+          {starts.alerts ? `Latest saved alerts run started ${new Date(starts.alerts).toUTCString()}.` : "No saved alerts run start."}
+        </p>
+        <p className="automation-retained-run">
+          {starts.dueSender ? `Latest saved due-sender run started ${new Date(starts.dueSender).toUTCString()}.` : "No saved due-sender run start."}
+        </p>
       </div>
     </>
   )

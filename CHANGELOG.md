@@ -1,3 +1,8 @@
+## 0.9.109.80
+
+- Separate the shared GitHub bot result from the latest saved starts for alert
+  collection and due sending. A sender run no longer reads as a collector run.
+
 ## 0.9.109.79
 
 - Attach the exact retained river forecast PNG and its description through
