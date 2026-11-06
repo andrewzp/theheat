@@ -22,8 +22,9 @@ TEMPERATURE = temperature.KIND
 HOT10 = hazard.HOT10
 # Literal mirrors of gist_crw_media.KIND and gist_published_media.KINDS/product_for.
 CRW = "gist_crw_anomaly_v1"
+NWPS = "gist_nwps_forecast_v1"
 PUBLISHED = frozenset({"gist_published_radar_v1", "gist_published_chart_v1"})
-STORE_KINDS = frozenset({CRW, *PUBLISHED})
+STORE_KINDS = frozenset({CRW, NWPS, *PUBLISHED})
 KINDS = frozenset({TEMPERATURE, *hazard.KINDS, *STORE_KINDS})
 # Rendered here from retained source only (no store input, no published product):
 # the only kinds a trusted delegated joint review may cover.
@@ -46,14 +47,20 @@ def _module(kind):
     if kind == CRW:
         from src.media import gist_crw_media
         return gist_crw_media
+    if kind == NWPS:
+        from src.media import gist_nwps_media
+        return gist_nwps_media
     if kind in PUBLISHED:
         from src.media import gist_published_media
         return gist_published_media
     return hazard
 
 
-def validate_descriptor(value, bundle):
-    return _module(kind_of(value)).validate_descriptor(value, bundle)
+def validate_descriptor(value, bundle, *, review_context=None):
+    kind = kind_of(value)
+    if kind == NWPS:
+        return _module(kind).validate_descriptor(value, bundle, review_context or {})
+    return _module(kind).validate_descriptor(value, bundle)
 
 
 def required_attestations(value):
@@ -103,6 +110,8 @@ def currentness(bundle, descriptor=None, *, now=None):
     """The kind's own unchanged source-time rule; None when current."""
     if _crw_claims(bundle):
         return _module(CRW).currentness(bundle, now)
+    if isinstance(descriptor, dict) and descriptor.get("kind") == NWPS:
+        return _module(NWPS).currentness(bundle, now)
     if _published_claims(bundle):
         return _module("gist_published_radar_v1").currentness(descriptor or {}, now)
     return hazard.currentness(hazard.family_for(bundle), bundle, now)

@@ -501,6 +501,10 @@ async function validateDeliveredResponse(value, request, manifest) {
     await validatePNGResponse({ ...temperature, schema_version: 3, alt_text: delivery_text }, request, manifest)
     return value
   }
+  if (value.media_kind === "gist_nwps_forecast_v1") {
+    await validateRiverAttachmentResponse({ ...rest, schema_version: 4, posting_window: window }, request, manifest)
+    return value
+  }
   const retained = HAZARD_MEDIA[value?.media_kind]?.rendererVersion ? { retained_input_sha256: descriptor?.source?.packet_artifact_sha256 } : {}
   await validateHazardPNGResponse({ ...rest, schema_version: 4, posting_window: window }, { ...request, ...retained }, manifest)
   return value
@@ -539,41 +543,74 @@ async function validatePNGResponse(value, request, manifest) {
   return value
 }
 
-async function validateRiverPNGResponse(value, request, manifest) {
+function validRiverBinding(binding, files) {
+  return exactKeys(binding, ["template", "template_version", "renderer_version", "source_evidence_sha256",
+    "source_context_sha256", "png_sha256", "alt_sha256", "renderer_sha256", "canvas_sha256", "codec_sha256", "font_sha256"])
+    && binding.template === "nwps_river_forecast" && binding.template_version === templates.nwps_river_forecast.version
+    && binding.renderer_version === "p31-nwps-png-1"
+    && Object.entries(binding).filter(([k]) => k.endsWith("sha256")).every(([, v]) => isSHA(v))
+    && binding.renderer_sha256 === files["src/media/nwps_forecast_png.py"]
+    && binding.canvas_sha256 === files["src/media/gist_hazard_media.py"]
+    && binding.codec_sha256 === files["src/media/canonical_png.py"]
+    && binding.font_sha256 === files["src/media/fonts/DejaVuSansMono.ttf"]
+}
+
+export function validRiverMediaShape(descriptor, manifest) {
+  const ref = descriptor?.reference
+  return exactKeys(descriptor, ["kind", "schema_version", "reference", "binding", "series_sha256", "alt_text", "byte_count"])
+    && descriptor.kind === "gist_nwps_forecast_v1" && descriptor.schema_version === 1
+    && exactKeys(ref, ["schema_version", "artifact_sha256", "capture_sha256", "bundle_sha256"])
+    && ref.schema_version === 1 && [ref.artifact_sha256, ref.capture_sha256, ref.bundle_sha256, descriptor.series_sha256].every(isSHA)
+    && validRiverBinding(descriptor.binding, manifest.identity.files)
+    && text(descriptor.alt_text, 1000) && encoder.encode(descriptor.alt_text).length <= 1000
+    && Number.isSafeInteger(descriptor.byte_count) && descriptor.byte_count > 0 && descriptor.byte_count <= 750000
+}
+
+async function validateRiverFrame(value, request, manifest, binding, altText) {
   const template = templates.nwps_river_forecast
-  const binding = value?.binding
-  const files = manifest.identity.files
-  if (!exactKeys(value, ["schema_version", "draft_id", "revision_identity", "policy_source_sha256",
-        "preview_runtime_sha256", "binding", "cache_key", "png_base64", "title", "alt_text",
-        "scope", "width", "height", "source", "source_context", "publication_approved", "attachment"])
-      || value.schema_version !== 7 || value.draft_id !== request.draft_id
+  if (value.draft_id !== request.draft_id
       || canonical(value.revision_identity) !== canonical(request.expected_revision)
       || value.policy_source_sha256 !== request.expected_policy_source_sha256
       || value.preview_runtime_sha256 !== request.expected_preview_runtime_sha256
       || value.publication_approved !== false || value.attachment !== false
       || value.width !== 1200 || value.height !== 1500 || value.source !== template.source
       || !sourceContext(value, template)
-      || ![value.title, value.alt_text, value.scope].every(text => typeof text === "string" && text.length > 0 && text.length <= 10000)
-      || !exactKeys(binding, ["template", "template_version", "renderer_version", "source_evidence_sha256",
-        "source_context_sha256", "png_sha256", "alt_sha256", "renderer_sha256", "canvas_sha256", "codec_sha256", "font_sha256"])
-      || binding.template !== "nwps_river_forecast" || binding.template_version !== template.version
-      || binding.renderer_version !== "p31-nwps-png-1"
-      || ![binding.source_evidence_sha256, binding.renderer_sha256, binding.canvas_sha256,
-        binding.codec_sha256, binding.font_sha256].every(isSHA)
-      || binding.renderer_sha256 !== files["src/media/nwps_forecast_png.py"]
-      || binding.canvas_sha256 !== files["src/media/gist_hazard_media.py"]
-      || binding.codec_sha256 !== files["src/media/canonical_png.py"]
-      || binding.font_sha256 !== files["src/media/fonts/DejaVuSansMono.ttf"]
+      || ![value.title, altText, value.scope].every(field => text(field, 10000))
+      || !validRiverBinding(binding, manifest.identity.files)
       || await digest(JSON.stringify(bindingPayload(value.source_context))) !== binding.source_context_sha256
-      || await digestBytes(pngBytes(value.png_base64)) !== binding.png_sha256
-      || await digest(value.alt_text) !== binding.alt_sha256
-      || await digest(JSON.stringify(bindingPayload(binding))) !== value.cache_key) throw new Error("invalid preview")
+      || await digest(altText) !== binding.alt_sha256) throw new Error("invalid preview")
+  const png = pngBytes(value.png_base64)
+  if (await digestBytes(png) !== binding.png_sha256) throw new Error("invalid preview")
+  return png.length
+}
+
+async function validateRiverPNGResponse(value, request, manifest) {
+  if (!exactKeys(value, ["schema_version", "draft_id", "revision_identity", "policy_source_sha256",
+        "preview_runtime_sha256", "binding", "cache_key", "png_base64", "title", "alt_text",
+        "scope", "width", "height", "source", "source_context", "publication_approved", "attachment"])
+      || value.schema_version !== 7) throw new Error("invalid preview")
+  await validateRiverFrame(value, request, manifest, value.binding, value.alt_text)
+  if (await digest(JSON.stringify(bindingPayload(value.binding))) !== value.cache_key) throw new Error("invalid preview")
+  return value
+}
+
+async function validateRiverAttachmentResponse(value, request, manifest) {
+  const descriptor = value?.media_descriptor
+  if (!exactKeys(value, hazardKeys) || value.schema_version !== 4 || Object.hasOwn(request, "retained_input_sha256")
+      || value.media_kind !== "gist_nwps_forecast_v1" || !validRiverMediaShape(descriptor, manifest)
+      || value.png_sha256 !== descriptor.binding.png_sha256 || value.delivery_text !== descriptor.alt_text
+      || value.expanded_description !== descriptor.alt_text || !postingWindow(value.posting_window)
+      || await typedFingerprint(descriptor) !== value.media_descriptor_sha256
+      || await validateRiverFrame(value, request, manifest, descriptor.binding, descriptor.alt_text) !== descriptor.byte_count)
+    throw new Error("invalid preview")
   return value
 }
 
 export async function validateGraphicResponse(value, request, manifest) {
   if (request?.format === "river_png") return validateRiverPNGResponse(value, request, manifest)
   if (request?.delivered === true) return validateDeliveredResponse(value, request, manifest)
+  if (request?.format === "png" && value?.media_kind === "gist_nwps_forecast_v1")
+    return validateRiverAttachmentResponse(value, request, manifest)
   if (request?.format === "png" && value?.schema_version === 5) return validatePublishedResponse(value, request, manifest)
   if (request?.format === "png" && value?.schema_version === 4) return validateHazardPNGResponse(value, request, manifest)
   if (request?.format === "png") return validatePNGResponse(value, request, manifest)

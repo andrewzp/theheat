@@ -77,6 +77,7 @@ SOURCES = (
     'src/media/fire_map_graphic_adapter.py',
     'src/media/nwps_graphic_adapter.py',
     'src/media/nwps_forecast_png.py',
+    'src/media/gist_nwps_media.py',
     'src/media/nwps_capture.py',
     'src/media/maps/ne_110m_land_v4_1_0.json',
     'src/media/maps/manifest.json',

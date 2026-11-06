@@ -114,7 +114,7 @@ def test_acquired_capture_stays_outside_the_writer_bundle_and_survives_restore(s
 
 
 @pytest.mark.parametrize("change", ["text", "capture_reference", "bundle", "draft_switch"])
-@pytest.mark.parametrize("format", [None, "river_png"])
+@pytest.mark.parametrize("format", [None, "river_png", "png"])
 def test_change_during_render_never_returns_the_old_preview(saved_capture, change, format):
     state, request, store, _ = saved_capture
     if format:
@@ -177,15 +177,15 @@ def test_source_disagreement_is_refused_even_with_a_new_packet_identity(saved_ca
     assert not target.exists()
 
 
-def test_png_has_no_unreviewed_attachment_route(saved_capture, monkeypatch):
+def test_png_refuses_any_caller_selected_packet(saved_capture, monkeypatch):
     state, request, store, _ = saved_capture
     monkeypatch.setattr(store, "get", lambda *a, **kw: pytest.fail("PNG read the source packet"))
     with pytest.raises(PreviewError) as error:
-        preview(state, {**request, "format": "png"}, store)
-    assert error.value.code == "graphic_unavailable"
+        preview(state, {**request, "format": "png", "retained_input_sha256": "a" * 64}, store)
+    assert error.value.code == "bad_request"
 
 
-@pytest.mark.parametrize("format", [None, "river_png"])
+@pytest.mark.parametrize("format", [None, "river_png", "png"])
 def test_real_python_response_passes_browser_contract(saved_capture, tmp_path, format):
     state, request, store, _ = saved_capture
     root = Path(__file__).resolve().parents[1]
@@ -198,6 +198,10 @@ def test_real_python_response_passes_browser_contract(saved_capture, tmp_path, f
                          read_state=lambda: state, budget=Budget(), store=store)
     (tmp_path / "response.json").write_bytes(body)
     (tmp_path / "request.json").write_text(json.dumps(request))
+    (tmp_path / "draft.json").write_text(json.dumps(state["drafts"][0]))
+    if format == "png":
+        from src.editorial.policy import current_editorial_policy
+        (tmp_path / "policy.json").write_text(json.dumps(current_editorial_policy()))
     code = """
 import fs from 'node:fs'; import assert from 'node:assert/strict'; import {pathToFileURL} from 'node:url';
 const [root,temp]=process.argv.slice(1);
@@ -205,6 +209,38 @@ const {createGraphicPreviewController,validateGraphicResponse}=await import(path
 const read=name=>JSON.parse(fs.readFileSync(name));
 const value=read(temp+'/response.json'), request=read(temp+'/request.json'), manifest=read(root+'/dashboard/lib/graphic-runtime-manifest.json');
 await validateGraphicResponse(value,request,manifest);
+if (request.format === 'png') {
+    const {prepareGistMedia,validGistMedia}=await import(pathToFileURL(root+'/dashboard/lib/gist-media.js'));
+    const {applyDraftAction}=await import(pathToFileURL(root+'/dashboard/lib/draft-operations.js'));
+    const {draftIdentity,fingerprint,reviewIsCurrent}=await import(pathToFileURL(root+'/dashboard/lib/draft-revisions.js'));
+    const draft=read(temp+'/draft.json');
+    const policy=read(temp+'/policy.json'), at='2026-07-01T16:00:00Z';
+    Date.now=()=>Date.parse(at);
+    const state={drafts:[draft],run_history:[{started_at:at,runtime_inventory:{schema_version:1,captured_at:at,editorial_policy:policy}}]};
+    const local=new Request('http://127.0.0.1:3145/api/drafts',{headers:{host:'127.0.0.1:3145'}});
+    const fetcher=async (_url, options) => {
+        const revision={...draftIdentity(draft),decision_revision:draft.decision_revision??0};
+        assert.deepEqual(JSON.parse(options.body),{...request,expected_revision:revision});
+        return new Response(JSON.stringify({...value,revision_identity:revision}),{headers:{'Content-Type':'application/json'}});
+    };
+    const prepareMedia=(candidate,hash,retained)=>prepareGistMedia(local,candidate,hash,fetcher,retained);
+    await applyDraftAction(draft, state, {
+        action:'attach_graphic', body:{expectedMediaSha256:value.media_descriptor_sha256},
+        prepareMedia
+    });
+    assert.equal(validGistMedia(draft),true);
+    assert.equal(draft.review_binding,undefined);
+    const forged=structuredClone(draft);
+    forged.review_context.nwps_point_capture.artifact_sha256='a'.repeat(64);
+    assert.equal(validGistMedia(forged),false);
+    await assert.rejects(prepareGistMedia(local,draft,value.media_descriptor_sha256,fetcher,'a'.repeat(64)));
+    await applyDraftAction(draft,state,{action:'review',prepareMedia,body:{reviewConfirmed:true,
+      mediaReviewConfirmed:true, expectedMediaSha256:value.media_descriptor_sha256, expectedPolicySha256:fingerprint(policy)}});
+    assert.equal(draft.review_binding.kind,'human_media');
+    assert.equal(reviewIsCurrent(draft,policy),true);
+    assert.equal(draft.approval_binding,undefined);
+    fs.writeFileSync(temp+'/joint-reviewed.json',JSON.stringify(draft));
+}
 if (request.format === 'river_png') {
     for (const change of [
         v => { v.source_context.point_count++; },
@@ -233,6 +269,70 @@ if (request.format === 'river_png') {
     completed = subprocess.run(["node", "--input-type=module", "-e", code, str(root), str(tmp_path)],
                                timeout=15, capture_output=True, text=True)
     assert completed.returncode == 0, completed.stderr
+    if format == "png":
+        from src.editorial.revisions import review_is_current
+        assert review_is_current(json.loads((tmp_path / "joint-reviewed.json").read_text()))
+
+
+@pytest.mark.parametrize("changed", [False, True])
+def test_river_attachment_compares_all_points_at_existing_manual_sender_read(saved_capture, journey, monkeypatch, changed):  # noqa: F811
+    from datetime import datetime
+    from unittest.mock import MagicMock
+
+    from src.editorial.revisions import authorize_draft, invalidate_media_attachment, record_joint_media_review
+    from src.orchestrator import posting
+    from tests.test_nwps_major_forecasts import source
+
+    state, request, store, _ = saved_capture
+    draft = state["drafts"][0]
+    result = json.loads(preview(state, {**request, "format": "png"}, store))
+    inspection = json.loads(preview(state, {**request, "format": "river_png"}, store))
+    assert inspection["png_base64"] == result["png_base64"]
+    assert result["publication_approved"] is result["attachment"] is False
+    invalidate_media_attachment(draft, result["media_descriptor"], at=NOW.isoformat())
+    record_joint_media_review(draft)
+    with pytest.raises(ValueError, match="model review"):
+        authorize_draft(draft, "auto")
+    authorize_draft(draft, "manual", "invented-river-image-intent")
+    draft["status"] = "approved"
+    # The altered point is below the threshold. The existing headline evidence
+    # (first major point, peak, issue and time) remains byte-for-byte equivalent.
+    _, metadata, series = source()
+    revised = deepcopy(series)
+    revised["data"][0]["primary"] = 16.5
+    assert nwps.verify_major_forecast(source()[0], metadata, revised, NOW) == journey[3]
+    recheck = journey[1]
+    recheck.reset_mock()
+    recheck.side_effect = [(metadata, series), (metadata, revised if changed else series)]
+    monkeypatch.setattr(posting, "_utc_now", lambda: NOW)
+    monkeypatch.setattr(posting, "state", MagicMock())
+    monkeypatch.setattr(posting, "_record_published_two_bot_memory", MagicMock())
+    monkeypatch.setattr(posting, "post_to_bluesky", MagicMock())
+    monkeypatch.setattr(posting, "run_safety_pipeline", MagicMock(return_value=(True, "")))
+    monkeypatch.setattr(gist_assets, "configured", lambda: store)
+    monkeypatch.setattr("src.media.gist_hazard_media._aware_now", lambda now: now or NOW)
+    send = MagicMock(return_value={"id": "invented-river-image-receipt"})
+    monkeypatch.setattr(posting, "post_tweet", send)
+    monkeypatch.setenv("DRAFT_ID", draft["id"])
+    monkeypatch.setenv("TWEET_TEXT", draft["text"])
+    monkeypatch.setenv("PUBLISH_INTENT_ID", draft["publish_intent_id"])
+
+    posting.run_manual_tweet(state)
+    assert recheck.call_count == 2
+    row = state["publish_ledger"][draft["event_id"]]
+    if changed:
+        send.assert_not_called()
+        assert row["phase"] == "not_sent" and "nwps_forecast_series_changed" in draft["post_error"]
+    else:
+        send.assert_called_once_with(draft["text"], media_png=base64.b64decode(result["png_base64"]),
+                                     alt_text=result["delivery_text"])
+        assert row["tweet_id"] == "invented-river-image-receipt"
+        delivered_request = {**request, "format": "png", "delivered": True,
+                             "expected_revision": {**draft_identity(draft), "decision_revision": decision_revision(draft)}}
+        delivered = json.loads(preview(state, delivered_request, store))
+        assert delivered["schema_version"] == 6 and delivered["png_sha256"] == result["png_sha256"]
+        assert delivered["delivered"]["tweet_id"] == row["tweet_id"]
+        assert datetime.fromisoformat(delivered["delivered"]["confirmed_at"]).utcoffset() is not None
 
 
 @pytest.mark.parametrize("outcome", ["off", "unavailable_capture"])

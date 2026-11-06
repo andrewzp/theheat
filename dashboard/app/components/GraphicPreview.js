@@ -105,6 +105,7 @@ export function GraphicPreviewFigure({ value, url, originalURL = null }) {
       h("strong", null, value.title),
       h("p", { className: "graphic-kind" }, context.kind === "hot10_bulletin" ? "Forecast departure table (sampled cities)"
         : context.kind === "crw_product_day" ? "Satellite-analysis anomaly chart (sampled cells, not a continuous surface)"
+        : context.kind === "nwps_forecast_points" ? "Saved river-stage forecast"
         : context.kind === "pm25_forecast_day" ? "Model forecast chart"
         : context.kind === "viirs_acquisition" ? "NOAA-20/NOAA-21 VIIRS satellite detections" : "MODIS satellite detections"),
       h("p", null, `${value.source} · ${timing}`),
@@ -306,6 +307,9 @@ function SavedPreview({ request, family, fireSource, draft, onAction, storeFamil
     draft.type === "river_flood" && h("button", { type: "button", className: "btn sm",
       disabled: preview.status === "loading" || !startRequest,
       onClick: () => controller.current?.start({ ...startRequest, format: "river_png" }) }, "Preview forecast PNG"),
+    family === "nwps" && h("button", { type: "button", className: "btn sm",
+      disabled: preview.status === "loading" || !startRequest,
+      onClick: () => controller.current?.start(graphicRequest(draft, manifest)) }, "Inspect forecast SVG"),
     h("div", { role: "status", "aria-live": "polite" },
       preview.status === "loading" ? "Building the saved-source preview…" : preview.status === "error" ? preview.message : ""),
     preview.status === "ready" && (!storeFamily || preview.value.media_descriptor && retainedInput
@@ -329,6 +333,7 @@ function postImageFamily(draft) {
   if (draft?.type === "air_quality_hazard") return "pm25"
   if (draft?.type === "fire" && ["modis", "viirs"].includes(firePreviewSourceStatus(draft))) return firePreviewSourceStatus(draft)
   if (draft?.type === "hot10" && hot10PreviewSourceStatus(draft) === "bulletin") return "hot10"
+  if (riverPreviewSourceStatus(draft) === "retained") return "nwps"
   return null
 }
 

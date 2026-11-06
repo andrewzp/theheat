@@ -16,12 +16,13 @@ function draft() {
   }
 }
 
-test("a saved river capture offers its read-only preview without attachment controls", () => {
+test("a saved river capture offers review and inspection previews before any attachment", () => {
   const value = draft()
   assert.equal(riverPreviewSourceStatus(value), "retained")
   const html = renderToStaticMarkup(React.createElement(GraphicPreview, { draft: value }))
   assert.match(html, /Preview graphic/)
   assert.match(html, /Preview forecast PNG/)
+  assert.match(html, /Inspect forecast SVG/)
   assert.match(html, /river forecast chart/)
   assert.doesNotMatch(html, /Attach graphic|Review text and graphic|retained-input-/)
 })

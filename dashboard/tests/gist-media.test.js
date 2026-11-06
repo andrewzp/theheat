@@ -41,9 +41,9 @@ function attachedDraft() {
 
 test("temperature stays enabled and its exact validator decides", () => {
   assert.equal(GIST_MEDIA_KINDS[0], "gist_temperature_comparator_v1")
-  // Closed list: native hazard kinds, then exactly the three store-backed kinds.
+  // Closed list: native hazard kinds, then exactly the store-backed kinds.
   assert.deepEqual(GIST_MEDIA_KINDS.slice(1), [...GIST_HAZARD_KINDS, ...GIST_STORE_KINDS])
-  assert.deepEqual(GIST_STORE_KINDS, ["gist_crw_anomaly_v1", "gist_published_radar_v1", "gist_published_chart_v1"])
+  assert.deepEqual(GIST_STORE_KINDS, ["gist_crw_anomaly_v1", "gist_published_radar_v1", "gist_published_chart_v1", "gist_nwps_forecast_v1"])
   assert.ok(Object.isFrozen(GIST_MEDIA_KINDS))
   const draft = attachedDraft()
   assert.equal(gistMediaKind(draft.media_attachment), "gist_temperature_comparator_v1")
