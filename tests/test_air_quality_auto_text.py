@@ -31,8 +31,8 @@ from tests import live_content_harness as h
 DAY = "2026-10-29"
 T0 = datetime(2026, 10, 29, 13, 0, tzinfo=UTC)
 EPOCH = "invented-aq-epoch-0001"
-PM25_COPY = "Lahore's PM2.5 is forecast to average 250 µg/m³ today, about 17 times the WHO 24-hour guideline, per CAMS model data."
-DUST_COPY = "Dust is forecast to peak near 2,000 µg/m³ over Lahore today, per CAMS model data."
+PM25_COPY = "Lahore's PM2.5 is forecast to average 250 µg/m³ today, about 17 times the WHO 24-hour guideline (CAMS via Open-Meteo)."
+DUST_COPY = "Dust is forecast to peak near 2,000 µg/m³ over Lahore today (CAMS via Open-Meteo)."
 
 
 def city(name: str) -> dict:
@@ -373,6 +373,14 @@ def test_copy_without_a_forecast_qualifier_stays_manual(aq, monkeypatch):
     assert draft["approval_mode"] == "manual" and "auto_approve_at" not in draft
 
 
+def test_copy_missing_source_credit_stays_manual(aq, monkeypatch):
+    monkeypatch.setenv("THEHEAT_PM25_FORECAST_AUTO_TEXT", "1")
+    aq.script.copies["air_quality_hazard"] = PM25_COPY.replace(" via Open-Meteo", "")
+    draft = alerts(aq)["drafts"][0]
+    assert draft["automatic_source_hold"] == "air_quality_auto_missing_source_credit"
+    assert draft["approval_mode"] == "manual" and "auto_approve_at" not in draft
+
+
 def send_due(aq, monkeypatch, state, at: datetime):
     from freezegun import freeze_time
     from tests.gist_media_helpers import install_fake_x
@@ -394,10 +402,25 @@ def armed(aq, monkeypatch) -> Any:
 
 def test_due_text_rereads_once_before_safety_then_posts(aq, monkeypatch):
     state = armed(aq, monkeypatch)
+    writer_request = next(request for stage, request in aq.script.requests if stage == "writer")
+    assert "Credit the forecast as CAMS via Open-Meteo after the lead fact." in writer_request["messages"][0]["content"]
     fake = send_due(aq, monkeypatch, state, T0 + timedelta(minutes=40))
     assert fake.calls == [("create", PM25_COPY, {})] and fake.safety.call_count == 1
     assert [c["points"] for c in aq.transport.aq_calls] == [1]  # Not again after the durable intent.
     assert state["drafts"][0]["status"] == "posted"
+
+
+def test_due_uncredited_copy_holds_before_current_source_safety_or_x(aq, monkeypatch):
+    with monkeypatch.context() as legacy:
+        # Represent an unchanged, previously armed revision with the former copy rule.
+        legacy.setattr(current, "_SOURCE_CREDIT", SimpleNamespace(search=lambda _text: True))
+        legacy.setitem(aq.script.copies, "air_quality_hazard", PM25_COPY.replace(" via Open-Meteo", ""))
+        state = armed(aq, legacy)
+    monkeypatch.setenv("THEHEAT_PM25_FORECAST_AUTO_TEXT", "1")
+    fake = send_due(aq, monkeypatch, state, T0 + timedelta(minutes=40))
+    assert fake.calls == [] and fake.safety.call_count == 0 and aq.transport.aq_calls == []
+    draft = state["drafts"][0]
+    assert draft["approval_mode"] == "manual" and "air_quality_auto_missing_source_credit" in draft["post_error"]
 
 
 @pytest.mark.parametrize(("change", "reason"), [

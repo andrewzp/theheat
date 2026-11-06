@@ -172,6 +172,8 @@ def build_writer_user_prompt(
         prompt = f"{prompt}\n\n{MULTISIGNAL_GUIDANCE}"
     if bundle.signal_kind == "hot10":
         prompt = f"{prompt}\n\n{HOT10_RANK_GUIDANCE}"
+    if bundle.signal_kind in ("air_quality_hazard", "dust_event"):
+        prompt += "\n\nCredit the forecast as CAMS via Open-Meteo after the lead fact."
     if is_thermal(bundle) or any(is_thermal(signal) for signal in (bundle.related_signals or [])):
         prompt = f"{prompt}\n\n{THERMAL_TIME_GUIDANCE}"
     if getattr(bundle, "human_impact", None):
