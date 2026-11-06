@@ -92,16 +92,12 @@ def qualified_spec(bundle, *, synthetic=False, include_viirs=False, include_temp
     """
     _retained_bundle_json(bundle)
     if bundle["signal_kind"] == "river_flood" and "nwps_index_hint" in bundle.get("raw_signal_dump", {}):
-        from src.media.nwps_graphic_adapter import nwps_graphic_spec
+        from src.media.nwps_graphic_adapter import nwps_graphic_spec, source_context
         if nwps_source_capture is None:
             raise PreviewError("graphic_unavailable")
         spec = nwps_graphic_spec(bundle, nwps_source_capture, expected_bundle_sha256=fingerprint(bundle),
                                  expected_capture_sha256=fingerprint(nwps_source_capture))
-        evidence = spec["evidence"]
-        return spec, "NOAA/NWS National Water Prediction Service", {
-            "kind": "nwps_forecast_points", "gauge": evidence["gauge"], "unit": evidence["unit"],
-            "issued_at": evidence["issued_at"], "first_major_at": evidence["first_major_at"],
-            "checked_at": evidence["evidence_as_of"], "point_count": len(evidence["points"])}
+        return spec, "NOAA/NWS National Water Prediction Service", source_context(spec["evidence"])
     if bundle["signal_kind"] == "fire":
         receipts = [bundle["raw_signal_dump"]["acquisition_provenance"],
                     *[r["acquisition_evidence"] for r in bundle.get("related_signals", [])]]
@@ -157,7 +153,7 @@ def hot10_source_context(evidence):
 
 def _store_backed_result(request, prepared, policy_sha, runtime_sha, bundle):
     """Schema 4 (CRW, a native chart) or schema 5 (published original + derivative)."""
-    from src.media.gist_media import posting_window
+    from src.media.gist_media import NWPS, posting_window
     from src.media.gist_published_media import KINDS as PUBLISHED
     descriptor = prepared["descriptor"]
     common = {"draft_id": request["draft_id"], "revision_identity": deepcopy(request["expected_revision"]),
@@ -168,6 +164,11 @@ def _store_backed_result(request, prepared, policy_sha, runtime_sha, bundle):
               "delivery_text": prepared["delivery_text"], "expanded_description": prepared["full_text"],
               "scope": prepared["scope"], "posting_window": posting_window(bundle, descriptor=descriptor),
               "publication_approved": False, "attachment": False}
+    if descriptor["kind"] == NWPS:
+        from src.media.gist_nwps_media import SOURCE
+        return {"schema_version": 4, **common, "png_sha256": descriptor["binding"]["png_sha256"],
+                "source": SOURCE, "source_context": prepared["source_context"],
+                "width": 1200, "height": 1500}
     if descriptor["kind"] in PUBLISHED:
         asset = descriptor["asset"]
         return {"schema_version": 5, **common, "png_sha256": asset["derivative_sha256"],
@@ -226,10 +227,15 @@ def _delivered_store_backed(request, snapshot, attachment, receipt, *, policy_sh
     from src.media import gist_media
     bundle = deepcopy(snapshot["review_context"]["two_bot"]["bundle"])
     _retained_bundle_json(bundle)
-    identity = (attachment["source"]["packet_artifact_sha256"] if gist_media.kind_of(attachment) == gist_media.CRW
-                else attachment["asset"]["manifest_sha256"])
     try:
-        prepared = gist_media.prepare_media(bundle, retained_input_sha256=identity, store=store)
+        kind = gist_media.kind_of(attachment)
+        if kind == gist_media.NWPS:
+            from src.media import gist_nwps_media
+            prepared = gist_nwps_media.prepare(bundle, snapshot["review_context"], store)
+        else:
+            identity = (attachment["source"]["packet_artifact_sha256"] if kind == gist_media.CRW
+                        else attachment["asset"]["manifest_sha256"])
+            prepared = gist_media.prepare_media(bundle, retained_input_sha256=identity, store=store)
     except ValueError as exc:
         code = getattr(exc, "code", None)
         if isinstance(code, str) and code.startswith("media_"):
@@ -327,13 +333,13 @@ def build_preview(request, *, policy_sha, runtime_sha, read_state, budget, synth
         bundle = deepcopy(draft["review_context"]["two_bot"]["bundle"])
         # Bound the full retained story before canonical hashing and validation.
         retained_bundle = _retained_bundle_json(bundle)
-        from src.media import gist_media
+        from src.media import gist_media, gist_nwps_media
         nwps_source_capture = None
         river_png = request.get("format") == "river_png"
-        if bundle.get("signal_kind") == "river_flood" and "nwps_index_hint" in bundle.get("raw_signal_dump", {}):
-            # The attachment format is separate from the saved-source inspection image.
-            if request.get("format") == "png":
-                raise PreviewError("graphic_unavailable")
+        river_attachment = request.get("format") == "png" and gist_nwps_media.claims(bundle)
+        if river_attachment and ("retained_input_sha256" in request or synthetic):
+            raise PreviewError("bad_request")
+        if gist_nwps_media.claims(bundle) and not river_attachment:
             from src.media import gist_assets, nwps_capture
             try:
                 nwps_source_capture = nwps_capture.load(bundle, draft["review_context"].get(nwps_capture.CONTEXT_KEY), store)
@@ -341,7 +347,7 @@ def build_preview(request, *, policy_sha, runtime_sha, read_state, budget, synth
                 raise PreviewError("media_hold", exc.code) from None
         elif river_png:
             raise PreviewError("graphic_unavailable")
-        store_backed = request.get("format") == "png" and gist_media.needs_retained_input(bundle)
+        store_backed = river_attachment or (request.get("format") == "png" and gist_media.needs_retained_input(bundle))
         if store_backed:
             spec = source = context = None
         else:
@@ -350,7 +356,10 @@ def build_preview(request, *, policy_sha, runtime_sha, read_state, budget, synth
             spec, source, context = qualified_spec(bundle, synthetic=synthetic, include_viirs=True,
                                                   include_temperature=True, nwps_source_capture=nwps_source_capture)
         budget.remaining()
-        if request.get("format") == "png":
+        if river_attachment:
+            prepared = gist_nwps_media.prepare(bundle, draft["review_context"], store)
+            rendered = None
+        elif request.get("format") == "png":
             prepared = gist_media.prepare_media(bundle, synthetic=synthetic, store=store,
                                                 retained_input_sha256=request.get("retained_input_sha256"))
             rendered = None

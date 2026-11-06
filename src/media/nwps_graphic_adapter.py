@@ -87,6 +87,12 @@ def validate_nwps_adapter_binding(evidence):
     return expected
 
 
+def source_context(evidence):
+    return {"kind": "nwps_forecast_points", "gauge": evidence["gauge"], "unit": evidence["unit"],
+            "issued_at": evidence["issued_at"], "first_major_at": evidence["first_major_at"],
+            "checked_at": evidence["evidence_as_of"], "point_count": len(evidence["points"])}
+
+
 def nwps_alt_text(evidence):
     prefix = "Synthetic demonstration. " if evidence["synthetic"] else ""
     first = evidence["first_major_at"][:19].replace("T", " ")

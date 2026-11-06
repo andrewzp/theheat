@@ -1,3 +1,10 @@
+## 0.9.109.79
+
+- Attach the exact retained river forecast PNG and its description through
+  manual joint review. Keep SVG and downloadable PNG inspection available.
+- Before a manual image send, compare the full plotted source series using
+  the existing NOAA recheck. A change holds the image before upload.
+
 ## 0.9.109.78
 
 - Preview and download a river forecast PNG from the exact NOAA source packet

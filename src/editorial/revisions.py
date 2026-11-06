@@ -269,7 +269,7 @@ def review_is_current(draft: dict, *, policy=_CURRENT_POLICY) -> bool:
     if media:
         try:
             from src.media.gist_media import NATIVE_KINDS, kind_of, required_attestations, validate_descriptor
-            validate_descriptor(draft["media_attachment"], _two_bot(draft)["bundle"])
+            validate_descriptor(draft["media_attachment"], _two_bot(draft)["bundle"], review_context=draft.get("review_context"))
             if not isinstance(binding, dict) or binding.get("kind") not in ("human_media", "delegated_media") \
                     or binding.get("media_sha256") != fingerprint(draft["media_attachment"]):
                 return False
@@ -443,7 +443,7 @@ def record_joint_media_review(draft: dict, *, at: str | None = None, policy=_CUR
     defaults to confirmed and native kinds accept none.
     """
     from src.media.gist_media import required_attestations, validate_descriptor
-    validate_descriptor(draft["media_attachment"], _two_bot(draft)["bundle"])
+    validate_descriptor(draft["media_attachment"], _two_bot(draft)["bundle"], review_context=draft.get("review_context"))
     required = required_attestations(draft["media_attachment"])
     supplied = attestations or {}
     if not isinstance(supplied, dict) or set(supplied) != set(required) or any(v is not True for v in supplied.values()):

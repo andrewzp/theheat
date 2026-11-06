@@ -8,7 +8,7 @@ import { createHash } from "node:crypto"
 import manifest from "./graphic-runtime-manifest.json" with { type: "json" }
 import { EDITORIAL_POLICY_MANIFEST } from "./editorial-policy-manifest.js"
 import { draftIdentity, fingerprint } from "./draft-revisions.js"
-import { retainedPacketReference } from "./graphic-preview.js"
+import { retainedPacketReference, validRiverMediaShape, validateGraphicResponse } from "./graphic-preview.js"
 import { prepareGistTemperatureMedia, validGistTemperatureMedia } from "./gist-temperature-media.js"
 
 // Literals, not imports: an import cycle with draft-revisions.js must never
@@ -18,6 +18,7 @@ const PM25 = "gist_pm25_forecast_v1"
 const MODIS = "gist_modis_locator_v1"
 const VIIRS = "gist_viirs_locator_v1"
 const HOT10 = "gist_hot10_bulletin_v1"
+const NWPS = "gist_nwps_forecast_v1"
 const FONT = "src/media/fonts/DejaVuSansMono.ttf"
 // Schema 2: canonical, host-independent PNG bytes (src/media/canonical_png.py).
 const CODEC_FILE = "src/media/canonical_png.py", PNG_CODEC = "canonical-png-fixed-huffman-1"
@@ -78,7 +79,7 @@ const PRODUCTS = Object.freeze({
 })
 const CYCLONE_SIGNALS = ["cyclone_rapid_intensification", "cyclone_tier_crossing", "cyclone_landfall",
   "cyclone_land_threat", "cyclone_basin_record"]
-export const GIST_STORE_KINDS = Object.freeze([CRW, RADAR, CHART])
+export const GIST_STORE_KINDS = Object.freeze([CRW, RADAR, CHART, NWPS])
 export const GIST_MEDIA_KINDS = Object.freeze([TEMPERATURE, ...Object.keys(FAMILIES), ...GIST_STORE_KINDS])
 export const GIST_HAZARD_KINDS = Object.freeze(Object.keys(FAMILIES))
 // Paired with gist_media.NATIVE_KINDS: rendered from retained source only, the
@@ -262,6 +263,12 @@ export function validGistMedia(draft, value = draft?.media_attachment) {
   if (!kind) return false
   try {
     if (kind === CRW) return validCrwMedia(draft, value)
+    if (kind === NWPS) {
+      const review = draft?.review_context, bundle = review?.two_bot?.bundle
+      return riverClaims(bundle) && validRiverMediaShape(value, manifest)
+        && fingerprint(value.reference) === fingerprint(review.nwps_point_capture)
+        && value.reference.bundle_sha256 === fingerprint(bundle) && digest(value.alt_text) === value.binding.alt_sha256
+    }
     if (kind === RADAR || kind === CHART) return validPublishedMedia(draft, value)
     return validHazardMedia(draft, value)
   } catch { return false }
@@ -293,6 +300,14 @@ export function gistMediaCurrentness(draft, nowMs = Date.now()) {
   const kind = gistMediaKind(draft?.media_attachment)
   if (!kind || kind === TEMPERATURE) return null
   const now = nowMs * 1000, bundle = draft.review_context?.two_bot?.bundle
+  if (kind === NWPS) {
+    const evidence = bundle?.raw_signal_dump?.evidence
+    const issued = micros(evidence?.issued_at), first = micros(evidence?.forecast_valid_at)
+    if (issued === null || first === null || now < issued || now - issued > 6 * 3600 * 1000000
+        || now >= first || first - now > 72 * 3600 * 1000000)
+      return { code: "media_source_stale", message: "The saved river forecast is outside its current-source window" }
+    return null
+  }
   if (kind === CRW) {
     // Paired with crw_contract.fresh_day: product day 0-5 UTC days old.
     const day = bundle?.raw_signal_dump?.date
@@ -499,8 +514,28 @@ async function prepareStoreMedia(request, draft, kind, expectedMediaSha256, reta
   return descriptor
 }
 
+function riverClaims(bundle) {
+  return bundle?.signal_kind === "river_flood" && Object.hasOwn(bundle.raw_signal_dump ?? {}, "nwps_index_hint")
+}
+
+async function prepareRiverMedia(request, draft, expectedMediaSha256, fetcher, retainedInputSha256) {
+  if (!isSHA(expectedMediaSha256) || retainedInputSha256 !== null) throw refusal("Preview the river graphic from this draft's own packet")
+  const {result, revision} = await previewJSON(request, draft, {}, fetcher)
+  try {
+    await validateGraphicResponse(result, { draft_id: draft.id, expected_revision: revision, format: "png",
+      expected_policy_source_sha256: manifest.identity.policy_source_sha256,
+      expected_preview_runtime_sha256: manifest.runtime_sha256 }, manifest)
+    if (result.media_kind === NWPS && result.media_descriptor_sha256 === expectedMediaSha256
+        && validGistMedia(draft, result.media_descriptor)) return result.media_descriptor
+  } catch {
+    throw refusal("The river graphic changed; preview it again")
+  }
+  throw refusal("The river graphic changed; preview it again")
+}
+
 export async function prepareGistMedia(request, draft, expectedMediaSha256, fetcher = globalThis.fetch, retainedInputSha256 = null) {
   const bundle = draft?.review_context?.two_bot?.bundle
+  if (riverClaims(bundle)) return prepareRiverMedia(request, draft, expectedMediaSha256, fetcher, retainedInputSha256)
   if (gistNeedsRetainedInput(bundle)) {
     if (typeof expectedMediaSha256 !== "string" || !SHA.test(expectedMediaSha256)) throw refusal("Preview this exact graphic first")
     const kind = bundle.signal_kind === "regional_sst_anomaly" ? CRW : PRODUCTS[publishedProductFor(bundle)].kind

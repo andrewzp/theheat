@@ -91,7 +91,8 @@ test("10.6: Operations lists every family with its requirement and missing input
   assert.deepEqual(payload.families.map(row => [row.family, row.status]), GRAPHIC_FAMILIES.map(row =>
     [row.family, row.lane === "native" ? "from_saved_source" : "missing_input"]))
   const html = visible(renderToStaticMarkup(React.createElement(GraphicFamilies, { graphics: payload })))
-  assert.match(html, /Post-image families · 3 need an input here/)
+  assert.match(html, /Post-image families · 4 need an input here/)
+  assert.match(html, /NOAA river-stage forecast — rebuilt from one retained source packet/)
   assert.match(html, /Published NWS KTLX radar frame — an unaltered published image retained in the media store\. Missing here: a read-only media store \(THEHEAT_MEDIA_STORE\)\./)
   assert.match(html, /revokes the joint review and any approval/)
   const keys = ["NODE_ENV", "DASHBOARD_USERNAME", "DASHBOARD_PASSWORD", "THEHEAT_STATE_BACKEND", "THEHEAT_DB_PATH", "GIST_ID", "GITHUB_TOKEN", "THEHEAT_MEDIA_STORE", "THEHEAT_MEDIA_STORE_DSN"]

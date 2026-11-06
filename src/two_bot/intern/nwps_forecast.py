@@ -92,10 +92,16 @@ def current_nwps_forecast(draft: dict, *, live: bool, clock: Callable[[], dateti
         return hold
     if event_id != bundle_id:
         return "nwps_forecast_unverified"
+    attachment = draft.get("media_attachment")
+    if isinstance(attachment, dict) and attachment.get("kind") == "gist_nwps_forecast_v1":
+        series_sha = attachment.get("series_sha256")
+        if not isinstance(series_sha, str) or re.fullmatch(r"[a-f0-9]{64}", series_sha) is None:
+            return "nwps_forecast_unverified"
+        return forecast_source_hold(bundle, live=live, clock=clock, series_sha=series_sha)
     return forecast_source_hold(bundle, live=live, clock=clock)
 
 
-def forecast_source_hold(bundle: dict, *, live: bool, clock: Callable[[], datetime]) -> str | None:
+def forecast_source_hold(bundle: dict, *, live: bool, clock: Callable[[], datetime], series_sha: str | None = None) -> str | None:
     from src.editorial.revisions import fingerprint
 
     try:
@@ -118,6 +124,8 @@ def forecast_source_hold(bundle: dict, *, live: bool, clock: Callable[[], dateti
             expected = build_nwps_forecast_bundle(nwps.verify_major_forecast(hint, metadata, series, clock())).to_dict()
             if fingerprint({key: bundle[key] for key in expected}) != fingerprint(expected):
                 return "nwps_forecast_changed"
+            if series_sha is not None and fingerprint(series["data"]) != series_sha:
+                return "nwps_forecast_series_changed"
         return None
     except (RequestException, KeyError, TypeError, ValueError, AttributeError, OverflowError):
         return "nwps_forecast_unverified"
