@@ -116,13 +116,6 @@ def test_expanded_file_shards_partition_all_modules_and_parameters_without_chang
     assert [_ci_postgres_shard(path) for path in files] == original
 
 
-def test_moved_local_media_modules_are_kept_only_by_media_worker():
-    for name in ("test_delivery_begin_passes.py", "test_gist_png_portability.py", "test_joint_media_review.py"):
-        item = SimpleNamespace(path=ROOT / "tests" / name, nodeid=f"tests/{name}::invented")
-        assert select([item], "media") == [item]
-        assert select([item], "core") == select([item], "postgres") == []
-
-
 def test_stage_function_defaults_partition_cases_without_explicit_fault_metadata():
     path = ROOT / "tests/test_postgres_stage_revision_checks.py"
     # Frozen defaults keep complete functions together. Actual GHCN final-fault

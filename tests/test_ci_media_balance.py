@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 MOVED = (
     "test_retained_temperature_calculation.py", "test_parked_media_inspection.py",
     "test_media_replay_reuse.py", "test_media_review_pair.py",
+    "test_delivery_begin_passes.py", "test_gist_png_portability.py", "test_joint_media_review.py",
 )
 
 
@@ -26,7 +27,7 @@ def select(items, group):
     return kept
 
 
-def test_transfer_set_is_exactly_the_four_measured_whole_modules():
+def test_transfer_set_is_exactly_the_measured_whole_modules():
     assert _CI_LOCAL_MEDIA_MODULES == {ROOT / "tests" / name for name in MOVED}
 
 
@@ -47,7 +48,7 @@ def test_original_media_postgres_and_core_rules_and_relative_order_remain():
         "test_postgres_preview_command_ingress.py", "test_ci_media_balance.py",
         *MOVED, "test_retained_reader_decoding.py",
     )]
-    assert select(items, "media") == [items[0], items[1], *items[4:8]]
+    assert select(items, "media") == [items[0], items[1], *items[4:-1]]
     assert select(items, "postgres") == [items[2]]
-    assert select(items, "core") == [items[3], items[8]]
+    assert select(items, "core") == [items[3], items[-1]]
     assert select(items, "all") == items
