@@ -150,8 +150,14 @@ jobs:
       - name: Install PostgreSQL 17 contract-test binaries
         if: matrix.partition != 'core'
         timeout-minutes: 5
+        env:
+          THEHEAT_CI_INSTALL_GDB: ${{ matrix.partition == 'postgres' && (matrix.postgres-shard == '2' || matrix.postgres-shard == '8') && '1' || '0' }}
         run: |
-          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 install -y --no-install-recommends postgresql-17 postgresql-client-17 poppler-utils
+          packages=(postgresql-17 postgresql-client-17 poppler-utils)
+          if [[ "${THEHEAT_CI_INSTALL_GDB:-0}" == 1 ]]; then
+            packages+=(gdb)
+          fi
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 install -y --no-install-recommends "${packages[@]}"
 
       - name: Verify native graphics dependency capture
         if: matrix.partition == 'media'

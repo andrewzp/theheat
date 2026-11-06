@@ -132,15 +132,8 @@ def _directory(path: Path) -> None:
 def prepare(runner_temp: Path, environment_file: Path) -> None:
     """Publish restoration information BEFORE attempting a kernel mutation."""
     if shutil.which("gdb") is None:
-        # This CI-only prepare step is guarded to PG2/PG8 in the workflow. Keep the
-        # original three native dependency steps and their exact gates intact.
-        subprocess.run([
-            "sudo", "--non-interactive", "apt-get", "-o", "Acquire::Retries=2",
-            "-o", "Acquire::http::Timeout=20", "-o", "Acquire::https::Timeout=20",
-            "install", "-y", "--no-install-recommends", "gdb",
-        ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=120, check=True)
-        if shutil.which("gdb") is None:
-            raise ValueError("debugger_unavailable")
+        # The same PG2/PG8 workers install GDB with their other CI dependencies.
+        raise ValueError("debugger_unavailable")
     directory = Path(tempfile.mkdtemp(prefix="theheat-native-", dir=runner_temp))
     _directory(directory)
     if any(character in str(directory) for character in "\n\r%"):
