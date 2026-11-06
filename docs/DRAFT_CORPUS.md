@@ -11,6 +11,41 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-11-06 — Daily corpus grading (1 fresh draft; 2 carry-overs from Oct 31 / Nov 4, previously graded)
+
+**Context:** Gist read via git-clone path (success). 3 pending: `draft_20261031_032828_68` (Brazil fire,
+B- Oct 31) and `draft_20261104_022119_64` (Verkhoyansk hot10, B Nov 4) — same ids/text, not re-graded.
+**1 fresh:** `draft_20261105_121936_65`, `dust_event` (created Nov 5 12:19Z).
+
+**Staleness (~15:00 UTC Nov 6):** Brazil fire ~132h, past-tense/dated — not a strict candidate, but
+low news value. Verkhoyansk ~109h, "Wednesday" (Nov 4) forecast day now elapsed — strict candidate
+(>48h, dated forecast). Riyadh dust ~27h, "Thursday" (Nov 5) peak day elapsed but under 48h — watch
+next cycle. Gist write skipped (`gh` token invalid; gist API blocked by sandbox proxy).
+
+**Grade distribution (fresh):** 0 A / 0 B / 1 B-. **A-rate 0% (n=1)**; bar not cleared.
+
+### B-
+**[3] Riyadh dust_event (score 78)** — "dust is forecast to peak near 6,015 µg/m³ Thursday, with PM10
+averaging ~55× the WHO 24-hour guideline — CAMS model forecast, not station-measured." WHO multiple
+stated unprompted (55×45 = 2,475 µg/m³ mean, checks; P_dust counter-evidence, 3rd consecutive dust
+cycle). Peak-vs-mean gap is the implicit violation and the setup is strong, but the draft spends its
+close on a source disclaimer — same subtype as Urumqi Oct 31 (C+) and Riyadh Oct 31 [B-]. "near 6,015"
+hedges an exact figure (mild P4). No mechanism named (no source region, no why-now). Pure data
+delivery, valid register; capped by P_close.
+
+### Patterns
+1. **P_close** +1 cycle (disclaimer close, 0 positive of 2 drafts evaluated across Nov 4–6).
+2. **P_dust** counter-evidence cycle 3: WHO anchor present again (4 of 4 recent dust_event drafts).
+3. **P_event_sat** +1: Riyadh dust_event is the 4th Riyadh dust draft since Oct 28 (Jun 13, Oct 28,
+   Oct 31, Nov 5) — same city repeats across cycles, though not same-day this time.
+4. No era-anchor, political-anchor, banned-opener or plant-comparison hits.
+
+### Followups
+- Operator: reject Verkhoyansk (forecast day elapsed) and consider the Oct 31 Brazil fire.
+- Operator: `daily-plan-current` still unmerged; `main` lacks graded cycles since 2026-06-08.
+
+---
+
 ## 2026-11-04 — Daily corpus grading (1 fresh draft; 1 carry-over from Oct 31, previously graded)
 
 **Context:** Gist read via git-clone path (success). 2 pending: `draft_20261031_032828_68` (Brazil

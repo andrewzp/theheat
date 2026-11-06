@@ -80,6 +80,7 @@ We grade drafts on an A through F rubric in `docs/DRAFT_CORPUS.md` (the longitud
 | 2026-11-02 | 0 | — | — | — | — | **N/A** | — | No fresh drafts — queue is an exact match to Oct 31's 4 graded drafts; no re-grading, grades stand. No proposal evidence updates. 3 strict staleness candidates (Riyadh ×2, Urumqi; 69–84h, Oct 30 forecasts elapsed); gist write blocked (invalid `gh` token / 403), skipped. Intake quiet since Oct 31 03:28 UTC. |
 | 2026-11-03 | 0 | — | — | — | — | **N/A** | — | No fresh drafts — 1 pending is Oct 31's Brazil fire (B-, graded). Other 3 Nov 2 carry-overs gone from queue (cause unconfirmed). No proposal evidence updates. Intake dry since Oct 31 03:28 UTC. |
 | 2026-11-04 | 1 | 0 | 1 | 0 | 0 | **0%** | ✗ | n=1 fresh: Verkhoyansk hot10 B (clean exact data, no close/punch; first hot10 graded). Oct 31 Brazil fire carry-over (B-) not re-graded, ~98h old. P_close +1. Gist write skipped (invalid token). |
+| 2026-11-06 | 1 | 0 | 0 | 1 | 0 | **0%** | ✗ | n=1 fresh: Riyadh dust_event B- (WHO 55× stated — P_dust counter-evidence cycle 3; strong peak/mean setup spent on "model forecast, not station-measured" disclaimer close — P_close +1; "near 6,015" hedge). Carry-overs Brazil fire (B-) and Verkhoyansk (B) not re-graded. Verkhoyansk now a strict staleness candidate (109h, Wed forecast elapsed). Gist write skipped (invalid token). |
 
 **Trend interpretation:**
 The Apr 25 jump to 43% was real but came from a small cohort (7 drafts) and didn't sustain into Apr 27. The Apr 27 regression has named causes (Sonnet rewrite path, verb-list gap in opener regex, era-anchor over-deployment, political anchor curation error). All four have proposed fixes documented in `docs/DRAFT_CORPUS.md` Apr 27 implications section. Next data point: tomorrow's scheduled grader (fires 2026-04-27 06:00 UTC) on the Apr 26-27 cycle output under v2.5 + post-humor-lens fixes.
@@ -89,6 +90,10 @@ We've been in the 9-43% band for three cycles. Need to clear 50% sustained.
 ## Rejection events
 
 Drafts that got rejected, with dates.
+
+### 2026-11-06 — Staleness bulk-reject: 1 strict candidate; write skipped
+
+Verkhoyansk hot10 (~109h, "Wednesday" forecast elapsed) is a strict candidate. Brazil fire (~132h) past-tense, not mechanical. Riyadh dust (~27h) under threshold. `gh auth` invalid / gist API blocked; operator should reject via dashboard.
 
 ### 2026-11-03 — Staleness bulk-reject: 0 strict candidates; write skipped
 
