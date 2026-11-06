@@ -448,7 +448,7 @@ export default function Dashboard() {
   return (
     <>
 
-      <AutomationStatusStrip status={automation} error={automationError} localPreview={data?.local_preview === true} />
+      <AutomationStatusStrip status={automation} error={automationError} runHistory={runHistory} localPreview={data?.local_preview === true} />
 
       <div className="dash">
         {data?.local_preview && (

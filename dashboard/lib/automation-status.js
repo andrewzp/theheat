@@ -2,6 +2,8 @@
 // tests. Kept out of the component file so `node --test` can exercise the
 // color/banner logic without a JSX loader.
 
+import { reportTimestamp } from "./runtime-report.js"
+
 // Run conclusions that mean the workflow is broken. Mirrors
 // scripts/workflow_health.py FAILING_CONCLUSIONS — both must agree on what "red"
 // means. A failed run renders RED (it used to render yellow, which is how a
@@ -34,8 +36,24 @@ export const SELFHEAL_MAX_AGE_MS = 26 * 60 * 60 * 1000
 // the healer died. Matches scripts/workflow_health.py SELFHEAL_PENDING_MAX_AGE_H.
 export const SELFHEAL_PENDING_MAX_AGE_MS = 3 * 60 * 60 * 1000
 
-export function isCollectorWorkflow(wf) {
+export function isBotWorkflow(wf) {
   return wf?.name === "theheat-bot" && wf?.file === "bot.yml"
+}
+
+export function recordedBotLaneStarts(runHistory, now = Date.now()) {
+  let alerts = -Infinity
+  let dueSender = -Infinity
+  for (const run of Array.isArray(runHistory) ? runHistory : []) {
+    if (run?.configuration_only === true || run?.collection_paused === true) continue
+    const started = reportTimestamp(run?.started_at)
+    if (!Number.isFinite(started) || started > now) continue
+    if (run.mode === "alerts" || run.mode === "both") alerts = Math.max(alerts, started)
+    if (run.mode === "auto_publish_due") dueSender = Math.max(dueSender, started)
+  }
+  return {
+    alerts: Number.isFinite(alerts) ? new Date(alerts).toISOString() : null,
+    dueSender: Number.isFinite(dueSender) ? new Date(dueSender).toISOString() : null,
+  }
 }
 
 export function collectionPauseSummary(status) {
@@ -61,7 +79,7 @@ export function dotColorForWorkflow(wf, collectionPause) {
   if (wf.error) return "red"
   if (wf.state === "disabled_manually") return "gray"
   if (FAILING_CONCLUSIONS.has(wf.last_run_conclusion)) return "red"
-  if (isCollectorWorkflow(wf) && collectionPause?.status === "configured") return "gray"
+  if (isBotWorkflow(wf) && collectionPause?.status === "configured") return "gray"
   if (wf.last_run_conclusion === "success") return "green"
   // No decisive conclusion (cancelled / in-progress / never-run) → gray, NOT
   // green. Painting it green would let a real failure hide behind a newer
