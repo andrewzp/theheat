@@ -1,3 +1,8 @@
+## 0.9.109.83
+
+- Hold air-quality forecasts before automatic writer selection when the source
+  cannot still be current at the earliest allowed send time.
+
 ## 0.9.109.82
 
 - Ask the writer to credit CAMS via Open-Meteo in air-quality forecast copy.

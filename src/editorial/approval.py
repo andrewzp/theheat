@@ -250,14 +250,14 @@ def recommend_approval_policy(
         )
 
     if tweet_type in ("air_quality_hazard", "dust_event"):
-        from src.data.air_quality_current import auto_text_enabled
+        from src.data.air_quality_current import AUTO_DELAY_MINUTES, auto_text_enabled
         if auto_text_enabled(tweet_type):
             # Opt-in, default-off forecast TEXT. Arming and every send still need the
             # per-source current/episode/text-only eligibility in air_quality_current.
             return ApprovalPolicy(
                 key="pm25_forecast_auto_text" if tweet_type == "air_quality_hazard" else "dust_forecast_auto_text",
                 mode="armed_auto",
-                recommended_delay_minutes=30,
+                recommended_delay_minutes=AUTO_DELAY_MINUTES,
                 can_auto_approve=True,
                 reason="Opt-in current model-forecast text; a live source re-read gates arming and sending.",
             )

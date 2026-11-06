@@ -106,6 +106,9 @@ def test_unavailable_or_failed_check_saves_nothing(cli):
 # ---------------------------------------------------------------- opt-in PM2.5 through `alerts`
 
 PM25_ENV = {"THEHEAT_PM25_FORECAST_AUTO_TEXT": "1"}
+SCHEDULED = {"GITHUB_EVENT_NAME": "schedule", "GITHUB_REF": "refs/heads/main",
+             "THEHEAT_MAX_DRAFTS_PER_CYCLE": "1", "THEHEAT_REFILL_ENABLED": "0",
+             "THEHEAT_FUNNEL_TELEMETRY": "1"}
 T_AQ = datetime(2026, 10, 29, 13, 0, tzinfo=UTC)
 
 
@@ -116,20 +119,37 @@ def alerts(cli, **options) -> dict:
 
 
 def test_opt_in_pm25_alerts_journey_posts_once_and_isolates_other_sources(cli):
-    record = alerts(cli)
+    record = run_cli(cli, ["alerts"], T_AQ, env={**PM25_ENV, **SCHEDULED},
+                     models={"copies": {"air_quality_hazard": PM25_COPY}},
+                     air_quality={lahore_key(): {"pm25": 250.0, "dust": 100.0, "pm10": 90.0}})
     assert record["models"] == ["writer", "safety", "fact_check", "critic"]
     draft = drafts(cli, "air_quality_hazard")[0]
     assert draft["approval_policy"]["key"] == "pm25_forecast_auto_text" and draft["approval_mode"] == "policy_auto"
     report = state(cli)["run_history"][0]
     aq = next(row for row in report["sources"] if row["source"] == "air_quality")
+    automatic = next(row for row in report["sources"] if row["source"] == "automatic_selection")
     failed = [row["source"] for row in report["sources"] if row["status"] == "failed"]
     assert aq["status"] == "success" and failed and report["status"] == "partial_failure"  # Others fail alone.
+    assert automatic["details"]["potential_type_count"] == 1
     sent = run_cli(cli, ["auto_publish_due"], T_AQ + timedelta(minutes=40), env=PM25_ENV,
                    air_quality={lahore_key(): {"pm25": 250.0, "dust": 100.0, "pm10": 90.0}})
     assert sent["x"] == [PM25_COPY] and sent["models"] == ["safety"] and [c["points"] for c in sent["aq_calls"]] == [1]
     assert drafts(cli, "air_quality_hazard")[0]["status"] == "posted"
     again = run_cli(cli, ["auto_publish_due"], T_AQ + timedelta(minutes=80), env=PM25_ENV)
     assert again["x"] == [] and again["aq_calls"] == []
+
+
+def test_late_scheduled_pm25_forecast_does_not_reserve_or_call_writer(cli):
+    late = datetime(2026, 10, 29, 23, 40, tzinfo=UTC)
+    record = run_cli(cli, ["alerts"], late, env={**PM25_ENV, **SCHEDULED},
+                     models={"copies": {"air_quality_hazard": PM25_COPY}},
+                     air_quality={lahore_key(): {"pm25": 250.0, "dust": 100.0, "pm10": 90.0}})
+    assert record["models"] == [] and record["x"] == [] and not drafts(cli, "air_quality_hazard")
+    report = state(cli)["run_history"][0]
+    automatic = next(row for row in report["sources"] if row["source"] == "automatic_selection")
+    assert automatic["details"]["source_holds"] == {"air_quality_automatic_window_unavailable": 1}
+    assert report["funnel"]["writer_attempted"] == 0
+    assert len(record["aq_calls"]) == 1 and record["aq_calls"][0]["points"] > 1
 
 
 def test_new_local_day_holds_the_automatic_send(cli):

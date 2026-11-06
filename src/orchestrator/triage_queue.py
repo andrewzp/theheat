@@ -12,6 +12,7 @@ import time
 import weakref
 from collections import Counter
 from collections.abc import Callable
+from datetime import timedelta
 from typing import TYPE_CHECKING, cast
 
 from src.orchestrator.candidate_budget import CandidateBudget, writer_started
@@ -432,17 +433,24 @@ def _automatic_type_may_arm(kind: str, signal_total: int) -> bool:
 
 
 def _automatic_source_hold(candidate: "TriageCandidateBundle") -> str | None:
-    """Known NWS source/time refusals only; never call a provider or refresh."""
+    """Known source/time refusals before selection, without any source refresh."""
+    from src.data import air_quality_current
     from src.data.nws_alerts import NWS_URL
 
     bundle = candidate.bundle
+    if candidate.legacy_type in air_quality_current.KINDS or bundle.signal_kind in air_quality_current.KINDS:
+        if candidate.event_id != bundle.event_id or candidate.legacy_type != bundle.signal_kind:
+            return "air_quality_contract_invalid"
+        return air_quality_current.static_hold(
+            bundle, _utc_now(), automatic=True,
+            minimum_delay=timedelta(minutes=air_quality_current.AUTO_DELAY_MINUTES),
+        )
     raw = getattr(bundle, "raw_signal_dump", None)
     envelope = raw.get("source_evidence") if isinstance(raw, dict) else None
     if not (candidate.legacy_type == "severe_weather" or bundle.signal_kind == "severe_weather"
             or str(bundle.event_id).startswith("nws_")
             or isinstance(envelope, dict) and envelope.get("source_url") == NWS_URL):
         return None
-    from datetime import timedelta
     from src.editorial.warning_automatic import AUTO_DELAY_MINUTES
     from src.orchestrator.nws_publication import nws_generation_hold
 
@@ -1056,7 +1064,9 @@ def _drain_and_write_triage_queue(
                 held_types[candidate.legacy_type] += 1
             else:
                 source_holds[source_hold] += 1
-            stage = "nws_source" if source_hold else "automatic_policy"
+            stage = "automatic_policy"
+            if source_hold:
+                stage = "air_quality_source" if source_hold.startswith("air_quality_") else "nws_source"
             reason = source_hold or "type_has_no_automatic_arming_route"
             _bump_source_field_in_run(current_run, candidate.source, "triaged_out")
             _record_downstream_suppression(

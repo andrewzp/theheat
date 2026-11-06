@@ -223,6 +223,28 @@ def test_ended_window_and_stale_retained_source_hold_without_any_request(monkeyp
     assert current.static_hold(pm25_bundle(), datetime(2026, 10, 29, 23, 0, tzinfo=UTC), automatic=False) is None
 
 
+def test_automatic_delay_uses_exclusive_window_end_and_existing_freshness_boundary():
+    from src.two_bot.intern.air_quality import build_pm25_hazard_bundle
+
+    at = datetime(2026, 10, 29, 23, 30, tzinfo=UTC)
+    retrieved = datetime(2026, 10, 29, 20, 0, tzinfo=UTC)
+    body = h.aq_payload(LAHORE["lat"], LAHORE["lon"], DAY, **HAZARD)
+    obs = source._parse_single_location(body, "Lahore", "Pakistan", LAHORE["lat"], LAHORE["lon"], DAY,
+                                        requested_at=retrieved.isoformat(), retrieved_at=retrieved.isoformat())
+    late_bundle = build_pm25_hazard_bundle(source.detect_pm25_hazard(obs))
+    delay = timedelta(minutes=current.AUTO_DELAY_MINUTES)
+    microsecond = timedelta(microseconds=1)
+    assert current.static_hold(late_bundle, at - microsecond, automatic=True, minimum_delay=delay) is None
+    assert current.static_hold(late_bundle, at, automatic=True, minimum_delay=delay) == \
+        "air_quality_automatic_window_unavailable"
+    assert current.static_hold(late_bundle, at, automatic=False) is None
+    early_bundle = pm25_bundle()
+    latest = datetime(2026, 10, 29, 18, 0, 1, tzinfo=UTC) - delay
+    assert current.static_hold(early_bundle, latest, automatic=True, minimum_delay=delay) is None
+    assert current.static_hold(early_bundle, latest + microsecond, automatic=True, minimum_delay=delay) == \
+        "air_quality_automatic_window_unavailable"
+
+
 # ---------------------------------------------------------------- B2/B3: the real path, in process
 
 
