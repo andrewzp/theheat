@@ -4,7 +4,7 @@
 // and still be absent from the image (a departure, a multiple); software never reads
 // pixels, and an empty list is not proof of agreement or truth.
 
-const UNIT = String.raw`(°\s?C|°\s?F|µg\/m³|μg\/m³|ug\/m3|MW|mm|km\/h|km|mph|kt|knots|hPa|cm|m|%)`
+const UNIT = String.raw`(°\s?C|°\s?F|µg\/m³|μg\/m³|ug\/m3|MW|mm|km\/h|km|mph|kt|knots|hPa|cm|ft|feet|m|%)`
 const VALUE = new RegExp(String.raw`(?<![\w.])([-−]?\d{1,3}(?:,\d{3})+|[-−]?\d+(?:\.\d+)?)\s?` + UNIT + String.raw`(?![A-Za-z])`, "g")
 const MAX_TEXT = 4000
 
@@ -12,6 +12,7 @@ function parse(raw) { return Number(raw.replace(/,/g, "").replace("−", "-")) }
 function dimension(unit) {
   return unit.replace(/\s/g, "").replace(/^(?:µg\/m³|μg\/m³|ug\/m3)$/, "pm_mass")
     .replace(/^(?:kt|knots)$/, "knots")
+    .replace(/^feet$/, "ft")
 }
 function decimals(raw) { const dot = raw.indexOf("."); return dot < 0 ? 0 : raw.length - dot - 1 }
 function roundTo(value, places) { const f = 10 ** places; return Math.round(value * f) / f }

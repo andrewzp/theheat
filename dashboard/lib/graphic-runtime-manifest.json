@@ -1,6 +1,6 @@
 {
   "identity": {
-    "archive_sha256": "b3a51b373125e8f80327ab0d814627d7cf97130715cea554ae603c69511a6a87",
+    "archive_sha256": "765be9a32fafce7c1207a82c871639a17a2e357dc5e405059485eb797329232d",
     "deployment_files": {
       "api/graphic_preview.py": "f7521adcbd618f4b65b2a0de30ea62aaff4cdd36f2254e9af38bf68646d361ad",
       "api/graphic_reader_status.py": "5e9685d699625a4eea9d5be884b6e266939a0ad344a2997351ba79bd114407ba",
@@ -16,7 +16,7 @@
       "src/dashboard_preview/auth.py": "eafa95e1ed18c7e993fa13e016799d9e92f0ee843fe6d3f2843adf28579a8e21",
       "src/dashboard_preview/errors.py": "630b7118bc42f6a8bfbcb4d4844039541885629af12c08c30c0a77379b389c14",
       "src/dashboard_preview/http.py": "dbcbf1e3b4f4f3fa4a231c6e1f80946e321c098e51f12543fee889490f9011ad",
-      "src/dashboard_preview/preview.py": "cadc4679c67d0ec0a9a4ba19074f7558e61ab88f87698365f1eb4258f60ecde4",
+      "src/dashboard_preview/preview.py": "9516f4274122700c20025eddd4a2ec139c354a7dfb6ac77d84a3175091fada38",
       "src/dashboard_preview/reader.py": "6cd9c00c79810a3b1ed7a107dbce9b2687b5aaa9cd761c02dcfe8de8cd888d18",
       "src/dashboard_preview/reader_status.py": "1f3d9d42dabebe1218eacd7133bd2477f58c85b53a6e2a719658846fbc5e96bb",
       "src/data/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
@@ -91,6 +91,7 @@
       "src/media/maps/manifest.json": "1af072edc46ae3252bf6cf0edb43993986de262a2840b2cd4907eb4866f970e9",
       "src/media/maps/ne_110m_land_v4_1_0.json": "a37b057aca4fc9714a0c24b5d6bc9778bb5845894646e4052383ea63fa3cd50d",
       "src/media/nwps_capture.py": "3cfb530916344045db3b69529b26466df39c9221d30a9fdf25125e000c23d19a",
+      "src/media/nwps_forecast_png.py": "c1bcfc9a2b54028bb693d4f7065619415013bc1710047d0156027023c6cc9d68",
       "src/media/nwps_graphic_adapter.py": "c7120d428b58649bb5cd69fc0ca03425a0247a942611b17be52866d19b2c6d8a",
       "src/media/published_radar.py": "78b8605bb7607625ece71d8985f87ae1106dc47901c4beff5adcb1403cfabcbe",
       "src/media/temperature_graphic_adapter.py": "9800badb803f38cb1241a1a56fd09ee8c8ed59c9f20e8ec087f88dad393f2edf",
@@ -115,5 +116,5 @@
     },
     "schema_version": 1
   },
-  "runtime_sha256": "d9964a71f7be5880440533781da4544509063a50aba348e9d92d91752fe07679"
+  "runtime_sha256": "c0dbac7f684c2b41cd9317300e8d928a04718e4523d3e36db57447e74a46f4d7"
 }
