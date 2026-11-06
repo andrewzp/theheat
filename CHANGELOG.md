@@ -1,3 +1,8 @@
+## 0.9.109.81
+
+- Redistribute measured slow test files among the existing required CI jobs.
+  Keep all tests, crash-diagnostic cases, runner deadlines and release gates.
+
 ## 0.9.109.80
 
 - Separate the shared GitHub bot result from the latest saved starts for alert
