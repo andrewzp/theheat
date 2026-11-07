@@ -44,6 +44,14 @@ def _is_budget_exhausted(exc: Exception) -> bool:
     return any(pattern in message for pattern in _BUDGET_EXHAUSTED_PATTERNS)
 
 
+def is_google_payment_required(exc: Exception) -> bool:
+    """Use an actual SDK HTTP response, without trusting error prose or body codes."""
+    from google.genai.errors import APIError
+
+    status = getattr(getattr(exc, "response", None), "status_code", None)
+    return isinstance(exc, APIError) and type(status) is int and status == 402
+
+
 def _nonretryable_client_error(exc: Exception) -> bool:
     """Read SDK status fields, never numbers embedded in an error message.
 
@@ -93,6 +101,10 @@ def call_with_retries(
         except (BudgetExhaustedError, NonRetryableError):
             raise
         except Exception as exc:
+            if is_google_payment_required(exc):
+                raise BudgetExhaustedError(
+                    f"{label}: provider billing exhausted: google_http_402"
+                ) from exc
             if _is_budget_exhausted(exc):
                 raise BudgetExhaustedError(
                     f"{label}: provider billing exhausted: {exc}"

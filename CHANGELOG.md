@@ -1,3 +1,10 @@
+## 0.9.109.85
+
+- Carry a recorded Google payment failure from news discovery into the current
+  generation cycle before buying later writer or verification calls.
+- Report an unavailable safety check caused by HTTP402 through the existing
+  billing circuit and generation health.
+
 ## 0.9.109.84
 
 - Install the required crash debugger with the two selected CI workers'

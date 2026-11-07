@@ -34,6 +34,7 @@ from typing import Any
 
 from src.data._http import fetch_with_retry
 from src.two_bot.call_inventory import OperationAllowance
+from src.two_bot.retry import is_google_payment_required
 
 NEWS_KINDS = ("fire", "heat_mortality")
 MAX_NEWS_EVENTS = 10
@@ -77,6 +78,7 @@ class NewsRetrievalResult:
     # Discovery allowance for this retrieval: reserved strictly before egress,
     # physical attempts counted, unknown/malformed outcomes kept spent.
     allowance: OperationAllowance = field(default_factory=lambda: news_discovery_allowance())
+    provider_billing_exhausted: bool = False
 
     def verification_usage(self) -> dict:
         return {"model_calls": self.verify_calls, "model_call_limit": MAX_VERIFY_CALLS,
@@ -338,6 +340,8 @@ def _verify_grounded(events: list[dict], result: NewsRetrievalResult) -> list[di
         pending.append((index, entries))
         url = str(entry.get("url") or "")
         drops[index] += 1  # Undo only after an independently supported verdict.
+        if result.provider_billing_exhausted:
+            continue
         if url in failed_urls:
             continue
         if url not in page_cache:
@@ -390,7 +394,11 @@ def _verify_grounded(events: list[dict], result: NewsRetrievalResult) -> list[di
                 drops[index] -= 1
         except Exception as exc:
             result.verify_errors += 1
-            result.notes.append(f"verification unavailable: {type(exc).__name__}")
+            if is_google_payment_required(exc):
+                result.provider_billing_exhausted = True
+                result.notes.append("verification unavailable: google_http_402")
+            else:
+                result.notes.append(f"verification unavailable: {type(exc).__name__}")
     if result.verify_budget_skips:
         result.notes.append(f"verification model budget: {result.verify_budget_skips} impact entries withheld")
     if result.verify_fetch_budget_skips:
@@ -458,7 +466,11 @@ def fetch_news_events(
         except Exception as exc:  # noqa: BLE001 — a leg failure must not kill the lane
             if strict:
                 raise
-            result.notes.append(f"{leg_name} leg failed: {exc}")
+            if leg_name == "grounded_search" and is_google_payment_required(exc):
+                result.provider_billing_exhausted = True
+                result.notes.append("grounded_search leg failed: google_http_402")
+            else:
+                result.notes.append(f"{leg_name} leg failed: {exc}")
     floored = _floor_events(raw, result)
     checked = _verify_grounded(floored, result)
     checked.sort(

@@ -672,7 +672,7 @@
     "src/data/ice_mass.py": "6352519b96130b565a9507f558a289126b1e9524cc79437239c55c5f4f2dd737",
     "src/data/jtwc.py": "1ad213e88299c9333c149cde0dbfd28d689e31b89e1c51440995536c64776e56",
     "src/data/methane.py": "061c60608f1d7c016b5afcce91c4d178d98e9f26ea1fdffb600e5f9cc6161355",
-    "src/data/newsworthiness.py": "fed1facac4c5293b7b4e921a3c8e7beb4e4aabfec3ddb2dec8ffe9bb822e6e10",
+    "src/data/newsworthiness.py": "23fdccac2e006a7795bcfbe05dd3e3e550bb5c6d834a3e6e83753281d838d0a1",
     "src/data/nhc.py": "2cfa04ab49bd13c1231e298fa2d0e08fd833e649b93f265199ffe5a4071a7ab1",
     "src/data/nhc_advisory.py": "c54a764d194d376a39e98c87af40d1911dbc9f088817a2c36416b399b6e45acf",
     "src/data/nsidc_snow.py": "ab75c73ec88130ae5805b1c5cf33a9b3912922c74da72b281b34d9cb9c7ae535",
@@ -712,7 +712,7 @@
     "src/orchestrator/sources/ice_mass.py": "95f7de55872f48814f0397b7730b41cb91d019a1333f466f12014039ae2edd7b",
     "src/orchestrator/sources/marine.py": "341775be8e06a3304f3f05078d55d82c52e43fc64ef9c4b8f1b934c5fe693aa3",
     "src/orchestrator/sources/methane.py": "93647684e6a3c47e429cd9457d9fe806bfa9414bd4d6f3acfd095ded587396e6",
-    "src/orchestrator/sources/newsworthiness.py": "cdbe7e22a95a5c9a7c0ec3b10343a4017ab4d913cf2c96ec7b61479947f57510",
+    "src/orchestrator/sources/newsworthiness.py": "847ec9f11afff489b703a2ae77f2ca7a3bcc18b938c2782d2e9c40f8f2a7dbfb",
     "src/orchestrator/sources/nhc_advisory.py": "e14956f0d72e576e851efec730ae97459d1f4ca10aaba14fedb3dd98d1c5a1e4",
     "src/orchestrator/sources/nifc.py": "99801aa500b84c0fa2f587c4fa0fda4ffd2d5b53fa4a1f0703b03e645a66e026",
     "src/orchestrator/sources/nsidc_snow.py": "ddd091dae3900c5bce378010aab09709186c0c6774813bf2766026d269119a5d",
@@ -733,5 +733,5 @@
     "src/two_bot/intern/warnings.py": "04e0a4506ffbb29124c8d2960a5e5025305699297fcf8f9178b23caac2cd7a37"
   },
   "evidence_scope": "Referenced local code inventory; not live/provider/transitive-source qualification.",
-  "registry_sha256": "d6809c6fc293fd1dd0d35d19734119e42b24d839e939fd14aef7a101f921f219"
+  "registry_sha256": "7b57ca0ffb0e29cffb53027bf5c17fe150d37ccbb458da3924cc012d8f8d4d5f"
 }
