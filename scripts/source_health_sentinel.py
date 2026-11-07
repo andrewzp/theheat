@@ -874,7 +874,8 @@ def _close_coverage_watch_issue(number: int) -> None:
 # ---------------------------------------------------------------------------
 
 WRITER_WATCH_WINDOW_HOURS = 24
-WRITER_WATCH_TITLE = "Writer watch: the Anthropic writer is down (budget exhausted)"
+WRITER_WATCH_TITLE = "Writing pipeline: provider billing is blocking generation"
+_LEGACY_WRITER_WATCH_TITLE = "Writer watch: the Anthropic writer is down (budget exhausted)"
 WRITER_WATCH_MARKER = "<!-- source-health-writer-watch -->"
 
 
@@ -919,15 +920,15 @@ def build_writer_watch_body(findings: list[dict]) -> str:
     f = findings[0]
     return "\n".join([
         WRITER_WATCH_MARKER,
-        "**The writer is down: the Anthropic credit balance is exhausted.**",
+        "**A recorded provider billing failure is blocking generation.**",
         "",
         f"{f['count']} draft(s) died with `budget_exhausted` in the last "
-        f"{WRITER_WATCH_WINDOW_HOURS}h (latest `{f['last_ts']}`). Bot runs keep "
-        "reporting success while nothing drafts — this issue is the loud version.",
+        f"{WRITER_WATCH_WINDOW_HOURS}h (latest `{f['last_ts']}`). Required "
+        "writer or checker access needs verification.",
         "",
-        "**Fix:** top up Anthropic API credits (the writer is the metered Anthropic "
-        "API, separate from the operator's Claude Code plan), then confirm the next "
-        "voice-regression run is green and fresh drafts appear.",
+        "**Action:** identify the provider and project in the saved failure, "
+        "restore its API credit or billing access, then confirm successful required "
+        "checks and a fresh draft in an ordinary bot run.",
         "",
         "_Auto-maintained by the source-health sentinel writer watch. Auto-closes "
         "when no budget_exhausted kill lands in the window._",
@@ -945,7 +946,7 @@ def _open_writer_watch_issue() -> dict[str, Any] | None:
         print(f"[sentinel] could not list writer-watch issue: {exc!r}", file=sys.stderr)
         return None
     for item in items:
-        if item.get("title") == WRITER_WATCH_TITLE:
+        if item.get("title") in {WRITER_WATCH_TITLE, _LEGACY_WRITER_WATCH_TITLE}:
             return item
     return None
 
@@ -958,7 +959,8 @@ def plan_writer_watch_action(
         body = build_writer_watch_body(findings)
         if open_issue is None:
             return {"action": "create_writer_watch", "body": body, "labels": [LABEL, "ours"]}
-        if _open_issue_body(open_issue).strip() != body.strip():
+        if (_open_issue_body(open_issue).strip() != body.strip()
+                or open_issue.get("title", WRITER_WATCH_TITLE) != WRITER_WATCH_TITLE):
             return {
                 "action": "update_writer_watch",
                 "number": _open_issue_number(open_issue),
@@ -980,7 +982,8 @@ def _create_writer_watch_issue(action: Mapping[str, Any]) -> None:
 
 
 def _update_writer_watch_issue(action: Mapping[str, Any]) -> None:
-    args = ["issue", "edit", str(action["number"]), "--body", str(action["body"])]
+    args = ["issue", "edit", str(action["number"]), "--title", WRITER_WATCH_TITLE,
+            "--body", str(action["body"])]
     for label in action.get("labels") or []:
         args.extend(["--add-label", str(label)])
     _run_gh(args, check=False)
@@ -990,7 +993,8 @@ def _update_writer_watch_issue(action: Mapping[str, Any]) -> None:
 def _close_writer_watch_issue(number: int) -> None:
     _run_gh(
         ["issue", "close", str(number), "--comment",
-         "No budget_exhausted kills in the window — the writer is drafting again. "
+         "No provider billing kills are recorded in the current window. "
+         "Provider access requires a new successful check. "
          "Auto-closed by the source-health sentinel."],
         check=False,
     )

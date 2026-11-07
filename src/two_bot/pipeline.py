@@ -310,6 +310,8 @@ def _check_safety_honesty_fact(
                 result_out["rejected_candidate"] = capture_safety_rejection(
                     tweet, bundle, safety_input, safety_passed, safety_reason, attempt=candidate_attempt,
                 )
+            if safety_reason == "safety_unavailable: google_http_402":
+                raise BudgetExhaustedError("safety: provider billing exhausted: google_http_402")
             record_kill("safety", safety_reason or "unknown")
             return None
 

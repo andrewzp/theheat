@@ -5,10 +5,9 @@ source-health row, exactly like reganom shipped). When ON it retrieves cited
 world events (NIFC feed + grounded search, verification ladder inside
 ``src.data.newsworthiness``) and records them to ``state["news_events"]``.
 
-Phase 0 has ZERO editorial surface — nothing here touches scoring, triage, or
-drafting. A retrieval failure records a degraded/failed source row and the
-cycle proceeds without news; silent failure is structurally impossible because
-this IS a source row the sentinel watches like any other.
+The lane does not nominate drafts. An observed Google payment failure trips
+the existing process-only billing circuit before later generation. Other
+retrieval failures record source health and the cycle continues without news.
 """
 
 from __future__ import annotations
@@ -65,6 +64,13 @@ def run_newsworthiness(bot_state: BotState, current_run: dict | None, *, retenti
                 status="failed", observed=0, error=f"newsworthiness fetch failed: {exc}",
             )
             return None
+
+    if getattr(result, "provider_billing_exhausted", False) is True:
+        from src.orchestrator.triage_queue import _abort_cycle_on_billing
+
+        _abort_cycle_on_billing(
+            bot_state, current_run, None, [], "", bump_triaged_out=False,
+        )
 
     retained = None
     if retention_observer is not None:
