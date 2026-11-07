@@ -644,7 +644,7 @@ class TestWriterWatchIssue:
     def test_body_names_the_failure_and_the_fix(self):
         body = build_writer_watch_body(self.FINDING)
         assert WRITER_WATCH_MARKER in body
-        assert "Anthropic" in body
+        assert "provider and project" in body
         assert "credit" in body.lower()
         assert "3 draft(s)" in body
 

@@ -244,3 +244,39 @@ def test_real_safety_failure_is_recorded_as_billing_in_the_full_generation_path(
     client.close.assert_called_once()
     fact.assert_not_called()
     critic.assert_not_called()
+
+
+def test_google_billing_alert_does_not_direct_the_owner_to_fund_anthropic():
+    from datetime import UTC, datetime
+    from scripts.source_health_sentinel import build_writer_watch_body, writer_watch
+
+    findings = writer_watch(
+        [{"ts": "2026-11-07T12:00:00Z", "stage": "budget_exhausted",
+          "reasons": ["safety: provider billing exhausted: google_http_402"]}],
+        [{"mode": "both"}], now=datetime(2026, 11, 7, 13, 0, tzinfo=UTC),
+    )
+    body = build_writer_watch_body(findings)
+    assert "Anthropic credit balance is exhausted" not in body
+    assert "top up Anthropic" not in body
+    assert "provider" in body.lower() and "project" in body.lower()
+
+
+def test_existing_writer_watch_issue_is_migrated_without_creating_a_duplicate(monkeypatch):
+    from types import SimpleNamespace
+    import json
+    from scripts import source_health_sentinel as sentinel
+
+    old = {"number": 81, "title": "Writer watch: the Anthropic writer is down (budget exhausted)",
+           "body": sentinel.WRITER_WATCH_MARKER + "\nold text"}
+    calls = Mock(return_value=SimpleNamespace(stdout=json.dumps([old])))
+    monkeypatch.setattr(sentinel, "_run_gh", calls)
+    found = sentinel._open_writer_watch_issue()
+    assert found == old
+    action = sentinel.plan_writer_watch_action(
+        [{"count": 1, "last_ts": "2026-11-07T12:00:00Z"}], found,
+    )
+    assert action["action"] == "update_writer_watch"
+    sentinel._update_writer_watch_issue(action)
+    args = calls.call_args.args[0]
+    assert args[:3] == ["issue", "edit", "81"]
+    assert args[args.index("--title") + 1] == sentinel.WRITER_WATCH_TITLE
