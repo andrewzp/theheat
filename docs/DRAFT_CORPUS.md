@@ -11,6 +11,50 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-10-09 — Daily corpus grading (9 drafts)
+
+**Context:** Gist read via git-clone path (success). 9 pending, all fresh to the corpus (created Oct 7T10:48Z – Oct 9T03:51Z). The last corpus entry before this one is Jul 6 — **no graded cycles Jul 7 → Oct 8 in these docs** (the rolling `daily-plan-current` branch no longer exists on origin; main's docs end Jul 6). Counts below therefore continue the Jul 5 tallies as "graded cycles", not calendar days. Bot is on a much newer main (PR #633).
+
+**Grade distribution:** A 0 · B 4 (all B-) · C 5 · D/F 0 → **A-rate 0%** (bar 50%, gap 50 pp).
+
+**Headline finding:** The first `dust_event` batch where **every dust draft states a WHO multiple** (Quetta ~4×, Arequipa 2.7×, Riyadh 10.7×) — P_dust's 11-of-11 streak breaks. But the fix traded one gap for another: all 9 drafts end on provenance/caveat/data-tail ("Source: CAMS…", "(CAMS global model, 45 km resolution)", "not station measurements", "model forecast only", a raw NHC URL, a timestamp). Zero consequence closes, zero named mechanics. Data delivery is clean; there is no voice.
+
+### B- (4)
+
+- **[2] Quetta dust_event (523 µg/m³; PM10 mean 173, "nearly 4× WHO")** — B-. WHO anchor present and arithmetic right (173/45 = 3.8). Two competing numbers (523 peak, 173 mean) in one sentence; reader doesn't know which to hold. Close is a bare source tag. Quetta/Balochistan dust mechanism (wind, dry basin) absent.
+- **[4] Riyadh dust_event forecast (2,347 µg/m³ peak; PM10 "about 10.7×" WHO)** — B-. Best raw signal of the batch; the 2,347 is never calibrated, only the daily mean is. "about 10.7×" is false precision (approximation with a decimal). Sentence 2 is a pure disclaimer ("These are model estimates, not station measurements") — the whole close slot spent on hedge.
+- **[7] Kano air_quality_hazard (PM2.5 ~230, ~15× WHO)** — B-. 230/15 = 15.3 ✓. Only draft that uses sentence 2 for substance: dust above 300 µg/m³ through the day gives a second layer. No mechanism named (Harmattan onset not stated) and no consequence, but no hedge tail either. Strongest of the four.
+- **[9] Eastern Mongolian steppe fire (600.5 / 568.6 / 543.6 MW, 01:13 UTC, 100%)** — B-. Clean cluster framing, three values within 10 km. Stranded: an October steppe fire at three-for-three 100% confidence has an obvious seasonal-incongruity hook (autumn, pre-freeze, grass cured) and the draft states none. Pure data delivery — valid, but not elevated.
+
+### C (5)
+
+- **[1] Papua New Guinea fire (1,026 MW, "very-high-intensity", 94%)** — C-. Banned-formula verb present: **"is radiating 1,026 MW"** (exact verb: *radiating*). "very-high-intensity" reads as the bundle's own tier label leaking (P_tier-adjacent). Third sentence adds two more MW values (1,120 and 817) — number pile-up. No ecosystem, no season. ~52h old at grading.
+- **[3] Arequipa dust_event (527 µg/m³; mean ~121, 2.7× WHO)** — C+. Structural twin of [2] ("model-estimated dust … reached N µg/m³ on Oct 7 … PM10 24-hour mean … ×") posted 1 minute apart; "(CAMS global model, 45 km resolution)" parenthetical is a provenance tail no reader needs. 121/45 = 2.7 ✓.
+- **[5] Hurricane Isaias cyclone_rapid_intensification (35 kt/24h, advisory 006: 65 kt, 982 mb, 22.9°N 91.9°W)** — C+. "surpassing the NHC rapid intensification threshold of 30 kt" — threshold-as-comparator is the same shape as the Jul 3 Bavi C+ (P_tier). Here it is the real NHC definition, so less opaque, but the draft still reports the bundle's cutoff rather than the world. Close is a coordinate/pressure dump plus a raw NHC URL on its own line. Ratio hook (35 vs 30) is weak; "tropical storm to Category 1" is the real story and is buried mid-sentence.
+- **[6] Shah Alam air_quality_hazard (PM2.5 ~152, ~10× WHO)** — C+. 152/15 = 10.1 ✓. Ends on "No station data to verify; model forecast only." — hedge as close. No cause (Malaysia October: haze/monsoon transition) named.
+- **[8] Klang air_quality_hazard (PM2.5 ~152, ~10× WHO, peak ~188)** — C+. **Value-identical to [6]**: adjacent Selangor cities, same CAMS grid cell, same 152/10×, generated ~7h apart. Same-event duplicate across two place names — operational anomaly (cf. Jul 4 Antwerpen re-issue), not a voice proposal.
+
+### Patterns named
+
+1. **P_dust counter-evidence (first):** 3 of 3 dust drafts carry a WHO multiple (previously 0 of 11). Fix appears to have reached the writer. Still no named mechanic; the numbers land but the drafts remain mechanism-free.
+2. **Caveat/provenance-as-closer (new — P_caveat):** 6 of 9 drafts spend the closing slot on source/uncertainty text ([2],[3],[4],[6],[8] + [5] URL). This is P_close's failure in a new form: not an implied consequence, but no consequence at all.
+3. **P_close:** 0 positive, 9 failing this cycle (worst ratio yet; prior 2 positive/3 failing Jul 5).
+4. **P_tier:** [1] "very-high-intensity", [5] "NHC rapid-intensification threshold of 30 kt" — 2 instances, 2 signal types (fire, cyclone_rapid_intensification).
+5. **P5:** both fire drafts ([1],[9]) deliver data with no named mechanic and no seasonal framing. Dust/AQ drafts likewise.
+6. **Duplicate generation:** [6]/[8]; also [2]/[3] share template across different cities.
+7. **Not tested:** P9 (no precipitation_extreme), P_compound (no record-type draft). No era anchors, no political anchors, no plant-comparison, no Wodehouse math-out-loud beyond Riyadh's "about 10.7×".
+8. **A-grade reference moves:** none to note — no A.
+
+### Staleness review (as of Oct 9 ~15:00 UTC)
+
+- **[1] PNG fire, ~52h:** "on Oct. 7 is radiating" — present-tense, dated detection, >48h. Strict bulk-reject candidate. All other drafts <48h; Riyadh/Shah Alam/Klang/Kano forecast dates (Oct 8) have elapsed but are 35–39h old — watch for crossing 48h tomorrow.
+- Bulk-reject skipped: `gh` token invalid in this environment (`GH_TOKEN` rejected; also 403 on repo variables) → no gist-write path. 39th+ consecutive staleness skip.
+
+### Followups
+
+- Operator: verify whether `daily-plan-current` was merged/deleted and why docs stop at Jul 6; confirm the writer change that added WHO multiples to dust copy.
+- Operator: bulk-reject [1] via dashboard; consider de-duplicating same-cell AQ drafts ([6]/[8]).
+
 ## 2026-07-06 — Daily corpus grading (0 fresh drafts; 15 carry-overs from Jul 5, previously graded)
 
 **Context:** Gist read via git-clone path (success; no rate limit). Queue: 15 pending drafts —
