@@ -11,6 +11,60 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-11-07 — Daily corpus grading (2 drafts)
+
+**Context:** Gist read via git-clone path (success). Queue: 2 pending, both fresh to the corpus
+(first graded cycle since the Jul 6 entry — the corpus on `main` ends there). Grades: **0 A,
+1 B+, 1 B — A-rate 0% (0/2), 50 pp below bar.** Small n. Both drafts are data-delivery
+registers with honest source labelling; neither carries a named humor mechanic.
+
+### B+ (1)
+
+**[2] Riyadh, Saudi Arabia `dust_event`** (draft_20261105_121936_65, score 78, created Nov 5):
+"Riyadh, Saudi Arabia: dust is forecast to peak near 6,015 µg/m³ Thursday, with PM10 averaging
+~55× the WHO 24-hour guideline — CAMS model forecast, not station-measured."
+- **First `dust_event` draft in corpus with a WHO calibration anchor** (12th dust_event
+  instance; 11 prior had none). Fixes the P_dust failure mode directly: the 55× multiple lets a
+  lay reader size the number. Also drops the old "model-estimated … aerosol optical depth at Y"
+  opener template and the AOD metric.
+- Wodehouse: clean, no restate-padding. "~55×" is an approximation, but the bundle supplies
+  55.3×, so rounding is defensible.
+- Close is a source disclaimer, not a consequence — P_close failing in the weakest sense
+  (nothing stranded; there is simply no voice beat). Honest-labelling close is correct
+  behaviour under the evidence contract, but caps this at B+.
+- Minor: two figures (6,015 peak vs. the 55× on a PM10 average of ~2,487) are different
+  metrics in one sentence; a reader may not reconcile them.
+
+### B (1)
+
+**[1] Verkhoyansk, Russia `hot10`** (draft_20261104_022119_64, score 87, created Nov 4):
+"Verkhoyansk, Russia is forecast to reach −9.9°C Wednesday — 20.2°C above its November normal
+of −30.1°C, the largest departure among 440 sampled cities (Open-Meteo/Meteostat, forecast)."
+- Pure data delivery, valid register. Setup is strong (20.2°C departure, in a town known for
+  cold, "largest among 440"), but the punchline slot is occupied by a parenthetical source
+  credit. No voice beat; the mechanic is absent rather than misfiring.
+- Wodehouse: passes — nothing tries. First `hot10` leaderboard draft in this corpus pass.
+- No era anchor, no banned formula, no political anchor.
+
+### Patterns named
+
+1. **Source-credit closes (new sub-form of P_close).** Both drafts end on a provenance
+   clause ("CAMS model forecast, not station-measured"; "(Open-Meteo/Meteostat, forecast)").
+   Likely a consequence of the recent source-credit requirement for automatic forecast copy
+   (#768/#769). Honest, but it consumes the close slot; 2 of 2 this cycle.
+2. **P_dust counter-instance.** WHO anchor stated unprompted via the `dust_peak_who_pm10_multiple`
+   angle — the fix is landing for this type.
+3. **Wodehouse/era/formula checks:** 0 violations, 0 era anchors, 0 banned openers, 0
+   plant comparisons, 0 political anchors.
+4. **A-grade mechanics:** none this cycle.
+
+### Staleness / followups
+
+- Both drafts exceed 48h with an elapsed forecast day in the text ("Wednesday" = Nov 4;
+  "Thursday" = Nov 5): ~85h and ~75h old at grading. Strict bulk-reject candidates. Write
+  skipped (see QUALITY_TREND rejection log).
+- Operator: drafts older than the forecast day cannot ship as written.
+
 ## 2026-07-06 — Daily corpus grading (0 fresh drafts; 15 carry-overs from Jul 5, previously graded)
 
 **Context:** Gist read via git-clone path (success; no rate limit). Queue: 15 pending drafts —
