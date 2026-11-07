@@ -34,9 +34,6 @@ def facade(tmp_path, monkeypatch):
 
     def run(command, **kwargs):
         calls.append((command, kwargs))
-        if command[:3] == ["sudo", "--non-interactive", "apt-get"]:
-            state["gdb_ready"] = True
-            return subprocess.CompletedProcess(command, 0)
         if command[0] == "sudo":
             restoring = command[-1].startswith("kernel.core_pattern=|")
             state["pattern"] = command[-1].partition("=")[2]
@@ -110,17 +107,12 @@ def test_plugin_records_only_the_real_interpreter_before_any_test(facade, capsys
     assert rows(capsys)[-1]["test_outcome"] == "success"
 
 
-def test_missing_debugger_install_is_bounded_and_only_requests_gdb(facade, monkeypatch, capsys):
-    _, _, calls, state, prepare, _ = facade
-    monkeypatch.setattr(observer.shutil, "which", lambda _: "/invented/gdb" if state.get("gdb_ready") else None)
-    directory = prepare()
-    installs = [(command, kwargs) for command, kwargs in calls if isinstance(command, list) and "apt-get" in command]
-    assert len(installs) == 1
-    command, kwargs = installs[0]
-    assert command == ["sudo", "--non-interactive", "apt-get", "-o", "Acquire::Retries=2", "-o", "Acquire::http::Timeout=20", "-o", "Acquire::https::Timeout=20", "install", "-y", "--no-install-recommends", "gdb"]
-    assert kwargs["timeout"] == 120 and kwargs["check"] is True
-    assert observer.finish(directory, "skipped") == 0
-    rows(capsys)
+def test_missing_debugger_refuses_before_network_or_kernel_change(facade, monkeypatch):
+    root, environment, calls, _, prepare, _ = facade
+    monkeypatch.setattr(observer.shutil, "which", lambda _: None)
+    with pytest.raises(ValueError, match="debugger_unavailable"):
+        prepare()
+    assert calls == [] and not environment.exists() and not list(root.glob("theheat-native-*"))
 
 
 def test_prepare_preserves_existing_plugins_and_exports_only_to_pg2(facade, monkeypatch, capsys):
@@ -323,6 +315,9 @@ def test_original_suite_string_and_matrix_remain_exact():
     prepare = next(step for step in job["steps"] if step.get("name") == "Prepare private PG2/PG8 crash evidence")
     assert prepare["if"] == "matrix.partition == 'postgres' && (matrix.postgres-shard == '2' || matrix.postgres-shard == '8')"
     assert prepare["timeout-minutes"] == 3
+    packages = next(step for step in job["steps"] if step.get("name") == "Install PostgreSQL 17 contract-test binaries")
+    assert packages["env"] == {"THEHEAT_CI_INSTALL_GDB": "${{ " + prepare["if"] + " && '1' || '0' }}"}
+    assert job["steps"].index(packages) < job["steps"].index(prepare)
     cleanup = next(step for step in job["steps"] if step.get("name") == "Observe and remove private PG2/PG8 crash evidence")
     assert cleanup["if"] == "always() && matrix.partition == 'postgres' && (matrix.postgres-shard == '2' || matrix.postgres-shard == '8') && env.THEHEAT_CI_CORE_DIR != ''"
     assert cleanup["timeout-minutes"] == 2

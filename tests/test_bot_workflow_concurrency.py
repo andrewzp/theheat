@@ -318,14 +318,16 @@ def test_only_database_partitions_install_binaries_with_bounded_steps(workflow):
 
 
 @pytest.mark.parametrize("failure", [None, "directories", "key", "repository", "cluster", "metadata", "packages"])
-def test_dependency_shell_steps_fail_closed_without_system_access(workflow, tmp_path, failure):
+@pytest.mark.parametrize("install_gdb", ["0", "1"])
+def test_dependency_shell_steps_fail_closed_without_system_access(workflow, tmp_path, failure, install_gdb):
     stub = Path(__file__).parent / "fixtures/ci_dependency_stub.py"
     binary = tmp_path / "bin/sudo"
     binary.parent.mkdir()
     binary.write_text(f"#!{sys.executable}\n" + stub.read_text())
     binary.chmod(0o700)
     # No inherited BASH_ENV, credentials, network client or real sudo in PATH.
-    env = {"PATH": str(binary.parent), "THEHEAT_CI_STUB_ROOT": str(tmp_path)}
+    env = {"PATH": str(binary.parent), "THEHEAT_CI_STUB_ROOT": str(tmp_path),
+           "THEHEAT_CI_INSTALL_GDB": install_gdb}
     if failure:
         env["THEHEAT_CI_STUB_FAIL"] = failure
     completed_steps = []
@@ -351,7 +353,10 @@ def test_dependency_shell_steps_fail_closed_without_system_access(workflow, tmp_
     else:
         assert completed_steps == [0, 0, 0], result.stderr
         assert [call["phase"] for call in calls] == phases
-        assert json.loads((tmp_path / "packages.json").read_text()) == ["postgresql-17", "postgresql-client-17", "poppler-utils"]
+        expected_packages = ["postgresql-17", "postgresql-client-17", "poppler-utils"]
+        if install_gdb == "1":
+            expected_packages.append("gdb")
+        assert json.loads((tmp_path / "packages.json").read_text()) == expected_packages
 
 
 def test_immediate_python_output_is_scoped_to_bot_invocations(workflow):
