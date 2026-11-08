@@ -37,6 +37,11 @@ Living plan for closing the gap between the bot's current voice quality and the 
 > (3 of 3 dust drafts carry WHO multiples); 2 new proposals (P_nws, P_event_sat). Staleness: all
 > 15 are 11–21 days old; gist write blocked (invalid token / 403), skipped.
 >
+> **Nov 8: 0 fresh drafts — 2 pending are Verkhoyansk (B) and Riyadh (B-), both graded Nov 4/6.**
+> No proposal evidence updates; last measured A-rate 0% (n=1, Nov 6). Both drafts are now strict
+> staleness candidates (forecast days elapsed); gist write skipped (invalid `gh` token). Operator:
+> reject both via dashboard; `main` still lacks `daily-plan-current` cycles.
+>
 > **Jul 6: 0 fresh drafts — queue is an exact match to Jul 5's 15 graded drafts (same
 > `draft_id`s, scores, text); no re-grading performed, all grades stand at Jul 5's levels.**
 > No active-proposal evidence updates: P_close (16 cycles), P_tier (7 cycles/10 instances),

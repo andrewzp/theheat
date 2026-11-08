@@ -11,6 +11,20 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-11-08 — Daily corpus grading (0 fresh drafts; 2 carry-overs, previously graded)
+
+**Context:** Gist read via git-clone path (success). 2 pending, both already graded: `draft_20261104_022119_64`
+(Verkhoyansk hot10, B Nov 4) and `draft_20261105_121936_65` (Riyadh dust_event, B- Nov 6) — same ids/text/scores,
+not re-graded. Brazil fire (Oct 31, B-) is gone from the queue (cause unconfirmed). No new drafts since Nov 5 12:19Z.
+
+**Staleness (~Nov 8):** Both now strict bulk-reject candidates (>48h, dated forecast day elapsed):
+Verkhoyansk ~4.5d ("Wednesday", Nov 4); Riyadh ~2.5d ("Thursday", Nov 5). Gist write attempted/skipped
+(`gh` token invalid; gist API blocked) — operator should reject via dashboard.
+
+**Grade distribution:** none fresh. No proposal evidence updates. `daily-plan-current` remains unmerged to `main`.
+
+---
+
 ## 2026-11-06 — Daily corpus grading (1 fresh draft; 2 carry-overs from Oct 31 / Nov 4, previously graded)
 
 **Context:** Gist read via git-clone path (success). 3 pending: `draft_20261031_032828_68` (Brazil fire,
