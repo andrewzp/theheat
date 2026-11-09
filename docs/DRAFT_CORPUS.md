@@ -11,6 +11,40 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-11-09 — Daily corpus grading (1 fresh draft; 2 carry-overs, previously graded)
+
+**Context:** Gist read via git-clone path (success). 3 pending: `draft_20261104_022119_64` (Verkhoyansk
+hot10, B Nov 4) and `draft_20261105_121936_65` (Riyadh dust_event, B- Nov 6) — same ids/text, not
+re-graded. **1 fresh:** `hot10` Shymkent (created Nov 8 18:03Z, ~21h old).
+
+**Staleness (~15:00 UTC Nov 9):** Verkhoyansk (~5.5d, "Wednesday") and Riyadh (~3.1d, "Thursday") are strict
+candidates (>48h, forecast day elapsed). Shymkent is <48h but its "Sunday" (Nov 8) forecast day has
+already elapsed; it crosses the threshold Nov 10. Gist write skipped (`gh` token invalid; gist API
+blocked by sandbox proxy).
+
+**Grade distribution (fresh):** 0 A / 1 B / 0 C. **A-rate 0% (n=1)**; bar not cleared.
+
+### B
+**[3] Shymkent hot10 (score 87)** — "Shymkent, Kazakhstan is forecast to hit 27°C Sunday — 14.7°C above
+its November normal, the largest departure among 417 sampled cities (Open-Meteo/Meteostat, forecast)."
+Pure data delivery, valid register: forecast status and sample scope stated, no banned opener, no
+Wodehouse violation. Violation is real but milder than Verkhoyansk (27°C is a warm day, not a
+physically strange one) and the normal is left implicit (~12.3°C), so the reader does the subtraction.
+Ends on a parenthetical source tag, not a close. Capped at B; arguably the low end of B.
+
+### Patterns
+1. **P_close** +1 cycle (hot10 closeless, 2nd consecutive hot10 draft; 0 positive).
+2. Template convergence watch: Shymkent and Verkhoyansk share an identical skeleton ("is forecast to
+   [verb] X — Y°C above its November normal, the largest departure among N sampled cities
+   (Open-Meteo/Meteostat, forecast)"). n=2, logged only; not yet a proposal.
+3. No era-anchor, political-anchor, banned-opener or plant-comparison hits.
+
+### Followups
+- Operator: reject Verkhoyansk and Riyadh (forecast days elapsed); Shymkent next cycle.
+- Operator: `daily-plan-current` still unmerged; `main` lacks graded cycles since 2026-06-08.
+
+---
+
 ## 2026-11-08 — Daily corpus grading (0 fresh drafts; 2 carry-overs, previously graded)
 
 **Context:** Gist read via git-clone path (success). 2 pending, both already graded: `draft_20261104_022119_64`
