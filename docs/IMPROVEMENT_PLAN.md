@@ -2,6 +2,10 @@
 
 Living plan for closing the gap between the bot's current voice quality and the **resumption bar** (majority A-grade rate per cycle). Refined daily by the autonomous grading agent (cron `0 15 * * *`), reviewed and implemented by the human operator.
 
+> **Nov 10: 0 fresh drafts — queue identical to Nov 9 (Verkhoyansk B, Riyadh B-, Shymkent B); no
+> re-grading, no proposal evidence updates.** Verkhoyansk + Riyadh strict staleness candidates; Shymkent
+> crosses 48h ~18:00Z today. Gist write skipped (invalid token).
+>
 > **Nov 9: 1 fresh draft (hot10 Shymkent, B) + 2 carry-overs (Verkhoyansk B, Riyadh B-; not
 > re-graded). A-rate 0% (n=1).** Closeless data delivery again — P_close +1 cycle (hot10 0 positive of
 > 2). Shymkent and Verkhoyansk share an identical template skeleton (n=2, watch only; no new

@@ -11,6 +11,20 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-11-10 — Daily corpus grading (0 fresh drafts; 3 carry-overs, previously graded)
+
+**Context:** Gist read via git-clone path (success). 3 pending, exact match to Nov 9's queue: Verkhoyansk
+hot10 (B, Nov 4), Riyadh dust_event (B-, Nov 5), Shymkent hot10 (B, Nov 8). No re-grading; grades stand.
+
+**Staleness (~15:00 UTC Nov 10):** Verkhoyansk (~6.5d, "Wednesday") and Riyadh (~5.1d, "Thursday") are
+strict bulk-reject candidates (>48h, forecast day elapsed). Shymkent is ~45h (crosses 48h at ~18:00Z today;
+"Sunday" already elapsed). Gist write skipped: `gh` token invalid and gist API path blocked by the sandbox.
+
+**A-rate:** N/A (no fresh drafts). Last graded cycle: 0% (n=1, Nov 9).
+
+### Patterns
+No new evidence for any active proposal; queue static for 24h (cycle-cadence note only).
+
 ## 2026-11-09 — Daily corpus grading (1 fresh draft; 2 carry-overs, previously graded)
 
 **Context:** Gist read via git-clone path (success). 3 pending: `draft_20261104_022119_64` (Verkhoyansk
