@@ -11,6 +11,135 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-10-16 — Daily corpus grading (13 fresh drafts; first corpus cycle since Jul 6)
+
+**Grade distribution:** A: 0 · B-range: 5 (all B-) · C-range: 8 (7 C+, 1 C) · D/F: 0 → **0% A-rate (0/13)**.
+
+**Headline finding:** Zero A-grade drafts, and not one of the 13 contains a mechanism, a
+consequence, or a named humor move. Every draft is data delivery plus a source/caveat tail.
+The best of the batch (the three dust_event and two air_quality_hazard drafts) are clean,
+correct, WHO-anchored numbers — B- because the number carries them and the close does nothing.
+The worst are the cyclone and fire drafts that leak internal threshold language ("the NHC
+rapid-intensification threshold") or bundle labels ("very-high-intensity", "top tier of VIIRS
+detections").
+
+**Context:** Gist read via git-clone path (success). 13 pending, **all 13 are 7–9 days old**
+(created Oct 7 10:48Z → Oct 9 20:29Z), so this is a stale-queue grading, not a same-day one.
+The corpus and trend files have no cycles logged between Jul 6 and today (~102 days); the
+Sep 29 evaluation boundary banner in `QUALITY_TREND.md` applies — these grades are historical
+editorial observations, not factual qualification or authorization to resume posting. The
+gist has no `daily-plan-current` rolling branch on remote (main's docs top out at Jul 6), so
+this cycle's edits sit on the session branch off current `main` (a57c01d).
+
+**Staleness:** all 13 carry a calendar date or forecast date in the copy ("on Oct 7", "for
+Oct 8", "Oct 9") that has elapsed 7–9 days. All are strict bulk-reject candidates. Write
+skipped — see QUALITY_TREND rejection-events entry (`GH_TOKEN` invalid; no gist-write tool).
+
+### B- (5)
+
+- **[2] Quetta, Pakistan dust_event (71)** — "523 µg/m³ on Oct 7, with a PM10 24-hour mean of
+  173 µg/m³ — nearly 4× the WHO daily guideline." 173/45 = 3.84, "nearly 4×" is correct. Two
+  concentrations (peak 523, mean 173) force the reader to reconcile them; the WHO multiple is
+  the only calibrating number and it is the right one. Trailing "Source: CAMS global model via
+  Open-Meteo." is attribution in the close slot. No mechanism. **First dust_event in the
+  corpus to state a WHO anchor** (P_dust counter-instance).
+- **[3] Arequipa, Peru dust_event (71)** — "527 µg/m³ … pushing the PM10 24-hour mean to about
+  121 µg/m³ — 2.7× the WHO daily guideline. (CAMS global model, 45 km resolution)." 121/45 =
+  2.69 ✓. Same shape as Quetta, same parenthetical-source tail. "About 121" is approximation
+  where the exact value is available (P4, minor). Arequipa is a high-altitude Andean city; no
+  ecosystem specificity used.
+- **[4] Riyadh dust_event (75)** — "A CAMS air-quality model forecast puts Riyadh's peak dust
+  concentration at 2,347 µg/m³ … PM10 averaging about 10.7× the WHO 24-hour guideline." Highest
+  signal of the batch (2,347 is extraordinary) and the multiple lands. Opener is a source-first
+  clause ("A CAMS air-quality model forecast puts…") rather than the place. Ends on "These are
+  model estimates, not station measurements." — the hedge is the close (see P_hedge).
+- **[6] Shah Alam, Malaysia air_quality_hazard (74)** — "~152 µg/m³ … about 10× the WHO 24-hour
+  guideline of 15 µg/m³, with hourly estimates running above 180 µg/m³ overnight." 152/15 = 10.1 ✓.
+  Names the guideline value, which dust drafts do not. Closes "No station data to verify; model
+  forecast only." — hedge as close. Misses the obvious cause/consequence (regional haze season,
+  etc.) that the bundle may not carry.
+- **[7] Kano, Nigeria air_quality_hazard (74)** — "~230 μg/m³ … about 15× the WHO guideline …
+  Dust values in the same forecast run above 300 μg/m³ through most of the day." 230/15 = 15.3 ✓.
+  Best of the five: the second sentence adds a fact (dust above 300) instead of a hedge, so the
+  close is data, not a disclaimer. Still no mechanism — harmattan season is the obvious
+  specificity and is absent. B- rather than B because nothing is carrying the line but the number.
+
+### C-range (8)
+
+- **[1] Papua New Guinea fire (80) — C+.** "a thermal anomaly detected by NASA FIRMS/MODIS on Oct. 7
+  is radiating 1,026 MW — very-high-intensity, satellite-confirmed at 94% confidence." Banned-
+  formula-adjacent opener ("is radiating N MW"); "very-high-intensity" is an internal bundle
+  label (P_tier, soft); FIRMS/MODIS sourcing in the first clause. Top draft by score (80), no
+  better than C+ by voice. "Two nearby hotspots … 1,120 and 817 MW" is a list of numbers, not a
+  point. No landscape, no season.
+- **[5] Hurricane Isaias cyclone_rapid_intensification (71) — C+.** "surpassing the NHC rapid
+  intensification threshold of 30 kt." **P_tier** — names the trigger threshold verbatim as
+  the point of the sentence (3rd cyclone_rapid_intensification instance; Jul 4 Bavi avoided it).
+  "Advisory 006 puts it at 65 kt, 982 mb near 22.9°N, 91.9°W" is coordinates-as-copy. **Raw NHC URL
+  appended on its own line** (bundle-leak, same class as the Jul 3 JTWC URL).
+- **[8] Klang, Malaysia air_quality_hazard (74) — C+.** "~152 µg/m³ … about 10× the WHO daily
+  guideline — with a modeled hourly peak near 188 µg/m³." Same CAMS grid cell and same 152/10×
+  reading as Shah Alam [6], drafted 7.5 hours later; near-duplicate content, so it adds nothing
+  as a second tweet. Hedge-as-close again ("These are model estimates, not station readings").
+- **[9] Eastern Mongolian steppe fire (70) — C+.** "three thermal anomalies within about 10 km of
+  each other — 600.5, 568.6 and 543.6 MW … all at 01:13 UTC." The comic triple is present by
+  accident (three numbers) but nothing resolves it; it is a list. "Steppe" is the only
+  ecosystem word and nothing is done with it. Tail is a timestamp. No close.
+- **[10] Hurricane Isaias cyclone_tier_crossing (74) — C.** "strengthened to Category 3 (105 kt,
+  959 mb) … as of NHC Advisory 012a — up from Category 2 within the same advisory cycle." Pure
+  bulletin: advisory number, pressure, a URL. No stakes, no distance, no voice. Third Isaias
+  draft in the batch.
+- **[11] Hurricane Isaias cyclone_rapid_intensification (73) — C+.** "jumped from Category 1 to
+  Category 3 in 24 hours … winds rising 30 kt to 105 kt, exactly the NHC rapid-intensification
+  threshold." **P_tier** again; "exactly the threshold" is the whole payoff and it is the system's
+  trigger, not the world. "Rising 30 kt to 105 kt" reads as a rise *to* 30 on first pass.
+  Near-duplicate of [5] (same storm, 24 hours apart) plus URL tail.
+- **[12] East Pacific Hurricane Simon cyclone_rapid_intensification (70) — C+.** "intensified 30 kt
+  in 24 hours — from tropical storm to Category 2 at 85 kt — meeting the NHC threshold for rapid
+  intensification. (NHC advisory 009a)" **P_tier** (3rd instance this batch). Advisory number in
+  parentheses, URL tail. 55→85 kt arithmetic ✓.
+- **[13] Brazil Cerrado fire (68) — C+.** "519 MW … a thermal signal intense enough to register in
+  the top tier of VIIRS detections." "Top tier of VIIRS detections" is the tier-leak in softer
+  form (P_tier) and also self-referential — the fire is described by how the satellite ranks it.
+  "A second hotspot 200 km north logged 529 MW three minutes later" is the only interesting fact
+  (two hotspots, ~200 km apart, near-identical, minutes apart — likely one swath) and is
+  not exploited. Cerrado is a named biome; dry-season/savanna mechanism absent.
+
+### Patterns named
+
+1. **No mechanism, no consequence, no named mechanic in 13 of 13** — P_close 17th cycle, 0
+   positive, 13 failing. Not one fire draft reaches the permafrost/drought-carbon mechanism
+   class that cleared A- on Jun 25/Jul 3/Jul 5; the ecosystem words (steppe, Cerrado) are
+   named and dropped.
+2. **P_tier 8th cycle: 3 hard instances ([5], [11], [12]) + 2 soft ([1] "very-high-intensity",
+   [13] "top tier of VIIRS detections").** Confirms the cyclone_rapid_intensification class is
+   structurally exposed (3 of 3 this batch; Jul 4 Bavi the lone clean instance of 4).
+3. **P_dust counter-evidence.** Quetta, Arequipa and Riyadh all state a WHO multiple unprompted
+   (first 3 dust_event drafts after 11 of 11 without). Anchor is now present; the next gap is
+   the close (see 4) and a mechanism. Logged on the proposal as first counter-cycle.
+4. **NEW — P_hedge: the model-estimate disclaimer occupies the close slot.** [2] "Source: CAMS…",
+   [3] "(CAMS … 45 km resolution)", [4] "These are model estimates, not station measurements",
+   [6] "No station data to verify; model forecast only", [8] "These are model estimates, not
+   station readings" — 5 of 5 CAMS drafts end on provenance. Honesty is correct and should
+   stay; the position is the problem. A hedge written as the last sentence is a deflating
+   closer by construction (HUMOR_RESEARCH: the closer is the punchline).
+5. **Duplicate generation, 2 clusters.** Isaias ×3 ([5], [10], [11]; two RI drafts 24h apart
+   for the same storm) and Shah Alam/Klang (same grid cell, same 152 µg/m³). Operational
+   anomaly — logged, not a voice proposal (dedup lives outside the voice layer).
+6. **Raw source URL appended to cyclone copy ×4** ([5], [10], [11], [12]). Same bundle-leak
+   class flagged Jul 3 (JTWC). Flag for the engineer; not folded into grades.
+7. **Pure data delivery** is a valid mode (HUMOR_RESEARCH), but only works when the number is
+   itself the punchline (Riyadh 2,347 comes closest). These 13 add attribution and
+   coordinates where the data-delivery A-grades add one spare specific.
+
+### Followups
+
+- Operator: bulk-reject all 13 (7–9 days old, dated copy) via dashboard; gist write unavailable.
+- Operator: confirm whether the bot should be generating a second Isaias RI draft for the same
+  storm within 24h; and whether the 3 Oct 7–8 CAMS Malaysian/Peruvian drafts should dedup by grid cell.
+- Next cycle: watch whether P_dust's WHO anchor holds (needs 3 dust_event cycles to archive the
+  "no anchor" failure), and whether the P_hedge position issue shows in non-CAMS types.
+
 ## 2026-07-06 — Daily corpus grading (0 fresh drafts; 15 carry-overs from Jul 5, previously graded)
 
 **Context:** Gist read via git-clone path (success; no rate limit). Queue: 15 pending drafts —
