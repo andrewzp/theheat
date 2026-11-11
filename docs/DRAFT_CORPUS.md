@@ -11,6 +11,24 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-09-30 — Daily corpus grading (0 drafts; no pending queue)
+
+**Context:** Synced to `origin/main` (16a3127), gist read via git-clone path (success). Pending queue: **0**.
+Gist `drafts` holds 40 records — 38 `posted`, 2 `approved`, none `pending`; newest draft
+timestamp 2026-07-23. Nothing to grade; no grades fabricated and none of the Jul 6 batch
+re-graded (that batch has left the queue — posted/approved/swept; not verifiable from this
+run). Grade distribution: n/a. No new pattern evidence: P_close, P_tier, P_dust, P_compound, P9
+and P5 all unchanged from their last observations (Jul 5/Jul 4). Staleness bulk-reject: nothing
+pending, so nothing to reject (`gh` CLI absent regardless).
+
+**Followups for operator:** (1) `main` now carries the Sep 29 evaluation-boundary notes on
+`docs/QUALITY_TREND.md`; historical A-rate rows remain editorial observations only, not a
+resumption authorization. (2) The last measured A-rate on record is still Jul 5 (20%, n=5);
+there is no fresh-draft signal since Jul 23. The 2 `approved` drafts are not pending and were
+not graded.
+
+---
+
 ## 2026-07-06 — Daily corpus grading (0 fresh drafts; 15 carry-overs from Jul 5, previously graded)
 
 **Context:** Gist read via git-clone path (success; no rate limit). Queue: 15 pending drafts —
