@@ -11,6 +11,107 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-10-04 — Daily corpus grading (7 drafts)
+
+**Context:** Gist read via git-clone path (success). Queue: 7 pending, all fresh to the corpus
+(none match the Jul 6 batch; the last corpus section is 90 days old, so the Jul 6 queue has long
+since turned over). All 7 are `manual_only` approval-policy drafts created Sep 30 17:49Z → Oct 1
+20:47Z, i.e. **62–99h old at grading**. Mix: 3 dust_event, 1 air_quality_hazard, 1 fire,
+2 cyclone_tier_crossing (first of that type in the corpus). Evidence grades in the bundles read
+`model_estimated` (CAMS) — consistent with the Sept 29 evaluation boundary noted atop
+`QUALITY_TREND.md`: grades below are editorial observations only, not factual qualification or
+a resumption signal.
+
+**Grade distribution:** 0 A, 0 B+, 3 B/B- (1 B, 2 B-), 4 C-range (3 C+, 1 C). **A-rate 0%.**
+
+**Headline finding:** every draft is pure data delivery with no named mechanic operating and no
+closing line. The dust/AQ drafts finally carry the WHO multiple (P_dust's fix appears live —
+first time in 14 dust/AQ drafts that the anchor is stated on `dust_event`), but the anchor is
+the whole tweet: setup with no punchline. The two cyclone drafts read as wire copy ("has
+strengthened to Category N"). P_close fails on 6 of 7.
+
+### B-range
+
+**[1] Riyadh dust_event, B** — "CAMS model estimates a dust daily maximum of 4,338 µg/m³ on
+Sept 30, with PM10 averaging 1,176 µg/m³ over 24 hours — about 26× the WHO daily guideline."
+WHO anchor present and arithmetic holds (1,176/45 ≈ 26). First `dust_event` in corpus to state
+the multiple. Ends on "A concurrent PM2.5 signal reached 162 µg/m³ the same day" — a second
+unanchored number, flat, no consequence. Two metrics stacked where one multiple would carry.
+Ceiling B because there is no close (P_close).
+
+**[2] Mecca dust_event, B-** — "…PM10 averaging 4× the WHO 24-hour guideline — while Riyadh
+registered a peak of 4,338 µg/m³ the same day. Two major Saudi cities, one dust event.
+(CAMS/Open-Meteo)" Only draft in the batch with a closer that is a move: "Two major Saudi
+cities, one dust event" is period-and-restate in the right register — deadpan, distance
+preserved. Costs: it depends on a *different pending draft* ([1]) for its punchline's referent
+(if Riyadh is rejected/unposted the line orphans), and the trailing source parenthetical is
+bracketed-citation clutter. 622 µg/m³ vs. Riyadh's 4,338 is also the weaker half of the pair;
+leading with Riyadh would have been the story.
+
+**[4] Riyadh air_quality_hazard, B-** — "model-estimated PM2.5 daily mean of 213 µg/m³ on Oct. 1
+— 14× the WHO 24-hour guideline of 15 µg/m³. A related dust signal for the city peaked at
+4,711 µg/m³ the same day." Guideline value stated alongside the multiple (good, self-
+calibrating). Same city as [1] 17h later, same structure: multiple, then a second number as
+the "close". Third unanchored-extra-metric tail in the batch. Second Riyadh draft in 24h is a
+topic-repeat the queue now holds ([1], [2], [4] all reference the same dust event).
+
+### C+ / C
+
+**[3] Brazil Cerrado fire, C+** — "888 MW of radiative heat logged by NASA FIRMS on Oct. 1 —
+very-high intensity, satellite-confirmed at 100% confidence." **"very-high intensity" is a tier
+label** — P_tier's fire signal-type instance (this bundle field class again: label echoed
+verbatim). "satellite-confirmed at 100% confidence" is the pre-v2 fire formula. Second sentence
+lists two more MW readings (1,584; 1,018) — a list, not a mechanic. No Cerrado ecosystem
+specificity (savanna fire season, Oct. late-dry-season) that Siberia/Canadian-Arctic fire
+A-s carried. P_close failing; ecosystem-specificity not operating.
+
+**[5] Taiz dust_event, C+** — "model-estimated PM10 averaged ~266 µg/m³ over 24 hours on Oct 1
+— about 5.9× the WHO daily guideline. Dust daily maximum reached 829 µg/m³ (CAMS global model,
+45 km resolution)." **Approximation-when-exact-is-available ("~266", "about 5.9×" — P4)**: the
+multiple is given to a decimal, so the tildes are hedging, not rounding. Also the methodology
+parenthetical ("CAMS global model, 45 km resolution") explains the instrument instead of the
+world. WHO anchor present but at a low multiple with nothing said about what 5.9× does to
+Taiz. Prior Taiz drafts carried the best dust mechanism of the corpus (Tihama plain); this one
+dropped it entirely.
+
+**[7] Hurricane Rachel Cat 3, C+** — "has strengthened to Category 3 in the East Pacific,
+reaching 105 kt (121 mph) with a central pressure of 950 mb, per NHC advisory 019.
+nhc.noaa.gov/text/MIATCPEP3…" kt→mph conversion is correct and useful. But: wire-lede opener
+("has strengthened to"), "per NHC advisory 019" is citation-as-sentence, and **Category 3 is the
+major-hurricane line — the single most tweetable fact about this crossing — unstated.** URL
+appears twice in the posted text (a truncated `…` form, then the full URL on the next line).
+Same raw-source-URL-in-copy defect seen on Jul 3's JTWC draft; logged as operational.
+
+**[6] Hurricane Rachel Cat 2, C** — "has strengthened to Category 2 in the East Pacific, packing
+85-kt winds and a 972 mb central pressure as of the Oct. 1 NHC advisory." Pure wire copy; no kt→
+mph conversion (85 kt is not a number general readers hold), "packing" is stock newsroom verb.
+Moreover **superseded**: [7] reports Cat 3 10 hours later, so [6] is now a stale intermediate
+the queue should not carry (an operator decision, not a voice proposal).
+
+### Patterns named
+
+1. **WHO anchor now present on dust_event (P_dust counter-evidence, 3 of 3).** Fix appears to be
+   live. Remaining gap has moved from "no anchor" to "anchor is the entire tweet".
+2. **Second-metric tail as a fake close (new subtype of P_close).** [1], [4], [5] each end with a
+   second reading (PM2.5, dust peak, dust max) instead of a consequence. All three cluster on the
+   same signal family.
+3. **Wire-lede on cyclone_tier_crossing (new, P_wire).** First two drafts of the type both open
+   "Hurricane Rachel has strengthened to Category N" — no voice, no mechanic, tier meaning
+   not spelled out.
+4. **Tier label leak, fire (P_tier).** "very-high intensity" on a FIRMS fire.
+5. **Same-event repetition across drafts.** Riyadh ×3, Rachel ×2 — diversity gate allows
+   same-city/same-storm drafts in a ~24h window. Operational note only.
+
+### Followups
+
+- P_wire added; P_dust re-scoped (anchor present → close missing).
+- P_tier: add fire to signal-type list.
+- Operational: URL double-append on cyclone drafts; sequential-tier supersession in queue.
+- Staleness: all 7 are >48h with a dated "on Sept 30 / Oct 1" reference; gist write blocked (see
+  QUALITY_TREND rejection events).
+
+---
+
 ## 2026-07-06 — Daily corpus grading (0 fresh drafts; 15 carry-overs from Jul 5, previously graded)
 
 **Context:** Gist read via git-clone path (success; no rate limit). Queue: 15 pending drafts —
