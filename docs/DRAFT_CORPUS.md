@@ -11,6 +11,27 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-11-11 — Daily corpus grading (0 fresh drafts; 2 carry-overs, previously graded)
+
+**Context:** Gist read via git-clone path (success). 2 pending: `draft_20261105_121936_65` (Riyadh
+dust_event, B- Nov 6) and `draft_20261108_180324_55` (Shymkent hot10, B Nov 9) — same ids/text, not
+re-graded. Verkhoyansk hot10 (B, Nov 4) has left the queue (cause unconfirmed; likely operator reject or
+TTL sweep). No new pending drafts since Nov 8 18:03Z (~2.9 days).
+
+**Staleness (~15:00 UTC Nov 11):** both now strict bulk-reject candidates — Riyadh ~6.1d ("Thursday",
+Nov 5 elapsed), Shymkent ~69h ("Sunday", Nov 8 elapsed). Gist write skipped (`gh` token invalid).
+
+**A-rate:** N/A (no fresh drafts). Last graded cycle: 0% (n=1, Nov 9).
+
+### Patterns
+No new evidence for any active proposal. Infra note: the state gist logs repeated `state_size` warnings
+(7.79 MB, "approaching gist inline cliff") through Nov 11 08:22Z — if it crosses the cliff, this routine's
+git-clone read path may still work but the bot's own writes may not; operator should check.
+
+### Followups
+- Operator: reject Riyadh and Shymkent via dashboard (forecast days elapsed).
+- Operator: `daily-plan-current` still unmerged; `main` lacks graded cycles since 2026-07-06.
+
 ## 2026-11-10 — Daily corpus grading (0 fresh drafts; 3 carry-overs, previously graded)
 
 **Context:** Gist read via git-clone path (success). 3 pending, exact match to Nov 9's queue: Verkhoyansk

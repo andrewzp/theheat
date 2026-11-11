@@ -84,6 +84,7 @@ We grade drafts on an A through F rubric in `docs/DRAFT_CORPUS.md` (the longitud
 | 2026-11-08 | 0 | — | — | — | — | **N/A** | — | No fresh drafts — 2 pending are Verkhoyansk (B) and Riyadh (B-), both graded Nov 4/6. Both now strict staleness candidates (forecast days elapsed, 4.5d/2.5d). Gist write skipped (invalid token). No proposal evidence updates. |
 | 2026-11-09 | 1 | 0 | 1 | 0 | 0 | **0%** | ✗ | n=1 fresh: Shymkent hot10 B (clean exact data, forecast-labelled; no close, milder violation than Verkhoyansk). P_close +1. hot10 skeleton identical to Verkhoyansk (n=2, watch only). Verkhoyansk + Riyadh are strict staleness candidates; Shymkent forecast day elapsed, crosses 48h Nov 10. Gist write skipped (`gh` token invalid). |
 | 2026-11-10 | 0 | — | — | — | — | **N/A** | — | No fresh drafts — queue identical to Nov 9 (Verkhoyansk B, Riyadh B-, Shymkent B; all previously graded). Verkhoyansk + Riyadh strict staleness candidates; Shymkent ~45h, crosses 48h today. Gist write skipped (invalid token / API path blocked). No proposal evidence updates. |
+| 2026-11-11 | 0 | — | — | — | — | **N/A** | — | No fresh drafts — 2 pending are Riyadh dust (B-) and Shymkent hot10 (B), both previously graded; Verkhoyansk left the queue. Both now strict staleness candidates (6.1d / 69h, forecast days elapsed). Gist write skipped (invalid token). No proposal evidence updates. State gist at 7.79 MB with size warnings. |
 
 **Trend interpretation:**
 The Apr 25 jump to 43% was real but came from a small cohort (7 drafts) and didn't sustain into Apr 27. The Apr 27 regression has named causes (Sonnet rewrite path, verb-list gap in opener regex, era-anchor over-deployment, political anchor curation error). All four have proposed fixes documented in `docs/DRAFT_CORPUS.md` Apr 27 implications section. Next data point: tomorrow's scheduled grader (fires 2026-04-27 06:00 UTC) on the Apr 26-27 cycle output under v2.5 + post-humor-lens fixes.
@@ -93,6 +94,10 @@ We've been in the 9-43% band for three cycles. Need to clear 50% sustained.
 ## Rejection events
 
 Drafts that got rejected, with dates.
+
+### 2026-11-11 — Staleness bulk-reject: 2 strict candidates; write skipped
+
+Riyadh dust_event `draft_20261105_121936_65` (~6.1d, "Thursday" elapsed) and Shymkent hot10 `draft_20261108_180324_55` (~69h, "Sunday" elapsed). Gist write skipped (`gh` token invalid); operator should bulk-reject via dashboard.
 
 ### 2026-11-10 — Staleness bulk-reject: 2 strict candidates; write skipped
 
