@@ -11,6 +11,38 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-11-12 — Daily corpus grading (0 fresh drafts; 2 carry-overs, previously graded)
+
+**Context:** Gist read via git-clone path (success; gist HEAD Nov 12 13:14Z). 2 pending, exact match to
+Nov 11: `draft_20261105_121936_65` (Riyadh dust_event, B- Nov 6) and `draft_20261108_180324_55` (Shymkent
+hot10, B Nov 9) — same ids/text/scores, not re-graded.
+
+**Why the queue is dry:** not an intake drought. Two newer `hot10` drafts were created and auto-published
+without passing through pending (`publication_control.enabled=true`, live epoch since Oct 30): Ulan Bator
+Nov 9 22:27Z ("forecast to hit 9.7°C Tuesday — 14.2°C above its November normal …") and Ulan Bator Nov 10
+19:48Z ("forecast to reach 8.4°C Wednesday — 12.9°C above its November normal …"). Not graded here (routine
+grades pending only), but both reuse the Verkhoyansk/Shymkent hot10 skeleton verbatim — template-convergence
+watch now n=4 across 4 consecutive hot10 drafts, two of them already live. Same location two days running.
+
+**Staleness (~15:00 UTC Nov 12):** both strict bulk-reject candidates — Riyadh ~7.1d ("Thursday", Nov 5),
+Shymkent ~93h ("Sunday", Nov 8). Gist write skipped (`gh` token invalid).
+
+**A-rate:** N/A (no fresh drafts). Last graded cycle: 0% (n=1, Nov 9).
+
+### Patterns
+1. No new graded evidence for any active proposal.
+2. hot10 skeleton convergence (watch, n=4, incl. 2 auto-published): "[City] is forecast to [hit/reach] X°C
+   [Day] — Y°C above its November normal …, the largest departure among N sampled cities
+   (Open-Meteo/Meteostat, forecast)." If the operator wants this graded, auto-published posts need a
+   corpus path; logged only.
+3. State gist still logging `state_size` warnings (7.89 MB at 13:14Z, up from 7.79 MB Nov 11).
+
+### Followups
+- Operator: reject Riyadh and Shymkent via dashboard (forecast days elapsed).
+- Operator: decide whether auto-published drafts should be graded — the pending queue no longer
+  reflects writer output while auto-publish is enabled.
+- Operator: `daily-plan-current` still unmerged; `main` lacks graded cycles since 2026-07-06.
+
 ## 2026-11-11 — Daily corpus grading (0 fresh drafts; 2 carry-overs, previously graded)
 
 **Context:** Gist read via git-clone path (success). 2 pending: `draft_20261105_121936_65` (Riyadh
