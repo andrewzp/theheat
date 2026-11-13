@@ -1,3 +1,10 @@
+## 0.9.109.89
+
+- Preserve NOAA coastal gauge identity, exact observation time, preliminary or
+  verified status and response receipts through candidate creation. Compare only
+  same-time tide predictions; withhold missing, nonfinite or flagged samples and
+  expose partial station failures. Automatic eligibility remains unchanged.
+
 ## 0.9.109.88
 
 - Give observed auto-eligible copy a body budget that reserves its exact source

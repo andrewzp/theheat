@@ -11,7 +11,8 @@ def run_water_levels(bot_state: BotState, current_run: dict | None) -> None:
     print("[alerts] Checking coastal water levels...")
     water_levels_start = time.perf_counter()
     try:
-        wl_readings = _fetch_strict(water_levels.fetch_water_levels)
+        metrics: dict = {}
+        wl_readings = _fetch_strict(water_levels.fetch_water_levels, metrics_out=metrics)
         surges = water_levels.detect_storm_surge(wl_readings)
         source_promoted = 0
         for surge in surges:
@@ -20,22 +21,24 @@ def run_water_levels(bot_state: BotState, current_run: dict | None) -> None:
             score = score_storm_surge(surge.anomaly_m)
             if not _should_draft(score, surge.event_id):
                 continue
-            source_promoted += 1
             review_context = _review_context(
                 source="NOAA CO-OPS",
                 source_key="water_levels",
-                headline=f"Storm surge signal at {surge.station_name}",
+                headline=f"Observed coastal water-level residual at {surge.station_name}",
                 current_run=current_run,
                 facts=[
                     _fact("Station", surge.station_name),
                     _fact("State", surge.state),
+                    _fact("Observed time GMT", surge.evidence.get("valid_time")),
+                    _fact("Source quality", surge.evidence.get("quality_status")),
+                    _fact("Claim scope", surge.evidence.get("claim_scope")),
                     _fact("Anomaly", f"{surge.anomaly_m:.2f}m / {surge.anomaly_m * 3.281:.1f}ft above predicted"),
                     _fact("Observed vs predicted", f"{surge.observed_m:.2f}m vs {surge.predicted_m:.2f}m"),
                 ],
             )
             from src.two_bot.intern import build_storm_surge_bundle
             ss_bundle = build_storm_surge_bundle(surge)
-            _enqueue_story_candidate(
+            admitted = _enqueue_story_candidate(
                 bot_state,
                 bundle=ss_bundle,
                 score=score,
@@ -44,9 +47,13 @@ def run_water_levels(bot_state: BotState, current_run: dict | None) -> None:
                 event_id=surge.event_id,
                 review_context=review_context,
             )
+            source_promoted += int(admitted)
         _record_source_run(
             current_run, bot_state, "water_levels", water_levels_start,
-            status="success", observed=len(wl_readings), promoted=source_promoted, drafted=0
+            status="degraded" if metrics.get("stations_withheld") else "success",
+            observed=len(wl_readings), promoted=source_promoted, drafted=0,
+            note=f"{metrics['stations_withheld']} station(s) withheld" if metrics.get("stations_withheld") else None,
+            details={"coastal_observations": metrics}
         )
     except Exception as e:
         print(f"[alerts] Water levels error: {e}")
