@@ -8,6 +8,10 @@ from copy import deepcopy
 
 from src.config import WRITER_MODEL as _DEFAULT_WRITER_MODEL
 from src.data.fire_evidence import is_thermal
+from src.editorial.approval import AUTOSHIP_ALLOWLIST
+from src.editorial.automatic_text import AUTOMATIC_TEXT_MAX_SCALARS
+from src.editorial.observed_scope import enabled as observed_mode_enabled, story_hold as observed_story_hold
+from src.two_bot.source_links import source_citation
 from src.two_bot.prompts.writer_prompt import (
     HOT10_RANK_GUIDANCE,
     IMPACT_GUIDANCE,
@@ -148,6 +152,18 @@ def _memory_json(memory: MemorySlice) -> str:
     return json.dumps(memory.to_dict(), sort_keys=True, default=_json_default, allow_nan=False)
 
 
+def automatic_copy_budget(bundle: StoryBundle) -> dict | None:
+    """Advisory preparation only: the final automatic cap still decides arming."""
+    if (not observed_mode_enabled() or bundle.signal_kind not in AUTOSHIP_ALLOWLIST
+            or observed_story_hold(bundle) is not None):
+        return None
+    citation = source_citation(bundle)
+    reserve = 1 + len(citation) if citation else 0
+    return {"final_max_scalars": AUTOMATIC_TEXT_MAX_SCALARS,
+            "citation": citation, "citation_reserve_scalars": reserve,
+            "body_max_scalars": max(0, AUTOMATIC_TEXT_MAX_SCALARS - reserve)}
+
+
 def build_writer_user_prompt(
     bundle: StoryBundle,
     memory: MemorySlice,
@@ -190,6 +206,15 @@ def build_writer_user_prompt(
         prompt = f"{prompt}\n\n{THERMAL_TIME_GUIDANCE}"
     if getattr(bundle, "human_impact", None):
         prompt = f"{prompt}\n\n{IMPACT_GUIDANCE}"
+    budget = automatic_copy_budget(bundle)
+    if budget is not None:
+        prompt += "\n\nAutomatic publication copy budget: " + json.dumps(budget, sort_keys=True, ensure_ascii=False)
+        prompt += ("\nWrite the body only; the exact source citation, when present above, is appended before checks. "
+                   "Keep the complete body within body_max_scalars so body, newline and citation fit the final cap. "
+                   "Prefer one useful comparator. Preserve required units, period, geographic scope, baseline and attribution. "
+                   "Never drop a necessary qualifier, invent a short URL or truncate a claim to fit. "
+                   "If a faithful complete claim cannot fit, preserve correctness for manual review. "
+                   "This is a brevity target, not permission to omit checks or evidence.")
     if revision_constraint:
         prompt = f"{prompt}\n\n[Revision context: {revision_constraint}]"
     return prompt
