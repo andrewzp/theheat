@@ -423,12 +423,20 @@ def generate_draft(
     warning_provider_token = None
     checked_policy = current_editorial_policy()
     try:
+        from src.editorial.observed_scope import MESSAGE, story_hold
+        if scope_hold := story_hold(bundle):
+            _record_kill("editorial_scope", scope_hold + ": " + MESSAGE)
+            return None
         if checked_policy is None:
             _record_kill("editorial_policy", "Current editorial policy cannot be established")
             return None
         if not _warning_boundary(bundle, _record_kill):
             return None
         if not _audit_bundle_for_generation(bundle, state, record_kill=_record_kill, result_out=result_out):
+            return None
+        from src.data.c3s_monthly import KIND as C3S_KIND, current_bundle_hold
+        if bundle.signal_kind == C3S_KIND and (source_hold := current_bundle_hold(bundle, live=True)):
+            _record_kill("c3s_source", source_hold)
             return None
 
         from src.two_bot.bundle_capture import BundleCaptureError, capture_bundle
@@ -457,7 +465,7 @@ def generate_draft(
             return None
         from src.two_bot.intern.nwps_forecast import forecast_clock, forecast_source_hold, is_nwps_forecast
         nwps = is_nwps_forecast(bundle)
-        strict_source = nwps or bundle.signal_kind in _CURRENT_SOURCE_KINDS
+        strict_source = nwps or bundle.signal_kind in _CURRENT_SOURCE_KINDS or bundle.signal_kind == C3S_KIND
         if nwps and (hold := forecast_source_hold(checked_bundle.payload(), live=True, clock=forecast_clock)):
             _record_kill("nwps_source", hold)
             return None

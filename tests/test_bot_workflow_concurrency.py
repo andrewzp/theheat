@@ -76,6 +76,7 @@ def test_sentinel_keeps_its_hourly_cadence_in_a_separate_slot(workflow):
         ("schedule", "11 0,4,8,16,20 * * *", "", "alerts"),
         ("workflow_dispatch", "", "leaderboard", "leaderboard"),
         ("workflow_dispatch", "", "manual_tweet", "manual_tweet"),
+        ("workflow_dispatch", "", "observed_report", "observed_report"),
     ],
 )
 def test_real_mode_selector_preserves_scheduled_and_manual_roles(workflow, tmp_path, event, schedule, manual, expected):
@@ -90,7 +91,7 @@ def test_real_mode_selector_preserves_scheduled_and_manual_roles(workflow, tmp_p
 
 def test_all_manual_modes_share_that_same_non_cancelling_lock(workflow):
     modes = workflow["on"]["workflow_dispatch"]["inputs"]["mode"]["options"]
-    assert set(modes) == {"alerts", "leaderboard", "both", "manual_tweet", "auto_publish_due"}
+    assert set(modes) == {"alerts", "leaderboard", "both", "observed_report", "manual_tweet", "auto_publish_due"}
     assert "inputs" not in workflow["concurrency"]["group"]
     assert _queue_policy(workflow, "workflow_dispatch") == ("theheat-bot", False)
 

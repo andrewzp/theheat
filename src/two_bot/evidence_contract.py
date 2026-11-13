@@ -189,6 +189,9 @@ def audit_story_bundle(bundle: StoryBundle) -> EvidenceAudit:
             )
 
     from src.data.air_quality_evidence import bundle_failures as aq_failures
+    from src.data.c3s_monthly import bundle_failures as c3s_failures
+    for reason in c3s_failures(bundle):
+        issues.append(_issue("error", "c3s_finding_unqualified", "raw_signal_dump", reason))
     for reason in aq_failures(bundle):
         issues.append(_issue("error", "air_quality_window_unqualified", "raw_signal_dump", reason))
 

@@ -1,3 +1,11 @@
+## 0.9.109.86
+
+- Apply an observed-weather editorial mode before paid writing, approval and
+  posting; forecast archives remain available for private inspection.
+- Route one nominated, completed-month Copernicus finding through the existing
+  writer, required checks and source-checked sender, with one candidate/sample.
+- Retain draft text privately instead of printing it when a draft is saved.
+
 ## 0.9.109.85
 
 - Carry a recorded Google payment failure from news discovery into the current

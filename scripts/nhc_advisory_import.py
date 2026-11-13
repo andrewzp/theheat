@@ -227,8 +227,11 @@ def validate_report(raw: bytes, now: datetime, code_sha: str, source_sha: str) -
         fail("report_profile_invalid")
     if not timedelta(0) <= now - stamp(inv.get("captured_at")) <= timedelta(hours=6):
         fail("policy_stale")
-    if p["flags"] != {"writer_samples": 1, "critic_enabled": True, "critic_revise_enabled": False,
-                      "safety_llm_enabled": True}:
+    expected = {"writer_samples": 1, "critic_enabled": True, "critic_revise_enabled": False,
+                "safety_llm_enabled": True}
+    # Legacy archives lack the new scope flag; a new forecast import is allowed
+    # only in the old editorial mode, never under observed-only policy.
+    if p["flags"] not in (expected, {**expected, "observed_weather_only": False}):
         fail("policy_flags_changed")
     return p
 

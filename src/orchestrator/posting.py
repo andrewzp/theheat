@@ -1,6 +1,7 @@
 """Posting and publish queue modes."""
 
 from __future__ import annotations
+from datetime import UTC
 from src.data.fire_identity import legacy_history_reason
 from src.data.places import has_unregistered_identity, legacy_publication_status, requires_identity_review
 
@@ -38,12 +39,14 @@ def _current_nws_source(draft, *, live):
     from src.editorial.nhc_advisory_runtime import current_advisory_source
     from src.editorial.warning_runtime import current_warning_source
     from src.two_bot.intern.nwps_forecast import current_nwps_forecast
+    from src.data.c3s_monthly import current_draft_hold
     # An NHC advisory needs this process's own owner: static before intent,
     # a fresh fixed read at the live boundaries (manual entry, after intent).
     return (current_warning_source(draft) or current_advisory_source(draft, live=live)
             or _retained_nws_source(draft, live=live) or _current_hot10_source(draft)
             or _current_air_quality_source(draft, live=live) or _current_warning_auto_source(draft)
-            or current_nwps_forecast(draft, live=live, clock=_utc_now))
+            or current_nwps_forecast(draft, live=live, clock=_utc_now)
+            or current_draft_hold(draft, live=live, now=_utc_now()))
 
 
 def _current_warning_auto_source(draft) -> str | None:
@@ -117,6 +120,20 @@ def _autoship_freshness_anchor(draft: dict):
     ]
     review = draft.get("review_context")
     bundle = review.get("two_bot", {}).get("bundle") if isinstance(review, dict) else None
+    if draft.get("type") == "monthly_climate_report":
+        # A completed-month finding is retrospective by design. Its actual
+        # measurement period stays in bundle.when; queue age and independently
+        # captured report retrieval bound this nominated publication instead.
+        from src.data.c3s_monthly import validate_bundle
+        try:
+            report = validate_bundle(bundle, now=_utc_now())
+            captured = _parse_iso_utc(report["retrieved_at"])
+            created = _parse_iso_utc(draft.get("created_at"))
+            if captured is None or created is None or created > _utc_now():
+                raise ValueError("c3s_queue_time_invalid")
+            return min(created, captured)
+        except (ValueError, KeyError, TypeError):
+            return datetime.min.replace(tzinfo=UTC)
     if isinstance(bundle, dict):
         anchors.append(_parse_iso_utc(bundle.get("when")))
     valid = [a for a in anchors if a is not None]
@@ -260,6 +277,13 @@ def post_approved(draft_or_text: dict | str, bot_state: BotState) -> str:
         return "failed"
 
     draft = _coerce_publish_draft(draft_or_text)
+    from src.editorial.observed_scope import MESSAGE, story_hold
+    if scope_hold := story_hold(draft):
+        # Keep any unresolved delivery ledger intact. Scope withdrawal cannot
+        # erase evidence of an earlier send or authorize another attempt.
+        draft["post_error"] = scope_hold + ": " + MESSAGE
+        _touch_draft(draft)
+        return "failed"
     tracked = bool(draft.get("id") or draft.get("event_id") or draft.get("approval_binding"))
     if not tracked or not draft.get("id"):
         print("[post] Untracked text cannot publish; create and review a sourced draft")
@@ -425,6 +449,13 @@ def post_approved(draft_or_text: dict | str, bot_state: BotState) -> str:
         row["phase"] = "not_sent"
         draft["publish_outcome"] = "not_sent"
         draft["post_error"] = "Delivery bytes changed after the intent was recorded; nothing sent"
+        draft.pop("autoship_attempted", None)
+        _touch_draft(draft)
+        return "failed"
+    if scope_hold := story_hold(snapshot):
+        row["phase"] = "not_sent"
+        draft["publish_outcome"] = "not_sent"
+        draft["post_error"] = scope_hold + ": " + MESSAGE
         draft.pop("autoship_attempted", None)
         _touch_draft(draft)
         return "failed"

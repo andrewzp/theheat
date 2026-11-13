@@ -75,6 +75,7 @@ def collect_runtime_inventory(mode: str, *, now: datetime | None = None, bot_sta
             "claim_extract": None,
         },
         "flags": {
+            "observed_weather_only": os.environ.get("THEHEAT_OBSERVED_WEATHER_ONLY") == "1",
             "automatic_publication_enabled": publication_policy["enabled"],
             "automatic_publication_epoch": publication_policy["epoch"],
             "automatic_publication_reason": publication_policy["reason"],

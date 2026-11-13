@@ -48,6 +48,7 @@ PROVIDER_KINDS = {
     "gdacs": frozenset({"official_event_report"}),
     "usgs_earthquake": frozenset({"official_event_report"}),
     "copernicus_ems": frozenset({"official_event_report"}),
+    "copernicus_c3s": frozenset({"reanalysis"}),
     "nsidc": frozenset({"satellite_derived", "observed_station"}),
     "osi_saf": frozenset({"satellite_derived"}),
     "noaa_cpc": frozenset({"derived_index"}),
@@ -78,7 +79,7 @@ PROVIDER_NAMESPACES = {
     "open_meteo": "open_meteo", "noaa_ncei_ghcn": "noaa_ncei", "nasa_firms": "nasa_firms",
     "noaa_nesdis_hms": "noaa_nesdis", "us_drought_monitor": "usdm", "nifc_wfigs": "nifc", "noaa_gml": "noaa_gml",
     "nws": "nws", "nhc": "nhc", "jtwc": "jtwc", "gdacs": "gdacs", "usgs_earthquake": "usgs",
-    "copernicus_ems": "copernicus_ems", "nsidc": "nsidc", "osi_saf": "osi_saf", "noaa_cpc": "noaa_cpc",
+    "copernicus_ems": "copernicus_ems", "copernicus_c3s": "copernicus_c3s", "nsidc": "nsidc", "osi_saf": "osi_saf", "noaa_cpc": "noaa_cpc",
     "noaa_psl": "noaa_psl", "climate_reanalyzer": "climate_reanalyzer", "noaa_crw": "noaa_crw", "openaq": "openaq",
     "noaa_coops": "noaa_coops", "usgs_nwis": "usgs_nwis", "noaa_nwps": "noaa_nwps", "nasa_gesdisc": "nasa_gesdisc",
     "nasa_jpl_grace": "nasa_jpl", "nasa_ozone_watch": "nasa_ozone_watch", "grounded_search": "grounded_search",
@@ -147,6 +148,9 @@ RESTRICTIONS: dict[str, tuple[str, Any]] = {
                                          "association is not a shared footprint or simultaneous event.",
                                          (("synthesis_fire_drought_heat.marine_compound",
                                            "src/editorial/marine_evidence.py:claim_failures"),)),
+    "publisher_monthly_finding_scope": ("Attribute the completed-month finding and its comparison baseline to C3S; "
+                                        "not an annual prediction or independent global reconstruction.",
+                                        (("c3s_monthly", "src/data/c3s_monthly.py:bundle_failures"),)),
     "reported_not_adjudicated": ("A reported area, alert or activation is not an adjudicated impact total.", ADVISORY),
     "detection_not_cause_or_area": ("A thermal detection is not burned area, cause or casualties.", ADVISORY),
     "index_not_local_incident": ("An index or series milestone is not a local incident.", ADVISORY),
@@ -228,6 +232,15 @@ def _cache(source_id, chain, kind, provider, upstream, refs, *, health=None, leg
 
 
 LEGS: tuple[ProductLeg, ...] = (
+    _leg("c3s_monthly", "completed_month_report", "monthly_report", "primary", "copernicus_c3s",
+         "copernicus_c3s.era5_monthly_publisher_report", "reanalysis", "Published completed-month C3S ERA5 finding",
+         "Global monthly average in the publisher's ERA5 analysis; not station coverage.",
+         "Previous completed calendar month; retrieval is not measurement time.", "degrees C and monthly anomaly",
+         "Fixed official C3S report page; retained selected finding and response hashes.",
+         ("not_station_observation", "publisher_monthly_finding_scope"),
+         ("src/data/c3s_monthly.py:fetch_report", "src/data/c3s_monthly.py:validate_bundle"),
+         status="conditional", disposition="Explicit operator nomination in observed-report mode; required checks and current-source rereads remain.",
+         bound="One fixed report GET per acquisition or recheck; 10s socket timeout, 1MiB, no redirects or retries."),
     _leg("official_warning", "nominated_packet", "supplied_warning", "primary", "nominated_input",
          "theheat_supplied.official_warning_v1", "official_warning", "Exact nominated warning packet v1",
          "Only the nominated source's anchored place; no provider-wide coverage.",

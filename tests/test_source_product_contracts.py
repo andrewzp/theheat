@@ -43,13 +43,13 @@ def _mutated(target, /, **change):
 def test_every_wired_adapter_and_health_key_has_product_legs():
     document = products.product_contract_document()
     assert [row["source_id"] for row in document["adapters"]] == [row.source_id for row in CONTRACTS]
-    assert len(CONTRACTS) == 34
+    assert len(CONTRACTS) == 35
     # Preserve all 30 accepted-base entries; supplied warnings, the nominated NHC
     # advisory and owner-supplied regional observed packets (W05) are explicit,
     # default-absent adapters, not autonomous feeds.
     assert len([row for row in CONTRACTS
                 if row.source_id not in ("official_warning", "nhc_advisory", "regional_observed",
-                                         "nwps_major_forecasts")]) == 30
+                                         "nwps_major_forecasts", "c3s_monthly")]) == 30
     for row in CONTRACTS:
         legs = [leg for leg in products.LEGS if leg.source_id == row.source_id]
         assert legs and {key for leg in legs for key in leg.health_keys} == set(row.health_keys)
@@ -540,3 +540,15 @@ def test_r1_every_check_enforcement_is_a_scoped_function_and_the_rest_is_explici
         "basis": "check", "reference": GHCN_HISTORY}
     assert products.restriction_enforcement(BY_ID["co2.mlo_daily"])["record_needs_qualified_history"] == {
         "basis": "unresolved", "reference": None}
+
+
+def test_nominated_c3s_report_preserves_analysis_and_unknown_terms_without_granting_authority():
+    leg = BY_ID["c3s_monthly.completed_month_report"]
+    assert leg.provider == "copernicus_c3s" and leg.data_kind == "reanalysis"
+    assert leg.status == "conditional" and leg.runtime_leg_label is None
+    assert leg.claim_permissions == ()
+    assert "Previous completed calendar month" in leg.time_limit
+    assert "not_station_observation" in leg.claim_restrictions
+    assert products.restriction_enforcement(leg)["publisher_monthly_finding_scope"]["reference"] == "src/data/c3s_monthly.py:bundle_failures"
+    document = products.product_contract_document()
+    assert document["claim_permission_granted"] is False

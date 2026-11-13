@@ -3,7 +3,8 @@ import { EDITORIAL_POLICY_MANIFEST } from "./editorial-policy-manifest.js"
 import { buildRuntimeConfig } from "./runtime-inventory.js"
 
 const MODEL_KEYS = ["critic", "fact_check", "safety", "writer", "writer_provider"]
-const FLAG_KEYS = ["critic_enabled", "critic_revise_enabled", "safety_llm_enabled", "writer_samples"]
+const FLAG_KEYS = ["critic_enabled", "critic_revise_enabled", "observed_weather_only", "safety_llm_enabled", "writer_samples"]
+const LEGACY_FLAG_KEYS = FLAG_KEYS.filter(key => key !== "observed_weather_only")
 const keysEqual = (object, keys) => object && typeof object === "object" && !Array.isArray(object)
   && JSON.stringify(Object.keys(object).sort()) === JSON.stringify(keys)
 
@@ -12,8 +13,8 @@ export function validEditorialPolicy(value) {
     && typeof value.execution_sha256 === "string" && /^[a-f0-9]{64}$/.test(value.execution_sha256)
     && value.schema_version === 1 && typeof value.source_sha256 === "string" && /^[a-f0-9]{64}$/.test(value.source_sha256)
     && keysEqual(value.models, MODEL_KEYS) && Object.values(value.models).every((v) => typeof v === "string" && v.length > 0 && v.length <= 160)
-    && keysEqual(value.flags, FLAG_KEYS)
-    && FLAG_KEYS.filter((k) => k !== "writer_samples").every((k) => typeof value.flags[k] === "boolean")
+    && (keysEqual(value.flags, FLAG_KEYS) || keysEqual(value.flags, LEGACY_FLAG_KEYS))
+    && Object.keys(value.flags).filter((k) => k !== "writer_samples").every((k) => typeof value.flags[k] === "boolean")
     && Number.isSafeInteger(value.flags.writer_samples) && value.flags.writer_samples >= 1 && value.flags.writer_samples <= 100
 }
 
@@ -32,6 +33,7 @@ export function dashboardEditorialPolicy(state, { now = Date.now(), runtimeRepor
       || runtime.flags.writer_samples !== value.flags.writer_samples
       || runtime.flags.critic_enabled !== value.flags.critic_enabled
       || runtime.flags.critic_revise_enabled !== value.flags.critic_revise_enabled
+      || (runtime.flags.observed_weather_only ?? false) !== (value.flags.observed_weather_only ?? false)
       || runtime.credentials_present.safety_gemini !== value.flags.safety_llm_enabled)) {
     return { status: "unverified", policy: null, reason: "Configuration report disagrees with its captured editorial policy." }
   }

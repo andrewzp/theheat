@@ -49,6 +49,8 @@ SOURCES = (
     'src/editorial/__init__.py',
     'src/editorial/_util.py',
     'src/editorial/approval.py',
+    'src/editorial/observed_scope.py',
+    'src/data/c3s_monthly.py',
     'src/editorial/candidates.py',
     'src/editorial/hot10_contract.py',
     'src/editorial/marine_evidence.py',

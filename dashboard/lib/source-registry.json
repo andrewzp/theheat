@@ -16,6 +16,24 @@
   "claim_permission_granted": false,
   "sources": [
     {
+      "source_id": "c3s_monthly",
+      "health_keys": [
+        "c3s_monthly"
+      ],
+      "kind": "derived",
+      "entry_point": "src/orchestrator/observed_report.py:run_observed_report",
+      "scope": "One explicitly nominated previous completed-month global C3S temperature finding.",
+      "data_family": "official_report",
+      "provenance": "Copernicus C3S/ECMWF published retrospective ERA5 finding.",
+      "collection_rule": "Explicit observed_report workflow only; one candidate, no automatic discovery or substitute.",
+      "time_rule": "Previous completed calendar month; source retrieval is not measurement time; reread before sending.",
+      "claim_limit": "Attributed publisher finding, not a new station measurement, independent global reconstruction or annual prediction.",
+      "evidence_files": [
+        "src/orchestrator/observed_report.py",
+        "src/data/c3s_monthly.py"
+      ]
+    },
+    {
       "source_id": "open_meteo_extreme_signals",
       "health_keys": [
         "open_meteo_extreme_signals"
@@ -654,6 +672,7 @@
   "referenced_code_sha256": {
     "src/data/air_quality_availability.py": "fe4ec7eba42a0b41d296407c54d168e73b76def9f58739a48ecda94a9f6eb536",
     "src/data/air_quality_contract.py": "7f9de8f7fcd6836a3e4fb32ea8c1a35a3c9981bcede6aea2d74770f12539d667",
+    "src/data/c3s_monthly.py": "659e8c266f885a3ea413aed0a0ac244c64e09dc964da0829f856df8e169d593c",
     "src/data/climate_indices.py": "ee020029a91261d26ece8dd5ed27859b963e8cc8321d27c51afdce6ce3dc74d7",
     "src/data/co2.py": "63d9578eb77bcc56b438ef85ee56fc7a1695982a46f2b3133e04b65adefa3d5f",
     "src/data/copernicus_ems.py": "9e2c512e7ccb022a44190c6ea17ab10f18fa6232c7dcd2de51d1bc91fedcde95",
@@ -687,7 +706,7 @@
     "src/data/regional_observations.py": "eef66077194e446991db077d558f3e2da664e6c1c7a1deb5e2b4ea9cec08d88e",
     "src/data/river_gauges.py": "7f7f5bfa89c84d95f6d8b872476a9512116047e86a62e4d4db0412c87ee7ee14",
     "src/data/sea_ice.py": "373dc72240b8ee7439995cf194b9b190b9a1940df393723119849cdeeff455f8",
-    "src/data/source_registry.py": "fec249403b688243a303fd81767e9ed564a6e03c8f2b4e405825c50ec55272da",
+    "src/data/source_registry.py": "e971d61a8b71080374f751f1fdf96a286058367570ede94eea741b3dfe5f142e",
     "src/data/temperature_evidence.py": "a258f8402418fe275ca32167850c32380452a6f6298faecd80b2f760793737e8",
     "src/data/usgs_quakes.py": "d074863aba46097e0aa31a0c16c48158a2769c1403cac51e1e2054b2deb96650",
     "src/data/water_levels.py": "2b77738fe2e5f4a246b29691879726873a48622ee26e6ffcd35713f07c505ab3",
@@ -696,7 +715,8 @@
     "src/editorial/official_warning.py": "e37a232fe19e8ef90bfc825c92b95b89d9c9f9df7818b4a3352466ad2beeff87",
     "src/editorial/warning_runtime.py": "7c000ae5cf65b06d063ff0ae5092c2b3711d0eaff166521b8bb70ff388171f1c",
     "src/orchestrator/cyclones.py": "389c6441db0839763b6a9cd42146f75e3ab14d1179125d60a9c368eb1e03697d",
-    "src/orchestrator/hot10.py": "d54d41833d0bf91a0f8dae97970d2e5fac8a0794e4b2cfd3a5502db008baa40b",
+    "src/orchestrator/hot10.py": "6b0bf6df6a4b5545af3aabf89f14c1c22a0f7d42a3f3fe6eb4932ad1c5739990",
+    "src/orchestrator/observed_report.py": "ade51e85bc55f487fad98c46aa28cb0e05a7fb859938f4d3780bfdefb4d978e2",
     "src/orchestrator/run_alerts.py": "144eba3db84e67edb975956dcff06cb83ca664137d4d8489774b3e6ae0689676",
     "src/orchestrator/sources/air_quality.py": "6a829e8bed43f517c33ddb73204dd1c24566477b4342b9134705b7b448dce02b",
     "src/orchestrator/sources/climate_indices.py": "e46485639d62d426b5d55b6f02191a47b0434bb31eb23e8f4a6bece33e980208",
@@ -733,5 +753,5 @@
     "src/two_bot/intern/warnings.py": "04e0a4506ffbb29124c8d2960a5e5025305699297fcf8f9178b23caac2cd7a37"
   },
   "evidence_scope": "Referenced local code inventory; not live/provider/transitive-source qualification.",
-  "registry_sha256": "7b57ca0ffb0e29cffb53027bf5c17fe150d37ccbb458da3924cc012d8f8d4d5f"
+  "registry_sha256": "53d2fff11f96e586234745cfda26def39e1398b0b7ac2e5db9d8c04f0c846e5a"
 }
