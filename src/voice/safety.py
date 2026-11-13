@@ -27,6 +27,10 @@ MONTHS = (
     "july", "august", "september", "october", "november", "december",
 )
 
+# This is a prose style rule, not a restriction on a cited source URL.
+EVENT_SUFFIX_PATTERN = re.compile(r"(?<=[^\W_])-\d{2,4}\b")
+_SOURCE_URL = re.compile(r"\bhttps?://[^\s<>\"']+", re.IGNORECASE)
+
 # Layer 1: Deterministic regex patterns
 BANNED_PATTERNS = [
     re.compile(r"[\U0001F600-\U0001F64F]"),  # Emoticons
@@ -86,7 +90,7 @@ BANNED_PATTERNS = [
     re.compile(r"dangerous conditions", re.IGNORECASE),
     re.compile(r"\bextreme wind warning\b", re.IGNORECASE),
     # Bureaucratic noise in event names
-    re.compile(r"(?<=[^\W_])-\d{2,4}\b"),  # Alphanumeric event/date suffix, not a signed value
+    EVENT_SUFFIX_PATTERN,  # Alphanumeric prose event/date suffix, not a source URL or signed value
     # Fabricated temporal/seasonal/biological context — primary defense is the
     # writer prompt's HARD RULES bullet ("NO FABRICATED CONTEXT") in
     # src/two_bot/prompts/writer_prompt.py. These regexes are the fail-safe
@@ -171,15 +175,16 @@ def check_month_repetition(tweet: str) -> tuple[bool, str | None]:
     for monthly_low / monthly_high signals:
       "Sissonville hit 28°F on May 4 — coldest May night in 16 years"
 
-    Safety net: any single month appearing 4+ times is padding regardless
-    of context.
+    Safety net: any single month appearing 4+ times in prose is padding.
+    Source URL paths do not count as reader-facing date restatements.
     """
+    prose = _SOURCE_URL.sub("", tweet)
     for pattern in _REDUNDANT_DATE_PATTERNS:
-        match = pattern.search(tweet)
+        match = pattern.search(prose)
         if match:
             return False, f"Redundant date restatement: {match.group()!r}"
 
-    lowered = tweet.lower()
+    lowered = prose.lower()
     for month in MONTHS:
         count = len(re.findall(rf"\b{month}\b", lowered))
         if count >= 4:
@@ -192,9 +197,12 @@ def check_regex(tweet: str) -> tuple[bool, str | None]:
     if len(tweet) > 280:
         return False, f"Too long: {len(tweet)} chars (max 280)"
 
+    urls = [match.span() for match in _SOURCE_URL.finditer(tweet)]
     for pattern in BANNED_PATTERNS:
-        match = pattern.search(tweet)
-        if match:
+        for match in pattern.finditer(tweet):
+            if pattern is EVENT_SUFFIX_PATTERN and any(start <= match.start() and match.end() <= end
+                                                       for start, end in urls):
+                continue
             return False, f"Banned pattern: {match.group()!r}"
 
     return True, None
