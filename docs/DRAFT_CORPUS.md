@@ -11,6 +11,46 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-11-13 — Daily corpus grading (0 fresh drafts; 1 carry-over, previously graded)
+
+**Context:** Gist read via git-clone path (success; gist HEAD Nov 13 12:11Z). 1 pending:
+`draft_20261108_180324_55` (Shymkent hot10, B Nov 9) — same id/text/score, not re-graded. Riyadh dust_event
+(`draft_20261105_121936_65`, B- Nov 6) left the queue: `rejected_reason: staleness_ttl_7d`, rejected
+Nov 12 16:52Z — the bot's own 7d TTL sweep, not an operator action.
+
+**Why the queue is dry:** same as Nov 12 — auto-publish (`publication_control.enabled=true`, epoch
+`live-20261030…`) routes new drafts straight to posted. Two more since the last run, not graded here
+(routine grades pending only):
+- Tunis hot10, Nov 12 21:06Z: "Tunis, Tunisia is forecast to reach 32.1°C Thursday — 10.6°C above its
+  November normal, the largest departure among 417 sampled cities (Open-Meteo/Meteostat)." Same skeleton
+  as Verkhoyansk / Shymkent / Ulan Bator ×2 — hot10 convergence watch now **n=5 consecutive**, 3 live.
+- monthly_climate_report, Nov 13 06:20Z: "October 2026 was the warmest October on record in Copernicus/ERA5
+  data — 1.75°C above the 1850–1900 pre-industrial average, 0.9°C above the 1991–2020 baseline." Pure data
+  delivery, source URL on its own line. Has `approved_at`/`publish_requested_at` (dashboard path), so the
+  operator saw it before it went out.
+
+**Staleness (~16:00 UTC Nov 13):** Shymkent ~118h, "Sunday" (Nov 8) elapsed — strict bulk-reject
+candidate. Gist write skipped (`gh` token invalid). The 7d TTL sweep should clear it ~Nov 15 18:03Z if the
+operator doesn't first.
+
+**A-rate:** N/A (no fresh drafts). Last graded cycle: 0% (n=1, Nov 9).
+
+### Patterns
+1. No new graded evidence for any active proposal.
+2. hot10 skeleton (watch, n=5): "[City] is forecast to [hit/reach] X°C [Day] — Y°C above its November
+   normal …, the largest departure among 417 sampled cities (Open-Meteo/Meteostat[, forecast])." Tunis drops
+   the trailing ", forecast" — only variation in five drafts. Pure data delivery is valid, but five
+   identical frames in a row on a live account is the template-convergence failure P6/P7/P9 named for
+   other types. Logged as a watch, not a proposal: the evidence is auto-published, not graded.
+3. TTL sweep is now doing the staleness job this routine can't (Riyadh cleared at 7d). Strict 48h policy
+   still unenforced for the 2–7d window.
+
+### Followups
+- Operator: reject Shymkent via dashboard (forecast day elapsed), or let TTL clear it Nov 15.
+- Operator: auto-published drafts bypass grading — 5 hot10 + 1 monthly report since Nov 9 have no corpus
+  grade. Decide whether this routine should grade `posted` drafts from the last 24h too.
+- Operator: `daily-plan-current` still unmerged; `main` lacks graded cycles since 2026-07-06.
+
 ## 2026-11-12 — Daily corpus grading (0 fresh drafts; 2 carry-overs, previously graded)
 
 **Context:** Gist read via git-clone path (success; gist HEAD Nov 12 13:14Z). 2 pending, exact match to
