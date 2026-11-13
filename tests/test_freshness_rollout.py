@@ -179,15 +179,23 @@ def test_river_gauges_stale_data_raises_freshness():
             river_gauges.fetch_river_levels(strict=True)
 
 
+def _coastal_response(payload):
+    import json
+    response = _mock_response(payload)
+    response.content = json.dumps(payload).encode()
+    return response
+
+
 def test_water_levels_stale_data_raises_freshness():
-    obs = {"data": [{"t": "2020-01-01 00:00", "v": "1.8"}]}
+    obs = {"metadata": {"id": water_levels.STATIONS[0][0]},
+           "data": [{"t": "2020-01-01 00:00", "v": "1.8", "q": "p", "f": "0,0,0,0"}]}
     pred = {"predictions": [{"t": "2020-01-01 00:00", "v": "1.1"}]}
 
     with (
         patch("src.data.water_levels.STATIONS", [water_levels.STATIONS[0]]),
         patch(
             "src.data.water_levels.fetch_with_retry",
-            side_effect=[_mock_response(obs), _mock_response(pred)],
+            side_effect=[_coastal_response(obs), _coastal_response(pred)],
         ),
     ):
         with pytest.raises(SourceFetchError, match="water_levels stale data"):

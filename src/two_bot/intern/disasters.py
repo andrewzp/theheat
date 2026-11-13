@@ -526,7 +526,7 @@ def build_storm_surge_bundle(surge: StormSurgeEvent) -> StoryBundle:
     return StoryBundle(
         signal_kind="storm_surge",
         where=where,
-        when=surge.date,
+        when=surge.evidence.get("valid_time") or surge.date,
         event_id=surge.event_id,
         headline_metric={
             "label": "surge_anomaly_m",
@@ -535,11 +535,13 @@ def build_storm_surge_bundle(surge: StormSurgeEvent) -> StoryBundle:
         },
         current_facts=[
             {"label": "station_name", "value": surge.station_name},
+            {"label": "station_id", "value": surge.station_id},
+            {"label": "measurement_context", "value": surge.evidence},
             {"label": "state", "value": surge.state},
             {"label": "observed_m", "value": surge.observed_m},
             {"label": "predicted_m", "value": surge.predicted_m},
             {"label": "anomaly_m", "value": surge.anomaly_m},
         ],
-        historical_context={},
+        historical_context={"claim_scope": "Observed gauge residual, not a flood impact, cause or record."},
         raw_signal_dump=asdict(surge),
     )

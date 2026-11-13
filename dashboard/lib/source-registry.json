@@ -709,7 +709,7 @@
     "src/data/source_registry.py": "e971d61a8b71080374f751f1fdf96a286058367570ede94eea741b3dfe5f142e",
     "src/data/temperature_evidence.py": "a258f8402418fe275ca32167850c32380452a6f6298faecd80b2f760793737e8",
     "src/data/usgs_quakes.py": "d074863aba46097e0aa31a0c16c48158a2769c1403cac51e1e2054b2deb96650",
-    "src/data/water_levels.py": "2b77738fe2e5f4a246b29691879726873a48622ee26e6ffcd35713f07c505ab3",
+    "src/data/water_levels.py": "6bbcaee2102c3755b83ea8cc5a6986518e96a587f2a1b893b8b96814c0cd13cd",
     "src/editorial/nhc_advisory.py": "ffa814251ed31011de5642d9fc3fc1a4aec92ea7ddd82d0a733ce49741400f7b",
     "src/editorial/nhc_advisory_runtime.py": "aae58135f5f89026b01b9bcfe0e873bc48bbf25694d412af80643be23c9d242c",
     "src/editorial/official_warning.py": "e37a232fe19e8ef90bfc825c92b95b89d9c9f9df7818b4a3352466ad2beeff87",
@@ -721,7 +721,7 @@
     "src/orchestrator/sources/air_quality.py": "6a829e8bed43f517c33ddb73204dd1c24566477b4342b9134705b7b448dce02b",
     "src/orchestrator/sources/climate_indices.py": "e46485639d62d426b5d55b6f02191a47b0434bb31eb23e8f4a6bece33e980208",
     "src/orchestrator/sources/co2.py": "2ed59676536ab5ff9fc45d3116c91ffad10986a5a4380687a7191f2bd518d4a6",
-    "src/orchestrator/sources/co_ops.py": "df610d37df6ff4571024ab71fac1c22926991b565e0df3bbfe7bd7ba5df7307d",
+    "src/orchestrator/sources/co_ops.py": "e793c67c367bd38c4c06320ff2b8425275eb94151b72f1d2871e460cf8de2330",
     "src/orchestrator/sources/copernicus_ems.py": "e0f6ecdb505b3a469a94c623d5329e756c7458ce7f0386a6a26dbf7ca7a47aa4",
     "src/orchestrator/sources/coral_dhw.py": "6596f95e1ba183c4833d365c9d1d1b009e299e28e555295351fb061899d37e2f",
     "src/orchestrator/sources/drought.py": "224de9bf05297e87e28240ea48ba701c88b97117503e309b2c42cadc66a431a0",
@@ -753,5 +753,5 @@
     "src/two_bot/intern/warnings.py": "04e0a4506ffbb29124c8d2960a5e5025305699297fcf8f9178b23caac2cd7a37"
   },
   "evidence_scope": "Referenced local code inventory; not live/provider/transitive-source qualification.",
-  "registry_sha256": "53d2fff11f96e586234745cfda26def39e1398b0b7ac2e5db9d8c04f0c846e5a"
+  "registry_sha256": "19fb3a6cb56fbf7923b60092f8e6f6a4228ff83227322d242ba1d4f530ff5423"
 }
