@@ -157,7 +157,9 @@ def test_real_observed_report_path_runs_every_stage_and_arms_only_that_exact_dra
     sent = []
     stages = stage_fakes(sent, copy="October was the warmest October in Copernicus’s record—1.6°C above the pre-industrial October average.")
     monkeypatch.setattr(pipeline.writer, "write_tweet", stages[0])
-    monkeypatch.setattr(pipeline, "run_safety_pipeline", stages[1])
+    from src.voice import safety
+    monkeypatch.setattr(pipeline, "run_safety_pipeline", safety.run_safety_pipeline)
+    monkeypatch.setattr(safety, "check_llm", stages[1])
     monkeypatch.setattr(pipeline.fact_check, "fact_check", stages[2])
     monkeypatch.setattr(pipeline.critic, "critic_review", stages[3])
     state = deepcopy(DEFAULT_STATE)
@@ -190,7 +192,7 @@ def test_real_observed_report_path_runs_every_stage_and_arms_only_that_exact_dra
     monkeypatch.setattr("src.state.GITHUB_TOKEN", "invented-no-access")
     for key in ("API_KEY", "API_SECRET", "ACCESS_TOKEN", "ACCESS_SECRET"):
         monkeypatch.setattr(twitter, key, "invented-no-access")
-    monkeypatch.setattr(posting, "run_safety_pipeline", stages[1])
+    monkeypatch.setattr(posting, "run_safety_pipeline", safety.run_safety_pipeline)
     with freeze_time(NOW + timedelta(minutes=2), tick=True):
         assert posting._autoship_freshness_anchor(draft) == NOW
         posting.process_due_drafts(state, {"sources": []})

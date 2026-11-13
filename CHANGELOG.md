@@ -1,3 +1,8 @@
+## 0.9.109.87
+
+- Recognize year-suffixed source URLs as citations instead of prose event codes;
+  retain every other deterministic rule and the required model safety check.
+
 ## 0.9.109.86
 
 - Apply an observed-weather editorial mode before paid writing, approval and
