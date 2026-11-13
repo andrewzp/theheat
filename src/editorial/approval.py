@@ -5,6 +5,8 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
+from src.editorial.observed_scope import enabled, FORECAST_KINDS, MESSAGE
+
 
 # Phase B — decouple the ship gate. A HARD, explicit tweet_type allowlist for
 # auto-shipping on a critic PASS — NOT inferred from policy mode / can_auto_approve
@@ -95,7 +97,6 @@ def recommend_approval_policy(
     candidate_score: dict | None = None,
 ) -> ApprovalPolicy:
     """Return the editorial auto-approval posture for a draft."""
-    from src.editorial.observed_scope import enabled, FORECAST_KINDS, MESSAGE
     if enabled() and tweet_type in FORECAST_KINDS:
         return ApprovalPolicy(key="observed_weather_only", mode="manual_only",
                               recommended_delay_minutes=None, can_auto_approve=False,

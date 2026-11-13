@@ -125,19 +125,24 @@ def test_bot_drains_only_in_route_mode_and_keeps_every_existing_default():
         {k: v for k, v in old_step["env"].items() if k not in checked}
     assert doc["run-name"] == ("${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'manual_tweet' && "
                                "format('theheat-bot manual_tweet {0}', inputs.publish_intent_id) || ' ' }}") and "run-name" not in old
-    # Composed candidate: the route adds exactly its two keys; the Hot10 product selector is the
-    # supply stream's own mirror (legacy default, asserted by its own tests). Nothing else is new.
+    # Exact cumulative additions since the frozen .51 comparison: route ownership,
+    # source opt-ins, automatic-only selection, and the nominated observed report.
     # Root checkpoint R2 (deliberate): + the route sender's text source (references-only dispatch).
     assert set(step["env"]) - set(old_step["env"]) == {"THEHEAT_GIST_WRITE_ROUTE", "THEHEAT_SERIALIZED_WRITER",
                                                        "THEHEAT_HOT10_NORMALS_PRODUCT", "THEHEAT_SENDER_TEXT_SOURCE",
-                                                       "THEHEAT_NWPS_MAJOR_FORECASTS", "THEHEAT_NWPS_PACKET_RETENTION"}
+                                                       "THEHEAT_NWPS_MAJOR_FORECASTS", "THEHEAT_NWPS_PACKET_RETENTION",
+                                                       "THEHEAT_AUTOMATIC_SELECTION_ONLY", "THEHEAT_OBSERVED_WEATHER_ONLY",
+                                                       "THEHEAT_OBSERVED_REPORT_MONTH"}
     assert step["env"]["THEHEAT_SENDER_TEXT_SOURCE"] == "${{ github.event.inputs.text_source }}"
-    assert set(doc["on"]["workflow_dispatch"]["inputs"]) - set(old["on"]["workflow_dispatch"]["inputs"]) == {"text_source"}
+    assert set(doc["on"]["workflow_dispatch"]["inputs"]) - set(old["on"]["workflow_dispatch"]["inputs"]) == {"text_source", "automatic_only", "report_month"}
     assert step["env"]["THEHEAT_HOT10_NORMALS_PRODUCT"] == "${{ vars.THEHEAT_HOT10_NORMALS_PRODUCT || 'meteostat-normals-point-v1' }}"
     assert step["env"]["THEHEAT_NWPS_MAJOR_FORECASTS"] == "${{ vars.THEHEAT_NWPS_MAJOR_FORECASTS || '0' }}"
+    assert step["env"]["THEHEAT_OBSERVED_WEATHER_ONLY"] == "${{ vars.THEHEAT_OBSERVED_WEATHER_ONLY || '0' }}"
+    assert step["env"]["THEHEAT_OBSERVED_REPORT_MONTH"] == "${{ inputs.report_month }}"
+    assert step["env"]["THEHEAT_AUTOMATIC_SELECTION_ONLY"] == "${{ github.event_name == 'workflow_dispatch' && inputs.automatic_only && '1' || '0' }}"
     marker = step["env"]["THEHEAT_SERIALIZED_WRITER"]
     assert evaluate(marker, "") == "" and evaluate(marker, "serialized") == "format('{0}:run', github.run_id)"
-    assert set(old["jobs"]) == set(doc["jobs"]) - {"commands-before", "commands-after"}
+    assert set(old["jobs"]) == set(doc["jobs"]) - {"commands-before", "commands-after", "test-dashboard"}
 
 
 def test_other_gist_writer_workflows_join_the_group_only_in_route_mode():
