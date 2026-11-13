@@ -23,8 +23,9 @@ def _source_url(bundle: StoryBundle) -> str | None:
     facts = bundle.current_facts
     if not isinstance(facts, list):
         return None
+    label = "public_source_url" if bundle.signal_kind == "monthly_climate_report" else "public_advisory_url"
     values = [f.get("value") for f in facts
-              if isinstance(f, dict) and f.get("label") == "public_advisory_url"]
+              if isinstance(f, dict) and f.get("label") == label]
     if not values:
         return None
     urls: set[str] = set()
@@ -66,7 +67,7 @@ def format_source_link(tweet_text: str, bundle: StoryBundle) -> str:
     An uncertain abbreviation stays intact. If replacement cannot fit, preserve
     the original text, including its whitespace. The caller checks this final text.
     """
-    if bundle.signal_kind not in CYCLONE_LINK_KINDS or not tweet_text.strip():
+    if bundle.signal_kind not in (CYCLONE_LINK_KINDS | {"monthly_climate_report"}) or not tweet_text.strip():
         return tweet_text
     url = _source_url(bundle)
     if url is None or url in tweet_text.split():

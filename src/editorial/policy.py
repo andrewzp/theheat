@@ -88,7 +88,9 @@ POLICY_FILES = (
     "src/two_bot/multisignal.py",
     "src/two_bot/rejected_candidate.py",
     "src/voice/safety.py", "src/data/temperature_evidence.py", "src/data/json_evidence.py",
-    "src/editorial/approval.py", "src/data/world_thresholds.py", "src/data/open_meteo.py",
+    "src/editorial/approval.py", "src/editorial/observed_scope.py", "dashboard/lib/observed-weather.js",
+    "src/data/c3s_monthly.py", "src/orchestrator/observed_report.py", "src/orchestrator/cli.py", "src/main.py",
+    "src/data/world_thresholds.py", "src/data/open_meteo.py",
     "src/editorial/hot10_contract.py", "src/editorial/automatic_text.py",
     "src/data/hot10_baselines.py", "src/data/ghcnd_monthly_normals.py",
     "src/data/air_quality_current.py", "src/editorial/delegated_media_review.py",
@@ -149,7 +151,7 @@ POLICY_FILES = (
     "src/two_bot/copy_gates.py",
 )
 MODEL_KEYS = {"writer", "writer_provider", "fact_check", "critic", "safety"}
-FLAG_KEYS = {"critic_enabled", "critic_revise_enabled", "writer_samples", "safety_llm_enabled"}
+FLAG_KEYS = {"critic_enabled", "critic_revise_enabled", "writer_samples", "safety_llm_enabled", "observed_weather_only"}
 
 
 def source_manifest() -> dict:
@@ -170,8 +172,8 @@ def valid_policy(value) -> bool:
             and isinstance(execution, str) and len(execution) == 64 and all(c in "0123456789abcdef" for c in execution)
             and isinstance(models, dict) and set(models) == MODEL_KEYS
             and all(isinstance(v, str) and 0 < len(v) <= 160 for v in models.values())
-            and isinstance(flags, dict) and set(flags) == FLAG_KEYS
-            and all(type(flags[k]) is bool for k in FLAG_KEYS - {"writer_samples"})
+            and isinstance(flags, dict) and set(flags) in (FLAG_KEYS, FLAG_KEYS - {"observed_weather_only"})
+            and all(type(flags[k]) is bool for k in set(flags) - {"writer_samples"})
             and type(flags["writer_samples"]) is int and 1 <= flags["writer_samples"] <= 100)
 
 
@@ -180,6 +182,7 @@ def current_editorial_policy() -> dict | None:
     try:
         from src.two_bot import critic, fact_check, pipeline, writer
         from src.voice import safety
+        from src.editorial.observed_scope import enabled as observed_weather_only
         execution = {"prompts": {module.__name__: {name: text for name, text in vars(module).items()
                      if name.isupper() and isinstance(text, str) and ("PROMPT" in name or "GUIDANCE" in name)}
                      for module in (writer, critic, fact_check, safety)},
@@ -192,7 +195,8 @@ def current_editorial_policy() -> dict | None:
                  "flags": {"critic_enabled": pipeline._critic_enabled(),
                            "critic_revise_enabled": pipeline._critic_revise_enabled(),
                            "writer_samples": pipeline._writer_samples(),
-                           "safety_llm_enabled": bool(safety.GEMINI_API_KEY)}}
+                           "safety_llm_enabled": bool(safety.GEMINI_API_KEY),
+                           "observed_weather_only": observed_weather_only()}}
         return value if valid_policy(value) else None
     except (OSError, ValueError, TypeError, UnicodeError, ImportError):
         return None

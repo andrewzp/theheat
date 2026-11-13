@@ -1,6 +1,6 @@
 {
   "identity": {
-    "archive_sha256": "46df23c6f6b86a43fe2f95a9b3166c9b9ed1814b75ef6a3c4d55dd75c3e33686",
+    "archive_sha256": "d50d58fdaa4d18171d35ba754a487061668f7b6188a505024c427dea49c8d0ce",
     "deployment_files": {
       "api/graphic_preview.py": "f7521adcbd618f4b65b2a0de30ea62aaff4cdd36f2254e9af38bf68646d361ad",
       "api/graphic_reader_status.py": "5e9685d699625a4eea9d5be884b6e266939a0ad344a2997351ba79bd114407ba",
@@ -25,6 +25,7 @@
       "src/data/air_quality.py": "89975b423632d9d6a0b3db767df8dae8cc4e7e7c496a350d396d7e303e820e33",
       "src/data/air_quality_contract.py": "7f9de8f7fcd6836a3e4fb32ea8c1a35a3c9981bcede6aea2d74770f12539d667",
       "src/data/air_quality_evidence.py": "677713bb8916c4bcd51d407a5b19072f54532f5f46db116914af6b3fcac9f4f7",
+      "src/data/c3s_monthly.py": "659e8c266f885a3ea413aed0a0ac244c64e09dc964da0829f856df8e169d593c",
       "src/data/coral_evidence.py": "723b04dc720538b5dab0ab6290f2f774c877796963a69aa46eb541e00bbf84ee",
       "src/data/coral_regional_contract.py": "4d1bd7871d50c9e32036a338597184e76b7ffc3d0db018a40093c65f99db78d4",
       "src/data/coral_source_contract.py": "1809eeeb915f6dcf09bed99f67da998338360eafb11c976805679a1a87c5f310",
@@ -48,10 +49,11 @@
       "src/data/temperature_history.py": "c1369f662d76b2a788e49f30bdc00a57377f686e08bcefd0e958322e3ed33d84",
       "src/editorial/__init__.py": "ae88e85a4a7a2d49e32df9e41a7e424f8d61492db308742ece8f2fb6cac24896",
       "src/editorial/_util.py": "98efd5327d85052022b73cbee72931790a8457e7f133f0ff2bbd109cee5bfa05",
-      "src/editorial/approval.py": "0938f0d281e9e809cb1cdf857caf05846436ccee4bf82228e04f5e1af7f14a9c",
+      "src/editorial/approval.py": "8ee87c99527551cddb369b62313c824c1a396cca6a8589f61dccf9e040ed9c9b",
       "src/editorial/candidates.py": "80d50c488f44fd879c137751701a306cfae78eb376c3da33b9b7f3150cf9270d",
       "src/editorial/hot10_contract.py": "68dbb3c9081af24c7869ede677659a530a701a7270606307b122624a706fa534",
       "src/editorial/marine_evidence.py": "d6c9bb8c7ca12133eefa9ddf6283977c7a86da65ef50869d686c352263c1099d",
+      "src/editorial/observed_scope.py": "a132970b736b75a650454674f496a746be9c2ee0d45d8c17a6d23228276cc152",
       "src/editorial/operator_claim_references.py": "f7d1d14d75b55cc9f273d3a98459f158f57c533521d153b1e86ee5bc7d95d1fd",
       "src/editorial/publication.py": "7fa23a8f51530dc7f128beacc23689f0df7a8c95b6888beb39afca4212f1a5fe",
       "src/editorial/revisions.py": "3dd1a98539d2d8fc98647a847edbcf253d8dd38376f0e8eecb0f087cecb3f34c",
@@ -99,7 +101,7 @@
       "src/media/viirs_map_graphic_adapter.py": "657db3caef8503a4e0b9c9596bad8d28c029c3711e1d974f153fc1b60d3dd8d3",
       "src/state_schema.py": "96d0934e017ffd5e8493e20dd058e250ca000073a4b210a79598f22e9b57f63a",
       "src/two_bot/__init__.py": "57333e1314a97e2fc83e03db569e03b0199c67ff52fad71770853226b9a68f00",
-      "src/two_bot/evidence_contract.py": "506c86325dd4b589d5cd4f202461b65447f323218ccbaa8eacc0c92230e8f6a8",
+      "src/two_bot/evidence_contract.py": "29e3ff35f93cf719af6d7d7a41def03a367b756d0a8ce4f532374cf05997bf1e",
       "src/two_bot/ghcn_claim_contract.py": "749443ad87f4caac9726200dcc8f0e0aa3c662d5b5aee20f9b0f3dff8fa48bcc",
       "src/two_bot/intern/__init__.py": "2e34d6b9975fb831edbad10ed06d66aad2e8569a29cfd4cf17784177b91205e0",
       "src/two_bot/intern/air_quality.py": "f4fc20d4c197d4f604e1fa53e43ef02b658613940863eb5f4d41e0995d6c8ff0",
@@ -110,12 +112,12 @@
       "src/two_bot/types.py": "951044ca2582c8b96872bdd5b8ed8fc60546a58305aa8b06de50075206cc817e"
     },
     "format": "saved-source-svg-preview-v2",
-    "policy_source_sha256": "aec0d2e8c8e392617bf54a243a210acee4a00c09529fc5508342b998237b6b67",
+    "policy_source_sha256": "03abb34b53d1c32727fcd023bdaa8c544a18f637aee9a438ac16a5523363f4e9",
     "resource_sources": {
       "src/data/registry/country_codes.json": "data/country_codes.json",
       "src/data/registry/place_registry.json": "data/place_registry.json"
     },
     "schema_version": 1
   },
-  "runtime_sha256": "b43195bdd4b8a67a3a84d70f8f59b3ff008a907e590cd23d8e0ee23e2a000314"
+  "runtime_sha256": "cf8f0594b234e0906d8c93ed354d1537e25d4d0f2b44b23e2481fe2fd44f352c"
 }

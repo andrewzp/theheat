@@ -93,6 +93,18 @@ def _enqueue_story_candidate(
     from the same returned capture is reused, not queued again. Returns True
     only for a new queue row; ``admission_out`` records the disposition.
     """
+    from src.editorial.observed_scope import MESSAGE, story_hold
+    if scope_hold := story_hold(bundle):
+        if admission_out is not None:
+            admission_out["disposition"] = "refused_editorial_scope"
+        _record_downstream_suppression(
+            bot_state=bot_state, source=source,
+            run_id=(_current_suppression_ctx() or {}).get("run_id"),
+            event_id=event_id, score=score, kill_stage="editorial_scope",
+            kill_reason=scope_hold + ": " + MESSAGE,
+            summary=getattr(bundle, "where", None) or city or None,
+        )
+        return False
     from src.two_bot.evidence_contract import audit_story_bundle, evidence_rejection_details
     from src.two_bot.types import TriageCandidateBundle
 

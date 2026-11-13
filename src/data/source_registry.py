@@ -55,6 +55,14 @@ def _source(source_id, module, function, scope, family, provenance, claim_limit,
 
 
 CONTRACTS = (
+    SourceContract("c3s_monthly", ("c3s_monthly",), "derived",
+        "src/orchestrator/observed_report.py:run_observed_report",
+        "One explicitly nominated previous completed-month global C3S temperature finding.",
+        "official_report", "Copernicus C3S/ECMWF published retrospective ERA5 finding.",
+        "Explicit observed_report workflow only; one candidate, no automatic discovery or substitute.",
+        "Previous completed calendar month; source retrieval is not measurement time; reread before sending.",
+        "Attributed publisher finding, not a new station measurement, independent global reconstruction or annual prediction.",
+        ("src/orchestrator/observed_report.py", "src/data/c3s_monthly.py")),
     _source("open_meteo_extreme_signals", "open_meteo", "run_extreme_signals",
             "Configured cities and station candidates; not every place worldwide.", "mixed",
             "Open-Meteo forecasts/models and the separately gated GHCN station path.",

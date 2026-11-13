@@ -51,6 +51,12 @@ def can_draft_candidate(bot_state: BotState, candidate) -> tuple[bool, str]:
     """
     from src import state as _state
 
+    from src.editorial.observed_scope import story_hold
+    if story_hold(getattr(candidate, "bundle", None) or {
+        "type": getattr(candidate, "legacy_type", "")
+    }):
+        return False, "editorial_scope"
+
     event_id = getattr(candidate, "event_id", "") or ""
     fire_hold = legacy_history_reason(bot_state, event_id)
     if fire_hold:
@@ -154,6 +160,10 @@ def save_draft(
     from src.editorial.policy import current_editorial_policy
 
     clock = _utc_now()
+    if tweet_type == "monthly_climate_report":
+        from src.data.c3s_monthly import current_draft_hold
+        if current_draft_hold({"type": tweet_type, "review_context": review_context}, live=True, now=clock):
+            return False
     if tweet_type == "river_flood":
         from src.two_bot.intern.nwps_forecast import current_nwps_forecast
 
@@ -283,7 +293,7 @@ def save_draft(
         _record_save_rejection(bot_state=bot_state, **decision)
     # Retention belongs at state persistence, after cycle selection. Pruning
     # here could drop protected history and shift the cycle's starting index.
-    print(f"[draft] Saved: {tweet_text[:60]}...")
+    print(f"[draft] Saved id={draft.get('id')} type={tweet_type}; text retained privately")
     return True
 
 

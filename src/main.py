@@ -90,11 +90,13 @@ _prune_weakest_cycle_drafts = _finalize._prune_weakest_cycle_drafts
 
 def main() -> None:
     _sync_compat_globals()
+    from src.orchestrator.observed_report import run_observed_report
     _cli.main({
         "alerts": run_alerts,
         "leaderboard": run_leaderboard,
         "manual_tweet": run_manual_tweet,
         "auto_publish_due": process_due_drafts,
+        "observed_report": run_observed_report,
     })
 
 

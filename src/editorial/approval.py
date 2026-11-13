@@ -30,6 +30,7 @@ from dataclasses import dataclass
 # The THEHEAT_AUTOSHIP_ON_CRITIC_PASS flag and the critic remain the
 # kill-switches; flag OFF is byte-for-byte the manual behavior.
 AUTOSHIP_ALLOWLIST: frozenset[str] = frozenset({
+    "monthly_climate_report",
     "hot10", "co2_milestone", "ch4_milestone",
     "all_time_high", "all_time_low",
     "monthly_high", "monthly_low",
@@ -94,6 +95,15 @@ def recommend_approval_policy(
     candidate_score: dict | None = None,
 ) -> ApprovalPolicy:
     """Return the editorial auto-approval posture for a draft."""
+    from src.editorial.observed_scope import enabled, FORECAST_KINDS, MESSAGE
+    if enabled() and tweet_type in FORECAST_KINDS:
+        return ApprovalPolicy(key="observed_weather_only", mode="manual_only",
+                              recommended_delay_minutes=None, can_auto_approve=False,
+                              reason=MESSAGE)
+    if enabled() and tweet_type == "monthly_climate_report":
+        return ApprovalPolicy(key="nominated_observed_report", mode="armed_auto",
+            recommended_delay_minutes=1, can_auto_approve=True,
+            reason="One explicitly nominated completed-month official finding; required model checks and a current-source reread still apply.")
     copy_total = _candidate_total(candidate_score)
     is_strong = signal_total >= 72 and copy_total >= 72
     is_good = signal_total >= 66 and copy_total >= 68

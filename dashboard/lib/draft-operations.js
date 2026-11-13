@@ -7,6 +7,7 @@
 import { requiredAttestations } from "./gist-media.js"
 import { HOLD_MESSAGES, automaticTextHold } from "./automatic-text.js"
 import { dashboardEditorialPolicy } from "./editorial-policy.js"
+import { observedWeatherHold, OBSERVED_WEATHER_MESSAGE } from "./observed-weather.js"
 import { dashboardAutomaticPolicy } from "./publication-control.js"
 import { assertMediaCurrent, assertSavedSourceTiming } from "./draft-decision-confirm.js"
 import {
@@ -97,8 +98,12 @@ export async function applyDraftAction(draft, state, { runtimeReport = null, act
   const nowMs = () => now().getTime()
   const editedText = body.editedText, delayMinutes = body.delayMinutes, candidateRank = body.candidateRank
   assertMutable(draft, state)
-  if (["review", "approve", "auto_approve"].includes(action)) assertSavedSourceTiming(draft)
   const editorialPolicy = dashboardEditorialPolicy(state, { runtimeReport })
+  if (["review", "approve", "auto_approve"].includes(action)
+      && observedWeatherHold(draft, editorialPolicy.policy?.flags?.observed_weather_only)) {
+    fail(OBSERVED_WEATHER_MESSAGE, 409, "editorial_forecast_excluded")
+  }
+  if (["review", "approve", "auto_approve"].includes(action)) assertSavedSourceTiming(draft)
   if (action === "attach_graphic") {
     // Store-backed images also name their exact retained input (CRW packet or published asset).
     const descriptor = await prepareMedia(draft, body.expectedMediaSha256, body.retainedInputSha256 ?? null)

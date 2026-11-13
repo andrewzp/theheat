@@ -146,6 +146,13 @@ def _run_twitter_metrics(
 
 def run_leaderboard(bot_state: BotState, current_run: dict | None = None) -> BotState:
     """Generate the daily Hot 10 leaderboard as a draft."""
+    from src.editorial.observed_scope import enabled, MESSAGE
+    if enabled():
+        _record_source_run(current_run, bot_state, "leaderboard", time.perf_counter(),
+                           status="skipped", observed=0, promoted=0, drafted=0,
+                           note="editorial_forecast_excluded: " + MESSAGE)
+        _run_twitter_metrics(bot_state, current_run)
+        return bot_state
     _activate_suppression_ctx(
         bot_state,
         source="leaderboard",

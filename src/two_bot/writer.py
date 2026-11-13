@@ -164,6 +164,12 @@ def build_writer_user_prompt(
     prompt = WRITER_USER_PROMPT_TEMPLATE.format(
         bundle_json=_bundle_json(bundle), memory_json=_memory_json(memory),
     )
+    from src.editorial.observed_scope import enabled
+    if enabled():
+        prompt += ("\n\nReport what has happened, with verified factual context explaining its significance. "
+                   "Use observed events or retrospective analysis, never future weather or projected impacts. "
+                   "Preserve the source's measurement/estimate distinction and its dates. "
+                   "Do not invent consequences or rarity to make the story stronger.")
     from src.editorial.warning_automatic import writer_consequence_view
     consequence = writer_consequence_view(bundle)
     if consequence is not None:
@@ -172,6 +178,12 @@ def build_writer_user_prompt(
         prompt = f"{prompt}\n\n{MULTISIGNAL_GUIDANCE}"
     if bundle.signal_kind == "hot10":
         prompt = f"{prompt}\n\n{HOT10_RANK_GUIDANCE}"
+    if bundle.signal_kind == "monthly_climate_report":
+        prompt += ("\n\nLead with the completed month's global finding; credit Copernicus after the lead, "
+                   "never as a source-led opener. Scope any record to the Copernicus/ERA5 series. "
+                   "Prefer one short sentence with one meaningful baseline comparison. "
+                   "Exclude annual outlooks and permanent Paris-threshold claims. "
+                   "Keep the sentence under 150 characters before the deterministic source URL is appended.")
     if bundle.signal_kind in ("air_quality_hazard", "dust_event"):
         prompt += "\n\nCredit the forecast as CAMS via Open-Meteo after the lead fact."
     if is_thermal(bundle) or any(is_thermal(signal) for signal in (bundle.related_signals or [])):
@@ -354,6 +366,12 @@ def write_tweet(
     sees a >280-char string from this pipeline, no matter how the model
     drifts on a given sampling.
     """
+
+    from src.editorial.observed_scope import MESSAGE, story_hold
+    if scope_hold := story_hold(bundle):
+        return WriterResult(tweet=None, kill_reason=scope_hold + ": " + MESSAGE,
+                            angle_chosen="", era_anchor_used=None,
+                            peer_comparison_used=None, reasoning=MESSAGE)
 
     # Editorial-scope guard. Out-of-scope signals (earthquakes) are killed
     # deterministically here, before any model call — the same decision the

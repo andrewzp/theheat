@@ -19,7 +19,8 @@ def test_all_actual_alert_runners_health_keys_and_serial_calls_have_one_contract
     tree = ast.parse((ROOT / "src/orchestrator/run_alerts.py").read_text())
     runners = [node for node in ast.walk(tree) if isinstance(node, ast.Call)
                and isinstance(node.func, ast.Name) and node.func.id == "SourceRunner"]
-    contracts = {row.source_id: row for row in CONTRACTS if row.source_id != "leaderboard"}
+    # Explicit CLI modes are not serial/concurrent run_alerts adapters.
+    contracts = {row.source_id: row for row in CONTRACTS if row.source_id not in {"leaderboard", "c3s_monthly"}}
     assert len(runners) == len(contracts)
     source_functions = set()
     for runner in runners:
@@ -38,6 +39,16 @@ def test_all_actual_alert_runners_health_keys_and_serial_calls_have_one_contract
                     and isinstance(node.func, ast.Name) and node.func.id.startswith("run_")
                     and node.func.id != "run_stage1_then_synthesis"}
     assert serial_calls == source_functions - {"_process_cyclone_source"}
+
+
+def test_nominated_monthly_report_has_an_explicit_mode_not_a_scheduled_alert_adapter():
+    row = next(row for row in CONTRACTS if row.source_id == "c3s_monthly")
+    assert row.kind == "derived" and row.data_family == "official_report"
+    assert row.entry_point == "src/orchestrator/observed_report.py:run_observed_report"
+    cli = (ROOT / "src/orchestrator/cli.py").read_text()
+    assert 'if args.mode == "observed_report"' in cli and '_run("observed_report")' in cli
+    assert '"observed_report": run_observed_report' in (ROOT / "src/main.py").read_text()
+    assert "Explicit observed_report workflow only" in row.collection_rule
 
 
 def test_entry_points_exist_and_all_frozen_references_match_actual_code():

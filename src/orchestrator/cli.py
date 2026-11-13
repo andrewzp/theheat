@@ -20,7 +20,7 @@ def main(dispatchers: dict[str, RunMode]) -> None:
     parser = argparse.ArgumentParser(description="@theheat climate bot")
     parser.add_argument(
         "mode",
-        choices=["alerts", "leaderboard", "both", "manual_tweet", "auto_publish_due"],
+        choices=["alerts", "leaderboard", "both", "observed_report", "manual_tweet", "auto_publish_due"],
         help="Which content to generate and post",
     )
     args = parser.parse_args()
@@ -57,6 +57,8 @@ def main(dispatchers: dict[str, RunMode]) -> None:
             _run("manual_tweet")
         if args.mode == "auto_publish_due":
             _run("auto_publish_due")
+        if args.mode == "observed_report":
+            _run("observed_report")
 
     if any(source.get("status") in {"failed", "partial_failure"} for source in current_run.get("sources", [])):
         final_status = "partial_failure"
