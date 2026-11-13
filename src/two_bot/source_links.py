@@ -59,6 +59,13 @@ def _source_url(bundle: StoryBundle) -> str | None:
     return url
 
 
+def source_citation(bundle: StoryBundle) -> str | None:
+    """The exact validated citation this formatter can attach; no claim authority."""
+    if bundle.signal_kind not in (CYCLONE_LINK_KINDS | {"monthly_climate_report"}):
+        return None
+    return _source_url(bundle)
+
+
 def format_source_link(tweet_text: str, bundle: StoryBundle) -> str:
     """Append one exact source URL when it fits, replacing only a certain display.
 
@@ -69,7 +76,7 @@ def format_source_link(tweet_text: str, bundle: StoryBundle) -> str:
     """
     if bundle.signal_kind not in (CYCLONE_LINK_KINDS | {"monthly_climate_report"}) or not tweet_text.strip():
         return tweet_text
-    url = _source_url(bundle)
+    url = source_citation(bundle)
     if url is None or url in tweet_text.split():
         return tweet_text
     base = tweet_text.rstrip()

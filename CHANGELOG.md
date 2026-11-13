@@ -1,3 +1,8 @@
+## 0.9.109.88
+
+- Give observed auto-eligible copy a body budget that reserves its exact source
+  citation before writing. Keep the final cap, factual qualifiers and all checks.
+
 ## 0.9.109.87
 
 - Recognize year-suffixed source URLs as citations instead of prose event codes;
