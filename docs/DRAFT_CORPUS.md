@@ -11,6 +11,407 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-11-14 — Daily corpus grading (0 fresh drafts; 1 carry-over, previously graded)
+
+**Context:** Gist read via git-clone path (success; gist HEAD Nov 14 15:04Z — bot is running,
+`publication_control.enabled=true`, epoch `live-20261030…`). 1 pending: `draft_20261108_180324_55`
+(Shymkent hot10, B Nov 9) — same id/text/score, not re-graded. 54 drafts in state: 45 posted,
+8 rejected, 1 pending.
+
+**Why the queue is dry:** nothing new entered the draft list since the Nov 13 06:15Z
+monthly_climate_report (already logged Nov 13). No new auto-published drafts either — the hot10
+skeleton watch stays at n=5. Latest run_history entries are `auto_publish_due` sweeps with "No drafts
+due for auto-approval."
+
+**Staleness (~15:05 UTC Nov 14):** Shymkent ~141h, "Sunday" (Nov 8) elapsed — strict bulk-reject
+candidate, 6th day running. Gist write skipped (`gh` token invalid). Bot's 7d TTL sweep should clear it
+~Nov 15 18:03Z.
+
+**A-rate:** N/A (no fresh drafts). Last graded cycle: 0% (n=1, Nov 9).
+
+### Patterns
+1. No new graded evidence for any active proposal. 5th consecutive no-fresh-draft cycle (Nov 10–14).
+2. First day since Nov 9 with no auto-published draft either — intake itself was quiet, not just
+   bypassing pending.
+
+### Followups
+- Operator: reject Shymkent via dashboard, or let TTL clear it Nov 15.
+- Operator (carried): decide whether this routine should grade `posted` drafts from the last 24h —
+  under auto-publish, pending-only grading measures almost nothing.
+- Operator (carried): `daily-plan-current` still unmerged; `main` lacks graded cycles since 2026-07-06.
+- Infra (carried): `gh` token in the routine env is invalid — blocks gist write, PR create/edit, and the
+  `ROUTINE_BEACON` variable write.
+
+## 2026-11-13 — Daily corpus grading (0 fresh drafts; 1 carry-over, previously graded)
+
+**Context:** Gist read via git-clone path (success; gist HEAD Nov 13 12:11Z). 1 pending:
+`draft_20261108_180324_55` (Shymkent hot10, B Nov 9) — same id/text/score, not re-graded. Riyadh dust_event
+(`draft_20261105_121936_65`, B- Nov 6) left the queue: `rejected_reason: staleness_ttl_7d`, rejected
+Nov 12 16:52Z — the bot's own 7d TTL sweep, not an operator action.
+
+**Why the queue is dry:** same as Nov 12 — auto-publish (`publication_control.enabled=true`, epoch
+`live-20261030…`) routes new drafts straight to posted. Two more since the last run, not graded here
+(routine grades pending only):
+- Tunis hot10, Nov 12 21:06Z: "Tunis, Tunisia is forecast to reach 32.1°C Thursday — 10.6°C above its
+  November normal, the largest departure among 417 sampled cities (Open-Meteo/Meteostat)." Same skeleton
+  as Verkhoyansk / Shymkent / Ulan Bator ×2 — hot10 convergence watch now **n=5 consecutive**, 3 live.
+- monthly_climate_report, Nov 13 06:20Z: "October 2026 was the warmest October on record in Copernicus/ERA5
+  data — 1.75°C above the 1850–1900 pre-industrial average, 0.9°C above the 1991–2020 baseline." Pure data
+  delivery, source URL on its own line. Has `approved_at`/`publish_requested_at` (dashboard path), so the
+  operator saw it before it went out.
+
+**Staleness (~16:00 UTC Nov 13):** Shymkent ~118h, "Sunday" (Nov 8) elapsed — strict bulk-reject
+candidate. Gist write skipped (`gh` token invalid). The 7d TTL sweep should clear it ~Nov 15 18:03Z if the
+operator doesn't first.
+
+**A-rate:** N/A (no fresh drafts). Last graded cycle: 0% (n=1, Nov 9).
+
+### Patterns
+1. No new graded evidence for any active proposal.
+2. hot10 skeleton (watch, n=5): "[City] is forecast to [hit/reach] X°C [Day] — Y°C above its November
+   normal …, the largest departure among 417 sampled cities (Open-Meteo/Meteostat[, forecast])." Tunis drops
+   the trailing ", forecast" — only variation in five drafts. Pure data delivery is valid, but five
+   identical frames in a row on a live account is the template-convergence failure P6/P7/P9 named for
+   other types. Logged as a watch, not a proposal: the evidence is auto-published, not graded.
+3. TTL sweep is now doing the staleness job this routine can't (Riyadh cleared at 7d). Strict 48h policy
+   still unenforced for the 2–7d window.
+
+### Followups
+- Operator: reject Shymkent via dashboard (forecast day elapsed), or let TTL clear it Nov 15.
+- Operator: auto-published drafts bypass grading — 5 hot10 + 1 monthly report since Nov 9 have no corpus
+  grade. Decide whether this routine should grade `posted` drafts from the last 24h too.
+- Operator: `daily-plan-current` still unmerged; `main` lacks graded cycles since 2026-07-06.
+
+## 2026-11-12 — Daily corpus grading (0 fresh drafts; 2 carry-overs, previously graded)
+
+**Context:** Gist read via git-clone path (success; gist HEAD Nov 12 13:14Z). 2 pending, exact match to
+Nov 11: `draft_20261105_121936_65` (Riyadh dust_event, B- Nov 6) and `draft_20261108_180324_55` (Shymkent
+hot10, B Nov 9) — same ids/text/scores, not re-graded.
+
+**Why the queue is dry:** not an intake drought. Two newer `hot10` drafts were created and auto-published
+without passing through pending (`publication_control.enabled=true`, live epoch since Oct 30): Ulan Bator
+Nov 9 22:27Z ("forecast to hit 9.7°C Tuesday — 14.2°C above its November normal …") and Ulan Bator Nov 10
+19:48Z ("forecast to reach 8.4°C Wednesday — 12.9°C above its November normal …"). Not graded here (routine
+grades pending only), but both reuse the Verkhoyansk/Shymkent hot10 skeleton verbatim — template-convergence
+watch now n=4 across 4 consecutive hot10 drafts, two of them already live. Same location two days running.
+
+**Staleness (~15:00 UTC Nov 12):** both strict bulk-reject candidates — Riyadh ~7.1d ("Thursday", Nov 5),
+Shymkent ~93h ("Sunday", Nov 8). Gist write skipped (`gh` token invalid).
+
+**A-rate:** N/A (no fresh drafts). Last graded cycle: 0% (n=1, Nov 9).
+
+### Patterns
+1. No new graded evidence for any active proposal.
+2. hot10 skeleton convergence (watch, n=4, incl. 2 auto-published): "[City] is forecast to [hit/reach] X°C
+   [Day] — Y°C above its November normal …, the largest departure among N sampled cities
+   (Open-Meteo/Meteostat, forecast)." If the operator wants this graded, auto-published posts need a
+   corpus path; logged only.
+3. State gist still logging `state_size` warnings (7.89 MB at 13:14Z, up from 7.79 MB Nov 11).
+
+### Followups
+- Operator: reject Riyadh and Shymkent via dashboard (forecast days elapsed).
+- Operator: decide whether auto-published drafts should be graded — the pending queue no longer
+  reflects writer output while auto-publish is enabled.
+- Operator: `daily-plan-current` still unmerged; `main` lacks graded cycles since 2026-07-06.
+
+## 2026-11-11 — Daily corpus grading (0 fresh drafts; 2 carry-overs, previously graded)
+
+**Context:** Gist read via git-clone path (success). 2 pending: `draft_20261105_121936_65` (Riyadh
+dust_event, B- Nov 6) and `draft_20261108_180324_55` (Shymkent hot10, B Nov 9) — same ids/text, not
+re-graded. Verkhoyansk hot10 (B, Nov 4) has left the queue (cause unconfirmed; likely operator reject or
+TTL sweep). No new pending drafts since Nov 8 18:03Z (~2.9 days).
+
+**Staleness (~15:00 UTC Nov 11):** both now strict bulk-reject candidates — Riyadh ~6.1d ("Thursday",
+Nov 5 elapsed), Shymkent ~69h ("Sunday", Nov 8 elapsed). Gist write skipped (`gh` token invalid).
+
+**A-rate:** N/A (no fresh drafts). Last graded cycle: 0% (n=1, Nov 9).
+
+### Patterns
+No new evidence for any active proposal. Infra note: the state gist logs repeated `state_size` warnings
+(7.79 MB, "approaching gist inline cliff") through Nov 11 08:22Z — if it crosses the cliff, this routine's
+git-clone read path may still work but the bot's own writes may not; operator should check.
+
+### Followups
+- Operator: reject Riyadh and Shymkent via dashboard (forecast days elapsed).
+- Operator: `daily-plan-current` still unmerged; `main` lacks graded cycles since 2026-07-06.
+
+## 2026-11-10 — Daily corpus grading (0 fresh drafts; 3 carry-overs, previously graded)
+
+**Context:** Gist read via git-clone path (success). 3 pending, exact match to Nov 9's queue: Verkhoyansk
+hot10 (B, Nov 4), Riyadh dust_event (B-, Nov 5), Shymkent hot10 (B, Nov 8). No re-grading; grades stand.
+
+**Staleness (~15:00 UTC Nov 10):** Verkhoyansk (~6.5d, "Wednesday") and Riyadh (~5.1d, "Thursday") are
+strict bulk-reject candidates (>48h, forecast day elapsed). Shymkent is ~45h (crosses 48h at ~18:00Z today;
+"Sunday" already elapsed). Gist write skipped: `gh` token invalid and gist API path blocked by the sandbox.
+
+**A-rate:** N/A (no fresh drafts). Last graded cycle: 0% (n=1, Nov 9).
+
+### Patterns
+No new evidence for any active proposal; queue static for 24h (cycle-cadence note only).
+
+## 2026-11-09 — Daily corpus grading (1 fresh draft; 2 carry-overs, previously graded)
+
+**Context:** Gist read via git-clone path (success). 3 pending: `draft_20261104_022119_64` (Verkhoyansk
+hot10, B Nov 4) and `draft_20261105_121936_65` (Riyadh dust_event, B- Nov 6) — same ids/text, not
+re-graded. **1 fresh:** `hot10` Shymkent (created Nov 8 18:03Z, ~21h old).
+
+**Staleness (~15:00 UTC Nov 9):** Verkhoyansk (~5.5d, "Wednesday") and Riyadh (~3.1d, "Thursday") are strict
+candidates (>48h, forecast day elapsed). Shymkent is <48h but its "Sunday" (Nov 8) forecast day has
+already elapsed; it crosses the threshold Nov 10. Gist write skipped (`gh` token invalid; gist API
+blocked by sandbox proxy).
+
+**Grade distribution (fresh):** 0 A / 1 B / 0 C. **A-rate 0% (n=1)**; bar not cleared.
+
+### B
+**[3] Shymkent hot10 (score 87)** — "Shymkent, Kazakhstan is forecast to hit 27°C Sunday — 14.7°C above
+its November normal, the largest departure among 417 sampled cities (Open-Meteo/Meteostat, forecast)."
+Pure data delivery, valid register: forecast status and sample scope stated, no banned opener, no
+Wodehouse violation. Violation is real but milder than Verkhoyansk (27°C is a warm day, not a
+physically strange one) and the normal is left implicit (~12.3°C), so the reader does the subtraction.
+Ends on a parenthetical source tag, not a close. Capped at B; arguably the low end of B.
+
+### Patterns
+1. **P_close** +1 cycle (hot10 closeless, 2nd consecutive hot10 draft; 0 positive).
+2. Template convergence watch: Shymkent and Verkhoyansk share an identical skeleton ("is forecast to
+   [verb] X — Y°C above its November normal, the largest departure among N sampled cities
+   (Open-Meteo/Meteostat, forecast)"). n=2, logged only; not yet a proposal.
+3. No era-anchor, political-anchor, banned-opener or plant-comparison hits.
+
+### Followups
+- Operator: reject Verkhoyansk and Riyadh (forecast days elapsed); Shymkent next cycle.
+- Operator: `daily-plan-current` still unmerged; `main` lacks graded cycles since 2026-06-08.
+
+---
+
+## 2026-11-08 — Daily corpus grading (0 fresh drafts; 2 carry-overs, previously graded)
+
+**Context:** Gist read via git-clone path (success). 2 pending, both already graded: `draft_20261104_022119_64`
+(Verkhoyansk hot10, B Nov 4) and `draft_20261105_121936_65` (Riyadh dust_event, B- Nov 6) — same ids/text/scores,
+not re-graded. Brazil fire (Oct 31, B-) is gone from the queue (cause unconfirmed). No new drafts since Nov 5 12:19Z.
+
+**Staleness (~Nov 8):** Both now strict bulk-reject candidates (>48h, dated forecast day elapsed):
+Verkhoyansk ~4.5d ("Wednesday", Nov 4); Riyadh ~2.5d ("Thursday", Nov 5). Gist write attempted/skipped
+(`gh` token invalid; gist API blocked) — operator should reject via dashboard.
+
+**Grade distribution:** none fresh. No proposal evidence updates. `daily-plan-current` remains unmerged to `main`.
+
+---
+
+## 2026-11-06 — Daily corpus grading (1 fresh draft; 2 carry-overs from Oct 31 / Nov 4, previously graded)
+
+**Context:** Gist read via git-clone path (success). 3 pending: `draft_20261031_032828_68` (Brazil fire,
+B- Oct 31) and `draft_20261104_022119_64` (Verkhoyansk hot10, B Nov 4) — same ids/text, not re-graded.
+**1 fresh:** `draft_20261105_121936_65`, `dust_event` (created Nov 5 12:19Z).
+
+**Staleness (~15:00 UTC Nov 6):** Brazil fire ~132h, past-tense/dated — not a strict candidate, but
+low news value. Verkhoyansk ~109h, "Wednesday" (Nov 4) forecast day now elapsed — strict candidate
+(>48h, dated forecast). Riyadh dust ~27h, "Thursday" (Nov 5) peak day elapsed but under 48h — watch
+next cycle. Gist write skipped (`gh` token invalid; gist API blocked by sandbox proxy).
+
+**Grade distribution (fresh):** 0 A / 0 B / 1 B-. **A-rate 0% (n=1)**; bar not cleared.
+
+### B-
+**[3] Riyadh dust_event (score 78)** — "dust is forecast to peak near 6,015 µg/m³ Thursday, with PM10
+averaging ~55× the WHO 24-hour guideline — CAMS model forecast, not station-measured." WHO multiple
+stated unprompted (55×45 = 2,475 µg/m³ mean, checks; P_dust counter-evidence, 3rd consecutive dust
+cycle). Peak-vs-mean gap is the implicit violation and the setup is strong, but the draft spends its
+close on a source disclaimer — same subtype as Urumqi Oct 31 (C+) and Riyadh Oct 31 [B-]. "near 6,015"
+hedges an exact figure (mild P4). No mechanism named (no source region, no why-now). Pure data
+delivery, valid register; capped by P_close.
+
+### Patterns
+1. **P_close** +1 cycle (disclaimer close, 0 positive of 2 drafts evaluated across Nov 4–6).
+2. **P_dust** counter-evidence cycle 3: WHO anchor present again (4 of 4 recent dust_event drafts).
+3. **P_event_sat** +1: Riyadh dust_event is the 4th Riyadh dust draft since Oct 28 (Jun 13, Oct 28,
+   Oct 31, Nov 5) — same city repeats across cycles, though not same-day this time.
+4. No era-anchor, political-anchor, banned-opener or plant-comparison hits.
+
+### Followups
+- Operator: reject Verkhoyansk (forecast day elapsed) and consider the Oct 31 Brazil fire.
+- Operator: `daily-plan-current` still unmerged; `main` lacks graded cycles since 2026-06-08.
+
+---
+
+## 2026-11-04 — Daily corpus grading (1 fresh draft; 1 carry-over from Oct 31, previously graded)
+
+**Context:** Gist read via git-clone path (success). 2 pending: `draft_20261031_032828_68` (Brazil
+fire, 978.7 MW) — same id/text as Oct 31/Nov 3, graded B- then; no re-grading. **1 fresh:**
+`draft_20261104_022119_64`, `hot10` (created 02:21Z; first hot10 in this corpus section run).
+Intake resumed after the Oct 31 → Nov 4 dry spell.
+
+**Staleness (~15:00 UTC Nov 4):** Brazil fire ~98h old, past-tense, dated "Oct 31", no forecast
+language — not a strict candidate, but weak news value; operator may reject. Gist write skipped
+(`gh` token invalid; gist API blocked by sandbox proxy).
+
+**Grade distribution (fresh):** 0 A / 1 B. **A-rate 0% (n=1)**; bar not cleared.
+
+### B
+**[2] Verkhoyansk hot10 (score 87)** — "Verkhoyansk, Russia is forecast to reach −9.9°C Wednesday —
+20.2°C above its November normal of −30.1°C, the largest departure among 440 sampled cities
+(Open-Meteo/Meteostat, forecast)." Pure data delivery, valid register: exact figures, forecast
+status and sample scope stated, no Wodehouse violations, no banned opener. Capped at B: violation
+is real (a −30°C town forecast to 20° above normal) but the voice never takes a turn — ends on a
+parenthetical source tag, not a close. P_close failing (data stops at the comparison).
+
+### Patterns
+1. **P_close** +1 cycle (hot10 closeless). Other proposals untested (no dust/NWS/tier-jargon/
+   event-saturation content).
+2. No era-anchor, political-anchor, banned-opener or plant-comparison hits.
+
+### Followups
+- Operator: consider rejecting the Oct 31 Brazil fire (98h, dated).
+- Operator: `daily-plan-current` still unmerged; `main` lacks graded cycles since 2026-06-08.
+
+---
+
+## 2026-11-03 — Daily corpus grading (0 fresh drafts; 1 carry-over from Oct 31, previously graded)
+
+**Context:** Gist read via git-clone path (success). 1 pending: `draft_20261031_032828_68` (Brazil fire,
+978.7 MW) — same text/id as Oct 31's [4], graded B- then. No re-grading; grade stands. The other 3 Nov 2
+carry-overs (Riyadh dust, Riyadh PM2.5, Urumqi) are no longer pending — removed by an operator
+reject/publish or sweep outside this routine (cause unconfirmed). Intake: nothing new since Oct 31
+03:28 UTC (~3.5 days; third dry-spell day in a row — check source health / suppression ledger).
+
+**Staleness (~15:00 UTC Nov 3):** Brazil fire is ~83.5h old, past-tense ("detected … 00:09 UTC Oct 31"),
+no forecast language — not a strict candidate, but a 3.5-day-old satellite pass has little news value;
+operator may reject. Gist write skipped (`gh` token invalid; not attempted further).
+
+**A-rate:** — (no fresh drafts). Last graded cycle: 0% (0/4, Oct 31).
+
+### Notes
+- No proposal evidence updates (P_close, P_dust, P_event_sat, P4, P_tier, P_nws unchanged).
+- Operator: `daily-plan-current` still unmerged; `main` has no graded cycles since 2026-06-08.
+
+---
+
+## 2026-11-02 — Daily corpus grading (0 fresh drafts; 4 carry-overs from Oct 30–31, previously graded)
+
+**Context:** Gist read via git-clone path (success). 4 pending, identical to the Oct 31 queue (same
+`draft_id`s `_20261030_034425_67`, `_104126_68`, `_175304_69`, `_20261031_032828_68`; same text). Nothing new
+since Oct 31 03:28 UTC. No re-grading; Oct 31 grades stand (0 A · 3 B- · 1 C+). The pre-run main sync
+(`reset --hard` / `clean -fd`) was denied by the sandbox classifier; the checkout was verified clean with
+HEAD == origin/main instead, then the rolling branch was used.
+
+**Staleness (as of ~15:20 UTC Nov 2):** [1] Riyadh dust 83.6h, [2] Riyadh PM2.5 76.7h, [3] Urumqi 69.5h —
+all >48h, all "forecast … on Oct 30", forecast date now 3 days elapsed → **3 strict bulk-reject candidates**.
+[4] Brazil fire is 59.9h old but past-tense ("detected … 00:09 UTC Oct 31"), no forecast language — not a
+mechanical candidate, though a 3-day-old satellite pass is weak news value. Gist write skipped: `gh` token
+invalid and the sandbox blocks the gist API path (403). Operator should reject via dashboard.
+
+**A-rate:** — (no fresh drafts). Last graded cycle: 0% (0/4, 2026-10-31).
+
+### Patterns / notes
+1. No proposal evidence updates (P_close, P_dust, P_event_sat, P4, P_tier, P_nws unchanged from Oct 31).
+2. Intake after Oct 31 03:28 UTC: nothing for ~2.5 days. Second dry spell in a month (Oct 17–30 earlier);
+   worth checking source health / suppression ledger.
+
+### Followups
+- Operator: bulk-reject [1][2][3] (elapsed Oct 30 forecasts); consider [4] too.
+- Operator: merge `daily-plan-current` — `main` has no graded cycles since 2026-06-08.
+
+### Numbers
+- Pending: 4 (0 fresh) · A-rate N/A · staleness candidates: 3 (write skipped)
+
+---
+
+## 2026-10-31 — Daily corpus grading (4 fresh drafts; 0 carry-overs)
+
+**Context:** Gist read via git-clone path (success). 4 pending, all new to the corpus; none of Oct 28's
+15 remain (queue turned over — intake resumed Oct 30 after a 12-day drought; cause of the old 15
+leaving unconfirmed, likely operator reject). Oldest 35h, newest 12h. Graded cold against the Oct 28 baseline.
+
+**Distribution:** 0 A · 0 B · 3 B- · 1 C+ · 0 D → **A-rate 0% (0/4)**. Bar (50%) missed by 50 pp.
+
+**Headline:** Accurate, number-led data delivery with a WHO anchor on all three PM drafts (second
+consecutive cycle of P_dust counter-evidence), but still no close and no mechanic. Two of four are
+the same city on the same day (Riyadh ×2). "A CAMS air-quality model forecast puts…" is now a shared
+opener template across 3 of 3 PM drafts.
+
+### B- (3)
+- **[1] Riyadh dust_event** — peak ~4,227 µg/m³, 24h PM10 mean ~35× WHO (35×45 ≈ 1,575 checks). Peak-vs-mean gap is the implicit violation and the biggest numbers in the corpus for the type. But "~4,227" puts a tilde on an exact figure (P4 approximation tell), and the draft ends on the date. No close. B-.
+- **[2] Riyadh air_quality_hazard** — PM2.5 173 µg/m³, 11.5× WHO (173/15 = 11.5 ✓). Same city, same day as [1]; "co-reported dust values above 3,000" is jargon and just restates [1]. Em-dash aside, no close. B-.
+- **[4] Brazil fire (MODIS)** — 978.7 MW, then "Two nearby signals registered 624 and 465 MW the same pass" — exact numbers, deadpan cluster, the best raw material of the batch. But located by lat/lon ("near 3.7°S, 45.7°W") not a place name (geographic-orientation miss), "satellite confidence 100%" is filler, and nothing says what the fire is burning or what season it is. B-.
+
+### C+ (1)
+- **[3] Urumqi dust_event** — 668 µg/m³, PM10 ~5.8× WHO. Modest multiple, "Urumqi, China:" colon opener, "up to", and a disclaimer close ("model estimates, not station readings") that spends the punchline slot on hedging. C+.
+
+### Patterns named
+1. **P_close:** 0 of 4 positive. Disclaimer close ([3]), date/none ([1], [2], [4]).
+2. **P_dust:** 2 of 2 dust_event drafts carry WHO multiples (Oct 28: 3 of 3). Anchor now holds 2 cycles; archive at 3.
+3. **P_event_sat:** Riyadh ×2 (dust_event + air_quality_hazard, same forecast day).
+4. **P4 (Wodehouse):** tilde on exact number in [1]; hedging disclaimer in [3].
+5. **Opener template:** "A CAMS air-quality model forecast puts X's…" in [1], [2], [3 variant].
+6. **P_tier / P_nws:** not observed (no cyclone/severe_weather drafts).
+7. **No A-grade mechanic** this cycle; nothing to promote.
+
+### Followups
+- Operator: P_close and P_event_sat are the leverage points; a per-city/day dedupe would have cut [2] outright.
+- Staleness: none >48h; Oct 30-dated forecasts will cross the elapsed-date line in the next cycle. Gist write still blocked (gh token invalid) — skipped.
+
+## 2026-10-29 — Daily corpus grading (0 fresh drafts; 15 carry-overs from Oct 28, previously graded)
+
+**Context:** Gist read via git-clone path (success). 15 pending, identical to the Oct 28 queue
+(same text, same created_at timestamps Oct 7–17; newest is 12 days old, oldest 22). No new drafts
+reached pending since Oct 17. No re-grading performed; all Oct 28 grades stand
+(0 A · 2 B · 5 B- · 6 C+ · 2 D).
+
+**Headline:** Queue static for 12+ days. Nothing new to grade, so no evidence updates to any active
+proposal. All 15 remain staleness bulk-reject candidates (time-baked: Oct 8 forecasts, live NHC
+advisories, Guam "tonight"); the gist write is still blocked (`gh` token invalid, gist API 403).
+
+### Followups
+- Operator: reject all 15 via the dashboard (stale, time-baked). Guam pair first (manual proposals, D).
+- Operator: check suppression ledger / source health for why nothing has reached pending since Oct 17.
+
+## 2026-10-28 — Daily corpus grading (15 fresh drafts; 0 carry-overs)
+
+**Context:** Gist read via git-clone path (success). 15 pending, all new to the corpus (draft_ids
+`draft_20261007_*`–`draft_20261009_*` plus two manual severe_weather proposals from Oct 16–17).
+Newest is 11 days old, oldest 21. `main`'s corpus ended at Jul 6, so there is no documented grading
+for Jul 7 – Oct 27; this section is graded cold against the Jul 5 baseline. The rolling
+`daily-plan-current` branch no longer exists on remote (merged/deleted); this cycle starts fresh from `main`.
+
+**Distribution:** 0 A · 2 B · 5 B- · 6 C+ · 2 D → **A-rate 0% (0/15)**. Bar (50%) missed by 50 pp.
+
+**Headline:** Cyclone, PM2.5/dust and fire drafts are accurate but flat data delivery with no
+mechanic and weak closes. Two things are new: (1) `dust_event` drafts now state a WHO multiple
+unprompted (3 of 3), breaking the 11-of-11 no-anchor run; (2) 7 of 15 drafts are same-event or
+same-text duplicates (Isaias ×3, Klang/Shah Alam, Guam ×2, Quetta/Arequipa template twins).
+
+### B (2)
+- **[2] Quetta dust_event** (523 µg/m³ peak, PM10 mean 173, "nearly 4× the WHO daily guideline") — 173/45 = 3.8, checks. First WHO-anchored dust_event; peak-vs-mean gap is the implicit violation. Close is a bare source credit (P_close failing). B.
+- **[4] Riyadh dust_event** (peak 2,347 µg/m³ vs mean ~10.7× WHO) — same anchor, plus the peak/mean contrast is the best setup in the batch. Ends on a disclaimer ("model estimates, not station measurements") that spends the punchline slot on hedging. B.
+
+### B- (5)
+- **[3] Arequipa dust_event** — 2.7× WHO anchor present, near-template twin of [2]; close is "(CAMS global model, 45 km resolution)", a parenthetical, not a close. B-.
+- **[6] Shah Alam air_quality_hazard** — 152 µg/m³, ~10× WHO; ends "No station data to verify; model forecast only." Honest, not a close. B-.
+- **[7] Kano air_quality_hazard** — 230 µg/m³, 15× WHO, dust >300 in the same run; biggest multiple of the batch but no named cause (harmattan) and no close. B-.
+- **[9] Eastern Mongolian steppe fire** — three anomalies 600.5/568.6/543.6 MW within 10 km at 01:13 UTC. Cluster is vivid, exact numbers (no approximation), deadpan; no consequence/mechanism. B-.
+- **[10] Isaias Cat 3 tier_crossing** — 105 kt, 959 mb, "up from Category 2 within the same advisory cycle". Clean, but "Advisory 012a" is bureaucratic and the URL sits in the text. B-.
+
+### C+ (6)
+- **[1] Papua New Guinea fire** — "is radiating 1,026 MW" (banned-formula verb family; P3 class), plus tier label "very-high-intensity". No mechanic, no close. C+.
+- **[5] Isaias rapid_intensification (35 kt)** — "surpassing the NHC rapid intensification threshold of 30 kt" + advisory number + lat/lon + URL: P_tier leak and dispatcher register. C+.
+- **[8] Klang air_quality_hazard** — same ~152 µg/m³ forecast as [6] (adjacent city, same day): redundant, would read as a repeat. C+.
+- **[11] Isaias rapid_intensification (Cat 1→3)** — "exactly the NHC rapid-intensification threshold": P_tier. Third Isaias draft; same event as [5] and [10]. C+.
+- **[12] East Pacific Simon** — "meeting the NHC threshold for rapid intensification (NHC advisory 009a)": P_tier plus advisory ID. C+.
+- **[13] Brazil Cerrado fire** — "intense enough to register in the top tier of VIIRS detections": P_tier ("top tier"). Also undercut by the second hotspot (529 MW) being larger than the lead (519 MW). C+.
+
+### D (2)
+- **[14] / [15] Guam, Typhoon Champi (severe_weather, manual proposals, identical text)** — "Guam's preparation window is closing: life-threatening winds could arrive tonight" is NWS urgency paraphrase: no figure, no distance, panic register (violates HUMOR_RESEARCH §8.4 benign-violation), and "tonight" is 11–12 days old. [15] also has no score object (`score: ?`). D ×2.
+
+### Patterns named
+1. **P_tier, 5 instances in one cycle** ([1], [5], [11], [12], [13]) across fire + both cyclone types. Threshold/tier names leak as the "so what".
+2. **P_dust partial counter-evidence:** 3/3 dust_event drafts carry a WHO multiple. Unknown whether a fix shipped in the gap; hold open until it repeats.
+3. **P_close:** 0 of 15 close on mechanism/consequence. Disclaimer closes ([4], [6], [8]), source-credit closes ([2], [3]), and no close ([1], [7], [9], [10]).
+4. **Same-event saturation:** Isaias ×3 (Oct 8–9), Shah Alam/Klang, Guam ×2. Per-event cap not working across draft types.
+5. **Mechanic census:** no comic triple, idiom flip, or era anchor in any draft. Pure data delivery everywhere; Mongolia cluster and Riyadh peak/mean are the only stranded setups.
+6. **Political anchors:** none. **Plant-comparison regex:** no hits. **Wodehouse:** no approximation where exact available; disclaimers read as defensive.
+
+### Followups
+- Operator: P_tier fix now covers cyclone + VIIRS "tier" phrases (see plan).
+- Operator: Guam pair are manual proposals; reject both (stale, panic register).
+
 ## 2026-07-06 — Daily corpus grading (0 fresh drafts; 15 carry-overs from Jul 5, previously graded)
 
 **Context:** Gist read via git-clone path (success; no rate limit). Queue: 15 pending drafts —
