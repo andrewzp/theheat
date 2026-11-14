@@ -87,6 +87,7 @@ We grade drafts on an A through F rubric in `docs/DRAFT_CORPUS.md` (the longitud
 | 2026-11-11 | 0 | — | — | — | — | **N/A** | — | No fresh drafts — 2 pending are Riyadh dust (B-) and Shymkent hot10 (B), both previously graded; Verkhoyansk left the queue. Both now strict staleness candidates (6.1d / 69h, forecast days elapsed). Gist write skipped (invalid token). No proposal evidence updates. State gist at 7.79 MB with size warnings. |
 | 2026-11-12 | 0 | — | — | — | — | **N/A** | — | No fresh drafts — queue identical to Nov 11 (Riyadh dust B-, Shymkent hot10 B; previously graded). Intake not dry: 2 Ulan Bator hot10 drafts (Nov 9, Nov 10) auto-published, bypassing pending; both reuse the hot10 skeleton (watch n=4). Both pending are strict staleness candidates (7.1d / 93h). Gist write skipped (invalid token). State gist 7.89 MB. |
 | 2026-11-13 | 0 | — | — | — | — | **N/A** | — | No fresh drafts — 1 pending (Shymkent hot10 B, previously graded). Riyadh dust cleared by bot TTL sweep (`staleness_ttl_7d`, Nov 12 16:52Z). Auto-publish bypassed pending again: Tunis hot10 (Nov 12, same skeleton — watch n=5) + Oct monthly_climate_report (Nov 13, dashboard-approved). Shymkent strict staleness candidate (~118h); gist write skipped (invalid token). No proposal evidence updates. |
+| 2026-11-14 | 0 | — | — | — | — | **N/A** | — | No fresh drafts — 1 pending (Shymkent hot10 B, previously graded). No new drafts entered state at all since the Nov 13 monthly_climate_report (no auto-publishes either; hot10 watch stays n=5). Shymkent strict staleness candidate (~141h); gist write skipped (invalid token); TTL sweep due ~Nov 15 18:03Z. No proposal evidence updates. 5th consecutive no-fresh-draft cycle. |
 
 **Trend interpretation:**
 The Apr 25 jump to 43% was real but came from a small cohort (7 drafts) and didn't sustain into Apr 27. The Apr 27 regression has named causes (Sonnet rewrite path, verb-list gap in opener regex, era-anchor over-deployment, political anchor curation error). All four have proposed fixes documented in `docs/DRAFT_CORPUS.md` Apr 27 implications section. Next data point: tomorrow's scheduled grader (fires 2026-04-27 06:00 UTC) on the Apr 26-27 cycle output under v2.5 + post-humor-lens fixes.
@@ -96,6 +97,10 @@ We've been in the 9-43% band for three cycles. Need to clear 50% sustained.
 ## Rejection events
 
 Drafts that got rejected, with dates.
+
+### 2026-11-14 — Staleness bulk-reject: 1 strict candidate; write skipped
+
+Shymkent hot10 `draft_20261108_180324_55` (~141h, "Sunday" elapsed). Gist write skipped (`gh` token invalid — "The token in GH_TOKEN is invalid"); operator should reject via dashboard, else bot's `staleness_ttl_7d` sweep clears it ~2026-11-15 18:03Z.
 
 ### 2026-11-13 — Staleness bulk-reject: 1 strict candidate; write skipped
 
