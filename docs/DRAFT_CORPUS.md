@@ -11,6 +11,37 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-11-14 — Daily corpus grading (0 fresh drafts; 1 carry-over, previously graded)
+
+**Context:** Gist read via git-clone path (success; gist HEAD Nov 14 15:04Z — bot is running,
+`publication_control.enabled=true`, epoch `live-20261030…`). 1 pending: `draft_20261108_180324_55`
+(Shymkent hot10, B Nov 9) — same id/text/score, not re-graded. 54 drafts in state: 45 posted,
+8 rejected, 1 pending.
+
+**Why the queue is dry:** nothing new entered the draft list since the Nov 13 06:15Z
+monthly_climate_report (already logged Nov 13). No new auto-published drafts either — the hot10
+skeleton watch stays at n=5. Latest run_history entries are `auto_publish_due` sweeps with "No drafts
+due for auto-approval."
+
+**Staleness (~15:05 UTC Nov 14):** Shymkent ~141h, "Sunday" (Nov 8) elapsed — strict bulk-reject
+candidate, 6th day running. Gist write skipped (`gh` token invalid). Bot's 7d TTL sweep should clear it
+~Nov 15 18:03Z.
+
+**A-rate:** N/A (no fresh drafts). Last graded cycle: 0% (n=1, Nov 9).
+
+### Patterns
+1. No new graded evidence for any active proposal. 5th consecutive no-fresh-draft cycle (Nov 10–14).
+2. First day since Nov 9 with no auto-published draft either — intake itself was quiet, not just
+   bypassing pending.
+
+### Followups
+- Operator: reject Shymkent via dashboard, or let TTL clear it Nov 15.
+- Operator (carried): decide whether this routine should grade `posted` drafts from the last 24h —
+  under auto-publish, pending-only grading measures almost nothing.
+- Operator (carried): `daily-plan-current` still unmerged; `main` lacks graded cycles since 2026-07-06.
+- Infra (carried): `gh` token in the routine env is invalid — blocks gist write, PR create/edit, and the
+  `ROUTINE_BEACON` variable write.
+
 ## 2026-11-13 — Daily corpus grading (0 fresh drafts; 1 carry-over, previously graded)
 
 **Context:** Gist read via git-clone path (success; gist HEAD Nov 13 12:11Z). 1 pending:

@@ -2,6 +2,11 @@
 
 Living plan for closing the gap between the bot's current voice quality and the **resumption bar** (majority A-grade rate per cycle). Refined daily by the autonomous grading agent (cron `0 15 * * *`), reviewed and implemented by the human operator.
 
+> **Nov 14: 0 fresh drafts — 1 carry-over (Shymkent hot10 B; not re-graded). No proposal evidence
+> updates.** 5th consecutive no-fresh-draft cycle. Nothing new entered state since the Nov 13 monthly
+> report — no auto-publishes either, so hot10 watch holds at n=5. Shymkent strict staleness candidate
+> (~141h); gist write skipped (invalid token); TTL clears it ~Nov 15.
+>
 > **Nov 12: 0 fresh drafts — 2 carry-overs (Riyadh dust B-, Shymkent hot10 B; not re-graded). No
 > proposal evidence updates.** Queue is dry because auto-publish is on: 2 Ulan Bator hot10 drafts (Nov 9/10)
 > posted without reaching pending, both on the same hot10 skeleton (watch n=4, not yet a proposal — ungraded).
@@ -243,14 +248,17 @@ Living plan for closing the gap between the bot's current voice quality and the 
 |---|---|
 | Bot commit | `0.9.81.0`+ per BRIEFING.md 2026-06-28 (reganom recency window + honesty-gating, PR #347; world-half eval-gating fix, PR #345; reganom writer-voice upgrade, PR #349. Prior: 0.9.67.0, R-02 NOAA HMS independent fire witness; 30-item audit backlog complete [S-01..S-35]; source-redundancy lane R-00..R-09; bot active since 2026-06-01) |
 | Voice engine version | **two-bot + Attenborough/Economist voice + all-sources triage + evidence contract + diversity gate + automation dashboard** (Sonnet 4.6 writer prompt-cached + Gemini 2.5 Flash fact-checker [skips unknown kinds] + Gemini 2.5 Pro critic [assesses relative to available data]; all 23 sources on triage path via PR #150; evidence contract gates writer via 0.9.0.0; pending-type cap default 3 + per-type TTL sweep [fast 7d, coral/DHW 21d] via 0.9.6.0/0.9.16.0; `THEHEAT_TRIAGE_ENABLED=1` in CI; `THEHEAT_WRITER_SAMPLES=1` + `THEHEAT_CRITIC_REVISE_ENABLED=0` since 2026-07-14 (economics P0 paired flip; was 2/1 from 2026-06-13); reganom (`reanalysis_anomaly`) enabled `manual_only` since 2026-06-27 with 2-day recency + honesty-gating [PR #347]; routine beacon writes the `ROUTINE_BEACON` repo variable via `gh variable set` each cycle) |
-| Last cycle A-rate | **N/A (0 fresh, Nov 10–13).** Last measured: **0% (0/1, Nov 9; Shymkent hot10 B).** Prior: 0% (0/1, Nov 6; Riyadh dust B-). Prior: 0% (0/1, Nov 4; hot10 B). Prior: 0% (0/4, Oct 31). Prior: 0% (0/15, Oct 28). Prior measured: **— (0 fresh drafts, Jul 6).** Most recent measured: **20% (1/5 fresh, Jul 5)** — eastern Siberia fire A- (4th confirmation of the permafrost-carbon fire mechanic), 1 B+, 1 B, 1 B-, 1 C+. Prior: 20% (2/10, Jul 4); 33% (1/3, Jul 3); 0% (0/3, Jul 2); 0% (0/4, Jul 1); 22% (2/9 non-stale, Jun 30); 80% Jun 29 [BAR CLEARED]. |
+| Last cycle A-rate | **N/A (0 fresh, Nov 10–14).** Last measured: **0% (0/1, Nov 9; Shymkent hot10 B).** Prior: 0% (0/1, Nov 6; Riyadh dust B-). Prior: 0% (0/1, Nov 4; hot10 B). Prior: 0% (0/4, Oct 31). Prior: 0% (0/15, Oct 28). Prior measured: **— (0 fresh drafts, Jul 6).** Most recent measured: **20% (1/5 fresh, Jul 5)** — eastern Siberia fire A- (4th confirmation of the permafrost-carbon fire mechanic), 1 B+, 1 B, 1 B-, 1 C+. Prior: 20% (2/10, Jul 4); 33% (1/3, Jul 3); 0% (0/3, Jul 2); 0% (0/4, Jul 1); 22% (2/9 non-stale, Jun 30); 80% Jun 29 [BAR CLEARED]. |
 | Resumption bar | majority A (>50%) sustained — **cleared Jun 29 (80%, n=5); Jun 30 returned 22%; Jul 1 0% (n=4); Jul 2 0% (n=3); Jul 3 33% (n=3); Jul 4 20% (n=10); Jul 5 20% (n=5); Jul 6 no fresh drafts to measure**. |
-| Gap | **50 pp below bar (last measured Nov 9, 0%, n=1; no fresh drafts Nov 10–13; Nov 6, 0%, n=1; Nov 4, 0%, n=1; Oct 31, 0%, n=4; Oct 28 also 0%, n=15).** Prior: **30 pp below bar** (50% − 20%, most recent measured cycle Jul 5, n=5). No fresh measurement Jul 6. Seven cycles since the Jun 29 peak have ranged 0–33% depending on signal mix. P_tier and P_close remain the two most active-capping levers, both unchanged since Jul 5 (no fresh evidence Jul 6). |
+| Gap | **50 pp below bar (last measured Nov 9, 0%, n=1; no fresh drafts Nov 10–14; Nov 6, 0%, n=1; Nov 4, 0%, n=1; Oct 31, 0%, n=4; Oct 28 also 0%, n=15).** Prior: **30 pp below bar** (50% − 20%, most recent measured cycle Jul 5, n=5). No fresh measurement Jul 6. Seven cycles since the Jun 29 peak have ranged 0–33% depending on signal mix. P_tier and P_close remain the two most active-capping levers, both unchanged since Jul 5 (no fresh evidence Jul 6). |
 | Posting | paused; operator decision pending — Jun 29 cleared bar (80%), Jun 30–Jul 5 all below, Jul 6 no fresh drafts. **Queue unchanged at 15 pending as of Jul 6** (exact match to Jul 5's graded batch) — zero new drafts entered between the Jul 5 and Jul 6 pulls. |
 | Coverage | **638 cities × 180 countries** (was 613 × 179; +25 via PR #81) |
 | Queue status | **15 pending as of Jul 6 grading, unchanged from Jul 5** (10 carry-overs from Jul 4: 2 A- [Typhoon Bavi, Loxahatchee FL], 2 B+ [Island Pond VT, Antwerpen], 6 B [Barrow, Astana, Basrah, Al Başrah al Qadīmah, Rocky Mountains CO fire, Urumqi Jul 4 reading]; 5 from Jul 5: 1 A- eastern Siberia fire, 1 B+ Johannesburg air_quality_hazard, 1 B Doha absolute_extreme, 1 B- Urumqi Jul 5 reading, 1 C+ Phalodi dust_event). **2 of the 15 ([4] Basrah, [6] Al Başrah al Qadīmah) are now strict staleness bulk-reject candidates** (>48h old, forecast date July 4 elapsed) — flagged for operator, write unavailable this session. Bot at 0.9.81.0+ (no newer BRIEFING.md handoff confirmed this cycle); reganom enabled post-PR #347 with writer-voice upgrade (PR #349); `THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live. |
 
 ## Active proposals
+
+Nov 14: ordering unchanged — 5th consecutive no-fresh-draft cycle (Nov 10–14); no new drafts
+of any status since Nov 13 06:15Z. hot10 watch unchanged at n=5.
 
 Nov 13: ordering unchanged — 4th consecutive no-fresh-draft cycle (Nov 10–13); pending queue
 starved by auto-publish, so no graded evidence to re-rank against. Ungraded watch: hot10 skeleton
