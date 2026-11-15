@@ -1,3 +1,9 @@
+## 0.9.109.91
+
+- Adopt the verified NOAA threshold refresh through November 11 after checksum,
+  lineage and inventory verification. Keep the existing observation/QC rules
+  and reader validation; maintenance success alone does not imply adoption.
+
 ## 0.9.109.90
 
 - Connect qualified observed coastal reports to automatic review and sending.
