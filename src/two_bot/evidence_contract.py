@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from src.data import coastal_observed
+
+
 from dataclasses import dataclass
 from numbers import Number
 from typing import Any, Literal
@@ -187,6 +190,9 @@ def audit_story_bundle(bundle: StoryBundle) -> EvidenceAudit:
                     "no source-like key found in raw_signal_dump or current_facts",
                 )
             )
+
+    for reason in coastal_observed.bundle_failures(bundle):
+        issues.append(_issue("error", "coastal_source_unqualified", "raw_signal_dump", reason))
 
     from src.data.air_quality_evidence import bundle_failures as aq_failures
     from src.data.c3s_monthly import bundle_failures as c3s_failures

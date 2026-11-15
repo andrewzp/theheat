@@ -127,6 +127,9 @@ def scientific_claim_failures(tweet: str, bundle) -> list[str]:
     signal = bundle.signal_kind
     text = tweet.lower()
 
+    from src.data import coastal_observed
+    failures.extend(coastal_observed.claim_failures(tweet, bundle))
+
     from src.data.air_quality_evidence import bundle_failures as aq_failures, is_air_quality
     failures.extend("air_quality_window_unqualified: " + reason for reason in aq_failures(bundle))
     from src.two_bot.air_quality_claims import causal_claim_failures

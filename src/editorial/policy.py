@@ -89,6 +89,7 @@ POLICY_FILES = (
     "src/two_bot/rejected_candidate.py",
     "src/voice/safety.py", "src/data/temperature_evidence.py", "src/data/json_evidence.py",
     "src/editorial/approval.py", "src/editorial/observed_scope.py", "dashboard/lib/observed-weather.js",
+    "src/data/coastal_observed.py", "src/data/water_levels.py",
     "src/data/c3s_monthly.py", "src/orchestrator/observed_report.py", "src/orchestrator/cli.py", "src/main.py",
     "src/data/world_thresholds.py", "src/data/open_meteo.py",
     "src/editorial/hot10_contract.py", "src/editorial/automatic_text.py",

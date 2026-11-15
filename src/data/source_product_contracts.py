@@ -548,7 +548,7 @@ LEGS += (
             restrictions=("region_sample_not_census",)),
     _single("water_levels", "coops_water_level", "noaa_coops", "noaa_coops.water_level", "observed_station",
             "CO-OPS water level", "Configured coastal stations.", "m relative to station datum",
-            "NOAA CO-OPS station readings.", ("src/data/water_levels.py:fetch_water_levels",),
+            "NOAA CO-OPS station readings.", ("src/data/water_levels.py:fetch_water_levels", "src/data/coastal_observed.py:fetch_point"),
             restrictions=("region_sample_not_census",)),
     _single("river_gauges", "usgs_gauge_height", "usgs_nwis", "usgs_nwis.instantaneous_values", "observed_station",
             "Instantaneous gauge height", "Configured US river stations.", "ft gauge height",
