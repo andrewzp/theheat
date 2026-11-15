@@ -11,6 +11,35 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-11-15 — Daily corpus grading (0 fresh drafts; 1 carry-over, previously graded)
+
+**Context:** Gist read via git-clone path (success; gist HEAD Nov 15 11:28Z, `_state_rev` 3345 — bot
+is running, `publication_control.enabled=true`, epoch `live-20261030…`). 1 pending:
+`draft_20261108_180324_55` (Shymkent hot10, B Nov 9) — same id/text/score, not re-graded. 54 drafts in
+state: 45 posted, 8 rejected, 1 pending — identical counts to Nov 14.
+
+**Why the queue is dry:** no draft has entered state since the Nov 13 06:15Z monthly_climate_report.
+No auto-publishes either — hot10 skeleton watch holds at n=5. Second straight day of zero intake, not
+just zero pending.
+
+**Staleness (~15:10 UTC Nov 15):** Shymkent ~165h, "Sunday" (Nov 8) elapsed — strict bulk-reject
+candidate, 7th day running. Gist write skipped (`gh` token invalid). Bot's `staleness_ttl_7d` sweep is
+due ~18:03Z today; next cycle should find the queue empty.
+
+**A-rate:** N/A (no fresh drafts). Last graded cycle: 0% (n=1, Nov 9).
+
+### Patterns
+1. No new graded evidence for any active proposal. 6th consecutive no-fresh-draft cycle (Nov 10–15).
+2. Intake has been zero for ~57h. Under auto-publish this is the only signal the routine can see;
+   whether that's a quiet weather window or a stalled writer path isn't visible from state alone.
+
+### Followups
+- Operator: confirm the zero-intake stretch since Nov 13 is signal-driven, not a pipeline stall.
+- Operator (carried): decide whether this routine should grade `posted` drafts from the last 24h.
+- Operator (carried): `daily-plan-current` still unmerged; `main` lacks graded cycles since 2026-07-06.
+- Infra (carried): `gh` token in the routine env is invalid — blocks gist write, PR create/edit, and the
+  `ROUTINE_BEACON` variable write.
+
 ## 2026-11-14 — Daily corpus grading (0 fresh drafts; 1 carry-over, previously graded)
 
 **Context:** Gist read via git-clone path (success; gist HEAD Nov 14 15:04Z — bot is running,
