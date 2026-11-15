@@ -1,3 +1,10 @@
+## 0.9.109.90
+
+- Connect qualified observed coastal reports to automatic review and sending.
+  Preserve the exact gauge, UTC time, preliminary label and tide comparator;
+  recheck the same NOAA response before writing, saving and sending. Keep the
+  existing copy cap, required checks, station-day deduplication and no-resend guard.
+
 ## 0.9.109.89
 
 - Preserve NOAA coastal gauge identity, exact observation time, preliminary or

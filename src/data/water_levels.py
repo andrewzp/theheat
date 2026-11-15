@@ -15,9 +15,7 @@ import math
 from copy import deepcopy
 from urllib.parse import urlencode
 
-import requests
 
-from src.data._http import fetch_with_retry
 from src.data.source_status import SourceFetchError
 
 COOPS_URL = "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter"
@@ -68,6 +66,11 @@ class StormSurgeEvent:
     event_id: str
     station_id: str = ""
     evidence: dict = field(default_factory=dict)
+
+
+def fetch_with_retry(*args, **kwargs):
+    from src.data._http import fetch_with_retry as fetch
+    return fetch(*args, **kwargs)
 
 
 def _number(value) -> float:
@@ -143,6 +146,8 @@ def _pair(station_id: str, name: str, state: str, observed: dict, predicted: dic
 
 def fetch_water_levels(*, strict: bool = False, metrics_out: dict | None = None) -> list[WaterLevelReading]:
     """Fetch paired, time-bound observed gauge and tide-comparison samples."""
+    import requests
+
     readings: list[WaterLevelReading] = []
     failures: list[str] = []
     now = datetime.now(UTC)

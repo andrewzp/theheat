@@ -33,20 +33,23 @@ from src.editorial.revisions import (
 _DEFAULT_MIN_TWEET_SPACING_MIN = 15
 
 
-def _current_nws_source(draft, *, live):
+def _current_nws_source(draft, *, live, bot_state=None):
     # The supplied-warning seam has no implicit URL lookup. Without its owner's
     # independently current input this family stops before paid safety/transport.
     from src.editorial.nhc_advisory_runtime import current_advisory_source
     from src.editorial.warning_runtime import current_warning_source
     from src.two_bot.intern.nwps_forecast import current_nwps_forecast
     from src.data.c3s_monthly import current_draft_hold
+    from src.data import coastal_observed
     # An NHC advisory needs this process's own owner: static before intent,
     # a fresh fixed read at the live boundaries (manual entry, after intent).
     return (current_warning_source(draft) or current_advisory_source(draft, live=live)
             or _retained_nws_source(draft, live=live) or _current_hot10_source(draft)
             or _current_air_quality_source(draft, live=live) or _current_warning_auto_source(draft)
             or current_nwps_forecast(draft, live=live, clock=_utc_now)
-            or current_draft_hold(draft, live=live, now=_utc_now()))
+            or current_draft_hold(draft, live=live, now=_utc_now())
+            or coastal_observed.current_draft_hold(draft, live=live, now=_utc_now)
+            or coastal_observed.legacy_station_day_hold(draft, bot_state))
 
 
 def _current_warning_auto_source(draft) -> str | None:
@@ -92,7 +95,7 @@ def _hold_nws_draft(draft: dict, reason: str) -> None:
     draft["approval_mode"] = "manual"
     source_names: dict[object, str] = {"official_warning": "Official warning", "nhc_advisory": "NHC advisory",
                                        "hot10": "Hot10 bulletin", "air_quality_hazard": "PM2.5 forecast",
-                                       "dust_event": "Dust forecast", "river_flood": "River forecast"}
+                                       "dust_event": "Dust forecast", "river_flood": "River forecast", "coastal_observed_report": "Observed coastal report"}
     source = source_names.get(draft.get("type"), "NWS warning")
     draft["post_error"] = f"{source} needs fresh source review: {reason}"
     _touch_draft(draft)
@@ -331,7 +334,7 @@ def post_approved(draft_or_text: dict | str, bot_state: BotState) -> str:
         draft["post_error"] = "Legacy place evidence requires identity review"
         return "failed"
 
-    source_hold = _current_nws_source(draft, live=False)
+    source_hold = _current_nws_source(draft, live=False, bot_state=bot_state)
     if source_hold:
         _hold_nws_draft(draft, source_hold)
         return "failed"
@@ -414,7 +417,7 @@ def post_approved(draft_or_text: dict | str, bot_state: BotState) -> str:
 
     if "media_attachment" not in snapshot:
         media_png, alt_text = _hot10_media_for_draft(snapshot)
-    source_hold = _current_nws_source(snapshot, live=True)
+    source_hold = _current_nws_source(snapshot, live=True, bot_state=bot_state)
     if source_hold:
         row["phase"] = "not_sent"
         draft["publish_outcome"] = "not_sent"
@@ -604,7 +607,7 @@ def run_manual_tweet(bot_state: BotState, current_run: dict | None = None) -> Bo
                            status="failed", observed=1, error=reason)
         return bot_state
 
-    source_hold = _current_nws_source(draft, live=True)
+    source_hold = _current_nws_source(draft, live=True, bot_state=bot_state)
     if source_hold:
         _hold_nws_draft(draft, source_hold)
         _record_source_run(current_run, bot_state, "manual_publish", manual_start,
@@ -810,7 +813,7 @@ def process_due_drafts(bot_state: BotState, current_run: dict | None = None) -> 
             failures.append(f"{draft.get('id')}: {identity_reason}")
             continue
 
-        source_hold = _current_nws_source(draft, live=True)
+        source_hold = _current_nws_source(draft, live=True, bot_state=bot_state)
         if source_hold:
             _hold_nws_draft(draft, source_hold)
             failures.append(f"{draft.get('id')}: {source_hold}")

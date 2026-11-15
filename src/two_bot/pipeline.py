@@ -434,6 +434,10 @@ def generate_draft(
             return None
         if not _audit_bundle_for_generation(bundle, state, record_kill=_record_kill, result_out=result_out):
             return None
+        from src.data import coastal_observed
+        if source_hold := coastal_observed.current_bundle_hold(bundle, live=True):
+            _record_kill("coastal_source", source_hold)
+            return None
         from src.data.c3s_monthly import KIND as C3S_KIND, current_bundle_hold
         if bundle.signal_kind == C3S_KIND and (source_hold := current_bundle_hold(bundle, live=True)):
             _record_kill("c3s_source", source_hold)
@@ -465,7 +469,8 @@ def generate_draft(
             return None
         from src.two_bot.intern.nwps_forecast import forecast_clock, forecast_source_hold, is_nwps_forecast
         nwps = is_nwps_forecast(bundle)
-        strict_source = nwps or bundle.signal_kind in _CURRENT_SOURCE_KINDS or bundle.signal_kind == C3S_KIND
+        strict_source = (nwps or bundle.signal_kind in _CURRENT_SOURCE_KINDS
+                         or bundle.signal_kind in {C3S_KIND, coastal_observed.KIND})
         if nwps and (hold := forecast_source_hold(checked_bundle.payload(), live=True, clock=forecast_clock)):
             _record_kill("nwps_source", hold)
             return None

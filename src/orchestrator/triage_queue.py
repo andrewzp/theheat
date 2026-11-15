@@ -450,6 +450,12 @@ def _automatic_source_hold(candidate: "TriageCandidateBundle") -> str | None:
     from src.data.nws_alerts import NWS_URL
 
     bundle = candidate.bundle
+    from src.data import coastal_observed
+    if candidate.legacy_type == coastal_observed.KIND or bundle.signal_kind == coastal_observed.KIND:
+        if candidate.legacy_type != bundle.signal_kind or candidate.event_id != bundle.event_id:
+            return "coastal_source_identity_changed"
+        return coastal_observed.current_bundle_hold(bundle, now=_utc_now,
+            minimum_delay=timedelta(minutes=coastal_observed.AUTO_DELAY_MINUTES))
     if candidate.legacy_type in air_quality_current.KINDS or bundle.signal_kind in air_quality_current.KINDS:
         if candidate.event_id != bundle.event_id or candidate.legacy_type != bundle.signal_kind:
             return "air_quality_contract_invalid"
@@ -1078,7 +1084,8 @@ def _drain_and_write_triage_queue(
                 source_holds[source_hold] += 1
             stage = "automatic_policy"
             if source_hold:
-                stage = "air_quality_source" if source_hold.startswith("air_quality_") else "nws_source"
+                stage = ("air_quality_source" if source_hold.startswith("air_quality_") else
+                         "coastal_source" if source_hold.startswith("coastal_") else "nws_source")
             reason = source_hold or "type_has_no_automatic_arming_route"
             _bump_source_field_in_run(current_run, candidate.source, "triaged_out")
             _record_downstream_suppression(

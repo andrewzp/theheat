@@ -206,6 +206,12 @@ def build_writer_user_prompt(
         prompt = f"{prompt}\n\n{THERMAL_TIME_GUIDANCE}"
     if getattr(bundle, "human_impact", None):
         prompt = f"{prompt}\n\n{IMPACT_GUIDANCE}"
+    if bundle.signal_kind == "coastal_observed_report":
+        prompt += ("\n\nThis is an observed gauge reading above the same-time astronomical tide prediction, "
+                   "not a weather forecast, flood impact, storm cause or record. Name the gauge and exact UTC "
+                   "sample time (HH:MM UTC) and UTC reporting date (day plus month, e.g. 13 Nov); "
+                   "preserve preliminary status when present. Do not describe an older sample as conditions now. "
+                   "Use one supported residual value as intelligible context; the source link is appended before checks.")
     budget = automatic_copy_budget(bundle)
     if budget is not None:
         prompt += "\n\nAutomatic publication copy budget: " + json.dumps(budget, sort_keys=True, ensure_ascii=False)

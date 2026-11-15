@@ -32,7 +32,7 @@ from src.editorial.observed_scope import enabled, FORECAST_KINDS, MESSAGE
 # The THEHEAT_AUTOSHIP_ON_CRITIC_PASS flag and the critic remain the
 # kill-switches; flag OFF is byte-for-byte the manual behavior.
 AUTOSHIP_ALLOWLIST: frozenset[str] = frozenset({
-    "monthly_climate_report",
+    "monthly_climate_report", "coastal_observed_report",
     "hot10", "co2_milestone", "ch4_milestone",
     "all_time_high", "all_time_low",
     "monthly_high", "monthly_low",
@@ -105,6 +105,11 @@ def recommend_approval_policy(
         return ApprovalPolicy(key="nominated_observed_report", mode="armed_auto",
             recommended_delay_minutes=1, can_auto_approve=True,
             reason="One explicitly nominated completed-month official finding; required model checks and a current-source reread still apply.")
+    if tweet_type == "coastal_observed_report":
+        armed = enabled() and autoship_on_critic_pass_enabled()
+        return ApprovalPolicy(key="coastal_observed_point", mode="armed_auto" if armed else "manual_only",
+            recommended_delay_minutes=1 if armed else None, can_auto_approve=armed,
+            reason="One attributed observed gauge residual; exact source, preliminary label, critic and current-source rechecks remain required.")
     copy_total = _candidate_total(candidate_score)
     is_strong = signal_total >= 72 and copy_total >= 72
     is_good = signal_total >= 66 and copy_total >= 68

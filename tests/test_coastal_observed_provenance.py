@@ -51,7 +51,7 @@ def test_exact_observation_comparison_quality_and_byte_receipts_reach_admission(
 
     observed, predicted = payloads()
     install(monkeypatch, observed, predicted)
-    monkeypatch.setenv("THEHEAT_OBSERVED_WEATHER_ONLY", "1")
+    monkeypatch.setenv("THEHEAT_OBSERVED_WEATHER_ONLY", "0")
     run = {"id": "invented-coastal-run", "sources": []}
     with freeze_time(NOW):
         co_ops.run_water_levels(fresh_state, run)
@@ -72,7 +72,7 @@ def test_exact_observation_comparison_quality_and_byte_receipts_reach_admission(
         evidence["prediction_response_sha256"]
         == sha256(responses.calls[1].response.content).hexdigest()
     )
-    assert bundle_schema_issues(bundle) == [] and story_hold(bundle) is None
+    assert bundle_schema_issues(bundle) == [] and story_hold(bundle, observed_only=True) is None
     assert run["sources"][0]["promoted"] == 1
     assert "no storm cause, flood impact or historical-record claim" in evidence["claim_scope"]
     for call, product in zip(responses.calls, ("water_level", "predictions")):
@@ -225,7 +225,7 @@ def test_real_admission_and_required_checks_save_manual_draft_without_auto_autho
     for key, value in {
         "ANTHROPIC_API_KEY": "invented-no-access",
         "GEMINI_API_KEY": "invented-no-access",
-        "THEHEAT_OBSERVED_WEATHER_ONLY": "1",
+        "THEHEAT_OBSERVED_WEATHER_ONLY": "0",
         "THEHEAT_CRITIC_ENABLED": "1",
         "THEHEAT_CRITIC_REVISE_ENABLED": "0",
         "THEHEAT_WRITER_SAMPLES": "1",

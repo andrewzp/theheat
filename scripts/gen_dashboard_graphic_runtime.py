@@ -50,6 +50,8 @@ SOURCES = (
     'src/editorial/_util.py',
     'src/editorial/approval.py',
     'src/editorial/observed_scope.py',
+    'src/data/coastal_observed.py',
+    'src/data/water_levels.py',
     'src/data/c3s_monthly.py',
     'src/editorial/candidates.py',
     'src/editorial/hot10_contract.py',
