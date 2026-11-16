@@ -750,7 +750,7 @@
     "src/orchestrator/sources/enso.py": "33d53f7ef105d9b9fa48fb27eb0b859306e97f04ca301bc566120b7d83cc70ee",
     "src/orchestrator/sources/firms.py": "792f4c6334bca4df75fbcf47f00b28a40b4587d8947f131c09bb1afd233e6d08",
     "src/orchestrator/sources/gdacs.py": "89c9b0a96fee81b2079971dc2356dd0f272b5fb4a16f32ae408fdf9244081168",
-    "src/orchestrator/sources/gpm_imerg.py": "4e814deeb2b0a287136c2f1b87cab57b9f6391fda43e984ad5664eafb638a6d8",
+    "src/orchestrator/sources/gpm_imerg.py": "ebacce4d7fc643c213294e57578e64f83960c73f17f73a2adf7a23557a3af8ae",
     "src/orchestrator/sources/ice_mass.py": "95f7de55872f48814f0397b7730b41cb91d019a1333f466f12014039ae2edd7b",
     "src/orchestrator/sources/marine.py": "341775be8e06a3304f3f05078d55d82c52e43fc64ef9c4b8f1b934c5fe693aa3",
     "src/orchestrator/sources/methane.py": "93647684e6a3c47e429cd9457d9fe806bfa9414bd4d6f3acfd095ded587396e6",
@@ -775,5 +775,5 @@
     "src/two_bot/intern/warnings.py": "04e0a4506ffbb29124c8d2960a5e5025305699297fcf8f9178b23caac2cd7a37"
   },
   "evidence_scope": "Referenced local code inventory; not live/provider/transitive-source qualification.",
-  "registry_sha256": "7ec31fea45e93209f962923e605af68b29b7c64b295a8643bbc15e67b9b84b34"
+  "registry_sha256": "aafb1d4fd67755368b4f4a6ec9dfd9d01b887c3ae7e55d5fa6a503fa7043e565"
 }

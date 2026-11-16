@@ -3,7 +3,7 @@
  */
 import assert from "node:assert/strict"
 import test from "node:test"
-import { spawnSync } from "node:child_process"
+import { spawnFixtureWithFileInput } from "./helpers/fixture-file-input.js"
 import { createHash } from "node:crypto"
 import path from "node:path"
 import { importFresh } from "./helpers/import-fresh.js"
@@ -39,7 +39,7 @@ body=build_preview(value['request'],policy_sha=value['policy'],runtime_sha=value
 sys.stdout.buffer.write(body)
 `
 function pythonJSON(code, input) {
-  const result = spawnSync(python, ["-c", code], { cwd: root, input: JSON.stringify(input), encoding: "utf8", timeout: 30000,
+  const result = spawnFixtureWithFileInput(python, ["-c", code], { cwd: root, input: JSON.stringify(input), encoding: "utf8", timeout: 30000,
     env: { PATH: process.env.PATH, HOME: "/nonexistent-invented-gist-test", LC_ALL: "C", LANG: "C", NETRC: "/dev/null",
       PYTHON_DOTENV_DISABLED: "1", PYTHONDONTWRITEBYTECODE: "1", NO_PROXY: "*", no_proxy: "*" } })
   assert.equal(result.status, 0, JSON.stringify({ stderr: result.stderr, signal: result.signal,

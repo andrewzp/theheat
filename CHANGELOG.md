@@ -1,3 +1,9 @@
+## 0.9.109.99
+
+- Add a default-off completed-day satellite precipitation text route with exact point, product, accumulation window and source rereads. Preserve required checks and refuse unsupported rain/snow, impact or record claims.
+- Enforce its single attempted candidate with ranking enabled or disabled, and prevent a retired release from falling back to paid manual generation.
+- Package its compact retained-evidence validator and selected public watchlist without importing the live NASA collector.
+
 ## 0.9.109.98
 
 - Give observed-airport writing explicit time, date, scope and copy-budget requirements, and refuse an incorrect explicit UTC weekday before provider checks or publication.

@@ -14,6 +14,9 @@ ceiling: one attempt still runs every required check, and provider retries,
 unknown billing and posting limits keep their own rules. Each operation creates
 its own budget; nothing here is module-global, persisted or shared between
 threads or operations.
+
+The opted-in completed-day satellite report requires a one-attempt operation
+budget even when ranking is disabled. Disabling ranking never buys a refill.
 """
 
 from __future__ import annotations
@@ -86,12 +89,16 @@ class CandidateBudget:
     def for_operation(cls, operation: str, environ: Any = None) -> "CandidateBudget":
         """Read configuration once at the start of one operation."""
         enabled = triage_enabled(environ)
+        env = os.environ if environ is None else environ
+        bounded_report = env.get("THEHEAT_GPM_OBSERVED_REPORT") == "1"
         limit: int | None = None
-        if enabled:
+        if enabled or bounded_report:
             try:
                 limit = configured_max_candidates(environ)
             except CandidateBudgetConfigError as exc:
                 return cls(operation, 0, refusal=exc.code)
+            if bounded_report and limit != 1:
+                return cls(operation, 0, refusal="rainfall_report_one_candidate_required")
         if operation == "leaderboard":
             limit = LEADERBOARD_MAX_CANDIDATES if limit is None else min(limit, LEADERBOARD_MAX_CANDIDATES)
         return cls(operation, limit)

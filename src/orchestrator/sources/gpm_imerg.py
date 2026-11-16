@@ -18,6 +18,41 @@ SCAN_DEADLINE_S = 900.0
 REFUSAL_BACKOFF_FLAG = "THEHEAT_EARTHDATA_REFUSAL_BACKOFF"
 
 
+def _report_settings_hold(bot_state):
+    from src.data import rainfall_observed
+    from src.editorial.publication import automatic_publication_policy
+    if hold := rainfall_observed.settings_hold():
+        return hold
+    if not automatic_publication_policy(bot_state)["enabled"]:
+        return "rainfall_report_publication_paused"
+    return None
+
+
+def _enqueue_observed_reports(bot_state, readings, current_run, details):
+    from src.data import rainfall_observed
+    from src.editorial.scoring._shared import _build_score
+
+    if hold := _report_settings_hold(bot_state):
+        details.update(status="held", reason=hold, nominated=0, queued=0)
+        return 0
+    bundles = rainfall_observed.nominate(readings, bot_state)
+    queued = 0
+    for bundle in bundles:
+        score = _build_score(rainfall_observed.KIND, severity=80, novelty=75, timeliness=90,
+                            confidence=80, shareability=85, sensitivity=0, threshold=72,
+                            reasons=["Heavy completed-day satellite estimate at one monitored point"])
+        queued += int(_enqueue_story_candidate(
+            bot_state, bundle=bundle, score=score, source="gpm_imerg",
+            legacy_type=rainfall_observed.KIND, event_id=bundle.event_id,
+            review_context={"source": "NASA GPM IMERG Late", "source_key": "gpm_imerg",
+                            "headline": "Completed-day satellite rainfall estimate", "facts": bundle.current_facts},
+            tweet_date=bundle.when,
+        ))
+    details.update(status="nominated" if bundles else "no_qualified_report",
+                   nominated=len(bundles), queued=queued)
+    return queued
+
+
 def scan_blocks(cities: list[dict], block: int) -> tuple[list[str], list[list[int]]]:
     """Stable named blocks of the watchlist; a changed watchlist is a new region set (cursor 0)."""
     import hashlib
@@ -77,6 +112,7 @@ def run_gpm_imerg(
     trace = gpm_imerg.RainfallOpportunityTrace(run_id=(current_run or {}).get("id"))
     packet_holds: list[dict] = []  # W06.6: named packets stopped before paid generation
     scan: dict = {}  # W06.2: the bounded regional scan, when THEHEAT_RAINFALL_REGIONAL_SCAN is "1"
+    report_details: dict = {}
     # A3: bounded backoff after a provider refusal of this exact credential (its expiry claim,
     # never its value). An expired credential is already stopped locally inside the fetch.
     token = os.environ.get("EARTHDATA_TOKEN", "")
@@ -90,7 +126,8 @@ def run_gpm_imerg(
 
     def details() -> dict:
         out = {**_trace_details(trace), **({"rainfall_packet_holds": packet_holds} if packet_holds else {}),
-               **({"rainfall_scan": dict(scan)} if scan else {})}
+               **({"rainfall_scan": dict(scan)} if scan else {}),
+               **({"rainfall_observed_report": dict(report_details)} if report_details else {})}
         incident = out.get("incident")
         attempts = incident.get("attempts") if isinstance(incident, dict) else None
         record = source_access.run_record(credential_expires_at=credential_expires_at,
@@ -128,6 +165,9 @@ def run_gpm_imerg(
                 trace=trace,
                 **access,
             )
+        from src.data import rainfall_observed
+        if rainfall_observed.enabled():
+            source_promoted += _enqueue_observed_reports(bot_state, readings, current_run, report_details)
         events = gpm_imerg.detect_precip_records(readings, cast(dict, bot_state))
         for event in events:
             if state.is_duplicate(bot_state, event.event_id):

@@ -68,6 +68,7 @@ POLICY_FILES = (
     "src/data/newsworthiness.py",
     "src/data/places.py", "data/place_registry.json", "data/country_codes.json",
     "data/country_names.json", "src/data/awc_observed.py", "src/orchestrator/sources/awc_observed.py",
+    "src/data/rainfall_observed.py", "data/cities.csv",
     "src/orchestrator/metar_report.py",
     "scripts/post_collection_sender.py",
     "src/commands/postgres_batch_results.py", "src/commands/postgres_checks.py",
