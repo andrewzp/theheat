@@ -1,3 +1,9 @@
+## 0.9.109.92
+
+- Skip the excluded world forecast and archive-warming half during observed-only
+  collection. Preserve the selected GHCN observations and partitioning; report
+  intentional skips separately from source failure or successful service.
+
 ## 0.9.109.91
 
 - Adopt the verified NOAA threshold refresh through November 11 after checksum,
