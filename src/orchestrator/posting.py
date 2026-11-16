@@ -40,7 +40,7 @@ def _current_nws_source(draft, *, live, bot_state=None):
     from src.editorial.warning_runtime import current_warning_source
     from src.two_bot.intern.nwps_forecast import current_nwps_forecast
     from src.data.c3s_monthly import current_draft_hold
-    from src.data import coastal_observed
+    from src.data import coastal_observed, awc_observed
     # An NHC advisory needs this process's own owner: static before intent,
     # a fresh fixed read at the live boundaries (manual entry, after intent).
     return (current_warning_source(draft) or current_advisory_source(draft, live=live)
@@ -49,7 +49,8 @@ def _current_nws_source(draft, *, live, bot_state=None):
             or current_nwps_forecast(draft, live=live, clock=_utc_now)
             or current_draft_hold(draft, live=live, now=_utc_now())
             or coastal_observed.current_draft_hold(draft, live=live, now=_utc_now)
-            or coastal_observed.legacy_station_day_hold(draft, bot_state))
+            or coastal_observed.legacy_station_day_hold(draft, bot_state)
+            or awc_observed.current_draft_hold(draft, live=live, now=_utc_now))
 
 
 def _current_warning_auto_source(draft) -> str | None:

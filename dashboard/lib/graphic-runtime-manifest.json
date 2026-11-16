@@ -1,6 +1,6 @@
 {
   "identity": {
-    "archive_sha256": "ffbaa6c082e46a1a036f89955ff1f110ac4286c706336d73f1ab167b8017ebea",
+    "archive_sha256": "07e91b2b4aba6c8f2542db8619089926a6e1d9e1e99b7d61b6cfb6ca6fd902ce",
     "deployment_files": {
       "api/graphic_preview.py": "f7521adcbd618f4b65b2a0de30ea62aaff4cdd36f2254e9af38bf68646d361ad",
       "api/graphic_reader_status.py": "5e9685d699625a4eea9d5be884b6e266939a0ad344a2997351ba79bd114407ba",
@@ -25,6 +25,7 @@
       "src/data/air_quality.py": "89975b423632d9d6a0b3db767df8dae8cc4e7e7c496a350d396d7e303e820e33",
       "src/data/air_quality_contract.py": "7f9de8f7fcd6836a3e4fb32ea8c1a35a3c9981bcede6aea2d74770f12539d667",
       "src/data/air_quality_evidence.py": "677713bb8916c4bcd51d407a5b19072f54532f5f46db116914af6b3fcac9f4f7",
+      "src/data/awc_observed.py": "2a4161bf30e551fca018c4ddd9976fae5fd82dff37386b88f06dc4cae811648d",
       "src/data/c3s_monthly.py": "659e8c266f885a3ea413aed0a0ac244c64e09dc964da0829f856df8e169d593c",
       "src/data/coastal_observed.py": "8f495e5df2a689c91f0d277a039af30854fd0ecdf652962d2a4fec47217bafbd",
       "src/data/coral_evidence.py": "723b04dc720538b5dab0ab6290f2f774c877796963a69aa46eb541e00bbf84ee",
@@ -44,6 +45,7 @@
       "src/data/openmeteo_budget.py": "4cc3994e7c7f68f932ab7eeca1bc5bd3db4afc4d2894aab1a574ef99cefb1696",
       "src/data/places.py": "c66be0181393620b640f0354d2c7379e427aeacf4c80689b190489022bf2a870",
       "src/data/registry/country_codes.json": "563fd9c963633bb169c88bac593ec0ccb4694e31ae0613e37d31d1c07e276a9d",
+      "src/data/registry/country_names.json": "b2597ac1145b8d764bd9f783c765bbfbfb2d14af7a92e9f483ada7b8353cdc4f",
       "src/data/registry/place_registry.json": "e9678ac76bfd68d03032a80858a7cb6eed6353508bbcc2cafbdf3186a38cda64",
       "src/data/source_status.py": "434e4023279715976140d3afba8576e237a09137c23cd5e7f9dc52f51c7e4d53",
       "src/data/temperature_evidence.py": "a258f8402418fe275ca32167850c32380452a6f6298faecd80b2f760793737e8",
@@ -51,7 +53,7 @@
       "src/data/water_levels.py": "4868999eaaf6a95800439c3455efa4d67753e7b328161598b11d140d75e93c9e",
       "src/editorial/__init__.py": "ae88e85a4a7a2d49e32df9e41a7e424f8d61492db308742ece8f2fb6cac24896",
       "src/editorial/_util.py": "98efd5327d85052022b73cbee72931790a8457e7f133f0ff2bbd109cee5bfa05",
-      "src/editorial/approval.py": "3b24c6baf873ee6ae75769b1ac6c4ccb06254169509968f4e5289b3aeed568a2",
+      "src/editorial/approval.py": "08262069cee6c8ff4ab02f904e8e1bc662316b0f898455bb989c8830f5323994",
       "src/editorial/candidates.py": "80d50c488f44fd879c137751701a306cfae78eb376c3da33b9b7f3150cf9270d",
       "src/editorial/hot10_contract.py": "68dbb3c9081af24c7869ede677659a530a701a7270606307b122624a706fa534",
       "src/editorial/marine_evidence.py": "d6c9bb8c7ca12133eefa9ddf6283977c7a86da65ef50869d686c352263c1099d",
@@ -103,7 +105,7 @@
       "src/media/viirs_map_graphic_adapter.py": "657db3caef8503a4e0b9c9596bad8d28c029c3711e1d974f153fc1b60d3dd8d3",
       "src/state_schema.py": "96d0934e017ffd5e8493e20dd058e250ca000073a4b210a79598f22e9b57f63a",
       "src/two_bot/__init__.py": "57333e1314a97e2fc83e03db569e03b0199c67ff52fad71770853226b9a68f00",
-      "src/two_bot/evidence_contract.py": "d766d7f85e8f32a58d7d4a76636b5a1525d3db8f885143e24d13b16f64d96890",
+      "src/two_bot/evidence_contract.py": "745afa7d2d069aa7c1c090f7a8cc74584d3aa34253b5bbbff20a5c289ea4e949",
       "src/two_bot/ghcn_claim_contract.py": "749443ad87f4caac9726200dcc8f0e0aa3c662d5b5aee20f9b0f3dff8fa48bcc",
       "src/two_bot/intern/__init__.py": "2e34d6b9975fb831edbad10ed06d66aad2e8569a29cfd4cf17784177b91205e0",
       "src/two_bot/intern/air_quality.py": "f4fc20d4c197d4f604e1fa53e43ef02b658613940863eb5f4d41e0995d6c8ff0",
@@ -114,12 +116,13 @@
       "src/two_bot/types.py": "951044ca2582c8b96872bdd5b8ed8fc60546a58305aa8b06de50075206cc817e"
     },
     "format": "saved-source-svg-preview-v2",
-    "policy_source_sha256": "981d6662cbfee78ec44e8871576625092b4a431bacfc8f108b57f599706380c7",
+    "policy_source_sha256": "ce14c9d200e73344c716f69e1bdbfde40c64c7931f6b28217e8156a7e9609f16",
     "resource_sources": {
       "src/data/registry/country_codes.json": "data/country_codes.json",
+      "src/data/registry/country_names.json": "data/country_names.json",
       "src/data/registry/place_registry.json": "data/place_registry.json"
     },
     "schema_version": 1
   },
-  "runtime_sha256": "61b06438eb080f19c8ad1793d09fca35f6e1e530017f638e5a548823b3b0a020"
+  "runtime_sha256": "fd0798ba26177b8352dedde50bf3966a519548e4edb7c631eaa21e265602d1df"
 }

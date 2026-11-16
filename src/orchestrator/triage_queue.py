@@ -465,6 +465,12 @@ def _automatic_source_hold(candidate: "TriageCandidateBundle") -> str | None:
         if anchor is not None and now - anchor > timedelta(hours=autoship_max_age_hours()):
             return "autoship_source_stale"
     from src.data import coastal_observed
+    from src.data import awc_observed
+    if candidate.legacy_type == awc_observed.KIND or awc_observed.is_family(bundle):
+        if candidate.legacy_type != bundle.signal_kind or candidate.event_id != bundle.event_id:
+            return "awc_source_identity_changed"
+        return awc_observed.current_bundle_hold(bundle, now=_utc_now,
+            minimum_delay=timedelta(minutes=awc_observed.AUTO_DELAY_MINUTES))
     if candidate.legacy_type == coastal_observed.KIND or bundle.signal_kind == coastal_observed.KIND:
         if candidate.legacy_type != bundle.signal_kind or candidate.event_id != bundle.event_id:
             return "coastal_source_identity_changed"
@@ -522,7 +528,7 @@ def _automatic_selection_intent_hold(bot_state: BotState, current_run: dict | No
     if not (os.environ.get("GITHUB_EVENT_NAME") == "workflow_dispatch"
             and os.environ.get("GITHUB_REF") == "refs/heads/main"
             and os.environ.get("THEHEAT_PRODUCTION_PAUSED") != "1"
-            and isinstance(current_run, dict) and current_run.get("mode") in {"alerts", "both"}):
+            and isinstance(current_run, dict) and current_run.get("mode") in {"alerts", "both", "metar_report"}):
         return "automatic_selection_context_invalid"
     try:
         from src.editorial.approval import autoship_on_critic_pass_enabled
@@ -1100,6 +1106,7 @@ def _drain_and_write_triage_queue(
             if source_hold:
                 stage = ("air_quality_source" if source_hold.startswith("air_quality_") else
                          "autoship_source" if source_hold.startswith("autoship_") else
+                         "awc_source" if source_hold.startswith("awc_") else
                          "coastal_source" if source_hold.startswith("coastal_") else "nws_source")
             reason = source_hold or "type_has_no_automatic_arming_route"
             _bump_source_field_in_run(current_run, candidate.source, "triaged_out")

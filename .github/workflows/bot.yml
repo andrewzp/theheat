@@ -28,6 +28,7 @@ on:
           - leaderboard
           - both
           - observed_report
+          - metar_report
           - manual_tweet
           - auto_publish_due
       automatic_only:
@@ -397,8 +398,8 @@ jobs:
         run: |
           if [[ "${THEHEAT_AUTOMATIC_SELECTION_ONLY:-0}" == 1 ]] &&
               [[ "${GITHUB_EVENT_NAME:-}" != workflow_dispatch || "${GITHUB_REF:-}" != refs/heads/main ||
-                 ( "${REQUESTED_MODE:-}" != alerts && "${REQUESTED_MODE:-}" != both ) ]]; then
-            echo "Automatic-only selection requires a main-branch alerts/both dispatch." >&2
+                 ( "${REQUESTED_MODE:-}" != alerts && "${REQUESTED_MODE:-}" != both && "${REQUESTED_MODE:-}" != metar_report ) ]]; then
+            echo "Automatic-only selection requires a main-branch alerts/both/metar_report dispatch." >&2
             exit 2
           fi
           if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
@@ -492,6 +493,8 @@ jobs:
           THEHEAT_WRITER_SAMPLES: ${{ vars.THEHEAT_WRITER_SAMPLES || '1' }}
           THEHEAT_CRITIC_REVISE_ENABLED: ${{ vars.THEHEAT_CRITIC_REVISE_ENABLED || '0' }}
           THEHEAT_OBSERVED_WEATHER_ONLY: ${{ vars.THEHEAT_OBSERVED_WEATHER_ONLY || '0' }}
+          THEHEAT_AWC_OBSERVED_CONTRAST: ${{ vars.THEHEAT_AWC_OBSERVED_CONTRAST || '0' }}
+          THEHEAT_POST_COLLECTION_SENDER: ${{ vars.THEHEAT_POST_COLLECTION_SENDER || '0' }}
           THEHEAT_OBSERVED_REPORT_MONTH: ${{ inputs.report_month }}
           # Source-bound automatic forecasts are separate opt-ins; text only.
           THEHEAT_PM25_FORECAST_AUTO_TEXT: ${{ vars.THEHEAT_PM25_FORECAST_AUTO_TEXT || '0' }}
@@ -694,6 +697,15 @@ jobs:
             python -m src.main auto_publish_due
           fi
           python -m src.main "$mode"
+
+      - name: Service due drafts after scheduled collection
+        if: >-
+          success() && github.event_name == 'schedule' && github.ref == 'refs/heads/main'
+          && github.run_attempt == '1' && vars.THEHEAT_POST_COLLECTION_SENDER == '1'
+          && (steps.mode.outputs.mode == 'alerts' || steps.mode.outputs.mode == 'both')
+          && (steps.mode.outputs.catchup != '1' || steps.catchup-reservation.outputs.confirmed == '1')
+        env: *bot_runtime_env
+        run: python -m scripts.post_collection_sender --mode "${{ steps.mode.outputs.mode }}"
 
       - name: Open issue on scheduled-run failure
         if: failure() && github.event_name == 'schedule'

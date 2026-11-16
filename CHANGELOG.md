@@ -1,3 +1,12 @@
+## 0.9.109.95
+
+- Add a default-off, observed-only airport temperature comparison, with exact
+  source rereads before writing, saving and sending. Preserve one writer sample,
+  all required checks and the existing citation-inclusive copy limit.
+- Add an optional scheduled post-collection sender pass after the approval delay.
+  Keep manual dispatches, reruns, tags, pauses and other workflow roles excluded;
+  preserve the normal sender's approval, freshness and no-resend checks.
+
 ## 0.9.109.94
 
 - Permit authenticated catch-up reservations on the configured public or private
