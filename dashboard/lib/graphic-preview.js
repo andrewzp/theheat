@@ -161,6 +161,8 @@ export function temperaturePreviewSourceStatus(draft) {
 }
 
 const templates = {
+  awc_airport_temperature_pair: { version: "p31-awc-airport-pair-1", source: "NOAA Aviation Weather Center",
+    adapter: "src/media/awc_graphic_adapter.py", context: "awc_airport_pair" },
   nwps_river_forecast: { version: "p31-nwps-river-2", source: "NOAA/NWS National Water Prediction Service",
     adapter: "src/media/nwps_graphic_adapter.py", context: "nwps_forecast_points" },
   temperature_comparator: { version: "p31-preview-3-mobile", source: "NOAA GHCN-Daily · station observations",
@@ -201,6 +203,23 @@ function utcTimestamp(value) {
 function sourceContext(value, template) {
   const context = value.source_context
   if (context?.kind !== template.context) return false
+  if (template.context === "awc_airport_pair") {
+    const label = (value, max) => typeof value === "string" && value.length > 0 && value.length <= max && value.isWellFormed()
+    return exactKeys(context, ["kind", "observed_at", "retrieved_at", "difference_c", "points"])
+      && utcTimestamp(context.observed_at) && utcTimestamp(context.retrieved_at)
+      && typeof context.difference_c === "number" && Number.isFinite(context.difference_c)
+      && context.difference_c >= 60 && context.difference_c <= 155
+      && Array.isArray(context.points) && context.points.length === 2
+      && context.points.every(point => exactKeys(point, ["station_id", "airport", "country_code", "country", "latitude",
+        "longitude", "temperature_c", "valid_time", "metar_type", "maintenance", "raw_report_sha256"])
+        && /^[A-Z][A-Z0-9]{3}$/.test(point.station_id) && label(point.airport, 100) && label(point.country, 120)
+        && /^[A-Z]{2}$/.test(point.country_code) && [point.latitude, point.longitude, point.temperature_c].every(n => typeof n === "number" && Number.isFinite(n))
+        && point.latitude >= -90 && point.latitude <= 90 && point.longitude >= -180 && point.longitude <= 180
+        && point.temperature_c >= -90 && point.temperature_c <= 65 && point.valid_time === context.observed_at
+        && ["METAR", "SPECI"].includes(point.metar_type) && point.maintenance === false && isSHA(point.raw_report_sha256))
+      && context.points[0].station_id !== context.points[1].station_id
+      && context.points[0].country_code !== context.points[1].country_code
+  }
   if (template.context === "nwps_forecast_points")
     return exactKeys(context, ["kind", "gauge", "unit", "issued_at", "first_major_at", "checked_at", "point_count"])
       && typeof context.gauge === "string" && /^[A-Z0-9]{5}$/.test(context.gauge) && context.unit === "ft"
@@ -278,6 +297,11 @@ const pin = (files, path) => files?.[path] ?? EDITORIAL_POLICY_MANIFEST.files[pa
 const HAZARD_FILES = ["src/media/gist_media.py", "src/media/gist_hazard_media.py", "src/media/canonical_png.py", "src/media/fonts/DejaVuSansMono.ttf",
   "src/media/evidence_graphic.py", "src/media/temperature_graphic_adapter.py"]
 const HAZARD_MEDIA = {
+  gist_awc_observed_pair_v1: { template: "awc_airport_temperature_pair", templateVersion: "p31-awc-airport-pair-1",
+    adapterVersion: "p31-awc-observed-pair-1", derivation: "awc_pair_delivery_v1",
+    files: ["src/media/gist_media.py", "src/media/gist_hazard_media.py", "src/media/canonical_png.py", "src/media/fonts/DejaVuSansMono.ttf",
+      "src/media/evidence_graphic.py", "src/media/awc_graphic_adapter.py", "src/data/awc_observed.py", "src/data/places.py",
+      "src/data/registry/country_names.json", "src/two_bot/types.py", "src/editorial/revisions.py"] },
   gist_pm25_forecast_v1: { template: "pm25_forecast_day", templateVersion: "p31-pm25-forecast-1",
     adapterVersion: "p31-cams-pm25-1", derivation: "pm25_delivery_v1",
     files: [...HAZARD_FILES, "src/media/air_quality_graphic_adapter.py", "src/data/air_quality_contract.py", "src/data/air_quality_evidence.py",
@@ -330,6 +354,7 @@ export const MEDIA_HOLD_MESSAGES = Object.freeze({
   media_context_mismatch: "The retained image is not for this draft's source (storm, advisory, warning, place or time).",
   media_source_unqualified: "The saved source cannot support this image.",
   media_source_future: "The retained source time is in the future.",
+  media_source_stale: "The retained observation is older than its allowed source window.",
   media_unsupported: "This source has no reviewed image product.",
   media_renderer_changed: "The image profile changed; preview and review again.",
   media_preview_too_large: "This image is too large to preview and send here.",
@@ -413,6 +438,10 @@ async function validateHazardPNGResponse(value, request, manifest) {
       || d.delivery_scalars !== [...value.delivery_text].length || d.delivery_bytes !== encoder.encode(value.delivery_text).length
       || d.full_bytes !== encoder.encode(value.expanded_description).length) throw new Error("invalid preview")
   const bytes = pngBytes(value.png_base64)
+  if (value.media_kind === "gist_awc_observed_pair_v1" && (
+      descriptor.source?.points_sha256 !== await typedFingerprint(value.source_context.points)
+      || descriptor.source?.observed_at !== value.source_context.observed_at
+      || descriptor.source?.retrieved_at !== value.source_context.retrieved_at)) throw new Error("invalid preview")
   if (bytes.length !== image.byte_count || await digestBytes(bytes) !== value.png_sha256
       || await digest(value.delivery_text) !== d.delivery_sha256 || await digest(value.expanded_description) !== d.full_sha256
       || await typedFingerprint(descriptor) !== value.media_descriptor_sha256) throw new Error("invalid preview")

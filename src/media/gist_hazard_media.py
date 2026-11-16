@@ -31,6 +31,7 @@ from src.editorial.revisions import fingerprint
 from src.media.evidence_graphic import HEIGHT, WIDTH, build_alt_text, chart_title
 from src.media import air_quality_graphic_adapter as pm25_adapter, canonical_png, fire_map_graphic_adapter as locator
 from src.media import hot10_graphic_adapter as hot10_adapter, viirs_map_graphic_adapter as viirs_adapter
+from src.media import awc_graphic_adapter as awc_adapter
 from src.media.temperature_graphic_adapter import _StoredBundle
 
 # Schema 2 / renderer 2: canonical PNG bytes (canonical_png.py) replace the host
@@ -41,6 +42,7 @@ PM25 = "gist_pm25_forecast_v1"
 MODIS = "gist_modis_locator_v1"
 VIIRS = "gist_viirs_locator_v1"
 HOT10 = "gist_hot10_bulletin_v1"
+AWC = "gist_awc_observed_pair_v1"
 MAX_DESCRIPTOR_BYTES = 16_384
 MAX_PNG_BYTES = 750_000
 # Existing conservative house limit, both Unicode scalars and UTF-8 bytes. This
@@ -54,6 +56,15 @@ SHA = re.compile(r"[a-f0-9]{64}\Z")
 # Kind -> its one template, adapter versions, delivery derivation and every file
 # whose bytes affect rendering, descriptions or source selection.
 FAMILIES = {
+    AWC: dict(
+        template=awc_adapter.TEMPLATE, template_version=awc_adapter.TEMPLATE_VERSION,
+        adapter_version=awc_adapter.ADAPTER_VERSION, derivation="awc_pair_delivery_v1",
+        signal_kind="observed_metar_contrast", products=("awc-observed-airport-pair-v1",),
+        files=("src/media/gist_media.py", "src/media/gist_hazard_media.py", "src/media/canonical_png.py", FONT,
+               "src/media/evidence_graphic.py", "src/media/awc_graphic_adapter.py", "src/data/awc_observed.py",
+               "src/data/places.py", "src/data/registry/country_names.json", "src/two_bot/types.py",
+               "src/editorial/revisions.py"),
+    ),
     PM25: dict(
         template=pm25_adapter.TEMPLATE, template_version=pm25_adapter.TEMPLATE_VERSION,
         adapter_version=pm25_adapter.ADAPTER_VERSION, derivation="pm25_delivery_v1",
@@ -99,11 +110,13 @@ FAMILIES = {
     ),
 }
 # Bundle signals this module owns; any other signal keeps the temperature path.
-SIGNALS = frozenset({"air_quality_hazard", "fire", "hot10"})
+SIGNALS = frozenset({"air_quality_hazard", "fire", "hot10", "observed_metar_contrast"})
 KINDS = frozenset(FAMILIES)
 _TOP_KEYS = frozenset({"schema_version", "kind", "template", "template_version", "adapter_version",
                        "synthetic", "source", "renderer", "image", "description"})
 _SOURCE_KEYS = {
+    AWC: frozenset({"bundle_sha256", "evidence_sha256", "source_product", "source_sha256",
+                    "points_sha256", "observed_at", "retrieved_at"}),
     PM25: frozenset({"bundle_sha256", "evidence_sha256", "source_product", "window_sha256",
                      "selected_record_sha256", "valid_date", "timezone", "valid_start", "valid_end",
                      "requested_at", "retrieved_at"}),
@@ -138,6 +151,8 @@ def _digest(raw):
 def _resource(path):
     # Resolve under the real package (src.media/src.data): in the sealed runtime ZIP,
     # resource folders such as fonts/ and maps/ are not importable packages.
+    if path == "src/data/registry/country_names.json":
+        return awc_adapter.country_registry_bytes()
     parts = path.split("/")
     return files(".".join(parts[:2])).joinpath("/".join(parts[2:])).read_bytes()
 
@@ -186,6 +201,8 @@ def family_for(bundle):
 
 
 def _spec(kind, bundle, synthetic):
+    if kind == AWC:
+        return awc_adapter.awc_graphic_spec(bundle, expected_bundle_sha256=fingerprint(bundle), synthetic=synthetic)
     if kind == PM25:
         window = bundle["raw_signal_dump"]["forecast_window"]
         return pm25_adapter.pm25_graphic_spec(
@@ -205,6 +222,12 @@ def _spec(kind, bundle, synthetic):
 
 
 def _source_fields(kind, bundle, evidence_sha256):
+    if kind == AWC:
+        source = bundle["raw_signal_dump"]["evidence"]
+        return {"bundle_sha256": fingerprint(bundle), "evidence_sha256": evidence_sha256,
+                "source_product": "awc-observed-airport-pair-v1", "source_sha256": fingerprint(source),
+                "points_sha256": fingerprint(source["points"]), "observed_at": source["points"][0]["valid_time"],
+                "retrieved_at": source["retrieved_at"]}
     if kind == PM25:
         window = bundle["raw_signal_dump"]["forecast_window"]
         return {"bundle_sha256": fingerprint(bundle), "evidence_sha256": evidence_sha256,
@@ -333,7 +356,8 @@ def _hot10_delivery(evidence):
 def delivery_text(kind, evidence):
     """Versioned deterministic source projection; refuses rather than shortens."""
     _require(kind in FAMILIES, "media_unsupported", "unsupported attachment")
-    text = (_pm25_delivery(evidence) if kind == PM25 else _hot10_delivery(evidence) if kind == HOT10
+    text = (awc_adapter.delivery_text(evidence) if kind == AWC else
+            _pm25_delivery(evidence) if kind == PM25 else _hot10_delivery(evidence) if kind == HOT10
             else _map_delivery(evidence))
     try:
         raw = text.encode("utf-8", errors="strict")
@@ -432,6 +456,45 @@ class _Canvas:
 INK = "#f4f4f5"
 MUTED = "#b6bdcb"
 WARM = "#ffb38a"
+
+
+def _render_awc(evidence):
+    """Two distinct station reports on one linear axis, never a global ranking."""
+    canvas = _Canvas("#0b1220")
+    canvas.text((64, 72), "THEHEAT", size=42, fill=MUTED)
+    if evidence["synthetic"]:
+        canvas.text((1136, 72), "SYNTHETIC DATA", size=42, fill=WARM, anchor="rs")
+    canvas.text((64, 156), awc_adapter.TITLE, size=56, fill=INK)
+    stamp = evidence["observed_at"][:16].replace("T", " ")
+    canvas.text((64, 222), stamp + " UTC · observed", size=42, fill=MUTED)
+    canvas.text((64, 370), awc_adapter.number(evidence["difference_c"]) + "°C gap", size=112, fill=INK)
+    colours = ("#63d9d0", "#ffb38a")
+    for index, (point, colour) in enumerate(zip(evidence["points"], colours)):
+        start = 450 + 350 * index
+        canvas.text((64, start), f"Airport {'AB'[index]} · {point['station_id']}", size=42, fill=colour)
+        canvas.wrapped(64, start + 60, point["airport"], size=44, fill=INK, lines=3, pitch=50, maxwidth=620)
+        canvas.wrapped(64, start + 222, point["country"], size=42, fill=MUTED, lines=2, pitch=48, maxwidth=620)
+        canvas.text((1136, start + 144), awc_adapter.number(point["temperature_c"]) + "°C",
+                    size=96, fill=colour, anchor="rs", maxwidth=416)
+    canvas.text((64, 1140), "Reported air temperature (°C)", size=42, fill=MUTED)
+    axis = evidence["axis"]
+    left, right, y = 96, 1104, 1206
+    def x_of(value):
+        return left + (value - axis["min_c"]) / (axis["max_c"] - axis["min_c"]) * (right - left)
+    canvas.draw.line((left, y, right, y), fill=MUTED, width=3)
+    for tick in axis["ticks_c"]:
+        x = x_of(tick)
+        canvas.draw.line((x, y - 6, x, y + 10), fill=MUTED, width=3)
+        canvas.text((x, 1270), awc_adapter.number(tick), size=42, fill=MUTED, anchor="ms")
+    for index, (point, colour) in enumerate(zip(evidence["points"], colours)):
+        x = x_of(point["temperature_c"])
+        canvas.draw.ellipse((x - 14, y - 14, x + 14, y + 14), fill=colour)
+        canvas.text((x, 1186), "AB"[index], size=42, fill=colour, anchor="ms")
+    canvas.text((64, 1328), awc_adapter.SOURCE, size=42, fill=INK)
+    canvas.text((64, 1380), "Retrieved " + evidence["retrieved_at"][:16].replace("T", " ") + " UTC",
+                size=42, fill=MUTED)
+    canvas.text((64, 1432), "Two airports; not a record/ranking.", size=42, fill=MUTED)
+    return canvas.png()
 
 
 def _offset_label(seconds):
@@ -732,8 +795,10 @@ def prepare_media(bundle, *, synthetic=False):
         raise MediaWithheld("media_source_unqualified", str(exc)[:200] or "unqualified source") from exc
     template, evidence = spec["template"], spec["evidence"]
     _require(template == FAMILIES[kind]["template"], "media_unsupported", "unexpected template")
-    png = _render_pm25(evidence) if kind == PM25 else _render_hot10(evidence) if kind == HOT10 else _render_map(evidence)
-    full = hot10_adapter.full_description(evidence) if kind == HOT10 else build_alt_text(template, evidence)
+    png = (_render_awc(evidence) if kind == AWC else _render_pm25(evidence) if kind == PM25
+           else _render_hot10(evidence) if kind == HOT10 else _render_map(evidence))
+    full = (awc_adapter.full_description(evidence) if kind == AWC else
+            hot10_adapter.full_description(evidence) if kind == HOT10 else build_alt_text(template, evidence))
     full_raw = _text_identity(full, "media_description_unicode")
     _require(0 < len(full_raw) <= MAX_FULL_DESCRIPTION_BYTES, "media_description_too_long", "full description bound")
     delivery = delivery_text(kind, evidence)
@@ -753,7 +818,7 @@ def prepare_media(bundle, *, synthetic=False):
     }
     if not synthetic:
         validate_descriptor(descriptor, bundle)
-    title = hot10_adapter.TITLE if kind == HOT10 else chart_title(template, evidence)
+    title = awc_adapter.TITLE if kind == AWC else hot10_adapter.TITLE if kind == HOT10 else chart_title(template, evidence)
     return {"kind": kind, "descriptor": descriptor, "png": png, "title": title,
             "delivery_text": delivery, "full_text": full, "scope": evidence["scope"]}
 
@@ -843,6 +908,21 @@ def currentness(kind, bundle, now=None):
     Not a provider-certified expiry. A new render or review never refreshes source time.
     """
     current = _aware_now(now)
+    if kind == AWC:
+        from src.data import awc_observed
+        try:
+            raw = bundle["raw_signal_dump"]["evidence"]
+            if any(awc_observed._time(value) > current for value in
+                   (raw["retrieved_at"], raw["points"][0]["valid_time"])):
+                return ("media_source_future", "the retained airport capture or observation is in the future")
+            awc_observed.validate_bundle(bundle, now=current)
+        except awc_observed.ObservedHeld as exc:
+            if str(exc) == "awc_observation_expired":
+                return ("media_source_stale", "the airport observations are older than two hours")
+            return ("media_source_unqualified", "the retained airport observations are not qualified")
+        except (ValueError, KeyError, TypeError, AttributeError, OverflowError):
+            return ("media_source_unqualified", "the retained airport observations are not qualified")
+        return None
     if kind == PM25:
         window = bundle["raw_signal_dump"]["forecast_window"]
         try:

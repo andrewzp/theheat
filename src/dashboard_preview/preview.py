@@ -81,7 +81,7 @@ def _retained_bundle_json(bundle, *, code="graphic_unavailable"):
 
 
 def qualified_spec(bundle, *, synthetic=False, include_viirs=False, include_temperature=False,
-                   nwps_source_capture=None):
+                   include_awc=False, nwps_source_capture=None):
     """Shared Python qualification; callers own authentication/currentness.
 
     VIIRS and temperature comparisons are separately opt-in. The saved-draft
@@ -91,6 +91,11 @@ def qualified_spec(bundle, *, synthetic=False, include_viirs=False, include_temp
     product; the selected adapter then validates every row, so a mixed set holds.
     """
     _retained_bundle_json(bundle)
+    if include_awc and bundle["signal_kind"] == "observed_metar_contrast":
+        from src.media import awc_graphic_adapter
+        spec = awc_graphic_adapter.awc_graphic_spec(bundle, expected_bundle_sha256=fingerprint(bundle),
+                                                   synthetic=synthetic)
+        return spec, awc_graphic_adapter.SOURCE, awc_graphic_adapter.source_context(spec["evidence"])
     if bundle["signal_kind"] == "river_flood" and "nwps_index_hint" in bundle.get("raw_signal_dump", {}):
         from src.media.nwps_graphic_adapter import nwps_graphic_spec, source_context
         if nwps_source_capture is None:
@@ -283,7 +288,7 @@ def _delivered_preview(request, *, policy_sha, runtime_sha, read_state, budget, 
         raise PreviewError("draft_unavailable")
     bundle = deepcopy(snapshot["review_context"]["two_bot"]["bundle"])
     _retained_bundle_json(bundle)
-    spec, source, context = qualified_spec(bundle, include_viirs=True, include_temperature=True)
+    spec, source, context = qualified_spec(bundle, include_viirs=True, include_temperature=True, include_awc=True)
     budget.remaining()
     prepared = gist_media.prepare_media(bundle)
     if prepared["descriptor"] != attachment:
@@ -331,6 +336,8 @@ def build_preview(request, *, policy_sha, runtime_sha, read_state, budget, synth
         draft = _selected(read_state(), request)
         original_status = draft["status"]
         bundle = deepcopy(draft["review_context"]["two_bot"]["bundle"])
+        if bundle.get("signal_kind") == "observed_metar_contrast" and request.get("format") != "png":
+            raise PreviewError("graphic_unavailable")
         # Bound the full retained story before canonical hashing and validation.
         retained_bundle = _retained_bundle_json(bundle)
         from src.media import gist_media, gist_nwps_media
@@ -354,7 +361,8 @@ def build_preview(request, *, policy_sha, runtime_sha, read_state, budget, synth
             if "retained_input_sha256" in request:
                 raise PreviewError("bad_request")
             spec, source, context = qualified_spec(bundle, synthetic=synthetic, include_viirs=True,
-                                                  include_temperature=True, nwps_source_capture=nwps_source_capture)
+                                                  include_temperature=True, include_awc=True,
+                                                  nwps_source_capture=nwps_source_capture)
         budget.remaining()
         if river_attachment:
             prepared = gist_nwps_media.prepare(bundle, draft["review_context"], store)

@@ -1,11 +1,13 @@
 // Invented Gist transport and an explicit invented clock around the actual draft
 // handlers and the genuine Python PNG renderer. The clock is a labelled fixture
 // boundary: the route's Date.now and the Python preview both read it.
-import { spawnSync } from "node:child_process"
+import { spawnFixtureWithFileInput } from "../../helpers/fixture-file-input.js"
 import manifest from "../../../lib/graphic-runtime-manifest.json" with { type: "json" }
 import { runtimeRun } from "../../helpers/review-policy.js"
 const key = Symbol.for("theheat.invented.gist.hazard.journey")
 const python = process.env.THEHEAT_TEST_PYTHON || "python3"
+const families = (process.env.THEHEAT_GIST_HAZARD_JOURNEY_FAMILIES || "pm25,modis,viirs,hot10").split(",")
+if (!["awc", "pm25,modis,viirs,hot10"].includes(families.join(","))) throw new Error("Unknown invented journey family scope")
 const SENTINEL = "2000-01-01T00:00:00.000Z"
 const trap = "import json,sys,socket\nsocket.socket.connect=lambda *a,**k: (_ for _ in ()).throw(AssertionError('external connection trapped'))\n"
 const fixtureCode = trap + `
@@ -14,17 +16,20 @@ from tests.gist_hazard_helpers import (CLOCKS, HOT10_MIXED, HOT10_MIXED_CAPTURE,
     hot10_bundle, saved_state)
 value=json.load(sys.stdin)
 drafts=[]
-for family in ('pm25','modis','viirs','hot10'):
-    drafts.append(saved_state(family)['drafts'][0])
-# Long names, both signs and two local days; and an earlier Hot10 post delivered through the real sender.
-mixed=saved_state('hot10', bundle=hot10_bundle(HOT10_MIXED, now=HOT10_MIXED_CAPTURE, sampled=640))['drafts'][0]
-mixed.update(id='invented-hot10-mixed', text='Invented mixed-day Hot 10 forecast: departures run both above and below normal.')
-from src.editorial import revisions
-mixed.pop('review_binding', None); revisions.initialize_revision(mixed); mixed.update(content_revision=1, decision_revision=0)
-drafts.append(mixed)
+for family in value['families']:
+    items=saved_state(family)['drafts']
+    drafts.extend(items if family == 'awc' else items[:1])
+if 'hot10' in value['families']:
+    # Existing default Hot10 scope is unchanged; AWC never executes these old cases.
+    mixed=saved_state('hot10', bundle=hot10_bundle(HOT10_MIXED, now=HOT10_MIXED_CAPTURE, sampled=640))['drafts'][0]
+    mixed.update(id='invented-hot10-mixed', text='Invented mixed-day Hot 10 forecast: departures run both above and below normal.')
+    from src.editorial import revisions
+    mixed.pop('review_binding', None); revisions.initialize_revision(mixed); mixed.update(content_revision=1, decision_revision=0)
+    drafts.append(mixed)
 state={'drafts':drafts,'publish_ledger':{},'errors':[],'unrelated':{'preserve':True},'run_history':[value['runtime']]}
-with contextlib.redirect_stdout(sys.stderr):
-    delivered_hot10_draft(state)
+if 'hot10' in value['families']:
+    with contextlib.redirect_stdout(sys.stderr):
+        delivered_hot10_draft(state)
 clocks={k:list(v) for k,v in CLOCKS.items()}
 clocks['hot10-mixed']=[HOT10_MIXED_CLOCK,'2026-10-30T05:00:00Z']
 print(json.dumps(dict(raw=json.dumps(state,ensure_ascii=False),clocks=clocks)))
@@ -40,7 +45,7 @@ sys.stdout.buffer.write(body)
 `
 function pythonOutput(code, input) {
   const started = performance.now()
-  const result = spawnSync(python, ["-c", code], { cwd: process.env.THEHEAT_GIST_HAZARD_JOURNEY_ROOT,
+  const result = spawnFixtureWithFileInput(python, ["-c", code], { cwd: process.env.THEHEAT_GIST_HAZARD_JOURNEY_ROOT,
     input: JSON.stringify(input), encoding: "utf8", timeout: 60000,
     env: { PATH: process.env.PATH, HOME: process.env.HOME, TMPDIR: process.env.TMPDIR, LC_ALL: "C", LANG: "C", NETRC: "/dev/null",
       PYTHON_DOTENV_DISABLED: "1", PYTHONDONTWRITEBYTECODE: "1", NO_PROXY: "*", no_proxy: "*" } })
@@ -60,8 +65,8 @@ export function setClock(iso) {
 }
 export function fixtureStore() {
   if (!globalThis[key]) {
-    const value = JSON.parse(pythonOutput(fixtureCode, { runtime: runtimeRun(SENTINEL) }))
-    const now = Date.parse(value.clocks.pm25[0]), stamp = new Date(now - 60000).toISOString()
+    const value = JSON.parse(pythonOutput(fixtureCode, { runtime: runtimeRun(SENTINEL), families }))
+    const now = Date.parse(value.clocks[families[0]][0]), stamp = new Date(now - 60000).toISOString()
     const raw = value.raw.split(SENTINEL).join(stamp)
     globalThis[key] = { raw, seed: raw, stamp, seedStamp: stamp, now, clocks: value.clocks, writes: 0, refused: [],
       dispatches: [], previews: 0, previewRefused: false }

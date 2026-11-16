@@ -25,6 +25,7 @@ POLICY_FILES = (
     "src/media/published_radar.py",
     "src/media/gist_temperature_media.py", "dashboard/lib/gist-temperature-media.js",
     "src/media/gist_media.py", "src/media/gist_hazard_media.py", "src/media/canonical_png.py",
+    "src/media/awc_graphic_adapter.py",
     "src/media/gist_crw_media.py", "src/media/gist_published_media.py", "src/media/gist_assets.py",
     "src/media/gist_assets_postgres.py", "src/media/gist_media_export.py",
     "dashboard/lib/gist-media.js",

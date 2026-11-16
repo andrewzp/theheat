@@ -48,11 +48,14 @@ def with_bundle(draft, bundle):
 # Hot10: captured 09:00Z; Bangkok (UTC+7), the earliest-ending ranked local day, ends 17:00Z.
 HOT10_CAPTURE = datetime(2026, 10, 29, 9, 0, tzinfo=UTC)
 CLOCKS = {"pm25": ("2026-06-08T13:00:00Z", "2026-06-08T18:15:00Z"),
+          "awc": ("2026-11-15T12:10:00Z", "2026-11-15T15:10:00Z"),
           "modis": ("2032-03-01T12:00:00Z", "2032-03-03T00:00:00Z"),
           "viirs": ("2032-03-01T12:00:00Z", "2032-03-03T00:00:00Z"),
           "hot10": ("2026-10-29T10:00:00Z", "2026-10-29T17:30:00Z")}
-TYPES = {"pm25": "air_quality_hazard", "modis": "fire", "viirs": "fire", "hot10": "hot10"}
+TYPES = {"pm25": "air_quality_hazard", "modis": "fire", "viirs": "fire", "hot10": "hot10",
+         "awc": "observed_metar_contrast"}
 TEXTS = {"pm25": PM25_TEXT, "modis": "Invented satellite heat detections near a saved source minute.",
+         "awc": "At 12:00 UTC Nov 15, North Test airport, Norway, recorded −20°C; South Test airport, Chile, 45°C—a 65°C gap.",
          "viirs": "Invented NOAA-20 VIIRS heat detections near a saved source minute.",
          "hot10": "Invented Hot 10 forecast: the sampled leader's daily high runs 9.2°C above its point normal."}
 VIIRS_CATEGORIES = ("high", "nominal", "low", "high")
@@ -95,6 +98,13 @@ def hot10_rows(bundle):
 
 
 def family_bundle(family):
+    if family == "awc":
+        from pytest import MonkeyPatch
+        from src.data import awc_observed
+        from tests.test_awc_observed import NOW, install
+        with MonkeyPatch.context() as monkey:
+            install(monkey)
+            return awc_observed.build_bundle(awc_observed.nominate(now=NOW), now=NOW).to_dict()
     if family == "hot10":
         return hot10_bundle()
     if family == "pm25":
@@ -124,8 +134,11 @@ def saved_state(family, *, runtime=None, bundle=None):
     drafts = []
     for suffix in ("", "-secondary"):
         draft = dict(id=f"invented-{family}{suffix}", event_id=bundle["event_id"], type=TYPES[family],
-                     text=TEXTS[family], status="pending", created_at=CLOCKS[family][0],
+                     text=TEXTS[family] + (" " + bundle["raw_signal_dump"]["evidence"]["source_url"] if family == "awc" else ""),
+                     status="pending", created_at=CLOCKS[family][0],
                      review_context=dict(two_bot=dict(bundle=deepcopy(bundle))))
+        if family == "awc" and suffix:
+            draft["text"] = "Second invented draft: " + draft["text"]
         if family == "hot10":
             draft["hot10_rows"] = hot10_rows(bundle)
         revisions.initialize_revision(draft)

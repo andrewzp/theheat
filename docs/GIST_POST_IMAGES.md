@@ -2,20 +2,23 @@
 
 A saved Gist draft can carry one explicitly selected image into the existing manual
 X post. Graphics help tell a story; no tweet needs one, and a text-only story with
-its own evidence never waits for an image. Seven kinds are supported, each with its
-own versioned recipe. Four native families are rebuilt from the saved source alone:
+its own evidence never waits for an image. Each supported family has its own
+versioned recipe. Native families are rebuilt from the saved source alone:
 
 | Kind | Draft source | Image |
 |---|---|---|
+| `gist_awc_observed_pair_v1` | two qualified, simultaneous retained AWC airport observations | two signed Celsius readings on a shared linear axis including zero; colour identifies airports |
 | `gist_temperature_comparator_v1` | full retained GHCN station comparator | observed station reading vs its archive comparator |
 | `gist_pm25_forecast_v1` | unextended single-source `air_quality_hazard` model forecast | 24 hourly CAMS-via-Open-Meteo samples and their mean |
 | `gist_modis_locator_v1` | 1–4 receipt-bound `MODIS_NRT` detections | locator map of pixel centres coloured by FRP |
 | `gist_viirs_locator_v1` | 1–4 receipt-bound `VIIRS_NOAA20_NRT` or `VIIRS_NOAA21_NRT` detections | the same locator with VIIRS categorical confidence |
+| `gist_hot10_bulletin_v1` | a qualified retained Hot 10 bulletin with point monthly normals | ten departures with explicit forecast and comparator scope |
 
-Three more need one exact retained input from the durable media store (below):
+Store-backed families need one exact retained input from the durable media store (below):
 
 | Kind | Draft source | Image |
 |---|---|---|
+| `gist_nwps_forecast_v1` | the exact retained NOAA river-stage forecast packet | the full, unchanged source forecast series; forecast scope remains explicit |
 | `gist_crw_anomaly_v1` | qualified primary NOAA CRW regional SST anomaly + its retained CSV/metadata packet | sampled 1° cells on a blue-white-red scale, cos-latitude mean |
 | `gist_published_radar_v1` | catastrophic NWS Tornado Warning with its full retained alert + a retained KTLX Local Standard frame | the unchanged NWS reflectivity image (pixel-equivalent PNG) |
 | `gist_published_chart_v1` | an NHC advisory draft + a retained NHC track-forecast cone for the same storm and advisory | the unchanged NHC cone graphic (pixel-equivalent PNG) |
@@ -27,6 +30,15 @@ fallback or multisignal bundle, any non-KTLX radar, any other published product,
 any mixed product, platform or minute is refused rather than altered.
 
 ## What each image claims, and what it does not
+
+- **AWC airport comparison**: exactly two reported airport air temperatures at
+  one UTC minute/date, with both airports/countries, Celsius values and their
+  difference. Colour and A/B labels identify the airports, not hazard categories.
+  The common linear Celsius axis includes zero. This is not a national value,
+  record, global ranking, daily maximum/minimum, forecast or impact claim.
+  Reconstruction preserves the original capture time and fetches nothing;
+  approval and sending independently enforce the two-hour observation ceiling
+  and the existing source rereads. A new preview never refreshes source time.
 
 - **CRW**: an L4 satellite analysis against the product's own daily climatology
   (1985–2012, recentred to 1985–1990 + 1993), not a 1991–2020 average or a
@@ -116,7 +128,7 @@ replaced by another card.
 ## Descriptions
 
 The full adapter description stays available as expanded source details. The
-description sent to X is a separate versioned projection (`pm25_delivery_v1`,
+description sent to X is a separate versioned projection (`awc_pair_delivery_v1`, `pm25_delivery_v1`,
 `modis_delivery_v1`, `viirs_delivery_v1`). It must fit both 1000 Unicode scalars
 and 1000 UTF-8 bytes, the existing conservative house limit, not a claim about
 X's current byte policy. Text is never truncated, rounded or rewritten by a model.
@@ -263,3 +275,17 @@ Recency rules for the store-backed kinds: CRW uses the unchanged 0–5 day produ
 rule; radar the 15-minute editorial ceiling inside its warning interval; the cone
 a 6-hour editorial ceiling from its advisory issue time. Each is rechecked at
 approval and immediately before the first upload.
+
+## Observed airport comparison
+
+Open an `observed_metar_contrast` draft and choose **Preview graphic**. The
+preview shows both retained observations, source capture and the exact description
+sent to X. Use **View full size** on a phone. Long names that cannot fit at the
+readable minimum, unsupported scripts/glyphs, missing or changed proof and changed
+renderers hold the image; the software never clips labels or substitutes a family.
+Attach and explicitly review the exact text, graphic and description together.
+Text edits, image removal/replacement and source or renderer changes invalidate
+obsolete decisions. Expired observations remain inspectable but cannot be approved
+or sent. The existing manual sender rebuilds the reviewed bytes once; an uncertain
+outcome is held without a text-only fallback or resend. Automatic posts remain
+text-only. This feature does not enable a source, relax checks or authorize a post.

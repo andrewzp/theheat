@@ -1,3 +1,8 @@
+## 0.9.109.101
+
+- Add a native graphic for two retained, simultaneous airport observations: exact signed Celsius readings, a common zero-inclusive axis, source time and bounded X description. Preserve independent source checks, explicit joint review and manual image sending.
+- Preserve keyboard focus moved by the user after closing a full-size image, rather than allowing its delayed close event to steal focus back.
+
 ## 0.9.109.100
 
 - Keep location-list loads, sender jobs and generation counters from refreshing the dashboard weather-input milestone. Preserve genuine source observations and their recorded age and status.

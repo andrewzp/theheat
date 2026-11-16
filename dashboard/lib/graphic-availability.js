@@ -6,6 +6,8 @@
 export const MEDIA_STORE_ENV = "THEHEAT_MEDIA_STORE", MEDIA_STORE_DSN_ENV = "THEHEAT_MEDIA_STORE_DSN"
 
 export const GRAPHIC_FAMILIES = Object.freeze([
+  { family: "awc", kind: "gist_awc_observed_pair_v1", label: "Observed airport temperature pair", lane: "native",
+    needs: ["the two exact same-time AWC airport observations saved with the draft"] },
   { family: "temperature", kind: "gist_temperature_comparator_v1", label: "Station temperature comparator", lane: "native",
     needs: ["the qualified observed GHCN station comparator saved with the draft"] },
   { family: "pm25", kind: "gist_pm25_forecast_v1", label: "PM2.5 model forecast", lane: "native",
