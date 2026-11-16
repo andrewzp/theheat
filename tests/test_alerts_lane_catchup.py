@@ -68,6 +68,16 @@ def test_no_collection_history_keeps_sender_role(tmp_path):
     assert _run({"run_history": []}, tmp_path) == 2
 
 
+@pytest.mark.parametrize("age,expected", [(timedelta(hours=1), 1), (timedelta(hours=9), 0)])
+def test_completed_month_report_is_known_but_does_not_refresh_alerts_clock(tmp_path, age, expected):
+    history = _state(("alerts", NOW-age, "success"), ("observed_report", NOW, "success"))
+    assert _run(history, tmp_path) == expected
+
+
+def test_completed_month_report_alone_does_not_prove_alerts_history(tmp_path):
+    assert _run(_state(("observed_report", NOW, "success")), tmp_path) == 2
+
+
 @pytest.mark.parametrize("bad", ["not json", "[]", json.dumps({"drafts": []}),
                                  json.dumps({"run_history": "oops"})])
 def test_unreadable_state_never_escalates(tmp_path, bad):

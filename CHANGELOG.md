@@ -1,3 +1,9 @@
+## 0.9.109.94
+
+- Permit authenticated catch-up reservations on the configured public or private
+  Gist while retaining identity, complete receipt, writer, window and budget
+  checks. Recognize completed-month report runs without refreshing the alerts clock.
+
 ## 0.9.109.93
 
 - Hold automatic candidates whose source dates already exceed the sender's
