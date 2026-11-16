@@ -169,6 +169,11 @@ def test_copy_cannot_change_amount_scope_source_date_or_window(bundle, enabled, 
     assert report.claim_failures(TEXT.replace(old, new), bundle, now=NOW) == [reason]
 
 
+@pytest.mark.parametrize("period", ["24-hour period", "24‑hour period", "a day", "one day"])
+def test_equivalent_complete_day_wording_preserves_the_same_window(bundle, enabled, period):
+    assert report.claim_failures(TEXT.replace("24 hours", period), bundle, now=NOW) == []
+
+
 def test_record_impact_and_bad_conversion_claims_refuse(bundle, enabled):
     assert report.claim_failures(TEXT.replace(".\n", ", a record.\n"), bundle, now=NOW) == ["rainfall_unsupported_claim"]
     assert report.claim_failures(TEXT.replace(".\n", ", flooding homes.\n"), bundle, now=NOW) == ["rainfall_unsupported_claim"]

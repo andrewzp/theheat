@@ -133,7 +133,8 @@ def test_bot_drains_only_in_route_mode_and_keeps_every_existing_default():
                                                        "THEHEAT_NWPS_MAJOR_FORECASTS", "THEHEAT_NWPS_PACKET_RETENTION",
                                                        "THEHEAT_AUTOMATIC_SELECTION_ONLY", "THEHEAT_OBSERVED_WEATHER_ONLY",
                                                        "THEHEAT_OBSERVED_REPORT_MONTH", "THEHEAT_AWC_OBSERVED_CONTRAST",
-                                                       "THEHEAT_POST_COLLECTION_SENDER"}
+                                                       "THEHEAT_POST_COLLECTION_SENDER", "THEHEAT_GPM_OBSERVED_REPORT"}
+    assert step["env"]["THEHEAT_GPM_OBSERVED_REPORT"] == "${{ vars.THEHEAT_GPM_OBSERVED_REPORT || '0' }}"
     for flag in ("THEHEAT_AWC_OBSERVED_CONTRAST", "THEHEAT_POST_COLLECTION_SENDER"):
         assert step["env"][flag] == "${{ vars." + flag + " || '0' }}"
     assert step["env"]["THEHEAT_SENDER_TEXT_SOURCE"] == "${{ github.event.inputs.text_source }}"

@@ -1,6 +1,6 @@
 {
   "identity": {
-    "archive_sha256": "6c9d3f03e75688bee4e396424f63c4cf15e1f7c799508c51cf2e1f6ff36da26f",
+    "archive_sha256": "efee0edb995d1b4aef3356abc73fcf1cea4d96b459705fb2e4a3248489db6b98",
     "deployment_files": {
       "api/graphic_preview.py": "f7521adcbd618f4b65b2a0de30ea62aaff4cdd36f2254e9af38bf68646d361ad",
       "api/graphic_reader_status.py": "5e9685d699625a4eea9d5be884b6e266939a0ad344a2997351ba79bd114407ba",
@@ -44,7 +44,7 @@
       "src/data/open_meteo.py": "914f9670aec2ce129ce26f45577f9cbf65c7ef3beb14f971319eac1304e745ce",
       "src/data/openmeteo_budget.py": "4cc3994e7c7f68f932ab7eeca1bc5bd3db4afc4d2894aab1a574ef99cefb1696",
       "src/data/places.py": "c66be0181393620b640f0354d2c7379e427aeacf4c80689b190489022bf2a870",
-      "src/data/rainfall_observed.py": "d27b66c7d533482b336c8ec37748fcd6b3cfa5a9f57d9812a4c9a93ef0cd8a7f",
+      "src/data/rainfall_observed.py": "5da1b05a4cafec5fcaa6fdea2f3a8706fa56566a8c90ae9306b8986545b9ec7d",
       "src/data/rainfall_supply.py": "ca68b5078f504437894fc19bffcdcf07e6b7b066f2649f640ea90f24458cde46",
       "src/data/registry/cities.csv": "f44979e72a1023ba77555264a961ef64db53bff686655acb8cce28b88542f5f8",
       "src/data/registry/country_codes.json": "563fd9c963633bb169c88bac593ec0ccb4694e31ae0613e37d31d1c07e276a9d",
@@ -119,7 +119,7 @@
       "src/two_bot/types.py": "951044ca2582c8b96872bdd5b8ed8fc60546a58305aa8b06de50075206cc817e"
     },
     "format": "saved-source-svg-preview-v2",
-    "policy_source_sha256": "ff8e50a853661bc37eaf10368b67325441dcaa4d6b3fe99a2f213f96de3b816c",
+    "policy_source_sha256": "edaa3a94325f013d6b17f0658428fa09bd712fe81713abe9a924a8ead7a83cef",
     "resource_sources": {
       "src/data/registry/cities.csv": "data/cities.csv",
       "src/data/registry/country_codes.json": "data/country_codes.json",
@@ -128,5 +128,5 @@
     },
     "schema_version": 1
   },
-  "runtime_sha256": "bf6f916fb62f5e662ad9e1b14269687f69d3e7179afdba69f9fe4491f40694cf"
+  "runtime_sha256": "a1d8292c3a94905bd6f2a4360e9a702b8ee9a3250f08eb69bef43b87d663aefb"
 }

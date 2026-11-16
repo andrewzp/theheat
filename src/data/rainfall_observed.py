@@ -323,7 +323,7 @@ def claim_failures(text, bundle, *, now=None):
             return ["rainfall_point_scope_required"]
         if not re.search(r"\b" + re.escape(point["country"]) + r"\b", prose, re.I):
             return ["rainfall_country_required"]
-        if not re.search(r"\b(?:24\s*(?:hours?|h)|one day|daily)\b", prose, re.I):
+        if not re.search(r"\b(?:24[\s‐‑–-]*(?:hours?|h)|(?:one|a)\s+day|daily)\b", prose, re.I):
             return ["rainfall_daily_window_required"]
         month = _MONTHS[day.month - 1]
         if not (re.search(rf"\b{day.day}\s+{month}\b|\b{month}\s+{day.day}\b", prose, re.I)
