@@ -31,8 +31,8 @@ def _receipt(run_id=None, reserved_at=None):
     }
 
 
-@pytest.fixture
-def gist(monkeypatch):
+@pytest.fixture(params=[False, True], ids=["private", "public"])
+def gist(monkeypatch, request):
     for name, value in {
         "GITHUB_REPOSITORY": REPOSITORY, "GITHUB_RUN_ID": "123", "GITHUB_EVENT_NAME": "schedule",
         "GITHUB_RUN_ATTEMPT": "1", "GITHUB_REF": "refs/heads/main", "THEHEAT_STATE_BACKEND": "gist",
@@ -51,7 +51,7 @@ def gist(monkeypatch):
             return NOW
 
     monkeypatch.setattr(state, "datetime", Clock)
-    data = {"id": GIST_ID, "public": False, "files": {
+    data = {"id": GIST_ID, "public": request.param, "files": {
         state.ALERTS_CATCHUP_FILENAME: _receipt(), state.STATE_FILENAME: {"content": "unchanged"},
     }}
     transport = SimpleNamespace(data=data, calls=[], lost_patch_response=False, stale_readback=False)
@@ -95,6 +95,23 @@ def test_interrupted_collector_still_consumes_one_extra_slot(gist, monkeypatch):
     assert gist.calls == ["GET", "PATCH", "GET", "GET"]
 
 
+def test_readable_gist_without_write_token_cannot_reserve(gist, monkeypatch):
+    monkeypatch.setattr(state, "GITHUB_TOKEN", "")
+    assert alerts_lane_catchup.main(["--reserve"]) == 2
+    assert gist.calls == []
+
+
+def test_rejected_authenticated_write_never_grants_reservation(gist, monkeypatch):
+    def denied(*args, **kwargs):
+        gist.calls.append("PATCH")
+        return SimpleNamespace(status_code=403)
+    monkeypatch.setattr(state.requests, "patch", denied)
+    assert alerts_lane_catchup.main(["--reserve"]) == 2
+    assert gist.calls == ["GET", "PATCH"]
+    assert gist.data["files"][state.ALERTS_CATCHUP_FILENAME] == _receipt()
+    assert gist.data["files"][state.STATE_FILENAME] == {"content": "unchanged"}
+
+
 @pytest.mark.parametrize("failure", ["lost_patch_response", "stale_readback"])
 def test_uncertain_reservation_never_permits_collection(gist, monkeypatch, failure):
     setattr(gist, failure, True)
@@ -107,15 +124,20 @@ def test_uncertain_reservation_never_permits_collection(gist, monkeypatch, failu
     assert gist.calls.count("PATCH") == 1
 
 
-@pytest.mark.parametrize("failure", ["missing", "public", "wrong_gist", "wrong_repo", "truncated", "truncated_gist",
+@pytest.mark.parametrize("failure", ["missing", "public_wrong_gist", "unknown_visibility", "nonboolean_visibility", "wrong_gist", "wrong_repo", "truncated", "truncated_gist",
                                      "duplicate", "future", "naive"])
 def test_missing_or_unknown_reservation_refuses_without_writing(gist, failure):
     files = gist.data["files"]
     record = files[state.ALERTS_CATCHUP_FILENAME]
     if failure == "missing":
         files.pop(state.ALERTS_CATCHUP_FILENAME)
-    elif failure == "public":
+    elif failure == "public_wrong_gist":
         gist.data["public"] = True
+        gist.data["id"] = "other"
+    elif failure == "unknown_visibility":
+        gist.data.pop("public")
+    elif failure == "nonboolean_visibility":
+        gist.data["public"] = "false"
     elif failure == "wrong_gist":
         gist.data["id"] = "other"
     elif failure == "wrong_repo":

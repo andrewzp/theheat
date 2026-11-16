@@ -16,7 +16,7 @@ from typing import Any
 
 DEFAULT_MAX_AGE_MINUTES = 285
 ALERT_MODES = ("alerts", "both")
-RUN_MODES = (*ALERT_MODES, "leaderboard", "manual_tweet", "auto_publish_due")
+RUN_MODES = (*ALERT_MODES, "leaderboard", "manual_tweet", "auto_publish_due", "observed_report")
 
 
 def catchup_due(state: dict[str, Any], *, now: datetime, max_age: timedelta) -> bool:

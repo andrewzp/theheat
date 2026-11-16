@@ -1506,7 +1506,10 @@ def reserve_scheduled_alerts_catchup(*, window: timedelta) -> bool:
         if response.status_code != 200:
             raise ValueError("gist read refused")
         gist = response.json()
-        if (not isinstance(gist, dict) or gist.get("id") != GIST_ID or gist.get("public") is not False
+        # Public readability does not grant write authority. The existing
+        # production Gist is public; bind its exact identity and keep the
+        # authenticated writer/receipt checks for either known visibility.
+        if (not isinstance(gist, dict) or gist.get("id") != GIST_ID or type(gist.get("public")) is not bool
                 or gist.get("truncated") or not isinstance(gist.get("files"), dict)):
             raise ValueError("gist identity refused")
         files = gist["files"]
