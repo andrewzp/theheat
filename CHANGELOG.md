@@ -1,3 +1,9 @@
+## 0.9.109.93
+
+- Hold automatic candidates whose source dates already exceed the sender's
+  freshness ceiling before they consume a writer attempt. Preserve retrospective
+  report validation, manual drafting and the independent final send check.
+
 ## 0.9.109.92
 
 - Skip the excluded world forecast and archive-warming half during observed-only
