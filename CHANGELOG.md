@@ -1,3 +1,7 @@
+## 0.9.109.97
+
+- Adopt the verified NOAA station-threshold candidate through November 12, 2026, using its immutable database checksum and matching station inventory. Preserve existing source qualification and publishing rules.
+
 ## 0.9.109.96
 
 - Invoke the opted-in observed-airport source in ordinary sequential alert collection as well as concurrent collection. Preserve its source checks, one-candidate limits and existing automatic sender gates.
