@@ -40,6 +40,11 @@ kept byte-equivalent across the two (the standing sync contract).
 | `jtwc` | Plain official RSS (`plain_rss`) | Enhanced RSS 403/transport failures. | Official lower-feature feed; degraded source row remains visible. |
 | `ocean_sst_anomaly` | NOAA STAR/CRW SST anomaly NetCDF (`noaa_star_nc`) | CoastWatch ERDDAP timeout or 503 for regional SST anomaly regions. | Downloads latest grid once, fills failed regions, and records degraded telemetry. |
 
+When `THEHEAT_OBSERVED_WEATHER_ONLY=1`, GPM keeps its NASA grid and
+OPeNDAP paths but does not request the Open-Meteo forecast witness. A NASA
+failure remains a source failure. With the flag off, the existing witness
+behavior and model labels apply.
+
 ## Still unbacked or operator-gated
 
 These sources or subpaths have no verified autonomous substitute yet. They get

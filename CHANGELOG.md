@@ -1,5 +1,6 @@
 ## 0.9.109.97
 
+- Skip the forecast rainfall fallback before network requests in observed-only mode. Preserve the NASA observation paths, source failures and existing flag-off behavior.
 - Adopt the verified NOAA station-threshold candidate through November 12, 2026, using its immutable database checksum and matching station inventory. Preserve existing source qualification and publishing rules.
 
 ## 0.9.109.96
