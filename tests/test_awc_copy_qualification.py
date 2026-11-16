@@ -67,6 +67,20 @@ def test_correct_full_or_abbreviated_utc_weekday_stays_valid(monkeypatch, day):
     assert source.claim_failures(text, story, now=NOW) == []
 
 
+@pytest.mark.parametrize("word", ["sat at", "sat in the sun at"])
+def test_ordinary_words_are_not_abbreviated_calendar_labels(monkeypatch, word):
+    story = bundle(monkeypatch)
+    text = COPY.replace("recorded", word) + "\n" + story.raw_signal_dump["evidence"]["source_url"]
+    assert source.claim_failures(text, story, now=NOW) == []
+
+
+@pytest.mark.parametrize("label", ["on Mon", "Mon at 12:00", "Mon Nov 15", "Mon 15 Nov"])
+def test_abbreviations_require_calendar_context_and_still_refuse_wrong_day(monkeypatch, label):
+    story = bundle(monkeypatch)
+    text = COPY + " " + label + "\n" + story.raw_signal_dump["evidence"]["source_url"]
+    assert source.claim_failures(text, story, now=NOW) == ["awc_weekday_mismatch"]
+
+
 @pytest.mark.parametrize("label", ["same hour", "Sunday"])
 def test_weekday_or_same_hour_cannot_replace_utc_clock(monkeypatch, label):
     story = bundle(monkeypatch)

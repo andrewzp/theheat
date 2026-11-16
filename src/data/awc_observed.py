@@ -509,9 +509,22 @@ def claim_failures(text, bundle, *, now=None):
                         + rf"(?=\s+airports?\b|\s*,\s*{country}\b)")
             calendar_prose = re.sub(name, "", calendar_prose, flags=re.I)
         days = "|".join(sorted(_WEEKDAY_ALIASES, key=len, reverse=True))
-        weekdays = re.findall(r"\b(?:" + days + r")\b", calendar_prose, re.I)
-        if any(_WEEKDAY_ALIASES[day.casefold()] != target.weekday() for day in weekdays):
-            return ["awc_weekday_mismatch"]
+        months = "|".join(_MONTHS)
+        for match in re.finditer(r"\b(?:" + days + r")\b", calendar_prose, re.I):
+            day = match.group().casefold()
+            index = _WEEKDAY_ALIASES[day]
+            full_name = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")[index]
+            # Abbreviations can also be ordinary words ("sat", "sun"). Only
+            # treat them as days beside a date/clock or after the label "on".
+            if day != full_name and not (
+                re.search(r"\bon\s+$", calendar_prose[:match.start()], re.I)
+                or re.match(r"\.?\s*,?\s*(?:\d{1,2}\s+(?:" + months + r")\b|(?:" + months
+                            + r")\s+\d{1,2}\b|(?:at\s+)?\d{1,2}:\d{2}\b)",
+                            calendar_prose[match.end():], re.I)
+            ):
+                continue
+            if index != target.weekday():
+                return ["awc_weekday_mismatch"]
         if (not re.search(rf"\b{target:%H:%M}\s*UTC\b", prose, re.I)
                 or not (target.date().isoformat() in prose
                     or re.search(rf"\b(?:{target.day}\s+{_MONTHS[target.month-1]}|{_MONTHS[target.month-1]}\s+{target.day})\b", prose, re.I))):
