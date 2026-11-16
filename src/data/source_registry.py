@@ -55,6 +55,13 @@ def _source(source_id, module, function, scope, family, provenance, claim_limit,
 
 
 CONTRACTS = (
+    _source("awc_observed", "awc_observed", "run_awc_observed",
+        "Two explicitly named reporting airports in different countries at the same UTC observation time.",
+        "station_points", "NOAA Aviation Weather Center decoded METARs and reporting-station catalogue.",
+        "Observed airport temperatures only: no global ranking, record, rarity, climate cause, hazard or forecast claim.",
+        collection="Default OFF; explicit observed-only opt-in and one-candidate/sample budget, no refill.",
+        time_rule="Same UTC timestamp, at most two hours old; exact historical METAR and station metadata reread before writing, admission and sending.",
+        support=("src/data/awc_observed.py", "src/orchestrator/metar_report.py")),
     SourceContract("c3s_monthly", ("c3s_monthly",), "derived",
         "src/orchestrator/observed_report.py:run_observed_report",
         "One explicitly nominated previous completed-month global C3S temperature finding.",

@@ -57,6 +57,7 @@ PROVIDER_KINDS = {
     "noaa_crw": frozenset({"satellite_derived"}),
     "openaq": frozenset({"observed_station"}),
     "noaa_coops": frozenset({"observed_station"}),
+    "noaa_awc": frozenset({"observed_station", "official_reference"}),
     "usgs_nwis": frozenset({"observed_station"}),
     "noaa_nwps": frozenset({"official_reference", "forecast_model"}),
     "nasa_gesdisc": frozenset({"satellite_derived"}),
@@ -81,7 +82,7 @@ PROVIDER_NAMESPACES = {
     "nws": "nws", "nhc": "nhc", "jtwc": "jtwc", "gdacs": "gdacs", "usgs_earthquake": "usgs",
     "copernicus_ems": "copernicus_ems", "copernicus_c3s": "copernicus_c3s", "nsidc": "nsidc", "osi_saf": "osi_saf", "noaa_cpc": "noaa_cpc",
     "noaa_psl": "noaa_psl", "climate_reanalyzer": "climate_reanalyzer", "noaa_crw": "noaa_crw", "openaq": "openaq",
-    "noaa_coops": "noaa_coops", "usgs_nwis": "usgs_nwis", "noaa_nwps": "noaa_nwps", "nasa_gesdisc": "nasa_gesdisc",
+    "noaa_coops": "noaa_coops", "noaa_awc": "noaa_awc", "usgs_nwis": "usgs_nwis", "noaa_nwps": "noaa_nwps", "nasa_gesdisc": "nasa_gesdisc",
     "nasa_jpl_grace": "nasa_jpl", "nasa_ozone_watch": "nasa_ozone_watch", "grounded_search": "grounded_search",
     "reliefweb": "reliefweb", "theheat_retained": "theheat", "nominated_input": "theheat_supplied",
     "aemet": "aemet", "imd": "imd", "saws": "saws",
@@ -115,6 +116,8 @@ _LABELLED_DEGRADED = (
 _CACHE_DEGRADED = tuple((source, _RUNNER.format(source)) for source in (
     "co2", "enso", "sea_ice", "ozone_hole", "nsidc_snow", "climate_indices", "ice_mass"))
 RESTRICTIONS: dict[str, tuple[str, Any]] = {
+    "airport_pair_not_record": ("Two exact same-time reported airport temperatures, not a record, ranking or forecast.",
+                               (("awc_observed", "src/data/awc_observed.py:current_bundle_hold"),)),
     "not_station_observation": ("A model, reanalysis or satellite value is not a station measurement.",
                                 tuple((selector, _CLAIMS) for selector in (*_FORECAST_MARKED, *_MODEL_FALLBACK))),
     "forecast_not_outcome": ("A forecast or warning does not prove the forecast impact occurred.",
@@ -464,6 +467,20 @@ def _single(source_id, leg, provider, upstream, kind, product, geo, units, prove
 
 # Every other adapter in the frozen accepted-base inventory, including the leaderboard.
 LEGS += (
+    _single("awc_observed", "metar_observations", "noaa_awc", "noaa_awc.metar",
+            "observed_station", "Decoded METAR temperature observations", "Two explicitly named reporting airports.",
+            "degrees C at the same UTC instant", "NOAA Aviation Weather Center global METAR cache and exact historical API query.",
+            ("src/data/awc_observed.py:nominate", "src/data/awc_observed.py:current_bundle_hold"),
+            restrictions=("airport_pair_not_record", "region_sample_not_census"), status="conditional",
+            time_limit="Non-future and no older than two hours; fresh exact-point rereads at writing, admission and sending.",
+            disposition="Explicit default-off observed-only source opt-in; one candidate/sample and all required checks.",
+            bound="Two fixed cache requests to nominate; two fixed requests per live exact-target recheck, no retries or redirects."),
+    _single("awc_observed", "station_catalogue", "noaa_awc", "noaa_awc.station_catalogue",
+            "official_reference", "Reporting-station metadata", "Source-matched airport names, country codes and coordinates.",
+            "station identity and coordinates", "NOAA Aviation Weather Center station catalogue.",
+            ("src/data/awc_observed.py:parse_stations",), role="reference", status="conditional",
+            time_limit="Metadata only; never a new temperature observation.",
+            disposition="Duplicate, ambiguous, non-airport or mismatched identities are held."),
     _single("drought", "usdm_state_statistics", "us_drought_monitor", "usdm.state_statistics", "expert_analysis",
             "US Drought Monitor state statistics", "US states selected by the collector.", "percent of area",
             "Weekly drought analysis.", ("src/data/drought.py:fetch_drought_data",)),

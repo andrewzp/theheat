@@ -51,6 +51,7 @@ SOURCES = (
     'src/editorial/approval.py',
     'src/editorial/observed_scope.py',
     'src/data/coastal_observed.py',
+    'src/data/awc_observed.py',
     'src/data/water_levels.py',
     'src/data/c3s_monthly.py',
     'src/editorial/candidates.py',
@@ -116,6 +117,7 @@ SOURCES = (
 RESOURCES = (
     ("src/data/registry/place_registry.json", "data/place_registry.json"),
     ("src/data/registry/country_codes.json", "data/country_codes.json"),
+    ("src/data/registry/country_names.json", "data/country_names.json"),
 )
 DEPLOYMENT_FILES = ("api/graphic_preview.py", "api/graphic_reader_status.py", "pyproject.toml", "uv.lock")
 

@@ -545,7 +545,10 @@ def test_no_production_runner_closure_captures_the_live_state_or_run(monkeypatch
     live, run = _live()
     runners = fx.production_runners(monkeypatch, live, run)
     sources = runners["__serial__"] + runners["__concurrent__"]
-    assert len(sources) == 29  # 3 serial + 26 concurrent, as run_alerts builds them
+    assert len(runners["__serial__"]) == 3
+    assert len(runners["__concurrent__"]) == 27
+    assert len(sources) == 30
+    assert "awc_observed" in runners["__concurrent__"]
     for runner in [runners[s] for s in sources] + [runners["__synthesis__"]]:
         cells = [c.cell_contents for c in (runner.run.__closure__ or ())]
         assert not any(cell is live or cell is run for cell in cells), runner.source

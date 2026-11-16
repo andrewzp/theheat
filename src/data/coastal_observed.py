@@ -212,7 +212,7 @@ def current_draft_hold(draft, *, live=False, now=None):
     is_family = isinstance(bundle, dict) and _family(bundle)
     if draft.get("type") != KIND and not is_family:
         return None
-    if (draft.get("type") != KIND or not isinstance(bundle, dict)
+    if (draft.get("type") != KIND or not isinstance(bundle, dict) or bundle.get("signal_kind") != KIND
             or draft.get("event_id") != bundle.get("event_id")):
         return "coastal_draft_kind_changed"
     hold = current_bundle_hold(bundle, live=False, now=now)

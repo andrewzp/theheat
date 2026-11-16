@@ -132,7 +132,10 @@ def test_bot_drains_only_in_route_mode_and_keeps_every_existing_default():
                                                        "THEHEAT_HOT10_NORMALS_PRODUCT", "THEHEAT_SENDER_TEXT_SOURCE",
                                                        "THEHEAT_NWPS_MAJOR_FORECASTS", "THEHEAT_NWPS_PACKET_RETENTION",
                                                        "THEHEAT_AUTOMATIC_SELECTION_ONLY", "THEHEAT_OBSERVED_WEATHER_ONLY",
-                                                       "THEHEAT_OBSERVED_REPORT_MONTH"}
+                                                       "THEHEAT_OBSERVED_REPORT_MONTH", "THEHEAT_AWC_OBSERVED_CONTRAST",
+                                                       "THEHEAT_POST_COLLECTION_SENDER"}
+    for flag in ("THEHEAT_AWC_OBSERVED_CONTRAST", "THEHEAT_POST_COLLECTION_SENDER"):
+        assert step["env"][flag] == "${{ vars." + flag + " || '0' }}"
     assert step["env"]["THEHEAT_SENDER_TEXT_SOURCE"] == "${{ github.event.inputs.text_source }}"
     assert set(doc["on"]["workflow_dispatch"]["inputs"]) - set(old["on"]["workflow_dispatch"]["inputs"]) == {"text_source", "automatic_only", "report_month"}
     assert step["env"]["THEHEAT_HOT10_NORMALS_PRODUCT"] == "${{ vars.THEHEAT_HOT10_NORMALS_PRODUCT || 'meteostat-normals-point-v1' }}"
