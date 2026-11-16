@@ -2,11 +2,12 @@ import { dashboardEditorialPolicy } from "./editorial-policy.js"
 import { hasUnresolvedPublish, reviewIsCurrent } from "./draft-revisions.js"
 import { buildRuntimeConfig } from "./runtime-inventory.js"
 import { postOutcomes } from "./post-outcomes.js"
+import { sourceContract } from "./source-registry.js"
 
 const HOUR = 3600000
 const DAY = 24 * HOUR
 const METRIC_FIELDS = ["likes", "retweets", "replies"]
-const INTERNAL_SOURCES = new Set(["twitter_metrics", "budget", "triage", "billing"])
+const INTERNAL_SOURCES = new Set(["twitter_metrics", "budget", "triage", "billing", "generation", "automatic_selection"])
 const object = (value) => value !== null && typeof value === "object" && !Array.isArray(value)
 const rows = (value) => Array.isArray(value) ? value.filter(object) : []
 const entries = (value) => object(value) ? Object.entries(value) : []
@@ -209,7 +210,8 @@ export function buildProductHealth(rawState, { now = Date.now(), runtimeReport =
   return {
     generated_at: new Date(clock).toISOString(),
     milestones: {
-      source_observed: milestone(sources.filter((row) => identifier(row.source) && !INTERNAL_SOURCES.has(row.source) && count(row.observed) > 0).map((row) => ({ time: row.time, source: row.source, observed: row.observed, reported_status: row.status ?? null, evidence: row.evidence, timestamp_precision: row.timestamp_precision ?? "source" })), clock),
+      source_observed: milestone(sources.filter((row) => identifier(row.source) && !INTERNAL_SOURCES.has(row.source)
+        && sourceContract(row.source).kind !== "internal" && count(row.observed) > 0).map((row) => ({ time: row.time, source: row.source, observed: row.observed, reported_status: row.status ?? null, evidence: row.evidence, timestamp_precision: row.timestamp_precision ?? "source" })), clock),
       draft_created: milestone(drafts.map((draft) => ({ time: timestamp(draft.created_at, clock), id: draft.id ?? null })), clock),
       draft_reviewed: milestone(drafts.filter((draft) => { try { return reviewIsCurrent(draft, dashboardEditorialPolicy(state, { now: clock, runtimeReport }).policy) } catch { return false } }).map((draft) => ({ time: timestamp(draft.review_binding.reviewed_at, clock), id: draft.id ?? null, review_kind: draft.review_binding.kind })), clock),
       post_confirmed: milestone(posts.map(({ eligibility_time, ...post }) => post), clock),

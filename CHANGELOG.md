@@ -1,3 +1,7 @@
+## 0.9.109.100
+
+- Keep location-list loads, sender jobs and generation counters from refreshing the dashboard weather-input milestone. Preserve genuine source observations and their recorded age and status.
+
 ## 0.9.109.99
 
 - Add a default-off completed-day satellite precipitation text route with exact point, product, accumulation window and source rereads. Preserve required checks and refuse unsupported rain/snow, impact or record claims.
