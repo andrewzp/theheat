@@ -86,7 +86,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/data/air_quality_contract.py": "7f9de8f7fcd6836a3e4fb32ea8c1a35a3c9981bcede6aea2d74770f12539d667",
     "src/data/air_quality_current.py": "dded4e4fc18ff7635756edeb88c55fe1fa8f573e1b79ef04d6e0d648493dfa38",
     "src/data/air_quality_evidence.py": "677713bb8916c4bcd51d407a5b19072f54532f5f46db116914af6b3fcac9f4f7",
-    "src/data/awc_observed.py": "c8901f33d629630c0064a1321db494a94687d10f43b26460505d8641c0117b5f",
+    "src/data/awc_observed.py": "7857deec0fcd3fc87bcaaf1403a8daa50ed622b9addbf7975f1c4e9edb85eae3",
     "src/data/c3s_monthly.py": "babc1416c324b4edda24bdd0a7bd7a8a39ceda2bee7bf826ae4b5f54302d16c1",
     "src/data/coastal_observed.py": "6d5f56258134602bd199b16f43f061cd2a53212dc999bfc87307cc23950516be",
     "src/data/coral_dhw.py": "fc9357d1019e67e69e66a24d90aa1771e05097a99db1f042f4adfee2e8fb9560",
@@ -291,5 +291,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "39d1fb9de6ff09e711035c1b658337308f983bfd53927d800de037c2cc0fa4a9"
   },
   "schema_version": 1,
-  "source_sha256": "c0138bc6da51fc9efd2659d324fd3827b6bd145e37c86da66c0c1650be9bbcaa"
+  "source_sha256": "c826c16a892f733b8a06ab271e555f8c2c6267a1dfec83b9c682c28caf3a9b1a"
 }

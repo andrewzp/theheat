@@ -38,7 +38,10 @@ HISTORY_URL = BASE + "/api/data/metar"
 MAX_COMPRESSED = 2 * 1024 * 1024
 MAX_EXPANDED = 8 * 1024 * 1024
 _MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
-_WEEKDAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+_WEEKDAY_ALIASES = {name.casefold(): index for index, names in enumerate((
+    ("Monday", "Mon"), ("Tuesday", "Tue", "Tues"), ("Wednesday", "Wed"),
+    ("Thursday", "Thu", "Thur", "Thurs"), ("Friday", "Fri"), ("Saturday", "Sat"), ("Sunday", "Sun"),
+)) for name in names}
 
 
 class ObservedHeld(ValueError):
@@ -497,11 +500,17 @@ def claim_failures(text, bundle, *, now=None):
         calendar_prose = prose
         for point in evidence["points"]:
             location = re.sub(r"\b(?:Arpt|Airport)\b", "", point["airport"]).strip()
-            calendar_prose = re.sub(re.escape(location) + r"\s+(?:airport|airports)\b", "",
-                                    calendar_prose, flags=re.I)
-        weekdays = re.findall(r"\b(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\b",
-                              calendar_prose, re.I)
-        if any(day.casefold() != _WEEKDAYS[target.weekday()].casefold() for day in weekdays):
+            name = r"(?<!\w)" + re.escape(location) + r"(?!\w)"
+            if location.casefold() in _WEEKDAY_ALIASES:
+                # A single weekday name needs location context; never erase a
+                # separate calendar label merely because an airport shares it.
+                country = re.escape(point["country"])
+                name = (r"\bairports?\s+" + name + "|" + name
+                        + rf"(?=\s+airports?\b|\s*,\s*{country}\b)")
+            calendar_prose = re.sub(name, "", calendar_prose, flags=re.I)
+        days = "|".join(sorted(_WEEKDAY_ALIASES, key=len, reverse=True))
+        weekdays = re.findall(r"\b(?:" + days + r")\b", calendar_prose, re.I)
+        if any(_WEEKDAY_ALIASES[day.casefold()] != target.weekday() for day in weekdays):
             return ["awc_weekday_mismatch"]
         if (not re.search(rf"\b{target:%H:%M}\s*UTC\b", prose, re.I)
                 or not (target.date().isoformat() in prose

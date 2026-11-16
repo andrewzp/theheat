@@ -38,16 +38,33 @@ def test_constructed_writer_input_has_source_specific_qualification_instructions
     assert '"temperature_c": -20' in prompt and '"temperature_c": 45' in prompt
 
 
-def test_weekday_in_known_airport_name_is_not_a_calendar_claim(monkeypatch):
+@pytest.mark.parametrize("name", ["Monday Test", "Monday"])
+@pytest.mark.parametrize("noun_first", [False, True])
+def test_weekday_in_known_airport_name_is_not_a_calendar_claim(monkeypatch, name, noun_first):
     transport = Transport()
-    transport.stations[0]["site"] = "Monday Test Arpt"
+    transport.stations[0]["site"] = name + " Arpt"
     transport.install(monkeypatch.setattr)
     with freeze_time(NOW):
         story = source.build_bundle(source.nominate())
-    text = COPY.replace("North Test", "Monday Test") + "\n" + story.raw_signal_dump["evidence"]["source_url"]
+    text = COPY.replace("North Test airport", ("airports " + name if noun_first else name + " airport"))
+    text += "\n" + story.raw_signal_dump["evidence"]["source_url"]
     assert source.claim_failures(text, story, now=NOW) == []
     assert source.claim_failures(text.replace("Nov 15", "Monday Nov 15"), story,
                                  now=NOW) == ["awc_weekday_mismatch"]
+
+
+@pytest.mark.parametrize("day", ["Monday", "Mon", "Mon.", "Tue", "Tues", "Wed", "Thu", "Thur", "Thurs", "Fri", "Sat"])
+def test_incorrect_full_or_abbreviated_utc_weekday_refuses(monkeypatch, day):
+    story = bundle(monkeypatch)
+    text = COPY.replace("Nov 15", day + " 15 Nov") + "\n" + story.raw_signal_dump["evidence"]["source_url"]
+    assert source.claim_failures(text, story, now=NOW) == ["awc_weekday_mismatch"]
+
+
+@pytest.mark.parametrize("day", ["Sunday", "Sun", "Sun."])
+def test_correct_full_or_abbreviated_utc_weekday_stays_valid(monkeypatch, day):
+    story = bundle(monkeypatch)
+    text = COPY.replace("Nov 15", day + " 15 Nov") + "\n" + story.raw_signal_dump["evidence"]["source_url"]
+    assert source.claim_failures(text, story, now=NOW) == []
 
 
 @pytest.mark.parametrize("label", ["same hour", "Sunday"])
