@@ -91,7 +91,7 @@ def test_real_mode_selector_preserves_scheduled_and_manual_roles(workflow, tmp_p
 
 def test_all_manual_modes_share_that_same_non_cancelling_lock(workflow):
     modes = workflow["on"]["workflow_dispatch"]["inputs"]["mode"]["options"]
-    assert set(modes) == {"alerts", "leaderboard", "both", "observed_report", "manual_tweet", "auto_publish_due"}
+    assert set(modes) == {"alerts", "leaderboard", "both", "observed_report", "metar_report", "manual_tweet", "auto_publish_due"}
     assert "inputs" not in workflow["concurrency"]["group"]
     assert _queue_policy(workflow, "workflow_dispatch") == ("theheat-bot", False)
 
@@ -108,6 +108,8 @@ def test_all_manual_modes_share_that_same_non_cancelling_lock(workflow):
         ("workflow_dispatch", "alerts", "1", "1", "refs/heads/main", 0, ["alerts"]),
         ("workflow_dispatch", "both", "1", "1", "refs/heads/main", 0, ["both"]),
         ("workflow_dispatch", "manual_tweet", "1", "1", "refs/heads/main", 0, ["manual_tweet"]),
+        ("workflow_dispatch", "metar_report", "1", "1", "refs/heads/main", 0, ["metar_report"]),
+        ("schedule", "metar_report", "1", "1", "refs/heads/main", 0, ["metar_report"]),
         ("schedule", "alerts", "1", "1", "refs/heads/main", 1, ["auto_publish_due"]),
     ],
 )
@@ -368,7 +370,11 @@ def test_immediate_python_output_is_scoped_to_bot_invocations(workflow):
         for step in job["steps"]:
             if "PYTHONUNBUFFERED" in step.get("env", {}):
                 locations.append((job_name, step["name"], step["env"]["PYTHONUNBUFFERED"]))
-    assert locations == [("run", "Service hourly sender before catch-up", "1"), ("run", "Run bot", "1")]
+    assert locations == [
+        ("run", "Service hourly sender before catch-up", "1"),
+        ("run", "Run bot", "1"),
+        ("run", "Service due drafts after scheduled collection", "1"),
+    ]
 
 
 @pytest.mark.parametrize("use_workflow_setting", [True, False], ids=["unbuffered", "buffered-control"])
