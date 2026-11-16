@@ -11,6 +11,41 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-11-16 — Daily corpus grading (0 fresh drafts; queue empty)
+
+**Context:** Gist read via git-clone path (success; gist HEAD Nov 16 12:11Z, `_state_rev` 3362 — bot
+running, `publication_control.enabled=true`, epoch `live-20261030…`). **0 pending.** 52 drafts in state:
+45 posted, 7 rejected. Shymkent hot10 (`draft_20261108_180324_55`, B Nov 9) moved to `rejected` at
+Nov 15 18:56Z — the bot's 7-day TTL sweep, as forecast yesterday. Rejected count fell 8→7 net, so two
+older rejected records were also pruned from state.
+
+**Why the queue is dry:** still zero new drafts of any status since the Nov 13 06:15Z
+monthly_climate_report (~81h). Run history shows candidates are reaching selection but are held:
+`automatic_selection` reports 9 candidates at 06:16Z and 4 at 12:02Z, all `held_manual_types`
+(absolute_extreme ×1, fire ×8 / ×3), 0 auto-eligible. One writer attempt in the last 24h
+(water_levels, Nov 15 23:21Z) left no draft in state. `open_meteo_extreme_signals` reports `degraded`
+every alerts run (ghcn verification `diff_missing:1`). So the drought is policy holds + no hot10
+trigger, not a dead scheduler.
+
+**Staleness:** nothing pending — no candidates.
+
+**A-rate:** N/A (no fresh drafts). Last graded cycle: 0% (n=1, Nov 9).
+
+### Patterns
+1. No new graded evidence for any active proposal. 7th consecutive no-fresh-draft cycle (Nov 10–16).
+2. First fully empty queue since Oct 30. With auto-publish on and fire/absolute_extreme held
+   manual-only, the pending queue — the only thing this routine grades — gets nothing unless an
+   operator promotes a held candidate.
+
+### Followups
+- Operator: the held fire/absolute_extreme candidates are where today's drafts would be. If you want
+  grading signal, promote one or more through the manual path.
+- Operator: `open_meteo_extreme_signals` degraded on every alerts run Nov 15–16 (ghcn `diff_missing:1`).
+- Operator (carried): decide whether this routine should grade `posted` drafts from the last 24h.
+- Operator (carried): `daily-plan-current` still unmerged; `main` lacks graded cycles since 2026-07-06.
+- Infra (carried): `gh` token in the routine env is invalid — blocks gist write, PR create/edit, and the
+  `ROUTINE_BEACON` variable write.
+
 ## 2026-11-15 — Daily corpus grading (0 fresh drafts; 1 carry-over, previously graded)
 
 **Context:** Gist read via git-clone path (success; gist HEAD Nov 15 11:28Z, `_state_rev` 3345 — bot
