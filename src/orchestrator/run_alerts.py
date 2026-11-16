@@ -196,6 +196,7 @@ def run_alerts(bot_state: BotState, current_run: dict | None = None, *, ghcn_sup
             ),
         )
     else:
+        run_awc_observed(bot_state, current_run)
         run_extreme_signals(
             bot_state,
             current_run,
