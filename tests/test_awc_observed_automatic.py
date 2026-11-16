@@ -231,3 +231,15 @@ def test_nominated_automatic_intent_never_buys_manual_only_copy(monkeypatch, wor
     monkeypatch.setenv(flag, "0")
     generate(world)
     assert called == [] and state["drafts"] == [] and transport.x_posts == []
+
+
+def test_citation_overflow_cannot_publish_an_uncited_body(monkeypatch, world):
+    transport, state, _, called, _ = world
+    body = ("At 12:00 UTC Nov 15, Norway's North Test airport recorded −20°C, while Chile's South Test airport "
+            "reported 45°C, a 65°C difference between these two airport observations made at the same UTC moment.")
+    assert len(body) == 198
+    stages = stage_fakes(called, copy=body)
+    monkeypatch.setattr(pipeline.writer, "write_tweet", stages[0])
+    generate(world)
+    sender(monkeypatch, world)
+    assert transport.x_posts == [] and state["drafts"] == []

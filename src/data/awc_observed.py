@@ -345,6 +345,14 @@ def _history(points, *, now=None):
         flags = row.findall("quality_control_flags")
         if len(flags) > 1:
             raise ObservedHeld("awc_history_duplicate_flags")
+        if flags:
+            names = [child.tag for child in flags[0]]
+            if (len(names) != len(set(names)) or any(len(child) for child in flags[0])
+                    or any(not re.fullmatch(r"[a-z][a-z0-9_]{0,63}", name) for name in names)):
+                raise ObservedHeld("awc_history_duplicate_or_invalid_flag")
+            maintenance = flags[0].findall("maintenance_indicator_on")
+            if maintenance and maintenance[0].text not in ("TRUE", "FALSE"):
+                raise ObservedHeld("awc_history_maintenance_unknown")
         values["maintenance_indicator_on"] = flags[0].findtext("maintenance_indicator_on") if flags else None
         selected[station] = _point(values, metadata, now=_clock(now))
     if set(selected) != set(ids):
@@ -477,6 +485,9 @@ def claim_failures(text, bundle, *, now=None):
         evidence = validate_bundle(bundle, now=_clock(now))
         if not isinstance(text, str):
             return ["awc_text_invalid"]
+        if (re.findall(r"https?://\S+", text, flags=re.I) != [evidence["source_url"]]
+                or text.split().count(evidence["source_url"]) != 1):
+            return ["awc_exact_target_citation_required"]
         prose = re.sub(r"https?://\S+", "", text)
         if re.search(r"\b(?:forecast|expected|will|record|hottest|coldest|world.?s|ever|"
                      r"deadly|dangerous|life.threatening|climate change|caused|warning)\b", prose, re.I):
@@ -513,7 +524,7 @@ def current_draft_hold(draft, *, live=False, now=None):
     bundle = two_bot.get("bundle") if isinstance(two_bot, dict) else None
     if draft.get("type") != KIND and not (isinstance(bundle, dict) and _family(bundle)):
         return None
-    if (draft.get("type") != KIND or not isinstance(bundle, dict)
+    if (draft.get("type") != KIND or not isinstance(bundle, dict) or bundle.get("signal_kind") != KIND
             or draft.get("event_id") != bundle.get("event_id")):
         return "awc_draft_identity_changed"
     hold = current_bundle_hold(bundle, now=now)

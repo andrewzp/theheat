@@ -691,8 +691,8 @@
   "referenced_code_sha256": {
     "src/data/air_quality_availability.py": "fe4ec7eba42a0b41d296407c54d168e73b76def9f58739a48ecda94a9f6eb536",
     "src/data/air_quality_contract.py": "7f9de8f7fcd6836a3e4fb32ea8c1a35a3c9981bcede6aea2d74770f12539d667",
-    "src/data/awc_observed.py": "2a4161bf30e551fca018c4ddd9976fae5fd82dff37386b88f06dc4cae811648d",
-    "src/data/c3s_monthly.py": "659e8c266f885a3ea413aed0a0ac244c64e09dc964da0829f856df8e169d593c",
+    "src/data/awc_observed.py": "a0dc9e4266bd765f151fc98984821c19dcc68f5552917fc3b2e78a227538768f",
+    "src/data/c3s_monthly.py": "babc1416c324b4edda24bdd0a7bd7a8a39ceda2bee7bf826ae4b5f54302d16c1",
     "src/data/climate_indices.py": "ee020029a91261d26ece8dd5ed27859b963e8cc8321d27c51afdce6ce3dc74d7",
     "src/data/co2.py": "63d9578eb77bcc56b438ef85ee56fc7a1695982a46f2b3133e04b65adefa3d5f",
     "src/data/copernicus_ems.py": "9e2c512e7ccb022a44190c6ea17ab10f18fa6232c7dcd2de51d1bc91fedcde95",
@@ -775,5 +775,5 @@
     "src/two_bot/intern/warnings.py": "04e0a4506ffbb29124c8d2960a5e5025305699297fcf8f9178b23caac2cd7a37"
   },
   "evidence_scope": "Referenced local code inventory; not live/provider/transitive-source qualification.",
-  "registry_sha256": "1a4623499bbcd120c7cb01a01c72a2ce1f0c0ac25d22a7c9346f167408de9cd7"
+  "registry_sha256": "5f03dec6f21d8f945718ba8370e01a09a6f7ea20996e5450c17e9dc1a9a8e7ba"
 }

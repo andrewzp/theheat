@@ -6,6 +6,8 @@
 - Add an optional scheduled post-collection sender pass after the approval delay.
   Keep manual dispatches, reruns, tags, pauses and other workflow roles excluded;
   preserve the normal sender's approval, freshness and no-resend checks.
+- Refuse observed-report drafts whose declared type and retained source family
+  disagree. Preserve unrelated drafts and independently validate each report.
 
 ## 0.9.109.94
 

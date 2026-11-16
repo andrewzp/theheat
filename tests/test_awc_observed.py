@@ -272,6 +272,7 @@ def test_copy_cannot_upgrade_or_omit_the_observation_scope(monkeypatch, alterati
     install(monkeypatch)
     bundle = source.build_bundle(source.nominate(now=NOW), now=NOW)
     text = "At 12:00 UTC Nov 15, North Test airport, Norway, recorded −20°C; South Test airport, Chile, 45°C—a 65°C gap."
+    text += "\n" + source.citation(["TAAA", "TBBB"], TARGET)
     assert source.claim_failures(text, bundle, now=NOW) == []
     if alteration == "wrong-sign":
         text = text.replace("−20°C", "20°C")
@@ -285,4 +286,27 @@ def test_copy_cannot_upgrade_or_omit_the_observation_scope(monkeypatch, alterati
         text = text.replace("Nov 15", "today")
     else:
         text = text.replace("airport", "town")
+    assert source.claim_failures(text, bundle, now=NOW)
+
+
+@pytest.mark.parametrize("values", [("FALSE", "TRUE"), ("FALSE", "FALSE"), ("TRUE", "FALSE")])
+def test_duplicate_xml_maintenance_flags_never_choose_the_first_value(monkeypatch, values):
+    install(monkeypatch)
+    bundle = source.build_bundle(source.nominate(now=NOW), now=NOW)
+    fields = "".join(f"<maintenance_indicator_on>{value}</maintenance_indicator_on>" for value in values)
+    xml = history_xml().replace(b"<no_signal>TRUE</no_signal>", b"<no_signal>TRUE</no_signal>" + fields.encode(), 1)
+    install(monkeypatch, xml=xml)
+    assert source.current_bundle_hold(bundle, live=True, now=NOW)
+
+
+@pytest.mark.parametrize("change", ["missing", "wrong-target", "additional-url"])
+def test_family_requires_one_exact_target_citation(monkeypatch, change):
+    install(monkeypatch)
+    bundle = source.build_bundle(source.nominate(now=NOW), now=NOW)
+    text = "At 12:00 UTC Nov 15, North Test airport, Norway, recorded −20°C; South Test airport, Chile, 45°C—a 65°C gap."
+    url = source.citation(["TAAA", "TBBB"], TARGET)
+    if change == "wrong-target":
+        text += "\n" + url.replace("12:00:00", "11:00:00")
+    elif change == "additional-url":
+        text += "\n" + url + " https://example.invalid/other"
     assert source.claim_failures(text, bundle, now=NOW)

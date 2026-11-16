@@ -42,6 +42,12 @@ All required model checks, current policy/revision/epoch, approval delay, spacin
 daily limits and uncertain-send protections remain mandatory. No graphics are
 automatically attached by this source.
 
+The final text must contain its one exact target citation. If the generic link
+formatter cannot fit that citation, the uncited body is held; it cannot become
+an automatic post. Historical XML with duplicate quality flags is also held,
+including repeated maintenance flags that happen to agree. A declared report
+type cannot borrow an unrelated retained source bundle.
+
 ## Optional completion of scheduled delivery
 
 `THEHEAT_POST_COLLECTION_SENDER=1` enables one extra sender pass only after a

@@ -245,7 +245,7 @@ def current_draft_hold(draft: dict, *, live: bool = True, now: datetime | None =
     from src.editorial.observed_scope import enabled
     if not enabled():
         return "c3s_observed_mode_disabled"
-    if draft.get("type") != KIND:
+    if draft.get("type") != KIND or not isinstance(bundle, dict) or bundle.get("signal_kind") != KIND:
         return "c3s_kind_changed"
     try:
         retained = draft["review_context"]["two_bot"]["bundle"]

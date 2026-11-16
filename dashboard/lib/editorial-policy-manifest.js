@@ -86,9 +86,9 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/data/air_quality_contract.py": "7f9de8f7fcd6836a3e4fb32ea8c1a35a3c9981bcede6aea2d74770f12539d667",
     "src/data/air_quality_current.py": "dded4e4fc18ff7635756edeb88c55fe1fa8f573e1b79ef04d6e0d648493dfa38",
     "src/data/air_quality_evidence.py": "677713bb8916c4bcd51d407a5b19072f54532f5f46db116914af6b3fcac9f4f7",
-    "src/data/awc_observed.py": "2a4161bf30e551fca018c4ddd9976fae5fd82dff37386b88f06dc4cae811648d",
-    "src/data/c3s_monthly.py": "659e8c266f885a3ea413aed0a0ac244c64e09dc964da0829f856df8e169d593c",
-    "src/data/coastal_observed.py": "8f495e5df2a689c91f0d277a039af30854fd0ecdf652962d2a4fec47217bafbd",
+    "src/data/awc_observed.py": "a0dc9e4266bd765f151fc98984821c19dcc68f5552917fc3b2e78a227538768f",
+    "src/data/c3s_monthly.py": "babc1416c324b4edda24bdd0a7bd7a8a39ceda2bee7bf826ae4b5f54302d16c1",
+    "src/data/coastal_observed.py": "6d5f56258134602bd199b16f43f061cd2a53212dc999bfc87307cc23950516be",
     "src/data/coral_dhw.py": "fc9357d1019e67e69e66a24d90aa1771e05097a99db1f042f4adfee2e8fb9560",
     "src/data/coral_evidence.py": "723b04dc720538b5dab0ab6290f2f774c877796963a69aa46eb541e00bbf84ee",
     "src/data/coral_regional_contract.py": "4d1bd7871d50c9e32036a338597184e76b7ffc3d0db018a40093c65f99db78d4",
@@ -291,5 +291,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "39d1fb9de6ff09e711035c1b658337308f983bfd53927d800de037c2cc0fa4a9"
   },
   "schema_version": 1,
-  "source_sha256": "ce14c9d200e73344c716f69e1bdbfde40c64c7931f6b28217e8156a7e9609f16"
+  "source_sha256": "15f86366b86e72f8582031d4baad2b22166520f8a16b6485011aefa0b2f1cc38"
 }

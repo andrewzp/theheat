@@ -1,6 +1,6 @@
 {
   "identity": {
-    "archive_sha256": "07e91b2b4aba6c8f2542db8619089926a6e1d9e1e99b7d61b6cfb6ca6fd902ce",
+    "archive_sha256": "170318bcd2984b7c528bd22baed1bd6413603b6319ff77701c7ee55d7c560073",
     "deployment_files": {
       "api/graphic_preview.py": "f7521adcbd618f4b65b2a0de30ea62aaff4cdd36f2254e9af38bf68646d361ad",
       "api/graphic_reader_status.py": "5e9685d699625a4eea9d5be884b6e266939a0ad344a2997351ba79bd114407ba",
@@ -25,9 +25,9 @@
       "src/data/air_quality.py": "89975b423632d9d6a0b3db767df8dae8cc4e7e7c496a350d396d7e303e820e33",
       "src/data/air_quality_contract.py": "7f9de8f7fcd6836a3e4fb32ea8c1a35a3c9981bcede6aea2d74770f12539d667",
       "src/data/air_quality_evidence.py": "677713bb8916c4bcd51d407a5b19072f54532f5f46db116914af6b3fcac9f4f7",
-      "src/data/awc_observed.py": "2a4161bf30e551fca018c4ddd9976fae5fd82dff37386b88f06dc4cae811648d",
-      "src/data/c3s_monthly.py": "659e8c266f885a3ea413aed0a0ac244c64e09dc964da0829f856df8e169d593c",
-      "src/data/coastal_observed.py": "8f495e5df2a689c91f0d277a039af30854fd0ecdf652962d2a4fec47217bafbd",
+      "src/data/awc_observed.py": "a0dc9e4266bd765f151fc98984821c19dcc68f5552917fc3b2e78a227538768f",
+      "src/data/c3s_monthly.py": "babc1416c324b4edda24bdd0a7bd7a8a39ceda2bee7bf826ae4b5f54302d16c1",
+      "src/data/coastal_observed.py": "6d5f56258134602bd199b16f43f061cd2a53212dc999bfc87307cc23950516be",
       "src/data/coral_evidence.py": "723b04dc720538b5dab0ab6290f2f774c877796963a69aa46eb541e00bbf84ee",
       "src/data/coral_regional_contract.py": "4d1bd7871d50c9e32036a338597184e76b7ffc3d0db018a40093c65f99db78d4",
       "src/data/coral_source_contract.py": "1809eeeb915f6dcf09bed99f67da998338360eafb11c976805679a1a87c5f310",
@@ -116,7 +116,7 @@
       "src/two_bot/types.py": "951044ca2582c8b96872bdd5b8ed8fc60546a58305aa8b06de50075206cc817e"
     },
     "format": "saved-source-svg-preview-v2",
-    "policy_source_sha256": "ce14c9d200e73344c716f69e1bdbfde40c64c7931f6b28217e8156a7e9609f16",
+    "policy_source_sha256": "15f86366b86e72f8582031d4baad2b22166520f8a16b6485011aefa0b2f1cc38",
     "resource_sources": {
       "src/data/registry/country_codes.json": "data/country_codes.json",
       "src/data/registry/country_names.json": "data/country_names.json",
@@ -124,5 +124,5 @@
     },
     "schema_version": 1
   },
-  "runtime_sha256": "fd0798ba26177b8352dedde50bf3966a519548e4edb7c631eaa21e265602d1df"
+  "runtime_sha256": "6fa5c8f237977bfd756c6b3c261b30a65066d2493e74f0568e9ae1487bb94bb7"
 }
