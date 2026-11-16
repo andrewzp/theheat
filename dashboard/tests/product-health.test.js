@@ -68,6 +68,52 @@ test("latest observed source needs positive recorded observations, with its stat
   assert.equal(fallback.milestones.source_observed.source, "ocean")
 })
 
+test("registry, sender and generation counters cannot refresh weather input freshness", () => {
+  const internal = ["load_cities", "manual_publish", "auto_publish_due", "twitter_metrics",
+    "budget", "triage", "billing", "generation", "automatic_selection"]
+  const source = { source: "awc_observed", status: "degraded", observed: 2 }
+  const metadata = internal.map((name) => ({ source: name, status: "success", observed: 633 }))
+  const cases = [
+    { source_health: Object.fromEntries([source, ...metadata].map((row) => [row.source, { runs: [{
+      ...row, ts: row.source === source.source ? "2026-09-08T12:00:00Z" : "2026-09-08T17:59:00Z",
+    }] }])) },
+    { run_history: [
+      { ended_at: "2026-09-08T17:59:00Z", sources: metadata },
+      { ended_at: "2026-09-08T12:00:00Z", sources: [source] },
+    ] },
+  ]
+  for (const state of cases) {
+    const value = build(state).milestones.source_observed
+    assert.equal(value.source, "awc_observed")
+    assert.equal(value.observed, 2)
+    assert.equal(value.reported_status, "degraded")
+    assert.equal(value.at, "2026-09-08T12:00:00.000Z")
+    assert.equal(value.age_hours, 6)
+  }
+})
+
+test("operational counters alone leave the source observation milestone unknown", () => {
+  for (const name of ["load_cities", "manual_publish", "auto_publish_due", "generation", "automatic_selection"]) {
+    const row = { source: name, status: "success", observed: 633 }
+    for (const state of [
+      { source_health: { [name]: { runs: [{ ...row, ts: "2026-09-08T17:59:00Z" }] } } },
+      { run_history: [{ ended_at: "2026-09-08T17:59:00Z", sources: [row] }] },
+    ]) assert.deepEqual(build(state).milestones.source_observed, { status: "unknown", at: null, age_hours: null })
+  }
+})
+
+test("source freshness keeps genuine and unregistered legacy inputs in either telemetry order", () => {
+  const row = { source: "legacy_weather_adapter", observed: 3, status: "partial_failure" }
+  const sources = [row, { source: "load_cities", observed: 633, status: "success" }]
+  const forward = build({ run_history: [{ ended_at: "2026-09-08T17:00:00Z", sources }] }).milestones.source_observed
+  const reverse = build({ run_history: [{ ended_at: "2026-09-08T17:00:00Z", sources: [...sources].reverse() }] }).milestones.source_observed
+  assert.deepEqual(forward, reverse)
+  assert.equal(forward.source, row.source)
+  assert.equal(forward.observed, 3)
+  assert.equal(forward.reported_status, "partial_failure")
+  assert.equal(forward.timestamp_precision, "run")
+})
+
 test("review milestone verifies the current binding and excludes obsolete reviews", () => {
   const current = { id: "current", text: "40°C forecast", created_at: "2026-09-01T00:00:00Z", status: "pending" }
   recordHumanReview(current)
