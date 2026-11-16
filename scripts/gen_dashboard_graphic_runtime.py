@@ -52,6 +52,8 @@ SOURCES = (
     'src/editorial/observed_scope.py',
     'src/data/coastal_observed.py',
     'src/data/awc_observed.py',
+    'src/data/rainfall_observed.py',
+    'src/data/rainfall_supply.py',
     'src/data/water_levels.py',
     'src/data/c3s_monthly.py',
     'src/editorial/candidates.py',
@@ -115,6 +117,7 @@ SOURCES = (
     'src/two_bot/types.py',
 )
 RESOURCES = (
+    ("src/data/registry/cities.csv", "data/cities.csv"),
     ("src/data/registry/place_registry.json", "data/place_registry.json"),
     ("src/data/registry/country_codes.json", "data/country_codes.json"),
     ("src/data/registry/country_names.json", "data/country_names.json"),

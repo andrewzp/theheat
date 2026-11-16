@@ -32,7 +32,7 @@ from src.editorial.observed_scope import enabled, FORECAST_KINDS, MESSAGE
 # The THEHEAT_AUTOSHIP_ON_CRITIC_PASS flag and the critic remain the
 # kill-switches; flag OFF is byte-for-byte the manual behavior.
 AUTOSHIP_ALLOWLIST: frozenset[str] = frozenset({
-    "monthly_climate_report", "coastal_observed_report", "observed_metar_contrast",
+    "monthly_climate_report", "coastal_observed_report", "observed_metar_contrast", "satellite_precipitation_report",
     "hot10", "co2_milestone", "ch4_milestone",
     "all_time_high", "all_time_low",
     "monthly_high", "monthly_low",
@@ -116,6 +116,12 @@ def recommend_approval_policy(
         return ApprovalPolicy(key="observed_airport_pair", mode="armed_auto" if armed else "manual_only",
             recommended_delay_minutes=1 if armed else None, can_auto_approve=armed,
             reason="Two same-time airport observations; source opt-in, current exact-point rereads and all required checks remain mandatory.")
+    if tweet_type == "satellite_precipitation_report":
+        from src.data.rainfall_observed import settings_hold
+        armed = settings_hold() is None
+        return ApprovalPolicy(key="daily_satellite_rainfall_point", mode="armed_auto" if armed else "manual_only",
+            recommended_delay_minutes=1 if armed else None, can_auto_approve=armed,
+            reason="One completed-day satellite estimate; exact product/point/window, all required checks and current-source rereads remain mandatory.")
     copy_total = _candidate_total(candidate_score)
     is_strong = signal_total >= 72 and copy_total >= 72
     is_good = signal_total >= 66 and copy_total >= 68

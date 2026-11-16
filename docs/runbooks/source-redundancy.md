@@ -63,3 +63,27 @@ automatic replacement story should be inferred.
 records a hard failure with `<source> primary failed: …; <leg> witness failed: …`,
 which the sentinel classifies and files normally. That is a genuine outage of both
 legs — investigate per the usual source-down runbook.
+
+
+## Completed-day satellite precipitation report (default off)
+
+`THEHEAT_GPM_OBSERVED_REPORT=1` permits one narrowly scoped text-report type,
+`satellite_precipitation_report`, from the existing IMERG Late V07 daily reader.
+It requires observed-only mode, current automatic-publication authorization,
+the critic, one candidate and writer sample, and revision/refill disabled.
+The operation remains limited to one attempted candidate even with ranking off;
+a failed paid attempt never buys another point from the free nomination slate.
+
+The report names one monitored point, the completed UTC day and 24-hour window,
+and NASA's satellite-estimated water-equivalent precipitation. It describes a
+cell **near** the place, not a city-wide/gauge total, record, impact or identified
+rain/snow phase. The 150–1,000 mm nomination range is an operating bound, not a
+physical-maximum or rarity claim. Retrieval time remains unknown when the reader
+did not retain one; unchanged readings never get invented fresh timestamps.
+
+Exact-date primary-source rereads are required before writing, admission and
+sending. Changed/unavailable data, retired release epochs, obsolete checks,
+edits and legacy uncertain/pending deliveries hold the report. All required
+model checks, the final citation-inclusive copy cap and sender no-resend rules
+still apply. The new report grants no automatic image attachment or publication.
+The flag defaults off; deploying code does not show it has run or reached X.

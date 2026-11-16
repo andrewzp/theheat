@@ -466,6 +466,12 @@ def _automatic_source_hold(candidate: "TriageCandidateBundle") -> str | None:
             return "autoship_source_stale"
     from src.data import coastal_observed
     from src.data import awc_observed
+    from src.data import rainfall_observed
+    if candidate.legacy_type == rainfall_observed.KIND or rainfall_observed.is_family(bundle):
+        if candidate.legacy_type != bundle.signal_kind or candidate.event_id != bundle.event_id:
+            return "rainfall_source_identity_changed"
+        return rainfall_observed.current_bundle_hold(bundle, now=_utc_now,
+            minimum_delay=timedelta(minutes=rainfall_observed.AUTO_DELAY_MINUTES))
     if candidate.legacy_type == awc_observed.KIND or awc_observed.is_family(bundle):
         if candidate.legacy_type != bundle.signal_kind or candidate.event_id != bundle.event_id:
             return "awc_source_identity_changed"
