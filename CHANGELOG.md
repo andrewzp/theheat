@@ -1,3 +1,7 @@
+## 0.9.109.98
+
+- Give observed-airport writing explicit time, date, scope and copy-budget requirements, and refuse an incorrect explicit UTC weekday before provider checks or publication.
+
 ## 0.9.109.97
 
 - Skip the forecast rainfall fallback before network requests in observed-only mode. Preserve the NASA observation paths, source failures and existing flag-off behavior.

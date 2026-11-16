@@ -212,6 +212,15 @@ def build_writer_user_prompt(
                    "sample time (HH:MM UTC) and UTC reporting date (day plus month, e.g. 13 Nov); "
                    "preserve preliminary status when present. Do not describe an older sample as conditions now. "
                    "Use one supported residual value as intelligible context; the source link is appended before checks.")
+    if bundle.signal_kind == "observed_metar_contrast":
+        prompt += ("\n\nobserved_airport_copy_requirements: Include BOTH named airports and countries, "
+                   "their observed Celsius temperatures and the Celsius gap, sample_clock_utc exactly "
+                   "as HH:MM UTC, and sample_date_utc as day plus month. These are mandatory facts, "
+                   "not optional background. Use one compact fact-first sentence; 'same hour' alone "
+                   "does not supply the clock or date. Omit weekdays, relative dates, source "
+                   "parentheticals and filler: the exact source citation is appended before checks. "
+                   "Fit all required facts within body_max_scalars below. Do not imply a record, "
+                   "a global ranking or impacts. If the complete claim cannot fit, decline it.")
     budget = automatic_copy_budget(bundle)
     if budget is not None:
         prompt += "\n\nAutomatic publication copy budget: " + json.dumps(budget, sort_keys=True, ensure_ascii=False)

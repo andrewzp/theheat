@@ -38,6 +38,10 @@ HISTORY_URL = BASE + "/api/data/metar"
 MAX_COMPRESSED = 2 * 1024 * 1024
 MAX_EXPANDED = 8 * 1024 * 1024
 _MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+_WEEKDAY_ALIASES = {name.casefold(): index for index, names in enumerate((
+    ("Monday", "Mon"), ("Tuesday", "Tue", "Tues"), ("Wednesday", "Wed"),
+    ("Thursday", "Thu", "Thur", "Thurs"), ("Friday", "Fri"), ("Saturday", "Sat"), ("Sunday", "Sun"),
+)) for name in names}
 
 
 class ObservedHeld(ValueError):
@@ -493,6 +497,34 @@ def claim_failures(text, bundle, *, now=None):
                      r"deadly|dangerous|life.threatening|climate change|caused|warning)\b", prose, re.I):
             return ["awc_unsupported_upgrade"]
         target = _time(evidence["points"][0]["valid_time"])
+        calendar_prose = prose
+        for point in evidence["points"]:
+            location = re.sub(r"\b(?:Arpt|Airport)\b", "", point["airport"]).strip()
+            name = r"(?<!\w)" + re.escape(location) + r"(?!\w)"
+            if location.casefold() in _WEEKDAY_ALIASES:
+                # A single weekday name needs location context; never erase a
+                # separate calendar label merely because an airport shares it.
+                country = re.escape(point["country"])
+                name = (r"\bairports?\s+" + name + "|" + name
+                        + rf"(?=\s+airports?\b|\s*,\s*{country}\b)")
+            calendar_prose = re.sub(name, "", calendar_prose, flags=re.I)
+        days = "|".join(sorted(_WEEKDAY_ALIASES, key=len, reverse=True))
+        months = "|".join(_MONTHS)
+        for match in re.finditer(r"\b(?:" + days + r")\b", calendar_prose, re.I):
+            day = match.group().casefold()
+            index = _WEEKDAY_ALIASES[day]
+            full_name = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")[index]
+            # Abbreviations can also be ordinary words ("sat", "sun"). Only
+            # treat them as days beside a date/clock or after the label "on".
+            if day != full_name and not (
+                re.search(r"\bon\s+$", calendar_prose[:match.start()], re.I)
+                or re.match(r"\.?\s*,?\s*(?:\d{1,2}\s+(?:" + months + r")\b|(?:" + months
+                            + r")\s+\d{1,2}\b|(?:at\s+)?\d{1,2}:\d{2}\b)",
+                            calendar_prose[match.end():], re.I)
+            ):
+                continue
+            if index != target.weekday():
+                return ["awc_weekday_mismatch"]
         if (not re.search(rf"\b{target:%H:%M}\s*UTC\b", prose, re.I)
                 or not (target.date().isoformat() in prose
                     or re.search(rf"\b(?:{target.day}\s+{_MONTHS[target.month-1]}|{_MONTHS[target.month-1]}\s+{target.day})\b", prose, re.I))):
