@@ -497,6 +497,8 @@ def fetch_daily_precip(
     readings are tagged ``source_leg="open_meteo"`` and later graded
     ``model_fallback``. Downloaded grids inspect the entire qualified watchlist;
     ``max_cities`` caps only per-city network paths, up to MAX_NETWORK_CITIES.
+    Observed-only editorial scope keeps the NASA paths but never requests the
+    forecast witness; primary failures retain their ordinary failure handling.
     Return shape is unchanged.
     """
     # One sampling date for both legs even if the primary crosses midnight or
@@ -528,8 +530,10 @@ def fetch_daily_precip(
     def witness() -> list[CityPrecipReading]:
         return _fetch_precip_open_meteo(cities, max_cities=max_cities, today=today, **observe)
 
+    from src.editorial.observed_scope import enabled as observed_only_enabled
+
     try:
-        readings = with_witness(
+        readings = primary() if observed_only_enabled() else with_witness(
             primary, witness, source_key="gpm_imerg", leg_label="open_meteo"
         )
     except SourceSkipped as exc:
