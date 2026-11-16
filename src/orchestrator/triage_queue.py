@@ -446,10 +446,24 @@ def _automatic_type_may_arm(kind: str, signal_total: int) -> bool:
 
 def _automatic_source_hold(candidate: "TriageCandidateBundle") -> str | None:
     """Known source/time refusals before selection, without any source refresh."""
+    from src.editorial.approval import AUTOSHIP_ALLOWLIST, autoship_max_age_hours, autoship_on_critic_pass_enabled
+    from src.orchestrator.posting import _autoship_freshness_anchor
     from src.data import air_quality_current
     from src.data.nws_alerts import NWS_URL
 
     bundle = candidate.bundle
+    if autoship_on_critic_pass_enabled() and candidate.legacy_type in AUTOSHIP_ALLOWLIST:
+        now = _utc_now()
+        # A newly written draft cannot repair an already stale source date.
+        # Reuse the sender's exact anchor (including validated C3S retrieval),
+        # without granting source validity or changing the final send guard.
+        anchor = _autoship_freshness_anchor({
+            "type": candidate.legacy_type, "created_at": now.isoformat(),
+            "tweet_date": candidate.tweet_date,
+            "review_context": {"two_bot": {"bundle": bundle.to_dict()}},
+        })
+        if anchor is not None and now - anchor > timedelta(hours=autoship_max_age_hours()):
+            return "autoship_source_stale"
     from src.data import coastal_observed
     if candidate.legacy_type == coastal_observed.KIND or bundle.signal_kind == coastal_observed.KIND:
         if candidate.legacy_type != bundle.signal_kind or candidate.event_id != bundle.event_id:
@@ -1085,6 +1099,7 @@ def _drain_and_write_triage_queue(
             stage = "automatic_policy"
             if source_hold:
                 stage = ("air_quality_source" if source_hold.startswith("air_quality_") else
+                         "autoship_source" if source_hold.startswith("autoship_") else
                          "coastal_source" if source_hold.startswith("coastal_") else "nws_source")
             reason = source_hold or "type_has_no_automatic_arming_route"
             _bump_source_field_in_run(current_run, candidate.source, "triaged_out")
