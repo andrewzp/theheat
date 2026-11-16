@@ -239,3 +239,21 @@ def test_ordinary_disabled_profile_does_not_buy_manual_only_copy(monkeypatch, wo
     monkeypatch.setenv(flag, "0")
     collect(world)
     assert called == [] and state["drafts"] == [] and transport.x_posts == []
+
+
+@pytest.mark.parametrize("country_named", [False, True])
+def test_country_context_is_real_before_automatic_admission(monkeypatch, world, country_named):
+    transport, state, _, called, _, _ = world
+    transport.rows = [next(row for row in gpm.load_cities() if row["city"] == "Ahmedabad")]
+    place = "Ahmedabad, India" if country_named else "Ahmedabad"
+    body = TEXT.split("\n")[0].replace("Paris, France", place)
+    monkeypatch.setattr(pipeline.writer, "write_tweet", stage_fakes(called, copy=body)[0])
+    collect(world)
+    if country_named:
+        draft, = state["drafts"]
+        assert called == ["writer", "safety", "fact_check", "critic"]
+        assert draft["approval_binding"]["mode"] == "auto"
+        assert draft["text"] == body + "\n" + report.SOURCE_URL
+    else:
+        assert called == ["writer"] and state["drafts"] == []
+    assert transport.x_posts == []

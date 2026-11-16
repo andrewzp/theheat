@@ -216,6 +216,24 @@ def test_free_slate_is_bounded_order_independent_and_conflicts_never_win(reading
     assert report.nominate([conflict, reading], {}, now=NOW) == []
 
 
+@pytest.mark.parametrize("amount", [149.9, 1000.1, float("nan")])
+@pytest.mark.parametrize("reverse", [False, True])
+def test_ineligible_conflicting_copy_still_holds_the_qualifying_copy(reading, enabled, amount, reverse):
+    copies = [reading, replace(reading, mm_total=amount)]
+    assert report.nominate(copies[::-1] if reverse else copies, {}, now=NOW) == []
+
+
+def test_ordinary_in_cannot_supply_india_country_context(reading, enabled):
+    row = next(x for x in gpm.load_cities() if x["city"] == "Ahmedabad")
+    key = places.event_location_key(row["city"], row["country"], row["lat"], row["lon"])
+    india = replace(reading, city=row["city"], country=row["country"], lat=float(row["lat"]),
+                    lon=float(row["lon"]), event_id=f"gpm_imerg_{key}_{DAY}")
+    story = report.build_bundle(report.evidence_for(india, now=NOW), now=NOW)
+    without_country = TEXT.replace("Paris, France", "Ahmedabad")
+    assert report.claim_failures(without_country, story, now=NOW) == ["rainfall_country_required"]
+    assert report.claim_failures(TEXT.replace("Paris, France", "Ahmedabad, India"), story, now=NOW) == []
+
+
 def test_draft_retagging_and_old_uncertain_or_pending_aliases_hold(bundle, reading, enabled):
     draft = {"type": report.KIND, "event_id": bundle.event_id, "text": TEXT,
              "review_context": {"two_bot": {"bundle": bundle.to_dict()}}}

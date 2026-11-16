@@ -190,9 +190,32 @@ def nominate(readings, bot_state, *, now=None):
     from src.data import gpm_imerg
 
     clock = _clock(now)
-    qualified: dict[str, dict[str, Any] | None] = {}
+    # Detect disagreements before range/product eligibility can discard one
+    # copy. A malformed duplicate must not silently make its sibling trustworthy.
+    identities: dict[tuple[str, str], dict[str, Any] | None] = {}
+    retained = []
     for reading in readings:
         if not isinstance(reading, gpm_imerg.CityPrecipReading):
+            continue
+        raw = asdict(reading)
+        keys = []
+        if isinstance(reading.event_id, str) and reading.event_id:
+            keys.append(("event", reading.event_id))
+        try:
+            point = places.event_location_key(reading.city, reading.country, reading.lat, reading.lon)
+            day = date.fromisoformat(reading.date)
+            keys.append(("point_day", point + "_" + day.isoformat()))
+        except (ValueError, TypeError, KeyError, OverflowError):
+            pass
+        for key in keys:
+            if key not in identities:
+                identities[key] = raw
+            elif identities[key] != raw:
+                identities[key] = None
+        retained.append((reading, keys))
+    qualified: dict[str, dict[str, Any]] = {}
+    for reading, keys in retained:
+        if not keys or any(identities[key] is None for key in keys):
             continue
         try:
             bundle = build_bundle(evidence_for(reading, now=clock), now=clock)
@@ -203,13 +226,8 @@ def nominate(readings, bot_state, *, now=None):
                 or any(row.get("event_id") == bundle.event_id for row in bot_state.get("drafts", []))
                 or legacy_point_day_hold(bundle, bot_state)):
             continue
-        # A conflicting copy of a point/day cannot nominate whichever came first.
-        old = qualified.get(bundle.event_id)
-        if old is not None and old != bundle.to_dict():
-            qualified[bundle.event_id] = None
-        elif bundle.event_id not in qualified:
-            qualified[bundle.event_id] = bundle.to_dict()
-    rows = [value for value in qualified.values() if isinstance(value, dict)]
+        qualified.setdefault(bundle.event_id, bundle.to_dict())
+    rows = list(qualified.values())
     rows.sort(key=lambda value: (-_time(value["when"]).timestamp(),
                                 -value["headline_metric"]["value"], value["event_id"]))
     return [build_bundle(row["raw_signal_dump"]["evidence"], now=clock)
@@ -303,8 +321,7 @@ def claim_failures(text, bundle, *, now=None):
             return ["rainfall_quantity_label_required"]
         if not re.search(r"\bnear\s+" + re.escape(point["city"]) + r"\b", prose, re.I):
             return ["rainfall_point_scope_required"]
-        if not any(re.search(r"\b" + re.escape(label) + r"\b", prose, re.I)
-                   for label in {point["country"], reading.country, point["country_code"]}):
+        if not re.search(r"\b" + re.escape(point["country"]) + r"\b", prose, re.I):
             return ["rainfall_country_required"]
         if not re.search(r"\b(?:24\s*(?:hours?|h)|one day|daily)\b", prose, re.I):
             return ["rainfall_daily_window_required"]
