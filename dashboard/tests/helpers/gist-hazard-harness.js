@@ -4,7 +4,7 @@
  * Shared by the route tests and the cross-language fake-X journey.
  */
 import assert from "node:assert/strict"
-import { spawnSync } from "node:child_process"
+import { spawnFixtureWithFileInput } from "./fixture-file-input.js"
 import { createHash } from "node:crypto"
 import path from "node:path"
 import { importFresh } from "./import-fresh.js"
@@ -39,7 +39,7 @@ export function pythonJSON(code, input) {
   // Keep the original deadline and assertions. A slow child leaves bounded
   // stack evidence instead of only an empty stderr/SIGTERM after 60 seconds.
   const diagnostic = "import faulthandler\nfaulthandler.dump_traceback_later(15, repeat=True)\n"
-  const result = spawnSync(python, ["-c", diagnostic + code], { cwd: root, input: JSON.stringify(input), encoding: "utf8", timeout: 60000,
+  const result = spawnFixtureWithFileInput(python, ["-c", diagnostic + code], { cwd: root, input: JSON.stringify(input), encoding: "utf8", timeout: 60000,
     env: { PATH: process.env.PATH, HOME: "/nonexistent-invented-gist-test", LC_ALL: "C", LANG: "C", NETRC: "/dev/null",
       PYTHON_DOTENV_DISABLED: "1", PYTHONDONTWRITEBYTECODE: "1", NO_PROXY: "*", no_proxy: "*",
       // The invented local media store for store-backed families (never a credential).
