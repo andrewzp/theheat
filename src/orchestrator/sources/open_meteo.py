@@ -941,6 +941,8 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
     # "ghcn": NOAA GHCN-Daily stations via superghcnd_diff + SQLite threshold cache.
     # Hot 10 leaderboard (run_leaderboard) always uses Open-Meteo regardless of this flag.
     _signals_provider = os.environ.get("THEHEAT_SIGNALS_PROVIDER", "open_meteo").lower()
+    from src.editorial.observed_scope import enabled as observed_only_enabled
+    observed_only = observed_only_enabled()
     global_stations = _signals_provider == "both_global"
     combined = _signals_provider in {"both", "both_global"}
     print(f"[alerts] Checking extreme climate signals (provider={_signals_provider})...")
@@ -971,6 +973,15 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
                 "THEHEAT_SIGNALS_PROVIDER must be 'open_meteo', 'ghcn', 'both', or 'both_global', "
                 f"got {_signals_provider!r}"
             )
+        if observed_only and _signals_provider == "open_meteo":
+            _record_source_run(
+                current_run, bot_state, "open_meteo_extreme_signals", signals_start,
+                status="skipped", observed=0, promoted=0, drafted=0,
+                note="Forecast acquisition intentionally skipped: observed_weather_only",
+                details={"provider": _signals_provider, "reason": "observed_weather_only",
+                         "acquisition": "not_requested"},
+            )
+            return
         if _signals_provider == "ghcn":
             bundles, country_records = _verified_ghcn_signals(bot_state, ghcn_pipeline_metrics, ghcn_supply=ghcn_supply, current_run=current_run)
         elif _signals_provider == "open_meteo":
@@ -985,9 +996,16 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
             # Open-Meteo only needs the non-US cities — the US comes from GHCN —
             # so skip the US city fetches entirely.
             world_cities = [c for c in cities if not is_us_location(c.get("country"))]
-            om_bundles, om_country = _run_world_cached_half(
-                world_cities, open_meteo_pipeline_metrics, bot_state=bot_state,
-            )
+            if observed_only:
+                om_bundles, om_country = [], []
+                open_meteo_pipeline_metrics.update(
+                    status="skipped", reason="observed_weather_only",
+                    forecast_attempted=0, warm_attempted=0,
+                )
+            else:
+                om_bundles, om_country = _run_world_cached_half(
+                    world_cities, open_meteo_pipeline_metrics, bot_state=bot_state,
+                )
             bundles, country_records = partition_us_world(
                 ghcn_bundles, ghcn_country, om_bundles, om_country,
                 global_stations=global_stations,
@@ -1559,6 +1577,13 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
                 "open_meteo_pipeline_metrics": dict(open_meteo_pipeline_metrics),
                 "events": ghcn_event_log[:200],
             }
+            if observed_only:
+                # An editorial skip is neither a world-source outage nor proof
+                # that the selected station leg successfully served any data.
+                source_status = ghcn_pipeline_metrics["status"]
+                note = (f"provider:{_signals_provider} ghcn[{ghcn_funnel}] "
+                        f"world[skipped:observed_weather_only] | {signal_breakdown}")
+                details["selected_acquisition_provider"] = "ghcn"
         elif _signals_provider == "ghcn" and ghcn_pipeline_metrics:
             source_status = ghcn_pipeline_metrics["status"]
             funnel = (

@@ -114,12 +114,12 @@
       "src/two_bot/types.py": "951044ca2582c8b96872bdd5b8ed8fc60546a58305aa8b06de50075206cc817e"
     },
     "format": "saved-source-svg-preview-v2",
-    "policy_source_sha256": "d3ed792f237fd947411a82d04d6f86e49936e5741c6f827879d0852dece8ead8",
+    "policy_source_sha256": "941c73740766ad555a6d721dab9031420ae4543e4de87d8ac715fd7429a3ab4d",
     "resource_sources": {
       "src/data/registry/country_codes.json": "data/country_codes.json",
       "src/data/registry/place_registry.json": "data/place_registry.json"
     },
     "schema_version": 1
   },
-  "runtime_sha256": "36e6f189c50ed0e9eb0358420b4b63c40c3849cdaeb5e63fc0de303e8fb42f16"
+  "runtime_sha256": "4937012c7d46f8edfc73637467f1ddfbec3370d4c981b63667d8294ce6e02edc"
 }
