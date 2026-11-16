@@ -1,9 +1,9 @@
-## 0.9.109.95
-
 ## 0.9.109.96
 
 - Invoke the opted-in observed-airport source in ordinary sequential alert collection as well as concurrent collection. Preserve its source checks, one-candidate limits and existing automatic sender gates.
 - Exercise both ordinary collection branches through parser, required checks, saved approval and a fixture sender, including disabled-source refusal.
+
+## 0.9.109.95
 
 - Add a default-off, observed-only airport temperature comparison, with exact
   source rereads before writing, saving and sending. Preserve one writer sample,
