@@ -38,6 +38,7 @@ HISTORY_URL = BASE + "/api/data/metar"
 MAX_COMPRESSED = 2 * 1024 * 1024
 MAX_EXPANDED = 8 * 1024 * 1024
 _MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+_WEEKDAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
 
 
 class ObservedHeld(ValueError):
@@ -493,6 +494,15 @@ def claim_failures(text, bundle, *, now=None):
                      r"deadly|dangerous|life.threatening|climate change|caused|warning)\b", prose, re.I):
             return ["awc_unsupported_upgrade"]
         target = _time(evidence["points"][0]["valid_time"])
+        calendar_prose = prose
+        for point in evidence["points"]:
+            location = re.sub(r"\b(?:Arpt|Airport)\b", "", point["airport"]).strip()
+            calendar_prose = re.sub(re.escape(location) + r"\s+(?:airport|airports)\b", "",
+                                    calendar_prose, flags=re.I)
+        weekdays = re.findall(r"\b(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\b",
+                              calendar_prose, re.I)
+        if any(day.casefold() != _WEEKDAYS[target.weekday()].casefold() for day in weekdays):
+            return ["awc_weekday_mismatch"]
         if (not re.search(rf"\b{target:%H:%M}\s*UTC\b", prose, re.I)
                 or not (target.date().isoformat() in prose
                     or re.search(rf"\b(?:{target.day}\s+{_MONTHS[target.month-1]}|{_MONTHS[target.month-1]}\s+{target.day})\b", prose, re.I))):

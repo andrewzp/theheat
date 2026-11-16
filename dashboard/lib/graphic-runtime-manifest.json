@@ -1,6 +1,6 @@
 {
   "identity": {
-    "archive_sha256": "170318bcd2984b7c528bd22baed1bd6413603b6319ff77701c7ee55d7c560073",
+    "archive_sha256": "0a6778ff1235e9e86ca581121a086cf38e2577442c4c2675977b6acf61cb021f",
     "deployment_files": {
       "api/graphic_preview.py": "f7521adcbd618f4b65b2a0de30ea62aaff4cdd36f2254e9af38bf68646d361ad",
       "api/graphic_reader_status.py": "5e9685d699625a4eea9d5be884b6e266939a0ad344a2997351ba79bd114407ba",
@@ -25,7 +25,7 @@
       "src/data/air_quality.py": "89975b423632d9d6a0b3db767df8dae8cc4e7e7c496a350d396d7e303e820e33",
       "src/data/air_quality_contract.py": "7f9de8f7fcd6836a3e4fb32ea8c1a35a3c9981bcede6aea2d74770f12539d667",
       "src/data/air_quality_evidence.py": "677713bb8916c4bcd51d407a5b19072f54532f5f46db116914af6b3fcac9f4f7",
-      "src/data/awc_observed.py": "a0dc9e4266bd765f151fc98984821c19dcc68f5552917fc3b2e78a227538768f",
+      "src/data/awc_observed.py": "c8901f33d629630c0064a1321db494a94687d10f43b26460505d8641c0117b5f",
       "src/data/c3s_monthly.py": "babc1416c324b4edda24bdd0a7bd7a8a39ceda2bee7bf826ae4b5f54302d16c1",
       "src/data/coastal_observed.py": "6d5f56258134602bd199b16f43f061cd2a53212dc999bfc87307cc23950516be",
       "src/data/coral_evidence.py": "723b04dc720538b5dab0ab6290f2f774c877796963a69aa46eb541e00bbf84ee",
@@ -116,7 +116,7 @@
       "src/two_bot/types.py": "951044ca2582c8b96872bdd5b8ed8fc60546a58305aa8b06de50075206cc817e"
     },
     "format": "saved-source-svg-preview-v2",
-    "policy_source_sha256": "29a745f13b895ab146401c603daa0ddc8aed9ecaa643cf6e04aee6a25c43f1e0",
+    "policy_source_sha256": "c0138bc6da51fc9efd2659d324fd3827b6bd145e37c86da66c0c1650be9bbcaa",
     "resource_sources": {
       "src/data/registry/country_codes.json": "data/country_codes.json",
       "src/data/registry/country_names.json": "data/country_names.json",
@@ -124,5 +124,5 @@
     },
     "schema_version": 1
   },
-  "runtime_sha256": "2a37aecca242f22a430a9babda534cb1c8a13efaad4c005729dd8c4346d2e978"
+  "runtime_sha256": "e69310d7f0609e627e5d91b54796c4dc57b5138eeafe08e46eb363ba3dd09866"
 }
