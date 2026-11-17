@@ -250,12 +250,24 @@ def test_dynamic_domain_validator_still_runs_and_refuses_after_a_pure_hit(retain
     bundle, sha = stored(retained)
     original = temperature_evidence.temperature_aggregate_failures
     trace = []
+    refuse = False
     def failures(value):
-        trace.append(value.event_id)
-        return original(value) if len(trace) == 1 else ["Invented changed domain validator"]
+        # Source projection checks also call this guard with its required
+        # fields only. Count the full source audit separately from that view.
+        trace.append(getattr(value, "event_id", None))
+        return ["Invented changed domain validator"] if refuse else original(value)
     monkeypatch.setattr(temperature_evidence, "temperature_aggregate_failures", failures)
     with adapter._retained_calculation_scope():
-        adapter._qualified(bundle, sha)
+        first = adapter._qualified(bundle, sha)
+        first_audits = trace.count(bundle.event_id)
+        assert first_audits > 0 and len(calls) == 1
+        assert adapter._qualified(bundle, sha) == first
+        assert trace.count(bundle.event_id) > first_audits and len(calls) == 1
+        before_refusal = trace.count(bundle.event_id)
+        # Flip between qualifications, independently of how many source/domain
+        # validators the complete audit legitimately invokes in one pass.
+        refuse = True
         with pytest.raises(ValueError, match="temperature_aggregate_unqualified"):
             adapter._qualified(bundle, sha)
-        assert len(trace) == 2 and len(calls) == 1
+        assert trace.count(bundle.event_id) > before_refusal
+        assert len(calls) == 1
