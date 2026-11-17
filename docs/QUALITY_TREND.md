@@ -90,6 +90,7 @@ We grade drafts on an A through F rubric in `docs/DRAFT_CORPUS.md` (the longitud
 | 2026-11-14 | 0 | — | — | — | — | **N/A** | — | No fresh drafts — 1 pending (Shymkent hot10 B, previously graded). No new drafts entered state at all since the Nov 13 monthly_climate_report (no auto-publishes either; hot10 watch stays n=5). Shymkent strict staleness candidate (~141h); gist write skipped (invalid token); TTL sweep due ~Nov 15 18:03Z. No proposal evidence updates. 5th consecutive no-fresh-draft cycle. |
 | 2026-11-15 | 0 | — | — | — | — | **N/A** | — | No fresh drafts — 1 pending (Shymkent hot10 B, previously graded). Zero intake since the Nov 13 monthly_climate_report (~57h; no auto-publishes; hot10 watch stays n=5). Shymkent strict staleness candidate (~165h); gist write skipped (invalid token); TTL sweep due ~18:03Z today. No proposal evidence updates. 6th consecutive no-fresh-draft cycle. |
 | 2026-11-16 | 0 | — | — | — | — | **N/A** | — | No fresh drafts — queue empty. Shymkent hot10 cleared by bot TTL sweep Nov 15 18:56Z. Zero intake since Nov 13 06:15Z (~81h); selection holding 4–9 fire/absolute_extreme candidates as manual-only, 0 auto-eligible. No proposal evidence updates. 7th consecutive no-fresh-draft cycle. |
+| 2026-11-17 | 1 | 0 | 1 | 0 | 0 | **0%** | ✗ | n=1 fresh: Saint Louis (Senegal) +39°C / Yakutsk −38°C `observed_metar_contrast` B — first of type in corpus. Clean exact-figure juxtaposition, Wodehouse-clean, no close; telegraphic slash/sign-prefix format. P_close +1. Ends 7-cycle no-fresh-draft run. No stale drafts (observed, ~2h old). Gist write not needed. |
 
 **Trend interpretation:**
 The Apr 25 jump to 43% was real but came from a small cohort (7 drafts) and didn't sustain into Apr 27. The Apr 27 regression has named causes (Sonnet rewrite path, verb-list gap in opener regex, era-anchor over-deployment, political anchor curation error). All four have proposed fixes documented in `docs/DRAFT_CORPUS.md` Apr 27 implications section. Next data point: tomorrow's scheduled grader (fires 2026-04-27 06:00 UTC) on the Apr 26-27 cycle output under v2.5 + post-humor-lens fixes.
@@ -99,6 +100,10 @@ We've been in the 9-43% band for three cycles. Need to clear 50% sustained.
 ## Rejection events
 
 Drafts that got rejected, with dates.
+
+### 2026-11-17 — Staleness bulk-reject: 0 candidates
+
+1 pending (`draft_20261117_131754_52`, observed METAR pair, ~2h old, no forecast date). Nothing to reject; no gist write attempted (`gh` token still invalid — "The token in GH_TOKEN is invalid").
 
 ### 2026-11-16 — Staleness bulk-reject: 0 candidates (queue empty)
 

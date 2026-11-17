@@ -2,6 +2,14 @@
 
 Living plan for closing the gap between the bot's current voice quality and the **resumption bar** (majority A-grade rate per cycle). Refined daily by the autonomous grading agent (cron `0 15 * * *`), reviewed and implemented by the human operator.
 
+> **Nov 17: 1 fresh draft, 0% A-rate (0 A / 1 B; n=1).** First `observed_metar_contrast` in corpus:
+> "77°C gap at 13:00 UTC 17 Nov: Saint Louis airport, Senegal +39°C / Yakutsk airport, Russia −38°C."
+> Clean exact-figure juxtaposition, Wodehouse-clean, no close; telegraphic slash format (watch, n=1).
+> P_close +1 cycle. Ends the 7-cycle no-fresh-draft run. **Retired 5 proposals** under the 3-graded-cycle
+> rule now that 6 graded cycles have accrued since the Jul–Oct gap (Oct 28 – Nov 17): P_tier, P_nws, P9,
+> P_compound (absence of opportunity — the signal types haven't recurred; re-activate on first reappearance)
+> and P_dust (resolved: WHO anchor held Oct 28 / Oct 31 / Nov 6). Active list is now P_close > P_event_sat > P5.
+>
 > **Nov 16: 0 fresh drafts — queue empty (Shymkent cleared by TTL sweep Nov 15 18:56Z). No proposal
 > evidence updates.** 7th consecutive no-fresh-draft cycle; zero intake since Nov 13 06:15Z (~81h).
 > Selection is holding 4–9 fire/absolute_extreme candidates as manual-only; nothing auto-eligible.
@@ -256,14 +264,22 @@ Living plan for closing the gap between the bot's current voice quality and the 
 |---|---|
 | Bot commit | `0.9.81.0`+ per BRIEFING.md 2026-06-28 (reganom recency window + honesty-gating, PR #347; world-half eval-gating fix, PR #345; reganom writer-voice upgrade, PR #349. Prior: 0.9.67.0, R-02 NOAA HMS independent fire witness; 30-item audit backlog complete [S-01..S-35]; source-redundancy lane R-00..R-09; bot active since 2026-06-01) |
 | Voice engine version | **two-bot + Attenborough/Economist voice + all-sources triage + evidence contract + diversity gate + automation dashboard** (Sonnet 4.6 writer prompt-cached + Gemini 2.5 Flash fact-checker [skips unknown kinds] + Gemini 2.5 Pro critic [assesses relative to available data]; all 23 sources on triage path via PR #150; evidence contract gates writer via 0.9.0.0; pending-type cap default 3 + per-type TTL sweep [fast 7d, coral/DHW 21d] via 0.9.6.0/0.9.16.0; `THEHEAT_TRIAGE_ENABLED=1` in CI; `THEHEAT_WRITER_SAMPLES=1` + `THEHEAT_CRITIC_REVISE_ENABLED=0` since 2026-07-14 (economics P0 paired flip; was 2/1 from 2026-06-13); reganom (`reanalysis_anomaly`) enabled `manual_only` since 2026-06-27 with 2-day recency + honesty-gating [PR #347]; routine beacon writes the `ROUTINE_BEACON` repo variable via `gh variable set` each cycle) |
-| Last cycle A-rate | **N/A (0 fresh, Nov 10–16).** Last measured: **0% (0/1, Nov 9; Shymkent hot10 B).** Prior: 0% (0/1, Nov 6; Riyadh dust B-). Prior: 0% (0/1, Nov 4; hot10 B). Prior: 0% (0/4, Oct 31). Prior: 0% (0/15, Oct 28). Prior measured: **— (0 fresh drafts, Jul 6).** Most recent measured: **20% (1/5 fresh, Jul 5)** — eastern Siberia fire A- (4th confirmation of the permafrost-carbon fire mechanic), 1 B+, 1 B, 1 B-, 1 C+. Prior: 20% (2/10, Jul 4); 33% (1/3, Jul 3); 0% (0/3, Jul 2); 0% (0/4, Jul 1); 22% (2/9 non-stale, Jun 30); 80% Jun 29 [BAR CLEARED]. |
+| Last cycle A-rate | **0% (0/1, Nov 17; Saint Louis/Yakutsk observed_metar_contrast B).** Prior: N/A (0 fresh, Nov 10–16). Prior measured: **0% (0/1, Nov 9; Shymkent hot10 B).** Prior: 0% (0/1, Nov 6; Riyadh dust B-). Prior: 0% (0/1, Nov 4; hot10 B). Prior: 0% (0/4, Oct 31). Prior: 0% (0/15, Oct 28). Prior measured: **— (0 fresh drafts, Jul 6).** Most recent measured: **20% (1/5 fresh, Jul 5)** — eastern Siberia fire A- (4th confirmation of the permafrost-carbon fire mechanic), 1 B+, 1 B, 1 B-, 1 C+. Prior: 20% (2/10, Jul 4); 33% (1/3, Jul 3); 0% (0/3, Jul 2); 0% (0/4, Jul 1); 22% (2/9 non-stale, Jun 30); 80% Jun 29 [BAR CLEARED]. |
 | Resumption bar | majority A (>50%) sustained — **cleared Jun 29 (80%, n=5); Jun 30 returned 22%; Jul 1 0% (n=4); Jul 2 0% (n=3); Jul 3 33% (n=3); Jul 4 20% (n=10); Jul 5 20% (n=5); Jul 6 no fresh drafts to measure**. |
-| Gap | **50 pp below bar (last measured Nov 9, 0%, n=1; no fresh drafts Nov 10–16; Nov 6, 0%, n=1; Nov 4, 0%, n=1; Oct 31, 0%, n=4; Oct 28 also 0%, n=15).** Prior: **30 pp below bar** (50% − 20%, most recent measured cycle Jul 5, n=5). No fresh measurement Jul 6. Seven cycles since the Jun 29 peak have ranged 0–33% depending on signal mix. P_tier and P_close remain the two most active-capping levers, both unchanged since Jul 5 (no fresh evidence Jul 6). |
+| Gap | **50 pp below bar (Nov 17, 0%, n=1). Prior: Nov 9, 0%, n=1; no fresh drafts Nov 10–16; Nov 6, 0%, n=1; Nov 4, 0%, n=1; Oct 31, 0%, n=4; Oct 28 also 0%, n=15).** Prior: **30 pp below bar** (50% − 20%, most recent measured cycle Jul 5, n=5). No fresh measurement Jul 6. Seven cycles since the Jun 29 peak have ranged 0–33% depending on signal mix. P_tier and P_close remain the two most active-capping levers, both unchanged since Jul 5 (no fresh evidence Jul 6). |
 | Posting | paused; operator decision pending — Jun 29 cleared bar (80%), Jun 30–Jul 5 all below, Jul 6 no fresh drafts. **Queue unchanged at 15 pending as of Jul 6** (exact match to Jul 5's graded batch) — zero new drafts entered between the Jul 5 and Jul 6 pulls. |
 | Coverage | **638 cities × 180 countries** (was 613 × 179; +25 via PR #81) |
-| Queue status | **15 pending as of Jul 6 grading, unchanged from Jul 5** (10 carry-overs from Jul 4: 2 A- [Typhoon Bavi, Loxahatchee FL], 2 B+ [Island Pond VT, Antwerpen], 6 B [Barrow, Astana, Basrah, Al Başrah al Qadīmah, Rocky Mountains CO fire, Urumqi Jul 4 reading]; 5 from Jul 5: 1 A- eastern Siberia fire, 1 B+ Johannesburg air_quality_hazard, 1 B Doha absolute_extreme, 1 B- Urumqi Jul 5 reading, 1 C+ Phalodi dust_event). **2 of the 15 ([4] Basrah, [6] Al Başrah al Qadīmah) are now strict staleness bulk-reject candidates** (>48h old, forecast date July 4 elapsed) — flagged for operator, write unavailable this session. Bot at 0.9.81.0+ (no newer BRIEFING.md handoff confirmed this cycle); reganom enabled post-PR #347 with writer-voice upgrade (PR #349); `THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live. |
+| Queue status | **Nov 17: 1 pending — Saint Louis/Yakutsk observed_metar_contrast (B, ~2h old, not stale; held from auto-publish by `automatic_text_over_200_scalars`).** Older entry: **15 pending as of Jul 6 grading, unchanged from Jul 5** (10 carry-overs from Jul 4: 2 A- [Typhoon Bavi, Loxahatchee FL], 2 B+ [Island Pond VT, Antwerpen], 6 B [Barrow, Astana, Basrah, Al Başrah al Qadīmah, Rocky Mountains CO fire, Urumqi Jul 4 reading]; 5 from Jul 5: 1 A- eastern Siberia fire, 1 B+ Johannesburg air_quality_hazard, 1 B Doha absolute_extreme, 1 B- Urumqi Jul 5 reading, 1 C+ Phalodi dust_event). **2 of the 15 ([4] Basrah, [6] Al Başrah al Qadīmah) are now strict staleness bulk-reject candidates** (>48h old, forecast date July 4 elapsed) — flagged for operator, write unavailable this session. Bot at 0.9.81.0+ (no newer BRIEFING.md handoff confirmed this cycle); reganom enabled post-PR #347 with writer-voice upgrade (PR #349); `THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live. |
 
 ## Active proposals
+
+Nov 17: re-ranked. 6 graded cycles since the Jul–Oct gap (Oct 28, Oct 31, Nov 4, Nov 6, Nov 9, Nov 17)
+make the 3-cycle rule usable again. Archived (see Resolved): P_tier (last Oct 28; 5 graded cycles clean,
+incl. Oct 31 Brazil fire), P_nws (last Oct 28), P9 and P_compound (last Jul 4; no precip or
+record-type drafts since), P_dust (resolved — anchor held 3 cycles). Remaining order:
+**P_close** (closeless in every graded post-gap cycle; last Nov 17) > **P_event_sat** (3 cycles, last
+Nov 6) > **P5** (no fresh evidence since Jul 5; kept because the Nov hot10/dust drafts deploy no named
+move either, but not formally logged — archive next graded cycle unless it's observed).
 
 Nov 16: ordering unchanged — 7th consecutive no-fresh-draft cycle (Nov 10–16); queue empty.
 No retirements: the 3-cycle rule counts graded cycles, and there have been none since Nov 9.
@@ -616,7 +632,7 @@ FAILING, same subtype as every prior dust_event close). Urumqi dust_event, 3rd i
 ("the topography traps it" = resolution-form, FAILING, near-verbatim repeat of its own prior
 two closes). P_close now confirmed across 14 signal types (unchanged — no new type this
 cycle).
-**Last seen:** Nov 4 (hot10 Verkhoyansk closeless, +1 cycle). Prior Oct 31 (0 positive of 4; disclaimer close on Urumqi [3], none on the rest; cycle count +1). Prior Oct 28 (0 positive, 12 failing across 15 drafts: disclaimer closes [4]/[6]/[8], source-credit closes [2]/[3], no close on the rest). Cycle count +1.
+**Last seen:** Nov 17 (observed_metar_contrast Saint Louis/Yakutsk closeless — ends on a source tag + URL, +1 cycle; Nov 9 Shymkent hot10 closeless, +1). Prior Nov 4 (hot10 Verkhoyansk closeless, +1 cycle). Prior Oct 31 (0 positive of 4; disclaimer close on Urumqi [3], none on the rest; cycle count +1). Prior Oct 28 (0 positive, 12 failing across 15 drafts: disclaimer closes [4]/[6]/[8], source-credit closes [2]/[3], no close on the rest). Cycle count +1.
 
 **Proposed fix (PROMPT LANGUAGE — surgical):** Add to `src/two_bot/prompts/writer_prompt.py`
 in the system-clause / second-sentence guidance section (near the "delete the system clause"
@@ -645,7 +661,204 @@ permafrost-carbon fire mechanic (4 instances, all B+/A-) is the clearest existen
 the corpus that a declarative-consequence close reliably lifts a draft once the mechanism is
 already sound.
 
-### P_dust — Dust_event drafts lack calibrating comparison anchor
+### P_event_sat — same event produces multiple drafts across types and cycles
+
+**Observed:** Oct 28 — Isaias ×3 ([5], [10], [11] across rapid_intensification and tier_crossing),
+Shah Alam + Klang (identical ~152 µg/m³ forecast), Guam ×2 (identical text), Quetta/Arequipa
+template twins. 7 of 15 drafts redundant with another in the queue.
+**Cycles observed:** Oct 28, Oct 31, Nov 6 (3 cycles; Oct 31 = Riyadh dust_event + air_quality_hazard, same city/day; Nov 6 = 4th Riyadh dust draft since Oct 28, cross-day repeat).
+**Last seen:** Nov 6.
+**Proposed fix (PROMPT/CONFIG LANGUAGE — surgical):** Widen the per-event dedupe key so one named
+storm / one metro-area forecast yields at most one pending draft regardless of signal subtype.
+**Expected impact:** Queue clarity; removes ~half of the redundant drafts.
+**Status:** Drafted. Needs a second cycle.
+
+### P5 — Name humor moves as available tools in writer_prompt.py
+
+**Observed:** Apr 25-27 corpus — SYSTEM_PROMPT named only a subset of available moves;
+Gemini converged on the most-explicit ones (era anchors). Unnamed mechanics (idiom-flip,
+accelerating-warming, ecosystem specificity) appeared inconsistently. In the two-bot
+context, the Sonnet writer also defaults to the most-stated patterns unless the full
+palette is named.
+
+**Cycles observed:** Apr 25, Apr 27, May 13, May 19 (4 cycles; era anchor over-deployment
++ mechanic convergence in v2 era; no named mechanics in fire drafts in two-bot era).
+**Last seen:** Jun 28 (weak: steppe ecosystem-incongruity in Astana [5] deployed organically —
+third-sentence "Astana sits in the driest interior of the Eurasian steppe" is a named
+ecosystem-specificity move used without explicit prompting. Taiz dust_event [3] and Casper [7]
+showed no named humor moves beyond mechanism. Same pattern as Jun 25/26/27: geographic categories
+self-select their mechanics naturally; dust_event and monthly_low do not.
+Prior Jun 26 note: Anchorage B chose orographic-stall mechanism as system clause organically;
+Aktobe C+ deployed half-year aridity ratio as close naturally. All 3 precipitation_extreme;
+all 3 used system-clause specificity without prompting. No named humor move beyond mechanism/ratio.
+Prior Jun 25 note: Siberia fire B+ deployed peatland carbon + companion-fire peer comparison;
+Barrow B+ used annual-precipitation ratio. Michigan monthly_low B and Taiz dust_event ×2 showed
+no named humor moves. Same pattern across cycles: fire/precip categories self-select mechanics;
+dust_event/monthly_low categories do not.
+Jun 29: Full mechanic variety across 5 fresh drafts — floor/ceiling inversion (marine_heatwave),
+ecosystem incongruity (Congo fire), latitude peer-comparison (Prudhoe Bay), declarative ecosystem
+specificity (Amsterdam). Not one draft needed explicit P5 prompting; mechanics deployed organically.
+3rd consecutive graded cycle where all deployed mechanics appeared without explicit naming.
+Jun 30: 2 dust_event drafts (Phalodi + Taiz) graded C+ — both deploy zero named humor mechanics. Mechanism-only second sentences, no period-and-restate, no idiom-flip, no comic triple. 2nd consecutive dust_event cycle without a named mechanic across all corpus drafts in this category. Precipitation drafts (Astana/Antwerpen/Colorado) also show no named moves beyond mechanism-as-system-clause. Pattern confirmed: dust_event is the current gap category for P5; precipitation_extreme continues self-selecting mechanism without named humor moves.
+Negative evidence accumulating: 5 consecutive fresh-draft cycles (Jun 7 / Jun 25-26 / Jun 27 / Jun 29 / Jun 30) show precipitation/fire named mechanics deploying naturally. P5 urgency split: fire/precip/record — organically deploying, low urgency; dust_event/monthly_low — confirmed gap, higher urgency.
+Jul 1: Mixed. Basrah [11] and Morrill Fire [12] both deploy real named-absence / causal-chain
+mechanics organically (no explicit prompting needed) — consistent with the "extreme-heat and
+fire-adjacent categories self-select" pattern. Wadi Halfa [14] dust_event again shows zero named
+humor mechanic despite a genuinely sophisticated two-step physical chain — 3rd consecutive
+dust_event cycle confirming the gap is category-specific, not writer-capability-limited (the
+writer clearly CAN build layered mechanisms; it just doesn't reach for a landing move in this
+category). Al Baṣrah al Qadīmah [13] similarly no named mechanic beyond mechanism description.
+Jul 3: Canadian Arctic fire [18]/[19] both deploy the carbon-release mechanic organically (no
+explicit prompting) — 3rd fire draft pair confirming fire self-selects mechanics naturally.
+Typhoon Bavi [20], the corpus's first `cyclone_rapid_intensification` draft, shows the ratio move
+("crossed it by nearly double") but built on top of a P_tier violation rather than a clean named
+mechanic — inconclusive as P5 evidence either way (the move is present, but not cleanly, so it's
+not a strong data point for "categories with a threshold field self-select cleanly").
+**Last seen:** Jul 3 (fire self-selecting for a 3rd consecutive fire cycle; dust_event still the
+confirmed gap category as of its last appearance Jul 1; no dust_event drafts this cycle to retest).
+Jul 4: Mixed, consistent with the established split. Extreme-heat/absolute_extreme self-select
+mechanics organically again (Loxahatchee's convection-stall contrast, Basrah/Al Başrah's
+named-absence forms). Urumqi dust_event again shows no named mechanic beyond mechanism
+description — 4th consecutive dust_event cycle confirming the gap. Typhoon Bavi's 2nd draft
+deploys a clean stakes-consequence move without explicit prompting (see P_close) — another data
+point that categories with strong physical stakes self-select even on their 2nd corpus instance.
+**Last seen:** Jul 4 (dust_event gap now 4 consecutive confirming cycles: Jun 30, Jul 1, and no
+dust_event Jul 2/Jul 3, then Jul 4).
+Jul 5: Urumqi dust_event (3rd corpus instance of this station) again shows zero named humor
+mechanic beyond mechanism/topography description — 5th cycle confirming the dust_event gap.
+Phalodi dust_event, same cycle, also zero named mechanic. Meanwhile eastern Siberia fire
+self-selects the permafrost-carbon mechanic cleanly (4th consecutive fire cycle confirming
+organic self-selection, no explicit prompting) and Johannesburg air_quality_hazard again
+builds a real causal chain unprompted (named season + source attribution — 2nd consecutive
+air_quality_hazard cycle confirming this type self-selects like fire/absolute_extreme, unlike
+its dust_event sibling). The fire/absolute_extreme/air_quality_hazard vs. dust_event split
+continues to sharpen with each cycle.
+**Last seen:** Jul 5 (dust_event gap now 5 consecutive confirming cycles: Jun 30, Jul 1, Jul 4,
+Jul 5, plus Jun 28; fire self-selection streak now 4 cycles; air_quality_hazard self-selection
+streak now 2 cycles).
+**Proposed fix (REDIRECTED to two-bot):** Add a "Voice moves available" section to
+`src/two_bot/prompts/writer_prompt.py` after the hard rules. List: comic triple
+(period-stop), idiom-flip (Steven Wright), understatement closer (British dry),
+period-and-restate (Anchorage move), deadpan delivery, accelerating-warming, era anchor,
+ecosystem-specific specificity. Conclude: *"None of these are mandatory. When the number
+alone is striking, deliver the data plainly. Forced humor breaks the spell."*
+
+**Expected impact:** Richer move palette → more variety across drafts → less convergence
+on the easy default. Note: coral drafts in the May 19 cycle produced named-move variants
+without explicit prompting (contrast-reveal, expectation-reversal, understatement closer)
+— the coral writer prompt may already be doing the work. Verify whether `writer_prompt.py`
+has a coral-specific named-moves section before implementing.
+
+**Status:** Drafted. Target updated from dead generator.py SYSTEM_PROMPT to
+`src/two_bot/prompts/writer_prompt.py`. Awaiting human implementation. Jun 15 retroactive
+extends evidence to fire/hot10/dust categories; coral/record categories may not need it.
+
+~~### P7 — Coral opener formula convergence~~ → **[Resolved 2026-06-15 — see Resolved section]**
+
+~~### P8 — Snow/extreme record: ratio-as-punchline unused~~ → **[Resolved 2026-06-17 — see Resolved section]**
+
+### ~~P6~~ — Fire template convergence — **SHIPPED 2026-05-12 (PR #85)**
+
+**Observed:** 2026-05-13 first graded two-bot cycle — all 3 fire drafts (Mali,
+Campeche, Mongolia) used the identical sentence-1 structure: *"A fire in
+[location] is radiating X MW of heat, detected by satellite at N% confidence."*
+The writer defaults to the most-stated form when the bundle is signal_kind=fire
+without historical_context, and the prompt's existing fire exemplar (#4) further
+reinforces the template. The 24h category cooldown shipped in PR #85 catches
+this across cron runs but not within a single cycle.
+
+**Cycles observed:** May 13 (1 cycle; 3 of 3 fire drafts identical sentence-1).
+**Last seen:** 2026-05-13.
+
+**Resolution:** New paragraph in `writer_prompt.py` IF-historical_context-IS-EMPTY
+section directly after the FRP intensity tier paragraph. Names 4 alternative
+sentence-1 forms (lead-with-location, lead-with-seasonal-frame, lead-with-tier-word,
+lead-with-stakes-or-scale-anchor) with full example tweets for each. Closes by
+banning the default opener when `recent_categories` already contains "fire" within
+24h, and tells the writer to ask whether the bundle is actually extraordinary
+enough to ship if no alternative form works.
+
+**Status:** SHIPPED in PR #85 second commit. Empirical test: next cron run that
+produces 2+ fire drafts in the same cycle — do they show structural variety?
+
+### ~~Chuuk ceiling — "expository → punch"~~ — **SHIPPED 2026-05-12 (PR #85)**
+
+**Observed:** 2026-05-13 grader noted that the Chuuk monthly_high draft was the
+ceiling at B (not A-). Clean data, 76-year record, °C+°F, specific date — but
+second sentence was "expository (Pacific warm pool context) rather than a
+punch." The system clause described the geography without paying off the data.
+
+**Cycles observed:** May 13 (1 cycle; identified as ceiling-class).
+**Last seen:** 2026-05-13.
+
+**Resolution:** Augmented THE SIGNATURE MOVE section's bullet-2 with the
+expository-vs-punch distinction. Explicit B-vs-A example pair using the Chuuk
+case ("Chuuk sits in the Pacific warm pool" → expository B; "Chuuk anchors the
+Pacific warm pool — the engine of the global atmosphere; small May reading
+shifts here propagate downstream" → punch A). New "delete the system clause"
+test: if removing your second sentence leaves the reader thinking "so what?",
+load-bearing. If it leaves them thinking "oh, fair enough", expository.
+
+**Status:** SHIPPED in PR #85 second commit. Empirical test: next graded cycle —
+do system clauses do work (consequence/contrast/causal/rate) rather than just
+describing geography?
+
+## Awaiting evidence
+
+These need more cycles before promotion to active proposals or retirement.
+
+### A1 — Era_anchors prune impact (Apr 26) — superseded by architecture change
+
+43 politically-charged entries removed from `data/era_anchors.json` on 2026-04-26. The
+Apr 27 cycle had one political-anchor draft (Jacobabad / Elon Musk). Whether the prune
+eliminated leakage was the watch condition — but this is now moot because generator.py
+(which used era_anchors.json) is dead since 2026-05-04. The two-bot writer has its own
+`memory.used_era_anchors` tracking. Watch for: era anchor quality in two-bot record
+drafts once they reach pending. If any politically-charged anchor appears, that's a
+separate curation path to investigate in the two-bot writer.
+
+### A2 — Two-bot writer sample-size baseline (replaces v2.5 sample-size question)
+
+**Updated 2026-05-19:** Two-bot baseline now measurable across two graded cycles (May 13:
+0/4 = 0%; May 19: 3/14 = 21%). Cumulative: 3 A / 18 drafts = 17% A-rate on first two-bot
+graded drafts. First A-grades are coral_bleaching (3 of 3 A-grades came from new category
+on 2026-05-19). Fire and monthly_high categories have not yet produced an A-grade in the
+two-bot era. Voice engine history (v2: 43%; v2.5: 9%) remains reference only — pipeline
+dead.
+
+**Updated 2026-05-25:** Five consecutive graded cycles (May 20, 22, 23, 24, 25) produced
+0 fresh drafts. Queue static since 2026-05-18T15:52Z (~7 days). Two-bot A-rate baseline
+unchanged: May 13 0/4 = 0%; May 19 3/14 = 21%; cumulative 3A / 18 = 17%. The 0.9.0.0
+release (2026-05-22) wired all 23 sources through the evidence contract for the first time
+— `stage="evidence_contract"` suppression kills are now possible on every signal type and
+are unverified empirically. A non-trivial kill count here would explain queue stagnation
+without invoking seasonal quiet. Next measurement when queue resumes.
+
+**Watch for:** whether fire category closes the gap between the May-13 0% and the coral
+batch's A-grade-producing range. Whether Wodehouse violations re-emerge as more categories
+are added. Whether the new critic stage (Gemini 2.5 Pro, PR #120) is contributing to or
+suppressing A-grade candidates before they reach pending.
+
+~~### A3 — Mediterranean SST threshold calibration gap (P_dust analog)~~ → **Promoted 2026-07-01 — see Active proposals, P_tier**
+
+Filed Jun 23 on a single Mediterranean SST instance ("exceeds the 2.5°C tier threshold..."), with
+an explicit promotion condition ("if 2+ cycles observed"). 2026-07-01 cleared that bar in one
+cycle: 3 fresh instances across `absolute_extreme` (×2) and `fire_footprint`, plus the
+already-graded Mediterranean SST carry-over. Broader than originally scoped — not just NOAA CRW
+SST tiers but any internal scoring-tier/threshold label leaking into copy across at least 3
+signal types. Full current writeup, evidence, and proposed fix now live under **P_tier** in
+Active proposals above.
+
+## Resolved (archive)
+
+History of fixes that landed or became obsolete — added when a failure mode either held
+for 3+ cycles without appearing, or when the target code was retired.
+
+### [Archived 2026-11-17] P_dust — Dust_event drafts lack calibrating comparison anchor
+
+Resolved: WHO-multiple anchor present in every dust_event draft for 3 consecutive dust cycles (Oct 28 ×3, Oct 31 ×2, Nov 6 ×1) after 11 of 11 without through Jul 5. Unconfirmed whether a fix shipped in the Jul–Oct gap. Re-activate if an unanchored dust_event draft appears.
+
+<details><summary>Full proposal text at archiving</summary>
 
 **Observed:** 2026-06-13 — Riyadh, Saudi Arabia dust_event (2,083 μg/m³, score 75)
 reached pending with no comparison anchor. 2,083 μg/m³ is ≈ 139× the WHO PM2.5 daily
@@ -715,7 +928,13 @@ convergence 11 of 11 `dust_event` drafts. The `air_quality_hazard` sibling type 
 unprompted twice now is a useful existence-proof for how small the prompt change should need
 to be. Awaiting human implementation.
 
-### P_tier — Internal scoring-tier / threshold name leaks verbatim into copy (promoted from A3)
+</details>
+
+### [Archived 2026-11-17] P_tier — Internal scoring-tier / threshold name leaks verbatim into copy
+
+Last seen Oct 28 (15 instances, 8 cycles). Not observed in 5 graded cycles since (Oct 31 incl. a fire draft, Nov 4/6/9/17). Mostly absence of opportunity — no cyclone or absolute_extreme draft since. Strongly evidenced; still worth shipping. Re-activate on first leak.
+
+<details><summary>Full proposal text at archiving</summary>
 
 **Observed:** 2026-06-23 — Mediterranean SST regional_sst_anomaly draft states "exceeds the 2.5°C
 tier threshold in NOAA CRW's basin-wide anomaly index" with no explanation of what the tier
@@ -813,7 +1032,13 @@ Jun 23 filing's own promotion criterion ("if 2+ cycles observed") is met. 7 cycl
 instances / 4 signal types as of Jul 5, now including confirmation outside the Basra-area
 cluster (plus 1 clean counter-instance). Awaiting human implementation.
 
-### P9 — precipitation_extreme opener template convergence + restate-math (reopened)
+</details>
+
+### [Archived 2026-11-17] P9 — precipitation_extreme opener template convergence + restate-math (2nd archiving)
+
+Last seen Jul 4. No precipitation_extreme draft in 6 graded post-gap cycles. Absence of opportunity, not a fix; re-activated last time on first reappearance. Fix text retained below.
+
+<details><summary>Full proposal text at archiving</summary>
 
 **Observed:** First observed 2026-06-18. Archived 2026-07-03 after 3 consecutive fresh-draft
 cycles without a `precipitation_extreme` draft (Jul 1, Jul 2, Jul 3), with an explicit note
@@ -859,91 +1084,13 @@ consecutive `precipitation_extreme`-free cycles per the runbook, same as before.
 
 ~~### P_new — Cold-record quality floor~~ → **[Archived 2026-06-21 — see Resolved section]**
 
-### P5 — Name humor moves as available tools in writer_prompt.py
+</details>
 
-**Observed:** Apr 25-27 corpus — SYSTEM_PROMPT named only a subset of available moves;
-Gemini converged on the most-explicit ones (era anchors). Unnamed mechanics (idiom-flip,
-accelerating-warming, ecosystem specificity) appeared inconsistently. In the two-bot
-context, the Sonnet writer also defaults to the most-stated patterns unless the full
-palette is named.
+### [Archived 2026-11-17] P_compound — Compound-qualifier first sentence
 
-**Cycles observed:** Apr 25, Apr 27, May 13, May 19 (4 cycles; era anchor over-deployment
-+ mechanic convergence in v2 era; no named mechanics in fire drafts in two-bot era).
-**Last seen:** Jun 28 (weak: steppe ecosystem-incongruity in Astana [5] deployed organically —
-third-sentence "Astana sits in the driest interior of the Eurasian steppe" is a named
-ecosystem-specificity move used without explicit prompting. Taiz dust_event [3] and Casper [7]
-showed no named humor moves beyond mechanism. Same pattern as Jun 25/26/27: geographic categories
-self-select their mechanics naturally; dust_event and monthly_low do not.
-Prior Jun 26 note: Anchorage B chose orographic-stall mechanism as system clause organically;
-Aktobe C+ deployed half-year aridity ratio as close naturally. All 3 precipitation_extreme;
-all 3 used system-clause specificity without prompting. No named humor move beyond mechanism/ratio.
-Prior Jun 25 note: Siberia fire B+ deployed peatland carbon + companion-fire peer comparison;
-Barrow B+ used annual-precipitation ratio. Michigan monthly_low B and Taiz dust_event ×2 showed
-no named humor moves. Same pattern across cycles: fire/precip categories self-select mechanics;
-dust_event/monthly_low categories do not.
-Jun 29: Full mechanic variety across 5 fresh drafts — floor/ceiling inversion (marine_heatwave),
-ecosystem incongruity (Congo fire), latitude peer-comparison (Prudhoe Bay), declarative ecosystem
-specificity (Amsterdam). Not one draft needed explicit P5 prompting; mechanics deployed organically.
-3rd consecutive graded cycle where all deployed mechanics appeared without explicit naming.
-Jun 30: 2 dust_event drafts (Phalodi + Taiz) graded C+ — both deploy zero named humor mechanics. Mechanism-only second sentences, no period-and-restate, no idiom-flip, no comic triple. 2nd consecutive dust_event cycle without a named mechanic across all corpus drafts in this category. Precipitation drafts (Astana/Antwerpen/Colorado) also show no named moves beyond mechanism-as-system-clause. Pattern confirmed: dust_event is the current gap category for P5; precipitation_extreme continues self-selecting mechanism without named humor moves.
-Negative evidence accumulating: 5 consecutive fresh-draft cycles (Jun 7 / Jun 25-26 / Jun 27 / Jun 29 / Jun 30) show precipitation/fire named mechanics deploying naturally. P5 urgency split: fire/precip/record — organically deploying, low urgency; dust_event/monthly_low — confirmed gap, higher urgency.
-Jul 1: Mixed. Basrah [11] and Morrill Fire [12] both deploy real named-absence / causal-chain
-mechanics organically (no explicit prompting needed) — consistent with the "extreme-heat and
-fire-adjacent categories self-select" pattern. Wadi Halfa [14] dust_event again shows zero named
-humor mechanic despite a genuinely sophisticated two-step physical chain — 3rd consecutive
-dust_event cycle confirming the gap is category-specific, not writer-capability-limited (the
-writer clearly CAN build layered mechanisms; it just doesn't reach for a landing move in this
-category). Al Baṣrah al Qadīmah [13] similarly no named mechanic beyond mechanism description.
-Jul 3: Canadian Arctic fire [18]/[19] both deploy the carbon-release mechanic organically (no
-explicit prompting) — 3rd fire draft pair confirming fire self-selects mechanics naturally.
-Typhoon Bavi [20], the corpus's first `cyclone_rapid_intensification` draft, shows the ratio move
-("crossed it by nearly double") but built on top of a P_tier violation rather than a clean named
-mechanic — inconclusive as P5 evidence either way (the move is present, but not cleanly, so it's
-not a strong data point for "categories with a threshold field self-select cleanly").
-**Last seen:** Jul 3 (fire self-selecting for a 3rd consecutive fire cycle; dust_event still the
-confirmed gap category as of its last appearance Jul 1; no dust_event drafts this cycle to retest).
-Jul 4: Mixed, consistent with the established split. Extreme-heat/absolute_extreme self-select
-mechanics organically again (Loxahatchee's convection-stall contrast, Basrah/Al Başrah's
-named-absence forms). Urumqi dust_event again shows no named mechanic beyond mechanism
-description — 4th consecutive dust_event cycle confirming the gap. Typhoon Bavi's 2nd draft
-deploys a clean stakes-consequence move without explicit prompting (see P_close) — another data
-point that categories with strong physical stakes self-select even on their 2nd corpus instance.
-**Last seen:** Jul 4 (dust_event gap now 4 consecutive confirming cycles: Jun 30, Jul 1, and no
-dust_event Jul 2/Jul 3, then Jul 4).
-Jul 5: Urumqi dust_event (3rd corpus instance of this station) again shows zero named humor
-mechanic beyond mechanism/topography description — 5th cycle confirming the dust_event gap.
-Phalodi dust_event, same cycle, also zero named mechanic. Meanwhile eastern Siberia fire
-self-selects the permafrost-carbon mechanic cleanly (4th consecutive fire cycle confirming
-organic self-selection, no explicit prompting) and Johannesburg air_quality_hazard again
-builds a real causal chain unprompted (named season + source attribution — 2nd consecutive
-air_quality_hazard cycle confirming this type self-selects like fire/absolute_extreme, unlike
-its dust_event sibling). The fire/absolute_extreme/air_quality_hazard vs. dust_event split
-continues to sharpen with each cycle.
-**Last seen:** Jul 5 (dust_event gap now 5 consecutive confirming cycles: Jun 30, Jul 1, Jul 4,
-Jul 5, plus Jun 28; fire self-selection streak now 4 cycles; air_quality_hazard self-selection
-streak now 2 cycles).
-**Proposed fix (REDIRECTED to two-bot):** Add a "Voice moves available" section to
-`src/two_bot/prompts/writer_prompt.py` after the hard rules. List: comic triple
-(period-stop), idiom-flip (Steven Wright), understatement closer (British dry),
-period-and-restate (Anchorage move), deadpan delivery, accelerating-warming, era anchor,
-ecosystem-specific specificity. Conclude: *"None of these are mandatory. When the number
-alone is striking, deliver the data plainly. Forced humor breaks the spell."*
+Last seen Jul 4. No record-type draft in 6 graded post-gap cycles. Absence of opportunity; re-activate on reappearance.
 
-**Expected impact:** Richer move palette → more variety across drafts → less convergence
-on the easy default. Note: coral drafts in the May 19 cycle produced named-move variants
-without explicit prompting (contrast-reveal, expectation-reversal, understatement closer)
-— the coral writer prompt may already be doing the work. Verify whether `writer_prompt.py`
-has a coral-specific named-moves section before implementing.
-
-**Status:** Drafted. Target updated from dead generator.py SYSTEM_PROMPT to
-`src/two_bot/prompts/writer_prompt.py`. Awaiting human implementation. Jun 15 retroactive
-extends evidence to fire/hot10/dust categories; coral/record categories may not need it.
-
-~~### P7 — Coral opener formula convergence~~ → **[Resolved 2026-06-15 — see Resolved section]**
-
-~~### P8 — Snow/extreme record: ratio-as-punchline unused~~ → **[Resolved 2026-06-17 — see Resolved section]**
-
-### P_compound — Compound-qualifier first sentence: choose archive OR margin, not both
+<details><summary>Full proposal text at archiving</summary>
 
 **Observed:** 2026-06-28 — two record-type drafts in the same cycle open with both archive-depth
 qualifier AND margin qualifier in one sentence. Beaver Dams UT all_time_high [6]: "Beaver Dams,
@@ -999,53 +1146,13 @@ monthly_high, country_record signal types where both archive depth and margin ar
 
 ~~### P_precip_floor — Precipitation quality floor~~ → **[Archived 2026-07-02 — see Resolved section]**
 
-### ~~P6~~ — Fire template convergence — **SHIPPED 2026-05-12 (PR #85)**
+</details>
 
-**Observed:** 2026-05-13 first graded two-bot cycle — all 3 fire drafts (Mali,
-Campeche, Mongolia) used the identical sentence-1 structure: *"A fire in
-[location] is radiating X MW of heat, detected by satellite at N% confidence."*
-The writer defaults to the most-stated form when the bundle is signal_kind=fire
-without historical_context, and the prompt's existing fire exemplar (#4) further
-reinforces the template. The 24h category cooldown shipped in PR #85 catches
-this across cron runs but not within a single cycle.
+### [Archived 2026-11-17] P_nws — severe_weather drafts paraphrase the NWS alert
 
-**Cycles observed:** May 13 (1 cycle; 3 of 3 fire drafts identical sentence-1).
-**Last seen:** 2026-05-13.
+Last seen Oct 28 (only cycle; 2 identical Guam drafts, D). No severe_weather draft in 5 graded cycles since. Single-cycle proposal; re-activate on reappearance.
 
-**Resolution:** New paragraph in `writer_prompt.py` IF-historical_context-IS-EMPTY
-section directly after the FRP intensity tier paragraph. Names 4 alternative
-sentence-1 forms (lead-with-location, lead-with-seasonal-frame, lead-with-tier-word,
-lead-with-stakes-or-scale-anchor) with full example tweets for each. Closes by
-banning the default opener when `recent_categories` already contains "fire" within
-24h, and tells the writer to ask whether the bundle is actually extraordinary
-enough to ship if no alternative form works.
-
-**Status:** SHIPPED in PR #85 second commit. Empirical test: next cron run that
-produces 2+ fire drafts in the same cycle — do they show structural variety?
-
-### ~~Chuuk ceiling — "expository → punch"~~ — **SHIPPED 2026-05-12 (PR #85)**
-
-**Observed:** 2026-05-13 grader noted that the Chuuk monthly_high draft was the
-ceiling at B (not A-). Clean data, 76-year record, °C+°F, specific date — but
-second sentence was "expository (Pacific warm pool context) rather than a
-punch." The system clause described the geography without paying off the data.
-
-**Cycles observed:** May 13 (1 cycle; identified as ceiling-class).
-**Last seen:** 2026-05-13.
-
-**Resolution:** Augmented THE SIGNATURE MOVE section's bullet-2 with the
-expository-vs-punch distinction. Explicit B-vs-A example pair using the Chuuk
-case ("Chuuk sits in the Pacific warm pool" → expository B; "Chuuk anchors the
-Pacific warm pool — the engine of the global atmosphere; small May reading
-shifts here propagate downstream" → punch A). New "delete the system clause"
-test: if removing your second sentence leaves the reader thinking "so what?",
-load-bearing. If it leaves them thinking "oh, fair enough", expository.
-
-**Status:** SHIPPED in PR #85 second commit. Empirical test: next graded cycle —
-do system clauses do work (consequence/contrast/causal/rate) rather than just
-describing geography?
-
-### P_nws — severe_weather drafts paraphrase the NWS alert: panic register, no figure
+<details><summary>Full proposal text at archiving</summary>
 
 **Observed:** Oct 28 — two identical manual-proposal severe_weather drafts: "Guam's preparation
 window is closing: life-threatening winds could arrive tonight as Typhoon Champi approaches, the
@@ -1059,68 +1166,7 @@ urgency phrasing; state facts in the calm register.
 **Expected impact:** D → B range for the type.
 **Status:** Drafted. Needs a second cycle.
 
-### P_event_sat — same event produces multiple drafts across types and cycles
-
-**Observed:** Oct 28 — Isaias ×3 ([5], [10], [11] across rapid_intensification and tier_crossing),
-Shah Alam + Klang (identical ~152 µg/m³ forecast), Guam ×2 (identical text), Quetta/Arequipa
-template twins. 7 of 15 drafts redundant with another in the queue.
-**Cycles observed:** Oct 28, Oct 31, Nov 6 (3 cycles; Oct 31 = Riyadh dust_event + air_quality_hazard, same city/day; Nov 6 = 4th Riyadh dust draft since Oct 28, cross-day repeat).
-**Last seen:** Nov 6.
-**Proposed fix (PROMPT/CONFIG LANGUAGE — surgical):** Widen the per-event dedupe key so one named
-storm / one metro-area forecast yields at most one pending draft regardless of signal subtype.
-**Expected impact:** Queue clarity; removes ~half of the redundant drafts.
-**Status:** Drafted. Needs a second cycle.
-
-## Awaiting evidence
-
-These need more cycles before promotion to active proposals or retirement.
-
-### A1 — Era_anchors prune impact (Apr 26) — superseded by architecture change
-
-43 politically-charged entries removed from `data/era_anchors.json` on 2026-04-26. The
-Apr 27 cycle had one political-anchor draft (Jacobabad / Elon Musk). Whether the prune
-eliminated leakage was the watch condition — but this is now moot because generator.py
-(which used era_anchors.json) is dead since 2026-05-04. The two-bot writer has its own
-`memory.used_era_anchors` tracking. Watch for: era anchor quality in two-bot record
-drafts once they reach pending. If any politically-charged anchor appears, that's a
-separate curation path to investigate in the two-bot writer.
-
-### A2 — Two-bot writer sample-size baseline (replaces v2.5 sample-size question)
-
-**Updated 2026-05-19:** Two-bot baseline now measurable across two graded cycles (May 13:
-0/4 = 0%; May 19: 3/14 = 21%). Cumulative: 3 A / 18 drafts = 17% A-rate on first two-bot
-graded drafts. First A-grades are coral_bleaching (3 of 3 A-grades came from new category
-on 2026-05-19). Fire and monthly_high categories have not yet produced an A-grade in the
-two-bot era. Voice engine history (v2: 43%; v2.5: 9%) remains reference only — pipeline
-dead.
-
-**Updated 2026-05-25:** Five consecutive graded cycles (May 20, 22, 23, 24, 25) produced
-0 fresh drafts. Queue static since 2026-05-18T15:52Z (~7 days). Two-bot A-rate baseline
-unchanged: May 13 0/4 = 0%; May 19 3/14 = 21%; cumulative 3A / 18 = 17%. The 0.9.0.0
-release (2026-05-22) wired all 23 sources through the evidence contract for the first time
-— `stage="evidence_contract"` suppression kills are now possible on every signal type and
-are unverified empirically. A non-trivial kill count here would explain queue stagnation
-without invoking seasonal quiet. Next measurement when queue resumes.
-
-**Watch for:** whether fire category closes the gap between the May-13 0% and the coral
-batch's A-grade-producing range. Whether Wodehouse violations re-emerge as more categories
-are added. Whether the new critic stage (Gemini 2.5 Pro, PR #120) is contributing to or
-suppressing A-grade candidates before they reach pending.
-
-~~### A3 — Mediterranean SST threshold calibration gap (P_dust analog)~~ → **Promoted 2026-07-01 — see Active proposals, P_tier**
-
-Filed Jun 23 on a single Mediterranean SST instance ("exceeds the 2.5°C tier threshold..."), with
-an explicit promotion condition ("if 2+ cycles observed"). 2026-07-01 cleared that bar in one
-cycle: 3 fresh instances across `absolute_extreme` (×2) and `fire_footprint`, plus the
-already-graded Mediterranean SST carry-over. Broader than originally scoped — not just NOAA CRW
-SST tiers but any internal scoring-tier/threshold label leaking into copy across at least 3
-signal types. Full current writeup, evidence, and proposed fix now live under **P_tier** in
-Active proposals above.
-
-## Resolved (archive)
-
-History of fixes that landed or became obsolete — added when a failure mode either held
-for 3+ cycles without appearing, or when the target code was retired.
+</details>
 
 ### [Archived 2026-07-03, Re-activated 2026-07-04] P9 — precipitation_extreme opener template convergence + restate-math
 

@@ -11,6 +11,51 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-11-17 — Daily corpus grading (1 fresh draft)
+
+**Context:** Gist read via git-clone path (success). 1 pending, fresh: `draft_20261117_131754_52`
+(`observed_metar_contrast`, created Nov 17 13:17Z, ~2h old at grading, score 80). **First
+`observed_metar_contrast` draft in the corpus.** Ends a 7-cycle no-fresh-draft run (Nov 10–16).
+Held from auto-publish (`automatic_text_hold: automatic_text_over_200_scalars`; policy `armed_auto`,
+mode manual).
+
+**Staleness:** none. Observed reading, ~2h old; no forecast day to elapse. Nothing to reject.
+
+**Grade distribution (fresh):** 0 A / 1 B / 0 C / 0 D-F. **A-rate 0% (n=1)**; bar not cleared.
+
+**Headline finding:** the new type's skeleton is a data-feed line, not a sentence. The contrast
+itself is a sound benign violation (same minute, 77°C apart) and the writer doesn't try to sell it —
+Wodehouse-clean. But slash-separated, sign-prefixed figures ("+39°C / −38°C") read as a ticker, and
+there is no close.
+
+### B
+**[1] Saint Louis / Yakutsk observed_metar_contrast (score 80)** — "77°C gap at 13:00 UTC 17 Nov:
+Saint Louis airport, Senegal +39°C / Yakutsk airport, Russia −38°C (NOAA METAR observations)." + source URL.
+- Violation: yes — simultaneous 39°C and −38°C on one planet is the setup and the punchline at once.
+- Benign: yes — flat register, no adjectives, scoped to "two reported observations" (matches bundle
+  `claim_scope`, no record claim).
+- Setup→punchline: inverted — the gap (derived figure) leads, the readings follow. Defensible; the gap
+  is the hook. The juxtaposition is the mechanic (deadpan/pure data delivery).
+- Wodehouse: clean. Exact figures, no restate, no math-out-loud, no poetry.
+- Caps: telegraphic slash syntax and "+39°C" sign notation read as a data feed rather than the voice;
+  "airport" twice; no close. The more surprising half — 39°C at a coastal Senegal station in
+  mid-November — is left unremarked, but the bundle carries no normal for it, so not a writer strand.
+- Source URL in tweet text is by design for this type (`docs/AWC_OBSERVATIONS.md`: exact target
+  citation required), unlike the Jul 3 Typhoon Bavi leak. Not graded against.
+
+### Patterns
+1. **P_close** +1 cycle (closeless data delivery; same shape as Nov 4/9 hot10).
+2. New type, n=1: telegraphic contrast skeleton ("N°C gap at HH:MM UTC DD Mon: A +x / B −y (source)").
+   Logged as a watch, not a proposal; needs a second draft to tell template from one-off.
+3. No era-anchor, political-anchor, banned-opener (P3 regex) or plant-comparison hits. No P4 violations.
+
+### Followups
+- Operator: Saint Louis/Yakutsk is clean and same-day; post or reject manually (it won't auto-publish).
+- Operator: if this pair type will run often, consider whether the slash format is the intended
+  house style before it accumulates.
+
+---
+
 ## 2026-11-16 — Daily corpus grading (0 fresh drafts; queue empty)
 
 **Context:** Gist read via git-clone path (success; gist HEAD Nov 16 12:11Z, `_state_rev` 3362 — bot
