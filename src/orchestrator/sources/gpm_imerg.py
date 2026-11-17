@@ -35,7 +35,9 @@ def _enqueue_observed_reports(bot_state, readings, current_run, details):
     if hold := _report_settings_hold(bot_state):
         details.update(status="held", reason=hold, nominated=0, queued=0)
         return 0
-    bundles = rainfall_observed.nominate(readings, bot_state)
+    nomination: dict = {}
+    bundles = rainfall_observed.nominate(readings, bot_state, diagnostics_out=nomination)
+    details["nomination"] = nomination
     queued = 0
     for bundle in bundles:
         score = _build_score(rainfall_observed.KIND, severity=80, novelty=75, timeliness=90,

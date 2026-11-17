@@ -1,3 +1,7 @@
+## 0.9.109.110
+
+- Record bounded count-only reasons when observed-rainfall inputs yield no nominations. Preserve the exact qualification, conflict, deduplication, history and selection behavior; make no additional source or model requests and retain no exception prose or input values.
+
 ## 0.9.109.109
 
 - Make stale or undated saved X receipts visible when the last bot report enabled automatic publication. Keep the notice informational: successful jobs and enabled settings do not verify a newer post, and no source, approval, scheduling or sending rule changes.
