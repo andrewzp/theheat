@@ -112,6 +112,7 @@ def build_fire_footprint_bundle(fc: FireComplex) -> StoryBundle:
     )
     return StoryBundle(
         signal_kind=NIFC_REPORT_KIND if report else "fire_footprint",
+        country=fc.country if report else "",
         where=where or "Unknown",
         when=report["record_modified_at"][:10] if report else (fc.start_date.isoformat() if fc.start_date else ""),
         event_id=fc.event_id,

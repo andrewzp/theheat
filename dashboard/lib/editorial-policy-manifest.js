@@ -263,7 +263,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/two_bot/intern/atmospheric.py": "6c7448b2e0e6bd2a45f447c9a29e5dd3cc295932b9482550eb9f76e5993ce572",
     "src/two_bot/intern/disasters.py": "db5f7138cc2943c42ae8479b5e97c76bb8aa8dfe4b86ba19e00f4600b5a102b6",
     "src/two_bot/intern/drought.py": "2b6449d5ae3ae7dbdaafdcf47b2d56abab2cabda9d195bcfcdeac85345ee27ab",
-    "src/two_bot/intern/fire.py": "8b4bb18a91fcdd8ea73703a0429c04893d0f2fdd947297faefe4e49e04405975",
+    "src/two_bot/intern/fire.py": "0bbe5462af5a0aad8b500bcd2d2caf6b273fc8112ae9f88686946c4b0e54f7f2",
     "src/two_bot/intern/marine.py": "2ab06c73acb56836f78be88d0fcee9daffcd639a91ba2120caf483fea1803c8d",
     "src/two_bot/intern/marine_crw.py": "b8d624e5e1607afcb2f3a6a5b0b04ce223b87553b0c5b4665a0830d4553d9050",
     "src/two_bot/intern/nhc_advisory.py": "61ffb8d8de787ecb0e7b9841ab3e25edafd45d4bafaf1a6fa54f8a329665793f",
@@ -296,5 +296,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "39d1fb9de6ff09e711035c1b658337308f983bfd53927d800de037c2cc0fa4a9"
   },
   "schema_version": 1,
-  "source_sha256": "c193991580ab656a92b7f82b5d1b7f9d86c98db9037463cfbc453e48fe67f6de"
+  "source_sha256": "0c183154020f0b79d159171243adc7a8a3b39eff9c76fd9b2cf92d4231b0bf0e"
 }

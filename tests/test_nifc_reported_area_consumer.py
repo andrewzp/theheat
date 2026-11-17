@@ -94,6 +94,7 @@ def test_actual_parsed_capture_supplies_qualified_report_and_separate_clocks(cap
     assert evidence["source_record"]["IncidentSize"] == 800000.0
     assert evidence["record_modified_at"].startswith(MODIFIED.date().isoformat())
     assert evidence["retrieved_at"].startswith(NOW.date().isoformat())
+    assert bundle.country == "US"
     assert bundle.headline_metric == {"label": "reported_incident_area_acres", "value": 800000.0, "unit": "acres"}
     assert fc.name == "Juniper Fire", "An umbrella complex name cannot replace the named incident"
 
@@ -166,6 +167,41 @@ def test_direct_report_policy_stays_manual_even_with_high_copy_scores():
     policy = recommend_approval_policy(source.KIND, signal_total=100, candidate_score={"total": 100})
     assert policy.mode == "manual_only" and not policy.can_auto_approve
     assert policy.recommended_delay_minutes is None
+
+
+@pytest.mark.parametrize("change", ["historical_context", "country"])
+def test_changed_source_owned_context_stops_before_queue_and_paid_writer(monkeypatch, world, capture, change):
+    transport, state, run, calls, _ = world
+    monkeypatch.setenv("THEHEAT_AUTOMATIC_SELECTION_ONLY", "0")
+    monkeypatch.setenv("GITHUB_EVENT_NAME", "workflow_dispatch")
+    run.update(mode="alerts", id="invented-nifc-review-repair")
+    stages = stage_fakes(calls, copy=COPY)
+    monkeypatch.setattr(pipeline.writer, "write_tweet", stages[0])
+    monkeypatch.setattr(safety, "check_llm", stages[1])
+    monkeypatch.setattr(pipeline.fact_check, "fact_check", stages[2])
+    monkeypatch.setattr(pipeline.critic, "critic_review", stages[3])
+    original_admission = nifc._enqueue_story_candidate
+    seen = []
+
+    def changed_context(*args, **kwargs):
+        bundle = kwargs["bundle"]
+        assert audit_story_bundle(bundle).prompt_ready
+        if change == "country":
+            bundle.country = "CA"
+        else:
+            bundle.historical_context = {"previous_record_acres": 1000, "claim": "Largest fire in 100 years"}
+        seen.append(audit_story_bundle(bundle).prompt_ready)
+        return original_admission(*args, **kwargs)
+
+    monkeypatch.setattr(nifc, "_enqueue_story_candidate", changed_context)
+    with freeze_time(NOW, tick=True):
+        nifc.run_fire_footprint(state, run)
+        _drain_and_write_triage_queue(state, run)
+    assert seen == [False], "Unsupported source identity/history must fail the real audit"
+    assert calls == [] and state["drafts"] == [] and transport.x_posts == []
+    assert state.get("_triage_queue", []) == []
+    assert run["sources"][-1]["promoted"] == 0
+    assert run["sources"][-1]["details"]["admission_holds"] == 1
 
 
 @pytest.mark.parametrize("scheduled", [False, True], ids=["operator-manual-draft", "ordinary-automatic-hold"])

@@ -196,7 +196,8 @@ def report_bundle_hold(bundle) -> str | None:
         from src.two_bot.intern.fire import build_fire_footprint_bundle
         expected = build_fire_footprint_bundle(fc)
         if any(getattr(bundle, key) != getattr(expected, key) for key in (
-            "signal_kind", "event_id", "where", "when", "headline_metric", "current_facts", "raw_signal_dump",
+            "signal_kind", "event_id", "where", "when", "headline_metric", "current_facts",
+            "historical_context", "country", "raw_signal_dump",
         )):
             return "nifc_report_binding_changed"
         return None
