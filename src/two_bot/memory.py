@@ -155,6 +155,7 @@ def _row_time(row: dict) -> datetime:
 
 
 def _event_base(event_id: Any) -> str:
+    # Legacy identity inspection only. This is not an episode/history join key.
     from src.data.places import event_identity
     identity = event_identity(str(event_id or ""))
     if identity:
@@ -312,10 +313,6 @@ def build_memory_slice(state: BotState, bundle: StoryBundle, *, now: datetime | 
         raise ValueError("unexpected_episode_context")
     memory = _memory(state)
     country = _country_for(bundle)
-    event_keys = set() if bound or source_scoped or standalone_observation else {
-        key for key in (_event_base(bundle.event_id), _event_series_key(bundle))
-        if key
-    }
     instant = now if now is not None else datetime.now(UTC)
     if instant.tzinfo is None:
         raise ValueError("memory_clock_requires_timezone")
@@ -337,7 +334,6 @@ def build_memory_slice(state: BotState, bundle: StoryBundle, *, now: datetime | 
 
     ongoing_event = None
     source_prior = None
-    fallback_region_match = None
     for row in memory.get("ongoing_events", []):
         if not isinstance(row, dict):
             continue
@@ -353,19 +349,8 @@ def build_memory_slice(state: BotState, bundle: StoryBundle, *, now: datetime | 
                 source_prior = row
                 break
             continue
-        if row.get(_SOURCE_MEMORY_FIELD) is not None:
-            continue
-        if row.get("event_id") == bundle.event_id:
-            ongoing_event = row
-            break
-        if (
-            row.get("signal_kind") == bundle.signal_kind
-            and row.get("region") == bundle.where
-            and country_key(row.get("country", "")) == country
-        ):
-            fallback_region_match = row
-    if ongoing_event is None:
-        ongoing_event = fallback_region_match
+        # Even the same complete candidate ID is publication history, not proof
+        # of a physical episode. Only the resolved bound branch can grant that.
 
     shipped_rows = [
         row for row in memory.get("shipped_tweets", []) if isinstance(row, dict)
@@ -407,17 +392,13 @@ def build_memory_slice(state: BotState, bundle: StoryBundle, *, now: datetime | 
                        if isinstance(row, dict) and row.get("physical_episode") is None
                        and source_identity is not None
                        and _memory_identity(row.get(_SOURCE_MEMORY_FIELD)) == source_identity and _tweet_text(row)]
-    elif event_keys:
+    elif not standalone_observation and bundle.event_id:
         for row in memory.get("shipped_tweets", []):
             if not isinstance(row, dict):
                 continue
             if row.get("physical_episode") is not None or row.get(_SOURCE_MEMORY_FIELD) is not None:
                 continue
-            row_keys = {
-                key for key in (_event_base(row.get("event_id")), row.get("event_series_key"))
-                if key
-            }
-            if not row_keys.intersection(event_keys):
+            if row.get("event_id") != bundle.event_id:
                 continue
             text = _tweet_text(row)
             if not text:
@@ -507,12 +488,10 @@ def record_shipped(
     if writer.angle_chosen:
         _dedup_append(memory.setdefault("used_framings", []), writer.angle_chosen)
 
-    if binding is None and (_standalone_observation(bundle) or (
-        _gdacs_memory_scoped(bundle) and source_identity is None
-    )):
-        # The published row remains in general history. Missing source identity
-        # cannot create ongoing-event authority via display country/name, and a
-        # standalone observation cannot create physical continuity/duration.
+    if binding is None and (_standalone_observation(bundle) or source_identity is None):
+        # Keep general/exact-candidate history, never infer physical duration
+        # from an unbound publication. Qualified GDACS series bookkeeping is
+        # preserved separately and is never returned as a physical episode.
         return
 
     events = memory.setdefault("ongoing_events", [])

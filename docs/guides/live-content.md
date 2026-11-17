@@ -113,3 +113,13 @@ checks, final safety and every unknown-delivery fence still apply first.
    complete the initial bounded threshold catch-up, then verify weekly refresh.
 3. Decide on the PM2.5 flag, then the dust flag, each under the standing
    automatic authority. Watch the Sources view outcome rows after each run.
+
+## Publication memory
+
+A past publication does not establish that a physical event is continuing.
+Only a resolved physical episode supplies ongoing-event context. Other story
+history matches the complete candidate ID; matching display regions, warning
+areas or ID prefixes cannot join different stories. General publication history
+and category cooldowns remain available. Existing stricter airport, thermal and
+GDACS source-series rules still apply. This rule grants no source qualification,
+approval or sending permission; a bundle missing provenance remains held.
