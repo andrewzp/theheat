@@ -1,3 +1,7 @@
+## 0.9.109.102
+
+- Tell the observed-airport writer to retain complete airport names, including slash-separated parts, and explicitly label airport readings. Preserve exact country, quantities, UTC time/date, citation, the automatic copy limit and every required check.
+
 ## 0.9.109.101
 
 - Add a native graphic for two retained, simultaneous airport observations: exact signed Celsius readings, a common zero-inclusive axis, source time and bounded X description. Preserve independent source checks, explicit joint review and manual image sending.

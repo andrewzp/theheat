@@ -214,6 +214,10 @@ def build_writer_user_prompt(
                    "Use one supported residual value as intelligible context; the source link is appended before checks.")
     if bundle.signal_kind == "observed_metar_contrast":
         prompt += ("\n\nobserved_airport_copy_requirements: Include BOTH named airports and countries, "
+                   "retaining each complete airport name, including slash-separated name parts, "
+                   "from observed_airports[].airport (Arpt may be expanded to airport). "
+                   "Use the word airport or airports explicitly. "
+                   "Never replace an airport name with a nearby city. Include "
                    "their observed Celsius temperatures and the Celsius gap, sample_clock_utc exactly "
                    "as HH:MM UTC, and sample_date_utc as day plus month. These are mandatory facts, "
                    "not optional background. Use one compact fact-first sentence; 'same hour' alone "
