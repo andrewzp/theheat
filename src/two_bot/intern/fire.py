@@ -6,10 +6,9 @@ from __future__ import annotations
 
 
 
-from datetime import date
 from copy import deepcopy
 
-from src.data.fire_footprint import FireComplex
+from src.data.fire_footprint import FireComplex, KIND as NIFC_REPORT_KIND, validated_report
 
 from src.data.fire_footprint import TIERS_HECTARES
 
@@ -97,33 +96,51 @@ def build_fire_bundle(fire: FireEvent) -> StoryBundle:
 
 
 def build_fire_footprint_bundle(fc: FireComplex) -> StoryBundle:
-    """A wildfire perimeter has crossed a tier threshold (acreage)."""
+    """An attributed incident-size report; legacy unsourced inputs stay held."""
 
+    report = validated_report(fc)
+    region_name = None
+    if report:
+        from src.data.ghcn import expand_us_state
+        region_name = expand_us_state(fc.region, fc.country)
     where = f"{fc.region}, {fc.country}" if fc.region and fc.country else (fc.region or fc.country)
-    name = fc.name or "Unnamed complex"
+    name = fc.name or ("Unnamed incident" if report else "Unnamed complex")
     tier_hectares = (
         TIERS_HECTARES[min(fc.tier, len(TIERS_HECTARES) - 1)]
         if fc.tier >= 0 and TIERS_HECTARES
         else None
     )
     return StoryBundle(
-        signal_kind="fire_footprint",
+        signal_kind=NIFC_REPORT_KIND if report else "fire_footprint",
+        country=fc.country if report else "",
         where=where or "Unknown",
-        when=date.today().isoformat(),
+        when=report["record_modified_at"][:10] if report else (fc.start_date.isoformat() if fc.start_date else ""),
         event_id=fc.event_id,
         headline_metric={
-            "label": "burned_area_ha",
+            "label": "reported_incident_area_acres",
+            "value": report["source_record"]["IncidentSize"],
+            "unit": "acres",
+        } if report else {
+            "label": "reported_incident_area_ha",
             "value": fc.hectares,
             "unit": "hectares",
         },
         current_facts=[
-            {"label": "complex_name", "value": name},
+            {"label": "incident_name" if report else "complex_name", "value": name},
             {"label": "region", "value": fc.region},
             {"label": "country", "value": fc.country},
-            {"label": "hectares", "value": fc.hectares},
+            {"label": "hectares", "value": fc.hectares, "unit": "hectares", "approximate": True},
             {"label": "tier", "value": fc.tier},
             {"label": "tier_hectares", "value": tier_hectares, "unit": "hectares"},
             {"label": "start_date", "value": fc.start_date.isoformat() if fc.start_date else None},
+            *([
+                {"label": "reported_size_acres", "value": report["source_record"]["IncidentSize"], "unit": "acres"},
+                {"label": "region_name", "value": region_name},
+                {"label": "source", "value": "NIFC WFIGS incident-location report"},
+                {"label": "record_modified_at", "value": report["record_modified_at"]},
+                {"label": "measurement_interval_known", "value": False},
+                {"label": "claim_scope", "value": "Attributed reported incident size, not a measured burn perimeter, burning interval or growth rate."},
+            ] if report else []),
             # Pre-computed "about"-citable area equivalents (the value_f /
             # value_rounded_c pattern): the writer cites these verbatim with
             # an approximation marker instead of converting hectares itself.
@@ -145,5 +162,6 @@ def build_fire_footprint_bundle(fc: FireComplex) -> StoryBundle:
             "tier": fc.tier,
             "tier_hectares": tier_hectares,
             "event_id": fc.event_id,
+            **({"evidence": report} if report else {}),
         },
     )

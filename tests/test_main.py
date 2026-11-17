@@ -2472,7 +2472,9 @@ class TestFireFootprintIntegration:
             country="US",
             region="California",
             hectares=213_000,
-            start_date=None,
+            # This opt-in synthetic routing fixture supplies its own date;
+            # a missing real source clock must never become today's report.
+            start_date=date.today(),
             tier=3,
             event_id="fire_footprint_GWIS_AAA_tier3",
         )

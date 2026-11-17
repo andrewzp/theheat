@@ -36,6 +36,7 @@ _STOPWORDS = {
 _SIGNAL_KIND_TO_CATEGORY: dict[str, str] = {
     "fire": "fire",
     "fire_footprint": "fire",
+    "reported_fire_incident_size": "fire",
     "monthly_high": "temperature_record",
     "monthly_low": "temperature_record",
     "calendar_record": "temperature_record",

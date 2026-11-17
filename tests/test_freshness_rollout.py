@@ -264,10 +264,12 @@ def test_fire_footprint_stale_data_raises_freshness():
                     "UniqueFireIdentifier": "2020-OLD-000001",
                     "IncidentName": "Old Fire",
                     "IsCpxChild": 0,
+                    "IncidentTypeCategory": "WF",
+                    "ActiveFireCandidate": 1,
                     "IncidentSize": 100_000.0,
                     "POOState": "US-CA",
                     "FireDiscoveryDateTime": _old_ms(),
-                    "ModifiedOnDateTime": _old_ms(),
+                    "ModifiedOnDateTime_dt": _old_ms(),
                 }
             }
         ]

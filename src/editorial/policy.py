@@ -130,6 +130,7 @@ POLICY_FILES = (
     "src/data/coral_dhw.py", "src/data/coral_evidence.py", "src/data/coral_source_contract.py", "src/data/coral_regional_contract.py",
     "src/data/air_quality.py", "src/data/air_quality_availability.py", "src/data/air_quality_contract.py", "src/data/air_quality_evidence.py",
     "src/data/firms.py", "src/data/fire_source_contract.py", "src/data/fire_identity.py", "src/data/fire_evidence.py",
+    "src/data/fire_footprint.py", "src/orchestrator/sources/nifc.py",
     "src/editorial/draft_admission.py", "src/orchestrator/dedup.py",
     "src/commands/postgres_candidate_admission.py",
     "src/commands/postgres_sourced_generation.py", "src/two_bot/sourced_generation.py",

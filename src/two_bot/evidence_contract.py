@@ -215,6 +215,17 @@ def audit_story_bundle(bundle: StoryBundle) -> EvidenceAudit:
     for reason in fire_bundle_failures(bundle):
         issues.append(_issue("error", "thermal_source_unqualified", "raw_signal_dump", reason))
 
+    report = raw_signal_dump.get("evidence") if isinstance(raw_signal_dump, dict) else None
+    if bundle.signal_kind == "reported_fire_incident_size" or isinstance(report, dict) and (
+        report.get("schema") == "nifc-incident-size-capture-v1"
+        or report.get("source_product") == "nifc-wfigs-reported-incident-size-v1"
+    ):
+        # This collector is absent from the sealed graphics runtime. Other
+        # families must not import it; NIFC reports still require its full audit.
+        from src.data.fire_footprint import report_bundle_hold
+        if reason := report_bundle_hold(bundle):
+            issues.append(_issue("error", "nifc_report_unqualified", "raw_signal_dump.evidence", reason))
+
     from src.data.temperature_evidence import temperature_aggregate_failures
     from src.data.crw_contract import reference_climatology_failures
     from src.data.coral_evidence import dhw_only_bundle_failures, regional_bundle_failures

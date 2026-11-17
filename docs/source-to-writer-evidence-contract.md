@@ -106,7 +106,7 @@ If a detail matters for factual safety, it belongs in `current_facts`,
 | Temperature records | `src/orchestrator/sources/open_meteo.py` | Weather and climate record data assembled into city, country, date, temperature, baseline, archive facts | Record, all-time record, monthly high, anomaly, country record, streak, simultaneous-record routing | `temperature.build_record_bundle`, `build_all_time_record_bundle`, `build_monthly_high_bundle`, `build_anomaly_bundle`, `build_country_record_bundle`, `build_record_streak_bundle`, `build_simultaneous_records_bundle` | Rich current facts, archive years, prior record, margin, units, calendar scope, forbidden claims for all-time records | Many builder variants need shared assertions so one path cannot silently lose archive context or date scope |
 | Hot 10 | `src/orchestrator/hot10.py` | Ranked anomaly candidates | Leaderboard selection | `temperature.build_hot10_bundle` | Ranking, anomaly, sample cities | Writer may overstate representativeness unless the bundle keeps leaderboard scope explicit |
 | Fire hotspots | `src/orchestrator/sources/firms.py` | FIRMS fire pixels and FRP values, with NOAA HMS backup for North America and FIRMS product chain for product gaps | Threshold/tier selection around location and country | `fire.build_fire_bundle` | FRP, FRP tier, country/region, lat/lon, climate facts, `observed_alt_host` when NOAA HMS serves | Empty historical context is acceptable only if raw location/source anchors are strong and audited; HMS is alternate observed data, product-chain provenance is not a new evidence grade |
-| Fire footprint | `src/orchestrator/sources/nifc.py` | Incident footprint and acreage data | Complex/incident area thresholding | `fire.build_fire_footprint_bundle` | Hectares, tier, complex, region, country, start date | Burned-area units and incident identity must survive into prompt |
+| NIFC reported incident size (legacy `fire_footprint` IDs) | `src/orchestrator/sources/nifc.py` | WFIGS point-location incident records | Existing reported-size tier thresholding; manual-only | `fire.build_fire_footprint_bundle` | Exact reported acres, approximate hectares, incident name/ID, region, individual record modification and capture times | Reported size is not a measured burn perimeter, new daily burning or growth rate; the measurement interval remains unknown |
 | CO2 | `src/orchestrator/sources/co2.py` | Atmospheric CO2 measurement | Milestone crossing | `atmospheric.build_co2_milestone_bundle` | PPM, measurement date, preindustrial baseline | Milestone threshold and actual measurement must both be present |
 | Methane | `src/orchestrator/sources/methane.py` | Atmospheric CH4 measurement | Milestone crossing | `atmospheric.build_ch4_milestone_bundle` | PPB crossed, actual PPB, source, preindustrial baseline | Milestone threshold and actual measurement must both be present |
 | ENSO | `src/orchestrator/sources/enso.py` | ONI/status data | Status transition and duration | `atmospheric.build_enso_bundle` | Season, status from/to, ONI value, previous duration | Prompt must not confuse observed status transition with forecast |
@@ -129,6 +129,24 @@ If a detail matters for factual safety, it belongs in `current_facts`,
 | Storm surge | `src/orchestrator/sources/co_ops.py` | CO-OPS water level observations | Observed versus predicted surge anomaly | `disasters.build_storm_surge_bundle` | Observed, predicted, anomaly, station/area | Anomaly sign and station identity must remain explicit |
 | Cyclones | Cyclone helpers in `src/orchestrator/common.py` | Storm track/intensity data | Rapid intensification, tier crossing, landfall, basin record | `disasters.build_cyclone_rapid_intensification_bundle`, `build_cyclone_tier_crossing_bundle`, `build_cyclone_landfall_bundle`, `build_cyclone_basin_record_bundle` | Storm identity, basin, wind values, category/tier, record context where relevant | Each cyclone story type must keep its comparison basis |
 | Synthesis | `src/orchestrator/sources/synthesis.py` | Existing cross-source inputs; marine pairs require complete qualified CRW source readings | Marine: bounded dated selection within each product family | `synthesis.build_synthesis_bundle` | Marine: both exact source receipts, individual dates/scopes, DHW metric, SST reference climate, explicit evaluation time | A regional association does not prove a shared footprint, simultaneous event, cause, marine heatwave, observed bleaching or mortality; legacy marine scalars remain held |
+
+## NIFC reported incident size
+
+Qualified WFIGS captures use `reported_fire_incident_size`; existing saved draft
+types and event IDs retain `fire_footprint`. The source-bound audit rebuilds the
+writing facts from the selected retained row. Its `ModifiedOnDateTime_dt` must be
+present, not in the future and at most four UTC calendar days old at capture.
+Discovery time, retrieval time and a different row's update cannot substitute for
+that clock. The record describes the named incident, not its `CpxName` umbrella.
+
+The capture retains the exact request identity, selected attributes and their
+digest, plus the decoded response size and digest. It does not retain the entire
+response or prove provider truth, rights or a physical event relationship. The
+2 MiB acceptance check is after download, not a physical network-byte ceiling.
+Source errors and malformed envelopes fail; individual row holds and truncated
+coverage are reported explicitly. The source remains manual-only, and ordinary
+automatic selection holds it before writing. Once-daily collection and dedup
+remain unchanged; this does not install a durable operator source inbox.
 
 ## High-Risk Evidence Gaps
 

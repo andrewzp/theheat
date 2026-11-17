@@ -18,6 +18,21 @@ ROOT = Path(__file__).resolve().parents[1]
 BY_ID = products.legs_by_id()
 
 
+def test_nifc_report_contract_names_its_actual_clock_and_scoped_check():
+    leg = BY_ID["fire_footprint.wfigs_incidents"]
+    assert "ModifiedOnDateTime_dt" in leg.time_limit
+    checks = products.restriction_enforcement(leg)
+    assert checks["nifc_reported_size_contract"] == {
+        "basis": "check", "reference": "src/data/fire_footprint.py:report_bundle_hold",
+    }
+    # Binding a source packet does not adjudicate its impact claim or grant
+    # permissions, and this check cannot stand in for the separate news leg.
+    assert checks["reported_not_adjudicated"]["basis"] == "advisory"
+    assert leg.claim_permissions == ()
+    assert all("nifc_reported_size_contract" not in other.claim_restrictions
+               for other in products.LEGS if other.source_id != "fire_footprint")
+
+
 def _module_symbols(path: str) -> set[str]:
     tree = ast.parse((ROOT / path).read_text())
     names = set()

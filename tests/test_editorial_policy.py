@@ -36,13 +36,13 @@ def test_generated_source_manifest_is_current_and_version_is_not_an_input():
         assert name in manifest["files"]
 
 
-@pytest.mark.parametrize("owner", ["src/data/gdacs_intake.py", "src/orchestrator/sources/gdacs.py", "src/data/json_evidence.py"])
+@pytest.mark.parametrize("owner", ["src/data/gdacs_intake.py", "src/orchestrator/sources/gdacs.py", "src/data/json_evidence.py",
+                                 "src/data/fire_footprint.py", "src/orchestrator/sources/nifc.py"])
 def test_source_selection_owner_bytes_revoke_old_policy_without_editing_content(monkeypatch, tmp_path, owner):
     manifest = policy.source_manifest()
-    assert owner in manifest["files"]
     # Use the actual full manifest in a private copy. Mutating only this owner
     # must change policy binding; the real checkout and runtime settings stay.
-    for name in manifest["files"]:
+    for name in set(manifest["files"]) | {owner}:
         target = tmp_path / name
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes((policy.ROOT / name).read_bytes())
@@ -55,9 +55,10 @@ def test_source_selection_owner_bytes_revoke_old_policy_without_editing_content(
     target = tmp_path / owner
     target.write_bytes(target.read_bytes() + b"\n# Invented source-binding mutation.\n")
     changed = policy.source_manifest()
+    assert not review_is_current(draft) and not approval_is_current(draft)
+    assert owner in manifest["files"]
     assert changed["source_sha256"] != manifest["source_sha256"]
     assert {name for name, digest in changed["files"].items() if digest != manifest["files"][name]} == {owner}
-    assert not review_is_current(draft) and not approval_is_current(draft)
     assert draft_identity(draft) == identity and binding_matches(draft, receipt)
 
 

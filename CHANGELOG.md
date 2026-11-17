@@ -1,3 +1,7 @@
+## 0.9.109.118
+
+- Carry NIFC's reported incident size and individual source update time through the evidence audit, queue and manual draft path. Correct the current clock field, retain source acreage with approximate hectare conversions, and refuse invalid or stale rows without borrowing another incident's date or umbrella name. Count only admitted candidates as promotions; preserve manual-only approval and the automatic prewriter hold.
+
 ## 0.9.109.117
 
 - Collect already-enabled bounded engagement feedback from ordinary observed-alert runs as well as the daily leaderboard role. Share the UTC-day opportunity across unfinished runs and retained summaries, preserving its start day when a lookup returns after midnight. Preserve failed attempts, resource caps, legacy producer fences and unknown counts/costs without changing publication controls.

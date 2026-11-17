@@ -38,11 +38,13 @@ def perimeter_bundles(monkeypatch, *, separator="-"):
     payload = {"features": [{"attributes": {
         "UniqueFireIdentifier": f"invented-complex{separator}{suffix}",
         "IncidentName": f"Invented complex {suffix}", "POOState": "US-OR",
-        "IncidentSize": 3_000_000, "ModifiedOnDateTime": stamp,
+        "IncidentSize": 3_000_000, "ModifiedOnDateTime_dt": stamp,
+        "IncidentTypeCategory": "WF", "ActiveFireCandidate": 1,
         "FireDiscoveryDateTime": stamp, "IsCpxChild": 0,
     }} for suffix in ("a", "b")]}
     response = requests.Response()
     response.status_code = 200
+    response.url = fire_footprint.GWIS_URL
     response._content = json.dumps(payload).encode()
     calls = []
 
@@ -58,12 +60,10 @@ def perimeter_bundles(monkeypatch, *, separator="-"):
     run = {"sources": []}
     nifc.run_fire_footprint(state, run)
     assert len(calls) == 2 and all(url == fire_footprint.GWIS_URL for url, _ in calls)
-    # The actual current source has no retained provenance. Do not patch its
-    # audit into a pass or claim a qualified queue/writer journey.
-    assert all(not audit_story_bundle(b).prompt_ready for b in bundles)
-    assert all("missing_provenance" in [i.code for i in audit_story_bundle(b).issues]
-               for b in bundles)
-    assert state.get("_triage_queue", []) == []
+    # The real parser now retains a source-bound incident-size report. This is
+    # no physical episode, provider truth or model/publication acceptance.
+    assert all(audit_story_bundle(b).prompt_ready for b in bundles)
+    assert len(state.get("_triage_queue", [])) == 2
     assert run["sources"][-1]["observed"] == 2
     return bundles
 
