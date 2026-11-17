@@ -1,3 +1,7 @@
+## 0.9.109.109
+
+- Make stale or undated saved X receipts visible when the last bot report enabled automatic publication. Keep the notice informational: successful jobs and enabled settings do not verify a newer post, and no source, approval, scheduling or sending rule changes.
+
 ## 0.9.109.108
 
 - Bound optional daily engagement lookups by distinct post count before client creation or spending admission. Keep older queued producers disabled through a separate rollout flag, report the effective allowance, and contain invalid configuration to metrics without interrupting weather processing. No monetary ceiling or API entitlement is implied.

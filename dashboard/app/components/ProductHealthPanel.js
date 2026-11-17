@@ -13,6 +13,20 @@ function age(hours) {
 }
 function setting(value) { return value === true ? "On" : value === false ? "Off" : value ?? "Unknown" }
 
+function PublicationEvidenceNotice({ health, enabled }) {
+  if (enabled !== true) return null
+  const receipt = health.milestones?.post_confirmed
+  const dated = receipt?.status === "recorded" && typeof receipt.at === "string"
+    && Number.isFinite(Date.parse(receipt.at)) && Number.isFinite(receipt.age_hours) && receipt.age_hours >= 0
+  // Attention threshold only: never a publication gate, quota or platform probe.
+  if (dated && receipt.age_hours < 24) return null
+  return h("p", { className: "runtime-note runtime-publication-notice", role: "status",
+    "data-publication-evidence": dated ? "old_receipt" : "undated_receipt" },
+  dated ? `No recent X receipt in saved data. The latest dated receipt is ${age(receipt.age_hours)}.`
+    : "No dated X receipt is available in saved data. Publication is unverified.",
+  " Enabled settings and successful jobs do not verify a newer post. Check writing and delivery results.")
+}
+
 function Milestone({ title, value }) {
   return h("div", { className: "runtime-milestone" },
     h("dt", null, title),
@@ -63,6 +77,7 @@ export function ProductHealthPanel({ health, config, deployment, codeRevision = 
       ? "Automatic publication paused in the last bot report. Release requires fresh checks and new approval."
       : flags.automatic_publication_enabled === true ? "Automatic publication was enabled in the last bot report. Approvals must match its release epoch."
         : "Automatic publication state is unverified; scheduling is unavailable until the bot reports its release policy."),
+    h(PublicationEvidenceNotice, { health, enabled: flags.automatic_publication_enabled }),
     config?.report_kind === "configuration_only" ? h("p", { className: "runtime-note" }, "Configuration refreshed only. This did not collect stories, write drafts or verify provider access.") : null,
     codeRevision ? h("p", { className: "runtime-note", "data-code-revision": codeRevision.status },
       `Code revision · ${label(codeRevision.status)}: ${codeRevision.reason}`,
