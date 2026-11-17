@@ -4,6 +4,45 @@ import assert from "node:assert/strict"
 import { importFresh } from "./helpers/import-fresh.js"
 import { buildSourceHealthPayload } from "../lib/source-health.js"
 
+for (const persisted of [true, false]) test(`forecast AQ policy skip is idle with retained failures (${persisted ? "source health" : "run history"})`, () => {
+  const rows = [
+    { ts: "2026-11-17T10:00:00Z", status: "failed", error: "Invented previous timeout" },
+    { ts: "2026-11-17T11:00:00Z", status: "failed", error: "Invented previous timeout" },
+    { ts: "2026-11-17T12:00:00Z", status: "failed", error: "Invented previous timeout" },
+    { ts: "2026-11-17T13:00:00Z", status: "skipped", error_class: "editorial_scope" },
+  ]
+  const state = persisted ? { source_health: { air_quality: {
+    runs: rows, failed: 3, success: 0, skipped: 1,
+    last_error: "Invented previous timeout", last_error_ts: rows[2].ts,
+  } } } : { run_history: rows.toReversed().map(row => ({
+    mode: "alerts", started_at: row.ts, sources: [{ ...row, source: "air_quality" }],
+  })) }
+  const before = JSON.stringify(state)
+  const source = buildSourceHealthPayload(state).sources.find(s => s.source === "air_quality")
+  assert.equal(source.health, "idle")
+  assert.equal(source.successes, 0)
+  assert.equal(source.failures, 3)
+  assert.equal(source.active, 3)
+  assert.equal(source.last_run_error_class, "editorial_scope")
+  assert.equal(source.troubleshooting_log.filter(row => row.status === "failed").length, 3)
+  assert.equal(JSON.stringify(state), before)
+})
+
+test("forecast AQ idle marker applies only to the latest exact policy skip", () => {
+  for (const [source, status, error_class] of [
+    ["air_quality", "failed", "editorial_scope"],
+    ["air_quality", "skipped", "other"],
+    ["ocean", "skipped", "editorial_scope"],
+  ]) {
+    const state = { source_health: { [source]: { failed: 3, success: 0, skipped: 1,
+      last_error: "Invented timeout", runs: [
+        { status: "failed" }, { status: "failed" }, { status: "failed" }, { status, error_class },
+      ] } } }
+    const value = buildSourceHealthPayload(state).sources.find(s => s.source === source)
+    assert.equal(value.health, "external")  // The existing upstream-timeout classification.
+  }
+})
+
 function basicAuth(username, password) {
   return `Basic ${Buffer.from(`${username}:${password}`, "utf-8").toString("base64")}`
 }

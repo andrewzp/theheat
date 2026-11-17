@@ -7,6 +7,7 @@ import os
 # ruff: noqa: F403,F405
 from src.orchestrator.common import *
 from src.data import air_quality, air_quality_availability, openaq, places
+from src.editorial import observed_scope
 from src.two_bot.intern import build_dust_event_bundle, build_pm25_hazard_bundle
 
 # Keep the established tolerance for small source gaps, now per enabled hazard.
@@ -58,8 +59,17 @@ def _should_emit_tier(
 
 def run_air_quality(bot_state: BotState, current_run: dict | None, cities: list[dict]) -> None:
     """Check batched CAMS air-quality data and enqueue qualifying candidates."""
-    print("[alerts] Checking air quality (PM2.5 24h-mean / dust peak)...")
     aq_start = time.perf_counter()
+    # These two products remain forecasts even when an OpenAQ station can
+    # corroborate one value. Explicit private acquisition keeps its old path.
+    if (observed_scope.enabled() and os.environ.get("GITHUB_EVENT_NAME") == "schedule"
+            and os.environ.get("GITHUB_REF") == "refs/heads/main"
+            and isinstance(current_run, dict) and current_run.get("mode") in {"alerts", "both"}):
+        _record_source_run(current_run, bot_state, "air_quality", aq_start, status="skipped",
+                           error_class="editorial_scope",
+                           note="Forecast AQ acquisition skipped in observed-only scheduled mode")
+        return
+    print("[alerts] Checking air quality (PM2.5 24h-mean / dust peak)...")
     source_promoted = 0
     pm25_enabled = _enabled("THEHEAT_AQ_PM25_ENABLED")
     dust_enabled = _enabled("THEHEAT_AQ_DUST_ENABLED")

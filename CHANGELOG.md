@@ -1,3 +1,7 @@
+## 0.9.109.121
+
+- Skip forecast-only air-quality acquisition during observed-only scheduled main-branch alerts. Preserve explicit private and manual collection, source history and unresolved incident status; show the intentional exclusion as idle without claiming provider recovery or changing publication controls.
+
 ## 0.9.109.120
 
 - Apply existing free station eligibility before the live country cap, preserving full scientific supply, ranking, freshness and one-writer limits. Bind individual GHCN record values and projected facts to their retained accepted readings and dated archive comparators; recheck evidence at final queue admission and count only successful admissions.
