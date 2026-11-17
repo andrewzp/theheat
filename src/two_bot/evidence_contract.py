@@ -226,7 +226,7 @@ def audit_story_bundle(bundle: StoryBundle) -> EvidenceAudit:
         if reason := report_bundle_hold(bundle):
             issues.append(_issue("error", "nifc_report_unqualified", "raw_signal_dump.evidence", reason))
 
-    from src.data.temperature_evidence import temperature_aggregate_failures
+    from src.data.temperature_evidence import temperature_aggregate_failures, ghcn_record_point_failures
     from src.data.crw_contract import reference_climatology_failures
     from src.data.coral_evidence import dhw_only_bundle_failures, regional_bundle_failures
 
@@ -241,6 +241,9 @@ def audit_story_bundle(bundle: StoryBundle) -> EvidenceAudit:
 
     for reason in temperature_aggregate_failures(bundle):
         issues.append(_issue("error", "temperature_aggregate_unqualified", "raw_signal_dump", reason))
+
+    for reason in ghcn_record_point_failures(bundle):
+        issues.append(_issue("error", "ghcn_record_point_unqualified", "raw_signal_dump", reason))
 
     # The strict boundary and older shape diagnostics can report the same
     # field. Keep one actionable instruction per code/field/severity.
