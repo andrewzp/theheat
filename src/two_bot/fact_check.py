@@ -14,7 +14,8 @@ from src.two_bot.prompts.fact_check_prompt import (
     FACT_CHECK_USER_PROMPT_TEMPLATE,
 )
 from src.two_bot.retry import call_with_retries
-from src.two_bot.trial_budget import google_trial_options, provider_call
+from src.two_bot.trial_budget import completed_google_text, google_trial_options, provider_call
+from src.two_bot.google_output import CHECK_OUTPUT_TOKENS
 from src.two_bot.scientific_claims import scientific_claim_failures
 from src.two_bot.strict_contract import CLAIM_KINDS, bundle_schema_issues, material_span_failures, review_snapshot
 from src.two_bot.types import ExtractedClaim, FactCheckResult, StoryBundle
@@ -152,7 +153,8 @@ def prepare_request(
             f"VERIFICATION DATE (UTC): {verification_date.isoformat()}\n\n"
             f"{user_prompt}{retry_suffix}"
         ),
-        config=dict(response_mime_type="application/json", response_json_schema=FACT_CHECK_OUTPUT_SCHEMA),
+        config=dict(response_mime_type="application/json", response_json_schema=FACT_CHECK_OUTPUT_SCHEMA,
+                    max_output_tokens=CHECK_OUTPUT_TOKENS),
     )
 
 
@@ -202,10 +204,7 @@ def _call_gemini(
     )
     from src.two_bot.usage_ledger import record_response
     record_response("fact_check", response, FACT_CHECKER_MODEL, "google")
-    # google-genai's response.text is Optional — empty when no candidates
-    # come back. Empty string falls through to the JSON parser as a parse
-    # error, which the caller handles consistently with other failure modes.
-    return response.text or ""
+    return completed_google_text(response)
 
 
 def _claim_reuse_failures(claims: list[ExtractedClaim], state: BotState) -> list[str]:

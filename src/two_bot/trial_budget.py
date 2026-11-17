@@ -44,6 +44,20 @@ def current_trial() -> TrialBudget | None:
     return _ACTIVE.get()
 
 
+def completed_google_text(response) -> str:
+    """Hold incomplete returned responses after usage, outside all retry loops."""
+    from src.two_bot.google_output import GoogleResponseUnavailable, complete_text
+
+    try:
+        return complete_text(response)
+    except GoogleResponseUnavailable:
+        budget = current_trial()
+        if budget is not None:
+            with budget._lock:
+                budget.stopped = budget.stopped or "trial_provider_response_incomplete"
+        raise
+
+
 class TrialBudget:
     def __init__(self, journal: Callable[[dict], None], stop_file: Path):
         self.journal = journal
@@ -98,11 +112,11 @@ class TrialBudget:
                 config = bounded.get("config") or {}
                 if not isinstance(config, dict):
                     config = config.model_dump(exclude_none=True)
-                # Ordinary safety now supplies this same bound explicitly.
-                # Accept only its exact existing trial limit, never caller
-                # overrides for another stage or a different output allowance.
+                # Accept only ordinary checks' exact known integer caps; this
+                # preserves the existing bounded wire request, never an override.
                 if "max_output_tokens" in config:
-                    if (stage != "safety" or type(config["max_output_tokens"]) is not int
+                    if (stage not in {"safety", "fact_check", "critic"}
+                            or type(config["max_output_tokens"]) is not int
                             or config["max_output_tokens"] != OUTPUT_LIMITS[stage]):
                         self.stop("trial_changed_output_bound")
                     config = {k: v for k, v in config.items() if k != "max_output_tokens"}

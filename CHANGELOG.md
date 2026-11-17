@@ -1,3 +1,7 @@
+## 0.9.109.114
+
+- Bound ordinary factual, critic and news model outputs explicitly. Retain usage and hold incomplete or blocked Google responses before interpreting their text, including valid-looking JSON stopped at the token limit. Preserve finite-trial wire limits, shared-check limits, runtime models and existing call budgets; these per-request bounds are not a monthly spending ceiling.
+
 ## 0.9.109.113
 
 - Keep unbound satellite thermal detections out of physical ongoing-event memory. Preserve general publication history and source deduplication, while preventing matching regions or repeated cells from granting fire continuity or duration. Retained restores follow the same rule; resolved physical bindings and perimeter/report-series behavior stay unchanged.

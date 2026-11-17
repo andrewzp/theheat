@@ -186,8 +186,7 @@ def test_exact_shared_requests_and_distinct_explicit_local_output_bound(case):
         config = batch.pop("config")
         assert config.pop("max_output_tokens") == 4096
         original_config = original.pop("config", {})
-        if stage == "safety":
-            assert original_config.pop("max_output_tokens") == 2048
+        assert original_config.pop("max_output_tokens") == (2048 if stage == "safety" else 8192)
         assert config == original_config
         assert batch == original
 
