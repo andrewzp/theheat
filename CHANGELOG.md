@@ -1,3 +1,7 @@
+## 0.9.109.113
+
+- Keep unbound satellite thermal detections out of physical ongoing-event memory. Preserve general publication history and source deduplication, while preventing matching regions or repeated cells from granting fire continuity or duration. Retained restores follow the same rule; resolved physical bindings and perimeter/report-series behavior stay unchanged.
+
 ## 0.9.109.112
 
 - Keep distinct GDACS reports out of each other's event memory. Carry exact source-series identity through publication-memory snapshots and restores, and present it separately from confirmed physical episodes. Missing or conflicting identities cannot inherit history from matching country or display names; other signal families and publication controls remain unchanged.
