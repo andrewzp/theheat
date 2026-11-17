@@ -202,10 +202,59 @@ def _memory(state: BotState) -> MemoryState:
     return state_store.get_memory(state)
 
 
+_GDACS_MEMORY_SCHEMA = "gdacs-source-memory/v1"
+_SOURCE_MEMORY_FIELD = "source_event_identity"
+
+
+def _gdacs_memory_scoped(bundle: StoryBundle) -> bool:
+    # The GDACS builder also serves explicit subtype witnesses. Their identity
+    # needs its own qualified reader; missing identity never grants a region key.
+    return bundle.signal_kind == "global_disaster"
+
+
+def _memory_identity(value: Any) -> dict | None:
+    """Validate a source-series key, never a physical-incident or review proof."""
+    from src.data.gdacs import EVENT_TYPES
+    if (type(value) is not dict or set(value) != {"schema", "issuer", "event_type", "source_event_id"}
+            or value["schema"] != _GDACS_MEMORY_SCHEMA or value["issuer"] != "gdacs-georss"
+            or type(value["event_type"]) is not str or value["event_type"] not in EVENT_TYPES
+            or type(value["source_event_id"]) is not str
+            or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,79}", value["source_event_id"], re.ASCII)
+            or set(value["source_event_id"]) == {"0"}):
+        return None
+    return dict(value)
+
+
+def _gdacs_memory_identity(bundle: StoryBundle) -> dict | None:
+    if not _gdacs_memory_scoped(bundle):
+        return None
+    from src.data.gdacs import EVENT_TYPES, GDACS_GEORSS_LEG, GDACS_GEORSS_URL
+    raw = bundle.raw_signal_dump
+    provenance = raw.get("source_provenance")
+    if type(provenance) is not dict:
+        return None
+    identity = _memory_identity({"schema": _GDACS_MEMORY_SCHEMA, "issuer": "gdacs-georss",
+        "event_type": provenance.get("eventtype"), "source_event_id": raw.get("source_event_id")})
+    if identity is None:
+        return None
+    event_type, source_id = identity["event_type"], identity["source_event_id"]
+    prefix = f"gdacs_{event_type}_{source_id}_"
+    expected = {"source_product": "gdacs-georss", "source_url": GDACS_GEORSS_URL,
+                "source_event_id": source_id, "disaster_type": EVENT_TYPES[event_type]}
+    if (type(bundle.event_id) is not str or raw.get("source_leg") != GDACS_GEORSS_LEG or raw.get("event_id") != bundle.event_id
+            or not bundle.event_id.startswith(prefix) or len(bundle.event_id) == len(prefix)):
+        return None
+    for label, value in expected.items():
+        facts = [fact for fact in bundle.current_facts if isinstance(fact, dict) and fact.get("label") == label]
+        if raw.get(label) != value or len(facts) != 1 or facts[0].get("value") != value:
+            return None
+    return identity
+
+
 def bundle_memory_snapshot(bundle: StoryBundle) -> dict:
     """Persist the small bundle subset needed to record publish memory later."""
 
-    snapshot = {
+    snapshot: dict[str, Any] = {
         "signal_kind": bundle.signal_kind,
         "where": bundle.where,
         "when": bundle.when,
@@ -219,6 +268,10 @@ def bundle_memory_snapshot(bundle: StoryBundle) -> dict:
     if "physical_episode" in bundle.raw_signal_dump:
         from src.storage.physical_events import validate_binding
         snapshot["physical_episode"] = validate_binding(bundle.raw_signal_dump["physical_episode"])
+    else:
+        identity = _gdacs_memory_identity(bundle)
+        if identity is not None:
+            snapshot[_SOURCE_MEMORY_FIELD] = identity
     return snapshot
 
 
@@ -227,6 +280,8 @@ def build_memory_slice(state: BotState, bundle: StoryBundle, *, now: datetime | 
 
     from src.data.places import country_key
     bound = "physical_episode" in bundle.raw_signal_dump
+    source_scoped = _gdacs_memory_scoped(bundle)
+    source_identity = _gdacs_memory_identity(bundle) if not bound else None
     if bound:
         from src.storage.physical_events import EpisodeContext
         if type(episode_context) is not EpisodeContext:
@@ -236,7 +291,7 @@ def build_memory_slice(state: BotState, bundle: StoryBundle, *, now: datetime | 
         raise ValueError("unexpected_episode_context")
     memory = _memory(state)
     country = _country_for(bundle)
-    event_keys = set() if bound else {
+    event_keys = set() if bound or source_scoped else {
         key for key in (_event_base(bundle.event_id), _event_series_key(bundle))
         if key
     }
@@ -260,6 +315,7 @@ def build_memory_slice(state: BotState, bundle: StoryBundle, *, now: datetime | 
     )
 
     ongoing_event = None
+    source_prior = None
     fallback_region_match = None
     for row in memory.get("ongoing_events", []):
         if not isinstance(row, dict):
@@ -270,6 +326,13 @@ def build_memory_slice(state: BotState, bundle: StoryBundle, *, now: datetime | 
                 break
             continue
         if row.get("physical_episode") is not None:
+            continue
+        if source_scoped:
+            if source_identity is not None and _memory_identity(row.get(_SOURCE_MEMORY_FIELD)) == source_identity:
+                source_prior = row
+                break
+            continue
+        if row.get(_SOURCE_MEMORY_FIELD) is not None:
             continue
         if row.get("event_id") == bundle.event_id:
             ongoing_event = row
@@ -314,14 +377,20 @@ def build_memory_slice(state: BotState, bundle: StoryBundle, *, now: datetime | 
         recent_categories.append(category)
 
     same_event_rows = []
+    source_rows = []
     if bound:
         same_event_rows = [row for row in memory.get("shipped_tweets", [])
                            if isinstance(row, dict) and episode_context.contains(row) and _tweet_text(row)]
+    elif source_scoped:
+        source_rows = [row for row in memory.get("shipped_tweets", [])
+                       if isinstance(row, dict) and row.get("physical_episode") is None
+                       and source_identity is not None
+                       and _memory_identity(row.get(_SOURCE_MEMORY_FIELD)) == source_identity and _tweet_text(row)]
     elif event_keys:
         for row in memory.get("shipped_tweets", []):
             if not isinstance(row, dict):
                 continue
-            if row.get("physical_episode") is not None:
+            if row.get("physical_episode") is not None or row.get(_SOURCE_MEMORY_FIELD) is not None:
                 continue
             row_keys = {
                 key for key in (_event_base(row.get("event_id")), row.get("event_series_key"))
@@ -334,6 +403,17 @@ def build_memory_slice(state: BotState, bundle: StoryBundle, *, now: datetime | 
                 continue
             same_event_rows.append(row)
     same_event_rows.sort(key=_row_time, reverse=True)
+    source_rows.sort(key=_row_time, reverse=True)
+    source_series = None
+    if not bound and source_identity is not None:
+        source_series = {
+            "identity": source_identity,
+            "claim_limit": "Shared GDACS report ID only; not proof of one physical incident, continuous conditions, duration or combined impacts.",
+            "previous_report_context": ({"event_id": source_prior.get("event_id"),
+                "reported_country": source_prior.get("country"), "reported_region": source_prior.get("region")}
+                if source_prior is not None else None),
+            "recent_published_texts": [_tweet_text(row) for row in source_rows[:5]],
+        }
 
     return MemorySlice(
         recent_tweets_same_country=[_tweet_text(row) for row in same_country_rows[:5]],
@@ -346,6 +426,7 @@ def build_memory_slice(state: BotState, bundle: StoryBundle, *, now: datetime | 
             _tweet_text(row) for row in shipped_rows[:_SHIPPED_TWEET_TEXTS_LIMIT]
         ],
         recent_categories=recent_categories,
+        source_report_series=source_series,
     )
 
 
@@ -368,7 +449,7 @@ def record_shipped(
     now = shipped_at or _utc_now_iso()
     event_series_key = _event_series_key(bundle)
 
-    shipped_row = {
+    shipped_row: dict[str, Any] = {
         "tweet_text": writer.tweet,
         "signal_kind": bundle.signal_kind,
         "event_id": bundle.event_id,
@@ -376,10 +457,15 @@ def record_shipped(
         "shipped_at": now,
     }
     binding = None
+    source_identity = None
     if "physical_episode" in bundle.raw_signal_dump:
         from src.storage.physical_events import validate_binding
         binding = validate_binding(bundle.raw_signal_dump["physical_episode"])
         shipped_row["physical_episode"] = binding
+    else:
+        source_identity = _gdacs_memory_identity(bundle)
+        if source_identity is not None:
+            shipped_row[_SOURCE_MEMORY_FIELD] = source_identity
     if tweet_id:
         shipped_row["tweet_id"] = tweet_id
     if event_series_key:
@@ -400,11 +486,18 @@ def record_shipped(
     if writer.angle_chosen:
         _dedup_append(memory.setdefault("used_framings", []), writer.angle_chosen)
 
+    if binding is None and _gdacs_memory_scoped(bundle) and source_identity is None:
+        # The published row remains in general history. Missing source identity
+        # cannot create ongoing-event authority via display country/name.
+        return
+
     events = memory.setdefault("ongoing_events", [])
     existing = next(
         (row for row in events if isinstance(row, dict)
          and (row.get("physical_episode", {}).get("episode_id") == binding["episode_id"] if binding
-              else row.get("physical_episode") is None and row.get("event_id") == bundle.event_id)),
+              else row.get("physical_episode") is None and (
+                  _memory_identity(row.get(_SOURCE_MEMORY_FIELD)) == source_identity if source_identity is not None
+                  else row.get(_SOURCE_MEMORY_FIELD) is None and row.get("event_id") == bundle.event_id))),
         None,
     )
     if existing is None:
@@ -417,6 +510,7 @@ def record_shipped(
                 "last_seen": _today_iso(),
                 "days_running": 1,
                 **({"physical_episode": binding} if binding else {}),
+                **({_SOURCE_MEMORY_FIELD: dict(source_identity)} if source_identity is not None else {}),
                 "signal_kind": bundle.signal_kind,
             }
         )
@@ -461,6 +555,16 @@ def _story_bundle_from_metadata(two_bot: dict, draft: dict) -> StoryBundle | Non
         dict(fact) for fact in facts_raw
         if isinstance(fact, dict)
     ] if isinstance(facts_raw, list) else []
+    # This miniature bundle is used only to record retained publication memory,
+    # never as source evidence or a fresh input to generation/scientific checks.
+    raw = {"physical_episode": payload["physical_episode"]} if "physical_episode" in payload else {}
+    identity = _memory_identity(payload.get(_SOURCE_MEMORY_FIELD))
+    if not raw and identity is not None:
+        from src.data.gdacs import EVENT_TYPES, GDACS_GEORSS_LEG, GDACS_GEORSS_URL
+        raw = {"event_id": event_id, "source_product": "gdacs-georss", "source_url": GDACS_GEORSS_URL,
+               "source_leg": GDACS_GEORSS_LEG, "source_event_id": identity["source_event_id"],
+               "disaster_type": EVENT_TYPES[identity["event_type"]],
+               "source_provenance": {"eventtype": identity["event_type"]}}
     return StoryBundle(
         signal_kind=signal_kind,
         where=str(payload.get("where") or draft.get("city") or ""),
@@ -469,8 +573,7 @@ def _story_bundle_from_metadata(two_bot: dict, draft: dict) -> StoryBundle | Non
         headline_metric={},
         current_facts=current_facts,
         historical_context={},
-        raw_signal_dump=({"physical_episode": payload["physical_episode"]}
-                         if "physical_episode" in payload else {}),
+        raw_signal_dump=raw,
     )
 
 

@@ -1,6 +1,6 @@
 {
   "identity": {
-    "archive_sha256": "47953a73fa7486e7d68c3d6f08cb2fecc6bbaf77362b4eefd2d682bb6bfbec81",
+    "archive_sha256": "32081bf848f621c33baaf4df1f75b4ad3721628d8226091d60a656315b5ca442",
     "deployment_files": {
       "api/graphic_preview.py": "f7521adcbd618f4b65b2a0de30ea62aaff4cdd36f2254e9af38bf68646d361ad",
       "api/graphic_reader_status.py": "5e9685d699625a4eea9d5be884b6e266939a0ad344a2997351ba79bd114407ba",
@@ -117,10 +117,10 @@
       "src/two_bot/intern/nwps_forecast.py": "d35210ea570b9f15dd74ea2e8e0278d06804e8c4053da00996648f740d54df5e",
       "src/two_bot/json_utils.py": "c09fd98817c8e478a38cdeb1028769ec146ad0f94701235b7c1e12de7a46e7da",
       "src/two_bot/strict_contract.py": "29893cf743fedfbb72ffa09da2daf8ca7501142085ee920ea521ceeb291d4e48",
-      "src/two_bot/types.py": "951044ca2582c8b96872bdd5b8ed8fc60546a58305aa8b06de50075206cc817e"
+      "src/two_bot/types.py": "65afc3d850c31c843bc1e7b58dcc0b13eb274969dcff657e2622641bd85239ee"
     },
     "format": "saved-source-svg-preview-v2",
-    "policy_source_sha256": "f1c7dbed24f760e91e139bc588858ee6275fa909b63d4e15977e6b04eeba33a3",
+    "policy_source_sha256": "5ff1bcfe7408e6c6eaef3dc6a73ffb4374ad51a278ba716aa08f31f2d2bc24d0",
     "resource_sources": {
       "src/data/registry/cities.csv": "data/cities.csv",
       "src/data/registry/country_codes.json": "data/country_codes.json",
@@ -129,5 +129,5 @@
     },
     "schema_version": 1
   },
-  "runtime_sha256": "555cfed794118a518bfa3a2bd807b8ffb99a7afa29650d257465f914d9cd03d1"
+  "runtime_sha256": "1199d3e75d1f36d9f675826d7d152ed77cc555792096d2add37412f7437f736b"
 }
