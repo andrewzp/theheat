@@ -294,6 +294,7 @@ def recommend_approval_policy(
         tweet_type in {
             "fire",
             "fire_footprint",
+            "reported_fire_incident_size",
             "severe_weather",
             "global_disaster",
             "usgs_earthquake",

@@ -125,7 +125,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/data/temperature_history.py": "c1369f662d76b2a788e49f30bdc00a57377f686e08bcefd0e958322e3ed33d84",
     "src/data/water_levels.py": "4868999eaaf6a95800439c3455efa4d67753e7b328161598b11d140d75e93c9e",
     "src/data/world_thresholds.py": "a817f8feabe3e41dac69ff3fef07ad9ac264843daa075caef2484fcf7fc5fe09",
-    "src/editorial/approval.py": "00133ebea90715105e7eac6540fae983a2ea746e1d5110f09c7663e0d1edf837",
+    "src/editorial/approval.py": "3a822e3a470bc4ac30f8a57aaa488c4eb8cded096fd137731fd1620d0939d306",
     "src/editorial/automatic_text.py": "907744454a6fcc4b1977446a4038a2c1d1120a6504a2a2e7cbaef884ad0031f5",
     "src/editorial/delegated_media_review.py": "9f8c0c1b73854b856b833a3bf93cb2222ede1b6c7043422723b45e37307bbeec",
     "src/editorial/draft_admission.py": "a726ca826cc564f43e3dd1169fa0f2a8d671be09d5f8ca80413587a64b857eb7",
@@ -250,7 +250,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/two_bot/copy_gates.py": "8a62c2e2d122b1c28057e580b4bc70cc85e0a4ee228221a915ac328e35322126",
     "src/two_bot/critic.py": "64abc0b68b6d842d031fc571b2323e72462534a8f9c7cc457f76b6dece4f17e9",
     "src/two_bot/engine_boundary.py": "295f59895701d9c3b74268f6c17398824dfe2904f9bc7a04d91a69a717dde735",
-    "src/two_bot/evidence_contract.py": "233401cb4c9394605a52b2d6bf7ea625e136428fee6d1323f685f7da83f35da3",
+    "src/two_bot/evidence_contract.py": "a9cf87dc875f4d801c02258f27ed3ac99061e52c077884142d39951af278feb3",
     "src/two_bot/fact_check.py": "09ec913239bd27d529ca5d46f4ece43f2cacc60bc7987c80f6fa2bd41f7da541",
     "src/two_bot/ghcn_claim_contract.py": "749443ad87f4caac9726200dcc8f0e0aa3c662d5b5aee20f9b0f3dff8fa48bcc",
     "src/two_bot/ghcn_claim_view.py": "0131240ab40e3a7492e4c04fa2d36944f1264e5b6eb31fa83abe6a0892474490",
@@ -263,7 +263,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/two_bot/intern/atmospheric.py": "6c7448b2e0e6bd2a45f447c9a29e5dd3cc295932b9482550eb9f76e5993ce572",
     "src/two_bot/intern/disasters.py": "db5f7138cc2943c42ae8479b5e97c76bb8aa8dfe4b86ba19e00f4600b5a102b6",
     "src/two_bot/intern/drought.py": "2b6449d5ae3ae7dbdaafdcf47b2d56abab2cabda9d195bcfcdeac85345ee27ab",
-    "src/two_bot/intern/fire.py": "c8b04dc71cfdccdcc8425af8275c66197773264a8ed4ad342e47c1d62316876d",
+    "src/two_bot/intern/fire.py": "8b4bb18a91fcdd8ea73703a0429c04893d0f2fdd947297faefe4e49e04405975",
     "src/two_bot/intern/marine.py": "2ab06c73acb56836f78be88d0fcee9daffcd639a91ba2120caf483fea1803c8d",
     "src/two_bot/intern/marine_crw.py": "b8d624e5e1607afcb2f3a6a5b0b04ce223b87553b0c5b4665a0830d4553d9050",
     "src/two_bot/intern/nhc_advisory.py": "61ffb8d8de787ecb0e7b9841ab3e25edafd45d4bafaf1a6fa54f8a329665793f",
@@ -274,7 +274,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/two_bot/intern/warnings.py": "04e0a4506ffbb29124c8d2960a5e5025305699297fcf8f9178b23caac2cd7a37",
     "src/two_bot/intern/wetbulb.py": "76cbe14776d3e95bbbea1b7dc74f1f79af9fd3a4d32ec75c49f4c44946a250f8",
     "src/two_bot/json_utils.py": "c09fd98817c8e478a38cdeb1028769ec146ad0f94701235b7c1e12de7a46e7da",
-    "src/two_bot/memory.py": "8ad06a3ab271cfd1d635b889d4d9c80ce0d8450f70c94375aa6cf885ae097b3a",
+    "src/two_bot/memory.py": "829f55fe94ad03869ddf995e31420bd2d75b333570a8581555baedaeae1450e6",
     "src/two_bot/multisignal.py": "6faa78ed3c5d94b4bb9305e12f4a61d370e212fddee47190b15997b52fbb243e",
     "src/two_bot/pipeline.py": "b10e00945bbd25f7c313f5c567d73576535464325fc1aa6076d336f73abbd5ea",
     "src/two_bot/prompts/__init__.py": "b08ec3ae2e477637b1fa3aa7f04935b7744b5ea7548bb384965e20ade7fabd2b",
@@ -296,5 +296,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "39d1fb9de6ff09e711035c1b658337308f983bfd53927d800de037c2cc0fa4a9"
   },
   "schema_version": 1,
-  "source_sha256": "48746359b98f1812039079157bfdde6d13e72ae26c6c7fb20ba69cdf456749ab"
+  "source_sha256": "c193991580ab656a92b7f82b5d1b7f9d86c98db9037463cfbc453e48fe67f6de"
 }

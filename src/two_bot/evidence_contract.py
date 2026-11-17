@@ -215,6 +215,14 @@ def audit_story_bundle(bundle: StoryBundle) -> EvidenceAudit:
     for reason in fire_bundle_failures(bundle):
         issues.append(_issue("error", "thermal_source_unqualified", "raw_signal_dump", reason))
 
+    from src.data.fire_footprint import KIND as nifc_kind, REPORT_SCHEMA, SOURCE_PRODUCT, report_bundle_hold
+    report = raw_signal_dump.get("evidence") if isinstance(raw_signal_dump, dict) else None
+    if bundle.signal_kind == nifc_kind or isinstance(report, dict) and (
+        report.get("schema") == REPORT_SCHEMA or report.get("source_product") == SOURCE_PRODUCT
+    ):
+        if reason := report_bundle_hold(bundle):
+            issues.append(_issue("error", "nifc_report_unqualified", "raw_signal_dump.evidence", reason))
+
     from src.data.temperature_evidence import temperature_aggregate_failures
     from src.data.crw_contract import reference_climatology_failures
     from src.data.coral_evidence import dhw_only_bundle_failures, regional_bundle_failures

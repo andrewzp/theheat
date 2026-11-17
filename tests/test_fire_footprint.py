@@ -36,10 +36,12 @@ SAMPLE_PAYLOAD = {
                 "IncidentName": "Dixie",
                 "CpxName": "Dixie Complex",
                 "IsCpxChild": 0,
+                "IncidentTypeCategory": "WF",
+                "ActiveFireCandidate": 1,
                 "IncidentSize": 526_321.0,
                 "POOState": "US-CA",
                 "FireDiscoveryDateTime": 1626220800000,
-                "ModifiedOnDateTime": FRESH_MS,
+                "ModifiedOnDateTime_dt": FRESH_MS,
             }
         },
         {
@@ -49,10 +51,12 @@ SAMPLE_PAYLOAD = {
                 "IncidentName": "Yukon Fire",
                 "CpxName": None,
                 "IsCpxChild": None,
+                "IncidentTypeCategory": "WF",
+                "ActiveFireCandidate": 1,
                 "IncidentSize": 148_264.0,
                 "POOState": "US-AK",
                 "FireDiscoveryDateTime": 1625616000000,
-                "ModifiedOnDateTime": FRESH_MS,
+                "ModifiedOnDateTime_dt": FRESH_MS,
             }
         },
         {
@@ -62,10 +66,12 @@ SAMPLE_PAYLOAD = {
                 "IncidentName": "Tanana Fire",
                 "CpxName": None,
                 "IsCpxChild": None,
+                "IncidentTypeCategory": "WF",
+                "ActiveFireCandidate": 1,
                 "IncidentSize": 148_264.0,  # ~60k ha, tier 1 — used as "good row" in exception test
                 "POOState": "US-AK",
                 "FireDiscoveryDateTime": 1625616000000,
-                "ModifiedOnDateTime": FRESH_MS,
+                "ModifiedOnDateTime_dt": FRESH_MS,
             }
         },
         {
@@ -75,10 +81,12 @@ SAMPLE_PAYLOAD = {
                 "IncidentName": "Small Fire",
                 "CpxName": None,
                 "IsCpxChild": None,
+                "IncidentTypeCategory": "WF",
+                "ActiveFireCandidate": 1,
                 "IncidentSize": 12_355.0,  # below floor (~4,999 ha)
                 "POOState": "US-OR",
                 "FireDiscoveryDateTime": 1625702400000,
-                "ModifiedOnDateTime": FRESH_MS,
+                "ModifiedOnDateTime_dt": FRESH_MS,
             }
         },
     ]
@@ -162,10 +170,12 @@ class TestFetchActiveFirePerimeters:
                         "IncidentName": "Fallback Fire",
                         "CpxName": None,
                         "IsCpxChild": None,
+                        "IncidentTypeCategory": "WF",
+                        "ActiveFireCandidate": 1,
                         "IncidentSize": 148_264.0,  # ~60k ha, above floor
                         "POOState": "US-NV",
                         "FireDiscoveryDateTime": 1625616000000,
-                        "ModifiedOnDateTime": FRESH_MS,
+                        "ModifiedOnDateTime_dt": FRESH_MS,
                     }
                 }
             ]
@@ -189,10 +199,12 @@ class TestFetchActiveFirePerimeters:
                         "IncidentName": "Parent Complex",
                         "CpxName": "Parent Complex",
                         "IsCpxChild": 0,
+                        "IncidentTypeCategory": "WF",
+                        "ActiveFireCandidate": 1,
                         "IncidentSize": 526_321.0,
                         "POOState": "US-CA",
                         "FireDiscoveryDateTime": 1626220800000,
-                        "ModifiedOnDateTime": FRESH_MS,
+                        "ModifiedOnDateTime_dt": FRESH_MS,
                     }
                 },
                 {
@@ -202,10 +214,12 @@ class TestFetchActiveFirePerimeters:
                         "IncidentName": "Child Fire A",
                         "CpxName": "Parent Complex",
                         "IsCpxChild": 1,
+                        "IncidentTypeCategory": "WF",
+                        "ActiveFireCandidate": 1,
                         "IncidentSize": 300_000.0,
                         "POOState": "US-CA",
                         "FireDiscoveryDateTime": 1626220800000,
-                        "ModifiedOnDateTime": FRESH_MS,
+                        "ModifiedOnDateTime_dt": FRESH_MS,
                     }
                 },
             ]

@@ -13,8 +13,9 @@ def run_fire_footprint(bot_state: BotState, current_run: dict | None) -> None:
         print("[alerts] Checking fire footprints (NIFC)...")
         ff_start = time.perf_counter()
         source_promoted = 0
+        source_details: dict = {}
         try:
-            complexes = _fetch_strict(fire_footprint.fetch_active_fire_perimeters)
+            complexes = _fetch_strict(fire_footprint.fetch_active_fire_perimeters, metrics_out=source_details)
             crossings = fire_footprint.detect_tier_crossings(complexes, cast(dict, bot_state))
             # Bet A A2 (default OFF): sourced near-miss rescue at the fire
             # score gate — batch-planned first so identity ambiguity rescues
@@ -63,20 +64,21 @@ def run_fire_footprint(bot_state: BotState, current_run: dict | None) -> None:
                             print(f"[news_boost] nifc boost error (continuing): {boost_exc!r}")
                     if not _should_draft(score, fc.event_id):
                         continue
-                    source_promoted += 1
                     tier_idx = min(fc.tier, len(fire_footprint.TIERS_HECTARES) - 1)
                     tier_threshold = fire_footprint.TIERS_HECTARES[tier_idx]
                     review_context = _review_context(
                         source="NIFC",
                         source_key="fire_footprint",
-                        headline=f"Fire complex crossed {tier_threshold:,} ha",
+                        headline=f"NIFC reported incident size: {int(fc.hectares):,} ha (approx.)",
                         current_run=current_run,
                         facts=[
-                            _fact("Complex", fc.name or fc.complex_id),
+                            _fact("Incident", fc.name or fc.complex_id),
                             _fact("Country", fc.country),
                             _fact("Region", fc.region),
-                            _fact("Cumulative burn area", f"{int(fc.hectares):,} ha"),
-                            _fact("Tier crossed", f"{tier_threshold:,} ha"),
+                            _fact("Reported incident size", f"{(fc.evidence or {}).get('source_record', {}).get('IncidentSize', 'unknown')} acres"),
+                            _fact("Converted size (approx.)", f"{int(fc.hectares):,} ha"),
+                            _fact("Internal size tier", f"{tier_threshold:,} ha"),
+                            _fact("Source record modified", (fc.evidence or {}).get("record_modified_at")),
                             _fact("Ignition date", fc.start_date.isoformat() if fc.start_date else "—"),
                         ],
                     )
@@ -92,7 +94,8 @@ def run_fire_footprint(bot_state: BotState, current_run: dict | None) -> None:
                     ) -> None:
                         state.update_fire_complex_tier(_bs, _cid, _tier)
 
-                    _enqueue_story_candidate(
+                    admission: dict = {}
+                    if _enqueue_story_candidate(
                         bot_state,
                         bundle=ff_bundle,
                         score=score,
@@ -101,7 +104,11 @@ def run_fire_footprint(bot_state: BotState, current_run: dict | None) -> None:
                         event_id=fc.event_id,
                         review_context=review_context,
                         on_draft_success=_on_success,
-                    )
+                        admission_out=admission,
+                    ):
+                        source_promoted += 1
+                    elif admission.get("disposition") == "refused_evidence":
+                        source_details["admission_holds"] = source_details.get("admission_holds", 0) + 1
                 except Exception as fc_err:
                     print(f"[alerts] Fire footprint: error processing {fc.complex_id}: {fc_err}")
                     state.log_error(bot_state, "fire_footprint", f"{fc.complex_id}: {fc_err}")
@@ -109,8 +116,10 @@ def run_fire_footprint(bot_state: BotState, current_run: dict | None) -> None:
             bot_state["fire_footprint_last_run"] = today_iso
             _record_source_run(
                 current_run, bot_state, "fire_footprint", ff_start,
-                status="success", observed=len(complexes),
+                status="degraded" if source_details.get("held_rows") or source_details.get("admission_holds") or source_details.get("coverage_truncated") else "success", observed=len(complexes),
                 promoted=source_promoted, drafted=0,
+                details=source_details or None,
+                note="Reported incident sizes; row/admission holds or truncated coverage" if source_details.get("held_rows") or source_details.get("admission_holds") or source_details.get("coverage_truncated") else None,
             )
         except Exception as e:
             print(f"[alerts] Fire footprint error: {e}")
