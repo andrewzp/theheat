@@ -49,8 +49,7 @@ class TestPostTweet:
 
         with (
             patch("src.posting.twitter.tweepy.Client", return_value=mock_client),
-            patch("src.posting.twitter.tweepy.OAuth1UserHandler") as mock_auth,
-            patch("src.posting.twitter.tweepy.API", return_value=mock_api),
+            patch("src.posting.twitter._get_upload_api", return_value=mock_api) as mock_upload_factory,
         ):
             from src.posting.twitter import post_tweet
 
@@ -58,7 +57,7 @@ class TestPostTweet:
 
         assert result is not None
         assert result["id"] == "12345"
-        mock_auth.assert_called_once_with("k", "s", "t", "a")
+        mock_upload_factory.assert_called_once_with()
         mock_api.media_upload.assert_called_once()
         upload_kwargs = mock_api.media_upload.call_args.kwargs
         assert upload_kwargs["filename"] == "hot10.png"

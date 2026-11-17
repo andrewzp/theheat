@@ -138,7 +138,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/editorial/observed_scope.py": "a132970b736b75a650454674f496a746be9c2ee0d45d8c17a6d23228276cc152",
     "src/editorial/official_warning.py": "e37a232fe19e8ef90bfc825c92b95b89d9c9f9df7818b4a3352466ad2beeff87",
     "src/editorial/operator_claim_references.py": "f7d1d14d75b55cc9f273d3a98459f158f57c533521d153b1e86ee5bc7d95d1fd",
-    "src/editorial/policy.py": "f778be53c4d9cd88dfcbed8b5e743e0766af41640b4540529267b0a6e567724e",
+    "src/editorial/policy.py": "36927233b889c143ca56950b81987c3bdc8f75ae15587a00b229737c226d8fd6",
     "src/editorial/portfolio.py": "b8a3e7b5a6fc2a1f9843ef4382fa4901fbaf74f6c5834646740a1f65e99fabd5",
     "src/editorial/report_development.py": "e2ed39a9ff957683c8befff0f3b99533fdc9d90d84af88220ed13f2bf1489995",
     "src/editorial/report_supply.py": "37aa718804a9dce97c105769912c87e8f7513f1b69bdcc3240865eba810c01a6",
@@ -217,7 +217,8 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/posting/delivery_receipts.py": "c944f22458726d02bcdbbf70d274d4831486013dc2eb1e47fd6f2a569abd4147",
     "src/posting/delivery_transport.py": "e50ee85bfe815291f5ec8c75e4c338268e83fc60cc4e919c9cfa70e4d51558e8",
     "src/posting/local_delivery.py": "cb59e1c54d5bfee5f7ad8409d278ebc095fb9ad4a0ebb8484668d82ae7c3a95d",
-    "src/posting/twitter.py": "fc17d9bb59ef8e2a56e25ba711a2997af9bfa2fdb2fdc5d4657537155966791e",
+    "src/posting/twitter.py": "75fb88e279ff3d5eae3fbba4670954adefa322e949e609d425801f0c3b7a85b6",
+    "src/posting/x_media.py": "bb1eedb176b4508fb261788151a5c823860c99cb804c0820ba6695d6b0754cb4",
     "src/runtime_inventory.py": "6d4dd984e5cc7dba5e9e62f7704bee0eb6106f206f856e7273687bd867f47391",
     "src/state.py": "02f368772cd0a9e13f31f0d0b5f3b14f62441591729da3fb106941628d0d8e38",
     "src/storage/cyclone_supply.py": "5bb79fe881f4453c4d526e855fd82ec18f787a77cdd9a89214270259ddaa0f8d",
@@ -294,5 +295,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "39d1fb9de6ff09e711035c1b658337308f983bfd53927d800de037c2cc0fa4a9"
   },
   "schema_version": 1,
-  "source_sha256": "bc495e023f07ee4ad256d02271d59be8f3c9323f829e362a6a790093956e0201"
+  "source_sha256": "f1c7dbed24f760e91e139bc588858ee6275fa909b63d4e15977e6b04eeba33a3"
 }

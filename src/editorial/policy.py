@@ -121,7 +121,7 @@ POLICY_FILES = (
     "src/commands/postgres_authority.py", "src/commands/sqlite_authority.py",
     "src/commands/postgres_delivery.py", "src/commands/preview_delivery_worker.py",
     "src/posting/local_delivery.py", "src/posting/delivery_transport.py", "src/posting/delivery_receipts.py",
-    "src/posting/twitter.py", "src/posting/bluesky.py", "src/storage/migrations/012_local_delivery.sql",
+    "src/posting/twitter.py", "src/posting/x_media.py", "src/posting/bluesky.py", "src/storage/migrations/012_local_delivery.sql",
     "src/storage/migrations/014_preview_delivery.sql",
     "src/orchestrator/sources/open_meteo.py",
     "src/orchestrator/sources/air_quality.py",

@@ -7,6 +7,8 @@ from io import BytesIO
 
 import tweepy
 
+from src.posting.x_media import XMediaAPI
+
 API_KEY = os.environ.get("TWITTER_API_KEY", "")
 API_SECRET = os.environ.get("TWITTER_API_SECRET", "")
 ACCESS_TOKEN = os.environ.get("TWITTER_ACCESS_TOKEN", "")
@@ -24,16 +26,15 @@ def _get_client() -> tweepy.Client | None:
     )
 
 
-def _get_upload_api() -> tweepy.API | None:
+def _get_upload_api() -> XMediaAPI | None:
     if not all([API_KEY, API_SECRET, ACCESS_TOKEN, ACCESS_SECRET]):
         return None
-    auth = tweepy.OAuth1UserHandler(
+    return XMediaAPI(
         API_KEY,
         API_SECRET,
         ACCESS_TOKEN,
         ACCESS_SECRET,
     )
-    return tweepy.API(auth)
 
 
 def _declared(send, stage=None):
@@ -55,10 +56,24 @@ def _declared(send, stage=None):
 
 def upload_png(api, png: bytes, **options):
     """One SDK phase; authorization and durable effects belong to its caller."""
+    if isinstance(api, XMediaAPI):
+        try:
+            api.validate_png(png)
+        except tweepy.TweepyException:
+            from src.posting.outbox_outcome import refuse_before_egress
+            refuse_before_egress("media_preflight_invalid")
+            raise
     return _declared(lambda: api.media_upload(filename="hot10.png", file=BytesIO(png), **options), "upload")
 
 
 def set_alt_text(api, media_id: str, alt_text: str, **options):
+    if isinstance(api, XMediaAPI):
+        try:
+            api.validate_metadata(media_id, alt_text)
+        except tweepy.TweepyException:
+            from src.posting.outbox_outcome import refuse_before_egress
+            refuse_before_egress("media_metadata_preflight_invalid")
+            raise
     return _declared(lambda: api.create_media_metadata(media_id, alt_text, **options), "alt")
 
 
