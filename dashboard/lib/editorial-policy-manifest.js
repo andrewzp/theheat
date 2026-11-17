@@ -118,7 +118,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/data/ocean_sst_anomaly.py": "78f0c70c0ce712b969042ffd2a1ac75d9fc0a71a0cee89535de5274fd2973f67",
     "src/data/open_meteo.py": "914f9670aec2ce129ce26f45577f9cbf65c7ef3beb14f971319eac1304e745ce",
     "src/data/places.py": "c66be0181393620b640f0354d2c7379e427aeacf4c80689b190489022bf2a870",
-    "src/data/rainfall_observed.py": "5da1b05a4cafec5fcaa6fdea2f3a8706fa56566a8c90ae9306b8986545b9ec7d",
+    "src/data/rainfall_observed.py": "ce2f5d7c5b9c46f91ba7fbd538275983b34a5edd52b4e28adae8d460a3368b15",
     "src/data/rainfall_supply.py": "ca68b5078f504437894fc19bffcdcf07e6b7b066f2649f640ea90f24458cde46",
     "src/data/regional_observations.py": "eef66077194e446991db077d558f3e2da664e6c1c7a1deb5e2b4ea9cec08d88e",
     "src/data/temperature_evidence.py": "a258f8402418fe275ca32167850c32380452a6f6298faecd80b2f760793737e8",
@@ -201,7 +201,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/orchestrator/sources/coral_dhw.py": "6596f95e1ba183c4833d365c9d1d1b009e299e28e555295351fb061899d37e2f",
     "src/orchestrator/sources/firms.py": "792f4c6334bca4df75fbcf47f00b28a40b4587d8947f131c09bb1afd233e6d08",
     "src/orchestrator/sources/gdacs.py": "89c9b0a96fee81b2079971dc2356dd0f272b5fb4a16f32ae408fdf9244081168",
-    "src/orchestrator/sources/gpm_imerg.py": "ebacce4d7fc643c213294e57578e64f83960c73f17f73a2adf7a23557a3af8ae",
+    "src/orchestrator/sources/gpm_imerg.py": "6d69254b9541cc0f08ef3df8a58ee5a2335b69192aedc71dd38d9f081a1344c2",
     "src/orchestrator/sources/newsworthiness.py": "847ec9f11afff489b703a2ae77f2ca7a3bcc18b938c2782d2e9c40f8f2a7dbfb",
     "src/orchestrator/sources/nhc_advisory.py": "e14956f0d72e576e851efec730ae97459d1f4ca10aaba14fedb3dd98d1c5a1e4",
     "src/orchestrator/sources/nws_alerts.py": "1990244b25454c4d5dc478494b02a580fd19634f3c79af13f8307739eaf94888",
@@ -294,5 +294,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "39d1fb9de6ff09e711035c1b658337308f983bfd53927d800de037c2cc0fa4a9"
   },
   "schema_version": 1,
-  "source_sha256": "80539ba89088cfab79d03e12b08011044e65b8b40ce3c0946134501386ed9761"
+  "source_sha256": "bc495e023f07ee4ad256d02271d59be8f3c9323f829e362a6a790093956e0201"
 }

@@ -6,6 +6,7 @@ The accumulation end, original day, point and product remain bound together.
 from __future__ import annotations
 
 from copy import deepcopy
+from collections import Counter
 from collections.abc import Mapping
 from dataclasses import asdict
 import csv
@@ -32,6 +33,13 @@ MAX_AGE = timedelta(hours=36)
 MIN_MM = 150.0
 MAX_MM = 1000.0
 MAX_NOMINATIONS = 3
+NOMINATION_SCHEMA = "rainfall-nomination-counts-v1"
+_NOMINATION_HOLDS = frozenset({
+    "rainfall_time_invalid", "rainfall_reading_invalid", "rainfall_satellite_product_required",
+    "rainfall_number_invalid", "rainfall_point_invalid", "rainfall_outside_automatic_range",
+    "rainfall_reading_identity_changed", "rainfall_evidence_invalid", "rainfall_source_identity_changed",
+    "rainfall_completed_window_expired",
+})
 _MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
 _READING_FIELDS = frozenset({"city", "country", "lat", "lon", "date", "mm_total",
                              "source_product", "event_id", "source_leg"})
@@ -184,18 +192,24 @@ def build_bundle(evidence, *, now=None):
     return _bundle(evidence)
 
 
-def nominate(readings, bot_state, *, now=None):
+def nominate(readings, bot_state, *, now=None, diagnostics_out=None):
     """A bounded free slate; the shared budget still selects one paid candidate."""
     from src import state
     from src.data import gpm_imerg
 
     clock = _clock(now)
+    counts = dict.fromkeys(("input_rows", "untyped_rows", "identity_unavailable_rows",
+        "identity_conflict_rows", "qualification_held_rows", "history_held_rows",
+        "duplicate_qualified_rows"), 0)
+    holds: Counter[str] = Counter()
     # Detect disagreements before range/product eligibility can discard one
     # copy. A malformed duplicate must not silently make its sibling trustworthy.
     identities: dict[tuple[str, str], dict[str, Any] | None] = {}
     retained = []
     for reading in readings:
+        counts["input_rows"] += 1
         if not isinstance(reading, gpm_imerg.CityPrecipReading):
+            counts["untyped_rows"] += 1
             continue
         raw = asdict(reading)
         keys = []
@@ -215,23 +229,41 @@ def nominate(readings, bot_state, *, now=None):
         retained.append((reading, keys))
     qualified: dict[str, dict[str, Any]] = {}
     for reading, keys in retained:
-        if not keys or any(identities[key] is None for key in keys):
+        if not keys:
+            counts["identity_unavailable_rows"] += 1
+            continue
+        if any(identities[key] is None for key in keys):
+            counts["identity_conflict_rows"] += 1
             continue
         try:
             bundle = build_bundle(evidence_for(reading, now=clock), now=clock)
-        except (ReportHeld, TypeError, ValueError, OverflowError):
+        except (ReportHeld, TypeError, ValueError, OverflowError) as exc:
+            counts["qualification_held_rows"] += 1
+            # Fixed safe codes only; never persist exception prose or source values.
+            code = exc.args[0] if len(exc.args) == 1 else None
+            holds[code if type(code) is str and code in _NOMINATION_HOLDS
+                  else "rainfall_report_unqualified"] += 1
             continue
         if (state.is_duplicate(bot_state, bundle.event_id)
                 or bundle.event_id in bot_state.get("publish_ledger", {})
                 or any(row.get("event_id") == bundle.event_id for row in bot_state.get("drafts", []))
                 or legacy_point_day_hold(bundle, bot_state)):
+            counts["history_held_rows"] += 1
             continue
+        if bundle.event_id in qualified:
+            counts["duplicate_qualified_rows"] += 1
         qualified.setdefault(bundle.event_id, bundle.to_dict())
     rows = list(qualified.values())
     rows.sort(key=lambda value: (-_time(value["when"]).timestamp(),
                                 -value["headline_metric"]["value"], value["event_id"]))
-    return [build_bundle(row["raw_signal_dump"]["evidence"], now=clock)
-            for row in rows[:MAX_NOMINATIONS]]
+    result = [build_bundle(row["raw_signal_dump"]["evidence"], now=clock)
+              for row in rows[:MAX_NOMINATIONS]]
+    if type(diagnostics_out) is dict:
+        diagnostics_out.update(schema=NOMINATION_SCHEMA, **counts,
+            qualification_holds=dict(sorted(holds.items())), qualified_events=len(qualified),
+            nominated_events=len(result), nomination_cap_excluded=len(qualified) - len(result),
+            scope="Input row dispositions and unique event nominations; not coverage or source-truth validation.")
+    return result
 
 
 def is_family(value):
