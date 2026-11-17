@@ -1,6 +1,6 @@
 {
   "identity": {
-    "archive_sha256": "71e70723a956e8c6071797f4fc286419dd088d35fecc4f1ed4ab0f26ffec559e",
+    "archive_sha256": "1925dd58a2815540582590c6e7612fc3f6f828e00b7c415882d947bf85401288",
     "deployment_files": {
       "api/graphic_preview.py": "f7521adcbd618f4b65b2a0de30ea62aaff4cdd36f2254e9af38bf68646d361ad",
       "api/graphic_reader_status.py": "5e9685d699625a4eea9d5be884b6e266939a0ad344a2997351ba79bd114407ba",
@@ -109,7 +109,7 @@
       "src/media/viirs_map_graphic_adapter.py": "657db3caef8503a4e0b9c9596bad8d28c029c3711e1d974f153fc1b60d3dd8d3",
       "src/state_schema.py": "c03acc762121b5810ef2d6bd293017af26ce57703444172a2c170a27b8729ae5",
       "src/two_bot/__init__.py": "57333e1314a97e2fc83e03db569e03b0199c67ff52fad71770853226b9a68f00",
-      "src/two_bot/evidence_contract.py": "a9cf87dc875f4d801c02258f27ed3ac99061e52c077884142d39951af278feb3",
+      "src/two_bot/evidence_contract.py": "a572c0f89e70332f4695a3d3342c34a2ff9f2c6ce7164ed219b23cb60f17f3cf",
       "src/two_bot/ghcn_claim_contract.py": "749443ad87f4caac9726200dcc8f0e0aa3c662d5b5aee20f9b0f3dff8fa48bcc",
       "src/two_bot/intern/__init__.py": "2e34d6b9975fb831edbad10ed06d66aad2e8569a29cfd4cf17784177b91205e0",
       "src/two_bot/intern/air_quality.py": "f4fc20d4c197d4f604e1fa53e43ef02b658613940863eb5f4d41e0995d6c8ff0",
@@ -120,7 +120,7 @@
       "src/two_bot/types.py": "65afc3d850c31c843bc1e7b58dcc0b13eb274969dcff657e2622641bd85239ee"
     },
     "format": "saved-source-svg-preview-v2",
-    "policy_source_sha256": "0c183154020f0b79d159171243adc7a8a3b39eff9c76fd9b2cf92d4231b0bf0e",
+    "policy_source_sha256": "7a2c30191813beb657e110d81c567c41414cbb6b73a4f7eeb7114390d8a38306",
     "resource_sources": {
       "src/data/registry/cities.csv": "data/cities.csv",
       "src/data/registry/country_codes.json": "data/country_codes.json",
@@ -129,5 +129,5 @@
     },
     "schema_version": 1
   },
-  "runtime_sha256": "72daa20f2862cf87c9f86fb0c52a25aeaa9bf5358e986fb57a93cd410d0b29e9"
+  "runtime_sha256": "d5c2380915e702f4119da71c465a0611dce860d830bc38420b034c8dde72a0b2"
 }
