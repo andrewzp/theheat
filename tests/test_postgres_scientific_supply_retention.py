@@ -138,9 +138,10 @@ def test_read_back_not_live_list_is_runner_input(capture, supply, monkeypatch):
     monkeypatch.setattr(p.PostgresProjectionRepository, "read", read)
     rows = []
     actual_prepass = source._scientific_prepass
-    def prepass(state, restored):
+    def prepass(state, restored, *, cap_individuals=True):
+        assert cap_individuals is False
         rows.extend(restored)
-        return actual_prepass(state, restored)
+        return actual_prepass(state, restored, cap_individuals=cap_individuals)
     monkeypatch.setattr(source, "_scientific_prepass", prepass)
     monkeypatch.setattr(source, "_enqueue_story_candidate", lambda *a, **k: False)
     source.run_extreme_signals(deepcopy(DEFAULT_STATE), None, [], {}, {}, ghcn_supply=capture)

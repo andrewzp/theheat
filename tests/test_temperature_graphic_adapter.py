@@ -11,6 +11,7 @@ from src.editorial.revisions import fingerprint
 from src.media.evidence_graphic import build_alt_text, chart_title, validate_graphic
 from src.media.temperature_graphic_adapter import story_bundle_snapshot, temperature_graphic_spec
 from src.two_bot.intern import build_all_time_record_bundle
+from src.two_bot.evidence_contract import audit_story_bundle
 from tests.ghcn_graphic_helpers import STATION, graphic_bundles, source_archive
 
 
@@ -78,8 +79,12 @@ def test_comparator_mutation_cannot_follow_the_callers_original_trusted_binding(
     changed.historical_context["margin_c"] += 10
     changed.raw_signal_dump["evidence"]["baseline"]["variables"]["temperature_2m_max"]["record_values_c"]["all_time"] -= 10
     reseal(changed)
-    with pytest.raises(ValueError, match="obsolete input bundle binding"):
+    # The shared admission now refuses the changed comparator/projection first.
+    with pytest.raises(ValueError, match="P05-qualified StoryBundle: ghcn_record_point_unqualified"):
         adapt([changed], expected=original)
+    # An otherwise qualified changed source still cannot inherit an old binding.
+    with pytest.raises(ValueError, match="obsolete input bundle binding"):
+        adapt(stories[1:2], expected=original)
 
 
 @pytest.mark.parametrize("change", [
@@ -173,7 +178,10 @@ def test_period_coverage_and_calendar_identity_are_qualified_separately(tier):
     key = "09" if tier == "monthly" else "09-08"
     scope[f"{tier}_years"][key] = 1
     reseal(bundle)
-    with pytest.raises(ValueError, match="period-specific"):
+    audit = audit_story_bundle(bundle)
+    assert any(issue.code == "ghcn_record_point_unqualified" and "period-specific" in issue.message
+               for issue in audit.issues)
+    with pytest.raises(ValueError, match="P05-qualified StoryBundle: ghcn_record_point_unqualified"):
         adapt([bundle])
 
 

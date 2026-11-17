@@ -1,6 +1,6 @@
 {
   "identity": {
-    "archive_sha256": "1925dd58a2815540582590c6e7612fc3f6f828e00b7c415882d947bf85401288",
+    "archive_sha256": "5b4529b36314245111e8bfd4e1bb3872c26a4283f35a1d2f1c6687713dd8e301",
     "deployment_files": {
       "api/graphic_preview.py": "f7521adcbd618f4b65b2a0de30ea62aaff4cdd36f2254e9af38bf68646d361ad",
       "api/graphic_reader_status.py": "5e9685d699625a4eea9d5be884b6e266939a0ad344a2997351ba79bd114407ba",
@@ -51,7 +51,7 @@
       "src/data/registry/country_names.json": "b2597ac1145b8d764bd9f783c765bbfbfb2d14af7a92e9f483ada7b8353cdc4f",
       "src/data/registry/place_registry.json": "e9678ac76bfd68d03032a80858a7cb6eed6353508bbcc2cafbdf3186a38cda64",
       "src/data/source_status.py": "434e4023279715976140d3afba8576e237a09137c23cd5e7f9dc52f51c7e4d53",
-      "src/data/temperature_evidence.py": "a258f8402418fe275ca32167850c32380452a6f6298faecd80b2f760793737e8",
+      "src/data/temperature_evidence.py": "c15caea1b3d1564209756c80250c49216370176e0c534500d969309e733feb12",
       "src/data/temperature_history.py": "c1369f662d76b2a788e49f30bdc00a57377f686e08bcefd0e958322e3ed33d84",
       "src/data/water_levels.py": "4868999eaaf6a95800439c3455efa4d67753e7b328161598b11d140d75e93c9e",
       "src/editorial/__init__.py": "ae88e85a4a7a2d49e32df9e41a7e424f8d61492db308742ece8f2fb6cac24896",
@@ -109,7 +109,7 @@
       "src/media/viirs_map_graphic_adapter.py": "657db3caef8503a4e0b9c9596bad8d28c029c3711e1d974f153fc1b60d3dd8d3",
       "src/state_schema.py": "c03acc762121b5810ef2d6bd293017af26ce57703444172a2c170a27b8729ae5",
       "src/two_bot/__init__.py": "57333e1314a97e2fc83e03db569e03b0199c67ff52fad71770853226b9a68f00",
-      "src/two_bot/evidence_contract.py": "a572c0f89e70332f4695a3d3342c34a2ff9f2c6ce7164ed219b23cb60f17f3cf",
+      "src/two_bot/evidence_contract.py": "7005ae6a54e7b521151b6957c7bdbccffa3fa1fa9f2aa07b75b7573d429a6639",
       "src/two_bot/ghcn_claim_contract.py": "749443ad87f4caac9726200dcc8f0e0aa3c662d5b5aee20f9b0f3dff8fa48bcc",
       "src/two_bot/intern/__init__.py": "2e34d6b9975fb831edbad10ed06d66aad2e8569a29cfd4cf17784177b91205e0",
       "src/two_bot/intern/air_quality.py": "f4fc20d4c197d4f604e1fa53e43ef02b658613940863eb5f4d41e0995d6c8ff0",
@@ -120,7 +120,7 @@
       "src/two_bot/types.py": "65afc3d850c31c843bc1e7b58dcc0b13eb274969dcff657e2622641bd85239ee"
     },
     "format": "saved-source-svg-preview-v2",
-    "policy_source_sha256": "8d4651727d22a11d15a6b1a2fd6ca3bbfceec1b532048ea504924e21b17c1914",
+    "policy_source_sha256": "c30e624805a5c94a80eed6b8e7dca8c112acd1ec097481b517eaaf8c3bd317f6",
     "resource_sources": {
       "src/data/registry/cities.csv": "data/cities.csv",
       "src/data/registry/country_codes.json": "data/country_codes.json",
@@ -129,5 +129,5 @@
     },
     "schema_version": 1
   },
-  "runtime_sha256": "90f223424dae617656a5cb6ef599067e917cfa551365b93411f27283c18c8fc0"
+  "runtime_sha256": "623a0558075fa407d0bec9fe309ef7edb1c5427d73d09ecbde7aa168e96a8fad"
 }

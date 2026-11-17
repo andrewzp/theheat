@@ -458,7 +458,7 @@ def _run_world_cached_half(world_cities: list[dict], metrics_out: dict, bot_stat
     return om_bundles, om_country
 
 
-def _scientific_prepass(bot_state: BotState, bundles: list):
+def _scientific_prepass(bot_state: BotState, bundles: list, *, cap_individuals: bool = True):
     """Shared real qualification/clustering/cap path; no enqueue or health writes."""
     # Heat records-cluster (#414) PREPASS — must run BEFORE the per-bundle loop,
     # because that loop enqueues individual record drafts inline and a fired
@@ -542,7 +542,7 @@ def _scientific_prepass(bot_state: BotState, bundles: list):
     # Publication diversity must not remove the stations needed to detect
     # a regional event. Keep the historical individual cap here, after the
     # complete scientific supply has reached the cluster prepass.
-    individual_bundles = select_individual_station_bundles(bundles)
+    individual_bundles = select_individual_station_bundles(bundles) if cap_individuals else list(bundles)
     return (records_cluster_suppressed_ids, records_cluster_fired_dates,
             records_cluster_candidates, individual_bundles, preview_clusters)
 
@@ -932,6 +932,95 @@ def _select_individual_signal(bot_state, bundle, records_cluster_suppressed_ids,
         strongest_headline, strongest_facts, strongest_type, strongest_city, signal_counts, simultaneous_record_stations)
 
 
+def _prepare_live_station_candidates(bot_state, current_run, bundles, suppressed_ids, city_elevations, *, observed_labels):
+    """Apply existing free gates before country diversity; final admission still rechecks.
+
+    The complete scientific prepass has already run. This local plan neither
+    queues candidates nor invokes success/consumption callbacks or a provider.
+    Retained scientific replay keeps its original independent cap contract.
+    """
+    from src.editorial.observed_scope import story_hold
+    from src.orchestrator.triage_queue import (
+        _automatic_source_hold, _automatic_type_may_arm, _scheduled_automatic_drain,
+    )
+    from src.two_bot.evidence_contract import audit_story_bundle
+    from src.two_bot.types import TriageCandidateBundle
+    from src.two_bot.bundle_capture import BundleCaptureError, capture_bundle
+
+    automatic_only = (os.environ.get("THEHEAT_AUTOMATIC_SELECTION_ONLY") == "1"
+                      or _scheduled_automatic_drain(bot_state, current_run))
+    eligible, prepared = [], {}
+    holds: dict[str, int] = {}
+
+    def hold(bundle, selection, stage, reason):
+        holds[stage] = holds.get(stage, 0) + 1
+        if selection.signal is not None:
+            _record_downstream_suppression(
+                bot_state=bot_state, source="open_meteo_extreme_signals",
+                run_id=(_current_suppression_ctx() or {}).get("run_id"),
+                event_id=selection.event_id, score=selection.score,
+                kill_stage=stage, kill_reason=reason,
+                summary=getattr(bundle, "city", None),
+            )
+
+    for bundle in bundles:
+        if not bundle.station_id:
+            eligible.append(bundle)
+            continue
+        selection = _select_individual_signal(
+            bot_state, bundle, suppressed_ids, city_elevations,
+            observed_labels=observed_labels,
+        )
+        if selection.signal is None:
+            hold(bundle, selection, "no_live_signal", "No unconsumed qualifying station signal")
+            continue
+        result: dict = {}
+        packet = _two_bot_bundle_for_extreme_signal(
+            selection.legacy_type, selection.signal, result_out=result, source="ghcn",
+        )
+        if packet is None:
+            hold(bundle, selection, result.get("kill_stage", "bundle_build"),
+                 result.get("kill_reason", "Bundle build failed"))
+            continue
+        scope_hold = story_hold(packet)
+        if scope_hold:
+            hold(bundle, selection, "editorial_scope", scope_hold)
+            continue
+        audit = audit_story_bundle(packet)
+        if not audit.prompt_ready:
+            hold(bundle, selection, "evidence_contract", "; ".join(
+                f"{issue.code} ({issue.field}): {issue.message}"
+                for issue in audit.issues if issue.severity == "error"))
+            continue
+        try:
+            capture_bundle(packet)
+        except BundleCaptureError as exc:
+            hold(bundle, selection, "bundle_retention", str(exc))
+            continue
+        if automatic_only:
+            # Use the drain's existing intent/type/source rules; this grants
+            # neither a check nor an approval, and the drain repeats its fences.
+            candidate = TriageCandidateBundle(
+                bundle=packet, score=selection.score, event_id=selection.event_id,
+                source="open_meteo_extreme_signals", review_context={},
+                city=selection.city, tweet_date=(bundle.signal_date or date.today()).isoformat(),
+                cooldown_exempt=False, legacy_type=selection.legacy_type,
+                created_at=_utc_now_iso(),
+            )
+            if not _automatic_type_may_arm(selection.legacy_type, selection.score.total):
+                hold(bundle, selection, "automatic_policy", "type_has_no_automatic_arming_route")
+                continue
+            if reason := _automatic_source_hold(candidate):
+                hold(bundle, selection, "automatic_source", reason)
+                continue
+        eligible.append(bundle)
+        prepared[id(bundle)] = (selection, packet)
+
+    selected = select_individual_station_bundles(eligible)
+    cap_excluded = sum(bool(b.station_id) for b in eligible) - sum(bool(b.station_id) for b in selected)
+    return selected, prepared, holds, cap_excluded
+
+
 def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: list[dict], us_city_state_map: dict[str, str], city_elevations: dict[tuple[str, str], int], *, ghcn_supply: ScientificSupplySession | None = None) -> None:
     if ghcn_supply is not None:
         require(type(ghcn_supply) is ScientificSupplySession, "explicit_supply_session_required")
@@ -1013,15 +1102,21 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
         source_promoted = 0
 
         (records_cluster_suppressed_ids, records_cluster_fired_dates,
-         records_cluster_candidates, individual_bundles, _) = _scientific_prepass(bot_state, bundles)
+         records_cluster_candidates, individual_bundles, _) = _scientific_prepass(bot_state, bundles, cap_individuals=False)
+        individual_bundles, prepared_stations, station_holds, cap_excluded = _prepare_live_station_candidates(
+            bot_state, current_run, individual_bundles, records_cluster_suppressed_ids,
+            city_elevations, observed_labels=global_stations,
+        )
         ghcn_pipeline_metrics["individual_station_candidates"] = sum(bool(b.station_id) for b in individual_bundles)
-        ghcn_pipeline_metrics["individual_station_cap_excluded"] = sum(bool(b.station_id) for b in bundles) - ghcn_pipeline_metrics["individual_station_candidates"]
+        ghcn_pipeline_metrics["individual_station_cap_excluded"] = cap_excluded
+        ghcn_pipeline_metrics["individual_station_preflight_holds"] = station_holds
         for bundle in individual_bundles:
             # Process signals in descending order of priority:
             # all-time > monthly > absolute-extreme > anomaly > calendar-date.
             # The strongest signal wins — we don't draft multiple tweets for the same city.
 
-            selected = _select_individual_signal(
+            prepared = prepared_stations.get(id(bundle))
+            selected = prepared[0] if prepared is not None else _select_individual_signal(
                 bot_state, bundle, records_cluster_suppressed_ids, city_elevations,
                 observed_labels=global_stations and bool(bundle.station_id),
             )
@@ -1038,7 +1133,6 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
                 # strongest_event_id alongside it — narrow for downstream calls
                 # that accept only str.
                 assert strongest_event_id is not None
-                source_promoted += 1
                 # Record synthesis component as soon as editorial gate passes:
                 syn_state = us_city_state_map.get(strongest_city)
                 if syn_state and strongest_type in {
@@ -1108,7 +1202,7 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
                 # rather than fall through to voice gen — a missed
                 # tweet is better than a Gemini-Flash-written tweet.
                 bundle_result: dict = {}
-                two_bot_bundle = _two_bot_bundle_for_extreme_signal(
+                two_bot_bundle = prepared[1] if prepared is not None else _two_bot_bundle_for_extreme_signal(
                     strongest_type,
                     strongest_signal,
                     result_out=bundle_result,
@@ -1148,6 +1242,7 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
                     tweet_date=(bundle.signal_date or date.today()).isoformat(),
                     cooldown_exempt=elite,
                 )
+                source_promoted += int(candidate_queued)
 
                 _hot = strongest_type in (
                     "all_time_high", "monthly_high", "record", "anomaly_hot"

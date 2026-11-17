@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from collections import OrderedDict
 from dataclasses import dataclass, replace
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 import hashlib
 import json
 import threading
@@ -30,6 +30,25 @@ MONTHS = (
 # This is a prose style rule, not a restriction on a cited source URL.
 EVENT_SUFFIX_PATTERN = re.compile(r"(?<=[^\W_])-\d{2,4}\b")
 _SOURCE_URL = re.compile(r"\bhttps?://[^\s<>\"']+", re.IGNORECASE)
+# A whole ISO calendar-date token (2026-11-15) is not a prose event suffix: record
+# wording must name the verified GHCN/ERA5 source cutoff literally. Only a real date
+# qualifies, as a standalone token; malformed, partial or impossible dates, hyphen-
+# joined date ranges and year ranges such as 1991-2020 keep the suffix refusal.
+_ISO_DATE_TOKEN = re.compile(r"(?<![\w./\-−])([0-9]{4})-([0-9]{2})-([0-9]{2})(?![\w/\-−]|\.\d)")
+
+
+def _calendar_date_spans(tweet: str) -> list[tuple[int, int]]:
+    spans = []
+    for match in _ISO_DATE_TOKEN.finditer(tweet):
+        year, month, day = (int(part) for part in match.groups())
+        if not 1800 <= year <= 2199:
+            continue
+        try:
+            date(year, month, day)
+        except ValueError:
+            continue
+        spans.append(match.span())
+    return spans
 
 # Layer 1: Deterministic regex patterns
 BANNED_PATTERNS = [
@@ -197,11 +216,13 @@ def check_regex(tweet: str) -> tuple[bool, str | None]:
     if len(tweet) > 280:
         return False, f"Too long: {len(tweet)} chars (max 280)"
 
-    urls = [match.span() for match in _SOURCE_URL.finditer(tweet)]
+    # Only the event-suffix rule skips a match lying wholly inside a cited source URL
+    # or a real ISO calendar-date token; every other ban still runs on the full text.
+    suffix_exempt = [match.span() for match in _SOURCE_URL.finditer(tweet)] + _calendar_date_spans(tweet)
     for pattern in BANNED_PATTERNS:
         for match in pattern.finditer(tweet):
             if pattern is EVENT_SUFFIX_PATTERN and any(start <= match.start() and match.end() <= end
-                                                       for start, end in urls):
+                                                       for start, end in suffix_exempt):
                 continue
             return False, f"Banned pattern: {match.group()!r}"
 

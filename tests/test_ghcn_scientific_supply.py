@@ -24,9 +24,17 @@ from tests.test_ghcn_time_integrity import DAY, NOW, baseline_rows, dly
 
 
 @pytest.fixture
-def supply_inputs(tmp_path):
+def supply_inputs(tmp_path, request):
     stations, observations, payloads = [], {}, {}
     history = baseline_rows()
+    if getattr(request, "param", False):
+        # Live admission now applies the existing32KB capture bound before the
+        # cap. Keep these routing controls genuinely retainable: explicit source
+        # missing cells outside June, with accepted June samples over23years.
+        # The unchanged dense fixture remains the default scientific control;
+        # test_station_country_cap_eligibility also tests its live size refusal.
+        history = [(day, element, value if day.month == 6 else -9999, qflag, sflag)
+                   for day, element, value, qflag, sflag in history]
     path = tmp_path / "stations.sqlite"
     with open_db(path) as conn:
         for index in range(9):
@@ -71,6 +79,7 @@ def test_source_retains_all_six_qualified_stations_and_excludes_bad_inputs(suppl
 
 
 @pytest.mark.parametrize("individual_cap", [0, 1, 2, 6])
+@pytest.mark.parametrize("supply_inputs", [True], indirect=True)
 def test_real_prepass_sees_six_stations_before_changed_individual_caps(monkeypatch, supply, individual_cap):
     bundles, countries, metrics = supply
     original = deepcopy(bundles)
@@ -116,6 +125,7 @@ def test_real_prepass_sees_six_stations_before_changed_individual_caps(monkeypat
 
 
 @pytest.mark.parametrize(("provider", "expected_station_count"), [("both", 0), ("both_global", 2)])
+@pytest.mark.parametrize("supply_inputs", [True], indirect=True)
 def test_world_station_reaches_real_runner_without_replacing_forecast_supply(
     monkeypatch, supply_inputs, provider, expected_station_count,
 ):

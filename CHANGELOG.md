@@ -1,3 +1,9 @@
+## 0.9.109.120
+
+- Apply existing free station eligibility before the live country cap, preserving full scientific supply, ranking, freshness and one-writer limits. Bind individual GHCN record values and projected facts to their retained accepted readings and dated archive comparators; recheck evidence at final queue admission and count only successful admissions.
+- Let complete, valid ASCII source-cutoff dates pass the event-suffix style rule while preserving malformed-token refusals, all other bans and required model checks. Exercise observed copy through the real writer/check/pending-save path with explicit offline SDK fixtures.
+- Add authenticated read-only descriptors and a bounded local CLI for complete configured-Gist revision backups. Preserve literal bytes in private files; incomplete or oversized captures remain held with no restore or publishing action.
+
 ## 0.9.109.119
 
 - Balance the complete temperature-delivery test module onto an existing CI worker. Preserve every test, fixture, explicit stage/fault cohort, required check and deadline; production sources, models, publishing controls and dashboard artifacts are unchanged.

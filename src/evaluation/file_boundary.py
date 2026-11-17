@@ -121,13 +121,13 @@ def read_regular(path: str, limit: int) -> bytes:
         return _read_at(directory, name, limit)
 
 
-def write_private_directory(path: str, files: dict[str, bytes]) -> None:
-    """Create a new 0700 directory and exclusive 0600 files inside it, never following a symlink.
+@contextmanager
+def new_private_directory(path: str) -> Iterator[int]:
+    """Hold a freshly created private directory for incremental bounded output.
 
-    An existing directory or file raises FileExistsError and is never reused or overwritten.
+    Ancestors remain no-follow; an existing path is never reused. The caller
+    owns only the yielded descriptor until this context ends, not a path lease.
     """
-    _require(all(type(name) is str and name not in _LEAF and "/" not in name and type(body) is bytes
-                 for name, body in files.items()), "invalid_path")
     parents, name = _components(path)
     with _directory(parents) as parent:
         os.mkdir(name, 0o700, dir_fd=parent)
@@ -136,9 +136,17 @@ def write_private_directory(path: str, files: dict[str, bytes]) -> None:
             created = os.fstat(directory)
             _require(stat.S_ISDIR(created.st_mode) and created.st_uid == os.getuid()
                      and not stat.S_IMODE(created.st_mode) & 0o077, "output_not_private")
-            for leaf, body in files.items():
-                fd = os.open(leaf, _CREATE, 0o600, dir_fd=directory)
-                with os.fdopen(fd, "wb") as stream:
-                    stream.write(body)
+            yield directory
         finally:
             os.close(directory)
+
+
+def write_private_directory(path: str, files: dict[str, bytes]) -> None:
+    """Create a new0700 directory with exclusive0600 files, never following symlinks."""
+    _require(all(type(name) is str and name not in _LEAF and "/" not in name and type(body) is bytes
+                 for name, body in files.items()), "invalid_path")
+    with new_private_directory(path) as directory:
+        for leaf, body in files.items():
+            fd = os.open(leaf, _CREATE, 0o600, dir_fd=directory)
+            with os.fdopen(fd, "wb") as stream:
+                stream.write(body)
