@@ -1,3 +1,7 @@
+## 0.9.109.111
+
+- Send reviewed PNG uploads and alt text through X's current media endpoints with the existing OAuth1 credentials. Preserve ordered admission and delivery outcomes, bounded requests, exact metadata binding and unknown-send holds. Keep automatic images disabled; local wire checks do not establish account entitlement or an image published on X.
+
 ## 0.9.109.110
 
 - Record bounded count-only reasons when observed-rainfall inputs yield no nominations. Preserve the exact qualification, conflict, deduplication, history and selection behavior; make no additional source or model requests and retain no exception prose or input values.
