@@ -16,7 +16,7 @@ from src.state_schema import BotState
 from src.two_bot import critic, fact_check, memory, request_archive, writer
 from src.two_bot.bundle_capture import BundleCapture
 from src.two_bot.rejected_candidate import (
-    capture_critic_rejection, capture_safety_rejection, capture_stage_input, stage_unavailable,
+    capture_copy_rejection, capture_critic_rejection, capture_safety_rejection, capture_stage_input, stage_unavailable,
 )
 from src.two_bot.evidence_contract import audit_story_bundle, evidence_rejection_details
 from src.two_bot.intern import build_fire_bundle
@@ -292,6 +292,12 @@ def _check_safety_honesty_fact(
         from src.two_bot.copy_gates import copy_rejection
         copy_hit = copy_rejection(tweet, bundle)
         if copy_hit is not None:
+            if result_out is not None:
+                result_out["rejected_candidate"] = (
+                    capture_copy_rejection(tweet, bundle, capture_stage_input(bundle, generation_input),
+                                           copy_hit, attempt=candidate_attempt)
+                    if generation_input is not None else
+                    stage_unavailable("copy_gate", candidate_attempt, "generation_input_unavailable"))
             if mark_stage is not None:
                 mark_stage("copy_gate", "kill")
             record_kill("copy_gate", copy_hit)

@@ -9,6 +9,7 @@ from src.two_bot.json_utils import model_response_diagnostic
 from src.two_bot.types import CriticResult, FactCheckResult, StoryBundle
 
 MAX_REJECTION_BYTES = 40_960
+MAX_COPY_REJECTION_BYTES = 8_192
 MAX_TEXT_BYTES = 4_096
 _CAPTURE_ERRORS = {"bundle_capture_unsupported_bytes", "bundle_capture_unsafe_integer",
                    "bundle_capture_too_large", "bundle_capture_not_object", "bundle_capture_invalid_json"}
@@ -180,6 +181,30 @@ def capture_safety_rejection(
         {"check_path": "safety_pipeline", "passed": False, "reason": reason,
          "response_status": "not_exposed", "response_diagnostic": None},
         stage="safety", attempt=attempt)
+
+
+def capture_copy_rejection(
+    tweet: str, bundle: StoryBundle, captured: BundleCapture | str, reason: str,
+    *, attempt: int,
+) -> dict:
+    """Retain a selected local copy refusal; no source/check/approval pass.
+
+    This packet describes only this refusal, not earlier slate/revision calls.
+    Existing suppression retention and store visibility still apply.
+    """
+    from src.two_bot.copy_gates import copy_rejection
+
+    try:
+        if not isinstance(reason, str) or not reason or copy_rejection(tweet, bundle) != reason:
+            return stage_unavailable("copy_gate", attempt, "invalid_verdict")
+        packet = _capture_stage_rejection(tweet, bundle, captured,
+            {"check_path": "local_copy_gate", "passed": False, "reason": reason,
+             "subsequent_checks": "not_run"}, stage="copy_gate", attempt=attempt)
+        if len(json.dumps(packet, sort_keys=True, allow_nan=False).encode("utf-8")) > MAX_COPY_REJECTION_BYTES:
+            return stage_unavailable("copy_gate", attempt, "packet_too_large")
+        return packet
+    except (ValueError, TypeError, UnicodeError, OverflowError, AttributeError, RecursionError):
+        return stage_unavailable("copy_gate", attempt, "invalid_packet")
 
 
 def capture_critic_rejection(
