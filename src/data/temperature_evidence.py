@@ -7,6 +7,7 @@ from datetime import date, datetime, time, timedelta, timezone
 import hashlib
 import json
 import math
+import re
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 ARCHIVE_MODEL = "era5"
@@ -128,19 +129,33 @@ def ghcn_record_point_failures(bundle) -> list[str]:
         "monthly_high": ("high", "monthly"), "monthly_low": ("low", "monthly"),
         "calendar_record": ("high", "calendar"), "calendar_record_low": ("low", "calendar"),
     }
-    if not isinstance(bundle.signal_kind, str) or bundle.signal_kind not in comparators:
+    if not isinstance(bundle.signal_kind, str):
         return []
     raw = bundle.raw_signal_dump
     evidence = raw.get("evidence") if isinstance(raw, dict) else None
     baseline = evidence.get("baseline") if isinstance(evidence, dict) else None
-    # Do not trust a mutable product label alone to distinguish GHCN/forecast.
-    if not (isinstance(bundle.headline_metric, dict)
-            and str(bundle.headline_metric.get("label", "")).startswith("observed_")) and not (
-        isinstance(evidence, dict) and (evidence.get("station_id")
-            or "ghcn" in str(evidence.get("source_product", "")).lower())
-    ) and not (isinstance(baseline, dict) and (baseline.get("station_id")
-        or "ghcn" in str(baseline.get("source_product", "")).lower())):
+    # Retained projections and exact station-event identities are family hints
+    # too. Relabelling raw evidence must not hide an inconsistent GHCN warrant.
+    def source_hint(value):
+        return isinstance(value, dict) and (value.get("station_id")
+            or "ghcn" in str(value.get("source_product", "")).lower())
+
+    history = bundle.historical_context if isinstance(bundle.historical_context, dict) else {}
+    facts = bundle.current_facts if isinstance(bundle.current_facts, list) else []
+    station_event = r"(?:all_time_(?:high|low)_[A-Z0-9]{11}|monthly_(?:high|low)_[A-Z0-9]{11}_\d{2}|cal_(?:high|low)_[A-Z0-9]{11})_\d{4}-\d{2}-\d{2}"
+    event_hint = any(isinstance(value, str) and re.fullmatch(station_event, value)
+                     for value in (bundle.event_id, raw.get("event_id") if isinstance(raw, dict) else None))
+    if not (source_hint(evidence) or source_hint(baseline) or source_hint(history.get("baseline"))
+            or event_hint or isinstance(raw, dict) and "ghcn_claim_view" in raw
+            or isinstance(bundle.headline_metric, dict) and str(bundle.headline_metric.get("label", "")).startswith("observed_")
+            or any(isinstance(fact, dict) and (fact.get("label") == "station_id"
+                or fact.get("label") == "source_product" and "ghcn" in str(fact.get("value", "")).lower())
+                for fact in facts)):
         return []
+    if bundle.signal_kind not in comparators:
+        if isinstance(raw, dict) and "new_temp_c" in raw and "old_record_c" in raw:
+            return ["GHCN individual record has an unsupported or changed signal kind"]
+        return []  # Non-record GHCN families retain their separate contracts.
     try:
         return _ghcn_record_point_failures(bundle, comparators[bundle.signal_kind])
     except (AttributeError, KeyError, TypeError, ValueError, OverflowError):

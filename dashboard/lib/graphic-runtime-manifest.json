@@ -1,6 +1,6 @@
 {
   "identity": {
-    "archive_sha256": "15aeae0a854a6781261f670f30c6307d5e5193f892f0ac0e1a84b154c6aaa0fe",
+    "archive_sha256": "8f05ef87ae46d5ae51b2aab327f2ecc0d58c6d5796402fc2dd1cd612f1033950",
     "deployment_files": {
       "api/graphic_preview.py": "f7521adcbd618f4b65b2a0de30ea62aaff4cdd36f2254e9af38bf68646d361ad",
       "api/graphic_reader_status.py": "5e9685d699625a4eea9d5be884b6e266939a0ad344a2997351ba79bd114407ba",
@@ -51,7 +51,7 @@
       "src/data/registry/country_names.json": "b2597ac1145b8d764bd9f783c765bbfbfb2d14af7a92e9f483ada7b8353cdc4f",
       "src/data/registry/place_registry.json": "e9678ac76bfd68d03032a80858a7cb6eed6353508bbcc2cafbdf3186a38cda64",
       "src/data/source_status.py": "434e4023279715976140d3afba8576e237a09137c23cd5e7f9dc52f51c7e4d53",
-      "src/data/temperature_evidence.py": "f4ee49abec15d5793f5ad57848320c48397bf4b98a31652ab37fbdf5b6e1834d",
+      "src/data/temperature_evidence.py": "90c60ef2efc562de267fce4f6c4c40103df6c275a6debc28c6b224e6808c51f2",
       "src/data/temperature_history.py": "c1369f662d76b2a788e49f30bdc00a57377f686e08bcefd0e958322e3ed33d84",
       "src/data/water_levels.py": "4868999eaaf6a95800439c3455efa4d67753e7b328161598b11d140d75e93c9e",
       "src/editorial/__init__.py": "ae88e85a4a7a2d49e32df9e41a7e424f8d61492db308742ece8f2fb6cac24896",
@@ -120,7 +120,7 @@
       "src/two_bot/types.py": "65afc3d850c31c843bc1e7b58dcc0b13eb274969dcff657e2622641bd85239ee"
     },
     "format": "saved-source-svg-preview-v2",
-    "policy_source_sha256": "16e34d8a3b13363b1f53e02d5c11ad88e685b3ced0b3999841a1b21b20478404",
+    "policy_source_sha256": "f1229f73c105f98d2a77b11245190daf7b03682b247b0ae0c5ec9a9c2b9d2afc",
     "resource_sources": {
       "src/data/registry/cities.csv": "data/cities.csv",
       "src/data/registry/country_codes.json": "data/country_codes.json",
@@ -129,5 +129,5 @@
     },
     "schema_version": 1
   },
-  "runtime_sha256": "8b5564741622df1f8de903f2c676ead6808d0a2aae849c005a1132a5bd116cb7"
+  "runtime_sha256": "2b95e380017d271513678fdd4df79ec6b72eaeeec9821956d38b2158500f87d7"
 }

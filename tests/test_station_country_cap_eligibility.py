@@ -348,6 +348,40 @@ def test_shared_admission_refuses_changed_point_or_projection_even_after_rehash(
     assert "ghcn_record_point_unqualified" in {issue.code for issue in audit.issues}
 
 
+@pytest.mark.parametrize("retained_hint", ["history", "fact", "event", "compact-reference"])
+def test_relabelled_raw_packet_cannot_hide_its_retained_ghcn_family(point_stories, retained_hint):
+    story = deepcopy(point_stories["high", "all_time"])
+    raw = story.raw_signal_dump
+    story.headline_metric["label"] = "high_c"
+    for evidence in (raw["evidence"], raw["evidence"]["baseline"]):
+        evidence.pop("station_id", None)
+        evidence["source_product"] = "invented-other-product"
+    if retained_hint != "history":
+        story.historical_context["baseline"].pop("station_id", None)
+        story.historical_context["baseline"]["source_product"] = "invented-other-product"
+    if retained_hint != "fact":
+        for fact in story.current_facts:
+            if fact["label"] == "source_product":
+                fact["value"] = "invented-other-product"
+    if retained_hint != "event":
+        story.event_id = raw["event_id"] = "invented-generic-point"
+    if retained_hint == "compact-reference":
+        # A marker is a family hint, never a bypass or a resolved source proof.
+        raw["ghcn_claim_view"] = {"kind": "ghcn_claim_view_v1"}
+    audit = audit_story_bundle(story)
+    assert not audit.prompt_ready
+    assert "ghcn_record_point_unqualified" in {issue.code for issue in audit.issues}
+
+
+def test_changed_kind_cannot_hide_an_inconsistent_retained_ghcn_record(point_stories):
+    story = deepcopy(point_stories["high", "all_time"])
+    story.signal_kind = "invented_unchecked_record"
+    story.raw_signal_dump["new_temp_c"] += 1
+    audit = audit_story_bundle(story)
+    assert not audit.prompt_ready
+    assert "ghcn_record_point_unqualified" in {issue.code for issue in audit.issues}
+
+
 @pytest.mark.parametrize("scheduled", [False, True], ids=["manual-unapproved", "ordinary-auto-delay"])
 def test_real_station_pipeline_spends_one_offline_writer_opportunity_and_saves_pending(monkeypatch, supply_inputs, world, scheduled):
     from src.orchestrator.triage_queue import _drain_and_write_triage_queue
