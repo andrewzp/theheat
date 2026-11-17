@@ -118,12 +118,16 @@ def test_incomplete_legacy_family_markers_never_restore_display_name_fallback(mo
 
 @pytest.mark.parametrize("compact", [False, True])
 @pytest.mark.parametrize("marker_only", [False, True])
-def test_actual_publication_snapshot_restore_is_idempotent_without_episode(monkeypatch, compact, marker_only):
+@pytest.mark.parametrize("other_source_hint", [False, True])
+def test_actual_publication_snapshot_restore_is_idempotent_without_episode(monkeypatch, compact, marker_only, other_source_hint):
     state = deepcopy(DEFAULT_STATE)
     bundle = nominate(monkeypatch, state)
     if marker_only:
         bundle.signal_kind, bundle.event_id = "invented_legacy_kind", "invented_legacy_id"
     snapshot = json.loads(json.dumps(bundle_memory_snapshot(bundle) if compact else bundle.to_dict()))
+    if other_source_hint:
+        snapshot["source_event_identity"] = {"schema": "gdacs-source-memory/v1", "issuer": "gdacs-georss",
+            "event_type": "FL", "source_event_id": "invented-unrelated-source"}
     memory_only = _story_bundle_from_metadata({"bundle": snapshot}, {})
     assert source.is_family(memory_only)
     # A restrictive memory marker never reconstructs source evidence or grants

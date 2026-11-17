@@ -589,10 +589,11 @@ def _story_bundle_from_metadata(two_bot: dict, draft: dict) -> StoryBundle | Non
                "source_leg": GDACS_GEORSS_LEG, "source_event_id": identity["source_event_id"],
                "disaster_type": EVENT_TYPES[identity["event_type"]],
                "source_provenance": {"eventtype": identity["event_type"]}}
-    if not raw:
+    if "physical_episode" not in payload:
         from src.data.awc_observed import SCHEMA, is_family as is_airport_comparison
         if is_airport_comparison(payload):
-            # Full and compact publication metadata retain the same restriction.
+            # Other source hints cannot erase this restriction. Explicit physical
+            # bindings still go through their original validation first.
             raw = {"report_schema": SCHEMA}
     return StoryBundle(
         signal_kind=signal_kind,
