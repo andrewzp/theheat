@@ -153,7 +153,11 @@ def ghcn_record_point_failures(bundle) -> list[str]:
                 for fact in facts)):
         return []
     if bundle.signal_kind not in comparators:
-        if isinstance(raw, dict) and "new_temp_c" in raw and "old_record_c" in raw:
+        # Missing required fields cannot reclassify a retained record as an
+        # exempt anomaly/absolute family. Identity or either side of its dated
+        # comparison is enough to retain the record boundary.
+        if (event_hint or isinstance(raw, dict) and any(key in raw for key in ("new_temp_c", "old_record_c"))
+            or any(key in history for key in ("prior_record_c", "prior_record_year"))):
             return ["GHCN individual record has an unsupported or changed signal kind"]
         return []  # Non-record GHCN families retain their separate contracts.
     try:

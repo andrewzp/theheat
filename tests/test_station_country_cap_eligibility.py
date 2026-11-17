@@ -373,10 +373,15 @@ def test_relabelled_raw_packet_cannot_hide_its_retained_ghcn_family(point_storie
     assert "ghcn_record_point_unqualified" in {issue.code for issue in audit.issues}
 
 
-def test_changed_kind_cannot_hide_an_inconsistent_retained_ghcn_record(point_stories):
+@pytest.mark.parametrize("removed", [(), ("new_temp_c",), ("old_record_c",),
+                                    ("new_temp_c", "old_record_c"),
+                                    ("new_temp_c", "old_record_c", "old_record_year", "years_of_data", "kind", "signal_date")])
+def test_changed_kind_cannot_hide_an_inconsistent_retained_ghcn_record(point_stories, removed):
     story = deepcopy(point_stories["high", "all_time"])
     story.signal_kind = "invented_unchecked_record"
     story.raw_signal_dump["new_temp_c"] += 1
+    for key in removed:
+        story.raw_signal_dump.pop(key)
     audit = audit_story_bundle(story)
     assert not audit.prompt_ready
     assert "ghcn_record_point_unqualified" in {issue.code for issue in audit.issues}
