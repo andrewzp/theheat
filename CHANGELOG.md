@@ -1,3 +1,7 @@
+## 0.9.109.104
+
+- Show both retained airport observations in the ordinary source-evidence panel, including exact Celsius readings, airport/country identities and observation/capture times. Preserve unreadable malformed packets and keep the display separate from checks, review and posting authority.
+
 ## 0.9.109.103
 
 - Preserve the existing candidate, coverage and news retention windows after state merging so stale snapshots cannot restore expired visibility rows. Use a valid completed-run clock for merged archives and preserve undated or malformed rows, retained drafts, delivery records and accounting.
