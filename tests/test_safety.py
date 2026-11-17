@@ -128,7 +128,9 @@ class TestEventNameSuffix:
         ("Flood-2026 remains active.", "Banned pattern: '-2026'"),
         ("Storm2-26 remains offshore.", "Banned pattern: '-26'"),
         ("台風-26 remains offshore.", "Banned pattern: '-26'"),
-        ("The source date is 2026-10-22.", "Banned pattern: '-10'"),
+        # A real ISO date token is a source cutoff, not a suffix (tests/test_safety_calendar_tokens.py);
+        # an impossible month keeps the exact refusal.
+        ("The source date is 2026-13-22.", "Banned pattern: '-13'"),
     ])
     def test_event_and_date_suffix_refusals_keep_their_exact_reason(self, text, reason):
         assert check_regex(text) == (False, reason)
