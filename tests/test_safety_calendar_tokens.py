@@ -129,3 +129,12 @@ def test_lexical_refusal_still_comes_before_any_model_call(monkeypatch):
     monkeypatch.setattr(safety, "check_llm", allow)
     assert safety.run_safety_pipeline("Invented Station 0 topped its high through 2026-13-45.")[0] is False
     assert calls == []
+
+
+@pytest.mark.parametrize("token", [
+    "2026-11-15/obs", "2026-11-15/99", "２０２６-１１-１５", "2026-１１-15",
+])
+def test_date_exemption_requires_the_whole_standalone_ascii_iso_token(token):
+    passed, reason = check_regex(f"Invented Station reached 40°C through {token}.")
+    assert passed is False
+    assert reason is not None and reason.startswith("Banned pattern:")

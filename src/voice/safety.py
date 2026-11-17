@@ -34,7 +34,7 @@ _SOURCE_URL = re.compile(r"\bhttps?://[^\s<>\"']+", re.IGNORECASE)
 # wording must name the verified GHCN/ERA5 source cutoff literally. Only a real date
 # qualifies, as a standalone token; malformed, partial or impossible dates, hyphen-
 # joined date ranges and year ranges such as 1991-2020 keep the suffix refusal.
-_ISO_DATE_TOKEN = re.compile(r"(?<![\w./\-−])(\d{4})-(\d{2})-(\d{2})(?![\w\-−]|\.\d)")
+_ISO_DATE_TOKEN = re.compile(r"(?<![\w./\-−])([0-9]{4})-([0-9]{2})-([0-9]{2})(?![\w/\-−]|\.\d)")
 
 
 def _calendar_date_spans(tweet: str) -> list[tuple[int, int]]:
