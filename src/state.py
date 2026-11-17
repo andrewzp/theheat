@@ -1307,7 +1307,9 @@ def _prune_rolling_metadata(bot_state: BotState, clock: datetime) -> None:
         rows = document.get(key)
         if not isinstance(rows, list):
             continue
-        cutoff = (clock - timedelta(days=days)).date()
+        # An archive can have a valid year-one clock. A cutoff before the
+        # representable calendar expires nothing, rather than breaking a save.
+        cutoff = date.fromordinal(max(1, clock.date().toordinal() - days))
         retained = []
         for row in rows:
             value = row.get(field) if isinstance(row, dict) else None

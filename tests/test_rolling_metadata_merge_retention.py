@@ -185,3 +185,34 @@ def test_stale_draft_guard_still_refuses_before_any_patch(monkeypatch):
         assert state.write_state(value, expected_draft=stale) is False
     assert transport.gist_patches == 0
     assert json.loads(transport.gist["state.json"]) == value
+
+
+@pytest.mark.parametrize("day,expired", [(1, set()), (8, set()),
+    (9, {"candidates_log", "news_events"}), (22, {"candidates_log", "news_events"})])
+def test_minimum_calendar_dates_preserve_the_full_inclusive_windows(day, expired):
+    value = snapshot()
+    value["run_history"][0].update(started_at=f"0001-01-{day:02}T00:00:00Z",
+                                    ended_at=f"0001-01-{day:02}T12:00:00Z")
+    for key, field, _ in WINDOWS:
+        value[key] = [{**row("earliest", field, "0001-01-01"), "window_start": "0001-01-01"}]
+    with freeze_time(NOW):
+        merged = state._prepare_merged_write(value, deepcopy(value))
+    for key, _, _ in WINDOWS:
+        assert merged[key] == ([] if key in expired else value[key])
+
+
+def test_minimum_date_archive_persists_through_real_gist_write_without_overflow(monkeypatch):
+    value = snapshot()
+    value["run_history"][0].update(started_at="0001-01-01T00:00:00Z", ended_at="0001-01-01T12:00:00Z")
+    transport = h.Transport(gist={"state.json": json.dumps(value)})
+    transport.install(monkeypatch.setattr)
+    monkeypatch.setenv("THEHEAT_STATE_BACKEND", "gist")
+    monkeypatch.setenv("THEHEAT_GIST_WRITE_ROUTE", "legacy")
+    monkeypatch.setattr(state, "GIST_ID", h.GIST_ID)
+    monkeypatch.setattr(state, "GITHUB_TOKEN", "invented-no-access")
+    with freeze_time(NOW):
+        assert state.write_state(value)
+    assert transport.gist_patches == 1
+    saved = json.loads(transport.gist["state.json"])
+    for key, _, _ in WINDOWS:
+        assert saved[key] == value[key]
