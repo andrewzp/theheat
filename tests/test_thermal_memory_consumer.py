@@ -140,13 +140,15 @@ def test_unresolved_physical_binding_still_refuses_before_any_thermal_fallback()
         remember(state, bundle)
 
 
-def test_perimeter_bundle_memory_remains_outside_thermal_measurement_change():
-    # A real perimeter builder, not a relabelled thermal packet. This is memory
-    # compatibility only, not a qualified real perimeter or a physical truth claim.
+def test_unbound_perimeter_retains_exact_history_without_physical_authority():
+    # A real perimeter builder, not a relabelled thermal packet. Its publication
+    # ID retains history but does not supply a resolved physical episode.
     bundle = build_fire_footprint_bundle(FireComplex(
         complex_id="invented-perimeter", name="Invented perimeter", country="Canada",
         region="Alberta", hectares=12000, start_date=None, tier=0,
         event_id="fire_footprint_invented_1"))
     state = deepcopy(DEFAULT_STATE)
     remember(state, bundle)
-    assert build_memory_slice(state, bundle).ongoing_event["event_id"] == bundle.event_id
+    memory = build_memory_slice(state, bundle)
+    assert memory.ongoing_event is None
+    assert memory.recent_tweets_same_event == ["Earlier invented thermal observation; no current-incident authority."]

@@ -39,12 +39,12 @@ def test_build_memory_slice_filters_by_country():
     assert len(memory_slice.recent_tweets_same_country) == 2
 
 
-def test_nonthermal_memory_slice_exposes_recent_published_tweets_for_event_base():
+def test_unbound_memory_selects_exact_complete_id_not_shared_prefix():
     state = _state_with_memory(
         shipped_tweets=[
             {
                 "tweet_text": "Hurricane Alpha hit Cat 3 in the Atlantic.",
-                "event_id": "gdacs_TC_1001270_tier3",
+                "event_id": "gdacs_TC_1001270_tier5",
                 "country": "US",
                 "shipped_at": "2026-05-03T00:00:00Z",
             },
@@ -76,6 +76,7 @@ def test_nonthermal_memory_slice_exposes_recent_published_tweets_for_event_base(
     assert memory_slice.recent_tweets_same_event == [
         "Hurricane Alpha hit Cat 3 in the Atlantic.",
     ]
+    assert memory_slice.ongoing_event is None
 
 
 def test_record_published_draft_writes_memory_from_persisted_two_bot_metadata():
@@ -150,7 +151,7 @@ def test_build_memory_slice_limits_general_history_without_claiming_thermal_cont
     assert memory_slice.ongoing_event is None
 
 
-def test_memory_slice_groups_severe_weather_by_event_type_and_area():
+def test_memory_slice_keeps_warning_ids_separate_despite_shared_type_and_area():
     state = _empty_memory_state()
     bundle = StoryBundle(
         signal_kind="severe_weather",
@@ -190,7 +191,9 @@ def test_memory_slice_groups_severe_weather_by_event_type_and_area():
 
     memory_slice = build_memory_slice(state, next_bundle)
 
-    assert memory_slice.recent_tweets_same_event == [
+    assert memory_slice.recent_tweets_same_event == []
+    assert memory_slice.ongoing_event is None
+    assert build_memory_slice(state, bundle).recent_tweets_same_event == [
         "Florida Keys are under a hurricane warning.",
     ]
 

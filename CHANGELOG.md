@@ -1,3 +1,7 @@
+## 0.9.109.116
+
+- Require a resolved physical episode for ongoing-event memory. Unbound publications retain general history and exact complete candidate-ID history, while shared display regions, warning areas and ID prefixes no longer link distinct stories. Preserve existing stored rows, source-series restrictions, physical bindings and publication controls.
+
 ## 0.9.109.115
 
 - Remove only the redundant terminal NOAA METAR credit from qualified airport-pair body copy before appending its exact source URL and running required checks. Preserve measurement qualifiers, the hard automatic length cap, original model responses and deterministic retained derivations; stale or disabled sources still cannot generate, gain approval or send.
