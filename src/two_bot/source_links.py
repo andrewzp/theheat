@@ -1,4 +1,4 @@
-"""Conservative source-link formatting before candidate checks; no I/O."""
+"""Conservative source-link formatting before candidate checks; no network."""
 
 from __future__ import annotations
 
@@ -17,6 +17,35 @@ _TERMINAL_DISPLAY = re.compile(
     r"(?<!\S)(?P<link>(?:https?://)?[A-Za-z0-9.-]+(?::[0-9]+)?/"
     r"[^\s?#<>\"']+(?:…|\.{3}))\s*$"
 )
+_AWC_CREDIT = " (NOAA METAR observations)"
+_AWC_TERMINAL_CREDIT = re.compile(re.escape(_AWC_CREDIT) + r"(?P<punctuation>[.!?]?)\Z")
+
+
+def _without_duplicate_airport_credit(text: str, bundle: StoryBundle) -> str:
+    """Remove one optional duplicate credit; never a measurement qualifier.
+
+    The AWC writer already omits this parenthetical by contract. Its exact
+    source citation is appended below, before all required candidate checks.
+    Validate at capture time so later derivations have identical bytes. Current
+    source/activation guards still run separately; this grants no approval.
+    """
+    if bundle.signal_kind != "observed_metar_contrast" or text.count(_AWC_CREDIT) != 1:
+        return text
+    match = _AWC_TERMINAL_CREDIT.search(text)
+    if match is None:
+        return text
+    try:
+        text.encode("utf-8")
+    except UnicodeError:
+        return text
+    from src.data import awc_observed
+    try:
+        evidence = bundle.raw_signal_dump["evidence"]
+        captured = awc_observed._time(evidence["retrieved_at"])
+        awc_observed.validate_bundle(bundle, now=captured)
+    except (ValueError, KeyError, TypeError, AttributeError, OverflowError):
+        return text
+    return text[:match.start()] + match["punctuation"]
 
 
 def _source_url(bundle: StoryBundle) -> str | None:
@@ -69,8 +98,9 @@ def source_citation(bundle: StoryBundle) -> str | None:
 def format_source_link(tweet_text: str, bundle: StoryBundle) -> str:
     """Append one exact source URL when it fits, replacing only a certain display.
 
-    No semantic editing, URL decoding, case folding or citation inference. URL
-    equality uses complete whitespace-delimited tokens, never substring matching.
+    Only the exact optional duplicate credit on a qualified AWC body is removed;
+    all measurement qualifiers remain. No URL decoding, case folding or citation
+    inference. URL equality uses complete tokens, never substring matching.
     An uncertain abbreviation stays intact. If replacement cannot fit, preserve
     the original text, including its whitespace. The caller checks this final text.
     """
@@ -92,6 +122,7 @@ def format_source_link(tweet_text: str, bundle: StoryBundle) -> str:
                 and shown.netloc.removeprefix("www.") == source.netloc.removeprefix("www.")
                 and len(shown.path) > 1 and source.path.startswith(shown.path)):
             base = tweet_text[:match.start()].rstrip()
+    base = _without_duplicate_airport_credit(base, bundle)
     # Keep both existing gates: raw characters and the conservative t.co allowance.
     final = f"{base}\n{url}" if base else url
     if len(base) + 1 + 23 > 280 or len(final) > 280:
