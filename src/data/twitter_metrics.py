@@ -102,8 +102,14 @@ def fetch_metrics(tweet_ids: list[str]) -> dict[str, dict]:
         return {}
 
     limit = configured_resource_limit()
-    if limit is not None and len(ids) > limit:
-        raise MetricsResourceLimitError("metrics_resource_limit_exceeded")
+    if limit is not None:
+        # The SDK joins IDs with commas. One admitted item must identify exactly
+        # one resource, never a packed list or another query representation.
+        if any(not value.isascii() or not value.isdigit() or value[0] == "0"
+               or len(value) > 20 for value in ids):
+            raise MetricsResourceLimitError("metrics_resource_id_invalid")
+        if len(ids) > limit:
+            raise MetricsResourceLimitError("metrics_resource_limit_exceeded")
 
     client = _get_client()
     if client is None:

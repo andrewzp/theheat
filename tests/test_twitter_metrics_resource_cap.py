@@ -48,6 +48,20 @@ def test_bad_cap_fails_before_client_or_ticket_without_echoing_config(monkeypatc
     ticket.assert_not_called()
 
 
+@pytest.mark.parametrize("raw", ["1,2", "1%2C2", "1&ids=2", "1 2", "1\n2", "１", "١", "0", "01", "1" * 21])
+def test_capped_resource_is_one_canonical_id_before_any_admission(monkeypatch, raw):
+    from src.two_bot import call_inventory
+    monkeypatch.setenv("THEHEAT_METRICS_ENABLED", "1")
+    monkeypatch.setenv("THEHEAT_METRICS_MAX_IDS", "1")
+    client, ticket = Mock(), Mock()
+    monkeypatch.setattr(twitter_metrics, "_get_client", client)
+    monkeypatch.setattr(call_inventory, "consume", ticket)
+    with pytest.raises(twitter_metrics.MetricsResourceLimitError, match="metrics_resource_id_invalid"):
+        twitter_metrics.fetch_metrics([raw])
+    client.assert_not_called()
+    ticket.assert_not_called()
+
+
 @pytest.mark.parametrize("limit", ["1", "10", "50"])
 def test_unique_limit_admits_one_batch_and_preserves_missing_counts(monkeypatch, limit):
     from src.two_bot import call_inventory

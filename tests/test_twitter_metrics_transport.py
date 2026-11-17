@@ -128,6 +128,26 @@ def test_actual_sdk_capped_request_counts_unique_resources_and_closes(monkeypatc
     assert result[ids[0]]["impressions"] is None
 
 
+def test_comma_packed_ids_refuse_before_client_or_spending_admission(monkeypatch):
+    from unittest.mock import Mock
+    from src.two_bot import call_inventory
+    monkeypatch.setenv("THEHEAT_METRICS_ENABLED", "1")
+    monkeypatch.setenv("THEHEAT_METRICS_MAX_IDS", "1")
+    adapter = OfflineAdapter()
+    sdk = client(monkeypatch, adapter)
+    get_client, ticket = Mock(return_value=sdk), Mock()
+    monkeypatch.setattr(metrics, "_get_client", get_client)
+    monkeypatch.setattr(call_inventory, "consume", ticket)
+    try:
+        with pytest.raises(metrics.MetricsResourceLimitError, match="metrics_resource_id_invalid"):
+            metrics.fetch_metrics(["123456789,123456790"])
+        get_client.assert_not_called()
+        ticket.assert_not_called()
+        assert adapter.sent == []
+    finally:
+        sdk.session.close()
+
+
 def test_owned_loopback_stall_obeys_same_configured_sdk_session_timeout(monkeypatch):
     calls = []
     finished = threading.Event()
