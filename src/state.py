@@ -1293,10 +1293,76 @@ def _prune_year_keyed_dict(values: Any, min_year: int) -> dict:
     return pruned
 
 
+def _prune_rolling_metadata(bot_state: BotState, clock: datetime) -> None:
+    """Expire only dated visibility rows under their existing rolling windows.
+
+    Unknown, malformed and future rows are preserved, not size-trimmed. Source
+    evidence embedded in drafts, publication/attempt records and accounting are
+    separate namespaces and never visited here.
+    """
+    document = cast(dict, bot_state)
+    for key, field, days in (("candidates_log", "date", CANDIDATES_WINDOW_DAYS),
+                             ("coverage_log", "date", COVERAGE_WINDOW_DAYS),
+                             ("news_events", "window_end", NEWS_WINDOW_DAYS)):
+        rows = document.get(key)
+        if not isinstance(rows, list):
+            continue
+        # An archive can have a valid year-one clock. A cutoff before the
+        # representable calendar expires nothing, rather than breaking a save.
+        cutoff = date.fromordinal(max(1, clock.date().toordinal() - days))
+        retained = []
+        for row in rows:
+            value = row.get(field) if isinstance(row, dict) else None
+            stamp = None
+            if isinstance(value, str) and len(value) == 10:
+                try:
+                    parsed = date.fromisoformat(value)
+                    if parsed.isoformat() == value:
+                        stamp = parsed
+                except ValueError:
+                    pass
+            if stamp is None or stamp >= cutoff:
+                retained.append(row)
+        document[key] = retained
+
+
+def _rolling_metadata_completion_clock(bot_state: BotState) -> datetime | None:
+    """Use recorded completion time, not wall time, for a merged archive.
+
+    Reapplying this watermark prevents a stale writer from resurrecting rows
+    that an ordinary completed cycle expired. With no valid completed run,
+    imports/restores retain their original metadata. Future or contradictory
+    run clocks cannot confer pruning authority.
+    """
+    rows = bot_state.get("run_history")
+    if not isinstance(rows, list):
+        return None
+    clocks = []
+    wall_clock = datetime.now(UTC)
+    for row in rows:
+        if (not isinstance(row, dict) or row.get("configuration_only") is True
+                or row.get("status") not in ("success", "partial_failure", "failed")):
+            continue
+        try:
+            start_text, end_text = row.get("started_at"), row.get("ended_at")
+            if not isinstance(start_text, str) or not isinstance(end_text, str):
+                continue
+            start, end = [datetime.fromisoformat(value.replace("Z", "+00:00")) for value in (start_text, end_text)]
+            if start.utcoffset() is None or end.utcoffset() is None:
+                continue
+            start, end = start.astimezone(UTC), end.astimezone(UTC)
+            if start <= end <= wall_clock:
+                clocks.append(end)
+        except (TypeError, ValueError):
+            continue
+    return max(clocks) if clocks else None
+
+
 def prune_state(bot_state: BotState, now: datetime | date | str) -> BotState:
     """Prune unbounded durable state in place at the end of a run."""
 
     now_dt = _coerce_utc_datetime(now)
+    _prune_rolling_metadata(bot_state, now_dt)
     _prune_daily_mm_records(
         bot_state,
         records_key="snow_daily_swe_gain_records",
@@ -1693,6 +1759,8 @@ def _prepare_merged_write(
     if log_conflict and current_rev != incoming_rev:
         print("[state] write conflict re-merged")
     merged = _merge_state(current, normalized)
+    if (maintenance_clock := _rolling_metadata_completion_clock(merged)) is not None:
+        _prune_rolling_metadata(merged, maintenance_clock)
     merged["_state_rev"] = max(current_rev, incoming_rev) + 1
     return merged
 
