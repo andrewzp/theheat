@@ -115,9 +115,11 @@ class MemorySlice:
     used_framings: list[str] = field(default_factory=list)
     shipped_tweet_texts: list[str] = field(default_factory=list)
     recent_categories: list[str] = field(default_factory=list)
+    # A common issuer report ID is weaker than a confirmed physical episode.
+    source_report_series: dict | None = None
 
     def to_dict(self) -> dict:
-        return {
+        result = {
             "recent_tweets_same_country": self.recent_tweets_same_country,
             "recent_tweets_same_event": self.recent_tweets_same_event,
             "ongoing_event": self.ongoing_event,
@@ -127,6 +129,9 @@ class MemorySlice:
             "shipped_tweet_texts": self.shipped_tweet_texts,
             "recent_categories": self.recent_categories,
         }
+        if self.source_report_series is not None:
+            result["source_report_series"] = self.source_report_series
+        return result
 
 
 @dataclass

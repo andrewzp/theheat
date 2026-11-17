@@ -1,3 +1,7 @@
+## 0.9.109.112
+
+- Keep distinct GDACS reports out of each other's event memory. Carry exact source-series identity through publication-memory snapshots and restores, and present it separately from confirmed physical episodes. Missing or conflicting identities cannot inherit history from matching country or display names; other signal families and publication controls remain unchanged.
+
 ## 0.9.109.111
 
 - Send reviewed PNG uploads and alt text through X's current media endpoints with the existing OAuth1 credentials. Preserve ordered admission and delivery outcomes, bounded requests, exact metadata binding and unknown-send holds. Keep automatic images disabled; local wire checks do not establish account entitlement or an image published on X.
