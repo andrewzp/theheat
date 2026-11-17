@@ -1,6 +1,6 @@
 ## 0.9.109.117
 
-- Collect already-enabled bounded engagement feedback from ordinary observed-alert runs as well as the daily leaderboard role. Share the UTC-day opportunity across unfinished runs, retained summaries and midnight boundaries; preserve failed attempts, resource caps, legacy producer fences and unknown counts/costs without changing publication controls.
+- Collect already-enabled bounded engagement feedback from ordinary observed-alert runs as well as the daily leaderboard role. Share the UTC-day opportunity across unfinished runs and retained summaries, preserving its start day when a lookup returns after midnight. Preserve failed attempts, resource caps, legacy producer fences and unknown counts/costs without changing publication controls.
 
 ## 0.9.109.116
 

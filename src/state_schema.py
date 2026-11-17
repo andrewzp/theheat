@@ -148,6 +148,7 @@ class SourceHealthRun(TypedDict, total=False):
     status: str
     error: str | None
     error_class: str
+    metrics_opportunity_day_utc: str | None
     duration_ms: int
     observed: int
     promoted: int

@@ -42,16 +42,28 @@ def _metric_source_seen_today(bot_state: BotState, now: datetime, current_run: d
         run_at = _parse_iso_utc(run.get("started_at") or run.get("ended_at"))
         for source in run.get("sources", []):
             if source.get("source") == _METRICS_SOURCE:
-                if run_at is not None and run_at.date() == today:
-                    return True
                 details = source.get("details")
-                if isinstance(details, dict) and details.get("metrics_opportunity_day_utc") == today.isoformat():
+                if isinstance(details, dict) and "metrics_opportunity_day_utc" in details:
+                    day = state._metrics_opportunity_day(details["metrics_opportunity_day_utc"])
+                    if day is None:
+                        raise MetricsResourceLimitError("metrics_opportunity_day_unverifiable")
+                    if day == today.isoformat():
+                        return True
+                    continue
+                if run_at is not None and run_at.date() == today:
                     return True
     # Hourly sender reports can evict a morning poll from the 20-run history.
     # Source summaries survive that rollover. Even a skipped opportunity keeps
     # this day closed, matching the existing completed-run gate semantics.
     health = (bot_state.get("source_health") or {}).get(_METRICS_SOURCE) or {}
     for row in health.get("runs") or []:
+        if "metrics_opportunity_day_utc" in row:
+            day = state._metrics_opportunity_day(row["metrics_opportunity_day_utc"])
+            if day is None:
+                raise MetricsResourceLimitError("metrics_opportunity_day_unverifiable")
+            if day == today.isoformat():
+                return True
+            continue
         at = _parse_iso_utc(row.get("ts"))
         if at is not None and at.date() == today:
             return True
@@ -125,9 +137,15 @@ def _run_twitter_metrics(
         _record_source_run(current_run, bot_state, _METRICS_SOURCE, metrics_start,
                            status=status, observed=observed, promoted=promoted,
                            error=error, note=note,
-                           details={"metrics_opportunity_day_utc": opportunity_day})
+                           details={"metrics_opportunity_day_utc": opportunity_day},
+                           metrics_opportunity_day_utc=opportunity_day)
 
-    if _metric_source_seen_today(bot_state, sample_time, current_run):
+    try:
+        seen_today = _metric_source_seen_today(bot_state, sample_time, current_run)
+    except MetricsResourceLimitError as exc:
+        record("failed", error=str(exc))
+        return
+    if seen_today:
         record("skipped", note="Metrics already polled today")
         return
 

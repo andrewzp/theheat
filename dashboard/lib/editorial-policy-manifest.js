@@ -188,7 +188,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/orchestrator/dedup.py": "e3ad15f1eb544e0d130a29f41e8090fb8839805e57877cf0b45c74438ac8b791",
     "src/orchestrator/draft_save.py": "fffa7239f3cef246d37f2f270298559a9815fb157e9c5b23cccf5cddd56109e9",
     "src/orchestrator/ghcn_source_result_client.py": "d30d22b50ffd270f647187e11fc8b17fe7f7dff28368e492b1d86fc0131cf1cd",
-    "src/orchestrator/hot10.py": "96800cbe6c21a18474235ef8762420cd856a8f59000cdc7d89cc4afd8e6e98fb",
+    "src/orchestrator/hot10.py": "1631ebf8949434ac1dd903fddf0354dc1460944d67222553250f002228e06739",
     "src/orchestrator/metar_report.py": "a170fc77cefdf3be42fc11803680c91250c88dcc80266c99265c41509b5ff82c",
     "src/orchestrator/nws_publication.py": "36874ce12091624ddd37f607685d7137f3e64fb1ceae6ec1fa9c8476936460e7",
     "src/orchestrator/observed_report.py": "ade51e85bc55f487fad98c46aa28cb0e05a7fb859938f4d3780bfdefb4d978e2",
@@ -220,7 +220,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/posting/twitter.py": "75fb88e279ff3d5eae3fbba4670954adefa322e949e609d425801f0c3b7a85b6",
     "src/posting/x_media.py": "bb1eedb176b4508fb261788151a5c823860c99cb804c0820ba6695d6b0754cb4",
     "src/runtime_inventory.py": "6d4dd984e5cc7dba5e9e62f7704bee0eb6106f206f856e7273687bd867f47391",
-    "src/state.py": "02f368772cd0a9e13f31f0d0b5f3b14f62441591729da3fb106941628d0d8e38",
+    "src/state.py": "dc469bf7909d8e660d3db76b36f1d9e9067273babf2949c6b450435efb401aa2",
     "src/storage/cyclone_supply.py": "5bb79fe881f4453c4d526e855fd82ec18f787a77cdd9a89214270259ddaa0f8d",
     "src/storage/ghcn_runtime_inputs.py": "bd8d06145e6385c7a92893162c5d82a7f3c82e9cc72999fe43efa3adabe8a6ac",
     "src/storage/hosted_staging.py": "54e82a1b070db00b70b3e7c2f82b900a1d6b7c55b9fa4935d726accc7997a7d5",
@@ -296,5 +296,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "39d1fb9de6ff09e711035c1b658337308f983bfd53927d800de037c2cc0fa4a9"
   },
   "schema_version": 1,
-  "source_sha256": "5eae2fa7ca3260c24c66ce0d25f11f9c05148a664bd5e06784c7556ba21c9f73"
+  "source_sha256": "48746359b98f1812039079157bfdde6d13e72ae26c6c7fb20ba69cdf456749ab"
 }

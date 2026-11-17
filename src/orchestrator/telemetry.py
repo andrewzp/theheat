@@ -27,6 +27,7 @@ def _record_source_run(
     details: dict | None = None,
     error_class: str | None = None,
     breaker: bool = False,
+    metrics_opportunity_day_utc: str | None = None,
 ) -> None:
     """Track a source result when run telemetry is enabled."""
     duration_ms = max(int((time.perf_counter() - started_at) * 1000), 0)
@@ -34,6 +35,9 @@ def _record_source_run(
         health_error = error
         if not health_error and status in {"failed", "degraded", "partial_failure"}:
             health_error = note
+        opportunity_metadata: dict = {}
+        if metrics_opportunity_day_utc is not None:
+            opportunity_metadata["metrics_opportunity_day_utc"] = metrics_opportunity_day_utc
         state.record_source_health(
             bot_state,
             source,
@@ -49,6 +53,7 @@ def _record_source_run(
                 "writer_attempted": writer_attempted,
                 "drafted": drafted,
             },
+            **opportunity_metadata,
         )
 
     if current_run is None:

@@ -735,7 +735,7 @@
     "src/editorial/official_warning.py": "e37a232fe19e8ef90bfc825c92b95b89d9c9f9df7818b4a3352466ad2beeff87",
     "src/editorial/warning_runtime.py": "7c000ae5cf65b06d063ff0ae5092c2b3711d0eaff166521b8bb70ff388171f1c",
     "src/orchestrator/cyclones.py": "389c6441db0839763b6a9cd42146f75e3ab14d1179125d60a9c368eb1e03697d",
-    "src/orchestrator/hot10.py": "96800cbe6c21a18474235ef8762420cd856a8f59000cdc7d89cc4afd8e6e98fb",
+    "src/orchestrator/hot10.py": "1631ebf8949434ac1dd903fddf0354dc1460944d67222553250f002228e06739",
     "src/orchestrator/metar_report.py": "a170fc77cefdf3be42fc11803680c91250c88dcc80266c99265c41509b5ff82c",
     "src/orchestrator/observed_report.py": "ade51e85bc55f487fad98c46aa28cb0e05a7fb859938f4d3780bfdefb4d978e2",
     "src/orchestrator/run_alerts.py": "c488b68fc63b38dc40482a0622a5f25f616420449c9ec5e929df32e316109f42",
@@ -775,5 +775,5 @@
     "src/two_bot/intern/warnings.py": "04e0a4506ffbb29124c8d2960a5e5025305699297fcf8f9178b23caac2cd7a37"
   },
   "evidence_scope": "Referenced local code inventory; not live/provider/transitive-source qualification.",
-  "registry_sha256": "32b5ce02f830002e272cff37b60896d6bc49a63ad10aee275f3013727f89724a"
+  "registry_sha256": "16433a1aa5ca1a6ba954b2530d7c40f358f5926753fa0e429999ec3f97e0421e"
 }

@@ -1,4 +1,5 @@
 """Real observed-alert caller and metrics SDK; every reply is invented/offline."""
+from copy import deepcopy
 from datetime import timedelta, timezone
 import json
 from urllib.parse import parse_qs, urlsplit
@@ -23,7 +24,8 @@ def metrics_http(monkeypatch):
     monkeypatch.setenv("THEHEAT_METRICS_ENABLED", "1")
     monkeypatch.setenv("THEHEAT_METRICS_MAX_IDS", "10")
     settings = {"status": 200, "timeout": False, "adapters": [],
-                "created_at": (NOW-timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M:%S.000Z")}
+                "created_at": (NOW-timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M:%S.000Z"),
+                "on_send": None}
 
     class Adapter(requests.adapters.BaseAdapter):
         def __init__(self):
@@ -39,6 +41,8 @@ def metrics_http(monkeypatch):
             auth = request.headers["Authorization"]
             assert (auth.decode() if isinstance(auth, bytes) else auth).startswith("OAuth ")
             self.sent.append(ID)  # Never retain signed headers, even invented ones.
+            if settings["on_send"] is not None:
+                settings["on_send"]()
             if settings["timeout"]:
                 raise requests.ReadTimeout("Invented offline timeout")
             response = requests.Response()
@@ -182,6 +186,60 @@ def test_next_utc_day_gets_only_its_ordinary_opportunity(world, metrics_http):
         hot10._run_twitter_metrics(state, other, now=NOW+timedelta(days=1))
         hot10._run_twitter_metrics(state, other, now=NOW+timedelta(days=1))
     assert sends(metrics_http) == 2
+
+
+@pytest.mark.parametrize("rollover", [False, True])
+def test_lookup_crossing_midnight_spends_only_its_start_day(world, metrics_http, rollover):
+    _, state, run, _, _ = world
+    at = NOW.replace(hour=23, minute=59, second=59)
+    receipts(state, at=at)
+    metrics_http["created_at"] = (at-timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+    run["started_at"] = at.isoformat()
+    with freeze_time(at) as clock:
+        metrics_http["on_send"] = lambda: clock.move_to(at+timedelta(seconds=2))
+        hot10._run_twitter_metrics(state, run)
+        storage.finalize_run(state, run)
+        metrics_http["on_send"] = None
+        if rollover:
+            for _ in range(21):
+                storage.finalize_run(state, storage.init_run("auto_publish_due"))
+        restored = storage._merge_state(deepcopy(storage.DEFAULT_STATE), json.loads(json.dumps(state)))
+        other = storage.init_run("alerts")
+        hot10._run_twitter_metrics(restored, other)
+        hot10._run_twitter_metrics(restored, other)
+    assert sends(metrics_http) == 2
+    assert state["source_health"]["twitter_metrics"]["runs"][0]["metrics_opportunity_day_utc"] == at.date().isoformat()
+
+
+def test_summary_merge_keeps_day_identity_and_conflicting_copies(world):
+    _, state, _, _, _ = world
+    earlier, later = NOW.date().isoformat(), (NOW+timedelta(days=1)).date().isoformat()
+    row = {"ts": (NOW+timedelta(days=1)).isoformat(), "status": "failed", "observed": 1,
+           "metrics_opportunity_day_utc": earlier}
+    state["source_health"] = {"twitter_metrics": {"runs": [row]}}
+    with freeze_time(NOW+timedelta(days=1)):
+        restored = storage._merge_state(deepcopy(storage.DEFAULT_STATE), state)
+    assert hot10._metric_source_seen_today(restored, NOW)
+    assert not hot10._metric_source_seen_today(restored, NOW+timedelta(days=1))
+    other = deepcopy(state)
+    other["source_health"]["twitter_metrics"]["runs"][0]["metrics_opportunity_day_utc"] = later
+    with freeze_time(NOW+timedelta(days=1)):
+        merged = storage._merge_state(state, other)
+    assert len(merged["source_health"]["twitter_metrics"]["runs"]) == 2
+    assert hot10._metric_source_seen_today(merged, NOW)
+    assert hot10._metric_source_seen_today(merged, NOW+timedelta(days=1))
+
+
+def test_unusable_explicit_day_is_held_not_treated_as_unspent(world, metrics_http):
+    _, state, run, _, _ = world
+    receipts(state)
+    state["source_health"] = {"twitter_metrics": {"runs": [
+        {"ts": (NOW-timedelta(days=1)).isoformat(), "status": "failed",
+         "metrics_opportunity_day_utc": "not-a-day"}]}}
+    with freeze_time(NOW):
+        hot10._run_twitter_metrics(state, run, now=NOW)
+    assert not metrics_http["adapters"] and sends(metrics_http) == 0
+    assert run["sources"][-1]["error"] == "metrics_opportunity_day_unverifiable"
 
 
 def test_naive_clock_refuses_before_client_or_any_lookup(world, metrics_http):

@@ -2163,6 +2163,16 @@ def _source_health_window_cutoff(runs: list[SourceHealthRun]) -> datetime:
     return latest - timedelta(days=SOURCE_HEALTH_WINDOW_DAYS)
 
 
+def _metrics_opportunity_day(value: Any) -> str | None:
+    if type(value) is not str or len(value) != 10:
+        return None
+    try:
+        parsed = date.fromisoformat(value)
+    except ValueError:
+        return None
+    return value if parsed.isoformat() == value else None
+
+
 def _rebuild_source_health(runs: list[SourceHealthRun]) -> SourceHealth:
     health = _empty_source_health()
     cutoff = _source_health_window_cutoff(runs)
@@ -2177,11 +2187,17 @@ def _rebuild_source_health(runs: list[SourceHealthRun]) -> SourceHealth:
         error_text = str(error) if error else None
         error_class = run.get("error_class")
         error_class_text = str(error_class) if error_class else None
-        key = (ts, status, error_text, error_class_text)
+        has_day = "metrics_opportunity_day_utc" in run
+        day = _metrics_opportunity_day(run.get("metrics_opportunity_day_utc")) if has_day else None
+        key = (ts, status, error_text, error_class_text, has_day, day)
         if key in seen:
             continue
         seen.add(key)
         entry: SourceHealthRun = {"ts": ts, "status": status}
+        if has_day:
+            # Preserve an invalid explicit day as an unverifiable sentinel,
+            # never reinterpret it as a legacy completion-day allowance.
+            entry["metrics_opportunity_day_utc"] = day
         if error_text:
             entry["error"] = error_text
         if error_class_text:
@@ -2234,6 +2250,7 @@ def record_source_health(
     timestamp: datetime | str | None = None,
     metrics: dict | None = None,
     error_class: str | None = None,
+    metrics_opportunity_day_utc: str | None = None,
 ) -> None:
     """Append a source-health observation and keep a rolling 7-day summary."""
     if not source:
@@ -2246,6 +2263,11 @@ def record_source_health(
         "ts": _format_state_timestamp(timestamp),
         "status": _source_health_status(status),
     }
+    if metrics_opportunity_day_utc is not None:
+        day = _metrics_opportunity_day(metrics_opportunity_day_utc)
+        if day is None:
+            raise ValueError("invalid_metrics_opportunity_day")
+        run["metrics_opportunity_day_utc"] = day
     if error:
         run["error"] = str(error)
     if error_class is not None:
