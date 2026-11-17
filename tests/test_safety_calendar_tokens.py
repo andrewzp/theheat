@@ -110,14 +110,22 @@ def test_truncated_fahrenheit_guard_still_runs_with_a_date():
 def test_lexical_pass_still_requires_the_model_verdict(monkeypatch):
     monkeypatch.setattr(safety, "GEMINI_API_KEY", "")
     assert safety.run_safety_pipeline(ROOT_REPRODUCTION) == (False, "safety_unavailable: missing credential")
-    calls = []
-    monkeypatch.setattr(safety, "check_llm", lambda text: (calls.append(text) or False, "invented model refusal"))
+    calls: list[str] = []
+
+    def refuse(text: str) -> tuple[bool, str]:
+        calls.append(text)
+        return False, "invented model refusal"
+    monkeypatch.setattr(safety, "check_llm", refuse)
     assert safety.run_safety_pipeline(ROOT_REPRODUCTION) == (False, "invented model refusal")
     assert calls == [ROOT_REPRODUCTION]
 
 
 def test_lexical_refusal_still_comes_before_any_model_call(monkeypatch):
-    calls = []
-    monkeypatch.setattr(safety, "check_llm", lambda text: (calls.append(text) or True, None))
+    calls: list[str] = []
+
+    def allow(text: str) -> tuple[bool, None]:
+        calls.append(text)
+        return True, None
+    monkeypatch.setattr(safety, "check_llm", allow)
     assert safety.run_safety_pipeline("Invented Station 0 topped its high through 2026-13-45.")[0] is False
     assert calls == []
