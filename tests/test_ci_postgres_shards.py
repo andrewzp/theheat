@@ -87,7 +87,7 @@ def test_expanded_file_shards_partition_all_modules_and_parameters_without_chang
                 "tests/test_postgres_ghcn_generation.py": 5,
                 "tests/test_postgres_platform_description.py": 6,
                 "tests/test_postgres_temperature_editor_media.py": 8,
-                "tests/test_postgres_temperature_delivery.py": 0,
+                "tests/test_postgres_temperature_delivery.py": 5,
                 "tests/test_postgres_candidate_admission.py": 3,
                 "tests/test_postgres_preview_editor_media.py": 3,
                 "tests/test_postgres_delivery_history.py": 11,
@@ -104,7 +104,7 @@ def test_expanded_file_shards_partition_all_modules_and_parameters_without_chang
     assert any(item.path.name == "test_postgres_ghcn_generation.py" for item in shards[5])
     assert any(item.path.name == "test_postgres_platform_description.py" for item in shards[6])
     assert {item.path.name for item in shards[8]} == {"test_postgres_temperature_editor_media.py"}
-    assert any(item.path.name == "test_postgres_temperature_delivery.py" for item in shards[0])
+    assert any(item.path.name == "test_postgres_temperature_delivery.py" for item in shards[5])
     assert {item.path.name for item in shards[11]} == {
         "test_postgres_delivery_history.py", "test_postgres_editor_media.py", "test_postgres_viirs_joint_media.py",
     }
@@ -205,7 +205,7 @@ def test_stage_function_routes_do_not_leak_to_other_modules_or_guess_unknown_nam
     foreign = ROOT / "tests/test_postgres_temperature_delivery.py"
     name = "test_v2_ghcn_approval_final_bound_and_reauthorization_roll_back_all_writes"
     assert _ci_postgres_shard(stage, name) == "1"
-    assert _ci_postgres_shard(foreign, name) == _ci_postgres_shard(foreign) == "0"
+    assert _ci_postgres_shard(foreign, name) == _ci_postgres_shard(foreign) == "5"
     for unknown in (None, "test_future_stage_case", name + "[injected]"):
         assert _ci_postgres_shard(stage, unknown) == _ci_postgres_shard(stage) == "3"
 
@@ -262,7 +262,7 @@ def test_actual_ghcn_fault_metadata_keeps_all_ten_cases_in_disjoint_fixed_pairs(
     assert len(selected) == len({id(item) for item in selected}) == 10
     assert set(map(id, selected)) == set(map(id, select(items, "postgres")))
     foreign = ROOT / "tests/test_postgres_temperature_delivery.py"
-    assert _ci_postgres_shard(foreign, name, {"fault": "policy"}) == "0"
+    assert _ci_postgres_shard(foreign, name, {"fault": "policy"}) == "5"
     assert _ci_postgres_shard(path, name, {"fault": "future_fault"}) == _ci_postgres_shard(path, name)
 
 

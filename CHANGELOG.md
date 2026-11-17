@@ -1,3 +1,7 @@
+## 0.9.109.119
+
+- Balance the complete temperature-delivery test module onto an existing CI worker. Preserve every test, fixture, explicit stage/fault cohort, required check and deadline; production sources, models, publishing controls and dashboard artifacts are unchanged.
+
 ## 0.9.109.118
 
 - Carry NIFC's reported incident size and individual source update time through the evidence audit, queue and manual draft path. Correct the current clock field, retain source acreage with approximate hectare conversions, and refuse invalid or stale rows without borrowing another incident's date or umbrella name. Count only admitted candidates as promotions; preserve manual-only approval and the automatic prewriter hold.
