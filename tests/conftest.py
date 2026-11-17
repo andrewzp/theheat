@@ -154,7 +154,8 @@ def _ci_postgres_shard(path, test_name=None, parameters=None):
         "tests/test_postgres_ghcn_generation.py": "5",
         "tests/test_postgres_platform_description.py": "6",
         "tests/test_postgres_temperature_editor_media.py": "8",
-        "tests/test_postgres_temperature_delivery.py": "0",
+        # Keep all temperature-delivery fixtures together on an existing worker.
+        "tests/test_postgres_temperature_delivery.py": "5",
         # Move whole modules to lighter existing jobs. Keep the PG2/PG8
         # diagnostic suites and explicit stage/fault cohorts where they are.
         "tests/test_postgres_candidate_admission.py": "3",
