@@ -71,6 +71,7 @@ function classifyError(lastError) {
 
 function classifyHealth(s) {
   if (s.source === "budget" && s.last_run_status === "skipped" && s.last_run_error_class === "accounting_coverage") return "idle"
+  if (s.source === "air_quality" && s.last_run_status === "skipped" && s.last_run_error_class === "editorial_scope") return "idle"
   // No runs OR no active attempts ever -> idle.
   const degradedRuns = s.degraded + s.partial_failures
   const active = s.successes + s.failures + degradedRuns
@@ -204,6 +205,7 @@ function aggregateFromSourceHealth(sourceHealth) {
       last_run_at: lastRun?.ts || null,
       last_run_status: lastRun?.status || null,
       ...(source === "budget" ? {last_run_error_class: lastRun?.error_class || null, accounting_note: lastRun?.error_class === "accounting_coverage" ? lastRun?.error || null : null} : {}),
+      ...(source === "air_quality" ? {last_run_error_class: lastRun?.error_class || null} : {}),
       troubleshooting_log: buildTroubleshootingLogFromRuns(runs, (r) => r?.ts || null),
     }
     for (const key of HEALTH_METRIC_TOTALS) {
@@ -269,6 +271,7 @@ function aggregateFromRunHistory(history) {
       if (agg.last_run_at == null) {
         agg.last_run_at = runStartedAt
         agg.last_run_status = s.status || null
+        if (key === "air_quality") agg.last_run_error_class = s.error_class || null
       }
       const isProblemStatus =
         s.status === "failed" ||

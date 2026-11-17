@@ -256,12 +256,14 @@ def classify_source(
                        and latest.get("error_class") == "accounting_coverage")
     verification_budget_only = (name == "newsworthiness" and latest.get("status") == "degraded"
                                 and latest.get("error_class") == "verification_budget")
+    editorial_scope_only = (name == "air_quality" and latest.get("status") == "skipped"
+                            and latest.get("error_class") == "editorial_scope")
     if verification_budget_only:
         # Intentional work limits are partial coverage, not a broken provider.
         # They neither open new repair incidents nor resolve earlier outages.
         category = "degraded"
         recent_rate = None
-    elif not recent or accounting_only:
+    elif not recent or accounting_only or editorial_scope_only:
         # A coverage report makes no claim of current budget health or outage.
         # Retain old threshold alarms, but do not keep filing them as new failures.
         category = "idle"
@@ -292,7 +294,8 @@ def classify_source(
     served_via = parse_served_via(last_error) if category == "degraded" else None
     return {
         "source": name,
-        **({"issue_resolution_unknown": True} if accounting_only or verification_budget_only else {}),
+        **({"issue_resolution_unknown": True}
+           if accounting_only or verification_budget_only or editorial_scope_only else {}),
         "category": category,
         "cause": cause if category == "failing" else None,
         "suggested_action": action if category == "failing" else None,
