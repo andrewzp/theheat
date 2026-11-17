@@ -114,6 +114,149 @@ def attach_evidence(bundle, evidence: dict) -> None:
             event.signal_date = bundle.signal_date
 
 
+def ghcn_record_point_failures(bundle) -> list[str]:
+    """Bind individual station records to the existing accepted-source warrant.
+
+    This is the cluster's qualification floor, also for TMIN/low records. It
+    verifies retained agreement, never NOAA authenticity or publication approval.
+    Forecast/aggregate families keep their own contracts. Imports stay scoped:
+    unrelated hazards must not load station collectors in the sealed runtime.
+    """
+    comparators = {
+        "open_meteo_archive_high": ("high", "all_time"),
+        "open_meteo_archive_low": ("low", "all_time"),
+        "monthly_high": ("high", "monthly"), "monthly_low": ("low", "monthly"),
+        "calendar_record": ("high", "calendar"), "calendar_record_low": ("low", "calendar"),
+    }
+    if not isinstance(bundle.signal_kind, str) or bundle.signal_kind not in comparators:
+        return []
+    raw = bundle.raw_signal_dump
+    evidence = raw.get("evidence") if isinstance(raw, dict) else None
+    baseline = evidence.get("baseline") if isinstance(evidence, dict) else None
+    # Do not trust a mutable product label alone to distinguish GHCN/forecast.
+    if not (isinstance(bundle.headline_metric, dict)
+            and str(bundle.headline_metric.get("label", "")).startswith("observed_")) and not (
+        isinstance(evidence, dict) and (evidence.get("station_id")
+            or "ghcn" in str(evidence.get("source_product", "")).lower())
+    ) and not (isinstance(baseline, dict) and (baseline.get("station_id")
+        or "ghcn" in str(baseline.get("source_product", "")).lower())):
+        return []
+    try:
+        return _ghcn_record_point_failures(bundle, comparators[bundle.signal_kind])
+    except (AttributeError, KeyError, TypeError, ValueError, OverflowError):
+        return ["Missing or malformed GHCN individual-record warrant"]
+
+
+def _ghcn_record_point_failures(bundle, comparator) -> list[str]:
+    from src.data.ghcn import GHCN_SOURCE_PRODUCT, MIN_ARCHIVE_YEARS, RECORD_MARGIN_C, record_comparison_qualified
+    from types import SimpleNamespace
+    from src.data.places import country_key
+    from src.two_bot.json_utils import json_default
+
+    raw, evidence = bundle.raw_signal_dump, bundle.raw_signal_dump["evidence"]
+    direction, period = comparator
+    sid, valid_iso = evidence["station_id"], evidence["valid_date"]
+    valid = date.fromisoformat(valid_iso)
+    variable = "temperature_2m_max" if direction == "high" else "temperature_2m_min"
+    element = "TMAX" if direction == "high" else "TMIN"
+    baseline = evidence["baseline"]
+    if not record_comparison_qualified(baseline, sid, valid_iso, variable):
+        return ["GHCN archive qualification failed"]
+    scope = baseline["variables"][variable]
+    reference = None
+    if "ghcn_claim_view" in raw:
+        # Preserve the existing passive compact contract. Its typed command
+        # resolver still owns replay/current authority; shape is not resolution.
+        from src.two_bot.ghcn_claim_contract import structural_view, json_tree
+        reference = structural_view(json_tree(bundle.to_dict()))
+        field = (f"all_time_{direction}" if period == "all_time" else
+                 f"monthly_{direction}" if period == "monthly" else f"calendar_date_{direction}")
+        if (reference["selection"] != {"station_id": sid, "signal_date": valid_iso, "signal_field": field}
+            or reference["observation_revision"] != evidence.get("revision_id")
+            or reference["baseline_revision"] != baseline.get("revision_id")
+            or reference["original_archives"][0]["raw_sha256"] != baseline.get("source_payload_sha256")):
+            return ["GHCN compact claim disagrees with its retained source reference"]
+    reading = evidence["variables"][element]
+    current, prior = raw["new_temp_c"], raw["old_record_c"]
+    if (evidence.get("domain") != "temperature" or evidence.get("evidence_type") != "observed"
+        or evidence.get("source_product") != GHCN_SOURCE_PRODUCT or evidence.get("unit") != "C"
+        or not isinstance(sid, str) or not sid
+        or not finite(current) or not finite(prior) or reading.get("value_c") != current
+        or not isinstance(reading.get("qflag"), str) or reading["qflag"].strip()
+        or reading.get("source_payload_sha256") != baseline["source_payload_sha256"]
+        or not finite(scope.get("years_with_samples")) or scope["years_with_samples"] < MIN_ARCHIVE_YEARS
+        or scope.get("verified_source_cutoff") != (valid-timedelta(days=1)).isoformat()
+        or raw.get("kind") != direction
+        or not finite(raw.get("lat")) or not -90 <= raw["lat"] <= 90
+        or not finite(raw.get("lon")) or not -180 <= raw["lon"] <= 180):
+        return ["GHCN point identity, accepted reading or archive cutoff disagrees"]
+    if reference is not None:
+        comparison = scope["selected_comparison"]
+        expected_key = None if period == "all_time" else valid_iso[5:7] if period == "monthly" else valid_iso[5:]
+        if (comparison.get("purpose") != "record_comparator" or comparison.get("period") != period
+            or comparison.get("key") != expected_key or not finite(comparison.get("years_with_samples"))
+            or comparison["years_with_samples"] < MIN_ARCHIVE_YEARS):
+            return ["GHCN compact period-specific comparator is unqualified"]
+        prior_day, prior_value = comparison["prior_date"], comparison["prior_value_c"]
+    else:
+        prior_day, prior_value = scope["record_dates"][period], scope["record_values_c"][period]
+    if reference is None and period != "all_time":
+        key = valid_iso[5:7] if period == "monthly" else valid_iso[5:]
+        prior_day, prior_value = prior_day[key], prior_value[key]
+        if not finite(scope[f"{period}_years"].get(key)) or scope[f"{period}_years"][key] < MIN_ARCHIVE_YEARS:
+            return ["GHCN period-specific comparator coverage is unqualified"]
+    prior_date = date.fromisoformat(prior_day)
+    if (not finite(prior_value) or prior != prior_value or type(raw.get("old_record_year")) is not int
+        or raw["old_record_year"] != prior_date.year or prior_date >= valid
+        or not (current > prior_value + RECORD_MARGIN_C if direction == "high" else current < prior_value - RECORD_MARGIN_C)
+        or period == "monthly" and (raw.get("month") != valid.month or prior_date.month != valid.month)
+        or period == "calendar" and prior_day[5:] != valid_iso[5:]):
+        return ["GHCN record does not match its dated comparator"]
+    expected_id = (f"all_time_{direction}_{sid}_{valid_iso}" if period == "all_time" else
+                   f"monthly_{direction}_{sid}_{valid.month:02d}_{valid_iso}" if period == "monthly" else
+                   f"cal_{direction}_{sid}_{valid_iso}")
+    source_date = raw["signal_date"].isoformat() if isinstance(raw["signal_date"], date) else raw["signal_date"]
+    if bundle.event_id != raw.get("event_id") or bundle.event_id != expected_id or source_date != valid_iso or bundle.when != valid_iso:
+        return ["GHCN record event/date differs from its station reading"]
+    if reference is None and evidence.get("revision_id") != fingerprint({k: v for k, v in evidence.items() if k not in {"revision_id", "retrieved_at"}}):
+        return ["GHCN retained evidence revision differs from its values"]
+
+    # Check the same source-owned projections without importing intern builders
+    # (and their collector-only climate dependencies) into the sealed runtime.
+    def normalize(value):
+        return json.loads(json.dumps(value, default=json_default, allow_nan=False))
+
+    where = ", ".join(value for value in (raw.get("city"), raw.get("state"), raw.get("country")) if value)
+    if (bundle.where != where or (getattr(bundle, "country", "") or "") not in {"", country_key(raw.get("country", ""))}
+        or bundle.headline_metric != {"label": f"observed_{direction}_c", "value": current,
+                                     "unit": "C", "value_f": round(current*9/5+32)}):
+        return ["GHCN projected identity/headline differs from its retained event"]
+    history = {"prior_record_c": prior, "prior_record_f": round(prior*9/5+32),
+               "prior_record_year": prior_date.year, "margin_c": round(current-prior, 2),
+               "margin_f": round(current*9/5+32)-round(prior*9/5+32)}
+    if period != "calendar":
+        history["archive_years"] = raw["years_of_data"]
+        if raw["years_of_data"] != scope["years_with_samples"]:
+            return ["GHCN projected archive span differs from accepted source years"]
+    for key, value in history.items():
+        if key not in bundle.historical_context or normalize(bundle.historical_context[key]) != normalize(value):
+            return ["GHCN projected comparison differs from its retained event"]
+    projection = SimpleNamespace(signal_kind=bundle.signal_kind, raw_signal_dump=raw,
+        current_facts=[], historical_context={}, headline_metric={}, when=valid_iso)
+    project_story_evidence(projection)
+    facts = [("city", raw["city"]), ("country", raw["country"]), ("kind", direction),
+             ("today_temp_c", current), ("today_temp_f", round(current*9/5+32))]
+    facts.extend((fact["label"], fact["value"]) for fact in projection.current_facts)
+    for label, value in facts:
+        actual = [row.get("value") for row in bundle.current_facts if row.get("label") == label]
+        if len(actual) != 1 or normalize(actual[0]) != normalize(value):
+            return ["GHCN projected fact differs from its retained event"]
+    for key, value in projection.historical_context.items():
+        if key not in bundle.historical_context or normalize(bundle.historical_context[key]) != normalize(value):
+            return ["GHCN projected source scope differs from its retained event"]
+    return []
+
+
 def project_story_evidence(bundle) -> None:
     """Give writer/checker the same explicit source type, day, baseline and limits."""
     # Construction must retain malformed source packets for the strict audit,

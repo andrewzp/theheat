@@ -1,3 +1,7 @@
+## 0.9.109.120
+
+- Apply existing free station eligibility before the live country cap, preserving full scientific supply, ranking, freshness and one-writer limits. Bind individual GHCN record values and projected facts to their retained accepted readings and dated archive comparators; recheck evidence at final queue admission and count only successful admissions.
+
 ## 0.9.109.119
 
 - Balance the complete temperature-delivery test module onto an existing CI worker. Preserve every test, fixture, explicit stage/fault cohort, required check and deadline; production sources, models, publishing controls and dashboard artifacts are unchanged.
