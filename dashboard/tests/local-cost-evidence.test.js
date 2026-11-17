@@ -2,6 +2,7 @@ import test from "node:test"
 import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 import { createServer } from "node:http"
+import { listenOwnedCostSocket } from "./cost-listener.mjs"
 import React from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 import { localCostEvidence } from "../lib/local-cost-evidence.js"
@@ -73,7 +74,7 @@ test("actual owned PostgreSQL HTTP -> dashboard API -> cost component, unavailab
       outgoing.writeHead(response.status, Object.fromEntries(response.headers)); outgoing.end(Buffer.from(await response.arrayBuffer()))
     } catch { outgoing.writeHead(500); outgoing.end('{}') }
   })
-  await new Promise((resolve, reject) => { server.once("error", reject); server.listen(Number(new URL(config.origin).port), "127.0.0.1", resolve) })
+  await listenOwnedCostSocket(server, config)
   async function get(role = "viewer") {
     const response = await actualFetch(`http://127.0.0.1:${server.address().port}/api/dashboard`, {headers: {Origin: config.origin,
       Authorization: `Basic ${Buffer.from(`${role}:invented-${role}`).toString("base64")}`}})

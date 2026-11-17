@@ -251,14 +251,23 @@ def restored_readback(case,expected,cluster,tmp_path):
 
 
 def cost_component_http(case,port,value,config):
+    from contextlib import nullcontext
     import shutil
-    config.write_text(json.dumps(dict(endpoint=f"http://127.0.0.1:{port}",origin=case.get("origin","http://127.0.0.1:3035"),expected=value)))
-    node=os.environ.get("THEHEAT_TEST_NODE") or shutil.which("node")
-    assert node,"Node is required for the actual cost HTTP/component journey"
-    run=subprocess.run([node,"--test","tests/local-cost-evidence.test.js"],cwd=Path(__file__).resolve().parents[1]/"dashboard",
-        env={**case["environment"],"THEHEAT_COST_TEST_CONFIG":str(config)},capture_output=True,text=True,timeout=30)
-    assert run.returncode==0,run.stdout+run.stderr
-
+    from tests.cost_listener_helpers import listener_fd, reserve_dashboard_listener
+    borrowed = case.get("dashboard_listener")
+    origin = case.get("origin", "http://127.0.0.1:3035")
+    reservation = nullcontext((borrowed, origin)) if borrowed is not None else reserve_dashboard_listener(origin)
+    with reservation as (listener, origin):
+        fd = listener_fd(listener, origin)
+        config.write_text(json.dumps(dict(endpoint=f"http://127.0.0.1:{port}",origin=origin,listener_fd=fd,expected=value)))
+        node=os.environ.get("THEHEAT_TEST_NODE") or shutil.which("node")
+        assert node,"Node is required for the actual cost HTTP/component journey"
+        # One file in its own process: a second test-runner child would discard
+        # the explicitly inherited socket before the HTTP bridge can adopt it.
+        run=subprocess.run([node,"--test","--test-isolation=none","tests/local-cost-evidence.test.js"],cwd=Path(__file__).resolve().parents[1]/"dashboard",
+            env={**case["environment"],"THEHEAT_COST_TEST_CONFIG":str(config)},capture_output=True,text=True,timeout=30,
+            pass_fds=(fd,))
+        assert run.returncode==0,run.stdout+run.stderr
 
 def test_projection_budget_preflights_before_body_fetch(store,monkeypatch):
     call(store,"reserve",intent())

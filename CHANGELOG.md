@@ -1,3 +1,7 @@
+## 0.9.109.107
+
+- Keep the test dashboard origin continuously owned while handing its listener from Python to the dedicated Node cost-view runner. Preserve the full HTTP, authorization, accounting and recovery assertions and existing deadlines.
+
 ## 0.9.109.106
 
 - Ask the observed-airport writer to lead with the supported temperature gap and keep the two readings and UTC time/date in one sentence. Preserve complete identities, source qualification, required checks and the final automatic copy limit.
