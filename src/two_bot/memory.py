@@ -212,6 +212,20 @@ def _gdacs_memory_scoped(bundle: StoryBundle) -> bool:
     return bundle.signal_kind == "global_disaster"
 
 
+def _airport_observation(bundle: StoryBundle) -> bool:
+    from src.data.awc_observed import is_family as is_airport_comparison
+
+    return is_airport_comparison({
+        "signal_kind": bundle.signal_kind, "event_id": bundle.event_id,
+        "raw_signal_dump": bundle.raw_signal_dump,
+    })
+
+
+def _standalone_observation(bundle: StoryBundle) -> bool:
+    """These measurement families do not independently identify an episode."""
+    return bundle.signal_kind == "fire" or _airport_observation(bundle)
+
+
 def _memory_identity(value: Any) -> dict | None:
     """Validate a source-series key, never a physical-incident or review proof."""
     from src.data.gdacs import EVENT_TYPES
@@ -272,6 +286,10 @@ def bundle_memory_snapshot(bundle: StoryBundle) -> dict:
         identity = _gdacs_memory_identity(bundle)
         if identity is not None:
             snapshot[_SOURCE_MEMORY_FIELD] = identity
+        if _airport_observation(bundle):
+            from src.data.awc_observed import SCHEMA
+            # Retain the existing restrictive family marker, never source proof.
+            snapshot["raw_signal_dump"] = {"report_schema": SCHEMA}
     return snapshot
 
 
@@ -281,9 +299,9 @@ def build_memory_slice(state: BotState, bundle: StoryBundle, *, now: datetime | 
     from src.data.places import country_key
     bound = "physical_episode" in bundle.raw_signal_dump
     source_scoped = _gdacs_memory_scoped(bundle)
-    # A thermal pixel/cell/day is an observation identity, not proof of one
-    # physical fire or its duration. Resolved physical bindings remain separate.
-    thermal_observation = bundle.signal_kind == "fire" and not bound
+    # Pixels and two-airport snapshots do not establish physical continuity.
+    # Resolved physical bindings remain separate and are validated first.
+    standalone_observation = not bound and _standalone_observation(bundle)
     source_identity = _gdacs_memory_identity(bundle) if not bound else None
     if bound:
         from src.storage.physical_events import EpisodeContext
@@ -294,7 +312,7 @@ def build_memory_slice(state: BotState, bundle: StoryBundle, *, now: datetime | 
         raise ValueError("unexpected_episode_context")
     memory = _memory(state)
     country = _country_for(bundle)
-    event_keys = set() if bound or source_scoped or thermal_observation else {
+    event_keys = set() if bound or source_scoped or standalone_observation else {
         key for key in (_event_base(bundle.event_id), _event_series_key(bundle))
         if key
     }
@@ -328,7 +346,7 @@ def build_memory_slice(state: BotState, bundle: StoryBundle, *, now: datetime | 
                 ongoing_event = row
                 break
             continue
-        if row.get("physical_episode") is not None or thermal_observation:
+        if row.get("physical_episode") is not None or standalone_observation:
             continue
         if source_scoped:
             if source_identity is not None and _memory_identity(row.get(_SOURCE_MEMORY_FIELD)) == source_identity:
@@ -489,12 +507,12 @@ def record_shipped(
     if writer.angle_chosen:
         _dedup_append(memory.setdefault("used_framings", []), writer.angle_chosen)
 
-    if binding is None and (bundle.signal_kind == "fire" or (
+    if binding is None and (_standalone_observation(bundle) or (
         _gdacs_memory_scoped(bundle) and source_identity is None
     )):
         # The published row remains in general history. Missing source identity
         # cannot create ongoing-event authority via display country/name, and a
-        # thermal observation cannot create a physical fire/duration authority.
+        # standalone observation cannot create physical continuity/duration.
         return
 
     events = memory.setdefault("ongoing_events", [])
@@ -571,6 +589,11 @@ def _story_bundle_from_metadata(two_bot: dict, draft: dict) -> StoryBundle | Non
                "source_leg": GDACS_GEORSS_LEG, "source_event_id": identity["source_event_id"],
                "disaster_type": EVENT_TYPES[identity["event_type"]],
                "source_provenance": {"eventtype": identity["event_type"]}}
+    if not raw:
+        from src.data.awc_observed import SCHEMA, is_family as is_airport_comparison
+        if is_airport_comparison(payload):
+            # Full and compact publication metadata retain the same restriction.
+            raw = {"report_schema": SCHEMA}
     return StoryBundle(
         signal_kind=signal_kind,
         where=str(payload.get("where") or draft.get("city") or ""),

@@ -120,7 +120,13 @@ def test_bot_drains_only_in_route_mode_and_keeps_every_existing_default():
     # The opt-in station selector retains the exact old default.
     assert old_step["env"]["THEHEAT_SIGNALS_PROVIDER"] == "both"
     assert step["env"]["THEHEAT_SIGNALS_PROVIDER"] == "${{ vars.THEHEAT_SIGNALS_PROVIDER || 'both' }}"
-    checked = {*renamed, "THEHEAT_SIGNALS_PROVIDER", "THEHEAT_MEDIA_WRITER_STORE", "THEHEAT_MEDIA_WRITER_DSN"}
+    # The released metrics fence deliberately stopped old producers reading the
+    # legacy flag. Check that exact approved exception instead of treating it as
+    # a route-default regression against the older .51 comparison point.
+    assert old_step["env"]["THEHEAT_METRICS_ENABLED"] == "${{ vars.THEHEAT_METRICS_ENABLED || '0' }}"
+    assert step["env"]["THEHEAT_METRICS_ENABLED"] == "${{ vars.THEHEAT_METRICS_V2_ENABLED == '1' && '1' || '0' }}"
+    checked = {*renamed, "THEHEAT_SIGNALS_PROVIDER", "THEHEAT_MEDIA_WRITER_STORE", "THEHEAT_MEDIA_WRITER_DSN",
+               "THEHEAT_METRICS_ENABLED"}
     assert {k: v for k, v in step["env"].items() if k in old_step["env"] and k not in checked} == \
         {k: v for k, v in old_step["env"].items() if k not in checked}
     assert doc["run-name"] == ("${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'manual_tweet' && "
@@ -133,7 +139,9 @@ def test_bot_drains_only_in_route_mode_and_keeps_every_existing_default():
                                                        "THEHEAT_NWPS_MAJOR_FORECASTS", "THEHEAT_NWPS_PACKET_RETENTION",
                                                        "THEHEAT_AUTOMATIC_SELECTION_ONLY", "THEHEAT_OBSERVED_WEATHER_ONLY",
                                                        "THEHEAT_OBSERVED_REPORT_MONTH", "THEHEAT_AWC_OBSERVED_CONTRAST",
-                                                       "THEHEAT_POST_COLLECTION_SENDER", "THEHEAT_GPM_OBSERVED_REPORT"}
+                                                       "THEHEAT_POST_COLLECTION_SENDER", "THEHEAT_GPM_OBSERVED_REPORT",
+                                                       "THEHEAT_METRICS_MAX_IDS"}
+    assert step["env"]["THEHEAT_METRICS_MAX_IDS"] == "${{ vars.THEHEAT_METRICS_MAX_IDS || '10' }}"
     assert step["env"]["THEHEAT_GPM_OBSERVED_REPORT"] == "${{ vars.THEHEAT_GPM_OBSERVED_REPORT || '0' }}"
     for flag in ("THEHEAT_AWC_OBSERVED_CONTRAST", "THEHEAT_POST_COLLECTION_SENDER"):
         assert step["env"][flag] == "${{ vars." + flag + " || '0' }}"

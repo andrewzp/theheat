@@ -18,12 +18,14 @@ STATES = ("active", "unassigned", "stopped", "stop_file", "call_limit", "cost_sc
 @pytest.fixture
 def boundaries(monkeypatch):
     from google import genai
+    from google.genai import types as genai_types
     from src.two_bot import usage_ledger
 
     # Replace only this module's environment reference, never read real values.
     credentials = Mock(return_value="invented-offline-key")
     monkeypatch.setattr(news, "os", SimpleNamespace(environ=SimpleNamespace(get=credentials)))
-    send = Mock(return_value=SimpleNamespace(text="[]"))
+    send = Mock(return_value=genai_types.GenerateContentResponse(candidates=[{"finish_reason": "STOP",
+        "content": {"role": "model", "parts": [{"text": "[]"}]}}]))
     client = Mock(return_value=SimpleNamespace(models=SimpleNamespace(generate_content=send)))
     monkeypatch.setattr(genai, "Client", client)
     usage = Mock()
@@ -137,8 +139,10 @@ def test_non_trial_news_retains_request_options_and_usage(boundaries, route):
         assert request["contents"] == news.GROUNDED_PROMPT
         assert len(request["config"].tools) == 1
         assert request["config"].tools[0].google_search is not None
+        assert request["config"].max_output_tokens == 8192
     else:
-        assert set(request) == {"model", "contents"}
+        assert set(request) == {"model", "contents", "config"}
+        assert request["config"] == {"max_output_tokens": 8192}
         assert request["contents"] == news.VERIFY_PROMPT_TEMPLATE.format(
             claim="Invented claim", value=1, page_text="Invented page")
     usage.assert_called_once_with(

@@ -30,7 +30,8 @@ def isolated_buffer():
 def response(text="{}", **usage):
     return SimpleNamespace(text=text, usage_metadata=SimpleNamespace(
         **{"prompt_token_count": 100, "candidates_token_count": 20,
-           "cached_content_token_count": 30, **usage}))
+           "cached_content_token_count": 30, **usage}), candidates=[SimpleNamespace(
+               finish_reason="STOP", content=SimpleNamespace(role="model", parts=[{"text": text}]))])
 
 
 @pytest.fixture
@@ -64,13 +65,22 @@ def test_capture_preserves_request_and_output_even_for_empty_or_invalid_text(mon
     generate.return_value = response(text)
     observer = ledger.record_response
     monkeypatch.setattr(ledger, "record_response", lambda *args: None)
-    before = invoke(stage)
+    def outcome():
+        from src.two_bot.google_output import GoogleResponseUnavailable
+        try:
+            return ("returned", invoke(stage))
+        except GoogleResponseUnavailable as exc:
+            return ("held", str(exc))
+
+    before = outcome()
+    if not text and stage != "safety":
+        assert before == ("held", "google_response_invalid_text")
     requests, clients = generate.call_args_list[:], client.call_args_list[:]
     generate.reset_mock()
     client.reset_mock()
     monkeypatch.setattr(ledger, "record_response", observer)
     safety._SAFETY_CACHE.clear()  # Compare observer behavior with identical uncached inputs.
-    assert invoke(stage) == before
+    assert outcome() == before
     assert generate.call_args_list == requests and client.call_args_list == clients
     assert generate.call_count == 1 and len(ledger._BUFFER) == 1
     row = ledger._BUFFER[0]
@@ -83,8 +93,17 @@ def test_capture_preserves_request_and_output_even_for_empty_or_invalid_text(mon
 
 @pytest.mark.parametrize("stage", STAGES)
 def test_response_accounted_before_text_access_fails(sdk, stage):
+    class BrokenContent:
+        role = "model"
+
+        @property
+        def parts(self):
+            assert len(ledger._BUFFER) == 1
+            raise ValueError("text unavailable")
+
     class BrokenText:
         usage_metadata = response().usage_metadata
+        candidates = [SimpleNamespace(finish_reason="STOP", content=BrokenContent())]
 
         @property
         def text(self):
@@ -96,7 +115,7 @@ def test_response_accounted_before_text_access_fails(sdk, stage):
     if stage == "safety":
         assert invoke(stage)[0] is False  # Unreadable model output cannot establish completion.
     else:
-        with pytest.raises(ValueError, match="text unavailable"):
+        with pytest.raises(RuntimeError, match="google_response_projection_unavailable"):
             invoke(stage)
     assert generate.call_count == 1 and len(ledger._BUFFER) == 1
 
@@ -105,6 +124,7 @@ def test_response_accounted_before_text_access_fails(sdk, stage):
 def test_metadata_or_accounting_failure_never_retries_provider(monkeypatch, sdk, stage):
     class BrokenMetadata:
         text = "NO"
+        candidates = response("NO").candidates
 
         @property
         def usage_metadata(self):

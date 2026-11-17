@@ -72,9 +72,11 @@ def test_reparse_cli_runs_offline_in_a_fresh_process(archives):
 
 def test_news_model_call_without_actual_hooked_sdk_is_refused_in_an_open_scope(journey_env, tmp_path, monkeypatch):
     from google import genai
+    from google.genai import types as genai_types
     from src.data import newsworthiness as news
     sent = []
-    answer = SimpleNamespace(text='{"supported": true}', usage_metadata=None)
+    answer = genai_types.GenerateContentResponse(candidates=[{"finish_reason": "STOP",
+        "content": {"role": "model", "parts": [{"text": '{"supported": true}'}]}}])
     def generate_content(**kw):
         sent.append(kw)
         return answer

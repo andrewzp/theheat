@@ -125,11 +125,13 @@ def test_output_field_contracts_match_parsers_with_nullable_rejection_metadata()
 @pytest.mark.parametrize("role", ["writer", "fact_check", "critic"])
 def test_existing_gemini_request_contains_exact_compact_policy_once_and_makes_one_call(role, monkeypatch):
     from google import genai
+    from google.genai import types as genai_types
     from src.two_bot import critic, fact_check, writer
     from src.two_bot.types import StoryBundle
 
     client = MagicMock()
-    client.models.generate_content.return_value = SimpleNamespace(text="{}", usage_metadata=None)
+    client.models.generate_content.return_value = genai_types.GenerateContentResponse(
+        candidates=[{"finish_reason": "STOP", "content": {"role": "model", "parts": [{"text": "{}"}]}}])
     monkeypatch.setattr(genai, "Client", lambda **kwargs: client)
     monkeypatch.setenv("GEMINI_API_KEY", "offline-fixture")
     module = {"writer": writer, "fact_check": fact_check, "critic": critic}[role]

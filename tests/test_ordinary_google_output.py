@@ -169,6 +169,43 @@ def test_earlier_terminal_trial_cause_survives_response_hold(sdk, tmp_path):
     assert budget.stopped == "earlier_terminal_cause" and not budget.calls
 
 
+@pytest.mark.parametrize("failure", [ValueError, KeyboardInterrupt])
+@pytest.mark.parametrize("prior", [None, "earlier_terminal_cause"])
+def test_projection_failure_after_returned_attempt_is_terminal_without_refund(sdk, tmp_path, failure, prior):
+    class BrokenProjection:
+        usage_metadata = None
+
+        @property
+        def candidates(self):
+            raise failure("invented projection detail must not become a public reason")
+
+    rows, returned = [], []
+    budget = trial_budget.TrialBudget(rows.append, tmp_path / "STOP")
+    budget.begin_candidate("invented")
+
+    def send(**request):
+        returned.append(request)
+        return BrokenProjection()
+
+    with trial_budget.trial_scope(budget):
+        response = trial_budget.provider_call("critic", "google", {
+            "model": trial_budget.MODELS["critic"][1], "contents": "Invented offline request."}, send)
+        usage_ledger.record_response("critic", response, trial_budget.MODELS["critic"][1], "google")
+        reserve = budget.estimated_reserved
+        budget.stopped = prior
+        expected = KeyboardInterrupt if failure is KeyboardInterrupt else RuntimeError
+        with pytest.raises(expected) as error:
+            trial_budget.completed_google_text(response)
+        if failure is ValueError:
+            assert str(error.value) == "google_response_projection_unavailable"
+        assert budget.stopped == (prior or "trial_provider_response_incomplete")
+        with pytest.raises(trial_budget.TrialStopped):
+            trial_budget.provider_call("critic", "google", {
+                "model": trial_budget.MODELS["critic"][1], "contents": "No replacement."}, send)
+        assert budget.estimated_reserved == reserve and reserve > 0
+    assert len(returned) == 1 and len(budget.calls) == 1 and sdk[2] == ["critic"]
+
+
 @pytest.mark.parametrize("stage", ("fact_check", "critic"))
 def test_finite_uncertain_response_keeps_reservation_and_stops_next_purchase(sdk, tmp_path, stage):
     payload, sends, usage = sdk

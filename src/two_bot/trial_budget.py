@@ -50,12 +50,16 @@ def completed_google_text(response) -> str:
 
     try:
         return complete_text(response)
-    except GoogleResponseUnavailable:
+    except BaseException as exc:
         budget = current_trial()
         if budget is not None:
             with budget._lock:
                 budget.stopped = budget.stopped or "trial_provider_response_incomplete"
-        raise
+        if isinstance(exc, GoogleResponseUnavailable):
+            raise
+        if isinstance(exc, Exception):
+            raise GoogleResponseUnavailable("google_response_projection_unavailable") from None
+        raise  # Interrupts still propagate after preserving the terminal hold.
 
 
 class TrialBudget:

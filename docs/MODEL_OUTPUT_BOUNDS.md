@@ -23,6 +23,8 @@ metadata, function call, blocked response or unusable text holds the operation.
 Valid-looking JSON does not override that hold. It does not buy a JSON retry or
 create a reusable verdict that the underlying weather evidence is bad. A finite
 trial becomes terminal and keeps its spent reservations and any earlier stop cause.
+Unexpected SDK response-projection errors also hold the trial. Interrupts propagate
+after that terminal hold is recorded; they cannot permit a replacement purchase.
 
 Token limits contain individual requests. They do not establish actual billing,
 limit grounding-tool charges or enforce an all-provider monthly budget. Existing

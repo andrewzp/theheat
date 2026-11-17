@@ -34,11 +34,14 @@ class _Models:
         self.answers, self.calls = list(answers), 0
 
     def generate_content(self, **kwargs):
+        from google.genai import types
+
         self.calls += 1
         answer = self.answers.pop(0)
         if isinstance(answer, BaseException):
             raise answer
-        return SimpleNamespace(text=answer, usage_metadata=None)
+        return types.GenerateContentResponse(candidates=[{"finish_reason": "STOP",
+            "content": {"role": "model", "parts": [{"text": answer}]}}])
 
 
 @pytest.fixture
