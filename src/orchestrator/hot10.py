@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 # ruff: noqa: F403,F405
+from datetime import UTC
+
 from src.data import twitter_metrics
 from src.data.metric_history import PUBLIC_FIELDS, append_sample
 from src.data.twitter_metrics import MetricsResourceLimitError, configured_resource_limit
@@ -31,16 +33,36 @@ def _metrics_enabled() -> bool:
     return os.environ.get("THEHEAT_METRICS_ENABLED", "0") == "1"
 
 
-def _metric_source_seen_today(bot_state: BotState, now: datetime) -> bool:
-    today = now.date()
-    for run in bot_state.get("run_history", []):
+def _metric_source_seen_today(bot_state: BotState, now: datetime, current_run: dict | None = None) -> bool:
+    today = now.astimezone(UTC).date()
+    runs = list(bot_state.get("run_history", []))
+    if current_run is not None:
+        runs.append(current_run)
+    for run in runs:
         run_at = _parse_iso_utc(run.get("started_at") or run.get("ended_at"))
-        if run_at is None or run_at.date() != today:
-            continue
         for source in run.get("sources", []):
             if source.get("source") == _METRICS_SOURCE:
-                return True
+                if run_at is not None and run_at.date() == today:
+                    return True
+                details = source.get("details")
+                if isinstance(details, dict) and details.get("metrics_opportunity_day_utc") == today.isoformat():
+                    return True
+    # Hourly sender reports can evict a morning poll from the 20-run history.
+    # Source summaries survive that rollover. Even a skipped opportunity keeps
+    # this day closed, matching the existing completed-run gate semantics.
+    health = (bot_state.get("source_health") or {}).get(_METRICS_SOURCE) or {}
+    for row in health.get("runs") or []:
+        at = _parse_iso_utc(row.get("ts"))
+        if at is not None and at.date() == today:
+            return True
     return False
+
+
+def _metrics_clock(value: datetime | None) -> datetime:
+    instant = value if value is not None else _utc_now()
+    if not isinstance(instant, datetime) or instant.tzinfo is None or instant.utcoffset() is None:
+        raise MetricsResourceLimitError("metrics_clock_invalid")
+    return instant.astimezone(UTC)
 
 
 def _metric_candidate_tweet_ids(bot_state: BotState, now: datetime) -> list[str]:
@@ -89,50 +111,52 @@ def _run_twitter_metrics(
         return
 
     metrics_start = time.perf_counter()
-    sample_time = now or _utc_now()
+    try:
+        sample_time = _metrics_clock(now)
+    except (MetricsResourceLimitError, ValueError, OverflowError):
+        _record_source_run(current_run, bot_state, _METRICS_SOURCE, metrics_start,
+                           status="failed", error="metrics_clock_invalid")
+        return
 
-    if _metric_source_seen_today(bot_state, sample_time):
-        _record_source_run(
-            current_run, bot_state, _METRICS_SOURCE, metrics_start,
-            status="skipped", note="Metrics already polled today"
-        )
+    opportunity_day = sample_time.date().isoformat()
+
+    def record(status: str, *, observed: int = 0, promoted: int = 0,
+               error: str | None = None, note: str | None = None) -> None:
+        _record_source_run(current_run, bot_state, _METRICS_SOURCE, metrics_start,
+                           status=status, observed=observed, promoted=promoted,
+                           error=error, note=note,
+                           details={"metrics_opportunity_day_utc": opportunity_day})
+
+    if _metric_source_seen_today(bot_state, sample_time, current_run):
+        record("skipped", note="Metrics already polled today")
         return
 
     try:
         tweet_ids = _metric_candidate_tweet_ids(bot_state, sample_time)
     except MetricsResourceLimitError as exc:
-        _record_source_run(
-            current_run, bot_state, _METRICS_SOURCE, metrics_start,
-            status="failed", observed=0, error=str(exc),
-        )
+        record("failed", error=str(exc))
         return
     if not tweet_ids:
-        _record_source_run(
-            current_run, bot_state, _METRICS_SOURCE, metrics_start,
-            status="skipped", note="No recent tweet ids to poll"
-        )
+        record("skipped", note="No recent tweet ids to poll")
         return
 
     if not twitter_metrics.credentials_available():
-        _record_source_run(
-            current_run, bot_state, _METRICS_SOURCE, metrics_start,
-            status="skipped", observed=len(tweet_ids),
-            note="No Twitter credentials configured"
-        )
+        record("skipped", observed=len(tweet_ids), note="No Twitter credentials configured")
         return
 
     try:
         metrics = twitter_metrics.fetch_metrics(tweet_ids)
     except Exception as exc:
-        _record_source_run(
-            current_run, bot_state, _METRICS_SOURCE, metrics_start,
-            status="failed", observed=len(tweet_ids), error=str(exc)
-        )
+        record("failed", observed=len(tweet_ids), error=str(exc))
         return
 
     returned = {tweet_id: row for tweet_id, row in metrics.items()
                 if tweet_id in tweet_ids and isinstance(row, dict)}
-    sample_time = now or _utc_now()  # Client observation after the lookup returned.
+    try:
+        sample_time = _metrics_clock(now)  # Client observation after the lookup returned.
+    except (MetricsResourceLimitError, ValueError, OverflowError):
+        record("failed", observed=len(tweet_ids), error="metrics_sample_clock_invalid")
+        return
     table = bot_state.setdefault("tweet_metrics", {})
     usable = 0
     for tweet_id, row in returned.items():
@@ -145,9 +169,8 @@ def _run_twitter_metrics(
             usable += 1
 
     missing = len(tweet_ids) - usable
-    _record_source_run(
-        current_run, bot_state, _METRICS_SOURCE, metrics_start,
-        status="partial_failure" if missing else "success", observed=len(tweet_ids), promoted=usable,
+    record(
+        "partial_failure" if missing else "success", observed=len(tweet_ids), promoted=usable,
         note=f"Stored {len(returned)} metric sample(s); {missing} requested post(s) without usable counts",
         error=f"No usable metric counts returned for {missing} requested post(s)" if missing else None,
     )

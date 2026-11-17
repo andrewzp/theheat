@@ -302,5 +302,9 @@ def run_alerts(bot_state: BotState, current_run: dict | None = None, *, ghcn_sup
 
     # Expired Stage 1 workers that finished by now leave late diagnostics only.
     attach_late_evidence(current_run, stage1_owner)
+    # Feedback uses its existing opt-in/resource allowance and shared UTC-day
+    # gate, including this unfinished run when both mode also visits Hot 10.
+    from src.orchestrator.hot10 import _run_twitter_metrics
+    _run_twitter_metrics(bot_state, current_run)
     print(f"[alerts] Done. Saved {drafted} drafts.")
     return bot_state

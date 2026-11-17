@@ -1,3 +1,7 @@
+## 0.9.109.117
+
+- Collect already-enabled bounded engagement feedback from ordinary observed-alert runs as well as the daily leaderboard role. Share the UTC-day opportunity across unfinished runs, retained summaries and midnight boundaries; preserve failed attempts, resource caps, legacy producer fences and unknown counts/costs without changing publication controls.
+
 ## 0.9.109.116
 
 - Require a resolved physical episode for ongoing-event memory. Unbound publications retain general history and exact complete candidate-ID history, while shared display regions, warning areas and ID prefixes no longer link distinct stories. Preserve existing stored rows, source-series restrictions, physical bindings and publication controls.
