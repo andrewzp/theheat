@@ -219,7 +219,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/posting/local_delivery.py": "cb59e1c54d5bfee5f7ad8409d278ebc095fb9ad4a0ebb8484668d82ae7c3a95d",
     "src/posting/twitter.py": "fc17d9bb59ef8e2a56e25ba711a2997af9bfa2fdb2fdc5d4657537155966791e",
     "src/runtime_inventory.py": "6209e642c6c51cd80cb90d77a0901c9beeba5b110be597fffff003fe6402a9ba",
-    "src/state.py": "88c216fe9af9ee43d4380433fd8d9d483996a8b4568831e142424183f0e4bd95",
+    "src/state.py": "0bdfc44dd56faa11b3833f72bbb25589d7998d5825fc4b9e76ca137c97f835c4",
     "src/storage/cyclone_supply.py": "5bb79fe881f4453c4d526e855fd82ec18f787a77cdd9a89214270259ddaa0f8d",
     "src/storage/ghcn_runtime_inputs.py": "bd8d06145e6385c7a92893162c5d82a7f3c82e9cc72999fe43efa3adabe8a6ac",
     "src/storage/hosted_staging.py": "54e82a1b070db00b70b3e7c2f82b900a1d6b7c55b9fa4935d726accc7997a7d5",
@@ -294,5 +294,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "39d1fb9de6ff09e711035c1b658337308f983bfd53927d800de037c2cc0fa4a9"
   },
   "schema_version": 1,
-  "source_sha256": "6d79dbf3017bc446ecc076fae7853c0187809ef77590c46e9db5e7eebb410c9a"
+  "source_sha256": "daa1c10e78d7a894dcb05d09e0b68051dd35fc69612d1d82c74642a0baaab614"
 }

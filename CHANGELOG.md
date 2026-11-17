@@ -1,3 +1,7 @@
+## 0.9.109.103
+
+- Preserve the existing candidate, coverage and news retention windows after state merging so stale snapshots cannot restore expired visibility rows. Use a valid completed-run clock for merged archives and preserve undated or malformed rows, retained drafts, delivery records and accounting.
+
 ## 0.9.109.102
 
 - Tell the observed-airport writer to retain complete airport names, including slash-separated parts, and explicitly label airport readings. Preserve exact country, quantities, UTC time/date, citation, the automatic copy limit and every required check.
