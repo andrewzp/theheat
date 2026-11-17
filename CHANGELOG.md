@@ -1,3 +1,7 @@
+## 0.9.109.108
+
+- Bound optional daily engagement lookups by distinct post count before client creation or spending admission. Keep older queued producers disabled through a separate rollout flag, report the effective allowance, and contain invalid configuration to metrics without interrupting weather processing. No monetary ceiling or API entitlement is implied.
+
 ## 0.9.109.107
 
 - Keep the test dashboard origin continuously owned while handing its listener from Python to the dedicated Node cost-view runner. Preserve the full HTTP, authorization, accounting and recovery assertions and existing deadlines.

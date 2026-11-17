@@ -57,6 +57,12 @@ def collect_runtime_inventory(mode: str, *, now: datetime | None = None, bot_sta
 
     from src.editorial.policy import current_editorial_policy
     publication_policy = automatic_publication_policy(bot_state)
+    try:
+        resource_limit = twitter_metrics.configured_resource_limit()
+        metrics_limit_status = "configured" if resource_limit is not None else "legacy_default"
+        metrics_max_ids = resource_limit if resource_limit is not None else 50
+    except twitter_metrics.MetricsResourceLimitError:
+        metrics_limit_status, metrics_max_ids = "invalid", None
     return {
         "schema_version": 1,
         "editorial_policy": current_editorial_policy(),
@@ -92,6 +98,8 @@ def collect_runtime_inventory(mode: str, *, now: datetime | None = None, bot_sta
             "funnel_telemetry": funnel.funnel_telemetry_enabled(),
             "concurrent_sources": scheduler.concurrent_sources_enabled(),
             "metrics_enabled": hot10._metrics_enabled(),
+            "metrics_max_ids": metrics_max_ids,
+            "metrics_limit_status": metrics_limit_status,
             "reganom_enabled": os.environ.get("THEHEAT_REGANOM_ENABLED", "0") == "1",
             "records_cluster_enabled": open_meteo._records_cluster_enabled(),
             "newsworthiness_enabled": news_source._enabled(),

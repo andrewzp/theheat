@@ -735,7 +735,7 @@
     "src/editorial/official_warning.py": "e37a232fe19e8ef90bfc825c92b95b89d9c9f9df7818b4a3352466ad2beeff87",
     "src/editorial/warning_runtime.py": "7c000ae5cf65b06d063ff0ae5092c2b3711d0eaff166521b8bb70ff388171f1c",
     "src/orchestrator/cyclones.py": "389c6441db0839763b6a9cd42146f75e3ab14d1179125d60a9c368eb1e03697d",
-    "src/orchestrator/hot10.py": "6b0bf6df6a4b5545af3aabf89f14c1c22a0f7d42a3f3fe6eb4932ad1c5739990",
+    "src/orchestrator/hot10.py": "2eaa844bbefd87d1f0a5ca0612466a5161fa2d1263dce5f81dfba6ba1c9632e2",
     "src/orchestrator/metar_report.py": "a170fc77cefdf3be42fc11803680c91250c88dcc80266c99265c41509b5ff82c",
     "src/orchestrator/observed_report.py": "ade51e85bc55f487fad98c46aa28cb0e05a7fb859938f4d3780bfdefb4d978e2",
     "src/orchestrator/run_alerts.py": "0fe0db491e4330a0a5a354dc2aa58ec66d754ef4d4ca5b569971eb1656fa5868",
@@ -775,5 +775,5 @@
     "src/two_bot/intern/warnings.py": "04e0a4506ffbb29124c8d2960a5e5025305699297fcf8f9178b23caac2cd7a37"
   },
   "evidence_scope": "Referenced local code inventory; not live/provider/transitive-source qualification.",
-  "registry_sha256": "aafb1d4fd67755368b4f4a6ec9dfd9d01b887c3ae7e55d5fa6a503fa7043e565"
+  "registry_sha256": "ef670ebb10d92894d5678dd26f62bf5ca7f2370229594547a9fadf4707577ce3"
 }

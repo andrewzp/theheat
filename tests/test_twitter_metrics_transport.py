@@ -6,6 +6,7 @@ import json
 import socket
 import threading
 import time
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
 import requests
@@ -105,6 +106,26 @@ def test_sdk_timeout_remains_failed_unknown_and_daily_guard_stops_second_lookup(
     hot10._run_twitter_metrics(state, dict(started_at=now.isoformat(), sources=[]), now=now)
     assert adapter.sent == [dict(auth_scheme="OAuth", timeout=(5.0, 15.0))]
     assert adapter.closed is True
+
+
+def test_actual_sdk_capped_request_counts_unique_resources_and_closes(monkeypatch):
+    class ResourceAdapter(OfflineAdapter):
+        ids = None
+
+        def send(self, request, **kwargs):
+            self.ids = parse_qs(urlsplit(request.url).query)["ids"][0].split(",")
+            return super().send(request, **kwargs)
+
+    monkeypatch.setenv("THEHEAT_METRICS_ENABLED", "1")
+    monkeypatch.setenv("THEHEAT_METRICS_MAX_IDS", "10")
+    adapter = ResourceAdapter()
+    client(monkeypatch, adapter)
+    ids = [str(123456789 + i) for i in range(10)]
+    result = metrics.fetch_metrics(ids + [ids[0], ""])
+    assert adapter.ids == ids
+    assert adapter.sent == [dict(auth_scheme="OAuth", timeout=(5.0, 15.0))]
+    assert adapter.closed and result[ids[0]]["likes"] == 0
+    assert result[ids[0]]["impressions"] is None
 
 
 def test_owned_loopback_stall_obeys_same_configured_sdk_session_timeout(monkeypatch):

@@ -17,6 +17,20 @@ ACCESS_SECRET = os.environ.get("TWITTER_ACCESS_SECRET", "")
 _METRICS_TIMEOUT = (5.0, 15.0)
 
 
+class MetricsResourceLimitError(ValueError):
+    """The configured resource allowance cannot admit this lookup."""
+
+
+def configured_resource_limit() -> int | None:
+    """Optional canonical 1..50 cap; unset preserves legacy caller limits."""
+    raw = os.environ.get("THEHEAT_METRICS_MAX_IDS")
+    if raw is None:
+        return None
+    if raw not in {str(value) for value in range(1, 51)}:
+        raise MetricsResourceLimitError("metrics_resource_limit_invalid")
+    return int(raw)
+
+
 class _MetricsSession(requests.Session):
     """Bound SDK inactivity and refuse redirects; no extra retry layer."""
 
@@ -75,6 +89,8 @@ def fetch_metrics(tweet_ids: list[str]) -> dict[str, dict]:
     and the owned session closes on failure too. This does not grant API access
     or impose an absolute elapsed-time or billing ceiling. The orchestrator owns
     its existing 50-ID, once-per-UTC-day gate, including unsuccessful attempts.
+    An optional resource cap refuses the entire oversized request before client
+    construction or spending admission; it is not a monetary billing ceiling.
     """
     ids = _unique_ids(tweet_ids)
     if not ids:
@@ -84,6 +100,10 @@ def fetch_metrics(tweet_ids: list[str]) -> dict[str, dict]:
         # Exact opt-in at the real call boundary, before any client construction.
         print("[twitter_metrics] THEHEAT_METRICS_ENABLED is not 1, skipping metrics fetch")
         return {}
+
+    limit = configured_resource_limit()
+    if limit is not None and len(ids) > limit:
+        raise MetricsResourceLimitError("metrics_resource_limit_exceeded")
 
     client = _get_client()
     if client is None:
