@@ -123,3 +123,17 @@ areas or ID prefixes cannot join different stories. General publication history
 and category cooldowns remain available. Existing stricter airport, thermal and
 GDACS source-series rules still apply. This rule grants no source qualification,
 approval or sending permission; a bundle missing provenance remains held.
+
+## Bounded engagement feedback
+
+When the existing metrics opt-in is enabled, ordinary alerts and the daily role
+share one UTC-day feedback opportunity. The configured resource allowance remains
+10 post IDs, including unsuccessful lookups. A combined run cannot read twice;
+retained source summaries keep the day closed when hourly sender reports replace
+older run history. Unknown counts remain unknown, and an unusable sample clock
+cannot produce a dated sample. Retain the opportunity's start day separately
+from the response timestamp: a lookup crossing midnight consumes one day, while
+the next UTC day keeps its own opportunity. Legacy rows use conservative timing;
+an unverifiable explicit day is held. This is retained ordinary accounting, without a
+claim of transactional enforcement across process death or every external writer.
+It grants no API access, new allowance, monthly billing ceiling or publication.

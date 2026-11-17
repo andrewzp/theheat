@@ -77,6 +77,7 @@ test("updateDraftStore merges an edited draft into the latest gist state", async
       shipped_tweets: [],
     },
     data_source_failures: { ghcn: 2 },
+    source_health: { twitter_metrics: { runs: [{ ts: "2026-05-15T00:00:01Z", status: "success", metrics_opportunity_day_utc: "2026-05-14" }] } },
     synthesis_components: JSON.parse(readFileSync(new URL("../../tests/fixtures/marine-components.json", import.meta.url), "utf8")),
   }
 
@@ -123,6 +124,7 @@ test("updateDraftStore merges an edited draft into the latest gist state", async
     assert.deepEqual(written.pending_confirmations, latestState.pending_confirmations)
     assert.deepEqual(written.memory, latestState.memory)
     assert.deepEqual(written.data_source_failures, { ghcn: 2 })
+    assert.deepEqual(written.source_health, latestState.source_health)
     assert.deepEqual(written.synthesis_components, latestState.synthesis_components)
 
     assert.equal(result.state.drafts.length, 2)
@@ -251,6 +253,7 @@ test("sqlite state store preserves Python-owned metadata keys", async () => {
         shipped_tweets: [],
       },
       data_source_failures: { ghcn: 2 },
+      source_health: { twitter_metrics: { runs: [{ ts: "2026-05-15T00:00:01Z", status: "success", metrics_opportunity_day_utc: "2026-05-14" }] } },
       synthesis_components: {
         ...JSON.parse(readFileSync(new URL("../../tests/fixtures/marine-components.json", import.meta.url), "utf8")),
         fires: { CA: [{ event_id: "fire_1", at: "2026-05-09T00:00:00Z" }] },
@@ -312,6 +315,7 @@ test("sqlite state store preserves Python-owned metadata keys", async () => {
     assert.deepEqual(loaded.memory.used_era_anchors, ["Spider-Man 2002"])
     assert.deepEqual(loaded.memory.ongoing_events, sourceState.memory.ongoing_events)
     assert.deepEqual(loaded.data_source_failures, { ghcn: 2 })
+    assert.deepEqual(loaded.source_health, sourceState.source_health)
     assert.deepEqual(loaded.synthesis_components, sourceState.synthesis_components)
     assert.deepEqual(loaded.synthesis_cooldown, sourceState.synthesis_cooldown)
     assert.deepEqual(loaded.fire_complex_tiers, { complex_1: 3 })
