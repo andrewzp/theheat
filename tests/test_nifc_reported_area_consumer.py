@@ -141,6 +141,15 @@ def test_unnamed_incident_does_not_inherit_its_umbrella_name(capture):
     assert fc.name is None
 
 
+def test_legacy_missing_clock_stays_missing_instead_of_becoming_today():
+    fc = source.FireComplex("invented-legacy", "Invented fire", "US", "OR",
+                            213000, None, 3, "fire_footprint_invented-legacy_tier3")
+    with freeze_time(NOW + timedelta(days=1)):
+        bundle = build_fire_footprint_bundle(fc)
+    assert bundle.when == ""
+    assert not audit_story_bundle(bundle).prompt_ready
+
+
 @pytest.mark.parametrize("change", ["name", "date", "area", "origin", "record-value-rehashed"])
 def test_source_packet_and_writing_facts_cannot_disagree_after_build(capture, change):
     fc, = acquire(capture)
