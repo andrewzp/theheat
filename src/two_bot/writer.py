@@ -358,6 +358,8 @@ def _call_anthropic(user_prompt: str) -> str:
 
 
 def _call_google(user_prompt: str) -> str:
+    from src.two_bot.google_output import WRITER_OUTPUT_TOKENS
+    from src.two_bot.trial_budget import completed_google_text
     api_key = os.environ.get("GEMINI_API_KEY", "")
     if not api_key:
         raise RuntimeError("GEMINI_API_KEY is required for the Gemini writer")
@@ -373,7 +375,8 @@ def _call_google(user_prompt: str) -> str:
         lambda: provider_call("writer", "google", dict(
             model=WRITER_MODEL,
             contents=f"{WRITER_SYSTEM_PROMPT}\n\n{user_prompt}",
-            config=genai_types.GenerateContentConfig(response_mime_type="application/json", response_json_schema=WRITER_OUTPUT_SCHEMA),
+            config=genai_types.GenerateContentConfig(response_mime_type="application/json", response_json_schema=WRITER_OUTPUT_SCHEMA,
+                                                     max_output_tokens=WRITER_OUTPUT_TOKENS),
         ), client.models.generate_content),
     )
     # Economics P0.6: mirror the Anthropic capture, same fail-open boundary
@@ -385,9 +388,7 @@ def _call_google(user_prompt: str) -> str:
         usage_ledger.record_writer_response(response, WRITER_MODEL, "google")
     except Exception as exc:  # noqa: BLE001 — accounting never breaks the call
         print(f"[usage_ledger] gemini usage extraction error (ignored): {exc!r}")
-    # google-genai response.text is Optional — empty falls through to the
-    # JSON parser as a parse error, which the caller handles.
-    return response.text or ""
+    return completed_google_text(response)
 
 
 def _call_writer_provider(user_prompt: str) -> str:

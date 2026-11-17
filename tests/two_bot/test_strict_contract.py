@@ -218,8 +218,10 @@ def test_nonfinite_rejected_candidate_is_persistable_without_repairing_it():
 @pytest.mark.parametrize("module,fn,schema", [(writer, "_call_google", writer.WRITER_OUTPUT_SCHEMA), (checker, "_call_gemini", checker.FACT_CHECK_OUTPUT_SCHEMA)])
 def test_gemini_requests_constrained_output_in_the_same_call(module, fn, schema, monkeypatch):
     from google import genai
+    from google.genai import types as genai_types
     client = MagicMock()
-    client.models.generate_content.return_value = SimpleNamespace(text=response(), usage_metadata=None)
+    client.models.generate_content.return_value = genai_types.GenerateContentResponse(
+        candidates=[{"finish_reason": "STOP", "content": {"role": "model", "parts": [{"text": response()}]}}])
     monkeypatch.setattr(genai, "Client", lambda **kwargs: client)
     monkeypatch.setenv("GEMINI_API_KEY", "offline-fixture")
     monkeypatch.setattr(module, "call_with_retries", lambda _, call: call())

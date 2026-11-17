@@ -35,7 +35,8 @@ from src.two_bot.prompts.critic_prompt import (
     CRITIC_USER_PROMPT_TEMPLATE,
 )
 from src.two_bot.retry import call_with_retries
-from src.two_bot.trial_budget import google_trial_options, provider_call
+from src.two_bot.trial_budget import completed_google_text, google_trial_options, provider_call
+from src.two_bot.google_output import CHECK_OUTPUT_TOKENS
 from src.two_bot.types import CriticResult, StoryBundle
 
 
@@ -310,7 +311,8 @@ def prepare_request(
         )
     if retry_suffix:
         user_prompt = f"{user_prompt}{retry_suffix}"
-    return dict(model=CRITIC_MODEL, contents=f"{CRITIC_SYSTEM_PROMPT}\n\n{user_prompt}")
+    return dict(model=CRITIC_MODEL, contents=f"{CRITIC_SYSTEM_PROMPT}\n\n{user_prompt}",
+                config=dict(max_output_tokens=CHECK_OUTPUT_TOKENS))
 
 
 def _call_gemini(
@@ -335,7 +337,7 @@ def _call_gemini(
     )
     from src.two_bot.usage_ledger import record_response
     record_response("critic", response, CRITIC_MODEL, "google")
-    return response.text or ""
+    return completed_google_text(response)
 
 
 def critic_review(

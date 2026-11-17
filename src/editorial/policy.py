@@ -84,6 +84,7 @@ POLICY_FILES = (
     "dashboard/lib/saved-claim-evidence.js",
     "src/two_bot/writer.py", "src/two_bot/critic.py", "src/two_bot/fact_check.py",
     "src/two_bot/trial_budget.py",
+    "src/two_bot/google_output.py",
     "src/two_bot/pipeline.py", "src/two_bot/provider_preflight.py", "src/two_bot/memory.py", "src/two_bot/types.py",
     "src/two_bot/strict_contract.py", "src/two_bot/evidence_contract.py",
     "src/two_bot/scientific_claims.py", "src/two_bot/json_utils.py",

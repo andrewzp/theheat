@@ -143,6 +143,7 @@ def test_real_sdk_boundaries_all_use_one_attempt_and_existing_requests(monkeypat
     import anthropic
     from anthropic.types import TextBlock
     from google import genai
+    from google.genai import types as genai_types
     from src.two_bot import writer, fact_check, critic
     from src.voice import safety
     from tests.two_bot.conftest import _bundle
@@ -159,8 +160,8 @@ def test_real_sdk_boundaries_all_use_one_attempt_and_existing_requests(monkeypat
     af = MagicMock(return_value=anthropic_client)
     monkeypatch.setattr(anthropic, "Anthropic", af)
     google_client = MagicMock()
-    google_client.models.generate_content.return_value = SimpleNamespace(
-        text="NO", usage_metadata=None, candidates=[SimpleNamespace(finish_reason="STOP")])
+    google_client.models.generate_content.return_value = genai_types.GenerateContentResponse(
+        candidates=[{"finish_reason": "STOP", "content": {"role": "model", "parts": [{"text": "NO"}]}}])
     gf = MagicMock(return_value=google_client)
     monkeypatch.setattr(genai, "Client", gf)
     value, _ = budget(tmp_path)
@@ -183,17 +184,19 @@ def test_real_sdk_boundaries_all_use_one_attempt_and_existing_requests(monkeypat
 
 
 @pytest.mark.parametrize("stage,explicit", [("safety", 2048), ("safety", 2049), ("safety", 1024),
-                                           ("safety", True), ("safety", "2048"), ("critic", 8192)])
-def test_only_exact_existing_safety_trial_bound_can_be_supplied(tmp_path, stage, explicit):
+                                           ("safety", True), ("safety", "2048"), ("critic", 8192),
+                                           ("fact_check", 8192), ("critic", 8193), ("critic", True),
+                                           ("fact_check", "8192"), ("fact_check", 2048)])
+def test_only_exact_known_ordinary_check_trial_bounds_can_be_supplied(tmp_path, stage, explicit):
     value, _ = budget(tmp_path)
     value.begin_candidate("invented")
     payload = request(stage)
     payload["config"] = {"max_output_tokens": explicit}
     send = MagicMock(return_value=SimpleNamespace(text="offline"))
     with limits.trial_scope(value):
-        if stage == "safety" and type(explicit) is int and explicit == 2048:
+        if type(explicit) is int and explicit == limits.OUTPUT_LIMITS[stage]:
             limits.provider_call(stage, "google", payload, send)
-            assert send.call_count == 1 and send.call_args.kwargs["config"]["max_output_tokens"] == 2048
+            assert send.call_count == 1 and send.call_args.kwargs["config"]["max_output_tokens"] == explicit
         else:
             with pytest.raises(limits.TrialStopped, match="changed_output_bound"):
                 limits.provider_call(stage, "google", payload, send)
