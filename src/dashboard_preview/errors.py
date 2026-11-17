@@ -111,6 +111,7 @@ MEDIA_HOLDS = {
                               "place or time).",
     "media_source_unqualified": "The saved source cannot support this image.",
     "media_source_future": "The retained source time is in the future.",
+    "media_source_stale": "The retained observation is older than its allowed source window.",
     "media_unsupported": "This source has no reviewed image product.",
     "media_renderer_changed": "The image profile changed; preview and review again.",
     "media_preview_too_large": "This image is too large to preview and send here.",

@@ -18,11 +18,19 @@ const PM25 = "gist_pm25_forecast_v1"
 const MODIS = "gist_modis_locator_v1"
 const VIIRS = "gist_viirs_locator_v1"
 const HOT10 = "gist_hot10_bulletin_v1"
+const AWC = "gist_awc_observed_pair_v1"
 const NWPS = "gist_nwps_forecast_v1"
 const FONT = "src/media/fonts/DejaVuSansMono.ttf"
 // Schema 2: canonical, host-independent PNG bytes (src/media/canonical_png.py).
 const CODEC_FILE = "src/media/canonical_png.py", PNG_CODEC = "canonical-png-fixed-huffman-1"
 const FAMILIES = Object.freeze({
+  [AWC]: Object.freeze({ template: "awc_airport_temperature_pair", templateVersion: "p31-awc-airport-pair-1",
+    adapterVersion: "p31-awc-observed-pair-1", derivation: "awc_pair_delivery_v1", signalKind: "observed_metar_contrast",
+    products: ["awc-observed-airport-pair-v1"],
+    files: ["src/media/gist_media.py", "src/media/gist_hazard_media.py", CODEC_FILE, FONT, "src/media/evidence_graphic.py",
+      "src/media/awc_graphic_adapter.py", "src/data/awc_observed.py", "src/data/places.py",
+      "src/data/registry/country_names.json", "src/two_bot/types.py", "src/editorial/revisions.py"],
+    source: ["bundle_sha256", "evidence_sha256", "source_product", "source_sha256", "points_sha256", "observed_at", "retrieved_at"] }),
   [PM25]: Object.freeze({ template: "pm25_forecast_day", templateVersion: "p31-pm25-forecast-1",
     adapterVersion: "p31-cams-pm25-1", derivation: "pm25_delivery_v1", signalKind: "air_quality_hazard",
     products: ["open-meteo-cams-air-quality-auto"],
@@ -56,7 +64,7 @@ const FAMILIES = Object.freeze({
     source: ["bundle_sha256", "evidence_sha256", "source_product", "baseline_product", "rows_sha256", "local_days"] }),
 })
 // Bundle signals the hazard families own; any other signal keeps the temperature path.
-const SIGNALS = ["air_quality_hazard", "fire", "hot10"]
+const SIGNALS = ["air_quality_hazard", "fire", "hot10", "observed_metar_contrast"]
 // Store-backed kinds (src/media/gist_crw_media.py, gist_published_media.py): Gist keeps
 // only the exact SHA256 of a retained CRW source packet or published asset manifest.
 const CRW = "gist_crw_anomaly_v1", RADAR = "gist_published_radar_v1", CHART = "gist_published_chart_v1"
@@ -122,6 +130,12 @@ function wellFormed(text) {
 
 function sourceFields(kind, bundle) {
   const raw = bundle.raw_signal_dump
+  if (kind === AWC) {
+    const source = raw.evidence
+    return { bundle_sha256: fingerprint(bundle), source_product: "awc-observed-airport-pair-v1",
+      source_sha256: fingerprint(source), points_sha256: fingerprint(source.points),
+      observed_at: source.points[0].valid_time, retrieved_at: source.retrieved_at }
+  }
   if (kind === PM25) {
     const window = raw.forecast_window
     return { bundle_sha256: fingerprint(bundle), source_product: window.source_product, window_sha256: fingerprint(window),
@@ -300,6 +314,22 @@ export function gistMediaCurrentness(draft, nowMs = Date.now()) {
   const kind = gistMediaKind(draft?.media_attachment)
   if (!kind || kind === TEMPERATURE) return null
   const now = nowMs * 1000, bundle = draft.review_context?.two_bot?.bundle
+  if (kind === AWC) {
+    const evidence = bundle?.raw_signal_dump?.evidence, points = evidence?.points
+    const captured = micros(evidence?.retrieved_at)
+    if (!Number.isFinite(now) || evidence?.schema !== "awc-observed-airport-pair-v1"
+        || !Array.isArray(points) || points.length !== 2 || captured === null
+        || points[0]?.valid_time !== points[1]?.valid_time)
+      return { code: "media_source_unqualified", message: "The retained airport observations are not qualified" }
+    const observed = micros(points[0]?.valid_time)
+    if (observed === null || observed % 60000000 !== 0 || observed > captured)
+      return { code: "media_source_unqualified", message: "The retained airport observation time is not qualified" }
+    if (captured > now || observed > now)
+      return { code: "media_source_future", message: "The retained airport capture or observation is in the future" }
+    if (now - observed > 2 * 3600 * 1000000)
+      return { code: "media_source_stale", message: "The airport observations are older than two hours" }
+    return null
+  }
   if (kind === NWPS) {
     const evidence = bundle?.raw_signal_dump?.evidence
     const issued = micros(evidence?.issued_at), first = micros(evidence?.forecast_valid_at)

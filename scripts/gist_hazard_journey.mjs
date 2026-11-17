@@ -9,6 +9,9 @@ import { fileURLToPath } from "node:url"
 import { options, startOwned, superviseJourney, waitOwnedReady } from "./operator_media_journey.mjs"
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), ".."), dashboard = join(repo, "dashboard")
 const fixture = join(dashboard, "tests/fixtures/gist-hazard-journey")
+const awcOnly = process.env.THEHEAT_GIST_HAZARD_JOURNEY_FAMILIES === "awc"
+if (process.env.THEHEAT_GIST_HAZARD_JOURNEY_FAMILIES && !awcOnly) throw new Error("Only the explicit AWC scope or the unchanged default journey is supported")
+const families = awcOnly ? ["awc"] : ["pm25", "modis", "viirs", "hot10"]
 const selected = options(process.argv.slice(2)), result = selected.result, origin = `http://127.0.0.1:${selected.port}`
 if (existsSync(result)) throw new Error("Use a new private result directory")
 const probe = createServer()
@@ -19,9 +22,10 @@ for (const dir of ["home", "tmp", "screens"]) mkdirSync(join(result, dir), { mod
 symlinkSync(realpathSync(join(dashboard, "node_modules")), join(result, "node_modules"))
 const env = { PATH: `${dirname(process.execPath)}:/usr/bin:/bin`, HOME: join(result, "home"), TMPDIR: join(result, "tmp"),
   LC_ALL: "C", LANG: "C", TZ: "UTC", NETRC: "/dev/null", NEXT_TELEMETRY_DISABLED: "1", NO_PROXY: "*", no_proxy: "*",
+  THEHEAT_GIST_HAZARD_JOURNEY_FAMILIES: families.join(","),
   THEHEAT_GIST_HAZARD_JOURNEY_DIST_DIR: relative(fixture, join(result, "next-dist")), THEHEAT_STATE_BACKEND: "gist", GIST_ID: "invented-gist-hazard-journey",
   DASHBOARD_USERNAME: "fixture", DASHBOARD_PASSWORD: "invented", THEHEAT_TEST_PYTHON: process.env.THEHEAT_TEST_PYTHON, THEHEAT_GIST_HAZARD_JOURNEY_ROOT: repo, THEHEAT_GIST_HAZARD_JOURNEY_ORIGIN: origin }
-const receipt = { scope: "invented_gist_hazard_journey", origin, node: process.version, playwright: selected.playwright, chromium: selected.chromium, steps: [] }
+const receipt = { scope: "invented_gist_hazard_journey", origin, families, node: process.version, playwright: selected.playwright, chromium: selected.chromium, steps: [] }
 const next = join(dashboard, "node_modules/next/dist/bin/next"), token = randomBytes(32).toString("hex")
 let server, journey
 try {
@@ -36,8 +40,8 @@ try {
   receipt.readiness = await waitOwnedReady({ origin, token, owned: server, deadline: Date.now() + 30000 })
   if (!receipt.readiness.ready) throw new Error("Owned invented fixture not ready")
   const config = join(result, "journey-config.json")
-  writeFileSync(config, JSON.stringify({ origin, playwright: selected.playwright, chromium: selected.chromium, screens: join(result, "screens"), result: join(result, "journey-result.json") }), { flag: "wx" })
-  journey = startOwned({ command: process.execPath, argv: ["--test", "tests/gist-hazard-journey.test.js"], cwd: dashboard,
+  writeFileSync(config, JSON.stringify({ origin, families, playwright: selected.playwright, chromium: selected.chromium, screens: join(result, "screens"), result: join(result, "journey-result.json") }), { flag: "wx" })
+  journey = startOwned({ command: process.execPath, argv: ["--test", awcOnly ? "tests/gist-awc-journey.test.js" : "tests/gist-hazard-journey.test.js"], cwd: dashboard,
     env: { ...env, THEHEAT_GIST_HAZARD_JOURNEY_CONFIG: config }, logPath: join(result, "journey.log") })
   receipt.supervised = await superviseJourney({ journey, server })
   if (!receipt.supervised.success) throw new Error("Invented hazard UI journey failed")

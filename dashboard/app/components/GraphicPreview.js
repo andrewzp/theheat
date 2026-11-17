@@ -28,7 +28,14 @@ export function FullSizeImage({ url, alt, title, width = 1200, height = 1500 }) 
     const node = dialog.current
     if (!node) return undefined
     // Escape and the close button both end here: one place restores focus.
-    const closed = () => { setOpen(false); opener.current?.focus() }
+    const closed = () => {
+      setOpen(false)
+      // Native close can restore focus before its queued close event runs.
+      // Preserve a user's subsequent focus move instead of reopening the modal
+      // when that user's next Enter was intended for Attach graphic.
+      const active = node.ownerDocument.activeElement
+      if (active === node || node.contains(active) || active === node.ownerDocument.body) opener.current?.focus()
+    }
     node.addEventListener("close", closed)
     return () => { node.removeEventListener("close", closed); if (node.open) node.close() }
   }, [])
@@ -89,6 +96,8 @@ export function GraphicPreviewFigure({ value, url, originalURL = null }) {
   if (value.schema_version === 5) return h(PublishedFigure, { value, url, originalURL })
   const context = value.source_context
   const timing = context.kind === "hot10_bulletin" ? `${localDays(context.local_days)} · forecast daily highs`
+    : context.kind === "awc_airport_pair"
+    ? `${context.observed_at.slice(0, 16).replace("T", " ")} UTC · two observed airport reports`
     : context.kind === "nwps_forecast_points"
     ? `Gauge ${context.gauge} · forecast issued ${context.issued_at} · ${context.point_count} supplied points in feet`
     : context.kind === "crw_product_day"
@@ -104,6 +113,7 @@ export function GraphicPreviewFigure({ value, url, originalURL = null }) {
     h("figcaption", null,
       h("strong", null, value.title),
       h("p", { className: "graphic-kind" }, context.kind === "hot10_bulletin" ? "Forecast departure table (sampled cities)"
+        : context.kind === "awc_airport_pair" ? "Observed airport temperature comparison (two points, not a global ranking)"
         : context.kind === "crw_product_day" ? "Satellite-analysis anomaly chart (sampled cells, not a continuous surface)"
         : context.kind === "nwps_forecast_points" ? "Saved river-stage forecast"
         : context.kind === "pm25_forecast_day" ? "Model forecast chart"
@@ -113,6 +123,11 @@ export function GraphicPreviewFigure({ value, url, originalURL = null }) {
         `Forecast requested ${context.requested_at.slice(0, 16).replace("T", " ")} UTC; retrieved ${context.retrieved_at.slice(0, 16).replace("T", " ")} UTC. Retrieval is not a model run time, and a forecast never becomes an observation.`),
       h("p", null, value.scope),
       context.kind === "hot10_bulletin" && h(Hot10Rows, { context }),
+      context.kind === "awc_airport_pair" && h("div", null,
+        h("ul", { "aria-label": "Two airport observations" }, context.points.map((point, index) =>
+          h("li", { key: point.station_id },
+            `Airport ${"AB"[index]}: ${point.airport}, ${point.country} (${point.station_id}), ${String(point.temperature_c).replace("-", "−")}°C`))),
+        h("p", null, `Source captured ${context.retrieved_at}. Colour identifies airports, not hazard categories.`)),
       h(PostingWindow, { window: value.posting_window }),
       h("div", { className: "graphic-full-description" }, h("strong", null, "Image description sent to X"), h("p", null, value.delivery_text)),
       h("details", null, h("summary", null, "Expanded source details (not sent)"), h("p", { style: { whiteSpace: "pre-wrap" } }, value.expanded_description))))
@@ -298,6 +313,7 @@ function SavedPreview({ request, family, fireSource, draft, onAction, storeFamil
         RETAINED_INPUT_REFUSALS[RETAINED_INPUT_REFUSAL_CODE(retainedInput)])),
     h("p", null, storeFamily ? STORE_LABELS[storeFamily][1] : draft.type === "air_quality_hazard"
       ? "Build a chart from the saved PM2.5 model forecast. No new source fetch or AI generation."
+      : family === "awc" ? "Build a colour comparison of the two saved airport observations. No new source fetch or AI generation."
       : family === "hot10" ? "Build the ten-row table from the saved qualified Hot 10 bulletin. No new source fetch, re-ranking or AI generation."
       : family === "temperature" ? "Compare the saved observed station reading with its qualified archive samples. No new source fetch or AI generation."
       : draft.type === "river_flood" ? "Build the river forecast chart from the source packet saved for this draft."
@@ -329,6 +345,7 @@ function SavedPreview({ request, family, fireSource, draft, onAction, storeFamil
 function postImageFamily(draft) {
   const store = storeFamilyFor(draft)
   if (store) return store
+  if (draft?.type === "observed_metar_contrast") return "awc"
   if (isTemperaturePreviewType(draft?.type)) return "temperature"
   if (draft?.type === "air_quality_hazard") return "pm25"
   if (draft?.type === "fire" && ["modis", "viirs"].includes(firePreviewSourceStatus(draft))) return firePreviewSourceStatus(draft)

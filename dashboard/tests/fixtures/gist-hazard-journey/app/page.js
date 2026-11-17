@@ -17,7 +17,9 @@ export default function Journey() {
   async function refresh() {
     const response = await fetch("/api/drafts", { headers, cache: "no-store" })
     if (!response.ok) throw new Error("Invented fixture refresh failed")
-    setDrafts((await response.json()).drafts)
+    const rows = (await response.json()).drafts
+    setDrafts(rows)
+    setSelected(current => rows.some(d => d.id === current) ? current : rows[0]?.id ?? null)
   }
   useEffect(() => { refresh().catch(error => setFeedback({ type: "error", text: error.message })) }, [])
   return <main className="container">
@@ -41,6 +43,7 @@ export default function Journey() {
           setDone(value => ({ count: value.count + 1, ok: String(response.ok), error: body.error ?? "", code: body.code ?? "" }))
         } finally { setAction(null) }
       }} draftAction={action} draftFeedback={feedback} pendingCommand={null} botRuns={[]} loadDelivered={loadDelivered} />
+    <output id="journey-selected" hidden data-draft-id={selected} />
     <output id="journey-actions" hidden data-count={done.count} data-ok={done.ok} data-code={done.code}>{done.error}</output>
   </main>
 }
