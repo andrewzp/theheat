@@ -1,3 +1,7 @@
+## 0.9.109.106
+
+- Ask the observed-airport writer to lead with the supported temperature gap and keep the two readings and UTC time/date in one sentence. Preserve complete identities, source qualification, required checks and the final automatic copy limit.
+
 ## 0.9.109.105
 
 - Retain complete bounded context for new selected copy refusals, including exact text and generation-bound source facts. Preserve the refusal, required checks, private-log boundaries and existing publication authority; missing old output remains unknown.
