@@ -1,3 +1,15 @@
+## 0.9.109.107
+
+- Keep the test dashboard origin continuously owned while handing its listener from Python to the dedicated Node cost-view runner. Preserve the full HTTP, authorization, accounting and recovery assertions and existing deadlines.
+
+## 0.9.109.106
+
+- Ask the observed-airport writer to lead with the supported temperature gap and keep the two readings and UTC time/date in one sentence. Preserve complete identities, source qualification, required checks and the final automatic copy limit.
+
+## 0.9.109.105
+
+- Retain complete bounded context for new selected copy refusals, including exact text and generation-bound source facts. Preserve the refusal, required checks, private-log boundaries and existing publication authority; missing old output remains unknown.
+
 ## 0.9.109.104
 
 - Show both retained airport observations in the ordinary source-evidence panel, including exact Celsius readings, airport/country identities and observation/capture times. Preserve unreadable malformed packets and keep the display separate from checks, review and posting authority.

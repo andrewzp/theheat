@@ -274,13 +274,13 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/two_bot/json_utils.py": "c09fd98817c8e478a38cdeb1028769ec146ad0f94701235b7c1e12de7a46e7da",
     "src/two_bot/memory.py": "33634f80d4002dd6246c5f627a8cf3db26cf8cb18fae5f81875db86f199c4bb9",
     "src/two_bot/multisignal.py": "6faa78ed3c5d94b4bb9305e12f4a61d370e212fddee47190b15997b52fbb243e",
-    "src/two_bot/pipeline.py": "b96d36cdaadf4a761b5157700947afc8b04b3c8a8e1af091c954d64c50ebaa9d",
+    "src/two_bot/pipeline.py": "b10e00945bbd25f7c313f5c567d73576535464325fc1aa6076d336f73abbd5ea",
     "src/two_bot/prompts/__init__.py": "b08ec3ae2e477637b1fa3aa7f04935b7744b5ea7548bb384965e20ade7fabd2b",
     "src/two_bot/prompts/critic_prompt.py": "a6993c558cd459c549f5a707aa51e034e4bd2b458c9dd8ccd180041303760439",
     "src/two_bot/prompts/fact_check_prompt.py": "3d216dd1d857e6183162a84aa4ee10b3ede7f18225b7b6c2e11395b0f658f77a",
     "src/two_bot/prompts/writer_prompt.py": "17437a5f4838b26030541b09e18c2eb2974d5b0bd963ec0ab7d73f7bb81115f4",
     "src/two_bot/provider_preflight.py": "9a6aa6b4834c04266acdde286a3ccae991a070ab9411a0d56e7b9ab519422021",
-    "src/two_bot/rejected_candidate.py": "4c4c843c14a52e5eb3f955b055d637476a94cf8bdaa0e98bab60c7c702f1ed53",
+    "src/two_bot/rejected_candidate.py": "481df6c4c46fa84646a3f1f27daa3852df83f729a8d02d1331732508be0d3d54",
     "src/two_bot/retained_usage.py": "48fbca8c9c9868a258c5bfdd0966234b4a7f07b4e21577cb1c3cfa0d9bfeeda9",
     "src/two_bot/scientific_claims.py": "e255d3419b75c3b3fa6a3b432a3656911bd43bdd3e95ce640fb81432ae2136fe",
     "src/two_bot/source_links.py": "84368d896a5f5ef37eb15ebc705728b9e384ba8b785ee418ec636e3ccb05650b",
@@ -290,9 +290,9 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/two_bot/synchronous_writer.py": "3a05a469917cd25e28adf6e046aca20f454dbc68543505628bd17ad31b4cca31",
     "src/two_bot/trial_budget.py": "a65fd6db5f4a9dd3fb800f9c93af3a1b192ac79c077471122a7eba530309f7ae",
     "src/two_bot/types.py": "951044ca2582c8b96872bdd5b8ed8fc60546a58305aa8b06de50075206cc817e",
-    "src/two_bot/writer.py": "da57843fc74e5ea83012610eafc416e1a0104a28e9280d52baf9a385a583812c",
+    "src/two_bot/writer.py": "8e4b837943cb0c17aa0546bea689ad883bab76388bcaeedc359ce854f449b23c",
     "src/voice/safety.py": "39d1fb9de6ff09e711035c1b658337308f983bfd53927d800de037c2cc0fa4a9"
   },
   "schema_version": 1,
-  "source_sha256": "6c9655837b0dc1a90898959601fae16123fa8d86784a75dd6c7490293ab00a5e"
+  "source_sha256": "629566acb6762d66b12cf1751a68ab7b05345685484459486fe3eaca6c516f6d"
 }

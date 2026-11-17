@@ -18,7 +18,7 @@ from src.two_bot import pipeline
 from src.two_bot.bundle_capture import MAX_BUNDLE_BYTES, MAX_SAFE_INTEGER
 from src.two_bot.json_utils import model_response_diagnostic
 from src.two_bot.rejected_candidate import (
-    MAX_REJECTION_BYTES, MAX_TEXT_BYTES, capture_critic_rejection, capture_fact_input,
+    MAX_COPY_REJECTION_BYTES, MAX_REJECTION_BYTES, MAX_TEXT_BYTES, capture_copy_rejection, capture_critic_rejection, capture_fact_input,
     capture_fact_rejection, capture_safety_rejection, capture_stage_input,
 )
 from src.two_bot.types import CriticResult, ExtractedClaim, FactCheckResult, WriterResult
@@ -267,9 +267,11 @@ def test_existing_recent_retention_and_merge_preserve_packets_but_do_not_backfil
     assert round_trip(state, monkeypatch)["suppressions"] == rows
 
 
-@pytest.mark.parametrize("stage", ["fact_check", "safety", "critic"])
+@pytest.mark.parametrize("stage", ["fact_check", "safety", "critic", "copy_gate"])
 def test_python_generated_packet_survives_authenticated_actual_dashboard_api(stages, monkeypatch, stage):
-    if stage != "fact_check":
+    if stage == "copy_gate":
+        stages[0].return_value = WriterResult(TEXT + " Another sentence. A third sentence.", None, "number", None, None, "offline")
+    elif stage != "fact_check":
         stages[2].return_value = FactCheckResult(True, [], "offline")
         if stage == "safety":
             stages[1].return_value = (False, "LLM flagged as potentially harmful")
@@ -499,7 +501,7 @@ def test_selected_packet_is_cleared_before_unsupported_terminal_outcome(unsuppor
 
 
 @pytest.mark.parametrize("outcome", ["safety_refusal", "safety_unavailable", "safety_invalid", "critic_kill", "critic_invalid",
-    "safety_revised_refusal", "critic_revised_kill"])
+    "safety_revised_refusal", "critic_revised_kill", "copy_refusal"])
 def test_actual_writer_safety_fact_critic_functions_with_offline_provider_results(outcome, monkeypatch, configured_pipeline_providers, capsys):
     from google import genai
     from src import main
@@ -510,7 +512,8 @@ def test_actual_writer_safety_fact_critic_functions_with_offline_provider_result
     is_revised = "revised" in outcome
     monkeypatch.setenv("THEHEAT_CRITIC_REVISE_ENABLED", "1" if is_revised else "0")
     revised_text = "Mali satellite thermal power is 361 MW."
-    writer_raw = json.dumps({"tweet": TEXT, "kill_reason": None, "angle_chosen": "number",
+    writer_text = TEXT + " Another sentence. A third sentence." if outcome == "copy_refusal" else TEXT
+    writer_raw = json.dumps({"tweet": writer_text, "kill_reason": None, "angle_chosen": "number",
         "era_anchor_used": None, "peer_comparison_used": None, "reasoning": "offline fixture"})
     writer_call = Mock(return_value=writer_raw)
     if is_revised:
@@ -542,9 +545,12 @@ def test_actual_writer_safety_fact_critic_functions_with_offline_provider_result
     try:
         row = dispatch_failure(monkeypatch, state, _bundle(), output)
         packet = row["rejected_candidate"]
-        stage = "safety" if outcome.startswith("safety") else "critic"
+        stage = "copy_gate" if outcome == "copy_refusal" else "safety" if outcome.startswith("safety") else "critic"
         assert row["stage"] == stage and packet["scope"] == f"selected_{stage}_rejection"
-        if outcome in {"safety_refusal", "critic_kill", "safety_revised_refusal", "critic_revised_kill"}:
+        if outcome == "copy_refusal":
+            assert packet["status"] == "retained" and packet["text"] == writer_text
+            assert packet["verdict"]["check_path"] == "local_copy_gate"
+        elif outcome in {"safety_refusal", "critic_kill", "safety_revised_refusal", "critic_revised_kill"}:
             assert packet["status"] == "retained" and packet["text"] == (revised_text if is_revised else TEXT)
             assert packet["attempt"] == (2 if is_revised else 1)
             if stage == "safety":
@@ -556,6 +562,8 @@ def test_actual_writer_safety_fact_critic_functions_with_offline_provider_result
             assert packet["status"] == "unavailable" and "text" not in packet
         expected_calls = ([2, 2, 1, 1] if stage == "safety" else [2, 2, 2, 2]) if is_revised else (
             [1, 1, 0, 0] if stage == "safety" else [1, 1, 1, 2 if outcome == "critic_invalid" else 1])
+        if outcome == "copy_refusal":
+            expected_calls = [1, 0, 0, 0]
         assert [writer_call.call_count, safety_call.call_count, fact_call.call_count, critic_call.call_count] == expected_calls
         assert not state["drafts"] and not state.get("writer_negative_cache")
         loaded = round_trip(state, monkeypatch)
@@ -591,3 +599,147 @@ def test_critic_invalid_response_unicode_is_unavailable():
     packet = capture_critic_rejection(TEXT, bundle, capture_fact_input(bundle),
         CriticResult(False, "Synthetic rejection", "\ud800"), attempt=1)
     assert packet["status"] == "unavailable" and packet["reason"] == "invalid_packet"
+
+
+def test_actual_copy_refusal_retains_complete_selected_text_without_paid_checks(stages, monkeypatch, capsys):
+    text = TEXT + " Another sentence. A third sentence."
+    stages[0].return_value = WriterResult(text, None, "number", None, None, "offline fixture")
+    state, bundle, output = _state_with_memory(), complete_bundle(), {}
+    row = dispatch_failure(monkeypatch, state, bundle, output)
+    assert output["kill_stage"] == "copy_gate"
+    packet = row["rejected_candidate"]
+    assert packet["status"] == "retained" and packet["stage"] == "copy_gate"
+    assert packet["text"] == text and packet["text_sha256"] == text_hash(text)
+    assert packet["bundle"] == capture_fact_input(bundle).payload()
+    assert packet["bundle_sha256"] == fingerprint(packet["bundle"])
+    assert packet["verdict"]["check_path"] == "local_copy_gate"
+    assert packet["verdict"]["reason"] == output["kill_reason"]
+    assert packet["verdict"]["subsequent_checks"] == "not_run"
+    assert [call.call_count for call in stages] == [1, 0, 0, 0]
+    assert not state["drafts"] and not state.get("writer_negative_cache")
+    assert text not in capsys.readouterr().out
+    before = deepcopy(row)
+    output["rejected_candidate"]["text"] = "caller changed"
+    bundle.raw_signal_dump["frp"] = 999
+    assert row == before
+    assert round_trip(state, monkeypatch)["suppressions"] == [before]
+
+
+def copy_packet(bundle=None, *, text=None, captured=None, reason=None, attempt=1):
+    from src.two_bot.copy_gates import copy_rejection
+    bundle = bundle or _bundle()
+    text = TEXT + " Another sentence. A third sentence." if text is None else text
+    entry = capture_stage_input(bundle, capture_fact_input(bundle)) if captured is None else captured
+    return capture_copy_rejection(text, bundle, entry,
+        copy_rejection(text, bundle) if reason is None else reason, attempt=attempt)
+
+
+@pytest.mark.parametrize("extra", [0, 1])
+def test_copy_packet_has_its_own_exact_eight_kib_bound_without_changing_other_stages(extra):
+    bundle = _bundle()
+    bundle.raw_signal_dump["padding"] = ""
+    initial = copy_packet(bundle)
+    size = len(json.dumps(initial, sort_keys=True).encode("utf-8"))
+    bundle.raw_signal_dump["padding"] = "x" * (MAX_COPY_REJECTION_BYTES - size + extra)
+    packet = copy_packet(bundle)
+    assert (packet["status"] == "retained") == (extra == 0)
+    if extra:
+        assert packet["reason"] == "packet_too_large" and "text" not in packet and "bundle" not in packet
+    else:
+        assert len(json.dumps(packet, sort_keys=True).encode("utf-8")) == MAX_COPY_REJECTION_BYTES
+    assert MAX_REJECTION_BYTES == 40_960
+
+
+@pytest.mark.parametrize("invalid", ["text_bytes", "surrogate", "nonfinite", "source_bytes", "source_too_large",
+    "wrong_reason", "passing_text", "attempt", "changed_generation", "changed_during_stage"])
+def test_copy_capture_refuses_incomplete_invalid_or_changed_context(invalid):
+    bundle, kwargs = _bundle(), {}
+    if invalid == "text_bytes":
+        kwargs["text"] = "☀" * (MAX_TEXT_BYTES // 3 + 1) + ". Another sentence. A third sentence."
+    elif invalid == "surrogate":
+        kwargs["text"] = "\ud800. Another sentence. A third sentence."
+    elif invalid == "nonfinite":
+        bundle.raw_signal_dump["bad"] = float("nan")
+    elif invalid == "source_bytes":
+        bundle.raw_signal_dump["bad"] = b"unsupported"
+    elif invalid == "source_too_large":
+        bundle.raw_signal_dump["padding"] = "x" * (MAX_BUNDLE_BYTES + 1)
+    elif invalid == "wrong_reason":
+        kwargs["reason"] = "invented_danger: 'forged'"
+    elif invalid == "passing_text":
+        kwargs["text"] = TEXT
+    elif invalid == "attempt":
+        kwargs["attempt"] = True
+    elif invalid == "changed_generation":
+        entry = capture_fact_input(bundle)
+        bundle.raw_signal_dump["changed"] = True
+        kwargs["captured"] = capture_stage_input(bundle, entry)
+    else:
+        kwargs["captured"] = capture_fact_input(bundle)
+        bundle.raw_signal_dump["changed"] = True
+    packet = copy_packet(bundle, **kwargs)
+    assert packet["status"] == "unavailable" and "text" not in packet and "bundle" not in packet
+    assert len(json.dumps(packet, allow_nan=False)) < 300
+
+
+def test_revised_copy_refusal_keeps_only_revised_text_without_repeating_paid_checks(stages, monkeypatch):
+    monkeypatch.setenv("THEHEAT_CRITIC_REVISE_ENABLED", "1")
+    revised = TEXT + " Another sentence. A third sentence."
+    stages[0].side_effect = [stages[0].return_value, WriterResult(revised, None, "number", None, None, "offline")]
+    stages[2].return_value = FactCheckResult(True, [], "offline")
+    stages[3].return_value = CriticResult(False, None, "offline", verdict="REVISE", revise_instruction="Fixture instruction")
+    output = {}
+    assert pipeline.generate_draft(_bundle(), _state_with_memory(), result_out=output) is None
+    packet = output["rejected_candidate"]
+    assert packet["attempt"] == 2 and packet["text"] == revised and packet["stage"] == "copy_gate"
+    assert packet["verdict"]["subsequent_checks"] == "not_run"
+    assert [call.call_count for call in stages] == [2, 1, 1, 1]
+
+
+def test_copy_refusal_after_slate_selection_retains_selected_candidate_only(stages, monkeypatch):
+    monkeypatch.setenv("THEHEAT_WRITER_SAMPLES", "2")
+    selected = TEXT + " Another sentence. A third sentence."
+    stages[0].side_effect = [stages[0].return_value, WriterResult(selected, None, "number", None, None, "offline")]
+    slate = Mock(return_value=CriticResult(True, None, "offline", selected_index=1))
+    monkeypatch.setattr(pipeline.critic, "critic_select_slate", slate)
+    output = {}
+    assert pipeline.generate_draft(_bundle(), _state_with_memory(), result_out=output) is None
+    assert output["rejected_candidate"]["text"] == selected
+    assert output["rejected_candidate"]["attempt"] == 1
+    assert slate.call_count == 1 and [call.call_count for call in stages] == [2, 0, 0, 0]
+
+
+def test_copy_context_is_cleared_on_reused_result_and_not_captured_without_output(stages, monkeypatch):
+    stages[0].return_value = WriterResult(TEXT + " Another sentence. A third sentence.", None, "number", None, None, "offline")
+    output, state = {}, _state_with_memory()
+    assert pipeline.generate_draft(_bundle(), state, result_out=output) is None
+    assert output["rejected_candidate"]["stage"] == "copy_gate"
+    stages[0].return_value = WriterResult(None, "Fixture writer kill", "", None, None, "offline")
+    assert pipeline.generate_draft(_bundle(), state, result_out=output) is None
+    assert "rejected_candidate" not in output
+    stages[0].return_value = WriterResult(TEXT + " Another sentence. A third sentence.", None, "number", None, None, "offline")
+    monkeypatch.setattr(pipeline, "capture_copy_rejection", Mock(side_effect=AssertionError("must not capture without output")))
+    assert pipeline.generate_draft(_bundle(), state) is None
+    assert [call.call_count for call in stages[1:]] == [0, 0, 0]
+
+
+def test_copy_refusal_with_missing_generation_input_is_explicitly_unavailable(stages):
+    output, kills = {}, []
+    assert pipeline._check_safety_honesty_fact(TEXT + " Another sentence. A third sentence.", _bundle(),
+        _state_with_memory(), result_out=output, record_kill=lambda stage, reason: kills.append((stage, reason))) is None
+    assert output["rejected_candidate"]["reason"] == "generation_input_unavailable"
+    assert [stage for stage, _ in kills] == ["copy_gate"]
+    assert [call.call_count for call in stages] == [0, 0, 0, 0]
+
+
+def test_actual_copy_refusal_cannot_rebind_evidence_changed_by_writer(stages):
+    bundle, output = _bundle(), {}
+    def changed(*args, **kwargs):
+        bundle.raw_signal_dump["changed_during_writer"] = True
+        return WriterResult(TEXT + " Another sentence. A third sentence.", None, "number", None, None, "offline")
+    stages[0].side_effect = changed
+    assert pipeline.generate_draft(bundle, _state_with_memory(), result_out=output) is None
+    assert output["kill_stage"] == "copy_gate"
+    packet = output["rejected_candidate"]
+    assert packet["reason"] == "bundle_changed_after_generation_entry" and "text" not in packet
+    assert [call.call_count for call in stages] == [1, 0, 0, 0]

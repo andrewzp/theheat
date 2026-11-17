@@ -51,6 +51,7 @@ from tests import test_postgres_editor_media as editor, test_check_executor as e
 from tests import test_postgres_delivery as delivery_tests
 from tests.local_delivery_helpers import fixture_server
 from tests.test_spend_journal import LIMITS
+from tests.cost_listener_helpers import reserve_dashboard_listener
 from tests.test_postgres_hosted_staging import (
     tls_cluster as tls_cluster,
     tls_database as base_tls_database,
@@ -202,36 +203,35 @@ def server(authority, tmp_path):
             },
         )
     )
-    with socket.socket() as probe:
-        probe.bind(("127.0.0.1", 0))
-        origin = "http://127.0.0.1:" + str(probe.getsockname()[1])
-    listener = PreviewServer.for_hosted_fixture(authority, operators, port=0, origin=origin)
-    thread = threading.Thread(target=listener.serve_forever, daemon=True)
-    thread.start()
-    trace = []
+    with reserve_dashboard_listener() as (dashboard_listener, origin):
+        listener = PreviewServer.for_hosted_fixture(authority, operators, port=0, origin=origin)
+        thread = threading.Thread(target=listener.serve_forever, daemon=True)
+        thread.start()
+        trace = []
 
-    def http(method, route, *, role="editor", body=None, status=200, headers=None):
-        response = requests.request(
-            method,
-            f"http://127.0.0.1:{listener.server_port}" + route,
-            auth=None if role is None else (role, "invented-" + role),
-            json=body,
-            headers={"Origin": origin, **(headers or {})},
-            timeout=20,
-        )
-        trace.append((method, route, response.status_code))
-        assert response.status_code == status, response.text
-        return response
+        def http(method, route, *, role="editor", body=None, status=200, headers=None):
+            response = requests.request(
+                method,
+                f"http://127.0.0.1:{listener.server_port}" + route,
+                auth=None if role is None else (role, "invented-" + role),
+                json=body,
+                headers={"Origin": origin, **(headers or {})},
+                timeout=20,
+            )
+            trace.append((method, route, response.status_code))
+            assert response.status_code == status, response.text
+            return response
 
-    http.origin = origin
-    http.port = listener.server_port
-    try:
-        yield http, operators, trace
-    finally:
-        listener.shutdown()
-        listener.server_close()
-        thread.join(5)
-        assert not thread.is_alive()
+        http.origin = origin
+        http.dashboard_listener = dashboard_listener
+        http.port = listener.server_port
+        try:
+            yield http, operators, trace
+        finally:
+            listener.shutdown()
+            listener.server_close()
+            thread.join(5)
+            assert not thread.is_alive()
 
 
 def action(http, authority, operators, name, payload, *, draft=None, role="editor", consume=True):
@@ -704,7 +704,7 @@ def test_continuous_preview_tls_source_radar_delivery_cost_restore(
             from tests.test_postgres_preview_command_ingress import clean_environment
 
             cost_tests.cost_component_http(
-                dict(environment=clean_environment(), origin=http.origin),
+                dict(environment=clean_environment(), origin=http.origin, dashboard_listener=http.dashboard_listener),
                 http.port,
                 costs,
                 tmp_path / "cost-http.json",
