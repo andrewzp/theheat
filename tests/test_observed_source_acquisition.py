@@ -1,5 +1,6 @@
 """Observed scope excludes forecast acquisition; existing GHCN qualification stays real."""
 from copy import deepcopy
+from typing import cast
 
 import pytest
 
@@ -7,11 +8,13 @@ from src.data import ghcn
 from src.orchestrator import caps
 from src.orchestrator.sources import open_meteo as source
 from src.state import DEFAULT_STATE
+from src.two_bot.types import TriageCandidateBundle
 from tests.test_ghcn_scientific_supply import supply_inputs as supply_inputs
 
 
 @pytest.mark.parametrize("provider,expected_count", [("both", 0), ("both_global", 2)])
 @pytest.mark.parametrize("observed_only", [False, True])
+@pytest.mark.parametrize("supply_inputs", [True], indirect=True)
 def test_qualified_station_artifacts_survive_while_excluded_world_requests_do_not(
     monkeypatch, supply_inputs, provider, expected_count, observed_only,
 ):
@@ -37,15 +40,21 @@ def test_qualified_station_artifacts_survive_while_excluded_world_requests_do_no
     monkeypatch.setenv("THEHEAT_GHCN_THRESHOLD_VERIFICATION", "success")
     monkeypatch.setenv("THEHEAT_RECORDS_CLUSTER_ENABLED", "0")
     state = deepcopy(DEFAULT_STATE)
-    run = {"id": "invented-observed-acquisition", "sources": []}
+    run: dict = {"id": "invented-observed-acquisition", "sources": []}
     source.run_extreme_signals(state, run, [{"country": "US"}, {"country": "FR"}], {}, {})
     assert calls == (["station"] if observed_only else ["station", "world"])
-    candidates = [c for c in state.get("_triage_queue", []) if c.legacy_type == "all_time_high"]
+    queued = cast(list[TriageCandidateBundle], cast(dict, state).get("_triage_queue", []))
+    candidates = [c for c in queued if c.legacy_type == "all_time_high"]
     assert len(candidates) == expected_count
     for c in candidates:
         assert c.bundle.raw_signal_dump["country"] == "France"
         assert c.bundle.raw_signal_dump["evidence"]["evidence_type"] == "observed"
         assert c.bundle.headline_metric["label"] == "observed_high_c"
+        # Same real source floor, with explicit missing non-June samples so
+        # this positive routing control fits the unchanged32KB capture bound.
+        coverage = c.bundle.raw_signal_dump["evidence"]["baseline"]["variables"]["temperature_2m_max"]
+        assert coverage["source_coverage_complete"] and not coverage["complete"]
+        assert coverage["years_with_samples"] >= ghcn.MIN_ARCHIVE_YEARS
     if observed_only:
         details = run["sources"][0]["details"]
         assert details["open_meteo_pipeline_metrics"]["status"] == "skipped"
@@ -69,7 +78,7 @@ def test_intentional_world_skip_preserves_actual_station_leg_outcome(monkeypatch
     monkeypatch.setenv("THEHEAT_SIGNALS_PROVIDER", provider)
     monkeypatch.setenv("THEHEAT_OBSERVED_WEATHER_ONLY", "1")
     state = deepcopy(DEFAULT_STATE)
-    run = {"sources": []}
+    run: dict = {"sources": []}
     source.run_extreme_signals(state, run, [], {}, {})
     assert calls == ["station"]
     row = run["sources"][0]
@@ -87,7 +96,7 @@ def test_explicit_forecast_only_provider_skips_without_inventing_a_station_fallb
     monkeypatch.setenv("THEHEAT_OBSERVED_WEATHER_ONLY", "1")
     state = deepcopy(DEFAULT_STATE)
     before = deepcopy(state)
-    run = {"sources": []}
+    run: dict = {"sources": []}
     source.run_extreme_signals(state, run, [], {}, {})
     row = run["sources"][0]
     assert row["status"] == "skipped" and row["observed"] == row["promoted"] == 0
@@ -106,6 +115,6 @@ def test_ghcn_only_configuration_uses_its_existing_source_call(monkeypatch):
     monkeypatch.setattr(source, "_verified_ghcn_signals", stations)
     monkeypatch.setenv("THEHEAT_SIGNALS_PROVIDER", "ghcn")
     monkeypatch.setenv("THEHEAT_OBSERVED_WEATHER_ONLY", "1")
-    run = {"sources": []}
+    run: dict = {"sources": []}
     source.run_extreme_signals(deepcopy(DEFAULT_STATE), run, [], {}, {})
     assert calls == ["station"] and run["sources"][0]["status"] == "success"
