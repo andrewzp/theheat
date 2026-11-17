@@ -1,3 +1,7 @@
+## 0.9.109.115
+
+- Remove only the redundant terminal NOAA METAR credit from qualified airport-pair body copy before appending its exact source URL and running required checks. Preserve measurement qualifiers, the hard automatic length cap, original model responses and deterministic retained derivations; stale or disabled sources still cannot generate, gain approval or send.
+
 ## 0.9.109.114
 
 - Bound ordinary factual, critic and news model outputs explicitly. Retain usage and hold incomplete or blocked Google responses before interpreting their text, including valid-looking JSON stopped at the token limit. Preserve finite-trial wire limits, shared-check limits, runtime models and existing call budgets; these per-request bounds are not a monthly spending ceiling.

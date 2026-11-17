@@ -14,6 +14,12 @@ checks, final safety and every unknown-delivery fence still apply first.
   `dashboard/lib/automatic-text.js`). A longer draft is saved complete for manual
   review with `automatic_text_hold`. It is never truncated. The cap is checked at
   both arming paths, at the dashboard `auto_approve` route and again before send.
+- **Airport source credit.** For a structurally qualified observed airport pair,
+  the exact optional terminal `(NOAA METAR observations)` credit is removed before
+  its full source URL is appended and required checks run. All airport names,
+  countries, readings, gap and UTC time/date remain. Other qualifiers and uncertain
+  patterns stay untouched. Formatting can be reproduced from retained evidence;
+  it does not establish currentness, activate a source or grant approval.
 - **Text only.** Automatic copy that refers to a chart, map, image or table is
   held (`automatic_text_implies_media`). Automatic sends never attach an image,
   including the legacy Hot10 card.
