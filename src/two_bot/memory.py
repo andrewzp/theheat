@@ -281,6 +281,9 @@ def build_memory_slice(state: BotState, bundle: StoryBundle, *, now: datetime | 
     from src.data.places import country_key
     bound = "physical_episode" in bundle.raw_signal_dump
     source_scoped = _gdacs_memory_scoped(bundle)
+    # A thermal pixel/cell/day is an observation identity, not proof of one
+    # physical fire or its duration. Resolved physical bindings remain separate.
+    thermal_observation = bundle.signal_kind == "fire" and not bound
     source_identity = _gdacs_memory_identity(bundle) if not bound else None
     if bound:
         from src.storage.physical_events import EpisodeContext
@@ -291,7 +294,7 @@ def build_memory_slice(state: BotState, bundle: StoryBundle, *, now: datetime | 
         raise ValueError("unexpected_episode_context")
     memory = _memory(state)
     country = _country_for(bundle)
-    event_keys = set() if bound or source_scoped else {
+    event_keys = set() if bound or source_scoped or thermal_observation else {
         key for key in (_event_base(bundle.event_id), _event_series_key(bundle))
         if key
     }
@@ -325,7 +328,7 @@ def build_memory_slice(state: BotState, bundle: StoryBundle, *, now: datetime | 
                 ongoing_event = row
                 break
             continue
-        if row.get("physical_episode") is not None:
+        if row.get("physical_episode") is not None or thermal_observation:
             continue
         if source_scoped:
             if source_identity is not None and _memory_identity(row.get(_SOURCE_MEMORY_FIELD)) == source_identity:
@@ -486,9 +489,12 @@ def record_shipped(
     if writer.angle_chosen:
         _dedup_append(memory.setdefault("used_framings", []), writer.angle_chosen)
 
-    if binding is None and _gdacs_memory_scoped(bundle) and source_identity is None:
+    if binding is None and (bundle.signal_kind == "fire" or (
+        _gdacs_memory_scoped(bundle) and source_identity is None
+    )):
         # The published row remains in general history. Missing source identity
-        # cannot create ongoing-event authority via display country/name.
+        # cannot create ongoing-event authority via display country/name, and a
+        # thermal observation cannot create a physical fire/duration authority.
         return
 
     events = memory.setdefault("ongoing_events", [])

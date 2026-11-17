@@ -39,7 +39,7 @@ def test_build_memory_slice_filters_by_country():
     assert len(memory_slice.recent_tweets_same_country) == 2
 
 
-def test_build_memory_slice_exposes_recent_published_tweets_for_event_base():
+def test_nonthermal_memory_slice_exposes_recent_published_tweets_for_event_base():
     state = _state_with_memory(
         shipped_tweets=[
             {
@@ -63,7 +63,13 @@ def test_build_memory_slice_exposes_recent_published_tweets_for_event_base():
             "created_at": "2026-05-03T02:00:00Z",
         }
     ]
-    bundle = _bundle(event_id="gdacs_TC_1001270_tier5", country="US")
+    # Generic memory projection only, not a source-qualified cyclone packet.
+    bundle = StoryBundle(
+        signal_kind="cyclone_tier_crossing", where="Atlantic", when="2026-05-03",
+        event_id="gdacs_TC_1001270_tier5", headline_metric={},
+        current_facts=[{"label": "country", "value": "US"}],
+        historical_context={}, raw_signal_dump={},
+    )
 
     memory_slice = build_memory_slice(state, bundle)
 
@@ -117,7 +123,7 @@ def test_record_published_draft_writes_memory_from_persisted_two_bot_metadata():
     assert "named_storm_scale" in memory["used_framings"]
 
 
-def test_build_memory_slice_limits_global_shipped_texts_but_keeps_same_event_context():
+def test_build_memory_slice_limits_general_history_without_claiming_thermal_continuity():
     rows = []
     for i in range(30):
         rows.append(
@@ -140,7 +146,8 @@ def test_build_memory_slice_limits_global_shipped_texts_but_keeps_same_event_con
     assert memory_slice.recent_tweets_same_country == [
         f"published tweet {i}" for i in range(5)
     ]
-    assert memory_slice.recent_tweets_same_event == ["published tweet 25"]
+    assert memory_slice.recent_tweets_same_event == []
+    assert memory_slice.ongoing_event is None
 
 
 def test_memory_slice_groups_severe_weather_by_event_type_and_area():
@@ -205,7 +212,7 @@ def test_record_shipped_uses_extracted_claims_not_writer_self_report():
     assert "2002 spider-man" in state["memory"]["used_era_anchors"]
 
 
-def test_record_shipped_updates_ongoing_event():
+def test_record_shipped_keeps_thermal_publication_without_physical_ongoing_event():
     state = _empty_memory_state()
     writer = WriterResult(
         tweet="Mali fire is 361 MW.",
@@ -218,10 +225,10 @@ def test_record_shipped_updates_ongoing_event():
 
     record_shipped(state, _bundle(event_id="fire_1"), writer, [])
 
-    event = state["memory"]["ongoing_events"][0]
-    assert event["event_id"] == "fire_1"
-    assert event["region"] == "Mali"
-    assert event["days_running"] == 1
+    assert state["memory"]["ongoing_events"] == []
+    published = state["memory"]["shipped_tweets"][0]
+    assert published["event_id"] == "fire_1"
+    assert published["tweet_text"] == writer.tweet
 
 
 def test_is_reuse_normalized_substring():
