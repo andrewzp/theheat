@@ -5,6 +5,7 @@ from __future__ import annotations
 # ruff: noqa: F403,F405
 from src.data import twitter_metrics
 from src.data.metric_history import PUBLIC_FIELDS, append_sample
+from src.data.twitter_metrics import MetricsResourceLimitError, configured_resource_limit
 from src.orchestrator.common import *
 
 
@@ -43,6 +44,7 @@ def _metric_source_seen_today(bot_state: BotState, now: datetime) -> bool:
 
 
 def _metric_candidate_tweet_ids(bot_state: BotState, now: datetime) -> list[str]:
+    limit = configured_resource_limit() or _METRICS_MAX_IDS
     cutoff = now - timedelta(days=_METRICS_LOOKBACK_DAYS)
     candidates: list[tuple[datetime, str]] = []
 
@@ -72,7 +74,7 @@ def _metric_candidate_tweet_ids(bot_state: BotState, now: datetime) -> list[str]
             continue
         seen.add(tweet_id)
         ids.append(tweet_id)
-        if len(ids) >= _METRICS_MAX_IDS:
+        if len(ids) >= limit:
             break
     return ids
 
@@ -96,7 +98,14 @@ def _run_twitter_metrics(
         )
         return
 
-    tweet_ids = _metric_candidate_tweet_ids(bot_state, sample_time)
+    try:
+        tweet_ids = _metric_candidate_tweet_ids(bot_state, sample_time)
+    except MetricsResourceLimitError as exc:
+        _record_source_run(
+            current_run, bot_state, _METRICS_SOURCE, metrics_start,
+            status="failed", observed=0, error=str(exc),
+        )
+        return
     if not tweet_ids:
         _record_source_run(
             current_run, bot_state, _METRICS_SOURCE, metrics_start,
