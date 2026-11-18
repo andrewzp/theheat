@@ -3,6 +3,7 @@
 from copy import deepcopy
 from dataclasses import replace
 from datetime import timedelta
+import json
 import socket
 
 from freezegun import freeze_time
@@ -304,3 +305,36 @@ def test_invalid_clock_cannot_mutate_state(pending, clock):
     with pytest.raises(ValueError, match="aware UTC"):
         sweep(state, now=clock)
     assert state == before
+
+
+@pytest.mark.parametrize("reverse", [True, False])
+@pytest.mark.parametrize("later_witness", [None, "unknown", "receipt"])
+def test_existing_state_reconciliation_preserves_retirement_or_later_send_evidence(
+    pending, reverse, later_witness
+):
+    from src.editorial.revisions import has_unresolved_publish
+    from src.state import _merge_state
+
+    state, draft = pending
+    prior = json.loads(json.dumps(state))
+    assert sweep(state) == 1
+    if later_witness == "unknown":
+        prior["drafts"][0].update(publish_outcome="unknown", autoship_attempted=True)
+    elif later_witness == "receipt":
+        prior["drafts"][0].update(tweet_id="invented-receipt", posted_at=NOW.isoformat())
+    first, second = (prior, state) if reverse else (state, prior)
+    with freeze_time(NOW + timedelta(hours=3)):
+        result = _merge_state(first, second)
+    retained = next(d for d in result["drafts"] if d["id"] == draft["id"])
+    assert retained["text"] == draft["text"]
+    assert retained["review_context"] == draft["review_context"]
+    assert not retained.get("approval_binding")
+    if later_witness == "unknown":
+        assert has_unresolved_publish(retained, result)
+    elif later_witness == "receipt":
+        assert retained["tweet_id"] == "invented-receipt"
+        assert retained["status"] == "posted"
+    else:
+        assert retained["status"] == "rejected"
+        assert retained["approval_mode"] == "manual"
+        assert retained["decision_revision"] == draft["decision_revision"]
