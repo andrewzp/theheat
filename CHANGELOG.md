@@ -1,3 +1,8 @@
+## 0.9.109.127
+
+- Show retained source facts for the existing directional draft/source kind aliases, including GHCN all-time records. Preserve event binding, display bounds and review/approval rules.
+- Describe an empty review summary without implying that facts in the other source panels are missing.
+
 ## 0.9.109.126
 
 - Retire intact, unattempted airport-observation drafts after their existing source window ends, before pending type caps. Preserve text, evidence and history while revoking obsolete approval; keep receipt, attempt and conflict witnesses for reconciliation.

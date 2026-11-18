@@ -1,4 +1,5 @@
 // Bounded display projection only. Model extraction is not a source warrant.
+import { operatorClaimKindMatches } from "./operator-claim-reference-input.js"
 const object = value => value !== null && typeof value === "object" && !Array.isArray(value)
 const text = (value, limit) => typeof value === "string" && value.trim().length > 0
   && value.length <= limit && !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/u.test(value)
@@ -77,7 +78,7 @@ export function projectSavedClaimEvidence(draft, { identity, analysisMatches }) 
   if (bundle != null) {
     const facts = displayFacts(bundle)
     const valid = object(bundle) && text(draft.event_id, 512) && draft.event_id === bundle.event_id
-      && text(draft.type, 80) && draft.type === bundle.signal_kind
+      && text(draft.type, 80) && (draft.type === bundle.signal_kind || operatorClaimKindMatches(draft.type, bundle.signal_kind))
       && text(bundle.where, 512) && text(bundle.when, 128)
       && validFacts(facts)
     if (valid) {
