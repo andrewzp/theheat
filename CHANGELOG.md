@@ -1,3 +1,8 @@
+## 0.9.109.123
+
+- Keep identified GHCN records inside source validation when their legacy draft type survives renamed event/signal fields and erased comparator hints. Preserve unrelated grid sources and non-record GHCN families, and refuse malformed records before safety or delivery.
+- Rebuild station-record comparison provenance from the producer's retained accepted daily high/low set. Verify every retained reading against the exact current archive; preserve full comparator equality and refuse unavailable original context.
+
 ## 0.9.109.122
 
 - Recheck individual GHCN station-record evidence against the current bounded NOAA archive at publication boundaries. Refuse changed source bytes, rejected readings, mismatched comparators and incomplete or relabelled warrants without granting review, rewriting copy or retrying unknown deliveries.

@@ -70,7 +70,9 @@ def _family(draft, payload):
                         for value in (draft.get("event_id"), payload.get("event_id") if isinstance(payload, dict) else None,
                                       raw.get("event_id") if isinstance(raw, dict) else None))
     signal = payload.get("signal_kind") if isinstance(payload, dict) else None
+    legacy_type = draft.get("type")
     record = (station_event or isinstance(signal, str) and signal in _SIGNALS
+              or isinstance(legacy_type, str) and legacy_type in _TYPES.values()
               or isinstance(raw, dict) and any(key in raw for key in ("new_temp_c", "old_record_c"))
               or isinstance(history, dict) and any(key in history for key in ("prior_record_c", "prior_record_year")))
     return bool(station_event or compact or ghcn and record)
@@ -153,7 +155,6 @@ def _read(station_id):
 
 def _current(bundle, evidence, baseline):
     from src.data import ghcn
-    from src.data.ghcn_format import DailyObs
     from src.data.temperature_evidence import fingerprint
 
     station_id = evidence["station_id"]
@@ -170,9 +171,25 @@ def _current(bundle, evidence, baseline):
     current = row.to_daily_obs() if row is not None else None
     _require(current is not None and current.value_c == bundle.raw_signal_dump["new_temp_c"],
              "ghcn_current_observation_changed")
-    original = DailyObs(station_id, day, element, bundle.raw_signal_dump["new_temp_c"])
-    thresholds, accepted = ghcn._thresholds_from_verified_archive(station_id, [original], snapshot)
-    _require(len(accepted) == 1 and fingerprint(thresholds.provenance) == fingerprint(baseline),
+    # The real producer can reconcile both daily extremes before choosing one
+    # story. Replay that retained accepted set; rebuilding only the claimed
+    # element changes candidate_accepted flags and the complete provenance hash.
+    variables = evidence["variables"]
+    _require(isinstance(variables, dict) and element in variables
+             and variables.keys() <= {"TMAX", "TMIN"}, "ghcn_current_observation_changed")
+    observations = []
+    for selected in sorted(variables):
+        source_row = snapshot["records"].get((day, selected))
+        observed = source_row.to_daily_obs() if source_row is not None else None
+        if observed is None:
+            raise SourceHeld("ghcn_current_observation_changed")
+        expected = {"value_c": observed.value_c, "mflag": observed.mflag, "qflag": observed.qflag,
+                    "sflag": observed.sflag, "observation_time": observed.observation_time,
+                    "source_payload_sha256": snapshot["source_revision"]}
+        _require(fingerprint(variables[selected]) == fingerprint(expected), "ghcn_current_observation_changed")
+        observations.append(observed)
+    thresholds, accepted = ghcn._thresholds_from_verified_archive(station_id, observations, snapshot)
+    _require(len(accepted) == len(observations) and fingerprint(thresholds.provenance) == fingerprint(baseline),
              "ghcn_current_comparator_changed")
 
 
