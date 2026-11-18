@@ -49,6 +49,53 @@ from src.two_bot.types import CriticResult, StoryBundle
 JSON_PARSE_RETRY_BUDGET = 1
 
 
+def _expired_unsent_airport(draft: dict, state: BotState, now: datetime) -> bool:
+    """Omit only qualified, naturally expired private copy with no possible send.
+
+    A held attempt deliberately stays pending for the operator. That does not
+    make it competing publishable inventory after its observation window ends.
+    This read-only distinction never retires it or grants another draft approval.
+    """
+    from src.data import awc_observed as awc
+
+    if draft.get("type") != awc.KIND or draft.get("publish_outcome") != "not_sent":
+        return False
+    if (draft.get("tweet_id") is not None
+            or any(key in draft for key in ("posted_at", "published_revision", "publication_observations",
+                                            "attempt_conflicts", "revision_conflicts"))):
+        return False
+    ledger = state.get("publish_ledger", {})
+    posted = state.get("posted_events", [])
+    if not isinstance(ledger, dict) or not isinstance(posted, list) or draft.get("event_id") in posted:
+        return False
+    # Check both historical ledger keys. Explicit not_sent on the draft cannot
+    # erase a contradictory or malformed retained attempt/receipt.
+    for key in (draft.get("event_id"), draft.get("id")):
+        if not isinstance(key, str) or not key:
+            return False
+        if key in ledger:
+            row = ledger[key]
+            if (not isinstance(row, dict) or row.get("phase") != "not_sent"
+                    or row.get("tweet_id") is not None or row.get("attempt_conflicts", []) != []
+                    or any(field in row for field in ("confirmed_at", "posted_at", "published_revision",
+                                                      "publication_observations", "revision_conflicts"))):
+                return False
+    try:
+        bundle = draft["review_context"]["two_bot"]["bundle"]
+        if bundle["event_id"] != draft["event_id"] or bundle["signal_kind"] != awc.KIND:
+            return False
+        captured = datetime.fromisoformat(bundle["raw_signal_dump"]["evidence"]["retrieved_at"].replace("Z", "+00:00"))
+        if captured > now:
+            return False
+        # A stale/malformed packet isn't proof of natural expiry. Audit the
+        # exact retained source at capture, with no source read or flag bypass.
+        evidence = awc.validate_bundle(bundle, now=captured)
+        target = datetime.fromisoformat(evidence["points"][0]["valid_time"].replace("Z", "+00:00"))
+        return now - target > awc.MAX_AGE
+    except (KeyError, IndexError, TypeError, ValueError, AttributeError):
+        return False
+
+
 def _collect_pending_today(state: BotState, *, exclude_event_id: str | None = None,
                            today: str | None = None) -> list[dict]:
     """Pending drafts created since UTC midnight, freshest first.
@@ -62,7 +109,8 @@ def _collect_pending_today(state: BotState, *, exclude_event_id: str | None = No
     """
 
     drafts = state.get("drafts", [])
-    today = today or datetime.now(UTC).date().isoformat()
+    now = datetime.now(UTC)
+    today = today or now.date().isoformat()
     pending_today: list[dict] = []
     for draft in drafts:
         if not isinstance(draft, dict):
@@ -73,6 +121,8 @@ def _collect_pending_today(state: BotState, *, exclude_event_id: str | None = No
         if not isinstance(created_at, str) or not created_at.startswith(today):
             continue
         if exclude_event_id and draft.get("event_id") == exclude_event_id:
+            continue
+        if _expired_unsent_airport(draft, state, now):
             continue
         pending_today.append(draft)
     # Most recent first — the critic should see the freshest sibling

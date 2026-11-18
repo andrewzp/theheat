@@ -1,3 +1,8 @@
+## 0.9.109.139
+
+- Keep qualified, naturally expired airport drafts with explicit never-sent outcomes out of the critic's competing pending excerpts. Retain uncertain deliveries, current drafts and all source or receipt contradictions.
+- Preserve saved drafts and their histories, required critic verdicts, request limits and publication checks. No expired draft is retired, approved or retried by this read-only context filter.
+
 ## 0.9.109.138
 
 - Keep prior NIFC incident-report publication context across size-tier candidate changes using the audited official identifier and its identifier namespace. Preserve exact-candidate publication history without inferring physical continuity, fire spread, duration or growth rate.
