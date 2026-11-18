@@ -1,3 +1,8 @@
+## 0.9.109.130
+
+- Match rainfall nomination details to the durable source-health serializer's omitted-zero representation. Require explicit source-row counts, matching collection time/status and all existing nomination checks; missing positive or malformed values remain unavailable.
+- Exercise the actual telemetry and durable serializer through the Sources reader and view, including zero- and positive-count cases.
+
 ## 0.9.109.129
 
 - Show retained rainfall report nomination counts and fixed hold reasons in the Sources page, distinguishing input rows, unique events, nominations and queued candidates from saved drafts or posts.

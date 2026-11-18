@@ -1,0 +1,229 @@
+{
+  "empty": {
+    "source_health": {
+      "gpm_imerg": {
+        "success": 1,
+        "degraded": 0,
+        "failed": 0,
+        "skipped": 0,
+        "total_duration_ms": 0,
+        "avg_duration_ms": null,
+        "max_duration_ms": 0,
+        "total_observed": 0,
+        "total_promoted": 0,
+        "total_triaged_in": 0,
+        "total_triaged_out": 0,
+        "total_writer_attempted": 0,
+        "total_drafted": 0,
+        "last_success_ts": "2026-11-16T17:00:00Z",
+        "last_error": null,
+        "last_error_ts": null,
+        "runs": [
+          {
+            "ts": "2026-11-16T17:00:00Z",
+            "status": "success",
+            "error_class": "none"
+          }
+        ]
+      }
+    },
+    "run_history": [
+      {
+        "id": "invented-durable-empty",
+        "started_at": "2026-11-16T16:59:00Z",
+        "ended_at": "2026-11-16T17:01:00Z",
+        "sources": [
+          {
+            "source": "gpm_imerg",
+            "status": "success",
+            "duration_ms": 0,
+            "observed": 0,
+            "promoted": 0,
+            "triaged_in": 0,
+            "triaged_out": 0,
+            "writer_attempted": 0,
+            "drafted": 0,
+            "error": null,
+            "note": null,
+            "details": {
+              "rainfall_observed_report": {
+                "nomination": {
+                  "schema": "rainfall-nomination-counts-v1",
+                  "input_rows": 0,
+                  "untyped_rows": 0,
+                  "identity_unavailable_rows": 0,
+                  "identity_conflict_rows": 0,
+                  "qualification_held_rows": 0,
+                  "history_held_rows": 0,
+                  "duplicate_qualified_rows": 0,
+                  "qualification_holds": {},
+                  "qualified_events": 0,
+                  "nominated_events": 0,
+                  "nomination_cap_excluded": 0,
+                  "scope": "Input row dispositions and unique event nominations; not coverage or source-truth validation."
+                },
+                "status": "no_qualified_report",
+                "nominated": 0,
+                "queued": 0
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "drafts": []
+  },
+  "range": {
+    "source_health": {
+      "gpm_imerg": {
+        "success": 1,
+        "degraded": 0,
+        "failed": 0,
+        "skipped": 0,
+        "total_duration_ms": 0,
+        "avg_duration_ms": null,
+        "max_duration_ms": 0,
+        "total_observed": 1,
+        "total_promoted": 0,
+        "total_triaged_in": 0,
+        "total_triaged_out": 0,
+        "total_writer_attempted": 0,
+        "total_drafted": 0,
+        "last_success_ts": "2026-11-16T17:00:00Z",
+        "last_error": null,
+        "last_error_ts": null,
+        "runs": [
+          {
+            "ts": "2026-11-16T17:00:00Z",
+            "status": "success",
+            "error_class": "none",
+            "observed": 1
+          }
+        ]
+      }
+    },
+    "run_history": [
+      {
+        "id": "invented-durable-range",
+        "started_at": "2026-11-16T16:59:00Z",
+        "ended_at": "2026-11-16T17:01:00Z",
+        "sources": [
+          {
+            "source": "gpm_imerg",
+            "status": "success",
+            "duration_ms": 0,
+            "observed": 1,
+            "promoted": 0,
+            "triaged_in": 0,
+            "triaged_out": 0,
+            "writer_attempted": 0,
+            "drafted": 0,
+            "error": null,
+            "note": null,
+            "details": {
+              "rainfall_observed_report": {
+                "nomination": {
+                  "schema": "rainfall-nomination-counts-v1",
+                  "input_rows": 1,
+                  "untyped_rows": 0,
+                  "identity_unavailable_rows": 0,
+                  "identity_conflict_rows": 0,
+                  "qualification_held_rows": 1,
+                  "history_held_rows": 0,
+                  "duplicate_qualified_rows": 0,
+                  "qualification_holds": {
+                    "rainfall_outside_automatic_range": 1
+                  },
+                  "qualified_events": 0,
+                  "nominated_events": 0,
+                  "nomination_cap_excluded": 0,
+                  "scope": "Input row dispositions and unique event nominations; not coverage or source-truth validation."
+                },
+                "status": "no_qualified_report",
+                "nominated": 0,
+                "queued": 0
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "drafts": []
+  },
+  "queued": {
+    "source_health": {
+      "gpm_imerg": {
+        "success": 1,
+        "degraded": 0,
+        "failed": 0,
+        "skipped": 0,
+        "total_duration_ms": 0,
+        "avg_duration_ms": null,
+        "max_duration_ms": 0,
+        "total_observed": 1,
+        "total_promoted": 1,
+        "total_triaged_in": 0,
+        "total_triaged_out": 0,
+        "total_writer_attempted": 0,
+        "total_drafted": 0,
+        "last_success_ts": "2026-11-16T17:00:00Z",
+        "last_error": null,
+        "last_error_ts": null,
+        "runs": [
+          {
+            "ts": "2026-11-16T17:00:00Z",
+            "status": "success",
+            "error_class": "none",
+            "observed": 1,
+            "promoted": 1
+          }
+        ]
+      }
+    },
+    "run_history": [
+      {
+        "id": "invented-durable-queued",
+        "started_at": "2026-11-16T16:59:00Z",
+        "ended_at": "2026-11-16T17:01:00Z",
+        "sources": [
+          {
+            "source": "gpm_imerg",
+            "status": "success",
+            "duration_ms": 0,
+            "observed": 1,
+            "promoted": 1,
+            "triaged_in": 0,
+            "triaged_out": 0,
+            "writer_attempted": 0,
+            "drafted": 0,
+            "error": null,
+            "note": null,
+            "details": {
+              "rainfall_observed_report": {
+                "nomination": {
+                  "schema": "rainfall-nomination-counts-v1",
+                  "input_rows": 1,
+                  "untyped_rows": 0,
+                  "identity_unavailable_rows": 0,
+                  "identity_conflict_rows": 0,
+                  "qualification_held_rows": 0,
+                  "history_held_rows": 0,
+                  "duplicate_qualified_rows": 0,
+                  "qualification_holds": {},
+                  "qualified_events": 1,
+                  "nominated_events": 1,
+                  "nomination_cap_excluded": 0,
+                  "scope": "Input row dispositions and unique event nominations; not coverage or source-truth validation."
+                },
+                "status": "nominated",
+                "nominated": 1,
+                "queued": 1
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "drafts": []
+  }
+}

@@ -433,9 +433,14 @@ function rainfallNominationIsCurrent(state, run, row, clock) {
   // health observation cannot borrow the older collection's nomination result.
   const latest = Array.isArray(health.runs) ? health.runs.at(-1) : null
   const at = timestamp(latest?.ts)
+  // state._rebuild_source_health deliberately omits zero-valued metrics. Compare
+  // that representation only against explicit zeros in the selected source row;
+  // missing positive counts and explicit malformed values remain unavailable.
+  const metricMatches = key => Number.isSafeInteger(row[key]) && row[key] >= 0
+    && (latest[key] === row[key] || (row[key] === 0 && !Object.hasOwn(latest, key)))
   return Number.isFinite(at) && at >= start && at <= end
     && latest.status === (row.status === "partial_failure" ? "degraded" : row.status)
-    && latest.observed === row.observed && latest.promoted === row.promoted
+    && metricMatches("observed") && metricMatches("promoted")
 }
 
 export function buildSourceHealthPayload(state, { runsLimit = 20, asOf = new Date().toISOString() } = {}) {
