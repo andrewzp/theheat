@@ -1,3 +1,8 @@
+## 0.9.109.138
+
+- Keep prior NIFC incident-report publication context across size-tier candidate changes using the audited official identifier and its identifier namespace. Preserve exact-candidate publication history without inferring physical continuity, fire spread, duration or growth rate.
+- Retain bounded source-bound report inputs through publication snapshots and memory restore. Unverified or changed evidence establishes no report series; NIFC memory creates no physical episode row or posting authority.
+
 ## 0.9.109.137
 
 - Show saved pending approval states separately from policy route recommendations: attention required, current automatic or manual approval, and unresolved sends. Missing or inconsistent evidence shows unavailable.
