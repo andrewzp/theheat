@@ -11,6 +11,78 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-11-18 — Daily corpus grading (1 fresh draft)
+
+**Context:** Gist read via git-clone path (success; gist HEAD Nov 18 14:38Z). 1 pending, fresh:
+`draft_20261118_143656_56` (`observed_metar_contrast`, created Nov 18 14:36Z, <1h old at grading,
+score 80). Yesterday's Saint Louis/Yakutsk draft left the queue — rejected `awc_source_window_elapsed`.
+Three more METAR-pair drafts were created and rejected between pulls (Neiva/Yakutsk Nov 17 23:34Z,
+Mount Isa/Yakutsk Nov 18 04:44Z, Kununurra/Yakutsk Nov 18 07:18Z), all `awc_source_window_elapsed`.
+They never sat in pending at a grading pull, so they're logged below as context, not in the A-rate.
+
+**Publish path:** today's draft is `armed_auto` (`observed_airport_pair`, `can_auto_approve: true`)
+but its 14:38Z publish attempt returned `not_sent` — `post_error`: "NWS warning needs fresh source
+review: awc_current_source_unavailable". **0 of 5 METAR-pair drafts have posted.** Four aged out on
+the AWC source window; the fifth failed the current-source reread. Unless the reread recovers inside
+the window, this one goes the same way.
+
+**Staleness:** none. Observed reading, <1h old.
+
+**Grade distribution (fresh):** 0 A / 1 B / 0 C / 0 D-F. **A-rate 0% (n=1)**; bar not cleared.
+
+**Headline finding:** the writer isn't locked into a template for this type — 5 drafts, 4 different
+skeletons. Today's version puts the readings first and the gap last, which fixes yesterday's inverted
+setup→punchline. But the colon-label layout ("Sarh airport, Chad: 40°C; Yakutsk airport, Russia:
+−38°C") is still a data card, and "a 78°C airport gap" stacks nouns. Yakutsk is the cold half of all
+five pairs.
+
+### B
+**[1] Sarh / Yakutsk observed_metar_contrast (score 80)** — "Sarh airport, Chad: 40°C; Yakutsk
+airport, Russia: −38°C — a 78°C airport gap at 14:00 UTC, 18 Nov." + source URL.
+- Violation: yes — 40°C and −38°C at the same minute.
+- Benign: yes — no adjectives, no record claim, scoped to two observations.
+- Setup→punchline: correct this time. Readings set up, the gap lands after the dash.
+- Mechanic: deadpan juxtaposition / pure data delivery. Wodehouse-clean: exact figures, no restate,
+  no math-out-loud beyond the single derived gap.
+- Caps: "airport" three times (twice in labels, once as an adjective on "gap"); "airport gap" is a
+  noun stack that reads like a field name. Colon-label + semicolon format is a spreadsheet row. No
+  close beyond the gap — for this type the gap may be the right close, so P_close is weak here.
+- Best version in the set is the rejected Mount Isa draft: "Yakutsk airport (Russia) logged −36°C
+  while Mount Isa airport (Australia) hit 38°C — a 74°C gap at the same hour." Full sentence, verbs
+  ("logged"/"hit"), gap last, no repeat. That's the shape to keep for this type.
+
+### Context — METAR-pair drafts rejected between pulls (not graded into A-rate)
+| created | text skeleton | note |
+|---|---|---|
+| Nov 17 23:34Z | "74°C gap at 23:00 UTC 17 Nov: Neiva/Salas airport, Colombia 34°C; Yakutsk … −40°C — same hour, two METAR observations." | gap-first, like Saint Louis; appended scope clause |
+| Nov 18 04:44Z | "At 04:30 UTC on 18 Nov, Yakutsk airport (Russia) logged −36°C while Mount Isa airport (Australia) hit 38°C — a 74°C gap at the same hour." | sentence form; best of the five |
+| Nov 18 07:18Z | "At 07:00 UTC on 18 Nov, Yakutsk airport (Russia) read −36°C while Kununurra airport (Australia) read +39°C — a 75°C gap at the same hour (NOAA METAR)." | same as Mount Isa; "read/read" flat, "+39°C" sign prefix back |
+
+### Patterns
+1. **Telegraphic-skeleton watch (opened Nov 17): closed.** Not a fixed template — 4 skeletons in 5
+   drafts. The variance is the issue now: sentence form (Mount Isa) is clearly stronger than the
+   data-card forms, and nothing pins the writer to it.
+2. **P_event_sat +1 cycle (new subtype: fixed anchor station).** Yakutsk is the cold half of 5/5
+   METAR pairs in ~25h. Each draft is a different event_id, so dedupe doesn't see it; on the feed it
+   would read as the same tweet with the warm city swapped. Logged under P_event_sat rather than a new
+   proposal.
+3. **P_close +1 (weak).** No close past the gap. For a pure juxtaposition the gap probably is the
+   punchline; flagged so the operator can decide whether this type should be exempt.
+4. No era-anchor, political-anchor, banned-opener (P3 regex) or plant-comparison hits. No P4
+   violations. No named humor move beyond deadpan juxtaposition (P5 not observed → archived).
+
+### Followups
+- **Operator: METAR-pair publish path is 0 for 5.** Four aged out on `awc_source_window_elapsed`; today's
+  failed the current-source reread (`awc_current_source_unavailable`). Either the source window is
+  shorter than the writer→review→publish latency or the AWC reread is failing. The voice work on this
+  type doesn't matter until one posts.
+- Operator: if METAR pairs stay on, consider pinning the Mount Isa sentence shape ("A logged X while B
+  hit Y — a Z gap at the same hour") and rotating the cold anchor so Yakutsk isn't in every pair.
+- Infra (carried): `gh` token invalid — gist write, PR edit via `gh`, and `ROUTINE_BEACON` write all blocked.
+- Operator (carried): `daily-plan-current` (PR #207) still unmerged.
+
+---
+
 ## 2026-11-17 — Daily corpus grading (1 fresh draft)
 
 **Context:** Gist read via git-clone path (success). 1 pending, fresh: `draft_20261117_131754_52`
