@@ -107,7 +107,8 @@ def supply_envelope(bundles, countries, metrics):
 def parts(supply):  # noqa: F811
     rows = population(6)
     return {
-        "products": ("source_products", products.product_contract_document()),
+        # The invented October cohort predates the November provider-document review.
+        "products": ("source_products", products.product_contract_document(schema=products.LEGACY_SCHEMA)),
         "trace": ("rainfall_opportunity", _grid_trace(rows, date(2026, 6, 5), read={0, 1}, run_id="run_alerts_g11")),
         "population": ("rainfall_opportunity", opportunity_population(rows)),
         "supply": ("scientific_supply", supply_envelope(*supply)),

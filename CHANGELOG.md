@@ -1,3 +1,8 @@
+## 0.9.109.128
+
+- Add dated, product-scoped AWC and NIFC documentation to the source-contract export. Keep incomplete quota, reuse-rights and cost evidence explicit; preserve the legacy v1 export and decoder.
+- Hold provider documentation reviewed after a readiness assessment's cutoff, preserving historical unknowns and existing source, claim and activation rules.
+
 ## 0.9.109.127
 
 - Show retained source facts for the existing directional draft/source kind aliases, including GHCN all-time records. Preserve event binding, display bounds and review/approval rules.

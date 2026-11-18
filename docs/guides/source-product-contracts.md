@@ -9,7 +9,7 @@ and unit limits, provenance, any code request bound and the claim restrictions
 already in force.
 
 `product_contract_document()` returns a separate versioned export
-(`theheat.source-product-contracts/v1`). The v1 registry and its dashboard JSON
+(`theheat.source-product-contracts/v2`). The v1 registry and its dashboard JSON
 are unchanged; nothing is added to old registry rows.
 
 What the contracts do not do:
@@ -24,9 +24,11 @@ What the contracts do not do:
   scientific gates are unchanged. Each export row carries
   `restriction_enforcement`, and the unresolved products are listed in
   `unmet_criteria`.
-- Provider cadence, quota, reuse rights and cost are `null` for every product.
-  A configured collection rule is not a provider promise, and a request bound is
-  not a spending cap.
+- Provider fields are `null` where documentation remains unknown. Exact named
+  AWC and NIFC legs carry dated primary-document facts with source URLs and snapshot
+  hashes. A `partial` fact stays in `unmet_criteria`; only its exact documented
+  product/field can leave that list. Costs remain unknown. A configured collection
+  rule is not a provider promise, and a request bound is not a spending cap.
 - One collector is at most one source, however many products it reads. Legs that
   reuse one upstream product through different collectors count once. The
   leaderboard and the temperature alerts both read the same best-match daily
@@ -57,7 +59,7 @@ fire/drought/heat overlap, and the CRW DHW / regional SST anomaly pairing. The
 pairing keeps each component's own date and footprint; a configured association
 is not a shared footprint.
 
-`decode_product_contract_document()` validates a detached export. A matching
+`decode_product_contract_document()` validates a detached v1 or v2 export. A matching
 digest only binds bytes. The rows must decode to the supported finite inventory
 with valid kinds, parents, health keys, restrictions and scoped enforcement.
 `missing_work`, `unmet_criteria` and the upstream groups are recomputed from those
@@ -67,6 +69,33 @@ refused, never coerced.
 Retired and unresolved legs stay listed in `missing_work` with their disposition.
 Importing the module or building the export reads no adapter modules, network,
 environment, credentials or files.
+
+## Dated provider documentation
+
+The reviewed facts are scoped to four legs, not whole providers:
+
+| Product | Documented cadence | Remaining limits |
+| --- | --- | --- |
+| AWC METAR cache and historical API | Cache every minute; individual reports usually hourly. | The API's 100 requests/minute does not establish cache quotas or guaranteed capacity. |
+| AWC station catalogue | Cache daily. | Cache quota unknown; this reference is not a temperature reading. |
+| NIFC WFIGS current incidents, including the newsworthiness leg | IRWIN synchronization every five minutes; fall-off hourly. | The declared 2,000-row default is not a rate quota, census or measurement clock; other query modes remain unqualified. |
+
+Sources: [AWC API documentation](https://aviationweather.gov/data/api/) and the
+[exact NIFC item metadata](https://www.arcgis.com/sharing/rest/content/items/4181a117dc9e43db8598533e29972015?f=pjson),
+with its linked layer. Both NIFC legs share one upstream product.
+
+Reuse evidence remains partial. The [NWS policy](https://www.weather.gov/disclaimer)
+distinguishes its own material from third-party inputs; it does not clear every
+international source or map. NIFC's item publishes a disclaimer without identifying
+an affirmative license for every contribution. Neither finding grants a claim,
+activation, current access, availability or zero-cost assurance.
+
+`checked_at` records the UTC documentation review time, not a provider update or
+weather observation. The readiness consumer holds a v2 component when that review
+postdates its assessment cutoff. An explicitly requested legacy export
+(`schema=LEGACY_SCHEMA`) preserves v1's all-unknown fields and original summaries;
+decoding it does not insert later facts. Unknown schemas, altered facts/references
+and falsely cleared gaps are refused even if their digest is recomputed.
 
 When a collector gains, loses or renames a leg, or a check changes scope, update
 its rows and run `tests/test_source_product_contracts.py`. The tests check every
