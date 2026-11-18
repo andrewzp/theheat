@@ -49,6 +49,9 @@ def _payload(draft):
 
 def _family(draft, payload):
     """Do not let missing/relabeled record evidence evade the source boundary."""
+    from src.two_bot.ghcn_readable_warrant import has_readable_marker
+    if has_readable_marker(payload):
+        return True
     raw = payload.get("raw_signal_dump") if isinstance(payload, dict) else None
     evidence = raw.get("evidence") if isinstance(raw, dict) else None
     history = payload.get("historical_context") if isinstance(payload, dict) else None
@@ -82,6 +85,9 @@ def _retained(draft, payload, clock):
     from src.two_bot.evidence_contract import audit_story_bundle
 
     _require(isinstance(payload, dict), "ghcn_retained_source_invalid")
+    from src.two_bot.ghcn_readable_warrant import has_readable_marker, materialize_tree
+    if has_readable_marker(payload):
+        payload = materialize_tree(payload)
     required = {"signal_kind", "where", "when", "event_id", "headline_metric", "current_facts",
                 "historical_context", "raw_signal_dump"}
     _require(required <= payload.keys()

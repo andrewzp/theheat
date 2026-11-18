@@ -1620,6 +1620,32 @@ def reserve_scheduled_alerts_catchup(*, window: timedelta) -> bool:
         return False
 
 
+def _decode_gist_state_json(content: str) -> dict:
+    """Preserve legacy parsing, but never discard ambiguity in readable warrants.
+
+    Object pairs are examined before json.loads can pick a duplicate winner.
+    This deliberately raises StateReadError even for a non-strict read: an
+    ambiguous authority must not turn into fresh state that a caller can write.
+    """
+    duplicate = readable = False
+    reserved = {"wire_profile", "calendar_table", "same_document_baseline", "full_baseline_sha256"}
+
+    def pairs(items):
+        nonlocal duplicate, readable
+        result = {}
+        for key, value in items:
+            duplicate |= key in result
+            readable |= key in reserved or (key == "schema_version" and isinstance(value, str)
+                                            and value.startswith("theheat-ghcn-"))
+            result[key] = value
+        return result
+
+    value = json.loads(content, object_pairs_hook=pairs)
+    if duplicate and readable:
+        raise StateReadError("Gist state contains ambiguous readable station evidence")
+    return value
+
+
 def _read_gist_state(*, strict: bool = False, route_sink: list | None = None) -> BotState:
     """Read state.json; ``route_sink`` (P00c) receives the route file entry of the SAME GET.
 
@@ -1666,7 +1692,7 @@ def _read_gist_state(*, strict: bool = False, route_sink: list | None = None) ->
             content = raw_resp.text
         else:
             content = file_meta["content"]
-        return _normalize_state(json.loads(content))
+        return _normalize_state(_decode_gist_state_json(content))
     except requests.RequestException as exc:
         if strict:
             raise StateReadError(f"Failed to read gist state: {exc}") from exc

@@ -8,6 +8,7 @@ import { NhcAdvisoryEvidence } from "./NhcAdvisoryEvidence.js"
 import { ReportStatementEvidence } from "./ReportStatementEvidence.js"
 import { EpisodeJoins } from "./EpisodeJoins.js"
 import { ClaimEvidence } from "./ClaimEvidence.js"
+import { GhcnReadableWarrant } from "./GhcnReadableWarrant.js"
 import { OperatorClaimReferenceHistory, OperatorClaimReferences } from "./OperatorClaimReferences.js"
 import { RECOVERY_NOTE, publicationAttemptLines } from "../../lib/publication-recovery.js"
 import { operatorReferencesForDisplay } from "../../lib/operator-claim-reference-input.js"
@@ -278,6 +279,7 @@ export function DraftWorkbench({
                 )}
 
                 <ClaimEvidence key={`claims:${reviewKey}:${editingId === selectedDraft.id}`} draft={selectedDraft} editing={editingId === selectedDraft.id} sourceHold={controls.sourceHold} />
+                <GhcnReadableWarrant key={`ghcn-warrant:${reviewKey}`} draft={selectedDraft} />
                 <OperatorClaimReferences key={`operator-references:${reviewKey}:${referenceEditKey}:${editingId === selectedDraft.id}:${editText}`}
                   draft={selectedDraft} text={editingId === selectedDraft.id ? editText : selectedDraft.text}
                   editing={editingId === selectedDraft.id} items={referenceItems}

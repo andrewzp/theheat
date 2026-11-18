@@ -10,6 +10,7 @@ from copy import deepcopy
 from dataclasses import asdict, fields
 import json
 import re
+from typing import cast
 
 from src.editorial.policy import source_manifest, valid_policy
 from src.editorial.revisions import fingerprint, text_hash
@@ -48,6 +49,9 @@ def has_ghcn_reference(value):
 def retained_bundle(value: dict, *, resolved=None) -> StoryBundle:
     """Refuse silent constructor/default/projection repair of retained evidence."""
     _bounded(value, MAX_INPUT_BYTES)
+    from src.two_bot.ghcn_readable_warrant import has_readable_marker, retained_bundle as readable_bundle
+    if has_readable_marker(value):
+        return cast(StoryBundle, readable_bundle(value))
     if has_ghcn_reference(value):
         from src.two_bot.ghcn_claim_view import ResolvedClaim
         _require(type(resolved) is ResolvedClaim, "ghcn_claim_view_requires_resolved_check_context")

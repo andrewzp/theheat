@@ -14,6 +14,7 @@ import { validGistMedia } from "../lib/gist-media.js"
 import { episodeView } from "../lib/hazard-episodes.js"
 import { boundRetainedMediaBlob, jointConfirmations } from "../lib/editor-media.js"
 import { fingerprint, initializeRevision, policy, projectDraft } from "./helpers/review-policy.js"
+import { readableDraft as readableDisplayDraft } from "./helpers/ghcn-readable.js"
 import { JOURNEY_TIMEOUT_MS, READY_PATH, options as launcherOptions, startOwned, superviseJourney, waitOwnedReady }
   from "../../scripts/operator_media_journey.mjs"
 
@@ -524,6 +525,36 @@ test("mounted operator media journey with invented API replies", {
   const sideEffects = async (journal) => (await journal()).calls.filter((call) => ["draftAct", "submitLocalCommand"].includes(call.name))
 
   try {
+    for (const width of [1280, 390, 320]) {
+      await t.test(`complete readable archive is collapsed, keyboard usable and contained at ${width}px`, () => scenario(`ghcn-readable-${width}`, {
+        drafts: [{ ...sourceDraft("readable"), type: "all_time_high", review_context: readableDisplayDraft().review_context }, previewA], selected: "readable",
+      }, async (h) => {
+        const panel = h.page.locator("details.ghcn-warrant"), summary = panel.locator("summary")
+        assert.equal(await panel.getAttribute("open"), null)
+        await summary.focus(); await h.page.keyboard.press("Enter")
+        assert.equal(await panel.evaluate(el => el.open), true)
+        const table = panel.getByRole("region", { name: "Complete retained GHCN calendar table" })
+        await h.page.keyboard.press("Tab")
+        assert.equal(await table.evaluate(el => document.activeElement === el), true)
+        assert.equal(await table.locator("thead th").count(), 9)
+        assert.equal(await table.locator("tbody tr").count(), 2)
+        assert.equal(await table.locator("tbody tr").first().getByText("—", { exact: true }).count(), 4)
+        await h.page.keyboard.press("ArrowRight")
+        if (width < 1000) await until(() => table.evaluate(el => el.scrollLeft > 0), "Keyboard scrolling did not move the retained table", 1000)
+        const layout = await h.page.evaluate(() => ({ width: innerWidth, scroll: document.documentElement.scrollWidth,
+          overflow: [...document.querySelectorAll("body *")].map(el => ({ tag: el.tagName, class: el.className,
+            right: el.getBoundingClientRect().right, width: el.getBoundingClientRect().width }))
+            .filter(el => el.right > innerWidth + 1).slice(0, 15) }))
+        assert.ok(layout.scroll <= layout.width + 1, JSON.stringify(layout))
+        await h.page.getByRole("button", { name: "Edit", exact: true }).click()
+        await h.settle()
+        assert.equal(await table.locator("tbody tr").count(), 2)
+        await h.act("cancelEditing")
+        await h.queueItem("preview-a").click()
+        assert.equal(await h.page.locator(".ghcn-warrant").count(), 0)
+        assert.deepEqual(await sideEffects(h.journal), [])
+      }, { width }))
+    }
     await t.test("late preview A cannot install over selected B; A is never displayed", () => scenario("stale-select", { drafts: previews, selected: "preview-a" }, async (h) => {
       const held = deferred()
       h.api.previews.set("preview-a", [{ status: 200, value: previewValue(previewA), hold: held }])

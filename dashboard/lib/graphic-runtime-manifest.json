@@ -1,6 +1,6 @@
 {
   "identity": {
-    "archive_sha256": "5b4529b36314245111e8bfd4e1bb3872c26a4283f35a1d2f1c6687713dd8e301",
+    "archive_sha256": "6e633bb373f99e72f043b249a1c7149fdabfd06dc78b3c4d82895e002dcfa6e9",
     "deployment_files": {
       "api/graphic_preview.py": "f7521adcbd618f4b65b2a0de30ea62aaff4cdd36f2254e9af38bf68646d361ad",
       "api/graphic_reader_status.py": "5e9685d699625a4eea9d5be884b6e266939a0ad344a2997351ba79bd114407ba",
@@ -16,7 +16,7 @@
       "src/dashboard_preview/auth.py": "eafa95e1ed18c7e993fa13e016799d9e92f0ee843fe6d3f2843adf28579a8e21",
       "src/dashboard_preview/errors.py": "db0b0536ee140453cc4aadcc8cc55be1d55e88703e749db725a1ca95ceb62018",
       "src/dashboard_preview/http.py": "dbcbf1e3b4f4f3fa4a231c6e1f80946e321c098e51f12543fee889490f9011ad",
-      "src/dashboard_preview/preview.py": "db7283bed857fe7898c6a38a72d67e2aea968482976e04e94a181f31db1a4b4b",
+      "src/dashboard_preview/preview.py": "5b9a9480dbe55c9bd438e148fd734e6ee7f7d00f4c0a9798da5799d4254680e1",
       "src/dashboard_preview/reader.py": "6cd9c00c79810a3b1ed7a107dbce9b2687b5aaa9cd761c02dcfe8de8cd888d18",
       "src/dashboard_preview/reader_status.py": "1f3d9d42dabebe1218eacd7133bd2477f58c85b53a6e2a719658846fbc5e96bb",
       "src/data/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
@@ -96,7 +96,7 @@
       "src/media/gist_media.py": "d1df9d0aace5214074598670e0a8a8c4b63a6f4bb18b218499f56bddb31b3319",
       "src/media/gist_nwps_media.py": "3387f8f0b1b7dc638de8a0da97fa7f21ceb0b0f5a6361c5d1a96d91ed817a7d1",
       "src/media/gist_published_media.py": "f9f3b23652087da499282a66fa486029bd7bc6c8da8f1b473d5fc1a724c6ddda",
-      "src/media/gist_temperature_media.py": "fd512e53889e3d3ed848b088b960dd5bc08defaee4f8f7732c66f581dd6e5920",
+      "src/media/gist_temperature_media.py": "b2882759fda08cd5e467c297c0b03d5daf56eebbe99b23b691c96ef5b1161e05",
       "src/media/hot10_graphic_adapter.py": "91e9b3812c5308513ad911a5771a420084ff2b25b70e0ad413de7d890675688e",
       "src/media/maps/NOTICE.md": "f6ebf3caca500621c4b2c9f9fe9aad802099b82a4a1c21c479daf97d29aabac0",
       "src/media/maps/manifest.json": "1af072edc46ae3252bf6cf0edb43993986de262a2840b2cd4907eb4866f970e9",
@@ -109,8 +109,9 @@
       "src/media/viirs_map_graphic_adapter.py": "657db3caef8503a4e0b9c9596bad8d28c029c3711e1d974f153fc1b60d3dd8d3",
       "src/state_schema.py": "c03acc762121b5810ef2d6bd293017af26ce57703444172a2c170a27b8729ae5",
       "src/two_bot/__init__.py": "57333e1314a97e2fc83e03db569e03b0199c67ff52fad71770853226b9a68f00",
-      "src/two_bot/evidence_contract.py": "7005ae6a54e7b521151b6957c7bdbccffa3fa1fa9f2aa07b75b7573d429a6639",
+      "src/two_bot/evidence_contract.py": "d4dd1b703e1444dd9843b384d73056de696f0d2d3eab17f0a7a2875bb2819b5a",
       "src/two_bot/ghcn_claim_contract.py": "749443ad87f4caac9726200dcc8f0e0aa3c662d5b5aee20f9b0f3dff8fa48bcc",
+      "src/two_bot/ghcn_readable_warrant.py": "f0b3fecd6350145627b80db087d8681c7a35899f76e9615d15ef385da6cf24bb",
       "src/two_bot/intern/__init__.py": "2e34d6b9975fb831edbad10ed06d66aad2e8569a29cfd4cf17784177b91205e0",
       "src/two_bot/intern/air_quality.py": "f4fc20d4c197d4f604e1fa53e43ef02b658613940863eb5f4d41e0995d6c8ff0",
       "src/two_bot/intern/marine_crw.py": "b8d624e5e1607afcb2f3a6a5b0b04ce223b87553b0c5b4665a0830d4553d9050",
@@ -120,7 +121,7 @@
       "src/two_bot/types.py": "65afc3d850c31c843bc1e7b58dcc0b13eb274969dcff657e2622641bd85239ee"
     },
     "format": "saved-source-svg-preview-v2",
-    "policy_source_sha256": "2dab5118fa2a4fe98fbb4b333a4534a9a388f72dd4f19d21e533d58f1aaa2902",
+    "policy_source_sha256": "f30129df5cf9e4ed15395927f2874aa2ffa85b655ecb5fe9a4889ddd07bbe1fc",
     "resource_sources": {
       "src/data/registry/cities.csv": "data/cities.csv",
       "src/data/registry/country_codes.json": "data/country_codes.json",
@@ -129,5 +130,5 @@
     },
     "schema_version": 1
   },
-  "runtime_sha256": "bdc95e30b7972c0bbddf88fc0044d1ecaf8aaf07c79620729658360ba7c2c27e"
+  "runtime_sha256": "c169b429fef554cab36c65a9a3edf9e4953af37f82a7416648cb5abc42688fc9"
 }

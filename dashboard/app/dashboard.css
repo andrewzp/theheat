@@ -1049,3 +1049,16 @@ h1 span { color: #666; font-weight: 400; font-size: 14px; margin-left: 8px; }
 .credential-banner-command { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .credential-banner-command code { overflow-wrap: anywhere; color: #eee; }
 .credential-banner-note { color: #888; }
+
+.ghcn-warrant { min-width: 0; max-width: 100%; display: block; }
+.ghcn-warrant > summary { cursor: pointer; overflow-wrap: anywhere; }
+.ghcn-warrant > summary:focus-visible,
+.ghcn-warrant-table:focus-visible { outline: 2px solid #ff864e; outline-offset: 3px; }
+.ghcn-warrant-table { min-width: 0; max-width: 100%; max-height: 32rem; overflow: auto; margin-top: 12px; border: 1px solid #333; border-radius: 6px; }
+.ghcn-warrant-table table { width: 100%; min-width: 58rem; border-collapse: collapse; font-size: 12px; }
+.ghcn-warrant-table caption { padding: 12px; text-align: left; color: #bbb; }
+.ghcn-warrant-table th, .ghcn-warrant-table td { padding: 9px; border-bottom: 1px solid #333; text-align: right; white-space: nowrap; }
+.ghcn-warrant-table th:first-child { text-align: left; }
+.ghcn-warrant-table thead th { position: sticky; top: 0; background: #1b1b1b; white-space: normal; overflow-wrap: anywhere; max-width: 10rem; vertical-align: top; }
+.ghcn-warrant-table tbody th { color: #eee; }
+.ghcn-warrant-digest { overflow-wrap: anywhere; }

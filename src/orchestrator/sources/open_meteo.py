@@ -992,9 +992,11 @@ def _prepare_live_station_candidates(bot_state, current_run, bundles, suppressed
                 f"{issue.code} ({issue.field}): {issue.message}"
                 for issue in audit.issues if issue.severity == "error"))
             continue
+        from src.two_bot.ghcn_readable_warrant import WarrantError, prepare_bundle
         try:
+            packet = prepare_bundle(packet)
             capture_bundle(packet)
-        except BundleCaptureError as exc:
+        except (BundleCaptureError, WarrantError) as exc:
             hold(bundle, selection, "bundle_retention", str(exc))
             continue
         if automatic_only:

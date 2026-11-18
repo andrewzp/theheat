@@ -109,6 +109,7 @@ SOURCES = (
     'src/two_bot/__init__.py',
     'src/two_bot/evidence_contract.py',
     'src/two_bot/ghcn_claim_contract.py',
+    'src/two_bot/ghcn_readable_warrant.py',
     'src/two_bot/intern/__init__.py',
     'src/two_bot/intern/air_quality.py',
     'src/two_bot/intern/marine_crw.py',

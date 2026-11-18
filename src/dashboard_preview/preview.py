@@ -128,9 +128,13 @@ def qualified_spec(bundle, *, synthetic=False, include_viirs=False, include_temp
     if include_temperature:
         # The adapter already replays this retained read-only StoryBundle facade;
         # it independently audits every field and warrant before projecting it.
-        stored = cast(StoryBundle, _StoredBundle(bundle))
+        from src.two_bot.ghcn_readable_warrant import materialize_tree
+        # The caller retains wire authority; native calculation independently
+        # binds the checked complete materialized source and never labels it wire.
+        full = materialize_tree(bundle)
+        stored = cast(StoryBundle, _StoredBundle(full))
         spec = temperature_graphic_spec("temperature_comparator", [stored],
-            expected_bundle_sha256=[fingerprint(bundle)], synthetic=synthetic)
+            expected_bundle_sha256=[fingerprint(full)], synthetic=synthetic)
         evidence = spec["evidence"]
         return spec, "NOAA GHCN-Daily · station observations", {
             "kind": "ghcn_station_day", "station_id": evidence["station_id"],

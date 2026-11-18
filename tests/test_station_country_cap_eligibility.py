@@ -258,21 +258,52 @@ def test_existing_score_floor_holds_weak_remaining_signals_before_country_cap(mo
 
 
 @pytest.mark.parametrize("supply_inputs", [{"sparse": False}], indirect=True)
-def test_complete_but_oversized_station_warrant_is_held_before_cap_without_truncation(monkeypatch, supply_inputs):
+def test_complete_dense_station_warrant_reaches_cap_losslessly(monkeypatch, supply_inputs):
     from src.two_bot.bundle_capture import BundleCaptureError, capture_bundle
+    from src.two_bot.ghcn_readable_warrant import decode_wire
+    from src.media.temperature_graphic_adapter import story_bundle_snapshot
     bundles, _ = ghcn.check_extreme_signals_for_stations(**supply_inputs)
     story = source._two_bot_bundle_for_extreme_signal("all_time_high", bundles[0].all_time_high, source="ghcn")
     assert audit_story_bundle(story).prompt_ready
     with pytest.raises(BundleCaptureError, match="bundle_capture_too_large"):
         capture_bundle(story)
+    monkeypatch.setattr(caps, "GHCN_INDIVIDUALS_PER_COUNTRY", 2)
+    state: dict = deepcopy(dict(DEFAULT_STATE))
+    run = run_source(monkeypatch, supply_inputs, state)
+    queued = individual_queue(state)
+    assert len(queued) == 2 and state["drafts"] == []
+    for candidate in queued:
+        original = next(bundle for bundle in bundles if bundle.all_time_high.event_id == candidate.event_id)
+        expected = source._two_bot_bundle_for_extreme_signal("all_time_high", original.all_time_high, source="ghcn")
+        captured = capture_bundle(candidate.bundle)
+        assert len(captured.serialized.encode()) <= 32768
+        assert decode_wire(captured.payload()) == story_bundle_snapshot(expected)
+        assert audit_story_bundle(candidate.bundle).prompt_ready
+    metrics = run["sources"][0]["details"]["pipeline_metrics"]
+    assert metrics["scientific_signal_bundles"] == 6
+    assert metrics["individual_station_preflight_holds"] == {}
+    assert metrics["individual_station_cap_excluded"] == 4
+    assert run["sources"][0]["promoted"] == 2
+
+
+@pytest.mark.parametrize("supply_inputs", [{"sparse": False}], indirect=True)
+def test_oversized_complete_readable_warrant_still_holds_before_cap(monkeypatch, supply_inputs):
+    build = source._two_bot_bundle_for_extreme_signal
+
+    def enlarged(*args, **kwargs):
+        packet = build(*args, **kwargs)
+        if packet is not None:
+            packet.raw_signal_dump["retained_operator_note"] = "x" * 6000
+        return packet
+
+    monkeypatch.setattr(source, "_two_bot_bundle_for_extreme_signal", enlarged)
     state: dict = deepcopy(dict(DEFAULT_STATE))
     run = run_source(monkeypatch, supply_inputs, state)
     assert not state.get("_triage_queue") and state["drafts"] == []
     metrics = run["sources"][0]["details"]["pipeline_metrics"]
     assert metrics["scientific_signal_bundles"] == 6
     assert metrics["individual_station_preflight_holds"] == {"bundle_retention": 6}
-    assert metrics["individual_station_cap_excluded"] == 0
-    assert run["sources"][0]["promoted"] == 0
+    assert metrics["individual_station_cap_excluded"] == 0 and run["sources"][0]["promoted"] == 0
 
 
 @pytest.fixture(scope="module")

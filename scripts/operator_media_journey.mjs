@@ -177,6 +177,7 @@ async function main() {
   const sources = [
     "app/components/DraftWorkbench.js", "app/components/GraphicPreview.js", "app/components/EditorMedia.js",
     "lib/graphic-preview.js", "lib/editor-media.js", "app/dashboard.css", TEST,
+    "app/components/GhcnReadableWarrant.js", "lib/ghcn-readable-warrant.js", "tests/helpers/ghcn-readable.js",
     "tests/fixtures/operator-journey/app/page.js", "tests/fixtures/operator-journey/app/layout.js",
     "tests/fixtures/operator-journey/app/operator-journey-ready/route.js",
     "tests/fixtures/operator-journey/next.config.mjs", "package-lock.json",

@@ -64,7 +64,9 @@ def validate_descriptor(value, bundle):
     for key in ("bundle_sha256", "source_revision_sha256", "baseline_revision_sha256", "png_sha256", "alt_sha256"):
         _require(type(value[key]) is str and SHA.fullmatch(value[key]), "invalid attachment digest")
     _require(type(bundle) is dict and value["bundle_sha256"] == fingerprint(bundle), "source changed")
-    raw = bundle.get("raw_signal_dump", {})
+    from src.two_bot.ghcn_readable_warrant import materialize_tree
+    full = materialize_tree(bundle)
+    raw = full.get("raw_signal_dump", {})
     _require(type(raw) is dict, "full station evidence missing")
     evidence = raw.get("evidence", {})
     _require(type(evidence) is dict and type(evidence.get("baseline")) is dict, "full station evidence missing")
@@ -199,11 +201,15 @@ def _png(spec):
 def prepare_media(bundle, *, synthetic=False):
     """No fetching: independently qualify the full retained comparator and render."""
     _require(type(bundle) is dict and "ghcn_claim" not in bundle, "full retained bundle required")
-    spec = temperature_graphic_spec("temperature_comparator", [cast(StoryBundle, _StoredBundle(bundle))],
-        expected_bundle_sha256=[fingerprint(bundle)], synthetic=synthetic)
+    from src.two_bot.ghcn_readable_warrant import materialize_tree
+    # Validate/expand before entering any native retained-calculation slot.
+    # Native science binds its FULL input; the outer descriptor binds SAVED WIRE.
+    full = materialize_tree(bundle)
+    spec = temperature_graphic_spec("temperature_comparator", [cast(StoryBundle, _StoredBundle(full))],
+        expected_bundle_sha256=[fingerprint(full)], synthetic=synthetic)
     png = _png(spec)
     alt = _alt_text(spec["evidence"])
-    evidence = bundle["raw_signal_dump"]["evidence"]
+    evidence = full["raw_signal_dump"]["evidence"]
     descriptor = {"schema_version": SCHEMA_VERSION, "kind": KIND, "bundle_sha256": fingerprint(bundle),
         "source_revision_sha256": evidence["revision_id"], "baseline_revision_sha256": evidence["baseline"]["revision_id"],
         "station_id": evidence["station_id"], "valid_date": evidence["valid_date"], "renderer": renderer_identity(),

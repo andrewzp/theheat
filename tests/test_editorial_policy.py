@@ -37,7 +37,10 @@ def test_generated_source_manifest_is_current_and_version_is_not_an_input():
 
 
 @pytest.mark.parametrize("owner", ["src/data/gdacs_intake.py", "src/orchestrator/sources/gdacs.py", "src/data/json_evidence.py",
-                                 "src/data/fire_footprint.py", "src/orchestrator/sources/nifc.py"])
+                                 "src/data/fire_footprint.py", "src/orchestrator/sources/nifc.py",
+                                 "src/two_bot/ghcn_readable_warrant.py", "src/state.py",
+                                 "dashboard/lib/ghcn-readable-warrant.js", "dashboard/app/components/GhcnReadableWarrant.js",
+                                 "dashboard/app/components/DraftWorkbench.js"])
 def test_source_selection_owner_bytes_revoke_old_policy_without_editing_content(monkeypatch, tmp_path, owner):
     manifest = policy.source_manifest()
     # Use the actual full manifest in a private copy. Mutating only this owner
