@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import re
+from copy import deepcopy
 from datetime import UTC, date, datetime
 from typing import Any
 
@@ -205,6 +207,8 @@ def _memory(state: BotState) -> MemoryState:
 
 
 _GDACS_MEMORY_SCHEMA = "gdacs-source-memory/v1"
+_NIFC_MEMORY_SCHEMA = "nifc-source-memory/v1"
+_NIFC_SNAPSHOT_BYTES = 32 * 1024
 _SOURCE_MEMORY_FIELD = "source_event_identity"
 
 
@@ -230,6 +234,15 @@ def _standalone_observation(bundle: StoryBundle) -> bool:
 
 def _memory_identity(value: Any) -> dict | None:
     """Validate a source-series key, never a physical-incident or review proof."""
+    if type(value) is dict and value.get("schema") == _NIFC_MEMORY_SCHEMA:
+        if (set(value) != {"schema", "issuer", "event_type", "identifier_kind", "source_event_id"}
+                or value["issuer"] != "nifc-wfigs" or value["event_type"] != "WF"
+                or type(value["identifier_kind"]) is not str
+                or value["identifier_kind"] not in {"UniqueFireIdentifier", "IrwinID"}
+                or type(value["source_event_id"]) is not str
+                or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}", value["source_event_id"], re.ASCII)):
+            return None
+        return dict(value)
     from src.data.gdacs import EVENT_TYPES
     if (type(value) is not dict or set(value) != {"schema", "issuer", "event_type", "source_event_id"}
             or value["schema"] != _GDACS_MEMORY_SCHEMA or value["issuer"] != "gdacs-georss"
@@ -267,6 +280,42 @@ def _gdacs_memory_identity(bundle: StoryBundle) -> dict | None:
     return identity
 
 
+def _nifc_report_family(bundle: StoryBundle) -> bool:
+    from src.data.fire_footprint import KIND, REPORT_SCHEMA
+
+    raw = bundle.raw_signal_dump if isinstance(bundle.raw_signal_dump, dict) else {}
+    packet = raw.get("evidence")
+    return (bundle.signal_kind in {KIND, "fire_footprint"}
+            or str(bundle.event_id).startswith("fire_footprint_")
+            or (isinstance(packet, dict) and packet.get("schema") == REPORT_SCHEMA))
+
+
+def _source_memory_identity(bundle: StoryBundle) -> dict | None:
+    if _gdacs_memory_scoped(bundle):
+        return _gdacs_memory_identity(bundle)
+    if not _nifc_report_family(bundle):
+        return None
+    from src.data.fire_footprint import report_bundle_hold
+
+    try:
+        if report_bundle_hold(bundle) is not None:
+            return None
+        raw = bundle.raw_signal_dump
+        record = raw["evidence"]["source_record"]
+        return _memory_identity({"schema": _NIFC_MEMORY_SCHEMA, "issuer": "nifc-wfigs", "event_type": "WF",
+            "identifier_kind": "UniqueFireIdentifier" if record.get("UniqueFireIdentifier") else "IrwinID",
+            "source_event_id": raw["complex_id"]})
+    except (AttributeError, KeyError, TypeError, ValueError, OverflowError, RecursionError):
+        return None
+
+
+def _nifc_snapshot_fits(value: dict) -> bool:
+    try:
+        return len(json.dumps(value, ensure_ascii=False, allow_nan=False).encode()) <= _NIFC_SNAPSHOT_BYTES
+    except (ValueError, TypeError, OverflowError, RecursionError):
+        return False
+
+
 def bundle_memory_snapshot(bundle: StoryBundle) -> dict:
     """Persist the small bundle subset needed to record publish memory later."""
 
@@ -285,9 +334,19 @@ def bundle_memory_snapshot(bundle: StoryBundle) -> dict:
         from src.storage.physical_events import validate_binding
         snapshot["physical_episode"] = validate_binding(bundle.raw_signal_dump["physical_episode"])
     else:
-        identity = _gdacs_memory_identity(bundle)
+        identity = _source_memory_identity(bundle)
         if identity is not None:
-            snapshot[_SOURCE_MEMORY_FIELD] = identity
+            if identity["schema"] == _NIFC_MEMORY_SCHEMA:
+                # Retain real report inputs, never rebuild a source proof from
+                # the incident identifier alone. Oversize evidence keeps only
+                # general publication history; it does not widen source gates.
+                candidate = {**snapshot, _SOURCE_MEMORY_FIELD: identity,
+                    "raw_signal_dump": bundle.raw_signal_dump, "headline_metric": bundle.headline_metric,
+                    "country": bundle.country, "historical_context": bundle.historical_context}
+                if _nifc_snapshot_fits(candidate):
+                    snapshot = deepcopy(candidate)
+            else:
+                snapshot[_SOURCE_MEMORY_FIELD] = identity
         if _airport_observation(bundle):
             from src.data.awc_observed import SCHEMA
             # Retain the existing restrictive family marker, never source proof.
@@ -301,10 +360,11 @@ def build_memory_slice(state: BotState, bundle: StoryBundle, *, now: datetime | 
     from src.data.places import country_key
     bound = "physical_episode" in bundle.raw_signal_dump
     source_scoped = _gdacs_memory_scoped(bundle)
+    nifc_report = _nifc_report_family(bundle)
     # Pixels and two-airport snapshots do not establish physical continuity.
     # Resolved physical bindings remain separate and are validated first.
     standalone_observation = not bound and _standalone_observation(bundle)
-    source_identity = _gdacs_memory_identity(bundle) if not bound else None
+    source_identity = _source_memory_identity(bundle) if not bound else None
     if bound:
         from src.storage.physical_events import EpisodeContext
         if type(episode_context) is not EpisodeContext:
@@ -393,6 +453,21 @@ def build_memory_slice(state: BotState, bundle: StoryBundle, *, now: datetime | 
                        if isinstance(row, dict) and row.get("physical_episode") is None
                        and source_identity is not None
                        and _memory_identity(row.get(_SOURCE_MEMORY_FIELD)) == source_identity and _tweet_text(row)]
+    elif nifc_report:
+        # Exact candidate publication history retains its original limited
+        # meaning, even for legacy reports. Cross-candidate report history
+        # additionally needs a qualified current and stored source identity.
+        for row in memory.get("shipped_tweets", []):
+            if not isinstance(row, dict) or row.get("physical_episode") is not None or not _tweet_text(row):
+                continue
+            identity = _memory_identity(row.get(_SOURCE_MEMORY_FIELD))
+            if source_identity is not None and identity == source_identity:
+                source_rows.append(row)
+            candidate_history = (row.get(_SOURCE_MEMORY_FIELD) is None
+                or identity is not None and identity["schema"] == _NIFC_MEMORY_SCHEMA
+                    and (source_identity is None or identity == source_identity))
+            if candidate_history and row.get("event_id") == bundle.event_id:
+                same_event_rows.append(row)
     elif not standalone_observation and bundle.event_id:
         for row in memory.get("shipped_tweets", []):
             if not isinstance(row, dict):
@@ -407,13 +482,18 @@ def build_memory_slice(state: BotState, bundle: StoryBundle, *, now: datetime | 
             same_event_rows.append(row)
     same_event_rows.sort(key=_row_time, reverse=True)
     source_rows.sort(key=_row_time, reverse=True)
+    if source_identity is not None and source_identity["schema"] == _NIFC_MEMORY_SCHEMA:
+        source_prior = source_rows[0] if source_rows else None
     source_series = None
     if not bound and source_identity is not None:
         source_series = {
             "identity": source_identity,
-            "claim_limit": "Shared GDACS report ID only; not proof of one physical incident, continuous conditions, duration or combined impacts.",
+            "claim_limit": ("Same NIFC incident report identifier only; not a measured burn perimeter, fire spread, continuous burning, growth rate or combined impacts."
+                if source_identity["schema"] == _NIFC_MEMORY_SCHEMA else
+                "Shared GDACS report ID only; not proof of one physical incident, continuous conditions, duration or combined impacts."),
             "previous_report_context": ({"event_id": source_prior.get("event_id"),
-                "reported_country": source_prior.get("country"), "reported_region": source_prior.get("region")}
+                "reported_country": source_prior.get("country"),
+                "reported_region": source_prior.get("reported_region") if source_identity["schema"] == _NIFC_MEMORY_SCHEMA else source_prior.get("region")}
                 if source_prior is not None else None),
             "recent_published_texts": [_tweet_text(row) for row in source_rows[:5]],
         }
@@ -466,9 +546,11 @@ def record_shipped(
         binding = validate_binding(bundle.raw_signal_dump["physical_episode"])
         shipped_row["physical_episode"] = binding
     else:
-        source_identity = _gdacs_memory_identity(bundle)
+        source_identity = _source_memory_identity(bundle)
         if source_identity is not None:
             shipped_row[_SOURCE_MEMORY_FIELD] = source_identity
+            if source_identity["schema"] == _NIFC_MEMORY_SCHEMA:
+                shipped_row["reported_region"] = bundle.where
     if tweet_id:
         shipped_row["tweet_id"] = tweet_id
     if event_series_key:
@@ -489,7 +571,8 @@ def record_shipped(
     if writer.angle_chosen:
         _dedup_append(memory.setdefault("used_framings", []), writer.angle_chosen)
 
-    if binding is None and (_standalone_observation(bundle) or source_identity is None):
+    if binding is None and (_standalone_observation(bundle) or source_identity is None
+                            or source_identity["schema"] == _NIFC_MEMORY_SCHEMA):
         # Keep general/exact-candidate history, never infer physical duration
         # from an unbound publication. Qualified GDACS series bookkeeping is
         # preserved separately and is never returned as a physical episode.
@@ -563,7 +646,7 @@ def _story_bundle_from_metadata(two_bot: dict, draft: dict) -> StoryBundle | Non
     # never as source evidence or a fresh input to generation/scientific checks.
     raw = {"physical_episode": payload["physical_episode"]} if "physical_episode" in payload else {}
     identity = _memory_identity(payload.get(_SOURCE_MEMORY_FIELD))
-    if not raw and identity is not None:
+    if not raw and identity is not None and identity["schema"] == _GDACS_MEMORY_SCHEMA:
         from src.data.gdacs import EVENT_TYPES, GDACS_GEORSS_LEG, GDACS_GEORSS_URL
         raw = {"event_id": event_id, "source_product": "gdacs-georss", "source_url": GDACS_GEORSS_URL,
                "source_leg": GDACS_GEORSS_LEG, "source_event_id": identity["source_event_id"],
@@ -575,7 +658,7 @@ def _story_bundle_from_metadata(two_bot: dict, draft: dict) -> StoryBundle | Non
             # Other source hints cannot erase this restriction. Explicit physical
             # bindings still go through their original validation first.
             raw = {"report_schema": SCHEMA}
-    return StoryBundle(
+    restored = StoryBundle(
         signal_kind=signal_kind,
         where=str(payload.get("where") or draft.get("city") or ""),
         when=str(payload.get("when") or draft.get("tweet_date") or ""),
@@ -585,6 +668,15 @@ def _story_bundle_from_metadata(two_bot: dict, draft: dict) -> StoryBundle | Non
         historical_context={},
         raw_signal_dump=raw,
     )
+    if not raw and identity is not None and identity["schema"] == _NIFC_MEMORY_SCHEMA and _nifc_snapshot_fits(payload):
+        restored.raw_signal_dump = deepcopy(payload.get("raw_signal_dump") or {})
+        restored.headline_metric = deepcopy(payload.get("headline_metric") or {})
+        restored.country = payload.get("country") or ""
+        restored.historical_context = deepcopy(payload.get("historical_context") or {})
+        if _source_memory_identity(restored) != identity:
+            # Retain the publication without promoting disputed source history.
+            restored.raw_signal_dump = {}
+    return restored
 
 
 def _claims_from_metadata(two_bot: dict) -> list[ExtractedClaim]:
