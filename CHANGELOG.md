@@ -1,3 +1,8 @@
+## 0.9.109.133
+
+- Align the observed airport writer's lead instruction with the shared place-first voice and show compact comparison syntax. Retain both airport names, countries, readings, difference, UTC time/date and the full appended citation.
+- Exercise source-shaped ordinary staged collection, both queue modes and SDK-level check replies. Preserve required checks, exact saved text and the existing manual-only treatment of complete overlong copy; no new model, sample, retry or publication rule.
+
 ## 0.9.109.132
 
 - Isolate contract-test package setup to byte-copies of the runner's Ubuntu sources and the existing signed PostgreSQL repository. Keep strict errors, signature bindings, bounded setup and every required test; unrelated image repositories cannot block setup.
