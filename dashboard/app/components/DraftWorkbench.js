@@ -376,7 +376,7 @@ export function DraftWorkbench({
                         ))}
                       </div>
                     ) : (
-                      <div className="empty">no structured source facts saved</div>
+                      <div className="empty">No facts were saved in this review summary.</div>
                     )}
                   </div>
 

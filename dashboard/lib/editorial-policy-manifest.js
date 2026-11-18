@@ -8,7 +8,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "dashboard/app/api/delivery-reconciliation/route.js": "93f2ac6677f748f8a2b6d28407bd7462719d1ae1fb65f6415f9a92dddb0cd263",
     "dashboard/app/api/drafts/route.js": "d2ff21fc10ba17d0dabad04f6142ed93bbaca1e602495f2775616c9b47141d56",
     "dashboard/app/api/episodes/route.js": "e76b489df08aedc236c9336af1fb86ba41a6630470c11ae3202dd5e53e4f63bc",
-    "dashboard/app/components/DraftWorkbench.js": "e39e83d0e0eeb269cdc0b911b2d5c13907530ad838fa0d21904c276238faf01a",
+    "dashboard/app/components/DraftWorkbench.js": "0c8945bcb0783096d170d197d3955d7fc8d50fc66629a99701ecf9ccd0711a01",
     "dashboard/app/components/GhcnReadableWarrant.js": "ed3977a83877165e0366ae6496b6283059b84fd93f640e95d32b61c8f5f2914f",
     "dashboard/lib/automatic-text.js": "287fcf2a5976331c0acfd4662ca5aee8231b0a565e7b23ebe10877d4e08bd7fb",
     "dashboard/lib/delivery-reconciliation.js": "1ca17c6db549efa97a367735b4ccd6b64c2b6d91c3858b3dabf7136c05461b4c",
@@ -33,7 +33,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "dashboard/lib/request-json.js": "eb40bfc6979bd0e1b97a0f12cfdfedb7673b75ae796f4b08d02949ad8ca5953a",
     "dashboard/lib/runtime-inventory.js": "1417b0923a7e6ba8f33cc607ca3bc9a26912db65478a8750fe65af37954ceada",
     "dashboard/lib/runtime-report.js": "bd1b84fa6f874ae831f348554fc54cc4af9aee396aebc8d85fd0cbc83e89b9d9",
-    "dashboard/lib/saved-claim-evidence.js": "ca380202655e26860d4b8f384eaa73ab9f63b8bb65c0643c2e763c4f5c9d42ee",
+    "dashboard/lib/saved-claim-evidence.js": "4ae8ac7b809fdf97bdcc1af489cdf63188d3276256f871bab5feffcfd98bf5ec",
     "dashboard/lib/state-store.js": "90339b78a1f499f8e76ff4159c9eef1b0d0cd0ca7e359a8d5a64468f273985e1",
     "data/cities.csv": "f44979e72a1023ba77555264a961ef64db53bff686655acb8cce28b88542f5f8",
     "data/country_codes.json": "563fd9c963633bb169c88bac593ec0ccb4694e31ae0613e37d31d1c07e276a9d",
@@ -304,5 +304,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "5c5ffcc95358c7df45ae838c228759ad0eb6275c8f9053c8130c0a8824b63d9e"
   },
   "schema_version": 1,
-  "source_sha256": "2dc3363d608dece4d48cd98cdffb3475833aa43e6b171d412c96afc753e7dd84"
+  "source_sha256": "e6476be3872e37a7873e78d3af79909dc601de9fdd63addc127b2fad2d9bb63f"
 }
