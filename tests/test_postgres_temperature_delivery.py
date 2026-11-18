@@ -14,7 +14,7 @@ from src.commands import postgres_delivery as delivery
 from src.commands.preview_delivery_worker import execute_delivery_once
 from src.commands.postgres_authority import PostgresCommandAuthority
 from src.commands.postgres_sourced_generation import private_configuration
-from src.commands.schema import CommandError, utc_text
+from src.commands.schema import CommandError, utc_datetime, utc_text
 from src.media import platform_description as descriptions
 from src.storage import postgres_projection as projection
 from tests import test_postgres_temperature_editor_media as temperature
@@ -150,6 +150,10 @@ def source_refusal_matrix(path, *, boundaries=("acquire", "begin"), saved=None):
     case, intent = path["case"], path["intent"]
     authority = case["authority"]
     context = delivery.prepare_context(authority, intent_id=intent)
+    # These are rollback-only dependency probes, not another send. Audit the
+    # original binding at its recorded time: eleven expensive probes must not
+    # turn an unrelated role/source refusal into a wall-clock expiry refusal.
+    audit_at = utc_datetime(saved["recorded_at"]) if saved is not None else None
     results = []
     trace_before = deepcopy(path["trace"])
     for boundary in boundaries:
@@ -195,19 +199,28 @@ def source_refusal_matrix(path, *, boundaries=("acquire", "begin"), saved=None):
                             delivery.acquire(authority, connection, value, "x", "upload", "t4-owned-local-worker",
                                 resolve, datetime.now(UTC), ghcn=proof)
                         elif boundary == "before_call":
-                            delivery.before_call(authority, connection, value, saved, resolve, datetime.now(UTC), ghcn=proof)
+                            delivery.before_call(authority, connection, value, saved, resolve, audit_at, ghcn=proof)
                         else:
                             delivery.begin(authority, connection, value, "x", "upload", {"owner": "t4-owned-local-worker"},
                                 {}, b"", resolve, datetime.now(UTC), ghcn=proof)
                 if fault == "source":
                     assert held.value.code == "media_source_not_allowlisted"
+                if boundary == "before_call":
+                    assert held.value.code not in {"delivery_window_expired", "ghcn_preparation_expired"}
                 results.append(dict(boundary=boundary, fault=fault, code=held.value.code))
             assert all_application_rows(case["params"]) == before
             assert path["trace"] == trace_before
     if saved is not None:
         with authority.projections._connection() as connection:
             delivery.before_call(authority, connection, delivery.read(connection, intent), saved,
-                                 case["operators"].resolve, datetime.now(UTC), ghcn=context)
+                                 case["operators"].resolve, audit_at, ghcn=context)
+        # Keep the production deadline fence observable, independently of host
+        # speed. The identical binding must be refused exactly at its expiry.
+        with pytest.raises(CommandError) as expired:
+            with authority.projections._connection() as connection:
+                delivery.before_call(authority, connection, delivery.read(connection, intent), saved,
+                    case["operators"].resolve, utc_datetime(saved["expires_at"]), ghcn=context)
+        assert expired.value.code == "delivery_window_expired"
         return results
     # An otherwise unchanged real context still cannot grant a forged lease.
     before = all_application_rows(case["params"])
