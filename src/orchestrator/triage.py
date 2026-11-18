@@ -308,6 +308,67 @@ def _pending_count_for_type(bot_state: Any, draft_type: str) -> int:
     )
 
 
+def apply_awc_expired_pending_sweep(bot_state: Any, *, now: datetime | None = None) -> int:
+    """Retire intact, unattempted airport pairs after their source window ends.
+
+    Validate at the retained capture first: an invalid or unavailable packet is
+    not proof of natural expiry. No current source read or new review occurs.
+    Keep all content/history and any publication uncertainty for the operator.
+    """
+    from src.data import awc_observed as awc
+    from src.editorial.revisions import has_unresolved_publish, revoke_approval
+
+    clock = now if now is not None else datetime.now(UTC)
+    if not isinstance(clock, datetime) or clock.utcoffset() != timedelta(0):
+        raise ValueError("Expiry requires an aware UTC clock")
+    ledger = bot_state.get("publish_ledger", {})
+    # A malformed ledger cannot demonstrate that this draft was never sent.
+    if not isinstance(ledger, dict):
+        return 0
+    retired = 0
+    for draft in bot_state.get("drafts", []) or []:
+        if not isinstance(draft, dict) or draft.get("status") != "pending" or draft.get("type") != awc.KIND:
+            continue
+        try:
+            if (not isinstance(draft.get("id"), str) or not draft["id"]
+                    or not isinstance(draft.get("event_id"), str) or not draft["event_id"]
+                    or draft["event_id"] in ledger or draft["id"] in ledger
+                    or any(key in draft for key in (
+                        "publish_outcome", "autoship_attempted", "last_publish_attempt_at",
+                        "tweet_id", "posted_at", "published_revision", "publication_observations",
+                        "attempt_conflicts", "revision_conflicts",
+                    ))
+                    or has_unresolved_publish(draft, bot_state)):
+                continue
+            context = draft.get("review_context")
+            two = context.get("two_bot") if isinstance(context, dict) else None
+            bundle = two.get("bundle") if isinstance(two, dict) else None
+            if not isinstance(bundle, dict):
+                continue
+            raw = bundle.get("raw_signal_dump")
+            evidence = raw.get("evidence") if isinstance(raw, dict) else None
+            if (not isinstance(evidence, dict) or bundle["event_id"] != draft["event_id"]
+                    or bundle.get("signal_kind") != awc.KIND):
+                continue
+            if not isinstance(evidence.get("retrieved_at"), str):
+                continue
+            captured = datetime.fromisoformat(evidence["retrieved_at"].replace("Z", "+00:00"))
+            if captured.utcoffset() != timedelta(0) or captured > clock:
+                continue
+            qualified = awc.validate_bundle(bundle, now=captured)
+            target = datetime.fromisoformat(qualified["points"][0]["valid_time"].replace("Z", "+00:00"))
+            if clock - target <= awc.MAX_AGE:
+                continue
+            revoke_approval(draft)
+            draft.update(status="rejected", rejected_reason="awc_source_window_elapsed",
+                         rejected_at=clock.isoformat().replace("+00:00", "Z"))
+            retired += 1
+        except (KeyError, TypeError, ValueError, OverflowError, UnicodeError):
+            # Preserve malformed/contradictory evidence; do not infer staleness.
+            continue
+    return retired
+
+
 def apply_pending_ttl_sweep(
     bot_state: Any,
     *,

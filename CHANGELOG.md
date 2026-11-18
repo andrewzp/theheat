@@ -1,3 +1,13 @@
+## 0.9.109.126
+
+- Retire intact, unattempted airport-observation drafts after their existing source window ends, before pending type caps. Preserve text, evidence and history while revoking obsolete approval; keep receipt, attempt and conflict witnesses for reconciliation.
+- Keep source validation, candidate limits and required checks unchanged. A failed cleanup leaves the cap occupied, and disabled triage/refill mode retains its existing behavior.
+
+## 0.9.109.125
+
+- Explain retained forecast-only AQ exclusions as intentional observed-only policy skips, preserving old failures and unverified availability. Do not describe a recorded skip as missing history.
+- Distinguish collected candidates from saved drafts in source follow-up guidance; missing draft counts remain unknown and saved drafts still require current review.
+
 ## 0.9.109.124
 
 - Carry complete GHCN station-record evidence in a strict readable calendar table within the existing writer input bound. Preserve every source field, optional enrichment and saved evidence identity through collection, queueing, checks, retained requests, editing and publication rechecks; refuse malformed or oversized inputs before generation.

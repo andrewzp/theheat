@@ -148,6 +148,7 @@ POLICY_FILES = (
     "src/two_bot/check_origin.py",
     "src/two_bot/batch_authority.py", "src/two_bot/batch_transport.py", "src/two_bot/batch_collector.py",
     "src/orchestrator/draft_save.py", "src/orchestrator/sources/firms.py", "src/orchestrator/triage_queue.py",
+    "src/orchestrator/triage.py",
     "src/editorial/synthesis.py", "src/editorial/thresholds.py",
     "src/editorial/marine_evidence.py",
     "src/orchestrator/sources/ocean_sst_anomaly.py", "src/orchestrator/sources/coral_dhw.py",
