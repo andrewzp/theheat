@@ -167,6 +167,26 @@ def test_any_send_evidence_stays_for_existing_resolution(pending, witness):
     assert state == before
 
 
+@pytest.mark.parametrize(
+    "field",
+    [
+        "tweet_id",
+        "posted_at",
+        "published_revision",
+        "publication_observations",
+        "attempt_conflicts",
+        "revision_conflicts",
+    ],
+)
+@pytest.mark.parametrize("value", [None, "invented receipt witness", {"tweet_id": "invented"}])
+def test_retained_receipt_and_conflict_fields_never_prove_unattempted(pending, field, value):
+    state, draft = pending
+    draft[field] = value
+    before = deepcopy(state)
+    assert sweep(state) == 0
+    assert state == before
+
+
 def test_real_source_sweep_frees_type_cap_without_raising_it(pending):
     state, draft = pending
     state["drafts"] = [deepcopy(draft) for _ in range(3)]
@@ -211,8 +231,9 @@ def test_actual_empty_drain_never_calls_writer(monkeypatch, pending):
 
 @pytest.mark.parametrize("refill", ["0", "1"])
 @pytest.mark.parametrize("distinct_event", [True, False])
+@pytest.mark.parametrize("cleanup_fails", [True, False])
 def test_actual_drain_frees_capacity_before_real_selector_and_writer_boundary(
-    monkeypatch, pending, refill, distinct_event
+    monkeypatch, pending, refill, distinct_event, cleanup_fails
 ):
     from src.orchestrator import common
 
@@ -242,6 +263,12 @@ def test_actual_drain_frees_capacity_before_real_selector_and_writer_boundary(
     monkeypatch.setenv("THEHEAT_TRIAGE_ENABLED", "1")
     monkeypatch.setenv("THEHEAT_REFILL_ENABLED", refill)
     monkeypatch.setenv("THEHEAT_MAX_DRAFTS_PER_CYCLE", "1")
+    if cleanup_fails:
+
+        def unavailable(*args, **kwargs):
+            raise RuntimeError("invented cleanup unavailable")
+
+        monkeypatch.setattr(triage, "apply_awc_expired_pending_sweep", unavailable)
     calls = []
 
     def writer_boundary(*args, **kwargs):
@@ -253,8 +280,10 @@ def test_actual_drain_frees_capacity_before_real_selector_and_writer_boundary(
     monkeypatch.setattr(common, "_try_two_bot_draft", writer_boundary)
     with freeze_time(current):
         assert common._drain_and_write_triage_queue(state, {"sources": []}) == 0
-    assert calls == ([bundle.event_id] if distinct_event else [])
+    assert calls == ([bundle.event_id] if distinct_event and not cleanup_fails else [])
     assert len(state["drafts"]) == 3
+    if cleanup_fails:
+        assert all(row["status"] == "pending" for row in state["drafts"])
     assert triage._pending_type_cap() == 3
 
 

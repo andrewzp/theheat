@@ -333,7 +333,11 @@ def apply_awc_expired_pending_sweep(bot_state: Any, *, now: datetime | None = No
             if (not isinstance(draft.get("id"), str) or not draft["id"]
                     or not isinstance(draft.get("event_id"), str) or not draft["event_id"]
                     or draft["event_id"] in ledger or draft["id"] in ledger
-                    or any(key in draft for key in ("publish_outcome", "autoship_attempted", "last_publish_attempt_at"))
+                    or any(key in draft for key in (
+                        "publish_outcome", "autoship_attempted", "last_publish_attempt_at",
+                        "tweet_id", "posted_at", "published_revision", "publication_observations",
+                        "attempt_conflicts", "revision_conflicts",
+                    ))
                     or has_unresolved_publish(draft, bot_state)):
                 continue
             context = draft.get("review_context")
