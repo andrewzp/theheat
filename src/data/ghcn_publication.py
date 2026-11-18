@@ -70,7 +70,9 @@ def _family(draft, payload):
                         for value in (draft.get("event_id"), payload.get("event_id") if isinstance(payload, dict) else None,
                                       raw.get("event_id") if isinstance(raw, dict) else None))
     signal = payload.get("signal_kind") if isinstance(payload, dict) else None
+    legacy_type = draft.get("type")
     record = (station_event or isinstance(signal, str) and signal in _SIGNALS
+              or isinstance(legacy_type, str) and legacy_type in _TYPES.values()
               or isinstance(raw, dict) and any(key in raw for key in ("new_temp_c", "old_record_c"))
               or isinstance(history, dict) and any(key in history for key in ("prior_record_c", "prior_record_year")))
     return bool(station_event or compact or ghcn and record)
