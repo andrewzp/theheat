@@ -98,17 +98,27 @@ _GPM_SOURCES = frozenset({"opendap", "datapool", "s3"})
 
 
 class _GridNotFound(Exception):
-    """The grid file for a candidate date is not published (404 / S3 403 /
-    NoSuchKey). Walk back to an earlier date."""
+    """The candidate is absent (HTTP404 / S3 NoSuchKey). Walk back a date.
+
+    Access refusal, including S3403, is not evidence of an unpublished date.
+    """
 
 
 class _GridTransient(Exception):
     """A transient grid-fetch failure (5xx, timeout, connection, auth). Not a
     date-availability signal — stop walking back."""
 
+    def __init__(self, message: str, *, diagnostic: str = "transient") -> None:
+        super().__init__(message)
+        self.diagnostic = diagnostic
+
 
 class _GridParseError(Exception):
     """The downloaded grid could not be opened/parsed into city readings."""
+
+    def __init__(self, message: str, *, diagnostic: str = "parse_error") -> None:
+        super().__init__(message)
+        self.diagnostic = diagnostic
 
 
 class _GridFetchUnavailable(Exception):
@@ -1326,7 +1336,7 @@ def _fetch_daily_precip_grid(
         )
     except (_GridNotFound, _GridTransient, _GridParseError) as exc:
         if trace is not None:
-            trace.leg_result(leg, "unavailable", _grid_outcome(exc))
+            trace.leg_result(leg, "unavailable", _grid_failure_reason(exc))
         raise _GridFetchUnavailable(str(exc)) from exc
     if trace is not None:
         trace.grid_inspected(source, resolved_date, readings)
@@ -1354,6 +1364,42 @@ def _grid_outcome(exc: Exception) -> str:
     if isinstance(exc, _GridTransient):
         return "transient"
     return "parse_error"
+
+
+def _grid_failure_reason(exc: Exception) -> str:
+    """Finite observation labels; candidate counts retain their coarse outcomes.
+
+    Incident/backoff policy deliberately keeps its existing broad classifications.
+    A refusal is not proof of an expired token; an HTML prefix is not proof of a
+    login page or a migrated endpoint.
+    """
+    if isinstance(exc, _GridTransient) and exc.diagnostic == "http_access_refused":
+        return "http_access_refused"
+    if isinstance(exc, _GridParseError) and exc.diagnostic in {
+        "html_payload", "unrecognized_payload", "hdf_payload_unreadable"
+    }:
+        return exc.diagnostic
+    return _grid_outcome(exc)
+
+
+def _unreadable_grid_reason(payload: bytes) -> str:
+    """Classify already-read bytes only AFTER h5py refused the container.
+
+    HDF5 signatures may follow a user block (0,512,1024,2048,...); arbitrary
+    user-block content must not be mistaken for an HTML response. These labels
+    do not validate a file or distinguish truncation from other HDF failures.
+    """
+    signature = b"\x89HDF\r\n\x1a\n"
+    offset = 0
+    while offset + len(signature) <= len(payload):
+        if payload[offset:offset + len(signature)] == signature:
+            return "hdf_payload_unreadable"
+        offset = 512 if offset == 0 else offset * 2
+    # Bound the prefix work and never retain or print any of it.
+    prefix = payload[:256].removeprefix(b"\xef\xbb\xbf").lstrip().lower()
+    if re.match(rb"(?:<!doctype\s+html(?:\s|>)|<html(?:\s|>))", prefix):
+        return "html_payload"
+    return "unrecognized_payload"
 
 
 def _fetch_grid_with_walkback(
@@ -1433,7 +1479,8 @@ def _fetch_grid_bytes_datapool(*, target_date: date, product: str, token: str) -
     if resp.status_code == 404:
         raise _GridNotFound(f"datapool 404 for {url}")
     if resp.status_code in (401, 403):
-        raise _GridTransient(f"datapool auth error HTTP {resp.status_code} for {url}")
+        raise _GridTransient(f"datapool auth error HTTP {resp.status_code} for {url}",
+                             diagnostic="http_access_refused")
     if resp.status_code >= 500:
         raise _GridTransient(f"datapool HTTP {resp.status_code} for {url}")
     try:
@@ -1508,7 +1555,8 @@ def _subset_grid(
             dataset = _find_precip_dataset(handle)
             grid = dataset[...]
     except OSError as exc:
-        raise _GridParseError(f"could not open IMERG grid: {exc}") from exc
+        reason = _unreadable_grid_reason(grid_bytes)
+        raise _GridParseError(f"could not open IMERG grid: {reason}", diagnostic=reason) from exc
 
     if grid.shape != (1, LON_CELLS, LAT_CELLS):
         raise _GridParseError(
@@ -1602,12 +1650,10 @@ def _detect_rolling_accumulations(
             window = rows[-period_days:]
             if len(window) != period_days or not _dates_are_consecutive([row["date"] for row in window]):
                 continue
-            # Stuck-sensor guard (#372): a window of IDENTICAL daily values is
-            # a stuck retrieval, not weather — Barrow logged exactly 71.25 mm
-            # eight days running (while ~5.6 mm actually fell) and minted a
-            # phantom "record" draft every few days for a month. Real daily
-            # satellite totals big enough to trip these thresholds are never
-            # equal to two decimals across a whole window.
+            # Repeated-value guard (#372): withhold identical rounded daily
+            # totals pending source verification. Repetition alone establishes
+            # neither a stuck retrieval nor the true rainfall; the historical
+            # Barrow source window and QC could not be reconstructed reliably.
             if len({round(float(row["mm"]), 2) for row in window}) == 1:
                 print(
                     f"[gpm] stuck-sensor guard: {reading.country}:{reading.city} "
