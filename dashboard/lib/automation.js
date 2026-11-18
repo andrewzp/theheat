@@ -1,5 +1,5 @@
 import { readStateStore } from "./state-store.js"
-import { selectLatestDecisiveRun } from "./automation-status.js"
+import { botWorkflowActivity, selectLatestDecisiveRun } from "./automation-status.js"
 
 const DEFAULT_PRODUCTION_BRANCH = "main"
 const ROUTINE_BEACON_VARIABLE = "ROUTINE_BEACON"
@@ -50,7 +50,7 @@ export async function fetchWorkflowState(file) {
   return { state: data.state, updated_at: data.updated_at }
 }
 
-export async function fetchWorkflowLastRun(file) {
+async function fetchWorkflowRunSnapshot(file) {
   if (!process.env.GITHUB_TOKEN) {
     throw new Error("GITHUB_TOKEN not configured")
   }
@@ -68,17 +68,26 @@ export async function fetchWorkflowLastRun(file) {
     throw new Error(`fetchWorkflowLastRun(${file}) failed: ${res.status}`)
   }
   const data = await res.json()
-  const runs = data.workflow_runs || []
-  if (runs.length === 0) return null
+  const runs = data.workflow_runs
+  if (!Array.isArray(runs)) throw new Error("Workflow run response invalid")
+  const currentActivity = file === "bot.yml"
+    ? { ...botWorkflowActivity(runs, { repository: repo(), branch: productionBranch() }),
+      checked_at: new Date().toISOString() }
+    : null
+  if (runs.length === 0) return { lastRun: null, currentActivity }
   const decisive = selectLatestDecisiveRun(runs)
   const r = decisive || runs[0]
-  return {
+  return { currentActivity, lastRun: {
     id: r.id,
     status: r.status,
     // null when no decisive run in the window → dot renders gray, not green.
     conclusion: decisive ? r.conclusion : null,
     created_at: r.created_at,
-  }
+  } }
+}
+
+export async function fetchWorkflowLastRun(file) {
+  return (await fetchWorkflowRunSnapshot(file)).lastRun
 }
 
 async function readBeaconVariable(name, label) {
@@ -156,6 +165,7 @@ function summarizePostingModes(drafts) {
 async function fetchWorkflowFull(spec) {
   let workflowState = null
   let lastRun = null
+  let currentActivity = null
   let error = null
   try {
     workflowState = await fetchWorkflowState(spec.file)
@@ -163,7 +173,9 @@ async function fetchWorkflowFull(spec) {
     error = e.message
   }
   try {
-    lastRun = await fetchWorkflowLastRun(spec.file)
+    const snapshot = await fetchWorkflowRunSnapshot(spec.file)
+    lastRun = snapshot.lastRun
+    currentActivity = snapshot.currentActivity
   } catch (e) {
     error = error || e.message
   }
@@ -173,6 +185,9 @@ async function fetchWorkflowFull(spec) {
     state: workflowState?.state ?? "unknown",
     last_run_at: lastRun?.created_at ?? null,
     last_run_conclusion: lastRun?.conclusion ?? null,
+    ...(spec.file === "bot.yml" ? { current_activity: currentActivity ?? {
+      status: "unavailable", window_size: null, runs: [], checked_at: null,
+    } } : {}),
     error,
   }
 }
