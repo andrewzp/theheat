@@ -30,8 +30,8 @@ def rehash(document):
     return document
 
 
-def test_default_export_contains_scoped_dated_provider_facts_and_no_grants():
-    document = products.product_contract_document()
+def test_v2_export_contains_original_scoped_dated_provider_facts_and_no_grants():
+    document = products.product_contract_document(schema=V2)
     assert document["schema"] == V2
     rows = by_id(document)
     assert {key for key, row in rows.items() if row["provider_cadence"] is not None} == DOCUMENTED
@@ -68,7 +68,7 @@ def test_legacy_export_is_byte_equivalent_to_accepted_127_and_stays_unknown():
 
 
 def test_cadence_is_product_scoped_and_is_not_a_freshness_or_rate_promise():
-    rows = by_id(products.product_contract_document())
+    rows = by_id(products.product_contract_document(schema=V2))
     assert "minute" in rows[AWC]["provider_cadence"]["summary"]
     assert "day" in rows[STATIONS]["provider_cadence"]["summary"]
     assert rows[AWC]["provider_cadence"] != rows[STATIONS]["provider_cadence"]
@@ -83,7 +83,7 @@ def test_cadence_is_product_scoped_and_is_not_a_freshness_or_rate_promise():
 
 
 def test_partial_evidence_and_unrelated_products_remain_in_exact_unmet_rows():
-    document = products.product_contract_document()
+    document = products.product_contract_document(schema=V2)
     rows = by_id(document)
     gaps = {(row["field"], row["status"]): row["products"] for row in document["unmet_criteria"]
             if row["field"] in products.UNKNOWN_FIELDS}
@@ -107,14 +107,14 @@ def test_partial_evidence_and_unrelated_products_remain_in_exact_unmet_rows():
     lambda row: row.__setitem__("provider_cadence", None),
 ])
 def test_rehashed_provider_fact_tampering_is_refused(mutation):
-    document = products.product_contract_document()
+    document = products.product_contract_document(schema=V2)
     mutation(by_id(document)[AWC])
     with pytest.raises(ValueError, match="source_product_export_permission"):
         products.decode_product_contract_document(rehash(document))
 
 
 def test_partial_gap_cannot_be_removed_by_rehashing():
-    document = products.product_contract_document()
+    document = products.product_contract_document(schema=V2)
     document["unmet_criteria"] = [row for row in document["unmet_criteria"]
                                 if not (row["field"] == "reuse_rights" and row["status"] == "partial")]
     with pytest.raises(ValueError, match="source_product_export_summary"):
@@ -132,19 +132,19 @@ def test_versions_cannot_borrow_each_others_provider_evidence():
 
 
 def test_export_is_detached_and_unrelated_product_cannot_borrow_evidence():
-    document = products.product_contract_document()
+    document = products.product_contract_document(schema=V2)
     original = deepcopy(document)
     other = next(row for row in document["products"] if row["product_id"] not in DOCUMENTED)
     other["provider_cadence"] = deepcopy(by_id(document)[AWC]["provider_cadence"])
     with pytest.raises(ValueError, match="source_product_export_permission"):
         products.decode_product_contract_document(rehash(document))
     by_id(document)[AWC]["provider_cadence"]["references"][0]["sha256"] = "0" * 64
-    assert products.product_contract_document() == original
+    assert products.product_contract_document(schema=V2) == original
 
 
 @pytest.mark.parametrize("schema", [None, [], {}, 0, True])
 def test_malformed_schema_is_a_bounded_refusal_not_a_consumer_crash(schema):
-    document = products.product_contract_document()
+    document = products.product_contract_document(schema=V2)
     document["schema"] = schema
     with pytest.raises(ValueError, match="source_product_export_schema"):
         products.decode_product_contract_document(rehash(document))
