@@ -1,3 +1,8 @@
+## 0.9.109.137
+
+- Show saved pending approval states separately from policy route recommendations: attention required, current automatic or manual approval, and unresolved sends. Missing or inconsistent evidence shows unavailable.
+- Reuse the existing state read and current review, approval and release checks. Preserve all policy and graphic-runtime identities, posting controls and final sender checks.
+
 ## 0.9.109.136
 
 - Preserve bounded HTTP, transport and stream failure reasons when rechecking observed airport evidence, and label sender refusals as observed airport reports. Keep unexpected failures distinct without logging provider messages or payloads.

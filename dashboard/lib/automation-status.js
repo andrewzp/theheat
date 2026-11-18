@@ -4,6 +4,18 @@
 
 import { reportTimestamp } from "./runtime-report.js"
 
+export function postingStatePresentation(summary) {
+  const unavailable = { status: "unavailable" }
+  const fields = ["pending_count", "attention_required_count", "auto_scheduled_count", "manual_approved_count", "unresolved_send_count"]
+  if (!summary || summary.schema_version !== 1 || summary.status !== "recorded"
+      || !Number.isFinite(reportTimestamp(summary.checked_at))
+      || fields.some(key => !Number.isSafeInteger(summary[key]) || summary[key] < 0)) return unavailable
+  const total = fields.slice(1).reduce((sum, key) => sum + summary[key], 0)
+  if (!Number.isSafeInteger(total) || total !== summary.pending_count) return unavailable
+  return { status: "recorded", checked_at: summary.checked_at,
+    ...Object.fromEntries(fields.map(key => [key, summary[key]])) }
+}
+
 // Run conclusions that mean the workflow is broken. Mirrors
 // scripts/workflow_health.py FAILING_CONCLUSIONS — both must agree on what "red"
 // means. A failed run renders RED (it used to render yellow, which is how a

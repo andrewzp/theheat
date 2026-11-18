@@ -8,6 +8,7 @@ import {
   collectionPauseSummary,
   recordedBotLaneStarts,
   botActivityPresentation,
+  postingStatePresentation,
 } from "../../lib/automation-status.js"
 
 function AutomationDot({ name, color, tooltip }) {
@@ -62,7 +63,7 @@ export function AutomationStatusStrip({ status, error, runHistory, localPreview 
   const workflows = status.workflows || []
   const routine = status.routine || {}
   const selfHeal = status.self_heal || {}
-  const pm = status.posting_mode_summary
+  const pm = postingStatePresentation(status.posting_state_summary)
   const failing = failingWorkflows(status)
   const pause = collectionPauseSummary(status)
   const botWorkflow = workflows.find(isBotWorkflow)
@@ -115,14 +116,15 @@ export function AutomationStatusStrip({ status, error, runHistory, localPreview 
           }`}
         />
         <span className="automation-spacer" />
-      {pm ? (
-        <span className="automation-posting-mode">
-          {pm.manual_only_count ?? 0} manual / {pm.armed_auto_count ?? 0} auto /{" "}
-          {pm.suggested_count ?? 0} suggested
+      {pm.status === "recorded" ? (
+        <span className="automation-posting-mode" title={`Saved pending decisions checked ${new Date(pm.checked_at).toUTCString()}. Final source and publication checks still apply.`}>
+          {pm.attention_required_count} need{pm.attention_required_count === 1 ? "s" : ""} attention /{" "}
+          {pm.auto_scheduled_count} auto-approved / {pm.manual_approved_count} manually approved /{" "}
+          {pm.unresolved_send_count} unresolved send{pm.unresolved_send_count === 1 ? "" : "s"}
         </span>
       ) : (
-        <span className="automation-posting-mode automation-posting-mode-error" title={status.posting_mode_error || ""}>
-          posting status unavailable
+        <span className="automation-posting-mode automation-posting-mode-error">
+          Saved approvals unavailable
         </span>
       )}
       </div>

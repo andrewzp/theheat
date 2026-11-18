@@ -1,5 +1,9 @@
-import { readStateStore } from "./state-store.js"
+import { readStateWithRuntimeReport } from "./state-store.js"
 import { botWorkflowActivity, selectLatestDecisiveRun } from "./automation-status.js"
+import { approvalIsCurrent, hasUnresolvedPublish } from "./draft-revisions.js"
+import { dashboardEditorialPolicy } from "./editorial-policy.js"
+import { dashboardAutomaticPolicy } from "./publication-control.js"
+import { reportTimestamp } from "./runtime-report.js"
 
 const DEFAULT_PRODUCTION_BRANCH = "main"
 const ROUTINE_BEACON_VARIABLE = "ROUTINE_BEACON"
@@ -162,6 +166,40 @@ function summarizePostingModes(drafts) {
   return summary
 }
 
+export function summarizePostingStates(state, { runtimeReport = null, now = Date.now() } = {}) {
+  const time = typeof now === "number" && Number.isFinite(now) ? new Date(now) : null
+  const checked_at = time && Number.isFinite(time.getTime()) ? time.toISOString() : null
+  const unavailable = { schema_version: 1, status: "unavailable", checked_at }
+  if (!checked_at || !Array.isArray(state?.drafts)) return unavailable
+  const summary = { schema_version: 1, status: "recorded", checked_at, pending_count: 0,
+    attention_required_count: 0, auto_scheduled_count: 0, manual_approved_count: 0, unresolved_send_count: 0 }
+  const ids = new Map()
+  for (const row of state.drafts) {
+    if (!row || typeof row !== "object" || Array.isArray(row)
+        || !["pending", "approved", "posted", "rejected"].includes(row.status)) return unavailable
+    if (typeof row.id === "string" && row.id.length) ids.set(row.id, (ids.get(row.id) || 0) + 1)
+  }
+  try {
+    const policy = dashboardEditorialPolicy(state, { now, runtimeReport }).policy
+    const publication = dashboardAutomaticPolicy(state, { now, runtimeReport })
+    for (const row of state.drafts) {
+      if (!["pending", "approved"].includes(row.status)) continue
+      if (typeof row.id !== "string" || !row.id.length || ids.get(row.id) !== 1) return unavailable
+      summary.pending_count++
+      if (hasUnresolvedPublish(row, state)) summary.unresolved_send_count++
+      else if (row.status === "pending" && row.approval_mode === "auto"
+          && row.autoship_on_critic_pass === true && Number.isFinite(reportTimestamp(row.auto_approve_at))
+          && row.approval_policy?.can_auto_approve !== false
+          && publication.enabled && row.approval_binding?.publication_epoch === publication.epoch
+          && approvalIsCurrent(row, "auto", policy)) summary.auto_scheduled_count++
+      else if (row.status === "approved" && row.approval_mode === "manual"
+          && approvalIsCurrent(row, "manual", policy)) summary.manual_approved_count++
+      else summary.attention_required_count++
+    }
+    return summary
+  } catch { return unavailable }
+}
+
 async function fetchWorkflowFull(spec) {
   let workflowState = null
   let lastRun = null
@@ -194,15 +232,19 @@ async function fetchWorkflowFull(spec) {
 
 async function readPostingModeSummary() {
   try {
-    const stateRecord = await readStateStore()
-    const drafts = stateRecord?.state?.drafts ?? stateRecord?.drafts ?? []
+    const { state, runtimeReport } = await readStateWithRuntimeReport()
+    const drafts = state?.drafts ?? []
     return {
       posting_mode_summary: summarizePostingModes(drafts),
+      posting_mode_summary_basis: "policy_recommendations",
+      posting_state_summary: summarizePostingStates(state, { runtimeReport }),
       posting_mode_error: null,
     }
   } catch (e) {
     return {
       posting_mode_summary: null,
+      posting_mode_summary_basis: "policy_recommendations",
+      posting_state_summary: null,
       posting_mode_error: e?.message || String(e),
     }
   }
@@ -236,6 +278,8 @@ export async function getAutomationStatus() {
       fixed: selfHealBeacon?.fixed ?? null,
     },
     posting_mode_summary: postingMode.posting_mode_summary,
+    posting_mode_summary_basis: postingMode.posting_mode_summary_basis,
+    posting_state_summary: postingMode.posting_state_summary,
     posting_mode_error: postingMode.posting_mode_error,
   }
 }
