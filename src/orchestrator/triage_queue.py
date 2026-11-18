@@ -934,6 +934,15 @@ def _drain_and_write_triage_queue(
     triage_enabled = _triage_enabled()
     refill_enabled = _caps.refill_enabled()
     if triage_enabled or refill_enabled:
+        # Airport source windows are hours, not the generic pending TTL's days.
+        # Retire only intact, unattempted expired pairs before the type cap.
+        try:
+            expired = _triage.apply_awc_expired_pending_sweep(bot_state)
+            if expired:
+                print(f"[triage] airport source-window sweep rejected {expired} draft(s)")
+        except Exception:
+            # Failed cleanup leaves capacity occupied; it never expands a cap.
+            print("[triage] airport source-window sweep unavailable (continuing)")
         # Pending-queue TTL sweep — auto-reject stale drafts BEFORE triage so the
         # freshly-opened slots are immediately available to incoming candidates
         # via the pending-type cap. Errors here must NOT block the cycle: a

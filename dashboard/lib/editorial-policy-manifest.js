@@ -143,7 +143,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/editorial/observed_scope.py": "a132970b736b75a650454674f496a746be9c2ee0d45d8c17a6d23228276cc152",
     "src/editorial/official_warning.py": "e37a232fe19e8ef90bfc825c92b95b89d9c9f9df7818b4a3352466ad2beeff87",
     "src/editorial/operator_claim_references.py": "f7d1d14d75b55cc9f273d3a98459f158f57c533521d153b1e86ee5bc7d95d1fd",
-    "src/editorial/policy.py": "e6484a81d947729cf91680c8bcbe25c7e80a5d3ef2bd18288134a680f869fe0b",
+    "src/editorial/policy.py": "fa56f817b3d75e0c94e842030400467ac6f0e72772981dc537982a2bc007ca96",
     "src/editorial/portfolio.py": "b8a3e7b5a6fc2a1f9843ef4382fa4901fbaf74f6c5834646740a1f65e99fabd5",
     "src/editorial/report_development.py": "e2ed39a9ff957683c8befff0f3b99533fdc9d90d84af88220ed13f2bf1489995",
     "src/editorial/report_supply.py": "37aa718804a9dce97c105769912c87e8f7513f1b69bdcc3240865eba810c01a6",
@@ -217,7 +217,8 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/orchestrator/sources/regional_observed.py": "ed3eb40b8f5d167262c3cf6bbfe706b2bbd68cf318804dfb817f5171178b65b2",
     "src/orchestrator/sources/river_gauges.py": "cf8e08b50ce78297f1138319a0f8ac91b91bcfc08c597538b011934fb80ae943",
     "src/orchestrator/sources/synthesis.py": "e1e101948dde8a2ac07be65d78e37ed0cd8e080c43523ea0ded1b1071cd31522",
-    "src/orchestrator/triage_queue.py": "1a55286072e53fa2075e6de82b19554cfe9b14736dcfbd4dccf7a9cd5262ab49",
+    "src/orchestrator/triage.py": "3c70f990f15aa815ca73e2ed1bb1d3016bdc85ba6a2e67d225eec55c4a7aa773",
+    "src/orchestrator/triage_queue.py": "cee7dc7f390c2629840ff9def5512dc3e8d1c1cd5a30b2d1062d058933f9a663",
     "src/orchestrator/two_bot_dispatch.py": "3f19fc38fc4ab63cbffb1391201f22a6790c45e6b51743e805b9943ec014fb80",
     "src/posting/bluesky.py": "30333265f7978e905a4f4c45039c7bdae997cb192811e9e93701bf31976105a4",
     "src/posting/delivery_receipts.py": "c944f22458726d02bcdbbf70d274d4831486013dc2eb1e47fd6f2a569abd4147",
@@ -303,5 +304,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "5c5ffcc95358c7df45ae838c228759ad0eb6275c8f9053c8130c0a8824b63d9e"
   },
   "schema_version": 1,
-  "source_sha256": "f30129df5cf9e4ed15395927f2874aa2ffa85b655ecb5fe9a4889ddd07bbe1fc"
+  "source_sha256": "3b04be0799ea9b58ca41a276d15efd6b76ec013d6392831386535b7dc453ce6b"
 }
