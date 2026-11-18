@@ -18,6 +18,7 @@ const OUTCOMES = Object.freeze({
   regional_hold: ["Regional service held", "Each named national service needs its owner access and schema contract; supplied regions are unaffected and nothing is inferred for the held ones."],
   unavailable: ["Source unavailable", "Retry on the next scheduled run; other sources are unaffected."],
   no_event: ["Checked, no qualifying event", "Nothing to do; an empty result is not proof of complete coverage."],
+  policy_excluded: ["Excluded by observed-only policy", "Forecast air-quality collection was intentionally skipped. Current service availability is unverified; previous errors remain in history."],
   supplying: ["Supplying candidates", "Review the resulting drafts."],
   unknown: ["Unknown", "No retained run row explains this source yet."],
 })
@@ -61,19 +62,36 @@ export function sourceOutcome(row, rejections = []) {
     : []
   if (held.length && !((count(row.promoted) ?? 0) > 0)) return outcome("regional_hold", row, held.join("; "))
   if (row.status === "failed") return outcome("unavailable", row, named)
+  // Only the collector's exact zero-work marker explains this policy exclusion.
+  // Keep explicit access/incident failures above it; old copy rejections below
+  // do not turn this current no-work policy skip into a new check attempt.
+  if (row.source === "air_quality" && row.status === "skipped" && row.error_class === "editorial_scope"
+      && row.note === "Forecast AQ acquisition skipped in observed-only scheduled mode"
+      && (row.error == null || row.error === "")
+      && ["observed", "promoted", "triaged_in", "triaged_out", "writer_attempted", "drafted"].every(key => row[key] === 0)) {
+    return outcome("policy_excluded", row)
+  }
   const admission = nwsAdmissionDetail(row)
   if (rejections.some(r => r?.source === row.source && ["writer", "safety", "fact_check", "critic", "honesty_gate", "copy_gate"].includes(r?.stage))) {
     return outcome("writer_or_check_rejection", row, admission)
   }
-  if ((count(row.promoted) ?? 0) > 0) return outcome("supplying", row, admission)
+  if ((count(row.promoted) ?? 0) > 0) {
+    const drafted = Number.isSafeInteger(row.drafted) && row.drafted >= 0 ? row.drafted : null
+    const action = drafted === null
+      ? "Check whether these candidates reached writing and review; the saved-draft count was not recorded."
+      : drafted === 0
+      ? "Candidates were collected, but this run recorded no saved draft. Check selection and check results."
+      : "Check the saved drafts from this run; they may need fresh review."
+    return outcome("supplying", row, admission, action)
+  }
   if (incident?.product_state === "alternate_served") return outcome("alternate_served", row, named)
   if (["success", "degraded", "partial_failure"].includes(row.status)) return outcome("no_event", row, admission)
   return outcome("unknown", row)
 }
 
-function outcome(state, row, detail = null) {
+function outcome(state, row, detail = null, action = null) {
   const [label, next_action] = OUTCOMES[state]
-  return { state, label, next_action, detail, source: row?.source ?? null, status: row?.status ?? null }
+  return { state, label, next_action: action ?? next_action, detail, source: row?.source ?? null, status: row?.status ?? null }
 }
 
 // Coverage denominators exactly as retained; sampled sources are never "global recall".
