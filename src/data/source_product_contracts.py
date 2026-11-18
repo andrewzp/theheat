@@ -1,8 +1,8 @@
 """Per-product serving-leg contracts for the wired source inventory.
 
 Advisory metadata only. It grants no claim permission, activation, source
-qualification or production availability. Provider cadence, quota, reuse rights
-and cost stay unknown here. Importing or exporting performs no adapter import,
+qualification or production availability. Dated primary-document facts cover
+only named products; incomplete quota/rights and costs stay explicit. Importing or exporting performs no adapter import,
 network, environment/credential read or state mutation.
 """
 
@@ -18,9 +18,70 @@ from typing import Any
 from src.data.source_registry import CONTRACTS as REGISTRY_CONTRACTS
 from src.data.source_registry import SCHEMA_VERSION as REGISTRY_SCHEMA_VERSION
 
-SCHEMA = "theheat.source-product-contracts/v1"
+LEGACY_SCHEMA = "theheat.source-product-contracts/v1"
+SCHEMA = "theheat.source-product-contracts/v2"
 PURPOSE = "product_and_serving_leg_inventory_not_activation_or_claim_permission"
 UNKNOWN_FIELDS = ("provider_cadence", "provider_quota", "reuse_rights", "cost")
+
+# Exact public documentation snapshots, read 18 November 2026. These identities
+# bind the reviewed documents, not current service, weather truth or permission.
+_AWC_DOC = ("https://aviationweather.gov/data/api/",
+            "0878d71049f7d391c5ea8e04b07e7bfdf17e863e898c70dc2e97bbd03eb23a86")
+_NWS_DOC = ("https://www.weather.gov/disclaimer",
+            "c08c1597ebd52b31e3ba749f76d2217c290dcd16dc894cb4c109655566ecbbd1")
+_NIFC_ITEM_DOC = (
+    "https://www.arcgis.com/sharing/rest/content/items/4181a117dc9e43db8598533e29972015?f=pjson",
+    "2431ef268c3e0e941d018e6153155074965ba3543a6c15c0e5235045e8f1ba29")
+_NIFC_LAYER_DOC = (
+    "https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/"
+    "WFIGS_Incident_Locations_Current/FeatureServer/0?f=pjson",
+    "a53be1fe171c7856cf9717f64a46ecb69046ac5b754ce5206c70f8aa4b66fcaf")
+
+
+def _provider_fact(status, summary, limits, *references):
+    return {"status": status, "checked_at": "2026-11-18T07:44:10Z", "summary": summary,
+            "limits": limits, "references": [{"url": url, "sha256": sha} for url, sha in references]}
+
+
+def _provider_fields(leg: ProductLeg, *, schema=SCHEMA) -> dict[str, Any]:
+    """Detached, finite documentation facts; never caller-supplied grants."""
+    fields: dict[str, Any] = {field: None for field in UNKNOWN_FIELDS}
+    if type(schema) is not str or schema not in {SCHEMA, LEGACY_SCHEMA}:
+        raise ValueError("source_product_export_schema")
+    if schema == LEGACY_SCHEMA:
+        return fields
+    product_id = leg.product_id
+    if product_id in {"awc_observed.metar_observations", "awc_observed.station_catalogue"}:
+        station = product_id == "awc_observed.station_catalogue"
+        upstream = "noaa_awc.station_catalogue" if station else "noaa_awc.metar"
+        if (leg.provider, leg.upstream) != ("noaa_awc", upstream):
+            return fields
+        fields["provider_cadence"] = _provider_fact(
+            "documented", "Station catalogue cache updates once a day." if station else
+            "Full METAR cache updates once a minute; most individual METARs update hourly.",
+            "Publication schedule, not an uptime promise or fresh individual observation.", _AWC_DOC)
+        if not station:
+            fields["provider_quota"] = _provider_fact(
+                "partial", "REST API documentation limits requests to 100 per minute.",
+                "REST portion only; dedicated cache limits, quota scope and reserved capacity remain unverified.", _AWC_DOC)
+        fields["reuse_rights"] = _provider_fact(
+            "partial", "NWS material has public-domain use conditions, with separate third-party provisions.",
+            "Per-product third-party or international origin and logo or imagery scope are not cleared here.", _NWS_DOC)
+    elif product_id in {"fire_footprint.wfigs_incidents", "newsworthiness.nifc_incidents"}:
+        if (leg.provider, leg.upstream) != ("nifc_wfigs", "nifc.wfigs_incident_locations_current"):
+            return fields
+        fields["provider_cadence"] = _provider_fact(
+            "documented", "IRWIN synchronization occurs every 5 minutes; fall-off rules are enforced hourly.",
+            "Not the size measurement time, a promise each incident changed or a service guarantee.", _NIFC_ITEM_DOC)
+        fields["provider_quota"] = _provider_fact(
+            "partial", "The exact layer reports maxRecordCount 2000.",
+            "Default response-row limit, not a request-rate quota or complete census; other query modes and rate quota remain unverified.",
+            _NIFC_LAYER_DOC)
+        fields["reuse_rights"] = _provider_fact(
+            "partial", "Published item terms disclaim accuracy, completeness and fitness.",
+            "No affirmative reuse license for every contributing dataset or base map is established by this metadata.",
+            _NIFC_ITEM_DOC)
+    return fields
 
 DATA_KINDS = frozenset({
     "observed_station", "forecast_model", "reanalysis", "satellite_derived", "expert_analysis",
@@ -1024,12 +1085,21 @@ def _missing_work(legs) -> list[dict[str, Any]]:
             for leg in legs if leg.status in {"unresolved", "retired"}]
 
 
-def _unmet_criteria(legs) -> list[dict[str, Any]]:
+def _unmet_criteria(legs, *, schema=SCHEMA) -> list[dict[str, Any]]:
     """Requirements the rows themselves leave open; derived, never supplied."""
-    unmet: list[dict[str, Any]] = [
-        {"field": field, "products": "all", "status": "unknown",
-         "needs": "Exact current provider documentation or a measured record for that product."}
-        for field in UNKNOWN_FIELDS]
+    unmet: list[dict[str, Any]] = []
+    for field in UNKNOWN_FIELDS:
+        if schema == LEGACY_SCHEMA:
+            unmet.append({"field": field, "products": "all", "status": "unknown",
+                          "needs": "Exact current provider documentation or a measured record for that product."})
+            continue
+        fields = {leg.product_id: _provider_fields(leg, schema=schema)[field] for leg in legs}
+        for status in ("unknown", "partial"):
+            members = sorted(product_id for product_id, fact in fields.items()
+                             if (fact is None if status == "unknown" else fact is not None and fact["status"] == "partial"))
+            if members:
+                unmet.append({"field": field, "products": members, "status": status,
+                              "needs": "Exact current provider documentation or a measured record for that product."})
     unmet.append({"field": "current_availability", "products": "all", "status": "unverified",
                   "needs": "Observed qualified collection; static contracts cannot show it."})
     unresolved = {leg.product_id: sorted(code for code, item in restriction_enforcement(leg).items()
@@ -1043,8 +1113,10 @@ def _unmet_criteria(legs) -> list[dict[str, Any]]:
     return unmet
 
 
-def product_contract_document(legs=LEGS, registry=REGISTRY_CONTRACTS) -> dict[str, Any]:
-    """Versioned read-only export joined to the v1 registry by exact source/health key."""
+def product_contract_document(legs=LEGS, registry=REGISTRY_CONTRACTS, *, schema=SCHEMA) -> dict[str, Any]:
+    """Dated v2 provider facts or exact legacy v1 shape; neither grants authority."""
+    if type(schema) is not str or schema not in {SCHEMA, LEGACY_SCHEMA}:
+        raise ValueError("source_product_export_schema")
     validate_legs(legs, registry)
     adapters = []
     for row in registry:
@@ -1061,7 +1133,7 @@ def product_contract_document(legs=LEGS, registry=REGISTRY_CONTRACTS) -> dict[st
     rows = []
     for leg in legs:
         item = asdict(leg)
-        item.update({field: None for field in UNKNOWN_FIELDS})
+        item.update(_provider_fields(leg, schema=schema))
         item["configured_collection_rule"] = next(r.collection_rule for r in registry if r.source_id == leg.source_id)
         item["claim_permission_granted"] = False
         item["restriction_enforcement"] = restriction_enforcement(leg)
@@ -1074,7 +1146,7 @@ def product_contract_document(legs=LEGS, registry=REGISTRY_CONTRACTS) -> dict[st
                               "checks": [] if advisory else [{"applies_to": selector, "reference": ref}
                                                              for selector, ref in enforcement]}
     body = {
-        "schema": SCHEMA,
+        "schema": schema,
         "registry_schema_version": REGISTRY_SCHEMA_VERSION,
         "purpose": PURPOSE,
         "claim_permission_granted": False,
@@ -1088,7 +1160,7 @@ def product_contract_document(legs=LEGS, registry=REGISTRY_CONTRACTS) -> dict[st
         "products": rows,
         "shared_upstream_groups": shared_upstream_groups(legs),
         "missing_work": _missing_work(legs),
-        "unmet_criteria": _unmet_criteria(legs),
+        "unmet_criteria": _unmet_criteria(legs, schema=schema),
     }
     body = json.loads(_canonical(body))  # JSON-native: identical once detached and reloaded
     return {**body, "contracts_sha256": hashlib.sha256(_canonical(body).encode()).hexdigest()}
@@ -1104,7 +1176,7 @@ _DOCUMENT_KEYS = frozenset({"schema", "registry_schema_version", "purpose", "cla
                             "shared_upstream_groups", "missing_work", "unmet_criteria", "contracts_sha256"})
 
 
-def _decode_leg(row: Any) -> ProductLeg:
+def _decode_leg(row: Any, *, schema=SCHEMA) -> ProductLeg:
     if type(row) is not dict or set(row) != _ROW_KEYS:
         raise ValueError("source_product_export_row")
     values: dict[str, Any] = {}
@@ -1120,12 +1192,14 @@ def _decode_leg(row: Any) -> ProductLeg:
         elif type(value) is not str or len(value) > 300:
             raise ValueError("source_product_export_row")
         values[field] = value
+    leg = ProductLeg(**values)
+    expected_provider = _provider_fields(leg, schema=schema)
     if values["claim_permissions"] or row["claim_permission_granted"] is not False \
-            or any(row[field] is not None for field in UNKNOWN_FIELDS):
+            or any(row[field] != expected_provider[field] for field in UNKNOWN_FIELDS):
         raise ValueError("source_product_export_permission")
     if type(row["restriction_enforcement"]) is not dict or type(row["configured_collection_rule"]) is not str:
         raise ValueError("source_product_export_row")
-    return ProductLeg(**values)
+    return leg
 
 
 def decode_product_contract_document(document: Any) -> dict[str, Any]:
@@ -1136,7 +1210,8 @@ def decode_product_contract_document(document: Any) -> dict[str, Any]:
     enforcement, and every summary is recomputed from those rows. Unknown
     versions or data are refused (held by the caller), never coerced.
     """
-    if type(document) is not dict or document.get("schema") != SCHEMA or set(document) != _DOCUMENT_KEYS \
+    if type(document) is not dict or type(document.get("schema")) is not str \
+            or document["schema"] not in {SCHEMA, LEGACY_SCHEMA} or set(document) != _DOCUMENT_KEYS \
             or document.get("registry_schema_version") != REGISTRY_SCHEMA_VERSION \
             or type(document["registry_schema_version"]) is not int or document.get("purpose") != PURPOSE \
             or document.get("unknown_fields") != list(UNKNOWN_FIELDS):
@@ -1156,11 +1231,11 @@ def decode_product_contract_document(document: Any) -> dict[str, Any]:
     rows = document["products"]
     if type(rows) is not list or len(rows) > 256:
         raise ValueError("source_product_export_row")
-    legs = tuple(_decode_leg(row) for row in rows)
+    legs = tuple(_decode_leg(row, schema=document["schema"]) for row in rows)
     validate_legs(legs, REGISTRY_CONTRACTS)
     if legs != LEGS:
         raise ValueError("source_product_export_inventory")
-    expected = product_contract_document(legs)
+    expected = product_contract_document(legs, schema=document["schema"])
     if [row["restriction_enforcement"] for row in rows] != [row["restriction_enforcement"] for row in expected["products"]]:
         raise ValueError("source_product_export_enforcement")
     if rows != expected["products"]:

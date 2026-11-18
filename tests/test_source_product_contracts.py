@@ -245,8 +245,8 @@ def test_unlabelled_success_is_ambiguous_where_unlabelled_alternate_routes_exist
         products.serving_disposition("firms", status="green")
 
 
-def test_export_grants_nothing_and_keeps_provider_terms_unknown():
-    document = products.product_contract_document()
+def test_legacy_export_grants_nothing_and_keeps_provider_terms_unknown():
+    document = products.product_contract_document(schema=products.LEGACY_SCHEMA)
     assert document["claim_permission_granted"] is False and document["coverage_denominator"] is None
     assert document["current_availability"] == "unverified" and document["operational_recovery"] == "not_established"
     for row in document["products"]:
@@ -257,7 +257,7 @@ def test_export_grants_nothing_and_keeps_provider_terms_unknown():
     assert {row["field"] for row in document["unmet_criteria"]} == {*products.UNKNOWN_FIELDS, "current_availability",
                                                                     "restriction_enforcement"}
     assert products.verify_product_contract_document(document) == document["contracts_sha256"]
-    assert document == products.product_contract_document()
+    assert document == products.product_contract_document(schema=products.LEGACY_SCHEMA)
 
 
 def test_export_verification_refuses_tampering_and_injected_permissions():

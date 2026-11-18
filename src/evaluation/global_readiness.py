@@ -133,12 +133,18 @@ def _source_products(export, cutoff):
         view = products.decode_product_contract_document(export)
     except ValueError as exc:
         raise _Unsupported(str(exc)) from None
-    return ("contracts:" + view["contracts_sha256"], {
+    checked_at = sorted({fact["checked_at"] for row in export["products"]
+                         for field in products.UNKNOWN_FIELDS if (fact := row[field]) is not None})
+    holds = ["provider_documentation_after_cutoff"] if any(utc_datetime(stamp) > cutoff for stamp in checked_at) else []
+    facts = {
         "product_ids": view["product_ids"],
         "adapters": view["adapters"],
         "missing_work": sorted(row["product_id"] for row in view["missing_work"]),
         "unmet_codes": sorted(f"{row['field']}_{row['status']}" for row in view["unmet_criteria"]),
-    }, [])
+    }
+    if checked_at:
+        facts["provider_documentation_checked_at"] = checked_at
+    return ("contracts:" + view["contracts_sha256"], facts, holds)
 
 
 def _rainfall(export, cutoff):
