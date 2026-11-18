@@ -285,7 +285,10 @@ _GPM_LEGS = {
 }
 _GPM_WINDOW = "imerg_late_daily_walkback"
 _GRID_REASON = {"not_found": "granule_missing", "transient": "transport_failure", "parse_error": "malformed",
-                "zero_readings": "empty_success"}
+                "zero_readings": "empty_success",
+                # More specific observations do not change incident/backoff policy.
+                "http_access_refused": "transport_failure", "html_payload": "malformed",
+                "unrecognized_payload": "malformed", "hdf_payload_unreadable": "malformed"}
 
 
 def _gpm_leg_outcome(leg: Mapping[str, Any]) -> tuple[str, int | None, dict[str, int]]:

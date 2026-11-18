@@ -1,3 +1,8 @@
+## 0.9.109.131
+
+- Distinguish HTTP access refusals, HTML-like payloads, unrecognized payloads and unreadable HDF containers in retained GPM grid diagnostics, without retaining response bodies or credentials. Keep download counts, fallback order, qualification and incident/backoff policy unchanged.
+- Preserve valid HDF user-block handling and exercise the real source runner and durable telemetry with invented responses. Correct the historical rainfall guard comment without changing the guard.
+
 ## 0.9.109.130
 
 - Match rainfall nomination details to the durable source-health serializer's omitted-zero representation. Require explicit source-row counts, matching collection time/status and all existing nomination checks; missing positive or malformed values remain unavailable.
