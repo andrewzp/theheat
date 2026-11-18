@@ -195,6 +195,14 @@ def test_oversize_report_keeps_general_publication_history_without_changing_sour
     assert audit_story_bundle(bundle).prompt_ready
 
 
+def test_snapshot_limit_uses_the_actual_state_writer_unicode_encoding(capture):
+    bundle = report(capture, ProviderNote="é" * 6000)
+    assert audit_story_bundle(bundle).prompt_ready
+    snapshot = bundle_memory_snapshot(bundle)
+    assert len(json.dumps(snapshot, separators=(",", ":"), default=state_store.json_default).encode()) <= 32 * 1024
+    assert "source_event_identity" not in snapshot
+
+
 def test_oversize_retained_input_cannot_bypass_snapshot_retention_limit(capture):
     bundle = report(capture)
     _, draft = published_memory(bundle)

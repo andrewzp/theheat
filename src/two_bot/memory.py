@@ -311,7 +311,7 @@ def _source_memory_identity(bundle: StoryBundle) -> dict | None:
 
 def _nifc_snapshot_fits(value: dict) -> bool:
     try:
-        return len(json.dumps(value, ensure_ascii=False, allow_nan=False).encode()) <= _NIFC_SNAPSHOT_BYTES
+        return len(json.dumps(value, ensure_ascii=True, allow_nan=False, separators=(",", ":")).encode()) <= _NIFC_SNAPSHOT_BYTES
     except (ValueError, TypeError, OverflowError, RecursionError):
         return False
 
