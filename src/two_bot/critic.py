@@ -92,7 +92,7 @@ def _expired_unsent_airport(draft: dict, state: BotState, now: datetime) -> bool
         evidence = awc.validate_bundle(bundle, now=captured)
         target = datetime.fromisoformat(evidence["points"][0]["valid_time"].replace("Z", "+00:00"))
         return now - target > awc.MAX_AGE
-    except (KeyError, IndexError, TypeError, ValueError, AttributeError):
+    except (KeyError, IndexError, TypeError, ValueError, AttributeError, OverflowError):
         return False
 
 

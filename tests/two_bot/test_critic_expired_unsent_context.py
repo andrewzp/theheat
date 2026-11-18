@@ -102,7 +102,7 @@ def test_uncertain_delivery_or_unqualified_source_stays_visible(case, change):
     elif change == "malformed_ledger":
         state["publish_ledger"] = []
     elif "ledger" in change:
-        row = {"phase": "unknown"}
+        row: dict | None = {"phase": "unknown"}
         if change == "event_ledger_null":
             row = None
         elif change in ("event_ledger_receipt", "draft_ledger_receipt"):
@@ -145,4 +145,25 @@ def test_matching_never_sent_ledger_does_not_make_expired_copy_compete(case, key
     before = deepcopy(state)
     with freeze_time(NOW + timedelta(hours=3)):
         assert critic._collect_pending_today(state) == []
+    assert state == before
+
+
+@pytest.mark.parametrize("slate", [False, True])
+def test_overflowing_retained_source_stays_context_and_does_not_abort_current_check(case, monkeypatch, slate):
+    state, draft, current = case
+    draft["review_context"]["two_bot"]["bundle"]["raw_signal_dump"]["evidence"]["points"][0]["temperature_c"] = 10 ** 400
+    state = json.loads(json.dumps(state))
+    before = deepcopy(state)
+    requests = []
+
+    def capture(text, bundle, pending, shipped, **kwargs):
+        requests.append(critic.prepare_request(text, bundle, pending, shipped, **kwargs))
+        return json.dumps({"verdict": "KILL", "kill_reason": "weak_signal"})
+
+    monkeypatch.setattr(critic, "_call_gemini", capture)
+    with freeze_time(NOW + timedelta(hours=3)):
+        result = (critic.critic_select_slate(["Invented new copy."], current, state, shipped_recent=[])
+                  if slate else critic.critic_review("Invented new copy.", current, state, shipped_recent=[]))
+    assert not result.passed and result.kill_reason == "weak_signal"
+    assert len(requests) == 1 and draft["text"] in requests[0]["contents"]
     assert state == before
