@@ -320,7 +320,17 @@ def test_only_database_partitions_install_binaries_with_bounded_steps(workflow):
     assert "if" not in suite and "continue-on-error" not in suite
 
 
-@pytest.mark.parametrize("failure", [None, "directories", "key", "repository", "cluster", "metadata", "packages"])
+def _dependency_source_fixtures(root):
+    parts = root / "filesystem/etc/apt/sources.list.d"
+    parts.mkdir(parents=True)
+    (parts / "ubuntu.sources").write_text(
+        "Types: deb\nURIs: https://archive.ubuntu.test/ubuntu\nSuites: noble noble-updates noble-security\n"
+        "Components: main universe\nSigned-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg\n")
+    (parts / "microsoft-prod.list").write_text("deb https://unrelated.microsoft.test/ubuntu noble main\n")
+
+
+@pytest.mark.parametrize("failure", [None, "directories", "key", "repository", "cluster", "source_directory",
+                                     "source_ubuntu", "source_postgres", "metadata", "packages"])
 @pytest.mark.parametrize("install_gdb", ["0", "1"])
 def test_dependency_shell_steps_fail_closed_without_system_access(workflow, tmp_path, failure, install_gdb):
     stub = Path(__file__).parent / "fixtures/ci_dependency_stub.py"
@@ -328,9 +338,10 @@ def test_dependency_shell_steps_fail_closed_without_system_access(workflow, tmp_
     binary.parent.mkdir()
     binary.write_text(f"#!{sys.executable}\n" + stub.read_text())
     binary.chmod(0o700)
+    _dependency_source_fixtures(tmp_path)
     # No inherited BASH_ENV, credentials, network client or real sudo in PATH.
     env = {"PATH": str(binary.parent), "THEHEAT_CI_STUB_ROOT": str(tmp_path),
-           "THEHEAT_CI_INSTALL_GDB": install_gdb}
+           "THEHEAT_CI_INSTALL_GDB": install_gdb, "RUNNER_TEMP": str(tmp_path / "runner-temp")}
     if failure:
         env["THEHEAT_CI_STUB_FAIL"] = failure
     completed_steps = []
@@ -345,7 +356,8 @@ def test_dependency_shell_steps_fail_closed_without_system_access(workflow, tmp_
         if result.returncode:
             break
     calls = [json.loads(line) for line in (tmp_path / "calls.jsonl").read_text().splitlines()]
-    phases = ["directories", "key", "repository", "cluster", "metadata", "packages"]
+    phases = ["directories", "key", "repository", "cluster", "source_directory",
+              "source_ubuntu", "source_postgres", "metadata", "packages"]
     if failure:
         # The injected command failure propagates, and no subsequent command
         # (even within the same shell step) or default success artifact appears.
@@ -360,6 +372,52 @@ def test_dependency_shell_steps_fail_closed_without_system_access(workflow, tmp_
         if install_gdb == "1":
             expected_packages.append("gdb")
         assert json.loads((tmp_path / "packages.json").read_text()) == expected_packages
+
+
+@pytest.mark.parametrize("case", ["unrelated_repository_429", "missing_ubuntu", "existing_source_scope",
+                                 "existing_source_symlink"])
+def test_actual_dependency_shell_uses_only_required_signed_sources(workflow, tmp_path, case):
+    stub = Path(__file__).parent / "fixtures/ci_dependency_stub.py"
+    binary = tmp_path / "bin/sudo"
+    binary.parent.mkdir()
+    binary.write_text(f"#!{sys.executable}\n" + stub.read_text())
+    binary.chmod(0o700)
+    _dependency_source_fixtures(tmp_path)
+    parts = tmp_path / "filesystem/etc/apt/sources.list.d"
+    original = {p.name: p.read_bytes() for p in parts.iterdir()}
+    if case == "unrelated_repository_429":
+        (tmp_path / "unrelated-repo-429").touch()
+    elif case == "missing_ubuntu":
+        (parts / "ubuntu.sources").unlink()
+    elif case == "existing_source_scope":
+        existing = tmp_path / "runner-temp/theheat-test-apt-sources"
+        existing.mkdir(parents=True)
+        (existing / "foreign.list").write_text("unrelated pre-existing input\n")
+    else:
+        existing = tmp_path / "runner-temp/theheat-test-apt-sources"
+        existing.parent.mkdir()
+        existing.symlink_to(tmp_path / "foreign-absent")
+    env = {"PATH": str(binary.parent), "THEHEAT_CI_STUB_ROOT": str(tmp_path),
+           "RUNNER_TEMP": str(tmp_path / "runner-temp")}
+    results = []
+    for step in _database_setup(workflow):
+        result = subprocess.run(["/bin/bash", "--noprofile", "--norc", "-e", "-c", step["run"]],
+                                env=env, cwd=tmp_path, capture_output=True, text=True, timeout=10)
+        results.append(result.returncode)
+        if result.returncode:
+            break
+    calls = [json.loads(line) for line in (tmp_path / "calls.jsonl").read_text().splitlines()]
+    if case == "unrelated_repository_429":
+        assert results == [0, 0, 0], result.stderr
+        accesses = [call for call in calls if call["phase"] in {"metadata", "packages"}]
+        assert len(accesses) == 2
+        assert all(call["requested_sources"] == ["pgdg.list", "ubuntu.sources"] for call in accesses)
+        assert (parts / "ubuntu.sources").read_bytes() == original["ubuntu.sources"]
+        assert (parts / "microsoft-prod.list").read_bytes() == original["microsoft-prod.list"]
+    else:
+        assert results == [49 if case == "missing_ubuntu" else 1]
+        assert not any(call["phase"] in {"metadata", "packages"} for call in calls)
+        assert not (tmp_path / "packages.json").exists()
 
 
 def test_immediate_python_output_is_scoped_to_bot_invocations(workflow):

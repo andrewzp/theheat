@@ -1,5 +1,6 @@
 ## 0.9.109.132
 
+- Isolate contract-test package setup to byte-copies of the runner's Ubuntu sources and the existing signed PostgreSQL repository. Keep strict errors, signature bindings, bounded setup and every required test; unrelated image repositories cannot block setup.
 - Add dated, product-specific NASA IMERG Late daily cadence and partial reuse documentation for the existing OPeNDAP and HTTPS grid legs. Preserve unknown quotas and costs, shared upstream identity and all source and publication rules.
 - Version the advisory export as v3 while preserving complete v1 and v2 exports and decoding, including historical unknowns and documentation dates.
 
