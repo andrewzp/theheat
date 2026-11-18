@@ -19,7 +19,9 @@ from src.data.source_registry import CONTRACTS as REGISTRY_CONTRACTS
 from src.data.source_registry import SCHEMA_VERSION as REGISTRY_SCHEMA_VERSION
 
 LEGACY_SCHEMA = "theheat.source-product-contracts/v1"
-SCHEMA = "theheat.source-product-contracts/v2"
+PREVIOUS_SCHEMA = "theheat.source-product-contracts/v2"
+SCHEMA = "theheat.source-product-contracts/v3"
+_SCHEMAS = frozenset({LEGACY_SCHEMA, PREVIOUS_SCHEMA, SCHEMA})
 PURPOSE = "product_and_serving_leg_inventory_not_activation_or_claim_permission"
 UNKNOWN_FIELDS = ("provider_cadence", "provider_quota", "reuse_rights", "cost")
 
@@ -36,17 +38,23 @@ _NIFC_LAYER_DOC = (
     "https://services3.arcgis.com/T4QMspbfLg3qTGWY/arcgis/rest/services/"
     "WFIGS_Incident_Locations_Current/FeatureServer/0?f=pjson",
     "a53be1fe171c7856cf9717f64a46ecb69046ac5b754ce5206c70f8aa4b66fcaf")
+_GPM_DAILY_DOC = (
+    "https://cmr.earthdata.nasa.gov/search/concepts/C2723754859-GES_DISC.umm_json",
+    "207b5af8100c8bf7fe5d8d7d9830917bff1ba52ea7c01592c791dce095aee684")
+_GPM_POLICY_DOC = ("https://gpm.nasa.gov/data/policy",
+                   "7d1324d0298c7b19e56d33876a787d16606d78c66915a118647a5cc8e496aeb3")
+_GPM_CHECKED_AT = "2026-11-18T11:28:57Z"
 
 
-def _provider_fact(status, summary, limits, *references):
-    return {"status": status, "checked_at": "2026-11-18T07:44:10Z", "summary": summary,
+def _provider_fact(status, summary, limits, *references, checked_at="2026-11-18T07:44:10Z"):
+    return {"status": status, "checked_at": checked_at, "summary": summary,
             "limits": limits, "references": [{"url": url, "sha256": sha} for url, sha in references]}
 
 
 def _provider_fields(leg: ProductLeg, *, schema=SCHEMA) -> dict[str, Any]:
     """Detached, finite documentation facts; never caller-supplied grants."""
     fields: dict[str, Any] = {field: None for field in UNKNOWN_FIELDS}
-    if type(schema) is not str or schema not in {SCHEMA, LEGACY_SCHEMA}:
+    if type(schema) is not str or schema not in _SCHEMAS:
         raise ValueError("source_product_export_schema")
     if schema == LEGACY_SCHEMA:
         return fields
@@ -81,6 +89,21 @@ def _provider_fields(leg: ProductLeg, *, schema=SCHEMA) -> dict[str, Any]:
             "partial", "Published item terms disclaim accuracy, completeness and fitness.",
             "No affirmative reuse license for every contributing dataset or base map is established by this metadata.",
             _NIFC_ITEM_DOC)
+    elif schema == SCHEMA and product_id in {"gpm_imerg.imerg_late_opendap", "gpm_imerg.imerg_late_grid_datapool"}:
+        if (leg.provider, leg.upstream) != ("nasa_gesdisc", "nasa_gesdisc.gpm_3imergdl_07"):
+            return fields
+        fields["provider_cadence"] = _provider_fact(
+            "documented", "The Late daily product follows the last half-hourly input by minutes; "
+            "target availability is no earlier than 14 hours after the UTC day closes.",
+            "A documented latency target, not an availability guarantee or current observation. "
+            "The daily mean rate (mm/day) scales valid half-hourly rates by 24; "
+            "it does not certify 48 valid samples or a station accumulation.",
+            _GPM_DAILY_DOC, checked_at=_GPM_CHECKED_AT)
+        fields["reuse_rights"] = _provider_fact(
+            "partial", "GPM describes processed data as freely available and asks users to acknowledge the specific dataset.",
+            "Dataset access and citation guidance only; account entitlement, route availability and "
+            "third-party maps, logos or imagery are not cleared here.",
+            _GPM_DAILY_DOC, _GPM_POLICY_DOC, checked_at=_GPM_CHECKED_AT)
     return fields
 
 DATA_KINDS = frozenset({
@@ -1114,8 +1137,8 @@ def _unmet_criteria(legs, *, schema=SCHEMA) -> list[dict[str, Any]]:
 
 
 def product_contract_document(legs=LEGS, registry=REGISTRY_CONTRACTS, *, schema=SCHEMA) -> dict[str, Any]:
-    """Dated v2 provider facts or exact legacy v1 shape; neither grants authority."""
-    if type(schema) is not str or schema not in {SCHEMA, LEGACY_SCHEMA}:
+    """Dated v3 facts or exact prior v1/v2 documents; none grants authority."""
+    if type(schema) is not str or schema not in _SCHEMAS:
         raise ValueError("source_product_export_schema")
     validate_legs(legs, registry)
     adapters = []
@@ -1211,7 +1234,7 @@ def decode_product_contract_document(document: Any) -> dict[str, Any]:
     versions or data are refused (held by the caller), never coerced.
     """
     if type(document) is not dict or type(document.get("schema")) is not str \
-            or document["schema"] not in {SCHEMA, LEGACY_SCHEMA} or set(document) != _DOCUMENT_KEYS \
+            or document["schema"] not in _SCHEMAS or set(document) != _DOCUMENT_KEYS \
             or document.get("registry_schema_version") != REGISTRY_SCHEMA_VERSION \
             or type(document["registry_schema_version"]) is not int or document.get("purpose") != PURPOSE \
             or document.get("unknown_fields") != list(UNKNOWN_FIELDS):

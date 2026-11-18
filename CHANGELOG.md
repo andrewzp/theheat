@@ -1,3 +1,8 @@
+## 0.9.109.132
+
+- Add dated, product-specific NASA IMERG Late daily cadence and partial reuse documentation for the existing OPeNDAP and HTTPS grid legs. Preserve unknown quotas and costs, shared upstream identity and all source and publication rules.
+- Version the advisory export as v3 while preserving complete v1 and v2 exports and decoding, including historical unknowns and documentation dates.
+
 ## 0.9.109.131
 
 - Distinguish HTTP access refusals, HTML-like payloads, unrecognized payloads and unreadable HDF containers in retained GPM grid diagnostics, without retaining response bodies or credentials. Keep download counts, fallback order, qualification and incident/backoff policy unchanged.
