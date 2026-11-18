@@ -422,6 +422,22 @@ export function queueWatch(drafts, now = new Date()) {
   }]
 }
 
+function rainfallNominationIsCurrent(state, run, row, clock) {
+  const timestamp = value => typeof value === "string" ? Date.parse(value) : NaN
+  const start = timestamp(run?.started_at), end = timestamp(run?.ended_at)
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end < start || end > timestamp(clock)
+      || run.sources.filter(item => item?.source === "gpm_imerg").length !== 1) return false
+  const health = state?.source_health?.gpm_imerg
+  if (health == null) return true
+  // Details live in run_history, not the cumulative source-health row. A newer
+  // health observation cannot borrow the older collection's nomination result.
+  const latest = Array.isArray(health.runs) ? health.runs.at(-1) : null
+  const at = timestamp(latest?.ts)
+  return Number.isFinite(at) && at >= start && at <= end
+    && latest.status === (row.status === "partial_failure" ? "degraded" : row.status)
+    && latest.observed === row.observed && latest.promoted === row.promoted
+}
+
 export function buildSourceHealthPayload(state, { runsLimit = 20, asOf = new Date().toISOString() } = {}) {
   const durableHealth = state?.source_health && Object.keys(state.source_health).length > 0
   const history = durableHealth
@@ -445,13 +461,19 @@ export function buildSourceHealthPayload(state, { runsLimit = 20, asOf = new Dat
   const clock = sourceHistoryTime([], { asOf }).as_of
   // The newest retained row per source carries its plain outcome and coverage denominators.
   const latestRows = new Map()
+  let rainfallRun = null
   for (const run of Array.isArray(state?.run_history) ? state.run_history : []) {
-    for (const row of Array.isArray(run?.sources) ? run.sources : []) if (row?.source && !latestRows.has(row.source)) latestRows.set(row.source, row)
+    for (const row of Array.isArray(run?.sources) ? run.sources : []) if (row?.source && !latestRows.has(row.source)) {
+      latestRows.set(row.source, row)
+      if (row.source === "gpm_imerg") rainfallRun = run
+    }
   }
   const rejections = Array.isArray(state?.suppressions) ? state.suppressions.slice(-200) : []
   for (const source of rawSources) {
     const latest = latestRows.get(source.source)
-    source.outcome = sourceOutcome(latest ?? null, rejections)
+    source.outcome = sourceOutcome(latest ?? null, rejections, {
+      rainfallNominationCurrent: source.source !== "gpm_imerg" || rainfallNominationIsCurrent(state, rainfallRun, latest, clock),
+    })
     source.coverage_row = latest ? coverageRow(latest) : null
     source.incidents = sourceIncidents(state?.run_history, source.source)
     source.rainfall_readiness = rainfallReadiness(state?.run_history, source.source, { asOf: clock })

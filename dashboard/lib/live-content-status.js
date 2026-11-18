@@ -20,6 +20,9 @@ const OUTCOMES = Object.freeze({
   no_event: ["Checked, no qualifying event", "Nothing to do; an empty result is not proof of complete coverage."],
   policy_excluded: ["Excluded by observed-only policy", "Forecast air-quality collection was intentionally skipped. Current service availability is unverified; previous errors remain in history."],
   supplying: ["Supplying candidates", "Review the resulting drafts."],
+  rainfall_nominations: ["Rainfall report nominations recorded", "Inspect the saved nomination dispositions; nomination and queue counts do not establish a saved draft."],
+  rainfall_reports_held: ["Rainfall reports held", "Check the named saved configuration hold; no nomination result was established."],
+  rainfall_nominations_unavailable: ["Rainfall report nomination unavailable", "Inspect this source run's retained details; missing or inconsistent counts are not zero."],
   unknown: ["Unknown", "No retained run row explains this source yet."],
 })
 
@@ -34,7 +37,87 @@ function nwsAdmissionDetail(row) {
   return `Saved NWS response contained ${received} alert entries. The adapter selected ${selected} under its warning criteria`
 }
 
-export function sourceOutcome(row, rejections = []) {
+const RAINFALL_COUNTERS = Object.freeze([
+  "input_rows", "untyped_rows", "identity_unavailable_rows", "identity_conflict_rows",
+  "qualification_held_rows", "history_held_rows", "duplicate_qualified_rows",
+  "qualified_events", "nominated_events", "nomination_cap_excluded",
+])
+const RAINFALL_HOLDS = Object.freeze({
+  rainfall_time_invalid: "invalid source time",
+  rainfall_reading_invalid: "invalid reading structure",
+  rainfall_satellite_product_required: "required satellite product missing",
+  rainfall_number_invalid: "invalid numeric reading",
+  rainfall_point_invalid: "invalid registered point or day",
+  rainfall_outside_automatic_range: "outside the automatic amount range",
+  rainfall_reading_identity_changed: "reading identity changed",
+  rainfall_evidence_invalid: "invalid evidence structure",
+  rainfall_source_identity_changed: "source identity changed",
+  rainfall_completed_window_expired: "completed window not current at nomination",
+  rainfall_report_unqualified: "other qualification hold",
+})
+const RAINFALL_SETTINGS_HOLDS = Object.freeze({
+  rainfall_observed_report_disabled: "observed report settings disabled",
+  rainfall_report_publication_paused: "publication settings paused",
+  rainfall_report_operation_limit_invalid: "operation limit invalid",
+  rainfall_report_one_sample_required: "one-sample operation settings required",
+})
+const RAINFALL_SCOPE = "Input row dispositions and unique event nominations; not coverage or source-truth validation."
+function record(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    && [Object.prototype, null].includes(Object.getPrototypeOf(value))
+}
+function exactKeys(value, keys) {
+  return record(value) && Reflect.ownKeys(value).length === keys.length && keys.every(key => Object.hasOwn(value, key))
+}
+function safeCount(value) { return Number.isSafeInteger(value) && value >= 0 }
+function safeSum(values) {
+  const total = values.reduce((sum, value) => sum + value, 0)
+  return Number.isSafeInteger(total) ? total : null
+}
+
+// Read only the finite aggregate emitted by rainfall_observed.nominate and its
+// real source caller. Never render a retained reason/scope as arbitrary prose.
+function rainfallNomination(row, current) {
+  if (row.source !== "gpm_imerg" || !["success", "degraded", "partial_failure"].includes(row.status)) return null
+  const unavailable = { state: "rainfall_nominations_unavailable", detail: "Rainfall report nomination counts are unavailable for this saved source run." }
+  if (!current || !safeCount(row.observed) || !safeCount(row.promoted)) return unavailable
+  const outer = row.details?.rainfall_observed_report
+  if (exactKeys(outer, ["status", "reason", "nominated", "queued"]) && outer.status === "held"
+      && typeof outer.reason === "string" && Object.hasOwn(RAINFALL_SETTINGS_HOLDS, outer.reason)
+      && outer.nominated === 0 && outer.queued === 0) {
+    return { state: "rainfall_reports_held", detail: `Saved rainfall report nomination held: ${RAINFALL_SETTINGS_HOLDS[outer.reason]}. Nomination counts were not recorded.` }
+  }
+  if (!exactKeys(outer, ["status", "nomination", "nominated", "queued"])) return unavailable
+  const n = outer.nomination
+  if (!exactKeys(n, ["schema", ...RAINFALL_COUNTERS, "qualification_holds", "scope"])
+      || n.schema !== "rainfall-nomination-counts-v1" || n.scope !== RAINFALL_SCOPE
+      || !RAINFALL_COUNTERS.every(key => safeCount(n[key]))
+      || !record(n.qualification_holds) || !safeCount(outer.nominated) || !safeCount(outer.queued)) return unavailable
+  const codes = Reflect.ownKeys(n.qualification_holds)
+  if (!codes.every(code => typeof code === "string" && Object.hasOwn(RAINFALL_HOLDS, code)
+      && safeCount(n.qualification_holds[code]) && n.qualification_holds[code] > 0)) return unavailable
+  if (n.input_rows !== row.observed
+      || safeSum(RAINFALL_COUNTERS.slice(1, 8).map(key => n[key])) !== n.input_rows
+      || safeSum(codes.map(code => n.qualification_holds[code])) !== n.qualification_held_rows
+      || safeSum([n.nominated_events, n.nomination_cap_excluded]) !== n.qualified_events
+      || n.nominated_events !== Math.min(3, n.qualified_events)
+      || (n.duplicate_qualified_rows > 0 && n.qualified_events === 0)
+      || outer.nominated !== n.nominated_events || outer.queued > outer.nominated || outer.queued > row.promoted
+      || outer.status !== (outer.nominated > 0 ? "nominated" : "no_qualified_report")) return unavailable
+  const reasons = [
+    ["untyped input rows", n.untyped_rows], ["rows without a usable identity", n.identity_unavailable_rows],
+    ["rows with conflicting identities", n.identity_conflict_rows],
+    ...codes.sort().map(code => [RAINFALL_HOLDS[code], n.qualification_holds[code]]),
+    ["held by retained draft/publication history", n.history_held_rows],
+    ["duplicate qualified rows", n.duplicate_qualified_rows], ["excluded by the nomination cap", n.nomination_cap_excluded],
+  ].filter(([, value]) => value > 0).map(([label, value]) => `${label}: ${value}`)
+  return { state: "rainfall_nominations", detail:
+    `Saved rainfall report nominations: ${n.input_rows} input rows; ${n.qualified_events} qualified events; ${outer.nominated} nominated; ${outer.queued} queued.`
+    + (reasons.length ? ` Dispositions: ${reasons.join("; ")}.` : "")
+    + " Retained decisions, not coverage, source truth, drafts or posts." }
+}
+
+export function sourceOutcome(row, rejections = [], { rainfallNominationCurrent = true } = {}) {
   if (!row || typeof row !== "object") return outcome("unknown", row)
   const error = text(row.error), note = text(row.note), details = row.details && typeof row.details === "object" ? row.details : {}
   const gate = details.rainfall_opportunity?.primary_gate
@@ -71,7 +154,8 @@ export function sourceOutcome(row, rejections = []) {
       && ["observed", "promoted", "triaged_in", "triaged_out", "writer_attempted", "drafted"].every(key => row[key] === 0)) {
     return outcome("policy_excluded", row)
   }
-  const admission = nwsAdmissionDetail(row)
+  const rainfall = rainfallNomination(row, rainfallNominationCurrent)
+  const admission = nwsAdmissionDetail(row) ?? rainfall?.detail ?? null
   if (rejections.some(r => r?.source === row.source && ["writer", "safety", "fact_check", "critic", "honesty_gate", "copy_gate"].includes(r?.stage))) {
     return outcome("writer_or_check_rejection", row, admission)
   }
@@ -85,6 +169,7 @@ export function sourceOutcome(row, rejections = []) {
     return outcome("supplying", row, admission, action)
   }
   if (incident?.product_state === "alternate_served") return outcome("alternate_served", row, named)
+  if (rainfall) return outcome(rainfall.state, row, rainfall.detail)
   if (["success", "degraded", "partial_failure"].includes(row.status)) return outcome("no_event", row, admission)
   return outcome("unknown", row)
 }

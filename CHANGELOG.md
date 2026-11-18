@@ -1,3 +1,8 @@
+## 0.9.109.129
+
+- Show retained rainfall report nomination counts and fixed hold reasons in the Sources page, distinguishing input rows, unique events, nominations and queued candidates from saved drafts or posts.
+- Treat missing, inconsistent or older-run nomination evidence as unavailable; preserve source acquisition, qualification, writer limits and publication rules.
+
 ## 0.9.109.128
 
 - Add dated, product-scoped AWC and NIFC documentation to the source-contract export. Keep incomplete quota, reuse-rights and cost evidence explicit; preserve the legacy v1 export and decoder.
