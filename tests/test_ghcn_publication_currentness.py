@@ -41,6 +41,26 @@ def saved_draft(bundle):
             "review_context": {"two_bot": {"bundle": deepcopy(payload)}}}
 
 
+def relabelled_record(draft, kind):
+    draft = deepcopy(draft)
+    bundle = draft["review_context"]["two_bot"]["bundle"]
+    raw = bundle["raw_signal_dump"]
+    draft["event_id"] = bundle["event_id"] = raw["event_id"] = "invented-renamed-record"
+    if kind == "one_comparator":
+        bundle["signal_kind"] = "temperature_anomaly"
+        raw.pop("new_temp_c")
+    elif kind == "facts_only":
+        raw.pop("evidence")
+        bundle["historical_context"].pop("baseline")
+    else:
+        for row in (raw["evidence"], raw["evidence"]["baseline"], bundle["historical_context"]["baseline"]):
+            row.pop("source_product", None)
+        if kind == "station_only":
+            bundle["current_facts"] = []
+            bundle["headline_metric"]["label"] = "renamed"
+    return draft
+
+
 def test_actual_publication_chain_does_not_accept_changed_current_archive(monkeypatch):
     draft = saved_draft(graphic_bundles()[-1])
     calls = []
@@ -132,6 +152,19 @@ def test_separate_live_boundaries_do_not_reuse_a_previously_accepted_archive(var
     archive_http["bytes"] += b"\n"
     assert current_draft_hold(draft, live=True, now=clock) == "ghcn_current_archive_changed"
     assert len(archive_http["calls"]) == 2
+
+
+@pytest.mark.parametrize("kind", ["one_comparator", "facts_only", "station_only", "station_and_facts"])
+def test_existing_station_fact_or_single_comparator_hints_cannot_escape_the_source_gate(
+    variants, archive_http, monkeypatch, kind,
+):
+    from src.data.ghcn_publication import current_draft_hold
+    draft = relabelled_record(variants[("high", "all_time")], kind)
+    now = datetime(2026, 9, 9, 12, tzinfo=UTC)
+    monkeypatch.setattr(posting, "_utc_now", lambda: now)
+    assert current_draft_hold(draft, live=True, now=now) == "ghcn_retained_source_invalid"
+    assert posting._current_nws_source(draft, live=True, bot_state={}) == "ghcn_retained_source_invalid"
+    assert not archive_http["calls"]
 
 
 @pytest.mark.parametrize("changed_cell,target,expected", [

@@ -6,7 +6,7 @@ import pytest
 from src.editorial import revisions
 from src.orchestrator import posting
 from tests.revision_helpers import bind_reviewed_draft
-from tests.test_ghcn_publication_currentness import archive_http as archive_http, variants as variants
+from tests.test_ghcn_publication_currentness import archive_http as archive_http, relabelled_record, variants as variants
 from tests.test_gist_temperature_posting import (
     fake_transport as fake_transport,
     invented_clock as invented_clock,
@@ -135,3 +135,17 @@ def test_full_source_guard_does_not_erase_or_resend_an_unknown_transport_outcome
     assert posting.post_approved(draft, state) == "failed"
     assert state["publish_ledger"][draft["event_id"]] == row
     assert len(fake_transport.calls) == 1
+
+
+@pytest.mark.parametrize("kind", ["station_only", "station_and_facts"])
+def test_human_review_cannot_make_relabelled_station_evidence_bypass_current_source(
+    variants, fake_transport, source_at_sender, monkeypatch, kind,
+):
+    changed = relabelled_record(variants[("high", "all_time")], kind)
+    draft = approved_record({("high", "all_time"): changed}, "manual")
+    state = state_for(draft)
+    run_sender(draft, state, "manual", monkeypatch)
+    assert not fake_transport.calls and not state["publish_ledger"]
+    assert not source_at_sender["calls"]
+    fake_transport.safety.assert_not_called()
+    assert draft["publish_outcome"] == "not_sent" and not draft.get("approval_binding")

@@ -54,15 +54,26 @@ def _family(draft, payload):
     history = payload.get("historical_context") if isinstance(payload, dict) else None
     candidates = [evidence, evidence.get("baseline") if isinstance(evidence, dict) else None,
                   history.get("baseline") if isinstance(history, dict) else None]
-    ghcn = any(isinstance(row, dict) and "ghcn" in str(row.get("source_product", "")).lower()
-               for row in candidates)
+    # Match the existing station-record floor's surviving family hints. Removing
+    # a product label or one comparator cannot turn a bad record into an exempt
+    # anomaly. These hints identify a boundary; they never verify its evidence.
+    facts = payload.get("current_facts") if isinstance(payload, dict) else None
+    headline = payload.get("headline_metric") if isinstance(payload, dict) else None
+    compact = isinstance(raw, dict) and "ghcn_claim_view" in raw
+    ghcn = (any(isinstance(row, dict) and (row.get("station_id")
+                or "ghcn" in str(row.get("source_product", "")).lower()) for row in candidates)
+            or isinstance(headline, dict) and str(headline.get("label", "")).startswith("observed_")
+            or isinstance(facts, list) and any(isinstance(fact, dict)
+                and (fact.get("label") == "station_id" or fact.get("label") == "source_product"
+                     and "ghcn" in str(fact.get("value", "")).lower()) for fact in facts))
     station_event = any(isinstance(value, str) and _EVENT.fullmatch(value) is not None
                         for value in (draft.get("event_id"), payload.get("event_id") if isinstance(payload, dict) else None,
                                       raw.get("event_id") if isinstance(raw, dict) else None))
     signal = payload.get("signal_kind") if isinstance(payload, dict) else None
     record = (station_event or isinstance(signal, str) and signal in _SIGNALS
-              or isinstance(raw, dict) and "new_temp_c" in raw and "old_record_c" in raw)
-    return station_event or ghcn and record
+              or isinstance(raw, dict) and any(key in raw for key in ("new_temp_c", "old_record_c"))
+              or isinstance(history, dict) and any(key in history for key in ("prior_record_c", "prior_record_year")))
+    return bool(station_event or compact or ghcn and record)
 
 
 def _retained(draft, payload, clock):
