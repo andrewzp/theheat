@@ -1,3 +1,8 @@
+## 0.9.109.136
+
+- Preserve bounded HTTP, transport and stream failure reasons when rechecking observed airport evidence, and label sender refusals as observed airport reports. Keep unexpected failures distinct without logging provider messages or payloads.
+- Retain source request bounds, required checks, approval revocation and no-send behavior. Exercise failures before and after publication intent with invented HTTP and SDK responses.
+
 ## 0.9.109.135
 
 - Verify mixed observed-airport slates through real threaded source staging, both selection modes, the one-candidate budget, SDK-level replies and every required check. Old evidence cannot displace the eligible row; all-held slates make no model request.

@@ -90,7 +90,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/data/air_quality_contract.py": "7f9de8f7fcd6836a3e4fb32ea8c1a35a3c9981bcede6aea2d74770f12539d667",
     "src/data/air_quality_current.py": "dded4e4fc18ff7635756edeb88c55fe1fa8f573e1b79ef04d6e0d648493dfa38",
     "src/data/air_quality_evidence.py": "677713bb8916c4bcd51d407a5b19072f54532f5f46db116914af6b3fcac9f4f7",
-    "src/data/awc_observed.py": "b0554622f625f2eb7fc5c4bf1084d73c54ddedc062f166bf75f69b1fdd664762",
+    "src/data/awc_observed.py": "b3e1425b11f7b58f9569622903a8fb9f3ded1e9da05be3b819565f62c5fb4535",
     "src/data/c3s_monthly.py": "babc1416c324b4edda24bdd0a7bd7a8a39ceda2bee7bf826ae4b5f54302d16c1",
     "src/data/coastal_observed.py": "6d5f56258134602bd199b16f43f061cd2a53212dc999bfc87307cc23950516be",
     "src/data/coral_dhw.py": "fc9357d1019e67e69e66a24d90aa1771e05097a99db1f042f4adfee2e8fb9560",
@@ -198,7 +198,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/orchestrator/nws_publication.py": "36874ce12091624ddd37f607685d7137f3e64fb1ceae6ec1fa9c8476936460e7",
     "src/orchestrator/observed_report.py": "ade51e85bc55f487fad98c46aa28cb0e05a7fb859938f4d3780bfdefb4d978e2",
     "src/orchestrator/portfolio_selection.py": "1ffd9496e71b155e250255e90664410637474d708b9951a863f08b4e9dd99d4c",
-    "src/orchestrator/posting.py": "dcf7e810891f64f295a06020f7ab8a4e080b7f336bcce741b06e0cbf72919efc",
+    "src/orchestrator/posting.py": "4bb475300c95463101573f9f9fe01c73241554505537366d2d3678451df325db",
     "src/orchestrator/run_alerts.py": "c488b68fc63b38dc40482a0622a5f25f616420449c9ec5e929df32e316109f42",
     "src/orchestrator/source_result_client.py": "c1c8ae63f62169dcc26f87c8746b1994302cd36e26d6cb2146ff8a803fe089fb",
     "src/orchestrator/sources/air_quality.py": "9a3d031de277b0c5d3bf3c26b02681895f1a54f74dacacaa7260e4513c64b3a6",
@@ -304,5 +304,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "5c5ffcc95358c7df45ae838c228759ad0eb6275c8f9053c8130c0a8824b63d9e"
   },
   "schema_version": 1,
-  "source_sha256": "eedef1359dca82384e4f05e3c52907616e3a867ee2629a270a5793a3dc9f518b"
+  "source_sha256": "f0f8b6a477ae5b68232fe645d94040978dac6b453fcbe25eecfbe34a81888bce"
 }
