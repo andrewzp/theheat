@@ -260,3 +260,32 @@ def test_restore_requires_the_exact_original_qualified_bundle(capture, change):
     actual = build_memory_slice(saved, bundle, now=NOW)
     assert actual.source_report_series["recent_published_texts"] == []
     assert saved["memory"]["ongoing_events"] == []
+
+
+@pytest.mark.parametrize("change", ["filtered-fact", "filled-date", "filled-kind", "filled-id", "coerced-where"])
+def test_generic_restore_repairs_cannot_establish_qualified_report_history(capture, change):
+    original = report(capture)
+    _, draft = published_memory(original)
+    packet = draft["review_context"]["two_bot"]["bundle"]
+    changed = deepcopy(original)
+    draft["tweet_date"] = original.when
+    if change == "filtered-fact":
+        packet["current_facts"].append("malformed retained fact")
+        changed.current_facts = deepcopy(packet["current_facts"])
+    elif change == "filled-date":
+        packet["when"] = changed.when = None
+    elif change == "filled-kind":
+        packet["signal_kind"] = changed.signal_kind = None
+    elif change == "filled-id":
+        packet["event_id"] = changed.event_id = None
+    else:
+        packet["where"] = changed.where = None
+        draft["city"] = original.where
+    assert source.report_bundle_hold(changed) == "nifc_report_binding_changed"
+    saved = deepcopy(DEFAULT_STATE)
+    with freeze_time(NOW):
+        assert record_published_draft(saved, draft), "Generic publication history is still retained"
+    current = report(capture, NOW+timedelta(days=1), IncidentSize=1600000.0)
+    actual = build_memory_slice(saved, current, now=NOW+timedelta(days=1))
+    assert actual.source_report_series["recent_published_texts"] == []
+    assert saved["memory"]["ongoing_events"] == []

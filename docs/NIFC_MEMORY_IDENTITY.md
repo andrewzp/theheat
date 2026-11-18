@@ -22,6 +22,8 @@ All required current checks still apply to new text.
 
 Publication snapshots retain the exact report inputs needed by the same offline
 audit after JSON restore. An identifier alone cannot recreate source evidence.
+This audit uses exact retained fields before the generic history reader can
+fill missing values, coerce strings or discard malformed facts.
 These NIFC snapshots are limited to 32 KiB of UTF-8 JSON. Oversize, unserializable,
 legacy, unrecognized or changed inputs keep general publication history without
 establishing a series identity. This limit does not change source qualification.

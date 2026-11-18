@@ -669,13 +669,17 @@ def _story_bundle_from_metadata(two_bot: dict, draft: dict) -> StoryBundle | Non
         raw_signal_dump=raw,
     )
     if not raw and identity is not None and identity["schema"] == _NIFC_MEMORY_SCHEMA and _nifc_snapshot_fits(payload):
-        restored.raw_signal_dump = deepcopy(payload.get("raw_signal_dump") or {})
-        restored.headline_metric = deepcopy(payload.get("headline_metric") or {})
-        restored.country = payload.get("country") or ""
-        restored.historical_context = deepcopy(payload.get("historical_context") or {})
-        if _source_memory_identity(restored) != identity:
-            # Retain the publication without promoting disputed source history.
-            restored.raw_signal_dump = {}
+        strings = ("signal_kind", "where", "when", "event_id", "country")
+        objects = ("raw_signal_dump", "headline_metric", "historical_context")
+        # Audit exact retained inputs, never the generic reader's repaired
+        # dates, fallback identifiers or filtered fact list above. That reader
+        # remains available only for limited ordinary publication history.
+        if (all(type(payload.get(key)) is str for key in strings)
+                and all(type(payload.get(key)) is dict for key in objects)
+                and type(payload.get("current_facts")) is list):
+            exact = StoryBundle(**deepcopy({key: payload[key] for key in (*strings, *objects, "current_facts")}))
+            if _source_memory_identity(exact) == identity:
+                return exact
     return restored
 
 
