@@ -1,3 +1,7 @@
+## 0.9.109.122
+
+- Recheck individual GHCN station-record evidence against the current bounded NOAA archive at publication boundaries. Refuse changed source bytes, rejected readings, mismatched comparators and incomplete or relabelled warrants without granting review, rewriting copy or retrying unknown deliveries.
+
 ## 0.9.109.121
 
 - Skip forecast-only air-quality acquisition during observed-only scheduled main-branch alerts. Preserve explicit private and manual collection, source history and unresolved incident status; show the intentional exclusion as idle without claiming provider recovery or changing publication controls.

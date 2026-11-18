@@ -112,7 +112,7 @@ POLICY_FILES = (
     "src/media/nwps_capture.py", "src/media/gist_nwps_media.py", "src/media/nwps_forecast_png.py",
     "src/orchestrator/sources/river_gauges.py", "src/editorial/scoring/disasters.py",
     "src/data/regional_observations.py", "src/orchestrator/sources/regional_observed.py",
-    "src/data/ghcn.py", "src/data/ghcn_format.py", "src/data/gdacs.py", "src/data/nhc.py", "src/data/cyclones.py",
+    "src/data/ghcn.py", "src/data/ghcn_format.py", "src/data/ghcn_publication.py", "src/data/gdacs.py", "src/data/nhc.py", "src/data/cyclones.py",
     "src/data/gdacs_intake.py", "src/orchestrator/sources/gdacs.py",
     "src/commands/postgres_check_observations.py",
     "src/commands/postgres_media.py", "src/commands/media_journal.py",

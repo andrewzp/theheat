@@ -40,7 +40,7 @@ def _current_nws_source(draft, *, live, bot_state=None):
     from src.editorial.warning_runtime import current_warning_source
     from src.two_bot.intern.nwps_forecast import current_nwps_forecast
     from src.data.c3s_monthly import current_draft_hold
-    from src.data import coastal_observed, awc_observed, rainfall_observed
+    from src.data import coastal_observed, awc_observed, rainfall_observed, ghcn_publication
     # An NHC advisory needs this process's own owner: static before intent,
     # a fresh fixed read at the live boundaries (manual entry, after intent).
     return (current_warning_source(draft) or current_advisory_source(draft, live=live)
@@ -52,7 +52,8 @@ def _current_nws_source(draft, *, live, bot_state=None):
             or coastal_observed.legacy_station_day_hold(draft, bot_state)
             or awc_observed.current_draft_hold(draft, live=live, now=_utc_now)
             or rainfall_observed.current_draft_hold(draft, live=live, now=_utc_now)
-            or rainfall_observed.operation_hold(draft, bot_state))
+            or rainfall_observed.operation_hold(draft, bot_state)
+            or ghcn_publication.current_draft_hold(draft, live=live, now=_utc_now))
 
 
 def _current_warning_auto_source(draft) -> str | None:
@@ -93,13 +94,17 @@ def _current_hot10_source(draft) -> str | None:
 
 
 def _hold_nws_draft(draft: dict, reason: str) -> None:
+    if reason.startswith("ghcn_") and draft.get("publish_outcome") in (None, "not_sent"):
+        # A source refusal before the intent is proven not sent. Never replace
+        # a submitted/unknown outcome with a fresh-source refusal.
+        draft["publish_outcome"] = "not_sent"
     revoke_approval(draft)
     draft["status"] = "pending"
     draft["approval_mode"] = "manual"
     source_names: dict[object, str] = {"official_warning": "Official warning", "nhc_advisory": "NHC advisory",
                                        "hot10": "Hot10 bulletin", "air_quality_hazard": "PM2.5 forecast",
                                        "dust_event": "Dust forecast", "river_flood": "River forecast", "coastal_observed_report": "Observed coastal report"}
-    source = source_names.get(draft.get("type"), "NWS warning")
+    source = "GHCN station record" if reason.startswith("ghcn_") else source_names.get(draft.get("type"), "NWS warning")
     draft["post_error"] = f"{source} needs fresh source review: {reason}"
     _touch_draft(draft)
 

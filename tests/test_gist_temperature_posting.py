@@ -1,6 +1,6 @@
 """Invented full-GHCN joint review through the real manual sender and fake X SDK.
 
-Only Gist persistence, final safety and the X client factories are replaced. The
+Only source HTTP bytes, Gist persistence, final safety and X factories are replaced. The
 renderer, descriptor validation, revision/approval rules, posting intent/receipt
 logic and upload/alt/create adapter execute their actual production functions.
 """
@@ -20,7 +20,7 @@ from src.media.temperature_graphic_adapter import story_bundle_snapshot
 from src.orchestrator import posting
 from src.posting import twitter
 from src.state import DEFAULT_STATE
-from tests.ghcn_graphic_helpers import graphic_bundles
+from tests.ghcn_graphic_helpers import graphic_bundles, source_archive
 from tests.test_hot10_card import _sample_rows
 
 
@@ -79,6 +79,9 @@ def fake_transport(monkeypatch):
     # Existing tests can replace the legacy common facade. Restore this module,
     # then explicitly select the real Twitter adapter with fake SDK factories.
     importlib.reload(posting)
+    from src.data import _http
+    from tests.test_ghcn_publication_currentness import ArchiveResponse
+    monkeypatch.setattr(_http, "fetch_with_retry", lambda url, **kwargs: ArchiveResponse(source_archive(), url))
     result = SimpleNamespace(calls=[], persisted=[], failure=None)
     storage = MagicMock()
     storage.check_daily_cap.return_value = True
@@ -193,7 +196,12 @@ def test_rehashed_but_invalid_attachment_or_source_refuses_before_upload(draft_f
     assert fake_transport.calls == []
     assert state["publish_ledger"] == {} and draft["publish_outcome"] == "not_sent"
     fake_transport.storage.write_state.assert_not_called()
-    assert "new preview and joint review" in draft["post_error"]
+    if changed in {"unit", "source", "comparator"}:
+        # The newly added retained-source preflight rejects these before the
+        # image check; rehashing the attachment cannot repair invalid evidence.
+        assert "ghcn_retained_source_invalid" in draft["post_error"]
+    else:
+        assert "new preview and joint review" in draft["post_error"]
 
 
 def test_changed_renderer_profile_refuses_review_and_send_before_intent(draft_factory, fake_transport, monkeypatch):
@@ -212,7 +220,7 @@ def test_changed_renderer_profile_refuses_review_and_send_before_intent(draft_fa
     fake_transport.storage.write_state.assert_not_called()
 
 
-@pytest.mark.parametrize("age,allowed", [(0, True), (4, True), (5, False), (-1, False)])
+@pytest.mark.parametrize("age,allowed", [(0, False), (1, True), (4, True), (5, False), (-1, False)])
 def test_send_uses_observation_day_age_not_new_retrieval_time(draft_factory, fake_transport, monkeypatch, age, allowed):
     draft = draft_factory()
     no_network_or_fallback(fake_transport, monkeypatch)
@@ -222,7 +230,13 @@ def test_send_uses_observation_day_age_not_new_retrieval_time(draft_factory, fak
     assert result == ("posted" if allowed else "failed")
     assert len(fake_transport.calls) == (3 if allowed else 0)
     if not allowed:
-        assert draft["publish_outcome"] == "not_sent" and "future or stale" in draft["post_error"]
+        assert draft["publish_outcome"] == "not_sent"
+        if age < 1:
+            # This fixture was retrieved on September 9. A simulated earlier
+            # send must now refuse that future retrieval before media work.
+            assert "ghcn_retained_source_invalid" in draft["post_error"]
+        else:
+            assert "future or stale" in draft["post_error"]
 
 
 @pytest.mark.parametrize("change", ["text", "source", "policy", "remove", "decision", "text_only_review"])

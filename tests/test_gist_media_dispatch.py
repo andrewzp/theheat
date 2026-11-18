@@ -14,7 +14,8 @@ import pytest
 from src.editorial import revisions
 from src.media import gist_hazard_media as hazard, gist_media, gist_temperature_media as temperature
 from src.media.temperature_graphic_adapter import story_bundle_snapshot
-from tests.ghcn_graphic_helpers import graphic_bundles
+from tests.ghcn_graphic_helpers import graphic_bundles, source_archive
+from tests.test_ghcn_publication_currentness import ArchiveResponse
 from tests.gist_media_helpers import approve, attach, install_fake_x, run_manual, saved_draft, state_for
 
 
@@ -120,6 +121,14 @@ def test_sender_refuses_unsupported_attachment_after_intent_without_fallback(sta
 
 
 def test_temperature_manual_journey_through_dispatch_uploads_exact_reviewed_bytes(station, monkeypatch):
+    from src.data import _http
+    responses = []
+    def archive(url, **kwargs):
+        assert url == "https://www.ncei.noaa.gov/pub/data/ghcn/daily/all/USC99000001.dly"
+        response = ArchiveResponse(source_archive(), url)
+        responses.append(response)
+        return response
+    monkeypatch.setattr(_http, "fetch_with_retry", archive)
     _bundle, direct = station
     draft = approve(attach(temperature_draft(station), direct["descriptor"]))
     original = deepcopy(draft)
@@ -133,3 +142,4 @@ def test_temperature_manual_journey_through_dispatch_uploads_exact_reviewed_byte
     ]
     assert draft["status"] == "posted" and state["publish_ledger"][draft["event_id"]]["phase"] == "confirmed"
     assert json.dumps(state, ensure_ascii=False).count('"png_base64"') == 0
+    assert len(responses) == 2 and all(response.closed for response in responses)
