@@ -1,3 +1,8 @@
+## 0.9.109.135
+
+- Verify mixed observed-airport slates through real threaded source staging, both selection modes, the one-candidate budget, SDK-level replies and every required check. Old evidence cannot displace the eligible row; all-held slates make no model request.
+- Cover the source window needed for the existing minimum publication delay. These offline integration tests change no source, model, policy, publishing control or dashboard behavior.
+
 ## 0.9.109.134
 
 - Show reported queued and running production bot workflows separately from the last decisive check, with bounded scope, checked time and safe links to each run. Preserve failure banners and distinguish an empty queried window from unavailable metadata.
