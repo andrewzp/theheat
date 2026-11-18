@@ -146,12 +146,19 @@ jobs:
           sudo curl --fail --silent --show-error --connect-timeout 10 --max-time 45 --retry 2 --retry-max-time 100 https://www.postgresql.org/media/keys/ACCC4CF8.asc -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
           echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt noble-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
           echo "create_main_cluster = false" | sudo tee /etc/postgresql-common/createcluster.conf > /dev/null
+          # Do not couple contract tests to unrelated repositories on the image.
+          # Copy the existing signed inputs; leave system source files untouched.
+          test ! -e "${RUNNER_TEMP:?}/theheat-test-apt-sources"
+          test ! -L "${RUNNER_TEMP:?}/theheat-test-apt-sources"
+          sudo install -d "$RUNNER_TEMP/theheat-test-apt-sources"
+          sudo install -m 0644 /etc/apt/sources.list.d/ubuntu.sources "$RUNNER_TEMP/theheat-test-apt-sources/ubuntu.sources"
+          sudo install -m 0644 /etc/apt/sources.list.d/pgdg.list "$RUNNER_TEMP/theheat-test-apt-sources/pgdg.list"
 
       - name: Refresh PostgreSQL test package metadata
         if: matrix.partition != 'core'
         timeout-minutes: 4
         run: |
-          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 update --error-on=any
+          sudo apt-get -o Dir::Etc::sourcelist=/dev/null -o "Dir::Etc::sourceparts=${RUNNER_TEMP:?}/theheat-test-apt-sources" -o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 update --error-on=any
 
       - name: Install PostgreSQL 17 contract-test binaries
         if: matrix.partition != 'core'
@@ -163,7 +170,7 @@ jobs:
           if [[ "${THEHEAT_CI_INSTALL_GDB:-0}" == 1 ]]; then
             packages+=(gdb)
           fi
-          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 install -y --no-install-recommends "${packages[@]}"
+          sudo apt-get -o Dir::Etc::sourcelist=/dev/null -o "Dir::Etc::sourceparts=${RUNNER_TEMP:?}/theheat-test-apt-sources" -o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 install -y --no-install-recommends "${packages[@]}"
 
       - name: Verify native graphics dependency capture
         if: matrix.partition == 'media'
