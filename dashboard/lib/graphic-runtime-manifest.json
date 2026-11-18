@@ -1,6 +1,6 @@
 {
   "identity": {
-    "archive_sha256": "6e633bb373f99e72f043b249a1c7149fdabfd06dc78b3c4d82895e002dcfa6e9",
+    "archive_sha256": "82bb8f7c24c4384e02026d0f7686ccc592ccf60b9146f50ee6144c1d31bbe17f",
     "deployment_files": {
       "api/graphic_preview.py": "f7521adcbd618f4b65b2a0de30ea62aaff4cdd36f2254e9af38bf68646d361ad",
       "api/graphic_reader_status.py": "5e9685d699625a4eea9d5be884b6e266939a0ad344a2997351ba79bd114407ba",
@@ -25,7 +25,7 @@
       "src/data/air_quality.py": "89975b423632d9d6a0b3db767df8dae8cc4e7e7c496a350d396d7e303e820e33",
       "src/data/air_quality_contract.py": "7f9de8f7fcd6836a3e4fb32ea8c1a35a3c9981bcede6aea2d74770f12539d667",
       "src/data/air_quality_evidence.py": "677713bb8916c4bcd51d407a5b19072f54532f5f46db116914af6b3fcac9f4f7",
-      "src/data/awc_observed.py": "b0554622f625f2eb7fc5c4bf1084d73c54ddedc062f166bf75f69b1fdd664762",
+      "src/data/awc_observed.py": "b3e1425b11f7b58f9569622903a8fb9f3ded1e9da05be3b819565f62c5fb4535",
       "src/data/c3s_monthly.py": "babc1416c324b4edda24bdd0a7bd7a8a39ceda2bee7bf826ae4b5f54302d16c1",
       "src/data/coastal_observed.py": "6d5f56258134602bd199b16f43f061cd2a53212dc999bfc87307cc23950516be",
       "src/data/coral_evidence.py": "723b04dc720538b5dab0ab6290f2f774c877796963a69aa46eb541e00bbf84ee",
@@ -121,7 +121,7 @@
       "src/two_bot/types.py": "65afc3d850c31c843bc1e7b58dcc0b13eb274969dcff657e2622641bd85239ee"
     },
     "format": "saved-source-svg-preview-v2",
-    "policy_source_sha256": "eedef1359dca82384e4f05e3c52907616e3a867ee2629a270a5793a3dc9f518b",
+    "policy_source_sha256": "f0f8b6a477ae5b68232fe645d94040978dac6b453fcbe25eecfbe34a81888bce",
     "resource_sources": {
       "src/data/registry/cities.csv": "data/cities.csv",
       "src/data/registry/country_codes.json": "data/country_codes.json",
@@ -130,5 +130,5 @@
     },
     "schema_version": 1
   },
-  "runtime_sha256": "a495d40911010e69adde7fa679b8765d221f54bbe98379e22c7a7a1803c99af3"
+  "runtime_sha256": "d819c8f152ea398640b875b46aafd26c4436c4aae1a17f716d1af623363724d8"
 }

@@ -103,7 +103,8 @@ def _hold_nws_draft(draft: dict, reason: str) -> None:
     draft["approval_mode"] = "manual"
     source_names: dict[object, str] = {"official_warning": "Official warning", "nhc_advisory": "NHC advisory",
                                        "hot10": "Hot10 bulletin", "air_quality_hazard": "PM2.5 forecast",
-                                       "dust_event": "Dust forecast", "river_flood": "River forecast", "coastal_observed_report": "Observed coastal report"}
+                                       "dust_event": "Dust forecast", "river_flood": "River forecast", "coastal_observed_report": "Observed coastal report",
+                                       "observed_metar_contrast": "Observed airport report"}
     source = "GHCN station record" if reason.startswith("ghcn_") else source_names.get(draft.get("type"), "NWS warning")
     draft["post_error"] = f"{source} needs fresh source review: {reason}"
     _touch_draft(draft)

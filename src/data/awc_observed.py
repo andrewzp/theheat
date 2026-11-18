@@ -224,26 +224,50 @@ def parse_metars(raw, metadata, *, now=None):
     return result
 
 
+def _request_failure(exc):
+    """Fixed diagnostics only; never retain provider text, URLs or payloads."""
+    import requests
+
+    if isinstance(exc, requests.HTTPError):
+        response = exc.response
+        status = response.status_code if response is not None else None
+        return f"awc_http_{status}" if type(status) is int and 400 <= status <= 599 else "awc_http_error"
+    if isinstance(exc, requests.Timeout):
+        return "awc_transport_timeout"
+    if isinstance(exc, requests.exceptions.SSLError):
+        return "awc_transport_tls"
+    if isinstance(exc, requests.ConnectionError):
+        return "awc_transport_connection"
+    if isinstance(exc, (requests.exceptions.ChunkedEncodingError, requests.exceptions.ContentDecodingError,
+                        requests.exceptions.StreamConsumedError)):
+        return "awc_response_stream_error"
+    return "awc_request_error"
+
+
 def _read(url, *, params=None):
+    import requests
     from src.data._http import fetch_with_retry
 
     if url not in (METARS_URL, STATIONS_URL, HISTORY_URL):
         raise ObservedHeld("awc_fixed_source_required")
-    response = fetch_with_retry(url, params=params, timeout=12, attempts=1,
-        allow_redirects=False, stream=True, headers={"User-Agent": "theheat-bot (contact@theheat.app)"})
     try:
-        if response.status_code != 200:
-            raise ObservedHeld("awc_response_invalid")
-        chunks, size = [], 0
-        deadline = time.monotonic() + 12
-        for chunk in response.iter_content(64 * 1024):
-            size += len(chunk)
-            if size > MAX_COMPRESSED or time.monotonic() > deadline:
-                raise ObservedHeld("awc_response_bound")
-            chunks.append(chunk)
-        return b"".join(chunks)
-    finally:
-        response.close()
+        response = fetch_with_retry(url, params=params, timeout=12, attempts=1,
+            allow_redirects=False, stream=True, headers={"User-Agent": "theheat-bot (contact@theheat.app)"})
+        try:
+            if response.status_code != 200:
+                raise ObservedHeld("awc_response_invalid")
+            chunks, size = [], 0
+            deadline = time.monotonic() + 12
+            for chunk in response.iter_content(64 * 1024):
+                size += len(chunk)
+                if size > MAX_COMPRESSED or time.monotonic() > deadline:
+                    raise ObservedHeld("awc_response_bound")
+                chunks.append(chunk)
+            return b"".join(chunks)
+        finally:
+            response.close()
+    except requests.RequestException as exc:
+        raise ObservedHeld(_request_failure(exc)) from None
 
 
 def _unzip(raw):
@@ -472,7 +496,7 @@ def current_bundle_hold(value, *, live=False, now=None, minimum_delay=timedelta(
     except ObservedHeld as exc:
         return str(exc)
     except Exception:  # noqa: BLE001 — missing/unavailable source is never a pass
-        return "awc_current_source_unavailable"
+        return "awc_current_source_unexpected"
 
 
 def bundle_failures(bundle):
