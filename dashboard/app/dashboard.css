@@ -977,6 +977,15 @@ h1 span { color: #666; font-weight: 400; font-size: 14px; margin-left: 8px; }
 }
 .automation-pause-status p { margin: 0; }
 .automation-retained-run { color: #a3a3a3; }
+.automation-activity-link {
+  color: #ffb380;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+}
+.automation-activity-link:focus-visible { outline: 2px solid #ffb380; outline-offset: 3px; border-radius: 2px; }
 
 /* Loud red banner when any scheduled workflow is red — impossible to miss. */
 .automation-banner {

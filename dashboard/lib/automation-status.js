@@ -27,6 +27,64 @@ export function selectLatestDecisiveRun(runs) {
   return null
 }
 
+const ACTIVE_RUN_STATUSES = new Set(["queued", "in_progress", "waiting", "pending", "requested"])
+
+function validRepository(value) {
+  return typeof value === "string" && /^[A-Za-z0-9_][A-Za-z0-9_.-]*\/[A-Za-z0-9_][A-Za-z0-9_.-]*$/.test(value)
+}
+
+// A bounded metadata view, not proof of collection, process liveness or posting.
+// Keep it separate from the last decisive result so activity cannot mask failure.
+export function botWorkflowActivity(runs, { repository, branch, now = Date.now() }) {
+  const unavailable = { status: "unavailable", window_size: null, runs: [] }
+  if (!validRepository(repository) || typeof branch !== "string" || !branch ||
+      !Array.isArray(runs) || runs.length > 10 || !Number.isFinite(now)) return unavailable
+  const active = []
+  const identities = new Set()
+  for (const run of runs) {
+    if (!run || typeof run !== "object" || Array.isArray(run)) return unavailable
+    if (!Number.isSafeInteger(run.id) || run.id <= 0 || identities.has(run.id)) return unavailable
+    identities.add(run.id)
+    if ((run.head_branch !== undefined && run.head_branch !== branch) || run.event === "pull_request") return unavailable
+    if (run.status === "completed") continue
+    if (!ACTIVE_RUN_STATUSES.has(run.status) || run.head_branch !== branch ||
+        !["schedule", "workflow_dispatch"].includes(run.event) ||
+        typeof run.head_sha !== "string" || !/^[a-f0-9]{40}$/.test(run.head_sha) ||
+        !Number.isFinite(reportTimestamp(run.created_at)) ||
+        reportTimestamp(run.created_at) > now) return unavailable
+    active.push({ id: run.id, status: run.status, event: run.event,
+      head_branch: run.head_branch, head_sha: run.head_sha, created_at: run.created_at })
+  }
+  active.sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at) || b.id - a.id)
+  return { status: active.length ? "reported" : "not_reported", repository, branch,
+    window_size: runs.length, runs: active }
+}
+
+export function botActivityPresentation(activity) {
+  const unavailable = { message: "Bot workflow activity unavailable.", runs: [], checked_at: null }
+  if (!activity || !Number.isInteger(activity.window_size) || activity.window_size < 0 ||
+      activity.window_size > 10 || !Array.isArray(activity.runs) ||
+      activity.runs.length > activity.window_size ||
+      !Number.isFinite(reportTimestamp(activity.checked_at))) return unavailable
+  // This is the server's bounded observation. A laptop's clock must not hide
+  // a valid reported handle; raw future run times are refused on the server.
+  const checked = botWorkflowActivity(activity.runs, {
+    repository: activity.repository, branch: activity.branch, now: reportTimestamp(activity.checked_at),
+  })
+  if (checked.status === "unavailable") return unavailable
+  if (activity.status === "not_reported" && checked.runs.length === 0) {
+    return { message: activity.window_size
+      ? `No queued or running bot workflow reported in the latest ${activity.window_size} returned runs.`
+      : "No bot workflow runs returned by the latest check.", runs: [], checked_at: activity.checked_at }
+  }
+  if (activity.status !== "reported" || checked.runs.length === 0) return unavailable
+  return { message: "Reported bot workflow activity:", checked_at: activity.checked_at,
+    runs: checked.runs.map((run) => ({
+    ...run, label: run.status === "in_progress" ? "running" : run.status,
+    href: `https://github.com/${checked.repository}/actions/runs/${run.id}`,
+  })) }
+}
+
 // How long the self-heal routine's heartbeat may age before its dot goes red.
 // Matches scripts/workflow_health.py SELFHEAL_MAX_AGE_H.
 export const SELFHEAL_MAX_AGE_MS = 26 * 60 * 60 * 1000

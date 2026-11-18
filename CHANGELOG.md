@@ -1,3 +1,8 @@
+## 0.9.109.134
+
+- Show reported queued and running production bot workflows separately from the last decisive check, with bounded scope, checked time and safe links to each run. Preserve failure banners and distinguish an empty queried window from unavailable metadata.
+- Reuse the existing workflow read; retain source, writer, editorial-policy and publishing controls unchanged.
+
 ## 0.9.109.133
 
 - Align the observed airport writer's lead instruction with the shared place-first voice and show compact comparison syntax. Retain both airport names, countries, readings, difference, UTC time/date and the full appended citation.

@@ -7,6 +7,7 @@ import {
   isBotWorkflow,
   collectionPauseSummary,
   recordedBotLaneStarts,
+  botActivityPresentation,
 } from "../../lib/automation-status.js"
 
 function AutomationDot({ name, color, tooltip }) {
@@ -66,6 +67,7 @@ export function AutomationStatusStrip({ status, error, runHistory, localPreview 
   const pause = collectionPauseSummary(status)
   const botWorkflow = workflows.find(isBotWorkflow)
   const starts = recordedBotLaneStarts(runHistory)
+  const activity = botActivityPresentation(botWorkflow?.current_activity)
 
   return (
     <>
@@ -133,6 +135,22 @@ export function AutomationStatusStrip({ status, error, runHistory, localPreview 
             {botWorkflow.last_run_at ? ` · ${new Date(botWorkflow.last_run_at).toUTCString()}` : " · no run time"}.
             {botWorkflow.error ? ` Check error: ${botWorkflow.error}` : ""}
           </p>
+        )}
+        {botWorkflow && (
+          <div className="automation-retained-run">
+            <p>{activity.message}</p>
+            {activity.runs.map((run) => (
+              <p key={run.id}>
+                <a className="automation-activity-link" href={run.href} target="_blank" rel="noopener noreferrer"
+                  aria-label={`Open bot workflow run ${run.id} in GitHub (new tab)`}>
+                  Run {run.id}
+                </a>{" "}· {run.label} · {new Date(run.created_at).toUTCString()}
+              </p>
+            ))}
+            {activity.checked_at && (
+              <p>Activity checked {new Date(activity.checked_at).toUTCString()}.</p>
+            )}
+          </div>
         )}
         <p className="automation-retained-run">
           {starts.alerts ? `Latest saved alerts run started ${new Date(starts.alerts).toUTCString()}.` : "No saved alerts run start."}
