@@ -1,5 +1,6 @@
 // Browser-only presentation contract. Source qualification stays in Python.
 import { EDITORIAL_POLICY_MANIFEST } from "./editorial-policy-manifest.js"
+import { hasReadableGHCNMarker, readableGHCNWarrantForDisplay } from "./ghcn-readable-warrant.js"
 const SHA = /^[a-f0-9]{64}$/
 const isSHA = value => typeof value === "string" && SHA.test(value)
 const LIMIT = 1024 * 1024
@@ -155,6 +156,7 @@ export function temperaturePreviewSourceStatus(draft) {
   const bundle = draft?.review_context?.two_bot?.bundle
   const evidence = bundle?.raw_signal_dump?.evidence
   if (!bundle || !evidence) return "missing"
+  if (hasReadableGHCNMarker(bundle) && readableGHCNWarrantForDisplay(draft).status !== "saved") return "unsupported"
   return isTemperaturePreviewType(draft.type) && bundle.signal_kind === temperatureKinds[draft.type]
     && evidence.source_product === "noaa-ghcn-daily-v2" && evidence.evidence_type === "observed"
     ? "ghcn" : "unsupported"

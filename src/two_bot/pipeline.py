@@ -429,6 +429,12 @@ def generate_draft(
     warning_provider_token = None
     checked_policy = current_editorial_policy()
     try:
+        from src.two_bot.ghcn_readable_warrant import WarrantError, prepare_bundle
+        try:
+            bundle = prepare_bundle(bundle)
+        except WarrantError as exc:
+            _record_kill("bundle_retention", str(exc))
+            return None
         from src.editorial.observed_scope import MESSAGE, story_hold
         if scope_hold := story_hold(bundle):
             _record_kill("editorial_scope", scope_hold + ": " + MESSAGE)
@@ -778,6 +784,8 @@ def generate_shadow_draft(bundle: StoryBundle, state: BotState) -> dict | None:
     """
 
     try:
+        from src.two_bot.ghcn_readable_warrant import prepare_bundle
+        bundle = prepare_bundle(bundle)
         if not _audit_bundle_for_generation(bundle, state, prefix="Shadow "):
             return None
 

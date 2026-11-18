@@ -73,6 +73,14 @@ def audit_story_bundle(bundle: StoryBundle) -> EvidenceAudit:
     surface weak context while allowing generation to continue.
     """
 
+    from src.two_bot.ghcn_readable_warrant import WarrantError, scientific_bundle
+    try:
+        bundle = scientific_bundle(bundle)
+    except WarrantError as exc:
+        return EvidenceAudit(signal_kind=getattr(bundle, "signal_kind", ""),
+            event_id=getattr(bundle, "event_id", ""), prompt_ready=False,
+            issues=(_issue("error", "ghcn_readable_warrant_invalid", "raw_signal_dump.evidence", str(exc)),))
+
     issues: list[EvidenceIssue] = [_issue("error", code, field, message) for code, field, message in bundle_schema_issues(bundle)]
 
     _require_text(issues, bundle.signal_kind, "signal_kind", "missing_signal_kind")

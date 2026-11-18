@@ -210,16 +210,21 @@ def test_record_copy_without_scope_or_with_overclaim_is_refused_at_the_determini
 
 
 @pytest.mark.parametrize("direction,tier", VARIANTS)
-def test_dense_full_record_bundle_is_held_at_capture_before_any_model_call(monkeypatch, direction, tier):
-    # Retained limit, not a success: the full 26-year source calendar exceeds the 32 KB capture
-    # bound. Root owns the production compact claim; this proves no paid call precedes the hold.
+def test_enlarged_complete_record_warrant_still_holds_before_any_model_call(monkeypatch, direction, tier):
+    # Native full capture retains its original bound. A lossless readable warrant
+    # can now fit; an addition that makes THAT complete input too large must still
+    # stop before a provider, with every retained source field left intact.
+    from src.two_bot.bundle_capture import BundleCaptureError, capture_bundle
     bundle = graphic_bundles(direction=direction, tier=tier)[0]
+    with pytest.raises(BundleCaptureError, match="bundle_capture_too_large"):
+        capture_bundle(bundle)
+    bundle.raw_signal_dump["retained_operator_note"] = "x" * 6000
     models = _models(monkeypatch, copy=_record_copy(direction, tier))
     outcome: dict = {}
     assert pipeline.generate_draft(bundle, deepcopy(DEFAULT_STATE), result_out=outcome) is None
     assert models.requests == []
-    assert (outcome["kill_stage"], outcome["kill_reason"], outcome["writer_started"]) == (
-        "bundle_retention", "bundle_capture_too_large", False)
+    assert outcome["kill_stage"] == "evidence_contract" and outcome["writer_started"] is False
+    assert "ghcn_readable_byte_bound" in outcome["kill_reason"]
 
 
 @pytest.mark.parametrize("copy", [

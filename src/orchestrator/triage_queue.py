@@ -115,6 +115,16 @@ def _enqueue_story_candidate(
         print(f"[triage] Fire history hold: {fire_hold}")
         out["disposition"] = "refused_history"
         return False
+    from src.two_bot.ghcn_readable_warrant import WarrantError, prepare_bundle
+    try:
+        bundle = prepare_bundle(bundle)
+    except WarrantError as exc:
+        out["disposition"] = "refused_retention"
+        _record_downstream_suppression(bot_state=bot_state, source=source,
+            run_id=(_current_suppression_ctx() or {}).get("run_id"), event_id=event_id,
+            score=score, kill_stage="bundle_retention", kill_reason=str(exc),
+            summary=getattr(bundle, "where", None) or city or None)
+        return False
     audit = audit_story_bundle(bundle)
     error_codes = [issue.code for issue in audit.issues if issue.severity == "error"]
     if error_codes:
@@ -953,6 +963,27 @@ def _drain_and_write_triage_queue(
     # BotState TypedDict (it's excluded from sqlite persistence intentionally).
     state_dict: dict = cast(dict, bot_state)
     queue = state_dict.pop("_triage_queue", [])
+    if not queue:
+        return 0
+
+    # Lower-level callers can insert full packets directly. Fix the operation's
+    # representation before enrichment and either drain's cache/request hashes.
+    from src.two_bot.ghcn_readable_warrant import WarrantError, prepare_bundle
+    from dataclasses import replace
+    prepared_queue = []
+    for candidate in queue:
+        try:
+            packet = prepare_bundle(candidate.bundle)
+            if packet is not candidate.bundle:
+                candidate = replace(candidate, bundle=packet)
+        except WarrantError as exc:
+            _record_downstream_suppression(bot_state=bot_state, source=candidate.source,
+                run_id=(_current_suppression_ctx() or {}).get("run_id"), event_id=candidate.event_id,
+                score=candidate.score, kill_stage="bundle_retention", kill_reason=str(exc),
+                summary=getattr(candidate.bundle, "where", None) or candidate.city or None)
+            continue
+        prepared_queue.append(candidate)
+    queue = prepared_queue
     if not queue:
         return 0
 

@@ -1,3 +1,8 @@
+## 0.9.109.124
+
+- Carry complete GHCN station-record evidence in a strict readable calendar table within the existing writer input bound. Preserve every source field, optional enrichment and saved evidence identity through collection, queueing, checks, retained requests, editing and publication rechecks; refuse malformed or oversized inputs before generation.
+- Show the retained station table in a collapsed, keyboard-accessible Workbench disclosure. Materialize full scientific evidence separately for native graphics while binding the attachment to the saved input. Keep existing source checks, models, limits and publication controls unchanged.
+
 ## 0.9.109.123
 
 - Keep identified GHCN records inside source validation when their legacy draft type survives renamed event/signal fields and erased comparator hints. Preserve unrelated grid sources and non-record GHCN families, and refuse malformed records before safety or delivery.

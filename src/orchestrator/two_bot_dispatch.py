@@ -90,6 +90,18 @@ def _try_two_bot_draft(
         # below (source hold, cache hit, prerequisite) leaves it False, so the
         # drain can tell a no-cost refusal from a paid attempt.
         result_out["writer_started"] = False
+    from src.two_bot.ghcn_readable_warrant import WarrantError, prepare_bundle
+    try:
+        bundle = prepare_bundle(bundle)
+    except WarrantError as exc:
+        if result_out is not None:
+            result_out.update(kill_stage="bundle_retention", kill_reason=str(exc))
+        retention_ctx = _current_suppression_ctx() or {}
+        _record_downstream_suppression(bot_state=bot_state, source=retention_ctx.get("source") or "writer",
+            run_id=retention_ctx.get("run_id"), event_id=event_id, score=score,
+            kill_stage="bundle_retention", kill_reason=str(exc),
+            summary=getattr(bundle, "where", None) or city or None)
+        return False
     if (getattr(bundle, "signal_kind", None) in ("official_warning", "nhc_advisory")
         or str(getattr(bundle, "event_id", "")).startswith(("official_warning:", "nhc_advisory:"))):
         from src.editorial.official_warning import WarningHold
