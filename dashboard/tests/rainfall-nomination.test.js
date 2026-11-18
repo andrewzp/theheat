@@ -1,6 +1,7 @@
 import test from "node:test"
 import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
+import { spawnSync } from "node:child_process"
 import { createRequire } from "node:module"
 import { dirname, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
@@ -193,4 +194,49 @@ test("real producer JSON reaches the actual rendered SourcesView with no draft o
     assert.match(markup, /Past collection results, not a live source check/)
     assert.doesNotMatch(markup, /Approve|Post now|Paris|180\.5/)
   }
+})
+
+const DURABLE = JSON.parse(readFileSync(new URL("./fixtures/rainfall-durable-health.json", import.meta.url)))
+test("the actual Python producer still emits the durable fixture used by this reader", () => {
+  const result = spawnSync(process.env.THEHEAT_TEST_PYTHON || "python3", ["-m", "dashboard.tests.fixtures.rainfall_durable_producer"], {
+    cwd: fileURLToPath(new URL("../../", import.meta.url)), encoding: "utf8", timeout: 20000,
+    env: { PATH: process.env.PATH, PYTHON_DOTENV_DISABLED: "1", PYTHONDONTWRITEBYTECODE: "1", LC_ALL: "C", LANG: "C", NO_PROXY: "*", no_proxy: "*" },
+  })
+  assert.equal(result.status, 0, result.stderr)
+  assert.deepEqual(JSON.parse(result.stdout), DURABLE)
+})
+test("actual telemetry and durable zero-eliding serializer reach the real reader and SourcesView", () => {
+  for (const name of ["empty", "range", "queued"]) {
+    const state = structuredClone(DURABLE[name]), before = structuredClone(state)
+    const latest = state.source_health.gpm_imerg.runs.at(-1)
+    assert.equal(Object.hasOwn(latest, "promoted"), name === "queued")
+    assert.equal(Object.hasOwn(latest, "observed"), name !== "empty")
+    const payload = buildSourceHealthPayload(state, { asOf: AS_OF })
+    const outcome = payload.sources.find(s => s.source === "gpm_imerg").outcome
+    assert.match(outcome.detail, /Saved rainfall report nominations:/)
+    assert.equal(outcome.state, name === "queued" ? "supplying" : "rainfall_nominations")
+    assert.ok(renderToStaticMarkup(createElement(SourcesView, payload)).includes(outcome.detail))
+    assert.deepEqual(state, before)
+  }
+})
+
+test("zero elision applies only to explicit source zeros in the bound run", () => {
+  const mutations = [
+    state => { delete state.source_health.gpm_imerg.runs.at(-1).observed },
+    state => { state.source_health.gpm_imerg.runs.at(-1).promoted = null },
+    state => { state.source_health.gpm_imerg.runs.at(-1).promoted = false },
+    state => { state.source_health.gpm_imerg.runs.at(-1).promoted = "0" },
+    state => { state.source_health.gpm_imerg.runs.at(-1).promoted = -1 },
+    state => { state.source_health.gpm_imerg.runs.at(-1).ts = "2026-11-16T17:01:30Z" },
+    state => { delete row(state).promoted },
+    state => { row(state).observed = 0 },
+  ]
+  for (const change of mutations) {
+    const state = structuredClone(DURABLE.range)
+    change(state)
+    unavailable(projected(state))
+  }
+  const positive = structuredClone(DURABLE.queued)
+  delete positive.source_health.gpm_imerg.runs.at(-1).promoted
+  unavailable(projected(positive))
 })
