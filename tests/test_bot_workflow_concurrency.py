@@ -172,8 +172,8 @@ def test_pr_and_display_branch_job_exclusions_remain_explicit(workflow):
 def test_required_offline_suite_and_own_production_smoke_gate_remain(workflow):
     test, run = workflow["jobs"]["test-partition"], workflow["jobs"]["run"]
     suite = next(step for step in test["steps"] if step.get("run", "").startswith("python -m pytest tests/ -v "))
-    assert suite["run"] == 'python -m pytest tests/ -v -m "not voice_replay" --ci-partition=${{ matrix.partition }} --ci-postgres-shard=${{ matrix.postgres-shard }} --ci-critical-first --maxfail=1 --durations=20 -o faulthandler_timeout=${{ matrix.partition == \'postgres\' && (matrix.postgres-shard == \'2\' || matrix.postgres-shard == \'8\') && \'0\' || \'300\' }}'
-    assert suite["env"]["THEHEAT_CI_SAFE_DIAGNOSTIC"] == "${{ matrix.partition == 'postgres' && matrix.postgres-shard == '8' && '1' || '0' }}"
+    assert suite["run"] == 'python -m pytest tests/ -v -m "not voice_replay" --ci-partition=${{ matrix.partition }} --ci-postgres-shard=${{ matrix.postgres-shard }} --ci-critical-first --maxfail=1 --durations=20 -o faulthandler_timeout=${{ matrix.partition == \'postgres\' && (matrix.postgres-shard == \'1\' || matrix.postgres-shard == \'2\' || matrix.postgres-shard == \'8\') && \'0\' || \'300\' }}'
+    assert suite["env"]["THEHEAT_CI_SAFE_DIAGNOSTIC"] == "${{ matrix.partition == 'postgres' && (matrix.postgres-shard == '1' || matrix.postgres-shard == '8') && '1' || '0' }}"
     assert suite["env"]["THEHEAT_TEST_POSTGRES"] == "1"
     assert any(step.get("name") == "SQLite backend smoke" for step in test["steps"])
     assert any(step.get("name") == "Smoke gate" for step in run["steps"])
@@ -315,7 +315,7 @@ def test_only_database_partitions_install_binaries_with_bounded_steps(workflow):
     suite = next(step for step in steps if step.get("run", "").startswith("python -m pytest tests/ -v "))
     assert suite["env"] == {
         "THEHEAT_TEST_POSTGRES": "1", "THEHEAT_POSTGRES_BINDIR": "/usr/lib/postgresql/17/bin",
-        "THEHEAT_CI_SAFE_DIAGNOSTIC": "${{ matrix.partition == 'postgres' && matrix.postgres-shard == '8' && '1' || '0' }}",
+        "THEHEAT_CI_SAFE_DIAGNOSTIC": "${{ matrix.partition == 'postgres' && (matrix.postgres-shard == '1' || matrix.postgres-shard == '8') && '1' || '0' }}",
     }
     assert "if" not in suite and "continue-on-error" not in suite
 
