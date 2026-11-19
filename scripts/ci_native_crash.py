@@ -1,8 +1,8 @@
 """Observe a CI pytest SIGSEGV without replaying it or publishing core memory.
 
-Only the Linux PG2 and PG8 jobs load this CI plugin. All test selections and
+Only the Linux PG1, PG2 and PG8 jobs load this CI plugin. All test selections and
 execution limits remain unchanged. PG2's replay checks require a single-threaded
-process. PG8's 300-second diagnostic uses normal Python frame references.
+process. PG1/PG8's 300-second diagnostic uses normal Python frame references.
 Core files stay in a private runner directory and are deleted after one bounded
 GDB read. Only sanitized function names, frame counts and statuses reach stdout;
 arguments, locals, addresses, environment and raw debugger output never do.
@@ -132,7 +132,7 @@ def _directory(path: Path) -> None:
 def prepare(runner_temp: Path, environment_file: Path) -> None:
     """Publish restoration information BEFORE attempting a kernel mutation."""
     if shutil.which("gdb") is None:
-        # The same PG2/PG8 workers install GDB with their other CI dependencies.
+        # The selected workers install GDB with their other CI dependencies.
         raise ValueError("debugger_unavailable")
     directory = Path(tempfile.mkdtemp(prefix="theheat-native-", dir=runner_temp))
     _directory(directory)
@@ -164,7 +164,7 @@ def pytest_configure(config: Any) -> None:
         shard = config.getoption("--ci-postgres-shard")
     except ValueError:
         return  # A nested pytest need not load this repository's conftest.
-    if partition != "postgres" or shard not in {"2", "8"}:
+    if partition != "postgres" or shard not in {"1", "2", "8"}:
         return
     directory = Path(os.environ["THEHEAT_CI_CORE_DIR"])
     _directory(directory)

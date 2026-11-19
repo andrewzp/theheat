@@ -3,6 +3,7 @@
 - Keep qualified, naturally expired airport drafts with explicit never-sent outcomes out of the critic's competing pending excerpts. Retain uncertain deliveries, current drafts and all source or receipt contradictions.
 - Preserve saved drafts and their histories, required critic verdicts, request limits and publication checks. No expired draft is retired, approved or retried by this read-only context filter.
 - Make rollback-only temperature delivery refusal tests use an explicit audit time, with a separate exact-expiry refusal control. Production deadlines and elapsed clocks are unchanged.
+- Use the existing GIL-held 300-second diagnostic and private crash capture for PostgreSQL shard 1. Preserve fatal-signal handling, all assertions, and the 45-minute job deadline; PostgreSQL shard 2 remains single-threaded.
 
 ## 0.9.109.138
 
