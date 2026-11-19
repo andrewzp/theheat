@@ -140,6 +140,11 @@ def test_actual_grid_through_real_writer_checks_save_and_fixture_x(monkeypatch, 
     monkeypatch.setenv("THEHEAT_TRIAGE_ENABLED", "1" if triage else "0")
     assert collect(ordinary_grid_world) is state
     assert models.stages() == ["writer", "safety", "fact_check", "critic"], state.get("suppressions")
+    request = next(request for stage, request in models.requests if stage == "writer")
+    actual_prompt = json.dumps(request["messages"])
+    assert "Explicitly say 'one grid cell' within the supplied map region." in actual_prompt
+    assert "Do not invent a nearby city or imply a region-wide total." in actual_prompt
+    assert "Use 'near' before the place" not in actual_prompt
     [draft] = state["drafts"]
     assert draft["text"] == COPY + "\n" + gpm_public_url()
     assert len(draft["text"]) <= 200

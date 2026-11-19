@@ -231,9 +231,15 @@ def build_writer_user_prompt(
                    "Fit all required facts within body_max_scalars below. Do not imply a record, "
                    "a global ranking or impacts. If the complete claim cannot fit, decline it.")
     if bundle.signal_kind == "satellite_precipitation_report":
-        prompt += ("\n\nLead with one daily precipitation amount and the named place, with country context. "
+        from src.data.rainfall_grid import is_family as grid_report
+        grid_cell = grid_report(bundle)
+        place = "map region" if grid_cell else "named place"
+        scope = ("Explicitly say 'one grid cell' within the supplied map region. "
+                 "Do not invent a nearby city or imply a region-wide total. " if grid_cell else
+                 "Use 'near' before the place: this is one satellite cell, not a city-wide total. ")
+        prompt += (f"\n\nLead with one daily precipitation amount and the {place}, with country context. "
                    "Credit NASA satellites and say estimate and water-equivalent precipitation. Preserve the UTC calendar date and 24-hour period. "
-                   "Use 'near' before the place: this is one satellite cell, not a city-wide total. "
+                   + scope +
                    "A correct rounded inch conversion may help a reader understand the amount. "
                    "The daily total does not establish rain/snow phase. No historical comparator, gauge measurement or impact finding is supplied. "
                    "Prefer one short sentence; the exact NASA citation is appended before checks.")

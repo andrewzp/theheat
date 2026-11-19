@@ -123,7 +123,7 @@
       "src/two_bot/types.py": "65afc3d850c31c843bc1e7b58dcc0b13eb274969dcff657e2622641bd85239ee"
     },
     "format": "saved-source-svg-preview-v2",
-    "policy_source_sha256": "1b6d17606fc50e5ebb74d4d81cd7cca0301baa6b2ec7d4531f5ca585a308427c",
+    "policy_source_sha256": "c0f2f29401da1c7670258a94199bb1300049f89ca1d6f455a9565293cdddb3a6",
     "resource_sources": {
       "src/data/registry/cities.csv": "data/cities.csv",
       "src/data/registry/country_codes.json": "data/country_codes.json",
@@ -133,5 +133,5 @@
     },
     "schema_version": 1
   },
-  "runtime_sha256": "84eadd875c4e5261ffced1932d3db2d9e02cbfeabe6cc1f3065e7d063ea375f0"
+  "runtime_sha256": "28a6d47548693df4aa75528f48f7b4fb4617c5edd4c53d2629455d821168f11e"
 }

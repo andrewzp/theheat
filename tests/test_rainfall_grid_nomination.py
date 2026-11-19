@@ -21,6 +21,17 @@ def test_grid_packet_dispatch_and_one_cell_copy_floor_share_existing_automatic_c
     assert len(json.dumps(bundle.to_dict()).encode()) < 32768
 
 
+def test_registered_point_writer_keeps_its_original_near_place_instruction():
+    from src.two_bot.types import MemorySlice
+    from src.two_bot.writer import build_writer_user_prompt
+    reading = _inland_reading()
+    bundle = report.build_bundle(report.evidence_for(reading, now=NOW), now=NOW)
+    prompt = build_writer_user_prompt(bundle, MemorySlice())
+    assert "Lead with one daily precipitation amount and the named place, with country context." in prompt
+    assert "Use 'near' before the place: this is one satellite cell, not a city-wide total." in prompt
+    assert "Explicitly say 'one grid cell' within the supplied map region." not in prompt
+
+
 @pytest.mark.parametrize("before,after,reason", [
     ("one grid cell", "Brazil nationwide", "rainfall_point_scope_required"),
     ("190.5 mm", "200 mm", "rainfall_amount_changed"),
