@@ -66,3 +66,49 @@ jobs:
           THEHEAT_PRODUCTION_PAUSED: ${{ vars.THEHEAT_PRODUCTION_PAUSED }}
           THEHEAT_PAID_EVALUATION_ENABLED: ${{ vars.THEHEAT_PAID_EVALUATION_ENABLED }}
         run: python scripts/workflow_health.py
+
+  alerts-catchup:
+    # GitHub fires only some scheduled runs (about 8 of the bot's 30 daily slots
+    # in late Oct and early Nov 2026), so a dropped four-hour slot can leave the
+    # alerts lane stale for most of a day (05:50 to 14:51 UTC on 2026-11-07).
+    # When the retained alerts start is older than the bot's own catch-up window,
+    # ask for one ordinary alerts run; a workflow_dispatch starts right away.
+    # Separate job so only this step's token can start workflows; the
+    # reconcilers above keep their read-only Actions scope.
+    if: vars.THEHEAT_PRODUCTION_PAUSED != '1' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Fetch state.json from gist
+        env:
+          GH_TOKEN: ${{ secrets.THEHEAT_GIST_WRITER_TOKEN || secrets.GH_GIST_TOKEN }}
+        run: gh gist view "${{ secrets.GIST_ID }}" -f state.json > "$RUNNER_TEMP/state.json"
+
+      # Same staleness rule as the bot's hourly catch-up (exit 0 = stale; recent
+      # or unreadable state dispatches nothing). Skip when a main bot run is
+      # already queued or running: it may be the missing slot, and the bot's
+      # shared lock would only hold this one behind it.
+      - name: Dispatch one alerts run when the lane is stale
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! python scripts/alerts_lane_catchup.py "$RUNNER_TEMP/state.json"; then
+            exit 0
+          fi
+          active=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow bot.yml --branch main --limit 20 \
+            --json status --jq '[.[] | select(.status != "completed")] | length') || active=unknown
+          if [[ "$active" != 0 ]]; then
+            echo "alerts catch-up: bot run already active ($active); not dispatching"
+            exit 0
+          fi
+          gh workflow run bot.yml --repo "$GITHUB_REPOSITORY" --ref main -f mode=alerts
+          echo "alerts catch-up: dispatched one alerts run"
