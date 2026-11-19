@@ -58,7 +58,7 @@ SHA = re.compile(r"[a-f0-9]{64}\Z")
 FAMILIES = {
     AWC: dict(
         template=awc_adapter.TEMPLATE, template_version=awc_adapter.TEMPLATE_VERSION,
-        adapter_version=awc_adapter.ADAPTER_VERSION, derivation="awc_pair_delivery_v1",
+        adapter_version=awc_adapter.ADAPTER_VERSION, derivation="awc_pair_delivery_v2",
         signal_kind="observed_metar_contrast", products=("awc-observed-airport-pair-v1",),
         files=("src/media/gist_media.py", "src/media/gist_hazard_media.py", "src/media/canonical_png.py", FONT,
                "src/media/evidence_graphic.py", "src/media/awc_graphic_adapter.py", "src/data/awc_observed.py",
@@ -459,7 +459,7 @@ WARM = "#ffb38a"
 
 
 def _render_awc(evidence):
-    """Two distinct station reports on one linear axis, never a global ranking."""
+    """Two station reports; warm/cool cues compare this pair, never classify risk."""
     canvas = _Canvas("#0b1220")
     canvas.text((64, 72), "THEHEAT", size=42, fill=MUTED)
     if evidence["synthetic"]:
@@ -468,7 +468,11 @@ def _render_awc(evidence):
     stamp = evidence["observed_at"][:16].replace("T", " ")
     canvas.text((64, 222), stamp + " UTC · observed", size=42, fill=MUTED)
     canvas.text((64, 370), awc_adapter.number(evidence["difference_c"]) + "°C gap", size=112, fill=INK)
-    colours = ("#63d9d0", "#ffb38a")
+    # The canonical station order is independent of temperature. Keep that
+    # identity/order, while both row and marker cues follow the source values.
+    colours = ((WARM, "#63d9d0")
+               if evidence["points"][0]["temperature_c"] > evidence["points"][1]["temperature_c"]
+               else ("#63d9d0", WARM))
     for index, (point, colour) in enumerate(zip(evidence["points"], colours)):
         start = 450 + 350 * index
         canvas.text((64, start), f"Airport {'AB'[index]} · {point['station_id']}", size=42, fill=colour)

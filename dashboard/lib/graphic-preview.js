@@ -163,7 +163,7 @@ export function temperaturePreviewSourceStatus(draft) {
 }
 
 const templates = {
-  awc_airport_temperature_pair: { version: "p31-awc-airport-pair-1", source: "NOAA Aviation Weather Center",
+  awc_airport_temperature_pair: { version: "p31-awc-airport-pair-2", source: "NOAA Aviation Weather Center",
     adapter: "src/media/awc_graphic_adapter.py", context: "awc_airport_pair" },
   nwps_river_forecast: { version: "p31-nwps-river-2", source: "NOAA/NWS National Water Prediction Service",
     adapter: "src/media/nwps_graphic_adapter.py", context: "nwps_forecast_points" },
@@ -299,8 +299,8 @@ const pin = (files, path) => files?.[path] ?? EDITORIAL_POLICY_MANIFEST.files[pa
 const HAZARD_FILES = ["src/media/gist_media.py", "src/media/gist_hazard_media.py", "src/media/canonical_png.py", "src/media/fonts/DejaVuSansMono.ttf",
   "src/media/evidence_graphic.py", "src/media/temperature_graphic_adapter.py"]
 const HAZARD_MEDIA = {
-  gist_awc_observed_pair_v1: { template: "awc_airport_temperature_pair", templateVersion: "p31-awc-airport-pair-1",
-    adapterVersion: "p31-awc-observed-pair-1", derivation: "awc_pair_delivery_v1",
+  gist_awc_observed_pair_v1: { template: "awc_airport_temperature_pair", templateVersion: "p31-awc-airport-pair-2",
+    adapterVersion: "p31-awc-observed-pair-2", derivation: "awc_pair_delivery_v2",
     files: ["src/media/gist_media.py", "src/media/gist_hazard_media.py", "src/media/canonical_png.py", "src/media/fonts/DejaVuSansMono.ttf",
       "src/media/evidence_graphic.py", "src/media/awc_graphic_adapter.py", "src/data/awc_observed.py", "src/data/places.py",
       "src/data/registry/country_names.json", "src/two_bot/types.py", "src/editorial/revisions.py"] },

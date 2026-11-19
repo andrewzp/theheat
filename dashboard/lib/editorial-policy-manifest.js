@@ -16,7 +16,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "dashboard/lib/draft-revisions.js": "709d04f5fc0e8b41f87278dd46ea4ac7625af514de9766baa7cf5fca82efb759",
     "dashboard/lib/editorial-policy.js": "5b24b0506ba6ba05440cd42c9bde1838af92cbb3d7ee777f98f834be3867c5ba",
     "dashboard/lib/ghcn-readable-warrant.js": "d618bffad4374ca047fb3038a36dc1cb51f3fb73c006a78708b86037137f0b9c",
-    "dashboard/lib/gist-media.js": "99f1ffe081a9b46281c889a7d45d2d27593af21544774044f81e2adcd7443e5a",
+    "dashboard/lib/gist-media.js": "0a5cbd517822ccfd5e6591b7ee3bfe46d2e36f67760cd9658bd22e4487b9ce3a",
     "dashboard/lib/gist-temperature-media.js": "c8f71b873413952379252711473846120e822a01d8563ad6633e09620b9d83e5",
     "dashboard/lib/hazard-episodes.js": "cb34494b1f40cce42991d5533381cdc55c8c91c96c8b731bf18f2a6781f10201",
     "dashboard/lib/lossless-gist.js": "225d5bb514ff22b8e2ee9d5b9adabc2ac06a71f8d7f3b18e9ab690e2cecb51ae",
@@ -164,7 +164,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/main.py": "0217c814c0f4e5d34031450211226d08cda3c9e5ac7acff8fa13b1cadfa6716b",
     "src/media/air_quality_graphic_adapter.py": "fb5a1e59526e64141f7aa745ac0f297b0edc159d2398f8e67d60c1ed18dd2aa7",
     "src/media/attachment.py": "119515f4136f9bfa35c9eb3dc2b6f4c9f5ba938cf70e9002d9ae7f9d7bdb8d12",
-    "src/media/awc_graphic_adapter.py": "99be6312c8408c1173b749c65947e8abddfc61a97eb06a3eeae99cc6b0dc26d1",
+    "src/media/awc_graphic_adapter.py": "b5a7535ebfa10379e8bc2e813dc35398237b7fbc548ec4e2f460756910b771d4",
     "src/media/canonical_png.py": "75e6a4c6d512e7f1c6b8c8b9fa616445dd08d203a6825d5d01e76adb3c74a636",
     "src/media/crw_capture.py": "fca3e76824bbfa6b0eecbba8705202d877880cce0a03f191ecc5481e73ec786f",
     "src/media/crw_graphic_adapter.py": "fe12fea1b25f2d81d4290477584aebc8b9aa0597c176c3b354835192facf8606",
@@ -174,7 +174,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/media/gist_assets.py": "17dc50885e891f8d2799b1b8ae00d2564ce81cda98cf13bc7ac326cd9d448597",
     "src/media/gist_assets_postgres.py": "e9f34f6939b7ca6ea560fab0627b37e7993cf711f09652e70ad2ccad641b003d",
     "src/media/gist_crw_media.py": "9d352696d559b3e1062e852a01978ecd4bce51fa013002c3fbbc870dd5ffc8d1",
-    "src/media/gist_hazard_media.py": "ab0a1a14f58996c54ed65a06da090951a88f1fc34c8495d64f4b59642debd046",
+    "src/media/gist_hazard_media.py": "910b98da8db10ce32ec9e12b6c9b328abc7c294bbfcf5fe35bb6a265dd7398f4",
     "src/media/gist_media.py": "d1df9d0aace5214074598670e0a8a8c4b63a6f4bb18b218499f56bddb31b3319",
     "src/media/gist_media_export.py": "296f80aab4408aecdd75ab400bb6a0d90530f3485379a310748df2959c865eae",
     "src/media/gist_nwps_media.py": "3387f8f0b1b7dc638de8a0da97fa7f21ceb0b0f5a6361c5d1a96d91ed817a7d1",
@@ -310,5 +310,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "5c5ffcc95358c7df45ae838c228759ad0eb6275c8f9053c8130c0a8824b63d9e"
   },
   "schema_version": 1,
-  "source_sha256": "c0f2f29401da1c7670258a94199bb1300049f89ca1d6f455a9565293cdddb3a6"
+  "source_sha256": "046fdd87e440496eb127d22d284e64878cd048e8236043e2803154b77e741aa3"
 }

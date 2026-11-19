@@ -33,7 +33,9 @@ any mixed product, platform or minute is refused rather than altered.
 
 - **AWC airport comparison**: exactly two reported airport air temperatures at
   one UTC minute/date, with both airports/countries, Celsius values and their
-  difference. Colour and A/B labels identify the airports, not hazard categories.
+  difference. Warm and cool colours mark the higher and lower readings within
+  the pair, not hazard categories; A/B labels identify the airports. Canonical
+  station order stays unchanged when the warmer airport is listed first.
   The common linear Celsius axis includes zero. This is not a national value,
   record, global ranking, daily maximum/minimum, forecast or impact claim.
   Reconstruction preserves the original capture time and fetches nothing;
@@ -128,7 +130,7 @@ replaced by another card.
 ## Descriptions
 
 The full adapter description stays available as expanded source details. The
-description sent to X is a separate versioned projection (`awc_pair_delivery_v1`, `pm25_delivery_v1`,
+description sent to X is a separate versioned projection (`awc_pair_delivery_v2`, `pm25_delivery_v1`,
 `modis_delivery_v1`, `viirs_delivery_v1`). It must fit both 1000 Unicode scalars
 and 1000 UTF-8 bytes, the existing conservative house limit, not a claim about
 X's current byte policy. Text is never truncated, rounded or rewritten by a model.

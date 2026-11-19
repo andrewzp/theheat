@@ -1,6 +1,6 @@
 {
   "identity": {
-    "archive_sha256": "16e2c7c1c1c9937afb986497736cddd647a632654a3dc78f65ad78e259136656",
+    "archive_sha256": "cea303b43508656cba219d9c9e12da71eac819bbce206cbda50df218282909bb",
     "deployment_files": {
       "api/graphic_preview.py": "984de6284b9eddef85db41cee9ab26c9d92954f12c7e13b6f87bf0bfb6640157",
       "api/graphic_reader_status.py": "5e9685d699625a4eea9d5be884b6e266939a0ad344a2997351ba79bd114407ba",
@@ -82,7 +82,7 @@
       "src/editorial/thresholds.py": "a24fefb63fc25510cbe693151c2479c9384ab259ac90d4dfee59e64309f22afe",
       "src/media/__init__.py": "d0615ff3fdf26d152945f16b1c3434fb8968f94fe520064ef2c2639ee91583b1",
       "src/media/air_quality_graphic_adapter.py": "fb5a1e59526e64141f7aa745ac0f297b0edc159d2398f8e67d60c1ed18dd2aa7",
-      "src/media/awc_graphic_adapter.py": "99be6312c8408c1173b749c65947e8abddfc61a97eb06a3eeae99cc6b0dc26d1",
+      "src/media/awc_graphic_adapter.py": "b5a7535ebfa10379e8bc2e813dc35398237b7fbc548ec4e2f460756910b771d4",
       "src/media/canonical_png.py": "75e6a4c6d512e7f1c6b8c8b9fa616445dd08d203a6825d5d01e76adb3c74a636",
       "src/media/crw_graphic_adapter.py": "fe12fea1b25f2d81d4290477584aebc8b9aa0597c176c3b354835192facf8606",
       "src/media/evidence_graphic.py": "ea4eb7222122706da91511454b8aaf7f346cefaf0a9de91c88eff12f046b3c1f",
@@ -94,7 +94,7 @@
       "src/media/gist_assets.py": "17dc50885e891f8d2799b1b8ae00d2564ce81cda98cf13bc7ac326cd9d448597",
       "src/media/gist_assets_postgres.py": "e9f34f6939b7ca6ea560fab0627b37e7993cf711f09652e70ad2ccad641b003d",
       "src/media/gist_crw_media.py": "9d352696d559b3e1062e852a01978ecd4bce51fa013002c3fbbc870dd5ffc8d1",
-      "src/media/gist_hazard_media.py": "ab0a1a14f58996c54ed65a06da090951a88f1fc34c8495d64f4b59642debd046",
+      "src/media/gist_hazard_media.py": "910b98da8db10ce32ec9e12b6c9b328abc7c294bbfcf5fe35bb6a265dd7398f4",
       "src/media/gist_media.py": "d1df9d0aace5214074598670e0a8a8c4b63a6f4bb18b218499f56bddb31b3319",
       "src/media/gist_nwps_media.py": "3387f8f0b1b7dc638de8a0da97fa7f21ceb0b0f5a6361c5d1a96d91ed817a7d1",
       "src/media/gist_published_media.py": "f9f3b23652087da499282a66fa486029bd7bc6c8da8f1b473d5fc1a724c6ddda",
@@ -123,7 +123,7 @@
       "src/two_bot/types.py": "65afc3d850c31c843bc1e7b58dcc0b13eb274969dcff657e2622641bd85239ee"
     },
     "format": "saved-source-svg-preview-v2",
-    "policy_source_sha256": "c0f2f29401da1c7670258a94199bb1300049f89ca1d6f455a9565293cdddb3a6",
+    "policy_source_sha256": "046fdd87e440496eb127d22d284e64878cd048e8236043e2803154b77e741aa3",
     "resource_sources": {
       "src/data/registry/cities.csv": "data/cities.csv",
       "src/data/registry/country_codes.json": "data/country_codes.json",
@@ -133,5 +133,5 @@
     },
     "schema_version": 1
   },
-  "runtime_sha256": "28a6d47548693df4aa75528f48f7b4fb4617c5edd4c53d2629455d821168f11e"
+  "runtime_sha256": "ee129540665fe5d5e0520379999e3b9838bcd51acf98f340c4d2accf550c55a5"
 }

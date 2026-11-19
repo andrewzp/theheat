@@ -1,3 +1,8 @@
+## 0.9.109.141
+
+- Make airport-comparison warm/cool colours follow the higher/lower reported temperature on both the figures and axis markers, while retaining station order, exact source values, scale and labels.
+- Explain the pair-relative colour cue in the image description and version the AWC template, adapter and description together. Old graphic recipes require a new preview and joint review; source-time and posting checks remain unchanged.
+
 ## 0.9.109.140
 
 - Discover qualified inland IMERG cells outside city sampling from the existing daily download, with pinned cartographic context, complete half-hour counts and explicit source/day/unit provenance. Share the existing one-candidate writer budget and required checks.
