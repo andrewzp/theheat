@@ -9,7 +9,7 @@ import zipfile
 
 import pytest
 
-from scripts.gen_dashboard_graphic_runtime import ROOT, SOURCES, RESOURCES, DEPLOYMENT_FILES, generate
+from scripts.gen_dashboard_graphic_runtime import ROOT, SOURCES, RESOURCES, DEPLOYMENT_FILES, MAX_RUNTIME_BYTES, generate
 
 
 def test_archive_is_exact_reproducible_public_allowlist():
@@ -17,6 +17,7 @@ def test_archive_is_exact_reproducible_public_allowlist():
     assert (archive, raw_manifest) == generate()
     assert archive == (ROOT / "dashboard/graphic-runtime.zip").read_bytes()
     assert raw_manifest == (ROOT / "dashboard/lib/graphic-runtime-manifest.json").read_bytes()
+    assert len(archive) <= MAX_RUNTIME_BYTES == 2_200_000
     manifest = json.loads(raw_manifest)
     assert manifest["identity"]["archive_sha256"] == sha256(archive).hexdigest()
     with zipfile.ZipFile(BytesIO(archive)) as z:
@@ -28,7 +29,16 @@ def test_archive_is_exact_reproducible_public_allowlist():
             assert "__pycache__" not in info.filename
 
 
-@pytest.mark.parametrize("tamper", [None, "archive", "wrapper", "lock", "manifest", "missing"])
+def test_generator_refuses_an_oversized_allowlist_before_publishing_outputs(monkeypatch):
+    from scripts import gen_dashboard_graphic_runtime as generator
+    original = (ROOT / "dashboard/graphic-runtime.zip").read_bytes()
+    monkeypatch.setattr(generator, "MAX_RUNTIME_BYTES", len(original) - 1)
+    with pytest.raises(ValueError, match="sealed archive byte bound"):
+        generator.generate()
+    assert (ROOT / "dashboard/graphic-runtime.zip").read_bytes() == original
+
+
+@pytest.mark.parametrize("tamper", [None, "archive", "wrapper", "lock", "manifest", "missing", "oversize"])
 def test_sealed_entrypoint_loads_only_verified_zip_and_fails_closed(tmp_path, tamper):
     for name in (*DEPLOYMENT_FILES, "graphic-runtime.zip", "lib/graphic-runtime-manifest.json"):
         target = tmp_path / name
@@ -44,6 +54,15 @@ def test_sealed_entrypoint_loads_only_verified_zip_and_fails_closed(tmp_path, ta
         (tmp_path / "lib/graphic-runtime-manifest.json").write_text(json.dumps(manifest))
     elif tamper == "missing":
         (tmp_path / "graphic-runtime.zip").unlink()
+    elif tamper == "oversize":
+        content = b"x" * (MAX_RUNTIME_BYTES + 1)
+        (tmp_path / "graphic-runtime.zip").write_bytes(content)
+        # A self-consistent envelope must still refuse at the byte bound.
+        manifest = json.loads((tmp_path / "lib/graphic-runtime-manifest.json").read_bytes())
+        manifest["identity"]["archive_sha256"] = sha256(content).hexdigest()
+        manifest["runtime_sha256"] = sha256(json.dumps(manifest["identity"], sort_keys=True,
+                                                       separators=(",", ":")).encode()).hexdigest()
+        (tmp_path / "lib/graphic-runtime-manifest.json").write_text(json.dumps(manifest))
     # A fresh, isolated interpreter cannot borrow source imports from this suite.
     code = '''
 import runpy, sys, json, socket
@@ -59,6 +78,8 @@ print(json.dumps({"unavailable": m["PreviewHandler"] is m["UnavailableHandler"],
     assert payload["unavailable"] is (tamper is not None)
     if tamper:
         assert payload["sources"] == []
+        if tamper == "oversize":
+            assert '"stage":"bootstrap_package"' in result.stderr
     else:
         assert payload["sources"] and all(name.startswith(str(tmp_path / "graphic-runtime.zip") + "/")
                                            for name in payload["sources"])

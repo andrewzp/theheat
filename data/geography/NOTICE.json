@@ -1,0 +1,12 @@
+{
+  "repository": "nvkelso/natural-earth-vector",
+  "tag": "v5.1.2",
+  "commit": "f1890d9f152c896d250a77557a5751a93d494776",
+  "path": "geojson/ne_110m_admin_0_countries.geojson",
+  "bytes": 838726,
+  "sha256": "6866c877d39cba9c357620878839b336d569f8c662d3cfab4cb1dbe2d39c977f",
+  "feature_count": 177,
+  "license_url": "https://www.naturalearthdata.com/about/terms-of-use/",
+  "boundary_policy_url": "https://www.naturalearthdata.com/about/disputed-boundaries-policy/",
+  "notice": "Made with Natural Earth. Public-domain cartographic data; no warranty of accuracy/completeness. Default map boundaries are not administrative certification. Weather values do not come from this file."
+}

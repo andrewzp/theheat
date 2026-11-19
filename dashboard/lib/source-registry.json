@@ -707,7 +707,7 @@
     "src/data/firms.py": "760c6157ec3cf3e84003ec764763f0c108539350e6bceba84c33532d8e75c422",
     "src/data/gdacs.py": "acd12ae1dd53550d5a377b8adc3f8f6179ae9b86239aa606717a0d07f0875457",
     "src/data/ghcn.py": "89e363985d8186b9c8112e4a432054ba11a6e5e301bd36c033ff9f4778546939",
-    "src/data/gpm_imerg.py": "4e59cf9b0daa99efcc5b47c8a6bf82bb0b26441c77aab6935ed1267fc28f4fe8",
+    "src/data/gpm_imerg.py": "39fcd05f4ba3d738a2043abf59de57a28fa4362d20c89e058469952be172b956",
     "src/data/ice_mass.py": "6352519b96130b565a9507f558a289126b1e9524cc79437239c55c5f4f2dd737",
     "src/data/jtwc.py": "1ad213e88299c9333c149cde0dbfd28d689e31b89e1c51440995536c64776e56",
     "src/data/methane.py": "061c60608f1d7c016b5afcce91c4d178d98e9f26ea1fdffb600e5f9cc6161355",
@@ -750,7 +750,7 @@
     "src/orchestrator/sources/enso.py": "33d53f7ef105d9b9fa48fb27eb0b859306e97f04ca301bc566120b7d83cc70ee",
     "src/orchestrator/sources/firms.py": "792f4c6334bca4df75fbcf47f00b28a40b4587d8947f131c09bb1afd233e6d08",
     "src/orchestrator/sources/gdacs.py": "89c9b0a96fee81b2079971dc2356dd0f272b5fb4a16f32ae408fdf9244081168",
-    "src/orchestrator/sources/gpm_imerg.py": "6d69254b9541cc0f08ef3df8a58ee5a2335b69192aedc71dd38d9f081a1344c2",
+    "src/orchestrator/sources/gpm_imerg.py": "466eeb20ec8a11bbc516d57bb3a0b56c7c11775bcebfdf9e5fd761a602b99322",
     "src/orchestrator/sources/ice_mass.py": "95f7de55872f48814f0397b7730b41cb91d019a1333f466f12014039ae2edd7b",
     "src/orchestrator/sources/marine.py": "341775be8e06a3304f3f05078d55d82c52e43fc64ef9c4b8f1b934c5fe693aa3",
     "src/orchestrator/sources/methane.py": "93647684e6a3c47e429cd9457d9fe806bfa9414bd4d6f3acfd095ded587396e6",
@@ -775,5 +775,5 @@
     "src/two_bot/intern/warnings.py": "04e0a4506ffbb29124c8d2960a5e5025305699297fcf8f9178b23caac2cd7a37"
   },
   "evidence_scope": "Referenced local code inventory; not live/provider/transitive-source qualification.",
-  "registry_sha256": "e5e6e6cfc7432afce55a9b64b2e9a8e1ec71ab630ecbbb8445028234bf4a68f1"
+  "registry_sha256": "1fea3bc9f4625208ac499fbd34ba1362f26cadf0411da43828356f42bf0dc1ee"
 }

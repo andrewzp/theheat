@@ -1,3 +1,9 @@
+## 0.9.109.140
+
+- Discover qualified inland IMERG cells outside city sampling from the existing daily download, with pinned cartographic context, complete half-hour counts and explicit source/day/unit provenance. Share the existing one-candidate writer budget and required checks.
+- Hold conflicting cell copies, repeated city/grid reports, changed source files and uncertain deliveries. Preserve city report support, original source limits and the default-off point-scan flag; canonicalize that scan before checkpointing.
+- Include the pure cell contract and geography in the sealed preview. Bound the reproducible archive at 2.2 MB in both generator and bootstrap; retain the 32 KB claim bound, integrity checks and refusal before imports on oversized packages.
+
 ## 0.9.109.139
 
 - Keep qualified, naturally expired airport drafts with explicit never-sent outcomes out of the critic's competing pending excerpts. Retain uncertain deliveries, current drafts and all source or receipt contradictions.

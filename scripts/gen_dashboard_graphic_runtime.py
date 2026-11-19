@@ -8,6 +8,7 @@ from pathlib import Path, PurePosixPath
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
+MAX_RUNTIME_BYTES = 2_200_000
 # Deliberately explicit: lazy scientific guards must stay in the package.
 SOURCES = (
     'src/__init__.py',
@@ -53,6 +54,7 @@ SOURCES = (
     'src/data/coastal_observed.py',
     'src/data/awc_observed.py',
     'src/data/rainfall_observed.py',
+    'src/data/rainfall_grid.py',
     'src/data/rainfall_supply.py',
     'src/data/water_levels.py',
     'src/data/c3s_monthly.py',
@@ -123,6 +125,7 @@ RESOURCES = (
     ("src/data/registry/place_registry.json", "data/place_registry.json"),
     ("src/data/registry/country_codes.json", "data/country_codes.json"),
     ("src/data/registry/country_names.json", "data/country_names.json"),
+    ("src/data/registry/geography/imerg_country_tiles_v1.json", "data/geography/imerg_country_tiles_v1.json"),
 )
 DEPLOYMENT_FILES = ("api/graphic_preview.py", "api/graphic_reader_status.py", "pyproject.toml", "uv.lock")
 
@@ -168,6 +171,8 @@ def generate(root=ROOT):
             entry.external_attr = 0o100644 << 16
             archive.writestr(entry, data)
     packaged = output.getvalue()
+    if len(packaged) > MAX_RUNTIME_BYTES:
+        raise ValueError("Graphic runtime exceeds the sealed archive byte bound")
     policy = (root / "dashboard/lib/editorial-policy-manifest.js").read_text()
     source_policy = json.loads(policy.split("export const EDITORIAL_POLICY_MANIFEST = ", 1)[1])
     identity = {

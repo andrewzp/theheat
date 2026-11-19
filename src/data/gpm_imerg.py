@@ -498,6 +498,7 @@ def fetch_daily_precip(
     trace: RainfallOpportunityTrace | None = None,
     network_selection: list[Mapping[str, Any]] | None = None,
     access_backoff: Mapping[str, Any] | None = None,
+    discovery_out: dict | None = None,
 ) -> list[CityPrecipReading]:
     """Fetch point daily precipitation for monitored cities (R-03 chained).
 
@@ -523,6 +524,9 @@ def fetch_daily_precip(
                     max_workers=max_workers, target_date=target_date)
 
     primary_extra: dict[str, Any] = {"access_backoff": access_backoff} if access_backoff else {}
+    if discovery_out is not None:
+        discovery_out.clear()
+        primary_extra["discovery_out"] = discovery_out
 
     def primary() -> list[CityPrecipReading]:
         return _fetch_daily_precip_primary(
@@ -547,10 +551,14 @@ def fetch_daily_precip(
             primary, witness, source_key="gpm_imerg", leg_label="open_meteo"
         )
     except SourceSkipped as exc:
+        if discovery_out is not None:
+            discovery_out.clear()
         if trace is not None:
             trace.finish("skipped", exc=exc)
         raise
     except (SourceFetchError, requests.RequestException) as exc:
+        if discovery_out is not None:
+            discovery_out.clear()
         if trace is not None:
             trace.finish("failed", exc=exc)
         if strict:
@@ -559,6 +567,8 @@ def fetch_daily_precip(
     if trace is not None:
         served = "witness_served" if source_leg_of(readings) == "open_meteo" else "primary_served"
         trace.finish(served if readings else "empty", readings)
+    if discovery_out is not None and source_leg_of(readings) == "open_meteo":
+        discovery_out.clear()
     return readings
 
 
@@ -574,6 +584,7 @@ def _fetch_daily_precip_primary(
     trace: RainfallOpportunityTrace | None = None,
     network_selection: list[Mapping[str, Any]] | None = None,
     access_backoff: Mapping[str, Any] | None = None,
+    discovery_out: dict | None = None,
 ) -> list[CityPrecipReading]:
     """Primary GESDISC-family daily precip fetch (grid chain then OPeNDAP).
 
@@ -583,6 +594,9 @@ def _fetch_daily_precip_primary(
     """
 
     observe: dict[str, Any] = {} if trace is None else {"trace": trace}
+    if discovery_out is not None:
+        discovery_out.clear()
+        observe["discovery_out"] = discovery_out
     token = os.environ.get("EARTHDATA_TOKEN", "")
     if not token:
         print("[gpm_imerg] EARTHDATA_TOKEN not configured — skipping")
@@ -645,6 +659,10 @@ def _fetch_daily_precip_primary(
             )
 
     headers = {"Authorization": f"Bearer {token}"}
+    # A point-only fallback cannot qualify a retained full-grid cell proof.
+    observe.pop("discovery_out", None)
+    if discovery_out is not None:
+        discovery_out.clear()
     if target_date is not None:
         requested_date = target_date
     else:
@@ -1297,6 +1315,7 @@ def _fetch_daily_precip_grid(
     token: str,
     today: date | None = None,
     trace: RainfallOpportunityTrace | None = None,
+    discovery_out: dict | None = None,
 ) -> list[CityPrecipReading]:
     """Download the daily IMERG grid once (via ``source``) and subset every
     qualified monitored city locally, independent of the per-city network cap.
@@ -1307,6 +1326,7 @@ def _fetch_daily_precip_grid(
     selected = _qualified_watchlist(rows)
     observe: dict[str, Any] = {} if trace is None else {"trace": trace}
     leg = _GRID_TRACE_LEGS.get(source, "")
+    discovered: dict = {}
     try:
         if target_date is not None:
             resolved_date = target_date
@@ -1332,7 +1352,8 @@ def _fetch_daily_precip_grid(
                 **observe,
             )
         readings = _subset_grid(
-            grid_bytes, selected, resolved_date=resolved_date, product=product
+            grid_bytes, selected, resolved_date=resolved_date, product=product,
+            **({"discovery_out": discovered} if discovery_out is not None else {}),
         )
     except (_GridNotFound, _GridTransient, _GridParseError) as exc:
         if trace is not None:
@@ -1340,7 +1361,7 @@ def _fetch_daily_precip_grid(
         raise _GridFetchUnavailable(str(exc)) from exc
     if trace is not None:
         trace.grid_inspected(source, resolved_date, readings)
-    if not readings:
+    if not readings and discovered.get("status") != "qualified":
         if trace is not None:
             trace.leg_result(leg, "unavailable", "zero_readings")
         raise _GridFetchUnavailable(
@@ -1354,6 +1375,8 @@ def _fetch_daily_precip_grid(
         raise
     if trace is not None:
         trace.leg_result(leg, "served")
+    if discovery_out is not None:
+        discovery_out.update(discovered)
     return readings
 
 
@@ -1540,6 +1563,7 @@ def _subset_grid(
     *,
     resolved_date: date,
     product: str,
+    discovery_out: dict | None = None,
 ) -> list[CityPrecipReading]:
     """Parse a daily IMERG grid and extract each city's precip via the same
     lat/lon index math the OPeNDAP path uses. Fill-value cells become skips,
@@ -1553,7 +1577,25 @@ def _subset_grid(
     try:
         with h5py.File(io.BytesIO(grid_bytes), "r") as handle:
             dataset = _find_precip_dataset(handle)
+            # Bound allocation before materialization, including malformed
+            # sparse/compressed inputs. Existing valid numeric city frames keep
+            # their extraction behavior and do not require new discovery fields.
+            if (dataset.shape != (1, LON_CELLS, LAT_CELLS)
+                    or dataset.dtype.kind not in "fiu" or dataset.dtype.itemsize > 8
+                    or dataset.is_virtual or dataset.external):
+                raise _GridParseError("unexpected precipitation grid shape or numeric dtype")
             grid = dataset[...]
+            if discovery_out is not None:
+                from src.data import rainfall_grid, rainfall_grid_scan
+                try:
+                    result = rainfall_grid_scan.scan(handle, dataset, grid, grid_bytes,
+                                                     day=resolved_date, product=product)
+                except (rainfall_grid.GridHeld, OSError, ValueError, TypeError, KeyError):
+                    # A minimal/legacy city frame can still serve registered
+                    # points; missing proof cannot nominate a new grid report.
+                    result = {"schema": "theheat.imerg-grid-discovery/v1", "status": "held",
+                              "reason": "rainfall_grid_frame_unqualified", "rows": []}
+                discovery_out.update(result)
     except OSError as exc:
         reason = _unreadable_grid_reason(grid_bytes)
         raise _GridParseError(f"could not open IMERG grid: {reason}", diagnostic=reason) from exc
@@ -1598,6 +1640,13 @@ def _find_precip_dataset(handle: Any) -> Any:
     import h5py
 
     for path in ("precipitation", "Grid/precipitation"):
+        # HDF links may name files outside these downloaded bytes. Refuse
+        # before resolving/materializing them, including a linked parent group.
+        parts = path.split("/")
+        for length in range(1, len(parts) + 1):
+            link = handle.get("/".join(parts[:length]), getlink=True)
+            if link is not None and not isinstance(link, h5py.HardLink):
+                raise _GridParseError("linked precipitation dataset is not retained in this grid")
         node = handle.get(path)
         if isinstance(node, h5py.Dataset):
             return node

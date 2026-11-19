@@ -222,6 +222,10 @@ jobs:
         if: matrix.partition == 'core'
         run: python scripts/gen_source_registry.py --check
 
+      - name: Verify pinned inland IMERG geography
+        if: matrix.partition == 'core'
+        run: python scripts/gen_imerg_country_tiles.py --check
+
       - name: Verify editorial policy manifest
         if: matrix.partition == 'core'
         run: python scripts/gen_editorial_policy.py --check

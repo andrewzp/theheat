@@ -5,6 +5,8 @@ import json
 from pathlib import Path
 import sys
 
+MAX_RUNTIME_BYTES = 2_200_000
+
 
 def _bootstrap_event(stage):
     # Startup cannot import even a logging helper from an unverified archive.
@@ -26,7 +28,7 @@ def load_handler(*, reader_status=False):
         root = Path(__file__).resolve().parents[1]
         manifest_path = root / "lib/graphic-runtime-manifest.json"
         archive = root / "graphic-runtime.zip"
-        if manifest_path.stat().st_size > 65536 or archive.stat().st_size > 2_000_000:
+        if manifest_path.stat().st_size > 65536 or archive.stat().st_size > MAX_RUNTIME_BYTES:
             raise ValueError("Invalid graphic runtime")
         manifest = json.loads(manifest_path.read_bytes())
         stage = "bootstrap_integrity"

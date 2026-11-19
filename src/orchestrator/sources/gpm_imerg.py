@@ -28,7 +28,7 @@ def _report_settings_hold(bot_state):
     return None
 
 
-def _enqueue_observed_reports(bot_state, readings, current_run, details):
+def _enqueue_observed_reports(bot_state, readings, current_run, details, *, discovery=None):
     from src.data import rainfall_observed
     from src.editorial.scoring._shared import _build_score
 
@@ -36,13 +36,14 @@ def _enqueue_observed_reports(bot_state, readings, current_run, details):
         details.update(status="held", reason=hold, nominated=0, queued=0)
         return 0
     nomination: dict = {}
-    bundles = rainfall_observed.nominate(readings, bot_state, diagnostics_out=nomination)
+    bundles = rainfall_observed.nominate(readings, bot_state, diagnostics_out=nomination,
+                                         grid_evidence=(discovery or {}).get("rows", []))
     details["nomination"] = nomination
     queued = 0
     for bundle in bundles:
         score = _build_score(rainfall_observed.KIND, severity=80, novelty=75, timeliness=90,
                             confidence=80, shareability=85, sensitivity=0, threshold=72,
-                            reasons=["Heavy completed-day satellite estimate at one monitored point"])
+                            reasons=["Heavy completed-day satellite estimate at one grid cell"])
         queued += int(_enqueue_story_candidate(
             bot_state, bundle=bundle, score=score, source="gpm_imerg",
             legacy_type=rainfall_observed.KIND, event_id=bundle.event_id,
@@ -59,7 +60,7 @@ def scan_blocks(cities: list[dict], block: int) -> tuple[list[str], list[list[in
     """Stable named blocks of the watchlist; a changed watchlist is a new region set (cursor 0)."""
     import hashlib
 
-    keys = ["|".join(str(c.get(k, "")) for k in ("city", "country", "lat", "lon")) for c in cities]
+    keys = [gpm_imerg.places.event_location_key(c["city"], c["country"], c["lat"], c["lon"]) for c in cities]
     blocks = [list(range(i, min(i + block, len(cities)))) for i in range(0, len(cities), block)]
     names = [f"block-{n + 1:03d}-" + hashlib.sha256("\n".join(keys[j] for j in idx).encode()).hexdigest()[:12]
              for n, idx in enumerate(blocks)]
@@ -67,7 +68,7 @@ def scan_blocks(cities: list[dict], block: int) -> tuple[list[str], list[list[in
 
 
 def _scanned_fetch(bot_state: BotState, cities: list[dict], *, max_cities: int, max_workers: int, trace,
-                   scan: dict, access: dict | None = None) -> list:
+                   scan: dict, access: dict | None = None, discovery_out=None) -> list:
     """One existing GPM call per run, ordered so the cursor's block gets the capped per-city legs.
 
     Grid downloads still inspect the whole watchlist; only the per-city order rotates. The
@@ -76,6 +77,7 @@ def _scanned_fetch(bot_state: BotState, cities: list[dict], *, max_cities: int, 
     """
     from src.data import rainfall_supply
 
+    cities = gpm_imerg._qualified_watchlist(cities, canonical_order=True)
     names, blocks = scan_blocks(cities, min(max_cities, gpm_imerg.MAX_NETWORK_CITIES))
     cursor = rainfall_supply.cursor_from_history(bot_state.get("run_history"), "gpm_imerg", names)
     readings: list = []
@@ -87,7 +89,9 @@ def _scanned_fetch(bot_state: BotState, cities: list[dict], *, max_cities: int, 
         try:
             rows = _fetch_strict(gpm_imerg.fetch_daily_precip, cities=[cities[j] for j in order],
                                  max_cities=max_cities, max_workers=max_workers, trace=trace,
-                                 network_selection=[cities[j] for j in chosen], **(access or {}))
+                                 network_selection=[cities[j] for j in chosen],
+                                 **({"discovery_out": discovery_out} if discovery_out is not None else {}),
+                                 **(access or {}))
         except Exception as exc:
             errors.append(exc)
             raise
@@ -115,6 +119,7 @@ def run_gpm_imerg(
     packet_holds: list[dict] = []  # W06.6: named packets stopped before paid generation
     scan: dict = {}  # W06.2: the bounded regional scan, when THEHEAT_RAINFALL_REGIONAL_SCAN is "1"
     report_details: dict = {}
+    discovery: dict = {}
     # A3: bounded backoff after a provider refusal of this exact credential (its expiry claim,
     # never its value). An expired credential is already stopped locally inside the fetch.
     token = os.environ.get("EARTHDATA_TOKEN", "")
@@ -130,6 +135,8 @@ def run_gpm_imerg(
         out = {**_trace_details(trace), **({"rainfall_packet_holds": packet_holds} if packet_holds else {}),
                **({"rainfall_scan": dict(scan)} if scan else {}),
                **({"rainfall_observed_report": dict(report_details)} if report_details else {})}
+        if discovery:
+            out["rainfall_grid_discovery"] = {k: v for k, v in discovery.items() if k != "rows"}
         incident = out.get("incident")
         attempts = incident.get("attempts") if isinstance(incident, dict) else None
         record = source_access.run_record(credential_expires_at=credential_expires_at,
@@ -157,7 +164,8 @@ def run_gpm_imerg(
             raise ValueError("GPM_IMERG_MAX_WORKERS must be >= 1")
         if os.environ.get(SCAN_FLAG) == "1" and cities:
             readings = _scanned_fetch(bot_state, cities, max_cities=max_cities, max_workers=max_workers,
-                                      trace=trace, scan=scan, access=access)
+                                      trace=trace, scan=scan, access=access,
+                                      discovery_out=discovery if _report_settings_hold(bot_state) is None else None)
         else:
             readings = _fetch_strict(
                 gpm_imerg.fetch_daily_precip,
@@ -165,11 +173,13 @@ def run_gpm_imerg(
                 max_cities=max_cities,
                 max_workers=max_workers,
                 trace=trace,
+                **({"discovery_out": discovery} if _report_settings_hold(bot_state) is None else {}),
                 **access,
             )
         from src.data import rainfall_observed
         if rainfall_observed.enabled():
-            source_promoted += _enqueue_observed_reports(bot_state, readings, current_run, report_details)
+            source_promoted += _enqueue_observed_reports(bot_state, readings, current_run, report_details,
+                                                         discovery=discovery)
         events = gpm_imerg.detect_precip_records(readings, cast(dict, bot_state))
         for event in events:
             if state.is_duplicate(bot_state, event.event_id):
