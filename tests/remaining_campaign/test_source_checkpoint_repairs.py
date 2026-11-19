@@ -23,7 +23,9 @@ def test_regional_retained_packet_expires_at_real_builder():
     assert regional.build_candidate(observation, now=datetime(2026, 10, 28, tzinfo=UTC))[1] == "time_support_future_capture"
 
 
-def test_scanner_passes_explicit_block_through_real_selector(monkeypatch):
+@pytest.mark.parametrize("cities", [CITIES, list(reversed(CITIES)), CITIES[1:] + CITIES[:1]],
+                         ids=["original", "reversed", "rotated"])
+def test_scanner_passes_explicit_block_through_real_selector(monkeypatch, cities):
     trap_network(monkeypatch.setattr)
     selected = []
     def fetch(*, cities, max_cities, network_selection=None, **kwargs):
@@ -32,13 +34,18 @@ def test_scanner_passes_explicit_block_through_real_selector(monkeypatch):
         return []
     monkeypatch.setattr(scan_runner.gpm_imerg, "fetch_daily_precip", fetch)
     state = {"run_history": []}
+    original = deepcopy(cities)
     for i in range(3):
         scan = {}
-        scan_runner._scanned_fetch(state, CITIES, max_cities=2, max_workers=1, trace=None, scan=scan)
+        scan_runner._scanned_fetch(state, cities, max_cities=2, max_workers=1, trace=None, scan=scan)
         state["run_history"].append({"started_at": f"2026-10-30T0{i}:00:00Z", "sources": [
             {"source": "gpm_imerg", "details": {"rainfall_scan": scan}}]})
+    # Sampling identities are canonicalized before checkpointing. Pin the
+    # exact membership, including the short final block, for every CSV order.
     assert [[row["city"] for row in rows] for rows in selected] == [
-        ["Ficta 0", "Ficta 1"], ["Ficta 2", "Ficta 3"], ["Ficta 4"]]
+        ["Ficta 4", "Ficta 0"], ["Ficta 2", "Ficta 3"], ["Ficta 1"]]
+    assert cities == original
+    assert [len(rows) for rows in selected] == [2, 2, 1]
 
 
 def test_default_normals_provider_refuses_before_library_import(monkeypatch):

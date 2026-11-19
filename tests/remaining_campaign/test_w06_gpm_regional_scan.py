@@ -65,8 +65,8 @@ def test_scan_rotates_blocks_checkpoints_in_retained_runs_and_failures_advance(g
     third = gpm(state, at="2026-10-28T06:00:00Z")["details"]["rainfall_scan"]
     wrapped = gpm(state, at="2026-10-29T06:00:00Z")["details"]["rainfall_scan"]
     # One existing provider call per run; the cursor's block leads the capped per-city legs.
-    assert [c[:2] for c in gpm.calls] == [["Ficta 0", "Ficta 1"], ["Ficta 2", "Ficta 3"], ["Ficta 4", "Ficta 0"],
-                                          ["Ficta 0", "Ficta 1"]]
+    assert [c[:2] for c in gpm.calls] == [["Ficta 4", "Ficta 0"], ["Ficta 2", "Ficta 3"], ["Ficta 1", "Ficta 4"],
+                                          ["Ficta 4", "Ficta 0"]]
     assert all(sorted(c) == sorted(x["city"] for x in CITIES) for c in gpm.calls)  # grids still see everyone
     assert (first["cursor"], first["next_cursor"], first["universe"]) == (0, 1, 3)
     assert failed["status"] == "failed" and failed["details"]["rainfall_scan"]["attempts"][0]["outcome"] == "failed"
@@ -74,7 +74,8 @@ def test_scan_rotates_blocks_checkpoints_in_retained_runs_and_failures_advance(g
     assert (third["cursor"], wrapped["cursor"]) == (2, 0)
     rows = {r["region"][:9]: r["outcome"] for r in rs.readiness(state["run_history"])}
     assert rows == {"block-001": "qualified", "block-002": "failed", "block-003": "qualified"}
-    names, _ = gpm_runner.scan_blocks(CITIES, 2)
+    canonical = gpm_runner.gpm_imerg._qualified_watchlist(CITIES, canonical_order=True)
+    names, _ = gpm_runner.scan_blocks(canonical, 2)
     assert rs.revisit_ages(state["run_history"], "gpm_imerg", names, today=date(2026, 10, 30)) == {
         names[0]: 1, names[1]: 3, names[2]: 2}
 
