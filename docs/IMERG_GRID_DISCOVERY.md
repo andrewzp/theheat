@@ -39,6 +39,10 @@ continue to apply. Same-cell/product/day duplicates use retained coordinates
 across city and grid schemas. No historical point is inferred from a new label.
 
 `details.rainfall_grid_discovery` records the finite scan and exclusion counts.
+Joint nomination diagnostics use `rainfall-nomination-counts-v2`, with separately
+reconciled city rows, discovered-cell inputs and unique joint cell counts. City-only
+v1 diagnostics stay supported. The Sources reader validates both schemas through
+the durable telemetry path; nomination counts never establish a draft or a post.
 The algorithm revisits every supported tile on each successful qualified frame;
 this is not a wall-clock freshness, source-access or scheduler guarantee. Existing
 retrieval walkbacks, retries and point-fallback caps remain. Physical requests,

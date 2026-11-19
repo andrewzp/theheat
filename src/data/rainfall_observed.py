@@ -35,6 +35,8 @@ MIN_MM = 150.0
 MAX_MM = 1000.0
 MAX_NOMINATIONS = 3
 NOMINATION_SCHEMA = "rainfall-nomination-counts-v1"
+GRID_NOMINATION_SCHEMA = "rainfall-nomination-counts-v2"
+GRID_NOMINATION_SCOPE = "City row and discovered cell dispositions; joint unique cell nominations, not coverage or source truth."
 _NOMINATION_HOLDS = frozenset({
     "rainfall_time_invalid", "rainfall_reading_invalid", "rainfall_satellite_product_required",
     "rainfall_number_invalid", "rainfall_point_invalid", "rainfall_outside_automatic_range",
@@ -277,7 +279,10 @@ def nominate(readings, bot_state, *, now=None, diagnostics_out=None, grid_eviden
         if bundle.event_id in qualified:
             counts["duplicate_qualified_rows"] += 1
         qualified.setdefault(bundle.event_id, bundle.to_dict())
-    grid_counts: Counter[str] = Counter()
+    grid_counts = dict.fromkeys(("input_rows", "identity_held_rows", "qualification_held_rows",
+                                 "history_held_rows", "duplicate_qualified_rows", "qualified_events"), 0)
+    grid_counts["input_rows"] = len(grid_evidence)
+    grid_qualified: dict[str, dict[str, Any]] = {}
     for evidence in grid_evidence:
         identity = _cell_identity(evidence)
         if (identity is None or identity in conflicting_cells
@@ -295,34 +300,41 @@ def nominate(readings, bot_state, *, now=None, diagnostics_out=None, grid_eviden
                 or legacy_point_day_hold(bundle, bot_state)):
             grid_counts["history_held_rows"] += 1
             continue
-        # One canonical nomination per cell/day across both schemas. A grid
-        # proof supersedes an equal city reading only within this free slate.
-        # This does not merge distinct cells or claim distinct physical storms.
-        for event, value in list(qualified.items()):
-            if _bundle_cell_identity(value) == identity:
-                del qualified[event]
-                grid_counts["same_cell_rows_collapsed"] += 1
-        qualified.setdefault(bundle.event_id, bundle.to_dict())
-        grid_counts["qualified_rows"] += 1
-    # City labels may share one sampled cell. Pick a stable retained packet,
-    # never buy multiple drafts for the identical product/day/cell.
+        if bundle.event_id in grid_qualified:
+            grid_counts["duplicate_qualified_rows"] += 1
+        grid_qualified.setdefault(bundle.event_id, bundle.to_dict())
+    grid_counts["qualified_events"] = len(grid_qualified)
+    # Retain separate input/disposition denominators. Join only the unique
+    # qualified events, preferring the complete grid proof for an equal cell.
+    # This neither merges physical storms nor changes city-only v1 telemetry.
     cells: dict[tuple, dict] = {}
     for value in sorted(qualified.values(), key=lambda row: row["event_id"]):
         key = _bundle_cell_identity(value)
         if key is not None:
             cells.setdefault(key, value)
-    rows = list(cells.values())
+    for value in sorted(grid_qualified.values(), key=lambda row: row["event_id"]):
+        key = _bundle_cell_identity(value)
+        if key is not None:
+            cells[key] = value
+    rows = list(cells.values()) if grid_evidence else list(qualified.values())
     rows.sort(key=lambda value: (-_time(value["when"]).timestamp(),
                                 -value["headline_metric"]["value"], value["event_id"]))
     result = [build_bundle(row["raw_signal_dump"]["evidence"], now=clock)
               for row in rows[:MAX_NOMINATIONS]]
     if type(diagnostics_out) is dict:
-        diagnostics_out.update(schema=NOMINATION_SCHEMA, **counts,
-            qualification_holds=dict(sorted(holds.items())), qualified_events=len(rows),
-            nominated_events=len(result), nomination_cap_excluded=len(rows) - len(result),
-            scope="Input row dispositions and unique event nominations; not coverage or source-truth validation.")
         if grid_evidence:
-            diagnostics_out["grid_rows"] = dict(grid_counts)
+            diagnostics_out.update(schema=GRID_NOMINATION_SCHEMA,
+                city={**counts, "qualification_holds": dict(sorted(holds.items())), "qualified_events": len(qualified)},
+                grid=grid_counts,
+                joint={"qualified_events": len(rows), "nominated_events": len(result),
+                       "nomination_cap_excluded": len(rows) - len(result),
+                       "duplicate_cell_events": len(qualified) + len(grid_qualified) - len(rows)},
+                scope=GRID_NOMINATION_SCOPE)
+        else:
+            diagnostics_out.update(schema=NOMINATION_SCHEMA, **counts,
+                qualification_holds=dict(sorted(holds.items())), qualified_events=len(rows),
+                nominated_events=len(result), nomination_cap_excluded=len(rows) - len(result),
+                scope="Input row dispositions and unique event nominations; not coverage or source-truth validation.")
     return result
 
 

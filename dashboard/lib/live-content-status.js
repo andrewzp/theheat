@@ -75,6 +75,52 @@ function safeSum(values) {
   return Number.isSafeInteger(total) ? total : null
 }
 
+const RAINFALL_GRID_SCOPE = "City row and discovered cell dispositions; joint unique cell nominations, not coverage or source truth."
+const GRID_COUNTERS = Object.freeze(["input_rows", "identity_held_rows", "qualification_held_rows",
+  "history_held_rows", "duplicate_qualified_rows", "qualified_events"])
+const JOINT_COUNTERS = Object.freeze(["qualified_events", "nominated_events", "nomination_cap_excluded", "duplicate_cell_events"])
+
+function rainfallGridNomination(row, outer, unavailable) {
+  const n = outer.nomination, c = n.city, g = n.grid, j = n.joint
+  const cityKeys = RAINFALL_COUNTERS.slice(0, 8)
+  if (!exactKeys(n, ["schema", "city", "grid", "joint", "scope"]) || n.scope !== RAINFALL_GRID_SCOPE
+      || !exactKeys(c, [...cityKeys, "qualification_holds"]) || !cityKeys.every(key => safeCount(c[key]))
+      || !exactKeys(g, GRID_COUNTERS) || !GRID_COUNTERS.every(key => safeCount(g[key]))
+      || !exactKeys(j, JOINT_COUNTERS) || !JOINT_COUNTERS.every(key => safeCount(j[key]))
+      || !record(c.qualification_holds) || !safeCount(outer.nominated) || !safeCount(outer.queued)) return unavailable
+  const codes = Reflect.ownKeys(c.qualification_holds)
+  if (!codes.every(code => typeof code === "string" && Object.hasOwn(RAINFALL_HOLDS, code)
+      && safeCount(c.qualification_holds[code]) && c.qualification_holds[code] > 0)) return unavailable
+  const qualifiedInput = safeSum([c.qualified_events, g.qualified_events])
+  if (c.input_rows !== row.observed || g.input_rows === 0
+      || safeSum(cityKeys.slice(1).map(key => c[key])) !== c.input_rows
+      || safeSum(GRID_COUNTERS.slice(1).map(key => g[key])) !== g.input_rows
+      || safeSum(codes.map(code => c.qualification_holds[code])) !== c.qualification_held_rows
+      || qualifiedInput === null || safeSum([j.qualified_events, j.duplicate_cell_events]) !== qualifiedInput
+      || safeSum([j.nominated_events, j.nomination_cap_excluded]) !== j.qualified_events
+      || j.nominated_events !== Math.min(3, j.qualified_events)
+      || (c.duplicate_qualified_rows > 0 && c.qualified_events === 0)
+      || (g.duplicate_qualified_rows > 0 && g.qualified_events === 0)
+      || (j.duplicate_cell_events > 0 && j.qualified_events === 0)
+      || outer.nominated !== j.nominated_events || outer.queued > outer.nominated || outer.queued > row.promoted
+      || outer.status !== (outer.nominated > 0 ? "nominated" : "no_qualified_report")) return unavailable
+  const reasons = [
+    ["city rows with conflicting identities", c.identity_conflict_rows],
+    ["city rows without a usable identity", c.identity_unavailable_rows], ["untyped city rows", c.untyped_rows],
+    ...codes.sort().map(code => [RAINFALL_HOLDS[code], c.qualification_holds[code]]),
+    ["city rows held by history", c.history_held_rows], ["duplicate city rows", c.duplicate_qualified_rows],
+    ["grid inputs with unusable or conflicting identities", g.identity_held_rows],
+    ["grid inputs held by qualification", g.qualification_held_rows], ["grid inputs held by history", g.history_held_rows],
+    ["duplicate grid rows", g.duplicate_qualified_rows], ["same-cell events joined", j.duplicate_cell_events],
+    ["excluded by the nomination cap", j.nomination_cap_excluded],
+  ].filter(([, value]) => value > 0).map(([label, value]) => `${label}: ${value}`)
+  return { state: "rainfall_nominations", detail:
+    `Saved rainfall report nominations: ${c.input_rows} city input rows; ${g.input_rows} grid cell report inputs; `
+    + `${j.qualified_events} qualified cells; ${outer.nominated} nominated; ${outer.queued} queued.`
+    + (reasons.length ? ` Dispositions: ${reasons.join("; ")}.` : "")
+    + " Retained decisions, not coverage, source truth, drafts or posts." }
+}
+
 // Read only the finite aggregate emitted by rainfall_observed.nominate and its
 // real source caller. Never render a retained reason/scope as arbitrary prose.
 function rainfallNomination(row, current) {
@@ -89,6 +135,7 @@ function rainfallNomination(row, current) {
   }
   if (!exactKeys(outer, ["status", "nomination", "nominated", "queued"])) return unavailable
   const n = outer.nomination
+  if (record(n) && n.schema === "rainfall-nomination-counts-v2") return rainfallGridNomination(row, outer, unavailable)
   if (!exactKeys(n, ["schema", ...RAINFALL_COUNTERS, "qualification_holds", "scope"])
       || n.schema !== "rainfall-nomination-counts-v1" || n.scope !== RAINFALL_SCOPE
       || !RAINFALL_COUNTERS.every(key => safeCount(n[key]))
