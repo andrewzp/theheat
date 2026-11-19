@@ -1,4 +1,4 @@
-"""GIL-held CI diagnostics replacing only the unsafe PG8 native timer.
+"""GIL-held CI diagnostics replacing selected long native-shard timers.
 
 The 300-second observation never terminates, retries or approves a test. Fatal
 signal handling and the external job deadline remain separate and unchanged.

@@ -164,7 +164,7 @@ jobs:
         if: matrix.partition != 'core'
         timeout-minutes: 5
         env:
-          THEHEAT_CI_INSTALL_GDB: ${{ matrix.partition == 'postgres' && (matrix.postgres-shard == '2' || matrix.postgres-shard == '8') && '1' || '0' }}
+          THEHEAT_CI_INSTALL_GDB: ${{ matrix.partition == 'postgres' && (matrix.postgres-shard == '1' || matrix.postgres-shard == '2' || matrix.postgres-shard == '8') && '1' || '0' }}
         run: |
           packages=(postgresql-17 postgresql-client-17 poppler-utils)
           if [[ "${THEHEAT_CI_INSTALL_GDB:-0}" == 1 ]]; then
@@ -233,24 +233,25 @@ jobs:
       # `voice_replay` tests live in tests/voice_regression/ and call the
       # real Anthropic writer. They run in voice-regression.yml (daily
       # canary + weekly full + writer-path PR gate), not in this suite.
-      - name: Prepare private PG2/PG8 crash evidence
-        if: matrix.partition == 'postgres' && (matrix.postgres-shard == '2' || matrix.postgres-shard == '8')
+      - name: Prepare private PG1/PG2/PG8 crash evidence
+        if: matrix.partition == 'postgres' && (matrix.postgres-shard == '1' || matrix.postgres-shard == '2' || matrix.postgres-shard == '8')
         timeout-minutes: 3
         run: python scripts/ci_native_crash.py prepare
 
       # Retained PG2 and PG8 cores identified the asynchronous diagnostic as
-      # the SIG11 recipient. PG8 uses the GIL-held Python 300s witness.
+      # the SIG11 recipient. PG1 also crashed just after a native dump; its
+      # precise cause remains unproven. PG1/PG8 use the Python 300s witness.
       # PG2's retained-supply replay requires a single-threaded process.
       # Fatal handling, every test and the 45min job deadline stay intact.
-      - run: python -m pytest tests/ -v -m "not voice_replay" --ci-partition=${{ matrix.partition }} --ci-postgres-shard=${{ matrix.postgres-shard }} --ci-critical-first --maxfail=1 --durations=20 -o faulthandler_timeout=${{ matrix.partition == 'postgres' && (matrix.postgres-shard == '2' || matrix.postgres-shard == '8') && '0' || '300' }}
+      - run: python -m pytest tests/ -v -m "not voice_replay" --ci-partition=${{ matrix.partition }} --ci-postgres-shard=${{ matrix.postgres-shard }} --ci-critical-first --maxfail=1 --durations=20 -o faulthandler_timeout=${{ matrix.partition == 'postgres' && (matrix.postgres-shard == '1' || matrix.postgres-shard == '2' || matrix.postgres-shard == '8') && '0' || '300' }}
         id: offline-suite
         env:
           THEHEAT_TEST_POSTGRES: "1"
           THEHEAT_POSTGRES_BINDIR: /usr/lib/postgresql/17/bin
-          THEHEAT_CI_SAFE_DIAGNOSTIC: ${{ matrix.partition == 'postgres' && matrix.postgres-shard == '8' && '1' || '0' }}
+          THEHEAT_CI_SAFE_DIAGNOSTIC: ${{ matrix.partition == 'postgres' && (matrix.postgres-shard == '1' || matrix.postgres-shard == '8') && '1' || '0' }}
 
-      - name: Observe and remove private PG2/PG8 crash evidence
-        if: always() && matrix.partition == 'postgres' && (matrix.postgres-shard == '2' || matrix.postgres-shard == '8') && env.THEHEAT_CI_CORE_DIR != ''
+      - name: Observe and remove private PG1/PG2/PG8 crash evidence
+        if: always() && matrix.partition == 'postgres' && (matrix.postgres-shard == '1' || matrix.postgres-shard == '2' || matrix.postgres-shard == '8') && env.THEHEAT_CI_CORE_DIR != ''
         timeout-minutes: 2
         run: python scripts/ci_native_crash.py finish
         env:
