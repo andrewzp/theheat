@@ -2,6 +2,13 @@
 
 Living plan for closing the gap between the bot's current voice quality and the **resumption bar** (majority A-grade rate per cycle). Refined daily by the autonomous grading agent (cron `0 15 * * *`), reviewed and implemented by the human operator.
 
+> **Nov 19: 1 fresh draft, 0% A-rate (0 A / 1 B; n=1).** Nouakchott/Yakutsk `observed_metar_contrast`:
+> "Nouakchott/Oumtounsy airport, Mauritania: 37°C; Yakutsk airport, Russia: −35°C — a 72°C airport gap at
+> 12:30 UTC, 19 Nov." Same colon-label card as Sarh and the posted Kununurra pair — 3 identical skeletons in a
+> row, so Nov 18's "not a template" call is reopened as a watch. **First METAR pair posted** (Kununurra/Yakutsk,
+> auto, Nov 19 01:56Z; 1 of 7). Yakutsk anchor 7/7, 3 in 22h. P_close +1 (weak), P_event_sat +1 (5 cycles).
+> Active list unchanged: P_close > P_event_sat.
+>
 > **Nov 18: 1 fresh draft, 0% A-rate (0 A / 1 B; n=1).** Sarh/Yakutsk `observed_metar_contrast`:
 > "Sarh airport, Chad: 40°C; Yakutsk airport, Russia: −38°C — a 78°C airport gap at 14:00 UTC, 18 Nov."
 > Readings-first fixes Nov 17's inverted order; still a data-card layout. 3 more METAR pairs were created and
@@ -271,14 +278,18 @@ Living plan for closing the gap between the bot's current voice quality and the 
 |---|---|
 | Bot commit | `0.9.81.0`+ per BRIEFING.md 2026-06-28 (reganom recency window + honesty-gating, PR #347; world-half eval-gating fix, PR #345; reganom writer-voice upgrade, PR #349. Prior: 0.9.67.0, R-02 NOAA HMS independent fire witness; 30-item audit backlog complete [S-01..S-35]; source-redundancy lane R-00..R-09; bot active since 2026-06-01) |
 | Voice engine version | **two-bot + Attenborough/Economist voice + all-sources triage + evidence contract + diversity gate + automation dashboard** (Sonnet 4.6 writer prompt-cached + Gemini 2.5 Flash fact-checker [skips unknown kinds] + Gemini 2.5 Pro critic [assesses relative to available data]; all 23 sources on triage path via PR #150; evidence contract gates writer via 0.9.0.0; pending-type cap default 3 + per-type TTL sweep [fast 7d, coral/DHW 21d] via 0.9.6.0/0.9.16.0; `THEHEAT_TRIAGE_ENABLED=1` in CI; `THEHEAT_WRITER_SAMPLES=1` + `THEHEAT_CRITIC_REVISE_ENABLED=0` since 2026-07-14 (economics P0 paired flip; was 2/1 from 2026-06-13); reganom (`reanalysis_anomaly`) enabled `manual_only` since 2026-06-27 with 2-day recency + honesty-gating [PR #347]; routine beacon writes the `ROUTINE_BEACON` repo variable via `gh variable set` each cycle) |
-| Last cycle A-rate | **0% (0/1, Nov 18; Sarh/Yakutsk observed_metar_contrast B).** Prior: 0% (0/1, Nov 17; Saint Louis/Yakutsk observed_metar_contrast B). Prior: N/A (0 fresh, Nov 10–16). Prior measured: **0% (0/1, Nov 9; Shymkent hot10 B).** Prior: 0% (0/1, Nov 6; Riyadh dust B-). Prior: 0% (0/1, Nov 4; hot10 B). Prior: 0% (0/4, Oct 31). Prior: 0% (0/15, Oct 28). Prior measured: **— (0 fresh drafts, Jul 6).** Most recent measured: **20% (1/5 fresh, Jul 5)** — eastern Siberia fire A- (4th confirmation of the permafrost-carbon fire mechanic), 1 B+, 1 B, 1 B-, 1 C+. Prior: 20% (2/10, Jul 4); 33% (1/3, Jul 3); 0% (0/3, Jul 2); 0% (0/4, Jul 1); 22% (2/9 non-stale, Jun 30); 80% Jun 29 [BAR CLEARED]. |
+| Last cycle A-rate | **0% (0/1, Nov 19; Nouakchott/Yakutsk observed_metar_contrast B).** Prior: 0% (0/1, Nov 18; Sarh/Yakutsk observed_metar_contrast B). Prior: 0% (0/1, Nov 17; Saint Louis/Yakutsk observed_metar_contrast B). Prior: N/A (0 fresh, Nov 10–16). Prior measured: **0% (0/1, Nov 9; Shymkent hot10 B).** Prior: 0% (0/1, Nov 6; Riyadh dust B-). Prior: 0% (0/1, Nov 4; hot10 B). Prior: 0% (0/4, Oct 31). Prior: 0% (0/15, Oct 28). Prior measured: **— (0 fresh drafts, Jul 6).** Most recent measured: **20% (1/5 fresh, Jul 5)** — eastern Siberia fire A- (4th confirmation of the permafrost-carbon fire mechanic), 1 B+, 1 B, 1 B-, 1 C+. Prior: 20% (2/10, Jul 4); 33% (1/3, Jul 3); 0% (0/3, Jul 2); 0% (0/4, Jul 1); 22% (2/9 non-stale, Jun 30); 80% Jun 29 [BAR CLEARED]. |
 | Resumption bar | majority A (>50%) sustained — **cleared Jun 29 (80%, n=5); Jun 30 returned 22%; Jul 1 0% (n=4); Jul 2 0% (n=3); Jul 3 33% (n=3); Jul 4 20% (n=10); Jul 5 20% (n=5); Jul 6 no fresh drafts to measure**. |
-| Gap | **50 pp below bar (Nov 18, 0%, n=1). Prior: Nov 17, 0%, n=1; Nov 9, 0%, n=1; no fresh drafts Nov 10–16; Nov 6, 0%, n=1; Nov 4, 0%, n=1; Oct 31, 0%, n=4; Oct 28 also 0%, n=15).** Prior: **30 pp below bar** (50% − 20%, most recent measured cycle Jul 5, n=5). No fresh measurement Jul 6. Seven cycles since the Jun 29 peak have ranged 0–33% depending on signal mix. P_tier and P_close remain the two most active-capping levers, both unchanged since Jul 5 (no fresh evidence Jul 6). |
+| Gap | **50 pp below bar (Nov 19, 0%, n=1). Prior: Nov 18, 0%, n=1; Nov 17, 0%, n=1; Nov 9, 0%, n=1; no fresh drafts Nov 10–16; Nov 6, 0%, n=1; Nov 4, 0%, n=1; Oct 31, 0%, n=4; Oct 28 also 0%, n=15).** Prior: **30 pp below bar** (50% − 20%, most recent measured cycle Jul 5, n=5). No fresh measurement Jul 6. Seven cycles since the Jun 29 peak have ranged 0–33% depending on signal mix. P_tier and P_close remain the two most active-capping levers, both unchanged since Jul 5 (no fresh evidence Jul 6). |
 | Posting | paused; operator decision pending — Jun 29 cleared bar (80%), Jun 30–Jul 5 all below, Jul 6 no fresh drafts. **Queue unchanged at 15 pending as of Jul 6** (exact match to Jul 5's graded batch) — zero new drafts entered between the Jul 5 and Jul 6 pulls. |
 | Coverage | **638 cities × 180 countries** (was 613 × 179; +25 via PR #81) |
-| Queue status | **Nov 18: 1 pending — Sarh/Yakutsk observed_metar_contrast (B, <1h old, not stale; `armed_auto` but publish attempt `not_sent`: `awc_current_source_unavailable`). Saint Louis/Yakutsk rejected `awc_source_window_elapsed`.** Prior: **Nov 17: 1 pending — Saint Louis/Yakutsk observed_metar_contrast (B, ~2h old, not stale; held from auto-publish by `automatic_text_over_200_scalars`).** Older entry: **15 pending as of Jul 6 grading, unchanged from Jul 5** (10 carry-overs from Jul 4: 2 A- [Typhoon Bavi, Loxahatchee FL], 2 B+ [Island Pond VT, Antwerpen], 6 B [Barrow, Astana, Basrah, Al Başrah al Qadīmah, Rocky Mountains CO fire, Urumqi Jul 4 reading]; 5 from Jul 5: 1 A- eastern Siberia fire, 1 B+ Johannesburg air_quality_hazard, 1 B Doha absolute_extreme, 1 B- Urumqi Jul 5 reading, 1 C+ Phalodi dust_event). **2 of the 15 ([4] Basrah, [6] Al Başrah al Qadīmah) are now strict staleness bulk-reject candidates** (>48h old, forecast date July 4 elapsed) — flagged for operator, write unavailable this session. Bot at 0.9.81.0+ (no newer BRIEFING.md handoff confirmed this cycle); reganom enabled post-PR #347 with writer-voice upgrade (PR #349); `THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live. |
+| Queue status | **Nov 19: 2 pending — Nouakchott/Yakutsk observed_metar_contrast (B, ~2h, held `automatic_text_over_200_scalars`) + Sarh/Yakutsk carry-over (B, ~24h, still `not_sent` after Nov 18 `awc_current_source_unavailable`). Neither stale. Kununurra/Yakutsk auto-posted 01:56Z — first METAR pair on the timeline.** Prior: **Nov 18: 1 pending — Sarh/Yakutsk observed_metar_contrast (B, <1h old, not stale; `armed_auto` but publish attempt `not_sent`: `awc_current_source_unavailable`). Saint Louis/Yakutsk rejected `awc_source_window_elapsed`.** Prior: **Nov 17: 1 pending — Saint Louis/Yakutsk observed_metar_contrast (B, ~2h old, not stale; held from auto-publish by `automatic_text_over_200_scalars`).** Older entry: **15 pending as of Jul 6 grading, unchanged from Jul 5** (10 carry-overs from Jul 4: 2 A- [Typhoon Bavi, Loxahatchee FL], 2 B+ [Island Pond VT, Antwerpen], 6 B [Barrow, Astana, Basrah, Al Başrah al Qadīmah, Rocky Mountains CO fire, Urumqi Jul 4 reading]; 5 from Jul 5: 1 A- eastern Siberia fire, 1 B+ Johannesburg air_quality_hazard, 1 B Doha absolute_extreme, 1 B- Urumqi Jul 5 reading, 1 C+ Phalodi dust_event). **2 of the 15 ([4] Basrah, [6] Al Başrah al Qadīmah) are now strict staleness bulk-reject candidates** (>48h old, forecast date July 4 elapsed) — flagged for operator, write unavailable this session. Bot at 0.9.81.0+ (no newer BRIEFING.md handoff confirmed this cycle); reganom enabled post-PR #347 with writer-voice upgrade (PR #349); `THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live. |
 
 ## Active proposals
+
+Nov 19: unchanged — **P_close** (closeless again, weak; last Nov 19) > **P_event_sat** (5 cycles, last
+Nov 19 — Yakutsk anchor 7/7, 3 pairs in 22h, one posted). No new proposal: the METAR card-skeleton
+convergence (n=3) is a watch, and its fix is already in the Nov 18 corpus followups.
 
 Nov 18: **P_close** (closeless every graded post-gap cycle; last Nov 18, weak) > **P_event_sat** (4 cycles,
 last Nov 18 — Yakutsk anchor in 5/5 METAR pairs). P5 archived (no evidence since Jul 5; 7 graded cycles clean).
@@ -643,7 +654,7 @@ FAILING, same subtype as every prior dust_event close). Urumqi dust_event, 3rd i
 ("the topography traps it" = resolution-form, FAILING, near-verbatim repeat of its own prior
 two closes). P_close now confirmed across 14 signal types (unchanged — no new type this
 cycle).
-**Last seen:** Nov 18 (observed_metar_contrast Sarh/Yakutsk ends on the gap, no close past it — +1 cycle, weak: for a pure juxtaposition the gap may be the right close; operator may want to exempt this type). Prior Nov 17 (observed_metar_contrast Saint Louis/Yakutsk closeless — ends on a source tag + URL, +1 cycle; Nov 9 Shymkent hot10 closeless, +1). Prior Nov 4 (hot10 Verkhoyansk closeless, +1 cycle). Prior Oct 31 (0 positive of 4; disclaimer close on Urumqi [3], none on the rest; cycle count +1). Prior Oct 28 (0 positive, 12 failing across 15 drafts: disclaimer closes [4]/[6]/[8], source-credit closes [2]/[3], no close on the rest). Cycle count +1.
+**Last seen:** Nov 19 (observed_metar_contrast Nouakchott/Yakutsk ends on the gap — +1 cycle, weak, same caveat as Nov 18). Prior Nov 18 (observed_metar_contrast Sarh/Yakutsk ends on the gap, no close past it — +1 cycle, weak: for a pure juxtaposition the gap may be the right close; operator may want to exempt this type). Prior Nov 17 (observed_metar_contrast Saint Louis/Yakutsk closeless — ends on a source tag + URL, +1 cycle; Nov 9 Shymkent hot10 closeless, +1). Prior Nov 4 (hot10 Verkhoyansk closeless, +1 cycle). Prior Oct 31 (0 positive of 4; disclaimer close on Urumqi [3], none on the rest; cycle count +1). Prior Oct 28 (0 positive, 12 failing across 15 drafts: disclaimer closes [4]/[6]/[8], source-credit closes [2]/[3], no close on the rest). Cycle count +1.
 
 **Proposed fix (PROMPT LANGUAGE — surgical):** Add to `src/two_bot/prompts/writer_prompt.py`
 in the system-clause / second-sentence guidance section (near the "delete the system clause"
@@ -677,14 +688,15 @@ already sound.
 **Observed:** Oct 28 — Isaias ×3 ([5], [10], [11] across rapid_intensification and tier_crossing),
 Shah Alam + Klang (identical ~152 µg/m³ forecast), Guam ×2 (identical text), Quetta/Arequipa
 template twins. 7 of 15 drafts redundant with another in the queue.
-**Cycles observed:** Oct 28, Oct 31, Nov 6, Nov 18 (4 cycles; Nov 18 = new subtype, fixed anchor station: Yakutsk is the cold half of 5/5 `observed_metar_contrast` pairs in ~25h [Saint Louis, Neiva, Mount Isa, Kununurra, Sarh] — distinct event_ids, so dedupe can't see it; Oct 31 = Riyadh dust_event + air_quality_hazard, same city/day; Nov 6 = 4th Riyadh dust draft since Oct 28, cross-day repeat).
-**Last seen:** Nov 18.
+**Cycles observed:** Oct 28, Oct 31, Nov 6, Nov 18, Nov 19 (5 cycles; Nov 19 = Yakutsk now 7/7 pairs, 3 inside 22h [Sarh Nov 18 14:36Z, Kununurra Nov 19 01:55Z — posted, Nouakchott Nov 19 12:58Z]; the 24h anchor-station key would have held Nouakchott. Nov 18 = new subtype, fixed anchor station: Yakutsk is the cold half of 5/5 `observed_metar_contrast` pairs in ~25h [Saint Louis, Neiva, Mount Isa, Kununurra, Sarh] — distinct event_ids, so dedupe can't see it; Oct 31 = Riyadh dust_event + air_quality_hazard, same city/day; Nov 6 = 4th Riyadh dust draft since Oct 28, cross-day repeat).
+**Last seen:** Nov 19.
 **Proposed fix (PROMPT/CONFIG LANGUAGE — surgical):** Widen the per-event dedupe key so one named
 storm / one metro-area forecast yields at most one pending draft regardless of signal subtype.
 Nov 18 addendum: for METAR pairs, treat the anchor station as part of the dedupe key over a 24h window
 (at most one pair per station per day), so the feed doesn't read as one tweet with the warm city swapped.
-**Expected impact:** Queue clarity; removes ~half of the redundant drafts.
-**Status:** Drafted. Needs a second cycle.
+**Expected impact:** Queue clarity; removes ~half of the redundant drafts. Now that METAR pairs post
+(Nov 19), it also keeps repeat-anchor tweets off the timeline.
+**Status:** Drafted. Evidenced across 5 cycles; ready for operator review.
 
 ### ~~P6~~ — Fire template convergence — **SHIPPED 2026-05-12 (PR #85)**
 

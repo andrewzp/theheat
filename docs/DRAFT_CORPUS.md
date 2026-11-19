@@ -11,6 +11,75 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-11-19 — Daily corpus grading (1 fresh draft; 1 carry-over, previously graded)
+
+**Context:** Gist read via git-clone path (success; gist HEAD Nov 19 13:52Z, `_state_rev` 3410,
+`publication_control.enabled=true`). 2 pending: `draft_20261118_143656_56` (Sarh/Yakutsk, graded B
+Nov 18, not re-graded) and fresh `draft_20261119_125829_58` (`observed_metar_contrast`, created
+Nov 19 12:58Z, ~2h old at grading, score 80). Fresh draft held from auto-publish
+(`automatic_text_hold: automatic_text_over_200_scalars`; policy `armed_auto`, mode manual).
+
+**Publish path: first METAR pair posted.** `draft_20261119_015524_57` (Yakutsk −35°C / Kununurra 34°C,
+"a 69°C airport gap at 01:30 UTC, 19 Nov.") auto-published Nov 19 01:56Z (`publish_outcome:
+confirmed`, ~85s after creation). Ends the 0-for-5 run logged Nov 18 — now 1 of 7. It went straight
+from creation to posted, so it never sat in pending at a pull and isn't graded into the A-rate.
+Sarh/Yakutsk is still pending with its Nov 18 `awc_current_source_unavailable` error and no retry.
+
+**Staleness:** none. Sarh is ~24h old (dated observation, "14:00 UTC, 18 Nov"), under the 48h line.
+Fresh draft ~2h old.
+
+**Grade distribution (fresh):** 0 A / 1 B / 0 C / 0 D-F. **A-rate 0% (n=1)**; bar not cleared.
+
+**Headline finding:** the skeleton has settled — on the weaker form. Nov 18's "4 skeletons in 5
+drafts" is now 3 identical colon-label cards in a row (Sarh, Kununurra, Nouakchott): "A airport,
+Country: X°C; B airport, Country: Y°C — a Z°C airport gap at HH:MM UTC, DD Mon." The Mount Isa sentence
+shape ("logged … while … hit … a 74°C gap at the same hour") hasn't come back. Yakutsk is the cold
+half of 7/7 pairs, 3 of them in the last 22h, one now on the timeline.
+
+### B
+**[2] Nouakchott / Yakutsk observed_metar_contrast (score 80)** — "Nouakchott/Oumtounsy airport,
+Mauritania: 37°C; Yakutsk airport, Russia: −35°C — a 72°C airport gap at 12:30 UTC, 19 Nov." + source URL.
+- Violation: yes — 37°C and −35°C at the same half-hour.
+- Benign: yes — flat, no adjectives, no record claim; matches the two-observation scope.
+- Setup→punchline: correct (readings, then gap). Mechanic: deadpan juxtaposition / pure data delivery.
+- Wodehouse: clean. Exact figures, one derived number, no restate.
+- Caps: same data-card layout as Sarh; "airport" ×3 again, "airport gap" noun stack again. New
+  wrinkle: "Nouakchott/Oumtounsy" — the station's official name pasted in with a slash, which reads
+  as a field value, not a place. "Nouakchott airport" would do. No close past the gap.
+- Grade parity with Sarh (B): same skeleton, same strengths; the slash name is a small extra cost,
+  not a full step.
+
+### Carry-over (not re-graded)
+- [1] Sarh/Yakutsk — B (Nov 18). ~24h old; the AWC reread failed Nov 18 14:38Z and nothing has
+  retried it. Probably ages out on `awc_source_window_elapsed` like the four before it.
+
+### Patterns
+1. **Skeleton convergence on the card form (n=3).** Nov 18 closed the telegraphic-skeleton watch as
+   "not a template". Three in a row since then use one layout, including the posted one. Watch
+   reopened. Not a proposal yet: the form is Wodehouse-clean and grades B, and the fix (prefer the
+   Mount Isa sentence form) is already in the Nov 18 followups.
+2. **P_event_sat +1 cycle.** Yakutsk anchor: 7/7 METAR pairs since Nov 17, 3 inside 22h
+   (Sarh Nov 18 14:36Z, Kununurra Nov 19 01:55Z [posted], Nouakchott Nov 19 12:58Z). With one live,
+   the next Yakutsk pair to post will read as a repeat on the feed. The Nov 18 addendum (one pair per
+   anchor station per 24h) would have held the Nouakchott draft.
+3. **P_close +1 (weak).** Ends on the gap again. Same caveat as Nov 18: for a pure juxtaposition the
+   gap may be the right close.
+4. No era-anchor, political-anchor, banned-opener (P3 regex) or plant-comparison hits. No P4
+   violations. No A-grade mechanic to log.
+
+### Followups
+- **Operator: METAR pair now posting (1/7).** Kununurra/Yakutsk went out 01:56Z. Next, look at the
+  feed before another Yakutsk pair posts. Nouakchott/Yakutsk is held by `automatic_text_over_200_scalars`,
+  so it won't auto-publish; reject it or post it by hand.
+- Operator: Sarh/Yakutsk still pending ~24h after its failed reread. Reject, or confirm the AWC
+  sweep will clear it.
+- Operator (carried): if this type stays on, pin the sentence form and the station display name
+  (drop the "/Oumtounsy"-style official suffix).
+- Infra (carried): `gh` token invalid ("Failed to log in to github.com using token (GH_TOKEN)") — gist
+  write, `gh pr` and `ROUTINE_BEACON` write all blocked.
+
+---
+
 ## 2026-11-18 — Daily corpus grading (1 fresh draft)
 
 **Context:** Gist read via git-clone path (success; gist HEAD Nov 18 14:38Z). 1 pending, fresh:
