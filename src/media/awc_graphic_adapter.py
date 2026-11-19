@@ -14,8 +14,8 @@ from src.data import awc_observed, places
 from src.editorial.revisions import fingerprint
 
 TEMPLATE = "awc_airport_temperature_pair"
-TEMPLATE_VERSION = "p31-awc-airport-pair-1"
-ADAPTER_VERSION = "p31-awc-observed-pair-1"
+TEMPLATE_VERSION = "p31-awc-airport-pair-2"
+ADAPTER_VERSION = "p31-awc-observed-pair-2"
 SOURCE = "NOAA Aviation Weather Center"
 TITLE = "Two airports. One moment."
 SCOPE = "Two reported airport observations; not a national value, record or global ranking."
@@ -75,7 +75,8 @@ def delivery_text(evidence):
     return (TITLE + " " + "; ".join(stations) + ". Observed "
             + evidence["observed_at"].replace("T", " ").removesuffix("Z") + " UTC. "
             + number(evidence["difference_c"]) + "°C difference. A common linear Celsius axis includes zero. "
-            + "Colour and A/B labels identify the airports, not hazard categories. "
+            + "Warm and cool colours mark the higher and lower readings in this pair, not hazard categories. "
+            + "A/B labels identify the airports. "
             + SOURCE + ". " + SCOPE)
 
 

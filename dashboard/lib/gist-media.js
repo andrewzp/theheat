@@ -24,8 +24,8 @@ const FONT = "src/media/fonts/DejaVuSansMono.ttf"
 // Schema 2: canonical, host-independent PNG bytes (src/media/canonical_png.py).
 const CODEC_FILE = "src/media/canonical_png.py", PNG_CODEC = "canonical-png-fixed-huffman-1"
 const FAMILIES = Object.freeze({
-  [AWC]: Object.freeze({ template: "awc_airport_temperature_pair", templateVersion: "p31-awc-airport-pair-1",
-    adapterVersion: "p31-awc-observed-pair-1", derivation: "awc_pair_delivery_v1", signalKind: "observed_metar_contrast",
+  [AWC]: Object.freeze({ template: "awc_airport_temperature_pair", templateVersion: "p31-awc-airport-pair-2",
+    adapterVersion: "p31-awc-observed-pair-2", derivation: "awc_pair_delivery_v2", signalKind: "observed_metar_contrast",
     products: ["awc-observed-airport-pair-v1"],
     files: ["src/media/gist_media.py", "src/media/gist_hazard_media.py", CODEC_FILE, FONT, "src/media/evidence_graphic.py",
       "src/media/awc_graphic_adapter.py", "src/data/awc_observed.py", "src/data/places.py",
