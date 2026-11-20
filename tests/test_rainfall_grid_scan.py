@@ -69,7 +69,7 @@ def test_declared_operating_edges_are_inclusive_not_records(amount):
     lambda h: h["precipitation"].attrs.__setitem__("scale_factor", .1),
     lambda h: h["precipitation"].attrs.__setitem__("add_offset", 1),
     lambda h: h["precipitation"].attrs.__setitem__("scale_factor", "1"),
-    lambda h: h["precipitation"].attrs.__setitem__("_FillValue", [190.5]),
+    lambda h: h["precipitation"].attrs.__setitem__("_FillValue", [190.5, 190.5]),
     lambda h: h["lat"].__setitem__(800, float("nan")),
     lambda h: h["time"].attrs.__setitem__("calendar", "360_day"),
     lambda h: h["time"].attrs.__setitem__("units", "seconds since someday"),

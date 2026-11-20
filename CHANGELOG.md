@@ -1,3 +1,8 @@
+## 0.9.109.144
+
+- Read scalar numeric IMERG metadata stored as one-element arrays by NetCDF, preserving the existing numeric types, identity scaling and missing-value exclusions. Ambiguous arrays and unsupported scaling remain held.
+- Exercise an invented NetCDF daily frame through the actual collector, required check parsers, saved draft and fixture sender; retain complete-day, source-file identity and one-candidate limits.
+
 ## 0.9.109.143
 
 - Retain known inland IMERG scan refusal codes from the existing daily download, without exporting exception text or changing source qualification, requests or nomination decisions.
