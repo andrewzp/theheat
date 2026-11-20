@@ -1,8 +1,9 @@
 import { dashboardEditorialPolicy } from "./editorial-policy.js"
-import { hasUnresolvedPublish, reviewIsCurrent } from "./draft-revisions.js"
+import { fingerprint, hasUnresolvedPublish, reviewIsCurrent } from "./draft-revisions.js"
 import { buildRuntimeConfig } from "./runtime-inventory.js"
 import { postOutcomes } from "./post-outcomes.js"
 import { sourceContract } from "./source-registry.js"
+import { automaticTextHold, HOLD_MESSAGES } from "./automatic-text.js"
 
 const HOUR = 3600000
 const DAY = 24 * HOUR
@@ -40,6 +41,75 @@ function milestone(candidates, now) {
   if (!latest) return { status: "unknown", at: null, age_hours: null }
   const { time, ...details } = latest
   return { status: "recorded", at: new Date(time).toISOString(), age_hours: (now - time) / HOUR, ...details }
+}
+
+// Deliberately limited to exact application messages/codes, never raw errors.
+const SEND_HOLDS = new Map([
+  ["Auto-approval needs a current model review and revision authorization", "approval_unverified"],
+  ["Editorial policy changed before final safety", "policy_changed"],
+  ["Autoship blocked: no critic PASS", "critic_not_passed"],
+  ["Autoship blocked: event already posted", "event_already_posted"],
+  ["Autoship blocked: stale framing (queue or source age)", "stale_framing"],
+  ["Autoship attempt unconfirmed; needs human review", "delivery_unresolved"],
+  ["Autoship disabled (flag off)", "autoship_disabled"],
+  ["Auto-approval blocked by policy", "policy_blocked"],
+  ...Object.entries(HOLD_MESSAGES).map(([code, message]) => [message, code]),
+])
+const AIRPORT_SEND_HOLDS = new Set(["awc_source_changed", "awc_observation_expired", "awc_source_insufficient_window",
+  "awc_source_disabled", "awc_observed_mode_required", "awc_current_source_unexpected", "awc_draft_invalid", "awc_draft_identity_changed"])
+function recordedSendHold(value) {
+  if (value == null || value === "") return null
+  if (typeof value !== "string") return "unclassified"
+  if (SEND_HOLDS.has(value)) return SEND_HOLDS.get(value)
+  const prefix = "Observed airport report needs fresh source review: "
+  if (value.startsWith(prefix)) {
+    const code = value.slice(prefix.length)
+    return AIRPORT_SEND_HOLDS.has(code) ? code : "airport_source_recheck"
+  }
+  return "unclassified"
+}
+
+// An operator summary, never a review, source qualification or send decision.
+// Only fixed reason codes escape this projection; raw source/error/copy stays private.
+function latestSavedDraft(drafts, state, now) {
+  const unknown = { status: "unknown", id: null, disposition: "unknown" }
+  if (!draftInventoryKnown(state)) return unknown
+  const dated = drafts.map(row => ({ row, time: timestamp(row.created_at, now) })).filter(item => item.time !== null)
+  if (!dated.length) return unknown
+  const time = dated.reduce((latest, item) => Math.max(latest, item.time), -Infinity)
+  const latest = dated.filter(item => item.time === time)
+  const ids = new Set(latest.map(item => item.row.id))
+  if (ids.size !== 1) return { status: "ambiguous", id: null, disposition: "unknown" }
+  const row = latest[0].row
+  if (typeof row.id !== "string" || !/^[a-zA-Z0-9_.:-]{1,200}$/.test(row.id)) return unknown
+  const knownHold = value => value == null ? null : typeof value === "string" && Object.hasOwn(HOLD_MESSAGES, value) ? value : "unclassified"
+  const schedule = value => timestamp(value, 8640000000000000) !== null
+  const rejection = value => value == null ? null : value === "awc_source_window_elapsed" ? value
+    : typeof value === "string" && /^staleness_ttl_[1-9][0-9]{0,3}d$/.test(value) ? "retained_ttl_elapsed"
+      : typeof value === "string" && /^forecast_elapsed_\d{4}-\d{2}-\d{2}$/.test(value) ? "retained_forecast_elapsed" : "unclassified"
+  const copies = drafts.filter(copy => copy.id === row.id)
+  // Same ID is not proof of identical history. Compare complete typed rows only
+  // when copies exist; neither source/error values nor fingerprints are exported.
+  // Invalid or conflicting copies cannot supply a winner for this status summary.
+  if (copies.length > 1) {
+    try {
+      if (new Set(copies.map(copy => fingerprint(copy))).size !== 1) return { status: "ambiguous", id: null, disposition: "unknown" }
+    } catch { return { status: "ambiguous", id: null, disposition: "unknown" } }
+  }
+  const receipt = typeof row.tweet_id === "string" && /^[0-9]{1,30}$/.test(row.tweet_id)
+  const disposition = hasUnresolvedPublish(row, state) ? "delivery_unresolved" : receipt ? "receipt_recorded"
+    : row.status === "posted" ? "posted_without_receipt"
+      : ["pending", "approved", "rejected"].includes(row.status) ? row.status : "unknown"
+  return { status: "recorded", id: row.id, at: new Date(time).toISOString(), age_hours: (now - time) / HOUR,
+    disposition, rejection: row.status === "rejected" ? rejection(row.rejected_reason) : null,
+    send_hold: recordedSendHold(row.post_error),
+    text_hold: typeof row.text === "string" ? automaticTextHold(row.text) : "unknown",
+    recorded_text_hold: knownHold(row.automatic_text_hold),
+    source_hold_recorded: typeof row.automatic_source_hold === "string" ? row.automatic_source_hold.length > 0
+      : row.automatic_source_hold == null ? false : null,
+    automatic_schedule_recorded: schedule(row.auto_approve_at),
+    undated_rows: drafts.length - dated.length,
+  }
 }
 
 function sourceRows(state, now) {
@@ -209,6 +279,7 @@ export function buildProductHealth(rawState, { now = Date.now(), runtimeReport =
   const posts = receiptPosts(state, drafts, clock)
   return {
     generated_at: new Date(clock).toISOString(),
+    latest_saved_draft: latestSavedDraft(drafts, state, clock),
     milestones: {
       source_observed: milestone(sources.filter((row) => identifier(row.source) && !INTERNAL_SOURCES.has(row.source)
         && sourceContract(row.source).kind !== "internal" && count(row.observed) > 0).map((row) => ({ time: row.time, source: row.source, observed: row.observed, reported_status: row.status ?? null, evidence: row.evidence, timestamp_precision: row.timestamp_precision ?? "source" })), clock),

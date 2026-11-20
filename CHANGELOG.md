@@ -1,3 +1,8 @@
+## 0.9.109.142
+
+- Show the latest saved draft's retained disposition and known automatic text or source-window holds, including rejected drafts that no longer appear in the pending queue.
+- Keep ambiguous records, missing receipts and unknown reasons explicit. The read-only projection omits draft text, source bundles and raw errors; it grants no review, approval or sending authority.
+
 ## 0.9.109.141
 
 - Make airport-comparison warm/cool colours follow the higher/lower reported temperature on both the figures and axis markers, while retaining station order, exact source values, scale and labels.

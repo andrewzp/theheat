@@ -6,6 +6,31 @@ import { ProductHealthPanel } from "../app/components/ProductHealthPanel.js"
 import { buildProductHealth } from "../lib/product-health.js"
 
 function render(props) { return renderToStaticMarkup(React.createElement(ProductHealthPanel, props)) }
+
+test("panel explains the latest rejected draft's retained window and text hold without implying approval", () => {
+  const value = buildProductHealth({ drafts: [{ id: "draft_latest", created_at: "2026-09-08T17:00:00Z",
+    status: "rejected", text: "x".repeat(201), rejected_reason: "awc_source_window_elapsed" }], publish_ledger: {} },
+  { now: Date.parse("2026-09-08T18:00:00Z") })
+  const markup = render({ health: value })
+  assert.match(markup, /data-latest-draft-disposition="rejected"/)
+  assert.match(markup, /Latest saved draft: rejected/)
+  assert.match(markup, /airport observations expired/i)
+  assert.match(markup, /200 characters/)
+  assert.doesNotMatch(markup, /xxxxx|Approved to post|publishing has recovered/)
+})
+
+test("latest draft panel keeps ambiguous and unknown outcomes distinct and never renders arbitrary reason strings", () => {
+  const draft = { id: "invented", created_at: "2026-09-08T17:00:00Z", status: "rejected", text: "A short fact.",
+    automatic_text_hold: "automatic_text_over_200_scalars", rejected_reason: "<script>private-reason</script>",
+    post_error: "Observed airport report needs fresh source review: awc_source_changed" }
+  const state = buildProductHealth({ drafts: [draft], publish_ledger: {} }, { now: Date.parse("2026-09-08T18:00:00Z") })
+  const markup = render({ health: state })
+  assert.match(markup, /Current text no longer has that automatic text hold/)
+  assert.match(markup, /Last recorded send hold: the airport source changed at recheck/)
+  assert.doesNotMatch(markup, /private-reason|<script>/)
+  assert.match(render({ health: { ...state, latest_saved_draft: { status: "ambiguous" } } }), /cannot be uniquely identified/)
+  assert.match(render({ health: { ...state, latest_saved_draft: { status: "unknown" } } }), /outcome is unavailable/)
+})
 const health = {
   milestones: { post_confirmed: { at: "2026-07-23T12:00:00Z", age_hours: 47 * 24 } },
   queue: { waiting_count: 2, unresolved_publish_count: 1, oldest_waiting_at: "2026-06-11T12:00:00Z", oldest_waiting_age_hours: 90 * 24 },
