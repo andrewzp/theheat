@@ -11,6 +11,74 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-11-20 — Daily corpus grading (1 fresh draft; 1 carry-over, previously graded)
+
+**Context:** Gist read via git-clone path (success; gist HEAD Nov 20 13:43Z, `_state_rev` 3425,
+`publication_control.enabled=true`). 2 pending: fresh `draft_20261120_134223_61` (`observed_metar_contrast`,
+created Nov 20 13:42Z, ~1.5h old at grading, score 80, held `automatic_text_over_200_scalars`) and
+`draft_20261118_143656_56` (Sarh/Yakutsk, graded B Nov 18, not re-graded).
+
+**Since the Nov 19 pull:** Nouakchott/Yakutsk rejected `awc_source_window_elapsed` (Nov 19 20:36Z).
+San José de Chiquitos/Yakutsk created Nov 19 20:36Z and rejected the same way 23:04Z — never pending at a
+pull, not graded. **Kununurra/Yakutsk posted again** (`draft_20261120_070904_60`, auto, Nov 20 07:10Z):
+"Yakutsk airport, Russia: −33°C; Kununurra airport, Australia: 40°C — a 73°C airport gap at 06:30 UTC,
+20 Nov." Same pair as the Nov 19 01:56Z post, ~29h apart. The writer's own reasoning cleared it as "gap
+widened 69°C → 73°C … a material update". METAR pairs posted: 2 of 10.
+
+**Staleness:** Sarh/Yakutsk is ~48.5h old with a dated observation ("14:00 UTC, 18 Nov"), so it's the first
+strict candidate since Nov 15. The bot's AWC window sweep cleared Nouakchott and San José within ~8h but
+has not cleared Sarh. Sarh is the only METAR draft carrying a failed publish attempt (`publish_outcome:
+not_sent`, `awc_current_source_unavailable`), so a failed attempt may exempt a draft from the sweep.
+Gist write 403 ("Gist writes are not permitted through this proxy"); reject skipped.
+
+**Grade distribution (fresh):** 0 A / 1 B / 0 C / 0 D-F. **A-rate 0% (n=1)**; bar not cleared.
+
+**Headline finding:** first METAR pair without Yakutsk (now 9 of 10), but the layout hasn't moved: six
+METAR drafts in a row (Sarh, Kununurra ×2, Nouakchott, San José, Shepherd Bay) use the same colon-label
+card. It's clean and grades B every time, so the card itself is now the B ceiling for this type.
+
+### B
+**[1] Shepherd Bay / Tete observed_metar_contrast (score 80)** — "Shepherd Bay airport, Canada: −28.2°C;
+Tete airport, Mozambique: 40°C — a 68.2°C airport gap at 13:00 UTC, 20 Nov." + source URL.
+- Violation: yes — Nunavut at −28°C and the Zambezi valley at 40°C in the same hour.
+- Benign: yes — flat, no record claim, scope held to two observations.
+- Setup→punchline: correct (readings, then gap). Mechanic: deadpan juxtaposition / pure data delivery.
+- Wodehouse: mostly clean. One new cost: mixed precision. One reading has a decimal and one doesn't, so
+  the gap comes out "68.2°C", which reads like a calculator result rather than a fact. "−28°C … 40°C —
+  a 68°C gap" is the same claim with the arithmetic hidden.
+- Caps: same card skeleton; "airport" ×3; "airport gap" noun stack. Smallest gap of the ten pairs, posted
+  ~6.5h after a 73°C one, so on the feed it reads as a step down.
+- Plus: a new cold anchor. Breaks the Yakutsk run, and Shepherd Bay is a real place most readers can't
+  picture, which helps the juxtaposition.
+- Grade parity with Sarh/Nouakchott (B). The new anchor and the decimal roughly cancel.
+
+### Carry-over (not re-graded)
+- Sarh/Yakutsk — B (Nov 18). ~48.5h old; strict staleness candidate (see above).
+
+### Patterns
+1. **Card skeleton promoted to proposal (P_metar_card).** 6/6 consecutive METAR drafts, 3 graded cycles
+   (Nov 18, 19, 20), 2 posted. Every graded instance is a B, held there by the same things: the
+   field-value layout, "airport" ×3 and nothing past the gap. The Mount Isa sentence form (Nov 18, not
+   graded) is the only variant on record.
+2. **P_event_sat +1 cycle.** Same airport pair (Kununurra/Yakutsk) on the timeline twice in ~29h. The
+   writer justified the repeat as material because the gap widened by 4°C. Yakutsk 9/10. The fix already
+   drafted (one pair per anchor station per 24h) would have held it.
+3. **P_close +1 (weak).** Ends on the gap again. Same caveat as before; folded into P_metar_card's fix.
+4. No era-anchor, political-anchor, banned-opener (P3 regex) or plant-comparison hits. No A-grade
+   mechanic to log.
+
+### Followups
+- **Operator: Sarh/Yakutsk is >48h** with a dated observation. Reject from the dashboard. Also check
+  whether `not_sent` drafts are excluded from the `awc_source_window_elapsed` sweep; this is the only
+  METAR draft the sweep hasn't cleared.
+- Operator: Kununurra/Yakutsk is now on the feed twice. Before the next auto-post, decide whether
+  "gap widened" should count as material for a repeat pair.
+- Operator: round both METAR readings to the same precision (integer) before the gap is computed.
+- Infra (carried): `gh` token invalid; gist writes 403 at the proxy. Gist reject, `gh pr` and
+  `ROUTINE_BEACON` writes all blocked.
+
+---
+
 ## 2026-11-19 — Daily corpus grading (1 fresh draft; 1 carry-over, previously graded)
 
 **Context:** Gist read via git-clone path (success; gist HEAD Nov 19 13:52Z, `_state_rev` 3410,
