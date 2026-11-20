@@ -1,3 +1,9 @@
+## 0.9.109.143
+
+- Retain known inland IMERG scan refusal codes from the existing daily download, without exporting exception text or changing source qualification, requests or nomination decisions.
+- Explain a held inland scan alongside retained city results in Sources. Keep unknown causes, mismatched source intervals and primary-versus-alternate service distinct; successful city collection does not establish an eligible inland report.
+- Let source explanations span their full row on desktop and mobile instead of being squeezed into a single table cell.
+
 ## 0.9.109.142
 
 - Show the latest saved draft's retained disposition and known automatic text or source-window holds, including rejected drafts that no longer appear in the pending queue.
