@@ -66,6 +66,7 @@ concurrency:
 
 jobs:
   test-partition:
+    name: test-partition (${{ matrix.partition }}, ${{ matrix.core-shard || matrix.postgres-shard }})
     # Full suite gates PR merges ONLY. Scheduled drafting runs no longer run it:
     # a flaky/time-dependent unit test must never be able to block — or redden —
     # production drafting. On 2026-06-19 a time-bomb unit test (hardcoded dates)
@@ -90,6 +91,10 @@ jobs:
         include:
           - partition: core
             postgres-shard: all
+            core-shard: '0'
+          - partition: core
+            postgres-shard: all
+            core-shard: '1'
           - partition: media
             postgres-shard: all
           - partition: postgres
@@ -247,7 +252,7 @@ jobs:
       # precise cause remains unproven. PG1/PG8 use the Python 300s witness.
       # PG2's retained-supply replay requires a single-threaded process.
       # Fatal handling, every test and the 45min job deadline stay intact.
-      - run: python -m pytest tests/ -v -m "not voice_replay" --ci-partition=${{ matrix.partition }} --ci-postgres-shard=${{ matrix.postgres-shard }} --ci-critical-first --maxfail=1 --durations=20 -o faulthandler_timeout=${{ matrix.partition == 'postgres' && (matrix.postgres-shard == '1' || matrix.postgres-shard == '2' || matrix.postgres-shard == '8') && '0' || '300' }}
+      - run: python -m pytest tests/ -v -m "not voice_replay" --ci-partition=${{ matrix.partition }} --ci-postgres-shard=${{ matrix.postgres-shard }} --ci-core-shard=${{ matrix.core-shard || 'all' }} --ci-critical-first --maxfail=1 --durations=20 -o faulthandler_timeout=${{ matrix.partition == 'postgres' && (matrix.postgres-shard == '1' || matrix.postgres-shard == '2' || matrix.postgres-shard == '8') && '0' || '300' }}
         id: offline-suite
         env:
           THEHEAT_TEST_POSTGRES: "1"

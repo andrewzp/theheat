@@ -65,6 +65,16 @@ GRID_STEP_DEGREES = 0.1
 LON_CELLS = 3600
 LAT_CELLS = 1800
 FILL_VALUE = -9999.0
+# Observation only: these are existing local scanner/clock/geography refusals.
+# Retain no exception prose, provider content, file paths or unknown future code.
+GRID_DISCOVERY_HOLD_CODES = frozenset({
+    "rainfall_completed_window_expired", "rainfall_grid_attribute_invalid",
+    "rainfall_grid_axes_invalid", "rainfall_grid_dataset_ambiguous", "rainfall_grid_dataset_invalid",
+    "rainfall_grid_packed_data_unsupported", "rainfall_grid_product_invalid",
+    "rainfall_grid_time_invalid", "rainfall_grid_units_invalid", "rainfall_grid_clock_invalid",
+    "rainfall_grid_geography_unavailable", "rainfall_grid_geography_identity_changed",
+    "rainfall_grid_geography_invalid",
+})
 DEFAULT_RECORD_MARGIN_MM = 20.0
 DEFAULT_CITY_LIMIT = 75
 # Per-city remote requests remain bounded even when the local grid scans all cities.
@@ -1590,11 +1600,14 @@ def _subset_grid(
                 try:
                     result = rainfall_grid_scan.scan(handle, dataset, grid, grid_bytes,
                                                      day=resolved_date, product=product)
-                except (rainfall_grid.GridHeld, OSError, ValueError, TypeError, KeyError):
+                except (rainfall_grid.GridHeld, OSError, ValueError, TypeError, KeyError) as exc:
                     # A minimal/legacy city frame can still serve registered
                     # points; missing proof cannot nominate a new grid report.
                     result = {"schema": "theheat.imerg-grid-discovery/v1", "status": "held",
                               "reason": "rainfall_grid_frame_unqualified", "rows": []}
+                    if (type(exc) is rainfall_grid.GridHeld and len(exc.args) == 1
+                            and type(exc.args[0]) is str and exc.args[0] in GRID_DISCOVERY_HOLD_CODES):
+                        result["hold_code"] = exc.args[0]
                 discovery_out.update(result)
     except OSError as exc:
         reason = _unreadable_grid_reason(grid_bytes)

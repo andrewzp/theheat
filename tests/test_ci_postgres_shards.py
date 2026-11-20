@@ -18,6 +18,7 @@ def select(items, partition, shard="all", critical_first=False):
     kept, removed = list(items), []
     config = SimpleNamespace(
         getoption=lambda name: {"--ci-partition":partition, "--ci-postgres-shard":shard,
+                                "--ci-core-shard":"all",
                                 "--ci-critical-first": critical_first}[name],
         hook=SimpleNamespace(pytest_deselected=lambda items: removed.extend(items)),
     )
@@ -284,9 +285,11 @@ def test_all_fourteen_workflow_groups_have_matching_parser_choices_and_original_
     pytest_addoption(SimpleNamespace(addoption=lambda name, **kw: options.update({name: kw})))
     workflow = yaml.load((ROOT / ".github/workflows/bot.yml").read_text(), Loader=yaml.BaseLoader)
     job = workflow["jobs"]["test-partition"]
-    groups = [(r["partition"], r["postgres-shard"]) for r in job["strategy"]["matrix"]["include"]]
-    expected = [("core", "all"), ("media", "all"), *(("postgres", str(i)) for i in range(12))]
-    assert groups == expected and len(set(groups)) == 14
+    groups = [(r["partition"], r.get("core-shard", r["postgres-shard"])) for r in job["strategy"]["matrix"]["include"]]
+    expected = [("core", "0"), ("core", "1"), ("media", "all"), *(("postgres", str(i)) for i in range(12))]
+    assert groups == expected and len(set(groups)) == 15
+    assert options["--ci-core-shard"]["choices"] == ("all", "0", "1")
+    assert job["name"] == "test-partition (${{ matrix.partition }}, ${{ matrix.core-shard || matrix.postgres-shard }})"
     assert options["--ci-postgres-shard"]["choices"] == ("all", *(str(i) for i in range(12)))
     assert job["timeout-minutes"] == "45" and job["strategy"]["fail-fast"] == "false"
 

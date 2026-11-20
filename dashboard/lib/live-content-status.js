@@ -22,6 +22,7 @@ const OUTCOMES = Object.freeze({
   supplying: ["Supplying candidates", "Review the resulting drafts."],
   rainfall_nominations: ["Rainfall report nominations recorded", "Inspect the saved nomination dispositions; nomination and queue counts do not establish a saved draft."],
   rainfall_reports_held: ["Rainfall reports held", "Check the named saved configuration hold; no nomination result was established."],
+  rainfall_grid_held: ["Inland rainfall scan held", "Inspect the scan reason; city results remain separate."],
   rainfall_nominations_unavailable: ["Rainfall report nomination unavailable", "Inspect this source run's retained details; missing or inconsistent counts are not zero."],
   unknown: ["Unknown", "No retained run row explains this source yet."],
 })
@@ -62,6 +63,21 @@ const RAINFALL_SETTINGS_HOLDS = Object.freeze({
   rainfall_report_one_sample_required: "one-sample operation settings required",
 })
 const RAINFALL_SCOPE = "Input row dispositions and unique event nominations; not coverage or source-truth validation."
+const RAINFALL_GRID_HOLDS = Object.freeze({
+  rainfall_completed_window_expired: "completed source day outside its allowed age",
+  rainfall_grid_attribute_invalid: "invalid or unsupported numeric metadata",
+  rainfall_grid_axes_invalid: "invalid or unsupported coordinate axes",
+  rainfall_grid_dataset_ambiguous: "ambiguous duplicate dataset layouts",
+  rainfall_grid_dataset_invalid: "invalid or unsupported dataset structure",
+  rainfall_grid_packed_data_unsupported: "unsupported packed or scaled data",
+  rainfall_grid_product_invalid: "unsupported product or file size",
+  rainfall_grid_time_invalid: "invalid or unsupported source time metadata",
+  rainfall_grid_units_invalid: "invalid or unsupported precipitation units",
+  rainfall_grid_clock_invalid: "invalid local scan clock",
+  rainfall_grid_geography_unavailable: "required inland geography unavailable",
+  rainfall_grid_geography_identity_changed: "inland geography identity changed",
+  rainfall_grid_geography_invalid: "invalid inland geography",
+})
 function record(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value)
     && [Object.prototype, null].includes(Object.getPrototypeOf(value))
@@ -70,6 +86,16 @@ function exactKeys(value, keys) {
   return record(value) && Reflect.ownKeys(value).length === keys.length && keys.every(key => Object.hasOwn(value, key))
 }
 function safeCount(value) { return Number.isSafeInteger(value) && value >= 0 }
+function rainfallGridHold(row) {
+  const value = row.details?.rainfall_grid_discovery
+  if ((!exactKeys(value, ["schema", "status", "reason"])
+      && !exactKeys(value, ["schema", "status", "reason", "hold_code"]))
+      || value.schema !== "theheat.imerg-grid-discovery/v1" || value.status !== "held"
+      || value.reason !== "rainfall_grid_frame_unqualified") return null
+  const reason = typeof value.hold_code === "string" && Object.hasOwn(RAINFALL_GRID_HOLDS, value.hold_code)
+    ? RAINFALL_GRID_HOLDS[value.hold_code] : "the specific cause was not retained"
+  return `Saved inland rainfall scan held: ${reason}.`
+}
 function safeSum(values) {
   const total = values.reduce((sum, value) => sum + value, 0)
   return Number.isSafeInteger(total) ? total : null
@@ -202,7 +228,10 @@ export function sourceOutcome(row, rejections = [], { rainfallNominationCurrent 
     return outcome("policy_excluded", row)
   }
   const rainfall = rainfallNomination(row, rainfallNominationCurrent)
-  const admission = nwsAdmissionDetail(row) ?? rainfall?.detail ?? null
+  // A scan explanation cannot borrow currency from a mismatched source interval
+  // or bypass the strict city/grid nomination denominators above.
+  const gridHold = rainfall?.state === "rainfall_nominations" ? rainfallGridHold(row) : null
+  const admission = [nwsAdmissionDetail(row) ?? rainfall?.detail, gridHold].filter(Boolean).join(" ") || null
   if (rejections.some(r => r?.source === row.source && ["writer", "safety", "fact_check", "critic", "honesty_gate", "copy_gate"].includes(r?.stage))) {
     return outcome("writer_or_check_rejection", row, admission)
   }
@@ -214,6 +243,11 @@ export function sourceOutcome(row, rejections = [], { rainfallNominationCurrent 
       ? "Candidates were collected, but this run recorded no saved draft. Check selection and check results."
       : "Check the saved drafts from this run; they may need fresh review."
     return outcome("supplying", row, admission, action)
+  }
+  if (gridHold) {
+    const alternate = incident?.product_state === "alternate_served"
+      ? " City data was served by an alternate leg; primary recovery is unverified." : ""
+    return outcome("rainfall_grid_held", row, admission + alternate)
   }
   if (incident?.product_state === "alternate_served") return outcome("alternate_served", row, named)
   if (rainfall) return outcome(rainfall.state, row, rainfall.detail)
