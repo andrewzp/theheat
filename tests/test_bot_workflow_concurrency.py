@@ -172,7 +172,7 @@ def test_pr_and_display_branch_job_exclusions_remain_explicit(workflow):
 def test_required_offline_suite_and_own_production_smoke_gate_remain(workflow):
     test, run = workflow["jobs"]["test-partition"], workflow["jobs"]["run"]
     suite = next(step for step in test["steps"] if step.get("run", "").startswith("python -m pytest tests/ -v "))
-    assert suite["run"] == 'python -m pytest tests/ -v -m "not voice_replay" --ci-partition=${{ matrix.partition }} --ci-postgres-shard=${{ matrix.postgres-shard }} --ci-critical-first --maxfail=1 --durations=20 -o faulthandler_timeout=${{ matrix.partition == \'postgres\' && (matrix.postgres-shard == \'1\' || matrix.postgres-shard == \'2\' || matrix.postgres-shard == \'8\') && \'0\' || \'300\' }}'
+    assert suite["run"] == 'python -m pytest tests/ -v -m "not voice_replay" --ci-partition=${{ matrix.partition }} --ci-postgres-shard=${{ matrix.postgres-shard }} --ci-core-shard=${{ matrix.core-shard || \'all\' }} --ci-critical-first --maxfail=1 --durations=20 -o faulthandler_timeout=${{ matrix.partition == \'postgres\' && (matrix.postgres-shard == \'1\' || matrix.postgres-shard == \'2\' || matrix.postgres-shard == \'8\') && \'0\' || \'300\' }}'
     assert suite["env"]["THEHEAT_CI_SAFE_DIAGNOSTIC"] == "${{ matrix.partition == 'postgres' && (matrix.postgres-shard == '1' || matrix.postgres-shard == '8') && '1' || '0' }}"
     assert suite["env"]["THEHEAT_TEST_POSTGRES"] == "1"
     assert any(step.get("name") == "SQLite backend smoke" for step in test["steps"])
@@ -223,7 +223,8 @@ def test_partitions_preserve_every_check_without_repeating_dashboard(workflow):
     worker = workflow["jobs"]["test-partition"]
     assert worker["strategy"] == {
         "fail-fast": "false", "matrix": {"include": [
-            {"partition":"core", "postgres-shard":"all"},
+            {"partition":"core", "postgres-shard":"all", "core-shard":"0"},
+            {"partition":"core", "postgres-shard":"all", "core-shard":"1"},
             {"partition":"media", "postgres-shard":"all"},
             *({"partition":"postgres", "postgres-shard":str(shard)} for shard in range(12)),
         ]},
@@ -279,6 +280,7 @@ def test_actual_collection_hook_keeps_preview_ingress_in_postgres(partition):
     deselected = []
     config = SimpleNamespace(
         getoption=lambda name: {"--ci-partition":partition, "--ci-postgres-shard":"all",
+                                "--ci-core-shard":"all",
                                 "--ci-critical-first":False}[name],
         hook=SimpleNamespace(pytest_deselected=lambda items: deselected.extend(items)),
     )

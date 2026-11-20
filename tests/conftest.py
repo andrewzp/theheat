@@ -71,6 +71,10 @@ def pytest_addoption(parser):
         help="Stable file/function cohort within --ci-partition=postgres; all preserves the complete partition.",
     )
     parser.addoption(
+        "--ci-core-shard", choices=("all", "0", "1"), default="all",
+        help="Stable complete-module cohort within --ci-partition=core; all preserves the complete partition.",
+    )
+    parser.addoption(
         "--ci-critical-first", action="store_true", default=False,
         help="Run exact PostgreSQL CI regression cases first without changing shard membership.",
     )
@@ -169,12 +173,18 @@ def _ci_postgres_shard(path, test_name=None, parameters=None):
     return str(int(sha256(relative.encode("utf-8")).hexdigest(), 16) % 8)
 
 
+def _ci_core_shard(path):
+    relative = path.resolve().relative_to(Path(__file__).resolve().parents[1]).as_posix()
+    return str(int(sha256(relative.encode("utf-8")).hexdigest(), 16) % 2)
+
+
 @pytest.hookimpl(trylast=True)
 def pytest_collection_modifyitems(config, items):
     partition = config.getoption("--ci-partition")
     shard = config.getoption("--ci-postgres-shard")
     if partition == "all":
         return
+    core_shard = config.getoption("--ci-core-shard") if partition == "core" else "all"
     selected, deselected = [], []
     for item in items:
         filename = item.path.name
@@ -188,6 +198,8 @@ def pytest_collection_modifyitems(config, items):
             group != "postgres" or shard == "all"
             or _ci_postgres_shard(item.path, getattr(item, "originalname", None),
                                   getattr(getattr(item, "callspec", None), "params", None)) == shard
+        ) and (
+            group != "core" or core_shard == "all" or _ci_core_shard(item.path) == core_shard
         )
         (selected if keep else deselected).append(item)
     items[:] = selected
@@ -388,6 +400,8 @@ def pytest_configure(config):
     )
     if config.getoption("--ci-postgres-shard") != "all" and config.getoption("--ci-partition") != "postgres":
         raise pytest.UsageError("A specific --ci-postgres-shard requires --ci-partition=postgres")
+    if config.getoption("--ci-core-shard") != "all" and config.getoption("--ci-partition") != "core":
+        raise pytest.UsageError("A specific --ci-core-shard requires --ci-partition=core")
     config.addinivalue_line(
         "markers",
         "allow_network: opt out of the hermeticity gate and allow real outbound connections",

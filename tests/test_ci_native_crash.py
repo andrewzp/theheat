@@ -307,9 +307,9 @@ def test_original_suite_string_and_matrix_remain_exact():
     workflow = yaml.safe_load((Path(__file__).resolve().parents[1] / ".github/workflows/bot.yml").read_text())
     job = workflow["jobs"]["test-partition"]
     assert job["timeout-minutes"] == 45
-    assert len(job["strategy"]["matrix"]["include"]) == 14
+    assert len(job["strategy"]["matrix"]["include"]) == 15
     suite = next(step for step in job["steps"] if step.get("run", "").startswith("python -m pytest tests/ -v "))
-    assert suite["run"] == 'python -m pytest tests/ -v -m "not voice_replay" --ci-partition=${{ matrix.partition }} --ci-postgres-shard=${{ matrix.postgres-shard }} --ci-critical-first --maxfail=1 --durations=20 -o faulthandler_timeout=${{ matrix.partition == \'postgres\' && (matrix.postgres-shard == \'1\' || matrix.postgres-shard == \'2\' || matrix.postgres-shard == \'8\') && \'0\' || \'300\' }}'
+    assert suite["run"] == 'python -m pytest tests/ -v -m "not voice_replay" --ci-partition=${{ matrix.partition }} --ci-postgres-shard=${{ matrix.postgres-shard }} --ci-core-shard=${{ matrix.core-shard || \'all\' }} --ci-critical-first --maxfail=1 --durations=20 -o faulthandler_timeout=${{ matrix.partition == \'postgres\' && (matrix.postgres-shard == \'1\' || matrix.postgres-shard == \'2\' || matrix.postgres-shard == \'8\') && \'0\' || \'300\' }}'
     assert "continue-on-error" not in suite
     assert suite["env"] == {"THEHEAT_TEST_POSTGRES": "1", "THEHEAT_POSTGRES_BINDIR": "/usr/lib/postgresql/17/bin", "THEHEAT_CI_SAFE_DIAGNOSTIC": "${{ matrix.partition == 'postgres' && (matrix.postgres-shard == '1' || matrix.postgres-shard == '8') && '1' || '0' }}"}
     prepare = next(step for step in job["steps"] if step.get("name") == "Prepare private PG1/PG2/PG8 crash evidence")

@@ -18,6 +18,7 @@ def select(items, group):
     kept, removed = list(items), []
     config = SimpleNamespace(
         getoption=lambda name: {"--ci-partition": group, "--ci-postgres-shard": "all",
+                                "--ci-core-shard": "all",
                                 "--ci-critical-first": False}[name],
         hook=SimpleNamespace(pytest_deselected=lambda items: removed.extend(items)),
     )
