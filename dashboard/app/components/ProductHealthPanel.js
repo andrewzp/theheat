@@ -35,6 +35,42 @@ function Milestone({ title, value }) {
       : "Unknown"))
 }
 
+function LatestSavedDraft({ value }) {
+  if (!value) return null
+  const labels = { rejected: "rejected", pending: "pending", approved: "approval recorded; sending unverified",
+    receipt_recorded: "receipt recorded", posted_without_receipt: "marked posted without a receipt",
+    delivery_unresolved: "delivery unresolved", unknown: "outcome unknown" }
+  const textHolds = { automatic_text_over_200_scalars: "over the 200 characters allowed for automatic text",
+    automatic_text_malformed_unicode: "malformed Unicode", automatic_text_implies_media: "copy refers to media that automatic text does not send",
+    unclassified: "reason unavailable", unknown: "text unavailable" }
+  const sendHolds = { approval_unverified: "review or revision approval was not current", policy_changed: "editorial policy changed",
+    critic_not_passed: "a critic pass was missing", event_already_posted: "the event already had a recorded post",
+    stale_framing: "the source or draft was stale", delivery_unresolved: "an earlier delivery was unresolved",
+    autoship_disabled: "automatic sending was disabled", policy_blocked: "the approval policy blocked automatic sending",
+    awc_source_changed: "the airport source changed at recheck", awc_observation_expired: "the airport observations expired",
+    awc_source_insufficient_window: "too little airport source time remained", awc_source_disabled: "the airport source route was disabled",
+    awc_observed_mode_required: "observed-only source settings were required", awc_current_source_unexpected: "the airport recheck was unavailable",
+    awc_draft_invalid: "the airport draft could not be validated", awc_draft_identity_changed: "the airport draft identity changed",
+    airport_source_recheck: "the airport source needed review", ...textHolds }
+  const disposition = value.status === "recorded" && Object.hasOwn(labels, value.disposition) ? value.disposition : "unknown"
+  return h("div", { className: "runtime-note", "data-latest-draft-disposition": disposition },
+    h("p", null, value.status === "ambiguous" ? "Latest saved draft cannot be uniquely identified in retained records."
+      : value.status !== "recorded" ? "Latest saved draft outcome is unavailable."
+        : `Latest saved draft: ${labels[disposition]}.`),
+    value.status === "recorded" ? h(React.Fragment, null,
+      value.rejection === "awc_source_window_elapsed" ? h("p", null, "This draft was rejected after its airport observations expired.") : null,
+      value.send_hold && Object.hasOwn(sendHolds, value.send_hold) ? h("p", null, `Last recorded send hold: ${sendHolds[value.send_hold]}.`) : null,
+      value.recorded_text_hold && Object.hasOwn(textHolds, value.recorded_text_hold)
+        ? h("p", null, `Saved automatic text hold: ${textHolds[value.recorded_text_hold]}.`)
+        : value.text_hold && Object.hasOwn(textHolds, value.text_hold)
+          ? h("p", null, `Current automatic text hold: ${textHolds[value.text_hold]}.`) : null,
+      value.recorded_text_hold && value.recorded_text_hold !== "unclassified" && value.text_hold === null
+        ? h("p", null, "Current text no longer has that automatic text hold.") : null,
+      value.source_hold_recorded === true ? h("p", null, "A source hold is recorded; its reason is unavailable here.") : null,
+      value.undated_rows > 0 ? h("p", null, "Other retained drafts have unavailable creation times; this is the latest dated record.") : null,
+    ) : null)
+}
+
 // W10.6: each post-image family's requirement and the input missing on this deployment.
 export function GraphicFamilies({ graphics }) {
   const families = Array.isArray(graphics?.families) ? graphics.families : []
@@ -87,6 +123,7 @@ export function ProductHealthPanel({ health, config, deployment, codeRevision = 
       h(Milestone, { title: "Last saved draft", value: health.milestones?.draft_created }),
       h(Milestone, { title: "Last current draft review", value: health.milestones?.draft_reviewed }),
       h(Milestone, { title: "Last post with receipt", value: health.milestones?.post_confirmed })),
+    h(LatestSavedDraft, { value: health.latest_saved_draft }),
     h("div", { className: "runtime-summary" },
       h("div", null,
         h("h3", null, "Review queue"),

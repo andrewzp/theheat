@@ -8,6 +8,100 @@ const now = Date.parse("2026-09-08T18:00:00Z")
 const build = (state) => buildProductHealth({ drafts: [], publish_ledger: {}, ...state }, { now })
 const post = (tweet_id, posted_at = "2026-09-07T12:00:00Z") => ({ id: `d-${tweet_id}`, status: "posted", tweet_id, posted_at })
 
+const latestDraft = (extra = {}) => ({ id: "draft_latest", created_at: "2026-09-08T17:00:00Z",
+  status: "rejected", text: "x".repeat(201), rejected_reason: "awc_source_window_elapsed",
+  automatic_text_hold: "automatic_text_over_200_scalars", ...extra })
+
+test("latest saved disposition survives rejection without exposing private draft fields or changing state", () => {
+  const latest = latestDraft({ post_error: "private-secret-error", review_context: { bundle: "private-source" } })
+  const state = { drafts: [{ id: "older_pending", created_at: "2026-09-08T16:00:00Z", status: "pending" }, latest] }
+  const before = structuredClone(state)
+  const view = build(state).latest_saved_draft
+  assert.equal(view.status, "recorded")
+  assert.equal(view.id, "draft_latest")
+  assert.equal(view.disposition, "rejected")
+  assert.equal(view.rejection, "awc_source_window_elapsed")
+  assert.equal(view.text_hold, "automatic_text_over_200_scalars")
+  assert.equal(view.recorded_text_hold, view.text_hold)
+  assert.equal(view.automatic_schedule_recorded, false)
+  assert.deepEqual(state, before)
+  assert.doesNotMatch(JSON.stringify(view), /private-secret|private-source|review_context|post_error|xxxxx/)
+  assert.equal(build(state).milestones.draft_created.id, "draft_latest")
+})
+
+test("latest saved disposition distinguishes recorded holds, current text, receipts and unknown reasons", () => {
+  const held = build({ drafts: [latestDraft({ text: "A short complete fact.", rejected_reason: "<script>secret</script>",
+    automatic_source_hold: "private-source-error" })] }).latest_saved_draft
+  assert.equal(held.text_hold, null)
+  assert.equal(held.recorded_text_hold, "automatic_text_over_200_scalars")
+  assert.equal(held.rejection, "unclassified")
+  assert.equal(held.source_hold_recorded, true)
+  assert.doesNotMatch(JSON.stringify(held), /script|secret|private-source/)
+  const noReceipt = build({ drafts: [latestDraft({ status: "posted", text: "Fact." })] }).latest_saved_draft
+  assert.equal(noReceipt.disposition, "posted_without_receipt")
+  assert.equal(build({ drafts: [latestDraft({ status: "posted", tweet_id: "123456789", text: "Fact." })] }).latest_saved_draft.disposition, "receipt_recorded")
+  const futureSchedule = build({ drafts: [latestDraft({ status: "pending", auto_approve_at: "2026-09-08T19:00:00Z" })] }).latest_saved_draft
+  assert.equal(futureSchedule.automatic_schedule_recorded, true)
+  assert.equal(build({ drafts: [latestDraft({ text: undefined, automatic_text_hold: "private-unrecognized" })] }).latest_saved_draft.text_hold, "unknown")
+})
+
+test("latest saved disposition refuses incomplete clocks and ambiguous latest records in either order", () => {
+  for (const created_at of [null, "nonsense", "2026-09-31T00:00:00Z", "2026-09-09T00:00:00Z"]) {
+    assert.equal(build({ drafts: [latestDraft({ created_at })] }).latest_saved_draft.status, "unknown")
+  }
+  const pairs = [
+    [latestDraft(), latestDraft({ id: "other_same_time" })],
+    [latestDraft(), latestDraft({ status: "pending" })],
+    [latestDraft(), latestDraft({ created_at: "2026-09-08T16:00:00Z", status: "pending" })],
+    [latestDraft(), latestDraft({ created_at: "bad-clock" })],
+    [latestDraft({ review_context: { bundle: { amount: 1 } } }), latestDraft({ review_context: { bundle: { amount: 2 } } })],
+  ]
+  for (const pair of pairs) for (const drafts of [pair, [...pair].reverse()]) {
+    assert.equal(build({ drafts }).latest_saved_draft.status, "ambiguous")
+  }
+  const repeated = latestDraft()
+  assert.deepEqual(build({ drafts: [repeated, structuredClone(repeated)] }).latest_saved_draft,
+    build({ drafts: [repeated] }).latest_saved_draft)
+})
+
+test("latest disposition preserves unknown sends even with a receipt or a rejection, and never leaks hostile metadata", () => {
+  const draft = latestDraft({ status: "posted", tweet_id: "123456789", publish_outcome: "unknown" })
+  assert.equal(build({ drafts: [draft] }).latest_saved_draft.disposition, "delivery_unresolved")
+  const unresolved = latestDraft({ publish_outcome: "not_sent", event_id: "event_latest" })
+  assert.equal(build({ drafts: [unresolved], publish_ledger: { event_latest: { phase: "intent" } } }).latest_saved_draft.disposition,
+    "delivery_unresolved")
+  const malformed = latestDraft({ id: "<script>private-id</script>" })
+  assert.deepEqual(build({ drafts: [malformed] }).latest_saved_draft, { status: "unknown", id: null, disposition: "unknown" })
+  const unicode = build({ drafts: [latestDraft({ text: "\ud800", automatic_text_hold: "__proto__", automatic_source_hold: { secret: "private-source" } })] }).latest_saved_draft
+  assert.equal(unicode.text_hold, "automatic_text_malformed_unicode")
+  assert.equal(unicode.recorded_text_hold, "unclassified")
+  assert.equal(unicode.source_hold_recorded, null)
+  assert.doesNotMatch(JSON.stringify(unicode), /private-source|__proto__/)
+  assert.equal(build({ drafts: [latestDraft({ status: "pending" })] }).latest_saved_draft.rejection, null)
+  for (const drafts of [null, {}, [latestDraft(), null]]) {
+    assert.equal(build({ drafts }).latest_saved_draft.status, "unknown")
+  }
+  const legacy = latestDraft({ status: "posted", event_id: "shared_event", text: "Later saved text." })
+  assert.notEqual(build({ drafts: [legacy], publish_ledger: { shared_event: {
+    phase: "posted", tweet_id: "123456789", text: "Different earlier publication.",
+  } } }).latest_saved_draft.disposition, "receipt_recorded")
+})
+
+test("latest draft projects only fixed recorded sender holds, keeping unknown error content private", () => {
+  for (const [post_error, code] of [
+    ["Observed airport report needs fresh source review: awc_source_changed", "awc_source_changed"],
+    ["Observed airport report needs fresh source review: private-key-in-error", "airport_source_recheck"],
+    ["Autoship blocked: event already posted", "event_already_posted"],
+    ["Auto-approval needs a current model review and revision authorization", "approval_unverified"],
+    ["private-key-in-error", "unclassified"],
+    [null, null],
+  ]) {
+    const view = build({ drafts: [latestDraft({ post_error })] }).latest_saved_draft
+    assert.equal(view.send_hold, code)
+    assert.doesNotMatch(JSON.stringify(view), /private-key-in-error|post_error/)
+  }
+})
+
 test("conflicting metric samples and empty partial lookups do not appear recovered", () => {
   const state = { drafts: [post("one")], tweet_metrics: {
     one: { at: "2026-09-08T12:00:00Z", likes: 2, retweets: 0, replies: 0, latest_sample_conflict: true },

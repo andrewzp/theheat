@@ -61,6 +61,41 @@ function setupEnv() {
   process.env.GITHUB_TOKEN = "token_123"
 }
 
+for (const [postError, sendHold] of [["private-error", "unclassified"],
+  ["Observed airport report needs fresh source review: awc_source_changed", "awc_source_changed"]]) {
+test(`dashboard GET exposes a bounded latest rejected disposition (${sendHold}) with zero writes`, async () => {
+  setupEnv()
+  const state = { drafts: [
+    { id: "draft_old", status: "pending", created_at: "2026-05-20T08:00:00Z", text: "Older fact." },
+    { id: "draft_latest", status: "rejected", created_at: "2026-05-20T09:00:00Z", text: "x".repeat(201),
+      automatic_text_hold: "automatic_text_over_200_scalars", rejected_reason: "awc_source_window_elapsed",
+      post_error: postError, review_context: { retained: "private-source" } },
+  ], publish_ledger: {}, suppressions: [], source_health: {}, run_history: [] }
+  const before = structuredClone(state), originalFetch = globalThis.fetch, methods = []
+  globalThis.fetch = async (url, options = {}) => {
+    methods.push(options.method || "GET")
+    return String(url).includes("/actions/runs") ? actionsResponse() : gistResponse(state)
+  }
+  try {
+    const { GET } = await importFresh("app/api/dashboard/route.js")
+    const response = await GET(new Request("http://localhost/api/dashboard", {
+      headers: { authorization: basicAuth("reviewer", "secret-pass") },
+    }))
+    assert.equal(response.status, 200)
+    const body = await response.json(), view = body.productHealth.latest_saved_draft
+    assert.equal(view.id, "draft_latest")
+    assert.equal(view.disposition, "rejected")
+    assert.equal(view.rejection, "awc_source_window_elapsed")
+    assert.equal(view.recorded_text_hold, "automatic_text_over_200_scalars")
+    assert.equal(view.send_hold, sendHold)
+    assert.deepEqual(body.drafts.drafts.map(row => row.id), ["draft_old"])
+    assert.doesNotMatch(JSON.stringify(view), /private-error|private-source|xxxxx|post_error|needs fresh source review/)
+    assert.ok(methods.every(method => method === "GET"))
+    assert.deepEqual(state, before)
+  } finally { globalThis.fetch = originalFetch }
+})
+}
+
 test("dashboard API hydrates page data with one state read and one workflow read", async () => {
   setupEnv()
   const state = {
