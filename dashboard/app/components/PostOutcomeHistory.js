@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useId, useState } from "react"
+import { perPostMetricChange } from "../../lib/per-post-metric-change.js"
 
 const h = React.createElement
 const fields = { likes: "Likes", retweets: "Reposts", replies: "Replies", quotes: "Quotes", impressions: "Impressions", bookmarks: "Bookmarks" }
@@ -26,12 +27,31 @@ function Observation({ item, position, total }) {
       ...Object.entries(fields).map(([key, label]) => h("div", { key }, h("dt", null, label), h("dd", null, item.counts[key] === null ? "Unknown" : String(item.counts[key]))))))
 }
 
+function MetricChange({ post }) {
+  const change = perPostMetricChange(post)
+  const unknown = value => value === null ? "Unknown" : String(value)
+  return h("details", { className: "runtime-details", style: { minWidth: 0 }, "data-metric-change-status": change.status },
+    h("summary", { style: { minHeight: 44 } }, "Changes between saved API observations"),
+    change.status === "comparable" ? h(React.Fragment, null,
+      h("p", { className: "runtime-note", style: { overflowWrap: "anywhere" } },
+        `${utc(change.previous.collected_at)} (${postAge(change.previous.post_age_seconds)}) → ${utc(change.latest.collected_at)} (${postAge(change.latest.post_age_seconds)}).`),
+      h("ul", { style: { listStyle: "none", padding: 0, overflowWrap: "anywhere" } },
+        ...change.metrics.map(row => h("li", { key: row.key, style: { margin: "8px 0" } },
+          `${fields[row.key]}: ${unknown(row.previous)} → ${unknown(row.latest)} · ${row.change === null ? "change unknown" : row.change > 0 ? `+${row.change}` : String(row.change)}`))),
+      h("p", { className: "runtime-note" }, "Reported changes for this post, not evidence of editorial improvement. Counts may decrease; missing values stay unknown."))
+      : h("p", { className: "runtime-note" }, change.status === "insufficient_samples"
+        ? change.sample_count === 1 ? "One saved API observation; a change is not yet available." : "No saved API observations to compare."
+        : "Saved API observations cannot be compared: their revision, timing or identity is unavailable or conflicting."))
+}
+
 export default function PostOutcomeHistory({ outcomes }) {
   const id = useId()
   const [view, setView] = useState({ post: "", page: 0 })
   const posts = outcomes?.posts || []
   const selected = posts.find(post => post.tweet_id === view.post) || posts[0]
-  const total = selected?.observations.length || 0
+  const observations = Array.isArray(selected?.observations) && selected.observations.every(item => item !== null && typeof item === "object" && !Array.isArray(item))
+    ? selected.observations : null
+  const total = observations?.length || 0
   const page = Math.min(selected?.tweet_id === view.post ? view.page : 0, Math.max(0, Math.ceil(total / 100) - 1))
   const start = page * 100
   return h("details", { className: "runtime-details", style: { minWidth: 0 } },
@@ -58,7 +78,8 @@ export default function PostOutcomeHistory({ outcomes }) {
             : "Writer-reported angle and text provenance are unknown."),
         selected.writer_context?.status === "recorded" && h("p", { className: "runtime-note" },
           `${selected.writer_context.retained_different_text ? "Retained history includes different text. " : ""}Retained history is incomplete${selected.writer_context.history_unavailable ? " and includes unavailable observations" : ""}. A text match does not establish that no edits occurred. Actor and human authorship are unknown.`),
-        h("p", { className: "runtime-note" }, `${selected.observations.length} retained observations. Post age uses the platform's recorded creation time; receipt time is not a substitute.`),
+        h("p", { className: "runtime-note" }, `${observations === null ? "Unknown number of" : total} retained observations. Post age uses the platform's recorded creation time; receipt time is not a substitute.`),
+        h(MetricChange, { post: selected }),
         h("p", { className: "runtime-note" }, `Retained text versions for this post: ${selected.retained_text_versions ?? "unknown"}. Who edited them is not recorded here.`),
         h("p", { className: "runtime-note" }, selected.generation_usage?.status === "joined"
           ? `Generation usage joined to this post's event: ${selected.generation_usage.responses} model response(s) across ${selected.generation_usage.attempts} attempt(s) (${Object.entries(selected.generation_usage.by_stage).map(([stage, row]) => `${stage.replaceAll("_", " ")} ${row.responses}`).join(", ")}). Includes attempts that were not published; the charge is unknown.`
@@ -92,13 +113,14 @@ export default function PostOutcomeHistory({ outcomes }) {
         h("summary", { style: { minHeight: 44 } }, "Retained writer and text observation variants"),
         h("ul", { style: { fontSize: 12, lineHeight: 1.6, overflowWrap: "anywhere" } },
           ...selected.writer_context.variants.map(variant => h("li", { key: variant.sha256 }, `${variant.status}: ${variant.sha256}`)))),
-      !selected.observations.length && h("p", { className: "runtime-note" }, selected.history_status === "unreadable_or_empty"
-        ? "The retained metric row has no readable observations." : "No metric observations were retained for this post."),
+      (observations === null || !total) && h("p", { className: "runtime-note" }, observations === null
+        ? "Retained metric history is unavailable or malformed."
+        : selected.history_status === "unreadable_or_empty" ? "The retained metric row has no readable observations." : "No metric observations were retained for this post."),
       total > 100 && h("nav", { "aria-label": "Observation pages", style: { display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", margin: "12px 0" } },
         h("button", { className: "btn sm", type: "button", disabled: page === 0, style: { minHeight: 44 }, onClick: () => setView({ post: selected.tweet_id, page: page - 1 }) }, "Previous observations"),
         h("button", { className: "btn sm", type: "button", disabled: start + 100 >= total, style: { minHeight: 44 }, onClick: () => setView({ post: selected.tweet_id, page: page + 1 }) }, "Next observations"),
         h("p", { className: "runtime-note", role: "status" }, `Showing ${start + 1}–${Math.min(start + 100, total)} of ${total}`)),
       h("ol", { style: { listStyle: "none", padding: 0, margin: 0 } },
-        ...selected.observations.slice(start, start + 100).map((item, index) => h(Observation, { key: item.id, item, position: start + index + 1, total })))),
+        ...(observations || []).slice(start, start + 100).map((item, index) => h(Observation, { key: item.id, item, position: start + index + 1, total })))),
     h("p", { className: "runtime-note" }, "Counts can change and posts may be different ages. These figures alone don’t show improvement. Writer angles are self-reported; saved text changes don’t identify an editor."))
 }

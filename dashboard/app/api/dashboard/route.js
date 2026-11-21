@@ -13,6 +13,7 @@ import { graphicAvailabilityPayload } from "../../../lib/graphic-availability.js
 import { buildCostEvidence } from "../../../lib/cost-evidence.js"
 import { nwsSourceTiming } from "../../../lib/nws-source-timing.js"
 import { recoveredPublishedRecords, recoveredRecordFor, recoveryProvenanceMap } from "../../../lib/recovery-continuity.js"
+import { projectSuppression } from "../../../lib/rejected-copy.js"
 
 export const runtime = "nodejs"
 
@@ -92,7 +93,7 @@ function suppressionsPayload(state, { sourceFilter, sinceFilter, limit }) {
   })
 
   filtered.sort((a, b) => tsValue(b) - tsValue(a))
-  const suppressions = filtered.slice(0, limit)
+  const suppressions = filtered.slice(0, limit).map(projectSuppression)
   const now = Date.now()
   const day = 24 * 60 * 60 * 1000
   const sourceCounts = {}

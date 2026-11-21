@@ -1,3 +1,9 @@
+## 0.9.109.147
+
+- Show reported count changes between the latest two comparable saved API observations of one published post. Preserve missing counts, decreases and ambiguous timing; keep single samples separate from a zero baseline.
+
+- Let operators read retained rejected drafts in Suppressed, with saved-context validation and keyboard/mobile disclosure. Rejections remain separate from checks and approval.
+
 ## 0.9.109.146
 
 - Describe saved X engagement lookups as metrics requests and usable responses, rather than weather candidates or drafts. Keep partial, skipped and inconsistent results distinct; missing engagement remains unknown.

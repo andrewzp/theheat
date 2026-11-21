@@ -124,6 +124,17 @@ export function SuppressedView({ suppressions, stats, sourceFilter, setSourceFil
                     ))}
                   </div>
                 )}
+                {s.rejected_copy?.status === "retained" ? (
+                  <details className="supp-rejected-copy">
+                    <summary>Read rejected draft · {s.rejected_copy.characters} characters</summary>
+                    <p className="supp-copy-meta">{s.rejected_copy.stage} · attempt {s.rejected_copy.attempt}</p>
+                    <blockquote>{s.rejected_copy.text}</blockquote>
+                    <p className="supp-copy-note">Retained candidate, not approval or evidence that its claims are true.</p>
+                  </details>
+                ) : ["invalid", "unavailable"].includes(s.rejected_copy?.status) ? (
+                  <p className="supp-copy-note">Rejected draft text unavailable: {s.rejected_copy.status === "invalid"
+                    ? "the saved context could not be verified for this rejection." : "complete context was not retained."}</p>
+                ) : null}
               </div>
             )
           })

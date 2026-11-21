@@ -1072,3 +1072,8 @@ h1 span { color: #666; font-weight: 400; font-size: 14px; margin-left: 8px; }
 .ghcn-warrant-table thead th { position: sticky; top: 0; background: #1b1b1b; white-space: normal; overflow-wrap: anywhere; max-width: 10rem; vertical-align: top; }
 .ghcn-warrant-table tbody th { color: #eee; }
 .ghcn-warrant-digest { overflow-wrap: anywhere; }
+.supp-rejected-copy { margin-top: 12px; min-width: 0; overflow-wrap: anywhere; }
+.supp-rejected-copy summary { cursor: pointer; padding: 8px 0; }
+.supp-rejected-copy summary:focus-visible { outline: 2px solid var(--accent, #ff5a00); outline-offset: 3px; }
+.supp-rejected-copy blockquote { margin: 8px 0; padding: 12px; border-left: 3px solid var(--accent, #ff5a00); white-space: pre-wrap; overflow-wrap: anywhere; }
+.supp-copy-meta, .supp-copy-note { font-size: 13px; color: var(--muted, #aaa); margin: 8px 0; overflow-wrap: anywhere; }
