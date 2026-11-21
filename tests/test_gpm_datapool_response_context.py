@@ -64,7 +64,7 @@ def test_destination_is_a_finite_label_never_url_userinfo_or_query(url, destinat
 @pytest.mark.parametrize(("value", "media"), [
     ("text/html; charset=UTF-8", "html"), ("APPLICATION/X-NETCDF", "netcdf"),
     ("application/x-hdf5", "hdf"), ("application/x-hdf", "hdf"),
-    ("application/octet-stream", "octet_stream"), (f"private/{SECRET}\nsecret", "other"),
+    ("application/octet-stream", "octet_stream"), (f"private/{SECRET}\nsecret", "unknown"),
     (SECRET * 100, "unknown"), (None, "unknown"), (True, "unknown"),
 ], ids=["html", "netcdf", "hdf5", "hdf", "octet", "secret", "too-long", "none", "bool"])
 def test_media_is_a_finite_label_never_raw_header(value, media):
@@ -131,3 +131,23 @@ def test_broken_log_output_does_not_swallow_the_provider_refusal(monkeypatch):
     monkeypatch.setattr(gpm, "print", Mock(side_effect=OSError(SECRET)), raising=False)
     with pytest.raises(gpm._GridNotFound):
         gpm._fetch_grid_bytes_datapool(target_date=DAY, product="late", token=SECRET)
+
+
+@pytest.mark.parametrize("url", [
+    "https://ur\ns.earthdata.nasa.gov/login", "https://gpm1.ges\tdisc.eosdis.nasa.gov/x",
+    "\x00https://urs.earthdata.nasa.gov/login", " https://urs.earthdata.nasa.gov/login",
+], ids=["authority-lf", "authority-tab", "leading-nul", "leading-space"])
+def test_literal_url_controls_cannot_be_normalized_into_known_destination(url):
+    assert "destination=unknown" in gpm._datapool_response_context(response(url=url))
+
+
+@pytest.mark.parametrize("media", ["\x0btext/html\r\n", "text/html\n", "text/html; private=\x1bsecret"],
+                         ids=["vertical-tab-crlf", "trailing-lf", "parameter-escape"])
+def test_literal_header_controls_cannot_be_normalized_into_known_media(media):
+    assert "media=unknown" in gpm._datapool_response_context(response(media=media))
+
+
+def test_normal_encoded_query_and_optional_mime_whitespace_stay_readable():
+    result = response(url=f"https://urs.earthdata.nasa.gov/login?opaque=%0A{SECRET}",
+                      media="\t text/html \t; charset=UTF-8\t")
+    assert gpm._datapool_response_context(result) == "status=200 media=html destination=earthdata_login redirects=0"

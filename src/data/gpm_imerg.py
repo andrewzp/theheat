@@ -1511,15 +1511,15 @@ def _datapool_response_context(resp: requests.Response) -> str:
             value = headers.get("Content-Type", headers.get("content-type"))
             if "Content-Type" not in headers and "content-type" not in headers:
                 media = "missing"
-            elif type(value) is str and len(value) <= 256:
-                mime = value.partition(";")[0].strip().lower()
+            elif type(value) is str and len(value) <= 256 and not re.search(r"[\x00-\x08\x0a-\x1f\x7f]", value):
+                mime = value.partition(";")[0].strip(" \t").lower()
                 media = {"text/html": "html", "application/x-netcdf": "netcdf",
                          "application/netcdf": "netcdf", "application/x-hdf5": "hdf",
                          "application/x-hdf": "hdf", "application/octet-stream": "octet_stream"}.get(mime, "other")
         except (AttributeError, KeyError, TypeError, ValueError):
             pass
     url = fields.get("url")
-    if type(url) is str and 0 < len(url) <= 4096:
+    if type(url) is str and 0 < len(url) <= 4096 and not re.search(r"[\x00-\x20\x7f]", url):
         try:
             parts = urlsplit(url)
             destination = ({"data.gesdisc.earthdata.nasa.gov": "datapool",
