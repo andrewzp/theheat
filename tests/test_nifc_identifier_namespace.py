@@ -12,6 +12,7 @@ import pytest
 
 from src import state as store
 from src.data import fire_footprint as source
+from src.state_schema import NIFC_TIER_TRACKING_UNAVAILABLE
 from src.orchestrator.sources import nifc
 from src.orchestrator.triage_queue import _drain_and_write_triage_queue
 from src.two_bot import pipeline
@@ -73,7 +74,7 @@ def test_actual_parser_identity_is_exact_and_shared_with_snapshot(capture, prefe
     identity = bundle_memory_snapshot(bundle)["source_event_identity"]
     assert identity["identifier_kind"] == expected_kind and identity["source_event_id"] == expected_id
     assert fc.complex_id == expected_id
-    assert fc.event_id == source.report_tracking_key(fc) + "_tier3"
+    assert fc.event_id == "nifc_report_v1_" + source.report_tracking_key(fc).rsplit("/", 1)[1] + "_tier3"
     assert audit_story_bundle(bundle).prompt_ready
     other, = parsed(capture, UniqueFireIdentifier=expected_id + "-other" if len(expected_id) < 90 else "other")
     assert other.event_id != fc.event_id
@@ -186,6 +187,100 @@ def test_malformed_legacy_event_tier_does_not_escape_the_ambiguity_hold(capture,
     holds = []
     assert source.detect_tier_crossings([fc], state, tracking_holds=holds) == []
     assert holds == ["nifc_legacy_event_namespace_ambiguous"]
+
+
+def test_actual_gist_missing_tracking_stays_unknown_through_write_read_and_retention(monkeypatch, world, capture):
+    transport, _, _, _, _ = world
+    monkeypatch.setenv("THEHEAT_STATE_BACKEND", "gist")
+    monkeypatch.setattr(store, "GIST_ID", h.GIST_ID)
+    monkeypatch.setattr(store, "GITHUB_TOKEN", h.INVENTED_TOKEN)
+    raw = deepcopy(store.DEFAULT_STATE)
+    del raw["fire_complex_tiers"]
+    raw["drafts"] = [{"id": "invented-unrelated-pending", "text": "Keep exactly.", "status": "pending"}]
+    transport.gist = {"state.json": json.dumps(raw)}
+    fc, = parsed(capture)
+    with freeze_time(NOW, tick=True):
+        state = store.read_state()
+        assert state["fire_complex_tiers"] == {NIFC_TIER_TRACKING_UNAVAILABLE: 0}
+        holds = []
+        assert source.detect_tier_crossings([fc], state, tracking_holds=holds) == []
+        assert holds == ["nifc_tier_tracking_unavailable"]
+        assert store.write_state(state)
+        restored = store.read_state()
+    with freeze_time(NOW + timedelta(days=180)):
+        store._prune_tier_store(restored, "fire_complex_tiers", 90, NOW + timedelta(days=180))
+        assert restored["fire_complex_tiers"] == {NIFC_TIER_TRACKING_UNAVAILABLE: 0}
+        assert store.write_state(restored)
+        assert store.read_state()["fire_complex_tiers"] == {NIFC_TIER_TRACKING_UNAVAILABLE: 0}
+    assert restored["drafts"] == raw["drafts"] and transport.x_posts == []
+    known = deepcopy(store.DEFAULT_STATE)
+    known["fire_complex_tiers"]["old-known-key"] = 4
+    merged = store._merge_state(restored, known)
+    assert merged["fire_complex_tiers"] == {NIFC_TIER_TRACKING_UNAVAILABLE: 0, "old-known-key": 4}
+    assert source.detect_tier_crossings([fc], merged) == []
+
+
+@pytest.mark.parametrize("invalid", [None, [], "unavailable"])
+def test_malformed_tracking_is_not_normalized_away_in_durable_merge(capture, invalid):
+    raw = deepcopy(store.DEFAULT_STATE)
+    raw["fire_complex_tiers"] = invalid
+    merged = store._merge_state(raw, deepcopy(raw))
+    assert merged["fire_complex_tiers"] == invalid
+    fc, = parsed(capture)
+    assert source.detect_tier_crossings([fc], merged) == []
+    with pytest.raises(ValueError, match="nifc_tier_tracking_unmergeable"):
+        store._merge_state(raw, deepcopy(store.DEFAULT_STATE))
+
+
+def test_full_legacy_identifier_suffix_is_parsed_from_right_before_comparison(capture):
+    short, = parsed(capture, UniqueFireIdentifier="Abc")
+    long, = parsed(capture, UniqueFireIdentifier="Abc_tierNorth")
+    state = deepcopy(store.DEFAULT_STATE)
+    state["posted_events"] = [f"fire_footprint_{long.complex_id}_tier3"]
+    assert source.detect_tier_crossings([short], state) == [short]
+    holds = []
+    assert source.detect_tier_crossings([long], state, tracking_holds=holds) == []
+    assert holds == ["nifc_legacy_event_namespace_ambiguous"]
+
+
+def test_storage_key_cannot_be_an_accepted_legacy_identifier_or_shadow_it(capture):
+    target, = parsed(capture, UniqueFireIdentifier="Abc")
+    key = source.report_tracking_key(target)
+    assert parsed(capture, UniqueFireIdentifier=key) == [], "New key is disjoint from the accepted bare-ID grammar"
+    old_shaped_key = "nifc_report_v1_" + key.rsplit("/", 1)[1]
+    old, = parsed(capture, UniqueFireIdentifier=old_shaped_key)
+    assert old.complex_id == old_shaped_key
+    state = deepcopy(store.DEFAULT_STATE)
+    state["fire_complex_tiers"][old.complex_id] = target.tier
+    assert source.detect_tier_crossings([target], state) == [target]
+    assert state["fire_complex_tiers"] == {old.complex_id: target.tier}
+
+
+@pytest.mark.parametrize("retained", ["draft", "posted", "ledger", "memory"])
+def test_visible_saved_higher_tier_refuses_a_contradictory_watermark_without_repair(capture, retained):
+    current, = parsed(capture)
+    higher, = parsed(capture, IncidentSize=1600000.0)
+    assert current.tier == 3 and higher.tier == 4
+    state = deepcopy(store.DEFAULT_STATE)
+    key = source.report_tracking_key(current)
+    state["fire_complex_tiers"][key] = 1
+    row = {"type": source.KIND, "event_id": higher.event_id, "status": "pending"}
+    if retained == "draft":
+        state["drafts"].append(row)
+    elif retained == "posted":
+        state["posted_events"].append(higher.event_id)
+    elif retained == "ledger":
+        state["publish_ledger"][higher.event_id] = {"phase": "unknown"}
+    else:
+        state["memory"]["shipped_tweets"].append(row)
+    before = deepcopy(state)
+    holds = []
+    assert source.detect_tier_crossings([current], state, tracking_holds=holds) == []
+    assert holds == ["nifc_saved_tier_contradiction"] and state == before
+    # A higher watermark with pruned older draft history is valid, not a reset.
+    state["fire_complex_tiers"][key] = 5
+    holds = []
+    assert source.detect_tier_crossings([higher], state, tracking_holds=holds) == [] and holds == []
 
 
 def test_old_qualified_snapshot_still_supplies_read_only_report_context_but_not_source_admission(capture):

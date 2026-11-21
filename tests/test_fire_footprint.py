@@ -124,7 +124,7 @@ class TestFetchActiveFirePerimeters:
         responses.add(responses.GET, GWIS_URL, json=SAMPLE_PAYLOAD, status=200)
         complexes = fetch_active_fire_perimeters()
         dixie = next(c for c in complexes if c.complex_id == "2026-CACND-000123")
-        assert dixie.event_id == report_tracking_key(dixie) + "_tier2"
+        assert dixie.event_id == "nifc_report_v1_" + report_tracking_key(dixie).rsplit("/", 1)[1] + "_tier2"
 
     @responses.activate
     def test_http_error_returns_empty(self):

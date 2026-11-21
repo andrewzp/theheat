@@ -1,6 +1,6 @@
 {
   "identity": {
-    "archive_sha256": "f509ca010986907c09893cd0027e0e13f11a57567b7614d9fffa720ae14d5c07",
+    "archive_sha256": "21b35fe86a91a4ffb753edf66364c65e2da0d60f849398f5a2b822ec0944dd61",
     "deployment_files": {
       "api/graphic_preview.py": "984de6284b9eddef85db41cee9ab26c9d92954f12c7e13b6f87bf0bfb6640157",
       "api/graphic_reader_status.py": "5e9685d699625a4eea9d5be884b6e266939a0ad344a2997351ba79bd114407ba",
@@ -109,7 +109,7 @@
       "src/media/published_radar.py": "78b8605bb7607625ece71d8985f87ae1106dc47901c4beff5adcb1403cfabcbe",
       "src/media/temperature_graphic_adapter.py": "9800badb803f38cb1241a1a56fd09ee8c8ed59c9f20e8ec087f88dad393f2edf",
       "src/media/viirs_map_graphic_adapter.py": "657db3caef8503a4e0b9c9596bad8d28c029c3711e1d974f153fc1b60d3dd8d3",
-      "src/state_schema.py": "c03acc762121b5810ef2d6bd293017af26ce57703444172a2c170a27b8729ae5",
+      "src/state_schema.py": "8ccdc4dfc01ecf0f3e5d2db88736188a9cd8a059a6c95ba0e5a29f9712e6be75",
       "src/two_bot/__init__.py": "57333e1314a97e2fc83e03db569e03b0199c67ff52fad71770853226b9a68f00",
       "src/two_bot/evidence_contract.py": "d4dd1b703e1444dd9843b384d73056de696f0d2d3eab17f0a7a2875bb2819b5a",
       "src/two_bot/ghcn_claim_contract.py": "749443ad87f4caac9726200dcc8f0e0aa3c662d5b5aee20f9b0f3dff8fa48bcc",
@@ -123,7 +123,7 @@
       "src/two_bot/types.py": "65afc3d850c31c843bc1e7b58dcc0b13eb274969dcff657e2622641bd85239ee"
     },
     "format": "saved-source-svg-preview-v2",
-    "policy_source_sha256": "b476a0deefcd0d2c9059fd81b87280e9edb655c479739d584400873e98e7fa14",
+    "policy_source_sha256": "5b04e6315cf52c6d232a33eeb52cea9724248dd032e0ea32090365f364cfa25d",
     "resource_sources": {
       "src/data/registry/cities.csv": "data/cities.csv",
       "src/data/registry/country_codes.json": "data/country_codes.json",
@@ -133,5 +133,5 @@
     },
     "schema_version": 1
   },
-  "runtime_sha256": "ce7d2a332c6e588a2f98e62866b14fbb33373ae358d926c900c97774030f2320"
+  "runtime_sha256": "2ba96f2cb5d758d0dab8162036bccc525d71588f27260160d3e218a4cdfa36ab"
 }

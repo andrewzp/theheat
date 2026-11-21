@@ -21,11 +21,20 @@ is not a distributed transaction or lock.
 
 No historical rows or bare tier keys are migrated. A visible old bare key or
 matching legacy event is ambiguous between identifier kinds and holds the new
-candidate before writing. Missing or malformed relevant tracking also holds.
+candidate before writing. A legacy ID is compared in full after its final
+canonical tier suffix is decoded; prefixes cannot suppress another valid ID.
+New storage keys include a slash, forbidden in every accepted legacy bare ID.
+Missing or malformed relevant tracking also holds, as does a watermark below a
+visible higher saved tier. A higher watermark survives ordinary history pruning.
 These holds contribute to the existing source admission-hold count and a fixed
 saved-tier diagnostic, rather than appearing as a successful empty feed. An
 empty initialized tier map with no matching retained history can admit a new
 qualified identity; this is not proof of a complete external job inventory.
+At the actual Gist reader, missing stored tracking acquires a reserved unknown
+key in that existing map. It persists across normal merge/write/read and does
+not expire. This adds no store or top-level schema and never discards known
+watermarks. Malformed tracking cannot silently merge into an empty map; a
+conflicting malformed map refuses persistence rather than guessing a repair.
 
 Exact older qualified report snapshots remain readable as prior report context.
 Their packet and projected facts must still match. This compatibility reader is

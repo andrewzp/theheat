@@ -105,7 +105,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/data/crw_regions.py": "7a4afb9f8ad021357cc652b8b82e2a88026f6e68a2ad9a805ae5ae2962e7f2ce",
     "src/data/cyclones.py": "e6f33c7cdbe9af0e91f661ae91be219ea7d325e3024822430338c9ee046666ac",
     "src/data/fire_evidence.py": "cc270db0d383a5264270a001ba6a8e0ecdb1a7d22c808c4a09930fee7e86f7bf",
-    "src/data/fire_footprint.py": "fc470d5d1b61f0cce444d535cdf8deb10e41b235b7d03f85f302aa1638ec44bb",
+    "src/data/fire_footprint.py": "ae1e4d611ebddc2ddac4240c1eca382c9fb3789491cebe62067343227a66b5b5",
     "src/data/fire_identity.py": "badc8f086211c5ef2eb4cfb2812ce4bd3a70f0dee4c6340ed5d0d5ecf260b961",
     "src/data/fire_source_contract.py": "851fcf3800b742f89f0780b8c8348bd9aa701b1cc93771fd5433cd6fee3c3d72",
     "src/data/firms.py": "760c6157ec3cf3e84003ec764763f0c108539350e6bceba84c33532d8e75c422",
@@ -234,7 +234,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/posting/twitter.py": "75fb88e279ff3d5eae3fbba4670954adefa322e949e609d425801f0c3b7a85b6",
     "src/posting/x_media.py": "bb1eedb176b4508fb261788151a5c823860c99cb804c0820ba6695d6b0754cb4",
     "src/runtime_inventory.py": "6d4dd984e5cc7dba5e9e62f7704bee0eb6106f206f856e7273687bd867f47391",
-    "src/state.py": "b624c2c1ebbdf0b82b84a22a62a9183574184165180369123261acf4dda4d0c1",
+    "src/state.py": "c5a261ebe41eaa6c5fd1acc637323e227eb7cc3f22b1fc9df6bdaef6a45291d6",
     "src/storage/cyclone_supply.py": "5bb79fe881f4453c4d526e855fd82ec18f787a77cdd9a89214270259ddaa0f8d",
     "src/storage/ghcn_runtime_inputs.py": "bd8d06145e6385c7a92893162c5d82a7f3c82e9cc72999fe43efa3adabe8a6ac",
     "src/storage/hosted_staging.py": "54e82a1b070db00b70b3e7c2f82b900a1d6b7c55b9fa4935d726accc7997a7d5",
@@ -311,5 +311,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "5c5ffcc95358c7df45ae838c228759ad0eb6275c8f9053c8130c0a8824b63d9e"
   },
   "schema_version": 1,
-  "source_sha256": "b476a0deefcd0d2c9059fd81b87280e9edb655c479739d584400873e98e7fa14"
+  "source_sha256": "5b04e6315cf52c6d232a33eeb52cea9724248dd032e0ea32090365f364cfa25d"
 }

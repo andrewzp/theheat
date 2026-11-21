@@ -25,6 +25,7 @@ from typing import Any
 
 from src.data._http import fetch_with_retry
 from src.data.source_status import SourceFetchError
+from src.state_schema import NIFC_TIER_TRACKING_UNAVAILABLE
 
 # Hectare thresholds for per-fire-complex tweet dedup. A complex is
 # eligible for a draft each time it crosses into a higher tier. Integer
@@ -103,14 +104,21 @@ def report_record_identity(attrs: dict) -> dict:
 def _report_key(identity: dict) -> str:
     # Include the exact product as well as the memory identity. Neither ID
     # prefixes nor case folding can merge different full source identifiers.
-    return "nifc_report_v1_" + _canonical_sha({"source_product": SOURCE_PRODUCT, **identity})
+    return "nifc_report_v1_" + _report_digest(identity)
+
+
+def _report_digest(identity: dict) -> str:
+    return _canonical_sha({"source_product": SOURCE_PRODUCT, **identity})
 
 
 def report_tracking_key(fc: FireComplex) -> str:
     packet = validated_report(fc)
     if packet is None:
         raise ValueError("nifc_report_unverified")
-    return _report_key(report_record_identity(packet["source_record"]))
+    identity = report_record_identity(packet["source_record"])
+    # Slash is forbidden in every accepted legacy bare identifier. A legal old
+    # source ID therefore cannot masquerade as this identity's new watermark.
+    return "nifc-report/v1/" + _report_digest(identity)
 
 
 def _canonical_sha(value: Any) -> str:
@@ -336,10 +344,12 @@ def _previous_report_tier(fc: FireComplex, state: dict) -> tuple[int, str | None
     tiers = state.get("fire_complex_tiers")
     if type(tiers) is not dict:
         return -1, "nifc_tier_tracking_unavailable"
+    if NIFC_TIER_TRACKING_UNAVAILABLE in tiers:
+        return -1, "nifc_tier_tracking_unavailable"
     if fc.complex_id in tiers:
         return -1, "nifc_legacy_tier_namespace_ambiguous"
     legacy_prefix = f"fire_footprint_{fc.complex_id}_tier"
-    current_prefix = f"{key}_tier"
+    current_prefix = fc.event_id.rsplit("_tier", 1)[0] + "_tier"
     posted = state.get("posted_events")
     drafts = state.get("drafts")
     memory = state.get("memory")
@@ -361,13 +371,28 @@ def _previous_report_tier(fc: FireComplex, state: dict) -> tuple[int, str | None
             if family in (KIND, "fire_footprint") and (type(event) is not str or not event):
                 return -1, "nifc_tier_tracking_unavailable"
             event_ids.append(event)
-    if any(isinstance(event, str) and event.startswith(legacy_prefix) for event in event_ids):
-        return -1, "nifc_legacy_event_namespace_ambiguous"
+    current_tiers = []
+    for event in event_ids:
+        if not isinstance(event, str):
+            continue
+        legacy = re.fullmatch(r"fire_footprint_(.+)_tier([0-5])", event)
+        if legacy is not None:
+            if legacy[1] == fc.complex_id:
+                return -1, "nifc_legacy_event_namespace_ambiguous"
+        elif event.startswith(legacy_prefix):
+            return -1, "nifc_legacy_event_namespace_ambiguous"
+        if event.startswith(current_prefix):
+            suffix = event[len(current_prefix):]
+            if not re.fullmatch(r"[0-5]", suffix):
+                return -1, "nifc_saved_event_invalid"
+            current_tiers.append(int(suffix))
     if key not in tiers:
-        if any(isinstance(event, str) and event.startswith(current_prefix) for event in event_ids):
+        if current_tiers:
             return -1, "nifc_saved_tier_missing"
         return -1, None
     previous = tiers[key]
     if type(previous) is not int or not 0 <= previous < len(TIERS_HECTARES):
         return -1, "nifc_saved_tier_invalid"
+    if current_tiers and max(current_tiers) > previous:
+        return -1, "nifc_saved_tier_contradiction"
     return previous, None
