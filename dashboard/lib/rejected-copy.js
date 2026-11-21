@@ -20,16 +20,38 @@ function safeJson(value, budget = { nodes: 0 }, depth = 0) {
     safeJson(key, budget, depth + 1) && safeJson(child, budget, depth + 1))
 }
 
+function persistedSizeBound(value) {
+  // The producer's json.JSONEncoder uses ensure_ascii and separator spaces.
+  // JSON parsing loses Python's int/float spelling: reserve the larger finite
+  // spelling, including .0 / exponent padding. Near-limit ambiguity stays held.
+  if (typeof value === "string") return JSON.stringify(value)
+    .replace(/[\u007f-\uffff]/g, char => "\\u" + char.charCodeAt(0).toString(16).padStart(4, "0")).length
+  if (typeof value === "number") return Number.isInteger(value)
+    ? String(value).length + 2 + Number(Object.is(value, -0))
+    : Math.max(String(value).length, value.toExponential().length) + 2
+  if (value === null) return 4
+  if (typeof value === "boolean") return value ? 4 : 5
+  if (Array.isArray(value)) return 2 + value.reduce((sum, item) => sum + persistedSizeBound(item), 0)
+    + Math.max(0, value.length - 1) * 2
+  const pairs = Object.entries(value)
+  return 2 + pairs.reduce((sum, [key, item]) => sum + persistedSizeBound(key) + 2 + persistedSizeBound(item), 0)
+    + Math.max(0, pairs.length - 1) * 2
+}
+
 function negativeVerdict(packet, stage, row) {
   const v = packet.verdict
   if (!object(v) || v.passed !== false) return null
-  const reasonMatches = reason => nonempty(reason) && Array.isArray(row.reasons) && row.reasons.includes(reason)
+  const reasonMatches = reason => nonempty(reason) && Array.isArray(row.reasons) && row.reasons[0] === reason
   if (stage === "fact_check") {
     return exact(v, ["check_path", "passed", "failures", "extracted_claims", "response_diagnostic"])
       && ["local_precheck", "required_checker"].includes(v.check_path)
       && Array.isArray(v.failures) && v.failures.every(reason => typeof reason === "string")
       && reasonMatches(v.failures.join("; ") || "unknown")
-      && Array.isArray(v.extracted_claims) && typeof v.response_diagnostic === "string" ? v.failures : null
+      && Array.isArray(v.extracted_claims) && v.extracted_claims.every(claim =>
+        exact(claim, ["text", "kind"]) && typeof claim.text === "string" && typeof claim.kind === "string")
+      && typeof v.response_diagnostic === "string"
+      && /^(?:response_chars=(?:0|[1-9][0-9]*) response_sha256=[a-f0-9]{64}|response_type=[A-Za-z_][A-Za-z_0-9]{0,63})$/.test(v.response_diagnostic)
+      ? v.failures : null
   }
   if (stage === "safety") {
     return exact(v, ["check_path", "passed", "reason", "response_status", "response_diagnostic"])
@@ -68,7 +90,7 @@ export function rejectedCopyPreview(row) {
     if (!exact(p, fields) || p.status !== "retained" || ![1, 2].includes(p.attempt)
       || !Number.isInteger(p.attempt) || !nonempty(p.text)
       || Buffer.byteLength(p.text, "utf8") > 4096 || !safeJson(p)
-      || Buffer.byteLength(JSON.stringify(p), "utf8") > limit
+      || persistedSizeBound(p) > limit
       || !sha(p.text_sha256) || textHash(p.text) !== p.text_sha256
       || !object(p.bundle) || !sha(p.bundle_sha256) || fingerprint(p.bundle) !== p.bundle_sha256
       || !nonempty(row.event_id) || p.bundle.event_id !== row.event_id

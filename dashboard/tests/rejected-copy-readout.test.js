@@ -151,6 +151,78 @@ test("Unicode scalars, exact copy and caller state are preserved", () => {
   assert.deepEqual(record, before)
 })
 
+test("the terminal first reason cannot be replaced by a matching later entry", () => {
+  const valid = row(); valid.reasons.push("news_boost=+8")
+  assert.equal(rejectedCopyPreview(valid).status, "retained")
+  valid.reasons = ["different terminal reason", "redundant_event"]
+  assert.deepEqual(rejectedCopyPreview(valid), { status: "invalid" })
+})
+
+function factRow() {
+  const record = row(), p = record.rejected_candidate
+  record.stage = "fact_check"; record.reasons = ["invented failure"]
+  p.schema_version = 1; p.scope = "selected_fact_check_rejection"; delete p.stage
+  p.bundle_phase = "before_local_fact_check"
+  p.verdict = { check_path: "required_checker", passed: false, failures: ["invented failure"],
+    extracted_claims: [], response_diagnostic: "response_chars=0 response_sha256=" + "a".repeat(64) }
+  return record
+}
+test("malformed factual claims cannot become a retained preview", () => {
+  const record = factRow(); assert.equal(rejectedCopyPreview(record).status, "retained")
+  record.rejected_candidate.verdict.extracted_claims = [null]
+  assert.deepEqual(rejectedCopyPreview(record), { status: "invalid" })
+})
+test("a blank diagnostic cannot become a retained factual preview", () => {
+  const record = factRow(); record.rejected_candidate.verdict.response_diagnostic = ""
+  assert.deepEqual(rejectedCopyPreview(record), { status: "invalid" })
+})
+test("supported fact diagnostic forms and actual claim shape remain readable", () => {
+  for (const diagnostic of ["response_chars=0 response_sha256=" + "a".repeat(64), "response_type=NoneType"]) {
+    const record = factRow(); record.rejected_candidate.verdict.response_diagnostic = diagnostic
+    record.rejected_candidate.verdict.extracted_claims = [{ text: "Invented claim", kind: "temperature" }]
+    assert.equal(rejectedCopyPreview(record).status, "retained")
+  }
+  for (const claim of [null, "claim", {}, { text: "missing kind" }, { text: 7, kind: "temperature" }]) {
+    const record = factRow(); record.rejected_candidate.verdict.extracted_claims = [claim]
+    assert.deepEqual(rejectedCopyPreview(record), { status: "invalid" })
+  }
+})
+test("ASCII-escaped Unicode and Python separator spaces count toward the producer cap", () => {
+  const record = row(), p = record.rejected_candidate
+  record.stage = p.stage = "copy_gate"; p.scope = "selected_copy_gate_rejection"; p.bundle_phase = "before_copy_gate"
+  p.verdict = { check_path: "local_copy_gate", passed: false, reason: "source_led_opener", subsequent_checks: "not_run" }
+  record.reasons = ["source_led_opener"]
+  p.bundle.current_facts = [{ note: "🌧".repeat(700) }]; p.bundle_sha256 = fingerprint(p.bundle)
+  assert.ok(Buffer.byteLength(JSON.stringify(p)) < 8192, "old compact UTF-8 check accepts it")
+  assert.deepEqual(rejectedCopyPreview(record), { status: "invalid" })
+})
+
+test("actual Python copy producer agrees on retained Unicode and oversized escaped packets", () => {
+  const program = `
+import json,socket
+socket.socket=lambda *a,**k: (_ for _ in ()).throw(AssertionError("network forbidden"))
+from src.two_bot.types import StoryBundle
+from src.two_bot.rejected_candidate import capture_fact_input,capture_copy_rejection
+from src.two_bot.copy_gates import copy_rejection
+text="NWS: Invented station reached 40°C 🌧."
+def capture(count):
+ b=StoryBundle(signal_kind="invented",where="Invented",when="2026-11-21",event_id="invented-event",headline_metric={},current_facts=[{"note":"🌧"*count}])
+ reason=copy_rejection(text,b); c=capture_fact_input(b)
+ return c.payload(),reason,capture_copy_rejection(text,b,c,reason,attempt=1)
+small,reason,p=capture(1);large,_,held=capture(700)
+print(json.dumps({"small":p,"large_bundle":large,"held":held,"reason":reason}))
+`
+  const result = spawnSync(process.env.THEHEAT_TEST_PYTHON || "python3", ["-c", program], {
+    cwd: resolve(dirname(fileURLToPath(import.meta.url)), "../.."), encoding: "utf8", timeout: 30000 })
+  assert.equal(result.status, 0, result.stderr)
+  const { small, large_bundle, held, reason } = JSON.parse(result.stdout)
+  assert.equal(small.status, "retained"); assert.equal(held.status, "unavailable"); assert.equal(held.reason, "packet_too_large")
+  const record = { ...row(), stage: "copy_gate", reasons: [reason], rejected_candidate: small }
+  assert.equal(rejectedCopyPreview(record).status, "retained")
+  record.rejected_candidate.bundle = large_bundle; record.rejected_candidate.bundle_sha256 = fingerprint(large_bundle)
+  assert.deepEqual(rejectedCopyPreview(record), { status: "invalid" })
+})
+
 test("actual Python capture producers join through both GET payloads for all four stages", async () => {
   const program = `
 import json, socket

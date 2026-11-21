@@ -133,7 +133,7 @@ export function SuppressedView({ suppressions, stats, sourceFilter, setSourceFil
                   </details>
                 ) : ["invalid", "unavailable"].includes(s.rejected_copy?.status) ? (
                   <p className="supp-copy-note">Rejected draft text unavailable: {s.rejected_copy.status === "invalid"
-                    ? "the saved context does not agree with this rejection." : "complete context was not retained."}</p>
+                    ? "the saved context could not be verified for this rejection." : "complete context was not retained."}</p>
                 ) : null}
               </div>
             )
