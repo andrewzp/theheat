@@ -37,15 +37,17 @@ export const OUTCOME_TEXT = Object.freeze({
   granule_missing: "No product file published inside the bounded window.",
 })
 
+function runTime(run) { return typeof run.started_at === "string" ? run.started_at : "" }
+
 function runsOldestFirst(runHistory) {
   const runs = Array.isArray(runHistory) ? runHistory.filter(run => run && typeof run === "object") : []
-  return [...runs].sort((a, b) => String(a.started_at ?? "").localeCompare(String(b.started_at ?? "")))
+  return [...runs].sort((a, b) => runTime(a).localeCompare(runTime(b)))
 }
 
 export function sourceIncidents(runHistory, source = null) {
   const table = new Map()
   for (const run of runsOldestFirst(runHistory)) {
-    const at = String(run.started_at ?? "")
+    const at = runTime(run)
     for (const entry of Array.isArray(run.sources) ? run.sources : []) {
       if (!entry || typeof entry !== "object" || (source !== null && entry.source !== source)) continue
       const incident = entry.details?.incident
