@@ -19,9 +19,118 @@ from tests.test_ghcn_discovery_hints import Reply, Raw, TARGET, fetch_reply, kno
 
 def error_body(**change):
     value = {"errorCode": 400, "errorMessage": "Bad Request", "errors": [
-        {"field": "units", "message": "Unsupported units in invented request.", "value": "private-ignored-value"}]}
+        {"field": "units", "message": "Invalid units. Valid units are standard or metric.", "value": "private-ignored-value"}]}
     value.update(change)
     return json.dumps(value).encode()
+
+
+def chunked_reply(body, *, status=400, separator=b"\r\n", trailer=b"\r\n"):
+    wire = (f"HTTP/1.1 {status} Fixture\r\nContent-Type: application/json\r\nTransfer-Encoding: chunked\r\n\r\n".encode()
+            + f"{len(body):x}\r\n".encode() + body + separator + b"0\r\n" + trailer)
+
+    class Sock:
+        def makefile(self, *_args, **_kwargs):
+            return BytesIO(wire)
+
+    original = http.client.HTTPResponse(Sock())
+    original.begin()
+    reply = Reply(body, status)
+    reply.headers.pop("Content-Length")
+    reply.headers["Transfer-Encoding"] = "chunked"
+    reply.raw = RawHTTPResponse(body=original, headers={"Transfer-Encoding": "chunked"}, status=status,
+                                preload_content=False, decode_content=False)
+    return reply
+
+
+@pytest.mark.parametrize("status", [200, 400])
+def test_multiple_supported_chunks_keep_the_original_payload_and_response_meaning(status):
+    from tests.test_ghcn_discovery_hints import hint
+
+    body = error_body() if status == 400 else json.dumps([hint()]).encode()
+    wire = f"HTTP/1.1 {status} Fixture\r\nContent-Type: application/json\r\nTransfer-Encoding: chunked\r\n\r\n".encode()
+    for part in (body[:3], body[3:17], body[17:]):
+        wire += f"{len(part):x}\r\n".encode() + part + b"\r\n"
+    wire += b"0\r\n\r\n"
+
+    class Sock:
+        def makefile(self, *_args, **_kwargs):
+            return BytesIO(wire)
+
+    original = http.client.HTTPResponse(Sock())
+    original.begin()
+    reply = Reply(body, status)
+    reply.headers.pop("Content-Length")
+    reply.headers["Transfer-Encoding"] = "chunked"
+    reply.raw = RawHTTPResponse(body=original, headers={"Transfer-Encoding": "chunked"}, status=status,
+                                preload_content=False, decode_content=False)
+    candidates, metadata = fetch_reply(reply)
+    if status == 400:
+        assert not candidates and metadata["provider_error"]["body_sha256"] == hashlib.sha256(body).hexdigest()
+    else:
+        assert candidates == {TARGET} and metadata["response_sha256"] == hashlib.sha256(body).hexdigest()
+
+
+@pytest.mark.parametrize("message", ["PRIVATE_FIXTURE_VALUE Authorization: Bearer INVENTED_TOKEN ftp://invented.invalid/private",
+                                     "PRIVATE_FIXTURE_VALUE", "unexpected \u202ereversed"])
+def test_untrusted_message_never_retains_arbitrary_text_even_when_it_echoes_the_value(message):
+    body = error_body(errors=[{"field": "units", "message": message, "value": "PRIVATE_FIXTURE_VALUE"}])
+    _, metadata = fetch_reply(Reply(body, 400))
+    stored = json.dumps(metadata, ensure_ascii=False)
+    assert all(value not in stored for value in ["PRIVATE_FIXTURE_VALUE", "Authorization", "INVENTED_TOKEN", "ftp://", "\u202e"])
+
+
+@pytest.mark.parametrize("status", [200, 400])
+def test_bad_data_chunk_separator_refuses_both_hints_and_error_diagnostics(status):
+    from tests.test_ghcn_discovery_hints import hint
+
+    body = error_body() if status == 400 else json.dumps([hint()]).encode()
+    candidates, metadata = fetch_reply(chunked_reply(body, status=status, separator=b"XX"))
+    assert not candidates
+    if status == 400:
+        assert metadata.get("provider_error") is None
+    else:
+        assert metadata["status"] == "unavailable"
+
+
+@pytest.mark.parametrize("status", [200, 400])
+def test_present_empty_transfer_encoding_cannot_be_treated_as_absent(status):
+    from tests.test_ghcn_discovery_hints import hint
+
+    reply = Reply(error_body() if status == 400 else json.dumps([hint()]).encode(), status)
+    reply.headers["Transfer-Encoding"] = ""
+    candidates, metadata = fetch_reply(reply)
+    assert not candidates and reply.raw.tell() == 0
+    if status == 400:
+        assert metadata.get("provider_error") is None
+
+
+@pytest.mark.parametrize("when", ["headers", "first_chunk"])
+def test_cancellation_stops_the_next_optional_diagnostic_read_and_closes_once(when):
+    from src.two_bot.call_inventory import CancelToken, OperationCancelled, run_cancellable
+
+    token, reads = CancelToken("invented-diagnostic-cancellation"), []
+
+    class Chunks(Raw):
+        def read1(self, size=-1, **kwargs):
+            reads.append(token.cancelled)
+            part = super().read1(min(size, 16), **kwargs)
+            if when == "first_chunk":
+                token.cancel("cancelled_diagnostic_read")
+            return part
+
+    reply = Reply(error_body(), 400)
+    reply.raw = Chunks(error_body())
+
+    def get(*args, **kwargs):
+        if when == "headers":
+            token.cancel("cancelled_diagnostic_read")
+        return reply
+
+    with patch.object(discovery.requests, "get", get), pytest.raises(OperationCancelled, match="cancelled_diagnostic_read"):
+        run_cancellable(token, discovery.fetch_nominations, frozenset({TARGET}), known_cache(),
+                        today=date(2026, 11, 21), max_age_days=4, anomaly=8)
+    assert reads == ([] if when == "headers" else [False])
+    assert reply.closed == 1 and reply.raw.tell() == (0 if when == "headers" else 16)
 
 
 def test_complete_provider_error_keeps_only_bounded_inert_diagnostic_and_never_nominates():
@@ -32,7 +141,7 @@ def test_complete_provider_error_keeps_only_bounded_inert_diagnostic_and_never_n
     assert metadata["provider_error"] == {
         "schema_version": 1, "scope": "untrusted_provider_error_not_weather",
         "body_bytes": len(body), "body_sha256": hashlib.sha256(body).hexdigest(),
-        "fields": [{"field": "units", "message": "Unsupported units in invented request."}]}
+        "fields": [{"field": "units", "message_code": "invalid_units"}]}
     assert metadata["response_bytes"] is None and metadata["rows_received"] is None
     assert metadata["nominated_stations"] == 0 and "private-ignored-value" not in json.dumps(metadata)
 

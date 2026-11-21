@@ -108,20 +108,22 @@ function providerErrorDetail(value) {
   const object = v => v !== null && typeof v === "object" && !Array.isArray(v)
   const keys = (v, names) => object(v) && Object.keys(v).sort().join() === names.sort().join()
   const fields = ["dataset", "stations", "startDate", "endDate", "dataTypes", "bbox", "format", "units"]
+  const messages = { invalid_units: "invalid units; standard or metric expected", details_withheld: "details withheld" }
   if (!keys(value, ["schema_version", "scope", "body_bytes", "body_sha256", "fields"])
       || value.schema_version !== 1 || value.scope !== "untrusted_provider_error_not_weather"
       || !Number.isSafeInteger(value.body_bytes) || value.body_bytes < 2 || value.body_bytes > 8192
       || typeof value.body_sha256 !== "string" || !/^[a-f0-9]{64}$/.test(value.body_sha256)
       || !Array.isArray(value.fields) || value.fields.length < 1 || value.fields.length > 8
-      || value.fields.some(row => !keys(row, ["field", "message"]) || !fields.includes(row.field)
-        || typeof row.message !== "string" || [...row.message].length < 1 || [...row.message].length > 240
-        || /[\u0000-\u001f\u007f-\u009f\ud800-\udfff]/u.test(row.message)
-        || /https?:\/\/|www\./i.test(row.message))) return null
+      || value.fields.some(row => !keys(row, ["field", "message_code"]) || !fields.includes(row.field)
+        || typeof row.message_code !== "string" || !Object.hasOwn(messages, row.message_code)
+        || row.message_code === "invalid_units" && row.field !== "units")) return null
   // The digest is retained consistency evidence, not authentication or cause
   // verification. Even a valid diagnostic grants no observation or nomination.
-  const minimum = new TextEncoder().encode(JSON.stringify({ errorCode: 400, errorMessage: "x", errors: value.fields })).length
+  const errors = value.fields.map(row => ({ field: row.field,
+    message: row.message_code === "invalid_units" ? "Invalid units. Valid units are standard or metric." : "x" }))
+  const minimum = new TextEncoder().encode(JSON.stringify({ errorCode: 400, errorMessage: "x", errors })).length
   if (value.body_bytes < minimum) return null
-  return ` Untrusted provider error: ${value.fields.map(row => `${row.field}: ${row.message}`).join("; ")}.`
+  return ` Untrusted provider error: ${value.fields.map(row => `${row.field}: ${messages[row.message_code]}`).join("; ")}.`
 }
 
 function ghcnArchiveIntake(m, context) {

@@ -25,7 +25,7 @@ from tests.test_ghcn_discovery_hints import API, METADATA, Reply
 
 def produce(case="fresh", provider="ghcn"):
     assert case in {"fresh", "qc", "unavailable", "malformed", "two_nominees",
-                    "error400", "error400_unknown", "error400_unicode"}
+                    "error400", "error400_unknown", "error400_unicode", "error400_private"}
     metadata = METADATA + ([dict(METADATA[1], station_id="SFX00000003")] if case == "two_nominees" else [])
     state = deepcopy(DEFAULT_STATE)
     baseline = archive_bytes(target=None)
@@ -41,7 +41,9 @@ def produce(case="fresh", provider="ghcn"):
             return Reply(b"", 404)
         if url == API:
             if case.startswith("error400"):
-                message = "🧭" * 240 if case == "error400_unicode" else "Unsupported units in invented request."
+                message = "🧭" * 240 if case == "error400_unicode" else "Invalid units. Valid units are standard or metric."
+                if case == "error400_private":
+                    message = "PRIVATE_FIXTURE_VALUE Authorization: Bearer INVENTED_TOKEN ftp://invented.invalid/private"
                 body = json.dumps({"errorCode": 400, "errorMessage": "Bad Request", "errors": [
                     {"field": "units", "message": message, "value": "ignored-provider-value"}]}).encode()
                 return Reply(b"{" if case == "error400_unknown" else body, 400)
@@ -81,5 +83,5 @@ def produce(case="fresh", provider="ghcn"):
 
 if __name__ == "__main__":
     sys.stdout.write(json.dumps({name: produce(name) for name in ("fresh", "qc", "unavailable", "malformed", "two_nominees",
-                                                               "error400", "error400_unknown", "error400_unicode")}
+                                                               "error400", "error400_unknown", "error400_unicode", "error400_private")}
                                | {"combined": produce(provider="both_global")}, sort_keys=True) + "\n")

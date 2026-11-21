@@ -34,6 +34,8 @@ _STATION = re.compile(r"[A-Z0-9]{11}\Z")
 _NUMBER = re.compile(r"[+-]?\d{1,4}(?:\.\d{1,6})?\Z")
 ERROR_MAX_BYTES = 8192
 ERROR_FIELDS = frozenset({"dataset", "stations", "startDate", "endDate", "dataTypes", "bbox", "format", "units"})
+UNIT_ERROR_MESSAGE = "Invalid units. Valid units are standard or metric."
+UNIT_ERROR_MESSAGE = "Invalid units. Valid units are standard or metric."
 
 
 class _NoAuth(AuthBase):
@@ -78,7 +80,7 @@ def _reject_redirect(response, *args, **kwargs):
 
 
 def _chunk_termination(raw):
-    """Strict empty trailer on this response only; never mutate a global class."""
+    """Supported hex chunks, CRLF separators and empty trailer on this response only."""
     response = getattr(raw, "_fp", None)
     if not isinstance(response, http.client.HTTPResponse):
         raise ValueError("unsupported_lookup_framing")
@@ -90,6 +92,26 @@ def _chunk_termination(raw):
         owner._theheat_chunk_complete = True
 
     setattr(response, "_read_and_discard_trailer", MethodType(trailer, response))
+
+    def size(owner):
+        line = owner.fp.readline(19)
+        if not re.fullmatch(rb"[0-9a-fA-F]{1,16}\r\n", line):
+            raise ValueError("unsupported_lookup_chunk_size")
+        return int(line[:-2], 16)
+
+    previous = getattr(response, "_get_chunk_left", None)
+    if not callable(previous):
+        raise ValueError("unsupported_lookup_chunk_reader")
+
+    def next_chunk(owner):
+        if owner.chunk_left == 0:
+            if owner._safe_read(2) != b"\r\n":
+                raise ValueError("unsupported_lookup_chunk_separator")
+            owner.chunk_left = None  # the stdlib must not consume this separator twice
+        return previous()
+
+    setattr(response, "_read_next_chunk_size", MethodType(size, response))
+    setattr(response, "_get_chunk_left", MethodType(next_chunk, response))
     return response
 
 
@@ -105,13 +127,20 @@ def _provider_error(response, deadline):
     No weather parsing, parameter repair, raw-body retention or retry. The same
     cooperative/socket bounds as the ordinary lookup apply, not a hard wall SLA.
     """
+    from src.two_bot.call_inventory import current_cancel_token, OperationCancelled
+
+    def cancelled():
+        token = current_cancel_token()
+        if token is not None and token.cancelled:
+            raise OperationCancelled(str(token.reason))
+
     try:
         headers = response.headers
         if (headers.get("Content-Type", "").split(";", 1)[0].strip().lower() != "application/json"
                 or headers.get("Content-Encoding", "identity").lower() != "identity"):
             return None
         length, transfer = headers.get("Content-Length"), headers.get("Transfer-Encoding")
-        if transfer and (transfer.lower() != "chunked" or length is not None):
+        if transfer is not None and (transfer.lower() != "chunked" or length is not None):
             return None
         if length is not None and (not re.fullmatch(r"0|[1-9]\d{0,3}", length) or int(length) > ERROR_MAX_BYTES):
             return None
@@ -120,9 +149,11 @@ def _provider_error(response, deadline):
         framed = _chunk_termination(response.raw) if transfer else None
         chunks, received = [], 0
         while True:
+            cancelled()
             if time.monotonic() > deadline:
                 return None
             chunk = response.raw.read1(ERROR_MAX_BYTES + 1 - received, decode_content=False)
+            cancelled()
             if time.monotonic() > deadline:
                 return None
             if not chunk:
@@ -149,7 +180,11 @@ def _provider_error(response, deadline):
                     or type(row["field"]) is not str or row["field"] not in ERROR_FIELDS
                     or not _diagnostic_text(row["message"])):
                 return None
-            fields.append({"field": row["field"], "message": row["message"]})
+            # A provider may echo even a value/header/URL inside its message.
+            # Only a fixed public template becomes a fixed code; unknown text
+            # is withheld entirely. No arbitrary provider text reaches storage.
+            code = "invalid_units" if row["field"] == "units" and row["message"] == UNIT_ERROR_MESSAGE else "details_withheld"
+            fields.append({"field": row["field"], "message_code": code})
         return {"schema_version": 1, "scope": "untrusted_provider_error_not_weather",
                 "body_bytes": received, "body_sha256": hashlib.sha256(body).hexdigest(), "fields": fields}
     except (requests.RequestException, StreamError, http.client.HTTPException, OSError, ValueError, TypeError, AttributeError,
@@ -302,7 +337,7 @@ def fetch_nominations(eligible: frozenset[str], cached: dict[str, StationThresho
             return set(), metadata
         length = response.headers.get("Content-Length")
         transfer = response.headers.get("Transfer-Encoding")
-        if transfer and (transfer.lower() != "chunked" or length is not None):
+        if transfer is not None and (transfer.lower() != "chunked" or length is not None):
             return set(), metadata
         if length is not None and (not re.fullmatch(r"0|[1-9]\d{0,8}", length) or int(length) > MAX_BYTES):
             return set(), metadata

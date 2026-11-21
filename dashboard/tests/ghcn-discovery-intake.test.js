@@ -15,6 +15,15 @@ const metrics = s => row(s).details.pipeline_metrics ?? row(s).details.ghcn_pipe
 const project = s => buildSourceHealthPayload(s, { asOf: "2026-11-21T12:02:00Z" }).sources
   .find(v => v.source === "open_meteo_extreme_signals").outcome
 
+test("provider text and echoed values cannot survive durable storage or Sources", () => {
+  const s = fixtures.error400_private, out = project(s)
+  for (const value of [JSON.stringify(s), out.detail]) {
+    assert.doesNotMatch(value, /PRIVATE_FIXTURE_VALUE|Authorization|INVENTED_TOKEN|ftp:\/\//)
+  }
+  assert.equal(out.state, "ghcn_archive_intake_empty")
+  assert.equal(s.request_count, 32)
+})
+
 test("real400 diagnostic survives durable serialization as untrusted operator text only", () => {
   for (const name of ["error400", "error400_unicode"]) {
     const s = structuredClone(fixtures[name]), before = structuredClone(s), out = project(s)
@@ -24,7 +33,8 @@ test("real400 diagnostic survives durable serialization as untrusted operator te
     assert.match(out.detail, /0 accepted daily values/)
     assert.match(out.detail, /HTTP 400/)
     assert.match(out.detail, /Untrusted provider error/)
-    assert.match(out.detail, name === "error400" ? /Unsupported units in invented request/ : /🧭/u)
+    assert.match(out.detail, name === "error400" ? /invalid units; standard or metric expected/ : /details withheld/)
+    assert.doesNotMatch(JSON.stringify(s), /🧭/u)
     assert.doesNotMatch(out.detail, /ignored-provider-value|recovered|source healthy/)
     assert.deepEqual(s, before)
   }
@@ -44,10 +54,11 @@ test("inconsistent400 diagnostics cannot supply a numerical or trusted explanati
     h => { h.provider_error.body_bytes = 8193 },
     h => { h.provider_error.body_sha256 = "bad" },
     h => { h.provider_error.fields[0].field = "unrecognized" },
-    h => { h.provider_error.fields[0].message = "bad\ncontrol" },
-    h => { h.provider_error.fields[0].message = "\ud800" },
-    h => { h.provider_error.fields[0].message = "https://invented.invalid/" },
-    h => { h.provider_error.fields[0].message = "x".repeat(241) },
+    h => { h.provider_error.fields[0].message_code = "unknown" },
+    h => { h.provider_error.fields[0].message_code = {} },
+    h => { h.provider_error.fields[0].field = "bbox" },
+    h => { h.provider_error.fields[0].message = "PRIVATE_FIXTURE_VALUE" },
+    h => { h.provider_error.fields[0] = { field: "units", message: "PRIVATE_FIXTURE_VALUE" } },
     h => { h.provider_error.fields[0].value = "not-exported" },
     h => { h.provider_error.fields = [] },
     h => { h.provider_error.fields = Array(9).fill(h.provider_error.fields[0]) },
