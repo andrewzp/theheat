@@ -2,6 +2,7 @@
 
 - Validate the exact Gist route configuration before selecting existing writer credentials; missing route credentials never fall back to legacy names.
 - Reject incomplete serialized Gist startup before collection or paid work, while preserving normal legacy operation and authenticated deactivation.
+- Give the single observed-airport writer a source-bound compact wording reference; the returned JSON, decline option, complete citation and required checks remain unchanged.
 
 ## 0.9.109.157
 
