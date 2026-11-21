@@ -301,3 +301,26 @@ def test_separate_affirmative_comparator_after_quote_or_question_still_refuses(r
     result = pipeline.fact_check.local_rejection(_with_clause(bundle, context+' previous record 34°C in 2021'), [], bundle, deepcopy(DEFAULT_STATE))
     assert result is not None and any('previous_record_value_mismatch' in r for r in result.failures)
     assert not any('previous_record_year_mismatch' in r for r in result.failures)
+
+
+@pytest.mark.parametrize('quotes', [('“', '”'), ('"', '"'), ("'", "'")])
+@pytest.mark.parametrize('ending', ['.', '!', '?'])
+def test_direct_sentence_after_terminal_punctuation_inside_quote_is_checked(records, quotes, ending):
+    bundle = variant(records, ('high', 'all_time'))
+    opening, closing = quotes
+    context = f'The archived note read {opening}New high; previous record 38°C in 2020{ending}{closing} '
+    result = pipeline.fact_check.local_rejection(_with_clause(bundle, context+'Previous record 34°C in 2021'), [], bundle, deepcopy(DEFAULT_STATE))
+    assert result is not None and any('previous_record_value_mismatch' in r for r in result.failures)
+    assert not any('previous_record_year_mismatch' in r for r in result.failures)
+
+
+def test_quoted_terminal_punctuation_at_physical_end_still_needs_model(records):
+    from src.evaluation.historical import VerificationRequired, offline_boundaries
+
+    bundle = variant(records, ('high', 'all_time'))
+    prefix = copy_for(bundle).split('; previous record', 1)[0]
+    text = prefix+'; The archived note read “New high; previous record 38°C in 2020.”'
+    with offline_boundaries() as calls:
+        with pytest.raises(VerificationRequired):
+            pipeline.fact_check.fact_check(text, [], bundle, deepcopy(DEFAULT_STATE))
+        assert calls['checker_boundary_reached'] == 1 and calls['unexpected_boundary_attempts'] == 0

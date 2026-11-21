@@ -427,6 +427,7 @@ def _assertive_record_clauses(tweet):
              '`': '`', '(': ')', '[': ']', '{': '}'}
     quote_ends = {'"', "'", '”', '’', '»', '›', '`'}
     stack: list[str] = []
+    context_ends: list[tuple[int, int, str]] = []
     protected = [False] * len(tweet)
     for index, char in enumerate(tweet):
         protected[index] = bool(stack)
@@ -435,15 +436,24 @@ def _assertive_record_clauses(tweet):
             continue  # A word's apostrophe does not open or close a quotation.
         if stack and char == stack[-1]:
             stack.pop()
+            if not stack:
+                tail = index-1
+                while tail >= 0 and (tweet[tail].isspace() or tweet[tail] in pairs.values()):
+                    tail -= 1
+                if tail >= 0 and protected[tail] and tweet[tail] in ".!?":
+                    # A period inside a closing quote/bracket also ends its
+                    # sentence. The next ordinary sentence is outside context.
+                    context_ends.append((index+1, index+1, "."))
         elif not stack or stack[-1] not in quote_ends:
             if char in pairs:
                 stack.append(pairs[char])
                 protected[index] = True
-    boundaries = [(m.start(), m.end(), m.group()) for m in re.finditer(r"[;!?\r\n]|\.(?![0-9])", tweet)]
+    boundaries = sorted(context_ends + [(m.start(), m.end(), m.group())
+                        for m in re.finditer(r"[;!?\r\n]|\.(?![0-9])", tweet)])
     questions: list[tuple[int, int]] = []
     sentence_start = 0
     for end, following, mark in boundaries:
-        if protected[end]:
+        if end < len(tweet) and protected[end]:
             continue
         if mark == "?":
             questions.append((sentence_start, following))
