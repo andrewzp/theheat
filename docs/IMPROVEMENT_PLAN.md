@@ -2,6 +2,13 @@
 
 Living plan for closing the gap between the bot's current voice quality and the **resumption bar** (majority A-grade rate per cycle). Refined daily by the autonomous grading agent (cron `0 15 * * *`), reviewed and implemented by the human operator.
 
+> **Oct 30: 2 pending (both fresh Riyadh CAMS drafts), 0% A-rate (0/2): dust_event B-, air_quality_hazard C+.**
+> **P_close 17th cycle** (2 failing, data-only endings). **P_dust: first counter-instance** — dust_event
+> [1] states the WHO multiple (35×) unprompted; anchor alone yields B-, close is now the binding gap.
+> **P4** gains evidence (tilde/"about"/"roughly" on exact values). Minor P5 (dust-above-3,000 detail
+> stranded in trailing clause). "co-reported" is pipeline jargon, P_tier-adjacent, logged under P_tier
+> as a watch item. 0 stale drafts; no bulk-reject needed. Near-duplicate same-city/day pair logged as operational.
+>
 > **Jul 6: 0 fresh drafts — queue is an exact match to Jul 5's 15 graded drafts (same
 > `draft_id`s, scores, text); no re-grading performed, all grades stand at Jul 5's levels.**
 > No active-proposal evidence updates: P_close (16 cycles), P_tier (7 cycles/10 instances),
@@ -185,9 +192,9 @@ Living plan for closing the gap between the bot's current voice quality and the 
 |---|---|
 | Bot commit | `0.9.81.0`+ per BRIEFING.md 2026-06-28 (reganom recency window + honesty-gating, PR #347; world-half eval-gating fix, PR #345; reganom writer-voice upgrade, PR #349. Prior: 0.9.67.0, R-02 NOAA HMS independent fire witness; 30-item audit backlog complete [S-01..S-35]; source-redundancy lane R-00..R-09; bot active since 2026-06-01) |
 | Voice engine version | **two-bot + Attenborough/Economist voice + all-sources triage + evidence contract + diversity gate + automation dashboard** (Sonnet 4.6 writer prompt-cached + Gemini 2.5 Flash fact-checker [skips unknown kinds] + Gemini 2.5 Pro critic [assesses relative to available data]; all 23 sources on triage path via PR #150; evidence contract gates writer via 0.9.0.0; pending-type cap default 3 + per-type TTL sweep [fast 7d, coral/DHW 21d] via 0.9.6.0/0.9.16.0; `THEHEAT_TRIAGE_ENABLED=1` in CI; `THEHEAT_WRITER_SAMPLES=1` + `THEHEAT_CRITIC_REVISE_ENABLED=0` since 2026-07-14 (economics P0 paired flip; was 2/1 from 2026-06-13); reganom (`reanalysis_anomaly`) enabled `manual_only` since 2026-06-27 with 2-day recency + honesty-gating [PR #347]; routine beacon writes the `ROUTINE_BEACON` repo variable via `gh variable set` each cycle) |
-| Last cycle A-rate | **— (0 fresh drafts, Jul 6).** Most recent measured: **20% (1/5 fresh, Jul 5)** — eastern Siberia fire A- (4th confirmation of the permafrost-carbon fire mechanic), 1 B+, 1 B, 1 B-, 1 C+. Prior: 20% (2/10, Jul 4); 33% (1/3, Jul 3); 0% (0/3, Jul 2); 0% (0/4, Jul 1); 22% (2/9 non-stale, Jun 30); 80% Jun 29 [BAR CLEARED]. |
+| Last cycle A-rate | **0% (0/2, Oct 30)** — Riyadh dust_event B-, Riyadh air_quality_hazard C+. Prior measured: 20% (Jul 5). Earlier note: **— (0 fresh drafts, Jul 6).** Most recent measured: **20% (1/5 fresh, Jul 5)** — eastern Siberia fire A- (4th confirmation of the permafrost-carbon fire mechanic), 1 B+, 1 B, 1 B-, 1 C+. Prior: 20% (2/10, Jul 4); 33% (1/3, Jul 3); 0% (0/3, Jul 2); 0% (0/4, Jul 1); 22% (2/9 non-stale, Jun 30); 80% Jun 29 [BAR CLEARED]. |
 | Resumption bar | majority A (>50%) sustained — **cleared Jun 29 (80%, n=5); Jun 30 returned 22%; Jul 1 0% (n=4); Jul 2 0% (n=3); Jul 3 33% (n=3); Jul 4 20% (n=10); Jul 5 20% (n=5); Jul 6 no fresh drafts to measure**. |
-| Gap | **30 pp below bar** (50% − 20%, most recent measured cycle Jul 5, n=5). No fresh measurement Jul 6. Seven cycles since the Jun 29 peak have ranged 0–33% depending on signal mix. P_tier and P_close remain the two most active-capping levers, both unchanged since Jul 5 (no fresh evidence Jul 6). |
+| Gap | **50 pp below bar (Oct 30, 0%, n=2)**; prior: 30 pp below bar (50% − 20%, most recent measured cycle Jul 5, n=5). No fresh measurement Jul 6. Seven cycles since the Jun 29 peak have ranged 0–33% depending on signal mix. P_tier and P_close remain the two most active-capping levers, both unchanged since Jul 5 (no fresh evidence Jul 6). |
 | Posting | paused; operator decision pending — Jun 29 cleared bar (80%), Jun 30–Jul 5 all below, Jul 6 no fresh drafts. **Queue unchanged at 15 pending as of Jul 6** (exact match to Jul 5's graded batch) — zero new drafts entered between the Jul 5 and Jul 6 pulls. |
 | Coverage | **638 cities × 180 countries** (was 613 × 179; +25 via PR #81) |
 | Queue status | **15 pending as of Jul 6 grading, unchanged from Jul 5** (10 carry-overs from Jul 4: 2 A- [Typhoon Bavi, Loxahatchee FL], 2 B+ [Island Pond VT, Antwerpen], 6 B [Barrow, Astana, Basrah, Al Başrah al Qadīmah, Rocky Mountains CO fire, Urumqi Jul 4 reading]; 5 from Jul 5: 1 A- eastern Siberia fire, 1 B+ Johannesburg air_quality_hazard, 1 B Doha absolute_extreme, 1 B- Urumqi Jul 5 reading, 1 C+ Phalodi dust_event). **2 of the 15 ([4] Basrah, [6] Al Başrah al Qadīmah) are now strict staleness bulk-reject candidates** (>48h old, forecast date July 4 elapsed) — flagged for operator, write unavailable this session. Bot at 0.9.81.0+ (no newer BRIEFING.md handoff confirmed this cycle); reganom enabled post-PR #347 with writer-voice upgrade (PR #349); `THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live. |
@@ -404,6 +411,8 @@ bottleneck — named mechanics and category-specific convergence are.**
 
 ### P_close — Mechanism close defaults to implied consequence rather than declarative statement
 
+**Oct 30 update:** 17th cycle. Both Riyadh drafts (dust_event B-, air_quality_hazard C+) end on a metric with no mechanism or consequence. Last seen Oct 30.
+
 **Observed:** 2026-06-07 — Barrow, Alaska precipitation_extreme, B+: "sheets across the
 surface instead" — consequence implied by contrast ("instead"), not named. 2026-06-10 —
 Chesnee, South Carolina monthly_low, B+ (status=approved): "threaten gardens well into
@@ -585,7 +594,7 @@ structure ("[City]: model-estimated dust daily maximum of X µg/m³ on [date] �
 depth at Y.") and AOD-only metric. Jun 24's Al Aḥmadī Kuwait (air_quality_hazard) stated the
 WHO multiple (10.1×) — confirming the gap is specific to the dust_event signal type, not the
 PM signal path generally.
-**Last seen:** Jun 28. Taiz [3] C+ ("model-estimated dust daily maximum of 728 μg/m³ on June 27 —
+**Last seen:** Oct 30 (counter-instance: Riyadh dust_event states 35× WHO, B- — anchor present, close missing; fix partly achievable). Prior last-seen Jun 28. Taiz [3] C+ ("model-estimated dust daily maximum of 728 μg/m³ on June 27 —
 aerosol optical depth at 0.77. Taiz sits at the southwest corner of the Arabian Peninsula where the
 summer monsoon low pulls Red Sea and Arabian dust inland through the Tihama coastal plain" —
 mechanism-only close, no WHO anchor, 728 ≈ 16× WHO PM10 limit unstated). Urumqi "traps it"
