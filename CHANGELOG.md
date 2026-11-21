@@ -1,3 +1,7 @@
+## 0.9.109.148
+
+- Log bounded status, media, destination-group and redirect labels from the existing IMERG datapool response without printing URLs or response bodies. Preserve request, content, error and fallback behavior.
+
 ## 0.9.109.147
 
 - Show reported count changes between the latest two comparable saved API observations of one published post. Preserve missing counts, decreases and ambiguous timing; keep single samples separate from a zero baseline.
