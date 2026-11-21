@@ -17,12 +17,40 @@ SHAPE = (1, 3600, 1800)
 
 
 def _attribute(value):
-    if isinstance(value, bytes):
+    """One bounded ASCII string, including explicit HDF5 scalar arrays.
+
+    Do not stringify objects or join multi-valued attributes. NumPy's fixed
+    string scalar extraction removes its storage padding; embedded NUL remains
+    invalid. Unit/calendar interpretation belongs to the exact callers below.
+    """
+    import numpy as np
+
+    if type(value) is np.ndarray:
+        if value.shape not in {(), (1,)}:
+            return None
+        if value.dtype.kind == "S":
+            if value.dtype.itemsize > 128:
+                return None
+        elif value.dtype.kind == "O":
+            import h5py
+
+            if h5py.check_string_dtype(value.dtype) is None:
+                return None
+        else:
+            return None
+        value = value.item()
+    if type(value) in (np.bytes_, np.str_):
+        value = value.item()
+    if type(value) is bytes:
+        if len(value) > 128:
+            return None
         try:
-            return value.decode("ascii")
+            value = value.decode("ascii")
         except UnicodeDecodeError:
             return None
-    return value if isinstance(value, str) else None
+    if type(value) is str and 0 < len(value) <= 128 and all(" " <= char <= "~" for char in value):
+        return value
+    return None
 
 
 def _dataset(handle, path, shape, *, integer=False):

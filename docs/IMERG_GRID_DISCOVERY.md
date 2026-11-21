@@ -22,6 +22,14 @@ mm/day, with a completed-day end no older than 36 hours. The range is an editori
 filter, not a record, physical ceiling or independent measurement. Exclusions are
 counted separately; missing or unexamined cells are never treated as zero.
 
+Text metadata may be a plain scalar or a single HDF5 string stored in a scalar
+or one-element array. The collector decodes a bounded ASCII value and then applies
+the same exact unit, coordinate and calendar checks. Multi-valued, untyped object,
+oversized or malformed attributes are refused. Fixed string storage is limited
+to 128 bytes; its HDF5/NumPy trailing padding is removed by scalar extraction,
+while embedded control characters remain invalid. No unit conversion, missing
+metadata default or changed interpretation of hourly rates is introduced.
+
 At most three reports share the existing city-report slate. Only one routine
 writer candidate and one sample can be paid for, and a paid failure receives no
 refill. A report states one cell's satellite estimate of daily water-equivalent
