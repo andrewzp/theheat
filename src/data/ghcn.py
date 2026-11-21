@@ -815,7 +815,7 @@ def check_extreme_signals_for_stations(
     """
     if metrics_out is not None:
         for field in ("diff_fetch", "diff_intake", "diff_dates_attempted", "diff_dates_fetched",
-                      "diff_dates_missing", "diff_missing_dates", "diff_fetch_failed"):
+                      "diff_dates_missing", "diff_missing_dates", "diff_fetch_failed", "station_archive_intake"):
             metrics_out.pop(field, None)
     resolved_db = Path(db_path) if db_path else _db_path()
 
@@ -852,6 +852,7 @@ def check_extreme_signals_for_stations(
     points = tracked_points(state)
     revisions: list = []
     fetch_metrics: dict = {}
+    archive_observations = False
     if _fetch_obs_fn is None:
         try:
             latest_obs = _fetch_recent_obs(
@@ -860,11 +861,21 @@ def check_extreme_signals_for_stations(
                 **({"lookback_days": _runtime.lookback, "max_obs_age_days": _runtime.max_age, "_runtime": _runtime}
                    if _runtime is not None else {}),
             )
-        except RuntimeError:
+        except RuntimeError as exc:
             fetch_metrics["diff_fetch_failed"] = 1
             if not points:
                 raise
             latest_obs = {}
+            # Only the original complete no-payload outcome may reuse bytes
+            # already selected for revision review. Never hide a parse failure,
+            # partial diff intake, injected reader or an unexpected exception.
+            attempted = fetch_metrics.get("diff_dates_attempted")
+            archive_observations = (
+                str(exc) == "GHCN: no diff files available from NOAA"
+                and type(attempted) is int and attempted > 0
+                and fetch_metrics.get("diff_dates_fetched") == 0
+                and fetch_metrics.get("diff_dates_missing") == attempted
+            )
         finally:
             # Passive diagnostics survive the original exception path too.
             # This does not turn a failed source or parsed body into an input.
@@ -933,6 +944,11 @@ def check_extreme_signals_for_stations(
                 retrieved_at=now, details={"coverage": "station_archive_not_verified_this_run",
                                           "historical_correctness": "not_determined"},
             ))
+    if archive_observations:
+        latest_obs, metrics["station_archive_intake"] = _verified_archive_observations(
+            snapshots, active_ids, now=now,
+            max_age_days=_runtime.max_age if _runtime is not None else MAX_OBS_AGE_DAYS,
+        )
     if not latest_obs and not tracked_stations:
         if metrics_out is not None:
             metrics_out.update(metrics | {"stations_active": len(stations)})
@@ -1001,6 +1017,45 @@ def check_extreme_signals_for_stations(
         })
 
     return signal_bundles, country_records
+
+
+def _verified_archive_observations(snapshots, active_ids, *, now, max_age_days):
+    """Reuse this invocation's verified tracked archives; no new source reads.
+
+    A failed diff remains failed. These are only the already-selected station
+    samples, not a replacement global scan, historical freshness or source SLA.
+    The normal downstream comparator, evidence and publishing gates still apply.
+    """
+    today = date.fromisoformat(now[:10])
+    cutoff = today - timedelta(days=max_age_days)
+    counts = dict.fromkeys(("temperature_rows", "inactive_station_rows", "too_old_rows", "future_rows",
+                            "unusable_rows", "accepted_values", "station_days", "stations_with_obs"), 0)
+    observations: dict[tuple[str, date], list[DailyObs]] = {}
+    for sid, snapshot in sorted(snapshots.items()):
+        for (day, _element), row in sorted(snapshot["records"].items()):
+            counts["temperature_rows"] += 1
+            if sid not in active_ids:
+                counts["inactive_station_rows"] += 1
+            elif day < cutoff:
+                counts["too_old_rows"] += 1
+            elif day > today:
+                counts["future_rows"] += 1
+            elif (obs := row.to_daily_obs()) is None:
+                counts["unusable_rows"] += 1
+            else:
+                observations.setdefault((sid, day), []).append(replace(
+                    obs, retrieved_at=snapshot["retrieved_at"], source_revision=snapshot["source_revision"],
+                ))
+                counts["accepted_values"] += 1
+    for values in observations.values():
+        values.sort(key=lambda obs: 0 if obs.element == "TMAX" else 1)
+    counts["station_days"] = len(observations)
+    counts["stations_with_obs"] = len({sid for sid, _ in observations})
+    return observations, {
+        "schema_version": 1, "scope": "already_verified_tracked_archives", "trigger": "no_diff_payload",
+        "window_day": today.isoformat(), "cutoff_day": cutoff.isoformat(), "retrieved_at": now,
+        "verified_archives": len(snapshots), "active_archives": len(active_ids & snapshots.keys()), "counts": counts,
+    }
 
 
 def _select_archive_stations(
