@@ -11,6 +11,111 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-10-21 — Daily corpus grading (15 drafts, all fresh to the corpus)
+
+**Context:** Gist read via git-clone path (success). 15 pending drafts, created Oct 7–17 —
+**none previously graded** (last corpus section was Jul 6; no grading cycles are recorded for
+Jul 7 → Oct 20, so this is a ~3.5-month gap, not a one-day carry-over). Queue is **4–14 days
+old**: every draft is past the 48h staleness line. Note the Sep 29 evaluation boundary in
+`QUALITY_TREND.md`: grades here are historical editorial observations only, not authorization to
+resume posting.
+
+**Grade distribution:** 0 A, 2 B-range, 10 C-range, 3 D-range. **A-rate: 0/15 = 0%** (bar 50%).
+
+**Headline finding:** a data-delivery queue with almost no voice in it. Dust/air-quality (6) and
+cyclone (5) drafts read as press-release paraphrase: number, WHO multiple or NHC threshold,
+provenance tail. Three failure modes dominate: (1) **internal threshold language leaks** (P_tier —
+"very-high-intensity", "NHC rapid intensification threshold" ×3, "top tier of VIIRS detections");
+(2) **provenance/model-caveat tails** closing the tweet ("Source: CAMS global model via
+Open-Meteo", "No station data to verify; model forecast only", "These are model estimates, not
+station readings") — five drafts spend the closer slot on a disclaimer; (3) **same-event
+duplicates** — Hurricane Isaias ×3, Klang/Shah Alam (identical 152 µg/m³ forecast, adjacent
+cities), Guam ×2 verbatim.
+
+### B range (2)
+
+#### [9] Eastern Mongolian steppe fire — **B-**
+
+> Eastern Mongolian steppe, Oct 9: NASA FIRMS (Terra/MODIS, 100% confidence) detected three thermal
+> anomalies within about 10 km of each other — 600.5, 568.6 and 543.6 MW of fire radiative power —
+> all at 01:13 UTC.
+
+Location-first opener, ecosystem named ("steppe"), exact figures, comic-triple-shaped list of
+three numbers. Pure data delivery (valid). Docked: no mechanism/season context, and three
+hotspots within 10 km are one fire counted three times; "all at 01:13 UTC" is a flat closer.
+
+#### [11] Isaias RI, Cat 1 → Cat 3 — **B-**
+
+> Hurricane Isaias jumped from Category 1 to Category 3 in 24 hours in the Gulf — winds rising 30 kt
+> to 105 kt, exactly the NHC rapid-intensification threshold.
+
+"Exactly the threshold" is a real deadpan beat — precision as understatement. Best of the
+Isaias three. Still leaks the threshold name (P_tier) and ends with a bare URL.
+
+### C range (10)
+
+- **[4] Riyadh dust forecast — C+.** "2,347 µg/m³ … about 10.7× the WHO 24-hour guideline." Big,
+  clean number; no anchor (P_dust); closer is a disclaimer ("model estimates, not station
+  measurements").
+- **[7] Kano PM2.5 — C+.** 230 µg/m³, ~15× WHO (arithmetic holds). Dust-above-300 second beat is
+  good compound data; no season (harmattan) or comparison anchor.
+- **[5] Isaias RI #1 — C+.** "surpassing the NHC rapid intensification threshold of 30 kt";
+  advisory number + coordinates + URL. Threshold leak.
+- **[12] Simon RI — C.** "meeting the NHC threshold … (NHC advisory 009a)". Same template as [5]/[11].
+- **[10] Isaias tier crossing — C.** "as of NHC Advisory 012a — up from Category 2 within the same
+  advisory cycle." Bureaucratic; "advisory cycle" is process language, not world.
+- **[2] Quetta dust — C.** 523 µg/m³ dust vs PM10 mean 173 (nearly 4×; math holds) — two figures
+  compete; closer is "Source: CAMS global model via Open-Meteo".
+- **[3] Arequipa dust — C.** Same template as [2], parenthetical "(CAMS global model, 45 km
+  resolution)" as closer. 527 vs 121 µg/m³ (2.7×).
+- **[6] Shah Alam PM2.5 — C.** ~152 µg/m³, ~10× WHO; "No station data to verify; model forecast
+  only." closer.
+- **[8] Klang PM2.5 — C-.** Near-duplicate of [6] (same 152 µg/m³, 10×, adjacent city, same model
+  cell) — would post the same event twice; same disclaimer closer.
+- **[13] Cerrado fire — C-.** "a thermal signal intense enough to register in the top tier of
+  VIIRS detections" — verbatim tier leak. Second-hotspot "200 km north … three minutes later" is a
+  non-sequitur compound.
+
+### D range (3)
+
+- **[1] Papua New Guinea fire — D+.** "a thermal anomaly detected by NASA FIRMS/MODIS … is
+  radiating 1,026 MW — very-high-intensity, satellite-confirmed at 94% confidence." Banned
+  `is radiating N MW` opener returned, plus "very-high-intensity" tier leak. Likely evaded the
+  opener regex because of the comma-formatted number (`1,026` vs `\d+`) — verify (P_regex_comma).
+- **[14] Guam / Typhoon Champi — D.** "Guam's preparation window is closing: life-threatening winds
+  could arrive tonight as Typhoon Champi approaches, the NWS warns." Alarm register (panic, urgency
+  imperative), no data, wire paraphrase, and "tonight" baked in 5 days ago.
+- **[15] Guam / Typhoon Champi duplicate — D.** Verbatim repeat of [14], created ~8h later, no
+  score, different timestamp format (`+00:00` vs `Z`) — suggests a different ingestion path.
+
+### Patterns named
+
+1. **Threshold-name leak (P_tier):** fire [1], [13]; cyclone [5], [11], [12] — 5 drafts, 2 signal
+   types. Cyclone RI is a new signal type for P_tier.
+2. **Provenance/caveat closer:** [2], [3], [4], [6], [8] — a disclaimer occupies the
+   punchline slot. (New proposal P_provenance.)
+3. **Dust/AQ without anchor (P_dust):** [2], [3], [4], [6], [7], [8] — WHO multiple only; no
+   place-specific comparison, season or source named.
+4. **Cyclone bureaucracy + alarm:** advisory numbers, thresholds, NWS paraphrase, urgency register.
+   (New proposal P_cyclone_register.)
+5. **Same-event duplicates:** Isaias ×3, Klang/Shah Alam, Guam ×2.
+6. **No A-graded mechanic anywhere;** no era anchors, plant comparisons, or political anchors seen.
+
+### Followups
+
+1. Operator: bulk-reject the whole queue — every draft is >96h old; storm/forecast language is
+   dead. Gist write blocked (HTTP 403 from proxy) — see Rejection events.
+2. Operator: grading routine appears to have not run Jul 7 → Oct 20 (no corpus entries); verify
+   the schedule/branch (`daily-plan-current` no longer exists on origin).
+3. Operator: verify whether `1,026 MW` evades the opener regex.
+
+### Numbers
+
+- Pending: 15; fresh graded: 15; A-rate **0%**; gap to bar **50 pp**
+- Distribution: 0 A / 2 B / 10 C / 3 D-F
+
+---
+
 ## 2026-07-06 — Daily corpus grading (0 fresh drafts; 15 carry-overs from Jul 5, previously graded)
 
 **Context:** Gist read via git-clone path (success; no rate limit). Queue: 15 pending drafts —
