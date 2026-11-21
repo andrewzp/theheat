@@ -268,3 +268,36 @@ def test_an_older_record_is_not_misbound_to_the_immediately_preceding_one(record
         with pytest.raises(VerificationRequired):
             pipeline.fact_check.fact_check(_with_clause(bundle, 'an old record 38°C in 2020'), [], bundle, deepcopy(DEFAULT_STATE))
         assert calls['checker_boundary_reached'] == 1 and calls['unexpected_boundary_attempts'] == 0
+
+
+@pytest.mark.parametrize('clause', [
+    'The archived bulletin read “New high; previous record 38°C in 2020.”',
+    'The archived bulletin read "New high; previous record 38°C in 2020."',
+    "The archived bulletin read 'New high; previous record 38°C in 2020.'",
+    'Previous record 38°C in 2020?',
+    'Previous record 38°C in 2020; was that correct?',
+    'Previous record 38°C in 2020; or was it 39°C?',
+    'The archived note (New high; previous record 38°C in 2020.)',
+    'The archived note [New high; previous record 38°C in 2020.]',
+    'The archived note (nested [New high; previous record 38°C in 2020.])',
+])
+def test_quoted_or_question_context_survives_clause_boundaries(records, clause):
+    from src.evaluation.historical import VerificationRequired, offline_boundaries
+
+    bundle = variant(records, ('high', 'all_time'))
+    with offline_boundaries() as calls:
+        with pytest.raises(VerificationRequired):
+            pipeline.fact_check.fact_check(_with_clause(bundle, clause), [], bundle, deepcopy(DEFAULT_STATE))
+        assert calls['checker_boundary_reached'] == 1 and calls['unexpected_boundary_attempts'] == 0
+
+
+@pytest.mark.parametrize('context', [
+    'Archived text “New high; previous record 38°C in 2020.”;',
+    'Archived text "New high; previous record 38°C in 2020.";',
+    'Previous record 38°C in 2020?',
+])
+def test_separate_affirmative_comparator_after_quote_or_question_still_refuses(records, context):
+    bundle = variant(records, ('high', 'all_time'))
+    result = pipeline.fact_check.local_rejection(_with_clause(bundle, context+' previous record 34°C in 2021'), [], bundle, deepcopy(DEFAULT_STATE))
+    assert result is not None and any('previous_record_value_mismatch' in r for r in result.failures)
+    assert not any('previous_record_year_mismatch' in r for r in result.failures)

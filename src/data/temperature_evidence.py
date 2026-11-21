@@ -421,6 +421,42 @@ def temperature_claim_failures(tweet: str, bundle) -> list[str]:
     return failures
 
 
+def _assertive_record_clauses(tweet):
+    """Keep quoted/bracketed context and question termination across separators."""
+    pairs = {'"': '"', "'": "'", '“': '”', '‘': '’', '«': '»', '‹': '›',
+             '`': '`', '(': ')', '[': ']', '{': '}'}
+    quote_ends = {'"', "'", '”', '’', '»', '›', '`'}
+    stack: list[str] = []
+    protected = [False] * len(tweet)
+    for index, char in enumerate(tweet):
+        protected[index] = bool(stack)
+        if (char in "'’" and 0 < index < len(tweet)-1
+            and tweet[index-1].isalnum() and tweet[index+1].isalnum()):
+            continue  # A word's apostrophe does not open or close a quotation.
+        if stack and char == stack[-1]:
+            stack.pop()
+        elif not stack or stack[-1] not in quote_ends:
+            if char in pairs:
+                stack.append(pairs[char])
+                protected[index] = True
+    boundaries = [(m.start(), m.end(), m.group()) for m in re.finditer(r"[;!?\r\n]|\.(?![0-9])", tweet)]
+    questions: list[tuple[int, int]] = []
+    sentence_start = 0
+    for end, following, mark in boundaries:
+        if protected[end]:
+            continue
+        if mark == "?":
+            questions.append((sentence_start, following))
+            sentence_start = following
+        elif mark in {".", "!", "\r", "\n"}:
+            sentence_start = following
+    start = 0
+    for end, following, _mark in [*boundaries, (len(tweet), len(tweet), "")]:
+        if not any(protected[start:end]) and not any(a < end and start < b for a, b in questions):
+            yield tweet[start:end]
+        start = following
+
+
 def _ghcn_previous_record_failures(tweet, bundle):
     """Reject explicit prior-record contradictions, never grant verification.
 
@@ -442,7 +478,7 @@ def _ghcn_previous_record_failures(tweet, bundle):
         or evidence.get("evidence_type") != "observed"):
         return []
     assertions = []
-    for clause in re.split(r"[;!?\r\n]|\.(?![0-9])", tweet):
+    for clause in _assertive_record_clauses(tweet):
         anchor = _PRIOR_RECORD.match(clause)
         if anchor is None:
             continue
