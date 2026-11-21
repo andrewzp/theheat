@@ -88,8 +88,8 @@ def _text_attribute(dataset, name):
                 if any(raw[terminator:]):
                     return None
                 raw = raw[:terminator]
-            elif padding == h5py.h5t.STR_NULLTERM:
-                return None
+            # NetCDF writes valid NULLTERM strings at their exact width,
+            # without storing an extra NUL. All declared bytes are text then.
         return _attribute(raw)
 
 

@@ -31,6 +31,9 @@ to 128 bytes. Only the declared trailing NUL or space padding is removed; opaque
 data and non-padding bytes after a NUL terminator are refused. Embedded control
 characters remain invalid. No unit conversion, missing
 metadata default or changed interpretation of hourly rates is introduced.
+Native NetCDF fixed strings can fill their entire declared width without a
+stored NUL; these remain supported. If a NUL is present, non-padding bytes after
+it still invalidate the attribute.
 
 At most three reports share the existing city-report slate. Only one routine
 writer candidate and one sample can be paid for, and a paid failure receives no

@@ -183,8 +183,8 @@ def stored_attribute_frame(case, field, shape, *, padding=None):
         elif case == "wide":
             node.attrs.create(key, np.array(value if shape == () else [value], dtype="S129"))
         else:
-            width = len(value) + 8
-            data = value + (b"\x00hour" if case == "suffix" else b" ")
+            width = len(value) if case == "full_width" else len(value) + 8
+            data = value if case == "full_width" else value + (b"\x00hour" if case == "suffix" else b" ")
             type_id = h5py.h5t.C_S1.copy()
             type_id.set_size(width)
             type_id.set_strpad(h5py.h5t.STR_NULLTERM if padding is None else padding)
@@ -215,5 +215,12 @@ def test_original_storage_type_width_and_hidden_suffix_refuse(case, shape, field
 @pytest.mark.parametrize("padding", [h5py.h5t.STR_NULLTERM, h5py.h5t.STR_NULLPAD, h5py.h5t.STR_SPACEPAD])
 def test_declared_padding_is_decoded_without_dropping_nonpadding_bytes(shape, padding):
     raw = stored_attribute_frame("positive", ("precipitation", "units"), shape, padding=padding)
+    result = scanned(raw)
+    assert result["status"] == "qualified" and result["rows"][0]["mm_per_day"] == 190.5
+
+
+@pytest.mark.parametrize("shape", [(), (1,)])
+def test_full_width_nullterm_string_matches_native_netcdf_without_a_stored_zero(shape):
+    raw = stored_attribute_frame("full_width", ("precipitation", "units"), shape)
     result = scanned(raw)
     assert result["status"] == "qualified" and result["rows"][0]["mm_per_day"] == 190.5
