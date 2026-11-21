@@ -75,6 +75,10 @@ def can_draft_candidate(bot_state: BotState, candidate) -> tuple[bool, str]:
     if event_id and _state.is_duplicate(bot_state, event_id):
         return False, "duplicate_posted"
 
+    from src.editorial.format_spacing import candidate_format_hold
+    if spacing := candidate_format_hold(bot_state, candidate, now=_utc_now()):
+        return False, spacing
+
     city = getattr(candidate, "city", "") or ""
     tweet_date = getattr(candidate, "tweet_date", "") or ""
     score = getattr(candidate, "score", None)

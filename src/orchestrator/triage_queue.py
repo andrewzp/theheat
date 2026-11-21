@@ -791,6 +791,12 @@ def _refill_drain(
             _pre_writer_kill(candidate, "negative_cache", f"pre-writer: {negcache_reason}")
             continue
 
+        # A publication can become visible after ranking/other preflight work.
+        # Check loaded receipt state at the reservation boundary as well.
+        from src.editorial.format_spacing import candidate_format_hold
+        if spacing := candidate_format_hold(bot_state, candidate, now=_utc_now()):
+            _pre_writer_kill(candidate, "editorial_spacing", f"pre-writer: {spacing}")
+            continue
         # Reserve before the paid boundary; a rejected attempt keeps its slot.
         if not budget.reserve(budget_key):
             _budget_cut(candidate)
@@ -1131,30 +1137,38 @@ def _drain_and_write_triage_queue(
             # Classify the whole pool before recording any disposition. A broken
             # policy lookup cannot partially select or fall back to paid writing.
             classified = []
+            from src.editorial.format_spacing import candidate_format_hold
             for candidate in queue:
                 possible = _automatic_type_may_arm(candidate.legacy_type, candidate.score.total)
-                classified.append((candidate, possible, _automatic_source_hold(candidate) if possible else None))
+                source_hold = _automatic_source_hold(candidate) if possible else None
+                spacing = candidate_format_hold(bot_state, candidate, now=_utc_now()) if possible and source_hold is None else None
+                classified.append((candidate, possible, source_hold, spacing))
         except Exception:  # noqa: BLE001 — fail closed without leaking private diagnostics
             return _hold_operation(bot_state, current_run, funnel_sink, queue, budget,
                                    note="automatic_policy_unavailable", error="automatic_policy_unavailable")
         ready = []
         held_types: Counter[str] = Counter()
         source_holds: Counter[str] = Counter()
-        for candidate, possible, source_hold in classified:
-            if possible and source_hold is None:
+        editorial_holds: Counter[str] = Counter()
+        for candidate, possible, source_hold, spacing in classified:
+            if possible and source_hold is None and spacing is None:
                 ready.append(candidate)
                 continue
-            if source_hold is None:
+            if spacing is not None:
+                editorial_holds[spacing] += 1
+            elif source_hold is None:
                 held_types[candidate.legacy_type] += 1
             else:
                 source_holds[source_hold] += 1
             stage = "automatic_policy"
-            if source_hold:
+            if spacing:
+                stage = "editorial_spacing"
+            elif source_hold:
                 stage = ("air_quality_source" if source_hold.startswith("air_quality_") else
                          "autoship_source" if source_hold.startswith("autoship_") else
                          "awc_source" if source_hold.startswith("awc_") else
                          "coastal_source" if source_hold.startswith("coastal_") else "nws_source")
-            reason = source_hold or "type_has_no_automatic_arming_route"
+            reason = spacing or source_hold or "type_has_no_automatic_arming_route"
             _bump_source_field_in_run(current_run, candidate.source, "triaged_out")
             _record_downstream_suppression(
                 bot_state=bot_state, source=candidate.source,
@@ -1170,13 +1184,18 @@ def _drain_and_write_triage_queue(
         # Workflow diagnostic, not a second source observation/promotion. Keep
         # counts in details so funnel/coverage denominators are not duplicated.
         details = {"policy_only": True, "candidate_count": len(queue),
-                   "potential_type_count": sum(possible for _, possible, _ in classified),
+                   "potential_type_count": sum(possible for _, possible, _, _ in classified),
                    "held_manual_types": sum(held_types.values()), "held_types": dict(sorted(held_types.items()))}
         note = f"automatic type preflight: {len(ready)} potential; {sum(held_types.values())} held; required checks still apply"
         if source_holds:
-            details.update(policy_only=False, source_ready_count=len(ready),
+            details.update(policy_only=False,
+                           source_ready_count=sum(possible and hold is None for _, possible, hold, _ in classified),
                            held_source_candidates=sum(source_holds.values()), source_holds=dict(sorted(source_holds.items())))
             note = f"automatic preflight: {len(ready)} potential; {sum(held_types.values())} type holds; {sum(source_holds.values())} source holds; required checks still apply"
+        if editorial_holds:
+            details.update(held_editorial_candidates=sum(editorial_holds.values()),
+                           editorial_holds=dict(sorted(editorial_holds.items())))
+            note += f"; {sum(editorial_holds.values())} editorial spacing holds"
         _record_source_run(
             current_run, bot_state, "automatic_selection", time.perf_counter(),
             status="success" if ready else "degraded", note=note, details=details,
@@ -1363,6 +1382,10 @@ def _drain_and_write_triage_queue(
             _legacy_pre_writer_row(
                 candidate, "duplicate_draft", "pre-writer: event already handled this operation"
             )
+            continue
+        from src.editorial.format_spacing import candidate_format_hold
+        if spacing := candidate_format_hold(bot_state, candidate, now=_utc_now()):
+            _legacy_pre_writer_row(candidate, "editorial_spacing", f"pre-writer: {spacing}")
             continue
         # Reserve before the paid boundary; a rejected attempt keeps its slot.
         if not budget.reserve(budget_key):
