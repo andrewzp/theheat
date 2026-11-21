@@ -1,10 +1,14 @@
 """Tests for fire footprint (NIFC WFIGS) data."""
 
+from copy import deepcopy
 from datetime import UTC, date, datetime, time, timedelta
+import json
 from unittest.mock import patch
 
+import requests
 import responses
 
+from src.state import DEFAULT_STATE
 from src.data.fire_footprint import (
     FireComplex,
     TIERS_HECTARES,
@@ -12,6 +16,7 @@ from src.data.fire_footprint import (
     detect_tier_crossings,
     fetch_active_fire_perimeters,
     GWIS_URL,
+    report_tracking_key,
 )
 
 FRESH_MS = int(
@@ -119,7 +124,7 @@ class TestFetchActiveFirePerimeters:
         responses.add(responses.GET, GWIS_URL, json=SAMPLE_PAYLOAD, status=200)
         complexes = fetch_active_fire_perimeters()
         dixie = next(c for c in complexes if c.complex_id == "2026-CACND-000123")
-        assert dixie.event_id == "fire_footprint_2026-CACND-000123_tier2"
+        assert dixie.event_id == report_tracking_key(dixie) + "_tier2"
 
     @responses.activate
     def test_http_error_returns_empty(self):
@@ -284,21 +289,29 @@ class TestFireComplexDataclass:
 
 def _mk_complex(complex_id: str, hectares: float, name: str | None = None) -> FireComplex:
     tier = _classify_tier(hectares)
-    return FireComplex(
-        complex_id=complex_id,
-        name=name,
-        country="US",
-        region="California",
-        hectares=hectares,
-        start_date=None,
-        tier=tier,
-        event_id=f"fire_footprint_{complex_id}_tier{tier}",
-    )
+    if tier < 0:
+        return FireComplex(complex_id, name, "US", "CA", hectares, None, tier, "invented-below-floor")
+    response = requests.Response()
+    response.status_code, response.url = 200, GWIS_URL
+    response._content = json.dumps({"features": [{"attributes": {
+        "UniqueFireIdentifier": complex_id, "IncidentName": name, "POOState": "US-CA",
+        "IncidentSize": hectares * 2.47105, "IsCpxChild": 0,
+        "IncidentTypeCategory": "WF", "ActiveFireCandidate": 1, "ModifiedOnDateTime_dt": FRESH_MS,
+    }}]}).encode()
+    with patch("src.data.fire_footprint.fetch_with_retry", return_value=response):
+        fc, = fetch_active_fire_perimeters(strict=True)
+    return fc
+
+
+def _tier_state(values):
+    state = deepcopy(DEFAULT_STATE)
+    state["fire_complex_tiers"] = {report_tracking_key(_mk_complex(key, 60000)): tier for key, tier in values.items()}
+    return state
 
 
 class TestDetectTierCrossings:
     def test_new_complex_above_floor_emits(self):
-        state = {"fire_complex_tiers": {}}
+        state = _tier_state({})
         complexes = [_mk_complex("A", 60_000)]  # tier 1
 
         crossings = detect_tier_crossings(complexes, state)
@@ -308,7 +321,7 @@ class TestDetectTierCrossings:
         assert crossings[0].tier == 1
 
     def test_new_complex_below_floor_suppressed(self):
-        state = {"fire_complex_tiers": {}}
+        state = _tier_state({})
         complexes = [_mk_complex("A", 15_000)]  # below tier 0
 
         crossings = detect_tier_crossings(complexes, state)
@@ -316,7 +329,7 @@ class TestDetectTierCrossings:
         assert crossings == []
 
     def test_same_tier_second_run_suppressed(self):
-        state = {"fire_complex_tiers": {"A": 1}}
+        state = _tier_state({"A": 1})
         complexes = [_mk_complex("A", 70_000)]  # still tier 1
 
         crossings = detect_tier_crossings(complexes, state)
@@ -324,7 +337,7 @@ class TestDetectTierCrossings:
         assert crossings == []
 
     def test_tier_upgrade_emits(self):
-        state = {"fire_complex_tiers": {"A": 1}}
+        state = _tier_state({"A": 1})
         complexes = [_mk_complex("A", 150_000)]  # now tier 2
 
         crossings = detect_tier_crossings(complexes, state)
@@ -333,7 +346,7 @@ class TestDetectTierCrossings:
         assert crossings[0].tier == 2
 
     def test_shrink_is_not_a_crossing(self):
-        state = {"fire_complex_tiers": {"A": 3}}
+        state = _tier_state({"A": 3})
         complexes = [_mk_complex("A", 60_000)]  # shrunk to tier 1
 
         crossings = detect_tier_crossings(complexes, state)
@@ -341,15 +354,16 @@ class TestDetectTierCrossings:
         assert crossings == []  # don't tweet a fire getting smaller
 
     def test_does_not_mutate_input_state(self):
-        state = {"fire_complex_tiers": {"A": 1}}
+        state = _tier_state({"A": 1})
+        before = deepcopy(state)
         complexes = [_mk_complex("A", 150_000)]
 
         detect_tier_crossings(complexes, state)
 
-        assert state["fire_complex_tiers"] == {"A": 1}
+        assert state == before
 
     def test_multiple_complexes_independent(self):
-        state = {"fire_complex_tiers": {"A": 2}}
+        state = _tier_state({"A": 2})
         complexes = [
             _mk_complex("A", 260_000),   # upgrade to tier 3
             _mk_complex("B", 60_000),    # new at tier 1
@@ -361,10 +375,11 @@ class TestDetectTierCrossings:
 
         assert emitted_ids == {"A", "B"}
 
-    def test_missing_state_key_treated_as_empty(self):
+    def test_missing_state_key_is_held_without_assuming_empty(self):
         state = {}  # no fire_complex_tiers key at all
         complexes = [_mk_complex("A", 60_000)]
 
-        crossings = detect_tier_crossings(complexes, state)
+        holds = []
+        crossings = detect_tier_crossings(complexes, state, tracking_holds=holds)
 
-        assert len(crossings) == 1
+        assert crossings == [] and holds == ["nifc_tier_tracking_unavailable"]

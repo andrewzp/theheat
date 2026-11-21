@@ -2526,9 +2526,9 @@ def record_coverage_observation(
 
 
 def update_fire_complex_tier(state: BotState, complex_id: str, tier: int) -> BotState:
-    """Record the highest tier we've tweeted for a fire complex.
+    """Record the highest successfully SAVED draft tier for this tracking key.
 
-    Takes max so concurrent cron runs don't lose a tier bump.
+    Takes max in this loaded state; this is not distributed fencing on Gist.
     """
     tiers = state.setdefault("fire_complex_tiers", {})
     current = int(tiers.get(complex_id, -1))

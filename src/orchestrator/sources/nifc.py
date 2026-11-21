@@ -16,7 +16,12 @@ def run_fire_footprint(bot_state: BotState, current_run: dict | None) -> None:
         source_details: dict = {}
         try:
             complexes = _fetch_strict(fire_footprint.fetch_active_fire_perimeters, metrics_out=source_details)
-            crossings = fire_footprint.detect_tier_crossings(complexes, cast(dict, bot_state))
+            tracking_holds: list[str] = []
+            crossings = fire_footprint.detect_tier_crossings(
+                complexes, cast(dict, bot_state), tracking_holds=tracking_holds,
+            )
+            if tracking_holds:
+                source_details["admission_holds"] = len(tracking_holds)
             # Bet A A2 (default OFF): sourced near-miss rescue at the fire
             # score gate — batch-planned first so identity ambiguity rescues
             # none (see the firms runner seam). NIFC complexes carry a name +
@@ -84,7 +89,7 @@ def run_fire_footprint(bot_state: BotState, current_run: dict | None) -> None:
                     )
                     from src.two_bot.intern import build_fire_footprint_bundle
                     ff_bundle = build_fire_footprint_bundle(fc)
-                    _complex_id = fc.complex_id
+                    _complex_id = fire_footprint.report_tracking_key(fc)
                     _tier = fc.tier
 
                     def _on_success(
@@ -119,7 +124,8 @@ def run_fire_footprint(bot_state: BotState, current_run: dict | None) -> None:
                 status="degraded" if source_details.get("held_rows") or source_details.get("admission_holds") or source_details.get("coverage_truncated") else "success", observed=len(complexes),
                 promoted=source_promoted, drafted=0,
                 details=source_details or None,
-                note="Reported incident sizes; row/admission holds or truncated coverage" if source_details.get("held_rows") or source_details.get("admission_holds") or source_details.get("coverage_truncated") else None,
+                note="Reported incident sizes; ambiguous or unavailable saved-tier tracking held" if tracking_holds else (
+                    "Reported incident sizes; row/admission holds or truncated coverage" if source_details.get("held_rows") or source_details.get("admission_holds") or source_details.get("coverage_truncated") else None),
             )
         except Exception as e:
             print(f"[alerts] Fire footprint error: {e}")
