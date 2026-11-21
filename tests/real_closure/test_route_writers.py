@@ -107,7 +107,7 @@ def test_bot_state_refusal_codes(gist, monkeypatch, capsys, files, env, code):
 
 # ---- bot_run_final_save / draft_save / metrics / publish_intent -------------------------------
 
-def test_bot_run_final_save_refuses_outside_the_group_and_exits_without_patch(gist, monkeypatch, capsys):
+def test_bot_run_refuses_outside_the_group_before_dispatch_read_or_patch(gist, monkeypatch, capsys):
     fake = gist(_state_files())
     monkeypatch.setenv(gist_route.ROUTE_ENV, "serialized")
     monkeypatch.setattr("sys.argv", ["theheat", "auto_publish_due"])
@@ -116,10 +116,11 @@ def test_bot_run_final_save_refuses_outside_the_group_and_exits_without_patch(gi
     monkeypatch.setattr(cli.credentials, "collect_credential_expiry", lambda: {})
     monkeypatch.setattr(cli.usage_ledger, "drain_into_state", lambda value: 0)
     monkeypatch.setattr(cli.budget, "record_budget_health", lambda value: cli.budget.budget_status({}))
+    calls = []
     with pytest.raises(SystemExit) as stop:
-        cli.main({"auto_publish_due": lambda value, *, current_run: deepcopy(value)})
-    assert stop.value.code == 1 and fake.patches == []
-    assert "could not be confirmed saved" in capsys.readouterr().out
+        cli.main({"auto_publish_due": lambda value, *, current_run: calls.append("dispatcher")})
+    assert stop.value.code == 1 and fake.patches == [] and fake.gets == 0 and calls == []
+    assert "direct_write_disabled_by_route" in capsys.readouterr().out
 
 
 @pytest.mark.parametrize("module", ["src/orchestrator/draft_save.py", "src/orchestrator/hot10.py",
@@ -230,7 +231,7 @@ ROUTE_TESTS = {
     "bot_state": "tests/real_closure/test_route_writers.py::test_bot_state_legacy_unchanged_and_route_mode_refuses_without_the_group_marker",
     "draft_save": "tests/real_closure/test_route_writers.py::test_in_process_writers_persist_only_through_write_state",
     "metrics": "tests/real_closure/test_route_writers.py::test_in_process_writers_persist_only_through_write_state",
-    "bot_run_final_save": "tests/real_closure/test_route_writers.py::test_bot_run_final_save_refuses_outside_the_group_and_exits_without_patch",
+    "bot_run_final_save": "tests/real_closure/test_route_writers.py::test_bot_run_refuses_outside_the_group_before_dispatch_read_or_patch",
     "publish_intent": "tests/real_closure/test_route_writers.py::test_publish_intent_write_is_refused_in_route_mode_before_any_send",
     "world_threshold_cache": "tests/real_closure/test_route_writers.py::test_world_threshold_cache_route_mode_refuses_and_legacy_unchanged",
     "runtime_report": "tests/real_closure/test_route_writers.py::test_runtime_report_route_mode_refuses_without_marker_and_legacy_makes_no_extra_request",

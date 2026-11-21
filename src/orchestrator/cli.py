@@ -7,6 +7,7 @@ import sys
 from collections.abc import Callable
 
 from src import credentials, runtime_inventory, state
+from src.commands import gist_route
 from src.orchestrator import budget
 from src.editorial.publication import observe_publication_policy
 from src.state_schema import BotState
@@ -26,6 +27,18 @@ def main(dispatchers: dict[str, RunMode]) -> None:
     args = parser.parse_args()
 
     print(f"[main] Starting @theheat in {args.mode} mode")
+
+    # Contain partial route provisioning before state/source/provider work. This
+    # checks configuration and the existing group marker, not token authority or
+    # historical-ref credential delivery; the final live writer guard still runs.
+    try:
+        if state._configured_backend() == "gist" and gist_route.configured_mode() == "serialized":
+            if not state.GIST_ID or not state.GITHUB_TOKEN:
+                raise gist_route.RouteRefused("serialized_gist_configuration_missing")
+            gist_route.check_writer(None, writer="bot_run_final_save")
+    except gist_route.RouteRefused as exc:
+        print(gist_route.refusal_line("bot_run_final_save", exc.code))
+        sys.exit(1)
 
     try:
         bot_state = state.read_state()
