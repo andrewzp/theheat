@@ -9,6 +9,7 @@ from datetime import date, datetime, timedelta, timezone
 
 import pytest
 from tests.marine_fixtures import marine_clock
+from tests.live_content_harness import trap_network
 
 pytestmark = pytest.mark.usefixtures("automatic_publication_release")
 
@@ -34,6 +35,12 @@ from src.data.methane import MethaneMilestone, MethaneReading
 
 def _fresh_state():
     return deepcopy(DEFAULT_STATE)
+
+
+@pytest.fixture(autouse=True)
+def refuse_unfaked_connections(monkeypatch):
+    """An unrelated adapter must not turn an orchestrator unit test live."""
+    trap_network(monkeypatch.setattr)
 
 
 @pytest.fixture(autouse=True)
