@@ -4,7 +4,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     ".github/workflows/bot.yml": "eec8c2274719fd7e148edc6cec7580828072187f1f6ff989d0ffdab4b91a0e88",
     ".github/workflows/runtime-report.yml": "d8ca2c728b9ad9263dfd973b64c51030c8bdabd1c82f979f961cdf08414c0150",
     "dashboard/app/api/config/route.js": "81d1f67bd7c58ead93c0fbee5498cb135a61afdacee01a50daf87711d6aed408",
-    "dashboard/app/api/dashboard/route.js": "bfd9a736250280a8e758ad827a187d3f39eb6ed1413ca7df170caab1195f806d",
+    "dashboard/app/api/dashboard/route.js": "76c747e80da37634a89fa922b2430e50b6c15c0e67373f87b5ce30cb2e6f50f4",
     "dashboard/app/api/delivery-reconciliation/route.js": "93f2ac6677f748f8a2b6d28407bd7462719d1ae1fb65f6415f9a92dddb0cd263",
     "dashboard/app/api/drafts/route.js": "d2ff21fc10ba17d0dabad04f6142ed93bbaca1e602495f2775616c9b47141d56",
     "dashboard/app/api/episodes/route.js": "e76b489df08aedc236c9336af1fb86ba41a6630470c11ae3202dd5e53e4f63bc",
@@ -310,5 +310,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "5c5ffcc95358c7df45ae838c228759ad0eb6275c8f9053c8130c0a8824b63d9e"
   },
   "schema_version": 1,
-  "source_sha256": "49317a100b9989a76b027ff1ea0e93d370ccb263b239cfc735fbd10b83916269"
+  "source_sha256": "1bc97b82003dd1aa56ed82aebec62d1ed599a82769fcda3332b0d806963153f9"
 }

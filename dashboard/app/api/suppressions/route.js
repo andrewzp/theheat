@@ -1,5 +1,6 @@
 import { readStateStore } from "../../../lib/state-store.js"
 import { requireDashboardAuth } from "../../../lib/auth.js"
+import { projectSuppression } from "../../../lib/rejected-copy.js"
 
 export const runtime = "nodejs"
 
@@ -41,7 +42,7 @@ export async function GET(request) {
     })
 
     filtered.sort((a, b) => tsValue(b) - tsValue(a))
-    const suppressions = filtered.slice(0, limit)
+    const suppressions = filtered.slice(0, limit).map(projectSuppression)
 
     // Aggregate stats over the FULL (filtered) set, not just the page.
     const now = Date.now()
