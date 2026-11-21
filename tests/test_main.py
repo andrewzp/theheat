@@ -2485,6 +2485,9 @@ class TestFireFootprintIntegration:
         mock_co2.detect_milestone.return_value = None
         mock_ff.fetch_active_fire_perimeters.return_value = [complex]
         mock_ff.detect_tier_crossings.return_value = [complex]
+        # Explicit routing fixture only; the real qualified-key consumer is
+        # covered by test_nifc_identifier_namespace, without source stubs.
+        mock_ff.report_tracking_key.return_value = "invented-namespaced-report-key"
         mock_ff.TIERS_HECTARES = [20_000, 50_000, 100_000, 250_000, 500_000, 1_000_000]
         mock_state.is_duplicate.return_value = False
         mock_two_bot.return_value = True
@@ -2505,9 +2508,9 @@ class TestFireFootprintIntegration:
         assert bundle_arg.signal_kind == "fire_footprint"
         assert bundle_arg.headline_metric["value"] == 213_000
 
-        mock_state.update_fire_complex_tier.assert_called_once_with(state_dict, "GWIS_AAA", 3)
+        mock_state.update_fire_complex_tier.assert_called_once_with(state_dict, "invented-namespaced-report-key", 3)
         # State updated with tier
-        assert state_dict.get("fire_complex_tiers", {}).get("GWIS_AAA") == 3
+        assert state_dict.get("fire_complex_tiers", {}).get("invented-namespaced-report-key") == 3
 
     @patch("src.main.save_draft")
     @patch("src.main.co2")

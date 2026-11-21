@@ -295,16 +295,14 @@ def _source_memory_identity(bundle: StoryBundle) -> dict | None:
         return _gdacs_memory_identity(bundle)
     if not _nifc_report_family(bundle):
         return None
-    from src.data.fire_footprint import report_bundle_hold
+    from src.data.fire_footprint import historical_report_bundle_hold, report_record_identity
 
     try:
-        if report_bundle_hold(bundle) is not None:
+        if historical_report_bundle_hold(bundle) is not None:
             return None
         raw = bundle.raw_signal_dump
         record = raw["evidence"]["source_record"]
-        return _memory_identity({"schema": _NIFC_MEMORY_SCHEMA, "issuer": "nifc-wfigs", "event_type": "WF",
-            "identifier_kind": "UniqueFireIdentifier" if record.get("UniqueFireIdentifier") else "IrwinID",
-            "source_event_id": raw["complex_id"]})
+        return _memory_identity(report_record_identity(record))
     except (AttributeError, KeyError, TypeError, ValueError, OverflowError, RecursionError):
         return None
 
