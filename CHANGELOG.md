@@ -1,3 +1,8 @@
+## 0.9.109.163 — 2026-11-21
+
+- Keep a small, framed, sanitized provider diagnostic from the already-budgeted NOAA lookup400 before closing its response. No query change, extra send, redirect or retry.
+- Carry the explicitly untrusted error through the durable Sources display without granting observations, nominations, source recovery or permission. Preserve original lookup records and tracked-archive checks when diagnostics are unavailable.
+
 ## 0.9.109.162 — 2026-11-21
 
 - Preserve unresolved source-review holds on both parts of a local episode split; an unverified packet reference never clears the hold.

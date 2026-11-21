@@ -103,6 +103,27 @@ function twitterMetricsOutcome(row) {
   return unavailable()
 }
 
+function providerErrorDetail(value) {
+  if (value === null) return " No bounded provider diagnostic is available."
+  const object = v => v !== null && typeof v === "object" && !Array.isArray(v)
+  const keys = (v, names) => object(v) && Object.keys(v).sort().join() === names.sort().join()
+  const fields = ["dataset", "stations", "startDate", "endDate", "dataTypes", "bbox", "format", "units"]
+  if (!keys(value, ["schema_version", "scope", "body_bytes", "body_sha256", "fields"])
+      || value.schema_version !== 1 || value.scope !== "untrusted_provider_error_not_weather"
+      || !Number.isSafeInteger(value.body_bytes) || value.body_bytes < 2 || value.body_bytes > 8192
+      || typeof value.body_sha256 !== "string" || !/^[a-f0-9]{64}$/.test(value.body_sha256)
+      || !Array.isArray(value.fields) || value.fields.length < 1 || value.fields.length > 8
+      || value.fields.some(row => !keys(row, ["field", "message"]) || !fields.includes(row.field)
+        || typeof row.message !== "string" || [...row.message].length < 1 || [...row.message].length > 240
+        || /[\u0000-\u001f\u007f-\u009f\ud800-\udfff]/u.test(row.message)
+        || /https?:\/\/|www\./i.test(row.message))) return null
+  // The digest is retained consistency evidence, not authentication or cause
+  // verification. Even a valid diagnostic grants no observation or nomination.
+  const minimum = new TextEncoder().encode(JSON.stringify({ errorCode: 400, errorMessage: "x", errors: value.fields })).length
+  if (value.body_bytes < minimum) return null
+  return ` Untrusted provider error: ${value.fields.map(row => `${row.field}: ${row.message}`).join("; ")}.`
+}
+
 function ghcnArchiveIntake(m, context) {
   const t = m?.station_archive_intake, c = t?.counts, selection = m?.archive_selection, tracked = selection?.tracked
   const object = v => v !== null && typeof v === "object" && !Array.isArray(v)
@@ -121,11 +142,11 @@ function ghcnArchiveIntake(m, context) {
   const suppliedLookup = Object.hasOwn(m ?? {}, "station_discovery"), h = m?.station_discovery
   const hintKeys = ["schema_version", "scope", "status", "reason", "http_status", "window_day", "cutoff_day", "get_calls", "max_get_calls",
     "eligible_untracked_stations", "response_bytes", "response_sha256", "rows_received", "held_stations",
-    "numeric_hints", "nominated_stations"]
+    "numeric_hints", "nominated_stations", ...(h?.schema_version === 2 ? ["provider_error"] : [])]
   let hintDetail = ""
   if (suppliedLookup) {
     if (!object(h) || Object.keys(h).sort().join() !== hintKeys.sort().join()
-        || h.schema_version !== 1 || h.scope !== "discovery_hints_not_observations"
+        || ![1, 2].includes(h.schema_version) || h.scope !== "discovery_hints_not_observations"
         || !["nominated", "no_nominations", "unavailable"].includes(h.status)
         || !["nominated", "no_nominations", "http_error", "transport_unavailable", "headers_unsupported",
           "body_limit", "read_deadline", "body_length_mismatch", "nomination_unavailable"].includes(h.reason)
@@ -141,6 +162,8 @@ function ghcnArchiveIntake(m, context) {
     const body = integer(h.response_bytes) && h.response_bytes <= 32 * 1024 * 1024
       && typeof h.response_sha256 === "string" && /^[a-f0-9]{64}$/.test(h.response_sha256)
     if (!noBody && !body) return null
+    if (h.schema_version === 2 && (h.status !== "unavailable" || h.reason !== "http_error"
+        || h.http_status !== 400 || !noBody)) return null
     if (h.status === "unavailable") {
       if (["nominated", "no_nominations"].includes(h.reason) || h.nominated_stations !== 0
           || [h.rows_received, h.held_stations, h.numeric_hints].some(v => v !== null)
@@ -159,6 +182,11 @@ function ghcnArchiveIntake(m, context) {
       body_length_mismatch: "length mismatch", nomination_unavailable: "unsupported reply or nomination inputs" }[h.reason]
     hintDetail = ` Additional station lookup: 1 client call; ${h.status === "unavailable" ? `reply unavailable (${reason})` : `${h.nominated_stations} archive nomination${h.nominated_stations === 1 ? "" : "s"}`}.`
       + " Lookup values are not observations; zero nominations do not establish no events."
+    if (h.schema_version === 2) {
+      const diagnostic = providerErrorDetail(h.provider_error)
+      if (diagnostic === null) return null
+      hintDetail += diagnostic
+    }
   }
   if (context?.current !== true || !object(m) || m.status !== "degraded" || m.threshold_verification !== "success"
       || !Number.isFinite(start) || !Number.isFinite(end) || end < start || !Number.isFinite(at) || at < start || at > end
