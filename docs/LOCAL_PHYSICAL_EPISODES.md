@@ -82,7 +82,9 @@ which omit the hold cannot clear it.
 Explicit holds in retained member assertions also apply when an older split left
 the episode's top-level field empty. Legacy splits also follow their recorded
 parent revision and its retained assertions, including earlier split ancestry;
-a later parent hold is not retroactive evidence about the child. Missing,
+a reciprocal parent split, recorded history transitions and the existing
+assertion digests must agree. Digests check retained consistency, not source truth.
+A later parent hold is not retroactive evidence about the child. Missing,
 inconsistent or cyclic ancestry refuses use (ancestry over64links is unsupported).
 `inspect` keeps that recorded episode intact
 and reports `effective_historical_hold` separately. Conflicting retained hold

@@ -102,7 +102,7 @@ def _hold_values(values: Sequence[Any]) -> str | None:
 
 
 def _origin_hold(ledger: Mapping[str, Any], episode_id: str, revision: int,
-                 seen: frozenset[str]) -> str | None:
+                 seen: frozenset[str], *, child_id: str) -> str | None:
     """Read explicit assertions at a split's recorded origin, never later parent labels.
 
     Holds are monotonic, so prior additions suffice; no physical event or source
@@ -115,23 +115,35 @@ def _origin_hold(ledger: Mapping[str, Any], episode_id: str, revision: int,
     if not isinstance(parent, Mapping) or not isinstance(parent.get("history"), list):
         raise ValueError("episode_historical_hold_origin_unavailable")
     history = parent["history"]
-    if revision > len(history):
+    if revision >= len(history):
         raise ValueError("episode_historical_hold_origin_unavailable")
     if any(not isinstance(row, Mapping) or type(row.get("revision")) is not int for row in history):
+        raise ValueError("episode_historical_hold_origin_unavailable")
+    reciprocal = history[revision]
+    if (reciprocal.get("revision") != revision + 1 or reciprocal.get("to") != child_id
+            or not isinstance(reciprocal.get("split_out"), list) or not reciprocal["split_out"]):
         raise ValueError("episode_historical_hold_origin_unavailable")
     records = [row for row in history if row["revision"] <= revision]
     if [row["revision"] for row in records] != list(range(1, revision + 1)):
         raise ValueError("episode_historical_hold_origin_unavailable")
     values = []
     for row in records:
+        transitions = {"added", "split_from", "split_out", "reassigned_in", "reassigned_out", "superseded_by"}
+        if len(transitions.intersection(row)) != 1:
+            raise ValueError("episode_historical_hold_origin_unavailable")
         if "split_from" in row:
-            values.append(_origin_hold(ledger, row["split_from"], row.get("origin_revision"), seen | {episode_id}))
+            if row["revision"] != 1:
+                raise ValueError("episode_historical_hold_origin_unavailable")
+            values.append(_origin_hold(ledger, row["split_from"], row.get("origin_revision"),
+                                       seen | {episode_id}, child_id=episode_id))
         for field in ("added", "reassigned_in"):
             if field not in row:
                 continue
             matches = [member.get("assertion") for item in ledger["episodes"].values()
                        for member in item.get("members", []) if member.get("source_revision") == row[field]]
             if not matches or any(not isinstance(assertion, Mapping) for assertion in matches):
+                raise ValueError("episode_historical_hold_origin_unavailable")
+            if any(source_revision(assertion) != row[field] for assertion in matches):
                 raise ValueError("episode_historical_hold_origin_unavailable")
             values.extend(assertion.get("historical_hold") for assertion in matches)
     return _hold_values(values)
@@ -149,8 +161,10 @@ def _historical_hold(episode: Mapping[str, Any], incoming: Mapping[str, Any] | N
         values.append(incoming.get("historical_hold"))
     for row in episode.get("history") or []:
         if "split_from" in row:
+            if row.get("revision") != 1:
+                raise ValueError("episode_historical_hold_origin_unavailable")
             values.append(_origin_hold(ledger, row["split_from"], row.get("origin_revision"),
-                                       frozenset({episode["episode_id"]})))
+                                       frozenset({episode["episode_id"]}), child_id=episode["episode_id"]))
     return _hold_values(values)
 
 
@@ -429,6 +443,8 @@ def publish_bindings(ledger: dict[str, Any], state: dict[str, Any]) -> dict[str,
     working = deepcopy(ledger)
     withdrawn = []
     for draft in state.get("drafts") or []:
+        if not isinstance(draft, dict):
+            continue
         if draft.get("status") == "posted" or has_unresolved_publish(draft, state):
             continue
         binding = (draft.get("review_context") or {}).get("physical_episode") if isinstance(draft, dict) else None

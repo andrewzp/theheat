@@ -149,11 +149,12 @@ def test_conflicting_retained_holds_refuse_projection_and_grant_no_statement(tmp
 
 
 def test_splitting_the_only_explicitly_held_member_keeps_both_legacy_parts_held():
-    ledger, key, moving, _ = episode("libya")
+    ledger, _, _, assertion = episode()
+    moving = he.assign(ledger, {**assertion, "historical_hold": "libya"})["source_revision"]
+    key = he.episode_key(assertion)
     original = ledger["episodes"][key]
     original["historical_hold"] = None
-    original["members"][0]["assertion"]["historical_hold"] = None
-    result = he.split(ledger, key, [moving], new_source_id="F-2", expected_revision=2,
+    result = he.split(ledger, key, [moving], new_source_id="F-2", expected_revision=3,
                       actor="invented", evidence_packet_sha256="a" * 64)
     assert he.project_binding(ledger, key)["historical_hold"] == "libya"
     assert he.project_binding(ledger, result["to"])["historical_hold"] == "libya"
@@ -168,14 +169,57 @@ def test_unheld_split_and_writer_statement_remain_available():
 
 
 def legacy_child(hold):
-    ledger, key, moving, _ = episode(hold)
+    _, _, _, assertion = episode(hold)
+    ledger = he.empty_ledger()
+    key = he.assign(ledger, assertion)["episode_id"]
     # The old assign/split pair emitted this exact shape: the moved assertion
     # omitted the hold; only the parent and its first assertion retained it.
-    ledger["episodes"][key]["members"][1]["assertion"]["historical_hold"] = None
+    moving = he.assign(ledger, {**assertion, "candidate_id": "invented-b", "value": 20,
+                               "historical_hold": None})["source_revision"]
     child = he.split(ledger, key, [moving], new_source_id="F-2", expected_revision=2,
                      actor="invented", evidence_packet_sha256="a" * 64)["to"]
     ledger["episodes"][child]["historical_hold"] = None
     return ledger, key, child
+
+
+@pytest.mark.parametrize("change", ["earlier_origin", "missing_transition", "changed_assertion"])
+def test_inconsistent_legacy_ancestry_cannot_turn_a_held_report_into_a_writer_statement(change):
+    ledger, _, _, assertion = episode()
+    key = he.episode_key(assertion)
+    he.assign(ledger, {**assertion, "historical_hold": "libya", "candidate_id": "held"})
+    moving = he.assign(ledger, {**assertion, "candidate_id": "unheld-after", "value": 30})["source_revision"]
+    child = he.split(ledger, key, [moving], new_source_id="F-2", expected_revision=4,
+                     actor="invented", evidence_packet_sha256="a" * 64)["to"]
+    ledger["episodes"][child]["historical_hold"] = None  # genuine released split field
+    matched_statement(ledger, child)
+    assert he.project_binding(ledger, child)["historical_hold"] == "libya"
+    if change == "earlier_origin":
+        ledger["episodes"][child]["history"][0]["origin_revision"] = 1
+    elif change == "missing_transition":
+        ledger["episodes"][key]["history"][2].pop("added")
+    else:
+        ledger["episodes"][key]["members"][2]["assertion"].pop("historical_hold")
+    before = deepcopy(ledger)
+    with pytest.raises(ValueError, match="historical_hold_origin"):
+        he.project_binding(ledger, child)
+    assert he.writer_statements(ledger, child) == [] and ledger == before
+
+
+@pytest.mark.parametrize("use_cli", [False, True])
+def test_null_draft_does_not_abort_the_unrelated_valid_projection(tmp_path, use_cli):
+    ledger, key, _, _ = episode("thailand")
+    state = {"drafts": [None, pending(key)]}
+    if use_cli:
+        ledger_path, state_path = tmp_path / "ledger.json", tmp_path / "state.json"
+        ledger_path.write_text(json.dumps(ledger))
+        state_path.write_text(json.dumps(state))
+        result = cli("--ledger", ledger_path, "--state", state_path, "publish")
+        assert result.returncode == 0, result.stdout + result.stderr
+        state = json.loads(state_path.read_text())
+    else:
+        he.publish_bindings(ledger, state)
+    assert state["drafts"][0] is None
+    assert state["drafts"][1]["review_context"]["physical_episode"]["historical_hold"] == "thailand"
 
 
 @pytest.mark.parametrize("hold", ["libya", "thailand", None])
