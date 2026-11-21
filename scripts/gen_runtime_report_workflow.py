@@ -68,6 +68,11 @@ jobs:
         run: pip install -r requirements.txt
       - name: Verify ordinary editorial profile parity
         run: python scripts/gen_runtime_report_workflow.py --check
+      - name: Validate exact Gist route mode
+        id: route-mode
+        env:
+          THEHEAT_GIST_WRITE_ROUTE: ${{ vars.THEHEAT_GIST_WRITE_ROUTE }}
+        run: python scripts/gist_route_mode.py
       - name: Publish configuration evidence only
         env:
 ''' + ''.join(f"          {key}: {json.dumps(value)}\n" for key, value in values.items()) + '''        run: python scripts/runtime_report.py

@@ -1,3 +1,9 @@
+## 0.9.109.158 — 2026-11-21
+
+- Validate the exact Gist route configuration before selecting existing writer credentials; missing route credentials never fall back to legacy names.
+- Reject incomplete serialized Gist startup before collection or paid work, while preserving normal legacy operation and authenticated deactivation.
+- Give the single observed-airport writer a source-bound compact wording reference; the returned JSON, decline option, complete citation and required checks remain unchanged.
+
 ## 0.9.109.157
 
 - Reuse fresh accepted readings from station archives already fetched for revision checks when every GHCN diff is unavailable. Preserve request limits, source dates, QC and record qualification; show the checked archive sample separately from failed diff acquisition.

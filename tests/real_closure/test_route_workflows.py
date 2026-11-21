@@ -4,9 +4,9 @@ Exact-head CI establishes GitHub syntax. These tests recognise only the narrow a
 expression shape ``${{ vars.THEHEAT_GIST_WRITE_ROUTE == 'serialized' && A || B }}`` and
 evaluate it for both variable values; they prove legacy keeps every existing default.
 
-v2 (ROUTE-CONTRACT-v2, deliberate expectation changes): the Gist writer and sender credentials are
-read from route-era secret names first (``secrets.NEW || secrets.OLD``, identical to today while NEW is
-unset); consume/drain jobs export the writer-name and legacy-name-presence booleans and the seal key;
+Explicit credential selection: mutating Gist/X jobs choose names by configured mode,
+without value fallback. Route-only drains never receive a legacy token. Deferred
+Bluesky behavior remains unchanged. Consume/drain jobs retain credential-name and legacy-name-presence booleans and the seal key;
 bot.yml titles manual_tweet runs by publish intent; admission refusal markers use an exact name.
 """
 from __future__ import annotations
@@ -22,7 +22,7 @@ ROOT = Path(__file__).resolve().parents[2]
 # Released .51 main: the comparison point for "no existing default changed".
 BASE = "7d3ad7ce57cd021d7b3919dad42ec402b5c742c2"
 WF = ROOT / ".github/workflows"
-ROUTE = re.compile(r"\$\{\{ vars\.THEHEAT_GIST_WRITE_ROUTE == 'serialized' && (.+?) \|\| (.+?) \}\}")
+ROUTE = re.compile(r"\$\{\{ (?:vars\.THEHEAT_GIST_WRITE_ROUTE|steps\.route-mode\.outputs\.mode) == 'serialized' && (.+?) \|\| (.+?) \}\}")
 # Legacy secret name -> its route-era name (ROUTE-CONTRACT-v2 §6).
 RENAMED = {"GH_GIST_TOKEN": "THEHEAT_GIST_WRITER_TOKEN", "TWITTER_API_KEY": "THEHEAT_X_API_KEY",
            "TWITTER_API_SECRET": "THEHEAT_X_API_SECRET", "TWITTER_ACCESS_TOKEN": "THEHEAT_X_ACCESS_TOKEN",
@@ -30,8 +30,8 @@ RENAMED = {"GH_GIST_TOKEN": "THEHEAT_GIST_WRITER_TOKEN", "TWITTER_API_KEY": "THE
            "BLUESKY_APP_PASSWORD": "THEHEAT_BLUESKY_APP_PASSWORD"}
 PRESENCE = "${{ " + " || ".join(f"secrets.{name} != ''" for name in RENAMED) + " }}"
 ROUTE_DRAIN_ENV = {
-    "GITHUB_TOKEN": "${{ secrets.THEHEAT_GIST_WRITER_TOKEN || secrets.GH_GIST_TOKEN }}",
-    "THEHEAT_GIST_CREDENTIAL": "${{ secrets.THEHEAT_GIST_WRITER_TOKEN != '' && 'route' || 'legacy' }}",
+    "GITHUB_TOKEN": "${{ steps.route-mode.outputs.mode != '' && secrets.THEHEAT_GIST_WRITER_TOKEN || '' }}",
+    "THEHEAT_GIST_CREDENTIAL": "${{ steps.route-mode.outputs.mode != '' && secrets.THEHEAT_GIST_WRITER_TOKEN != '' && 'route' || '' }}",
     "THEHEAT_LEGACY_CREDENTIALS_PRESENT": PRESENCE,
     "THEHEAT_COMMAND_SEAL_KEY": "${{ secrets.THEHEAT_COMMAND_SEAL_KEY }}",
     "THEHEAT_ROUTE_CONTROL_KEY": "${{ secrets.THEHEAT_ROUTE_CONTROL_KEY }}",
@@ -80,7 +80,7 @@ def test_gist_commands_admits_outside_the_group_and_consumes_inside_it():
     # Root checkpoint R1 (deliberate): the inbox reads the consumer's settled-run continuation (read only).
     assert fetch["env"] == {"GH_TOKEN": "${{ github.token }}", "THEHEAT_REPOSITORY": "${{ github.repository }}",
                             "GIST_ID": "${{ secrets.GIST_ID }}",
-                            "THEHEAT_GIST_READ_TOKEN": "${{ secrets.THEHEAT_GIST_WRITER_TOKEN || secrets.GH_GIST_TOKEN }}"}
+                            "THEHEAT_GIST_READ_TOKEN": "${{ steps.route-mode.outputs.mode != '' && secrets.THEHEAT_GIST_WRITER_TOKEN || '' }}"}
     run = next(s for s in consume["steps"] if s.get("name") == "Consume serially inside theheat-bot")
     assert run["env"]["THEHEAT_SERIALIZED_WRITER"] == "${{ github.run_id }}:consume"
     assert {key: run["env"][key] for key in ROUTE_DRAIN_ENV} == ROUTE_DRAIN_ENV and run["env"]["GIST_ID"] == "${{ secrets.GIST_ID }}"
@@ -111,12 +111,17 @@ def test_bot_drains_only_in_route_mode_and_keeps_every_existing_default():
     assert doc["jobs"]["run"]["permissions"] == old["jobs"]["run"]["permissions"]
     step = next(s for s in doc["jobs"]["run"]["steps"] if s.get("name") == "Run bot")
     old_step = next(s for s in old["jobs"]["run"]["steps"] if s.get("name") == "Run bot")
-    # Every pre-existing value is unchanged except the seven credentials, which read the route-era
-    # NAME first and otherwise exactly the old secret (identical while the new name is unset).
+    # Gist/X choose names by route; unset/legacy keeps the exact old name even
+    # during partial provisioning. Deferred Bluesky keeps its existing behavior.
     renamed = {"GITHUB_TOKEN": "GH_GIST_TOKEN", **{name: name for name in RENAMED if name != "GH_GIST_TOKEN"}}
     for env_key, legacy in renamed.items():
         assert old_step["env"][env_key] == "${{ secrets.%s }}" % legacy
-        assert step["env"][env_key] == "${{ secrets.%s || secrets.%s }}" % (RENAMED[legacy], legacy)
+        if env_key == "GITHUB_TOKEN" or env_key.startswith("TWITTER_"):
+            mode = "steps.route-mode.outputs.mode"
+            expected = "${{ (" + mode + " == 'serialized' && secrets." + RENAMED[legacy] + ") || (" + mode + " == 'legacy' && secrets." + legacy + ") || '' }}"
+        else:
+            expected = "${{ secrets.%s || secrets.%s }}" % (RENAMED[legacy], legacy)
+        assert step["env"][env_key] == expected
     # The opt-in station selector retains the exact old default.
     assert old_step["env"]["THEHEAT_SIGNALS_PROVIDER"] == "both"
     assert step["env"]["THEHEAT_SIGNALS_PROVIDER"] == "${{ vars.THEHEAT_SIGNALS_PROVIDER || 'both' }}"
@@ -202,12 +207,15 @@ def test_new_secret_names_are_exactly_the_approved_names():
         ("Verify and open the private checkpoint", expression),
         ("Seal interrupted progress", expression),
     ]
-    # Every remaining legacy reference is a NEW || OLD fallback or a presence boolean (never alone),
-    # except the generated runtime-report workflow, which the generator rebuilds from bot.yml.
+    # Mutating Gist/X jobs choose exact names by mode; unchanged read-only jobs
+    # and deferred Bluesky keep their old fallback. Presence checks grant no token.
     for path in WF.glob("*.yml"):
         if path.name == "runtime-report.yml":
             continue
         for line in path.read_text().splitlines():
             for name in RENAMED:
                 if f"secrets.{name}" in line:
-                    assert f"secrets.{RENAMED[name]} || secrets.{name}" in line or f"secrets.{name} != ''" in line, (path.name, line)
+                    mode = "steps.route-mode.outputs.mode"
+                    explicit = (f"({mode} == 'serialized' && secrets.{RENAMED[name]})" in line
+                                and f"({mode} == 'legacy' && secrets.{name}) || ''" in line)
+                    assert explicit or f"secrets.{RENAMED[name]} || secrets.{name}" in line or f"secrets.{name} != ''" in line, (path.name, line)
