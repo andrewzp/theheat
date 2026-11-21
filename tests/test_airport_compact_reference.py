@@ -103,3 +103,24 @@ def test_no_reference_for_unrelated_or_nonautomatic_context(monkeypatch):
     assert writer.airport_copy_reference(bundle, None) is None
     bundle.signal_kind = "unrelated_invented_fixture"
     assert writer.airport_copy_reference(bundle, budget) is None
+
+
+@pytest.mark.parametrize("decline", [False, True])
+def test_actual_sdk_keeps_json_response_and_decline_with_a_reference(
+    monkeypatch, fresh_state, decline
+):
+    script = {"writer_kill": "weak supported context"} if decline else {}
+    transport, models, run, budget = ordinary(monkeypatch, fresh_state, **script)
+    with freeze_time(NOW, tick=True):
+        assert stage_and_drain(fresh_state, run, budget) == (0 if decline else 1)
+    requests = [request for stage, request in models.requests if stage == "writer"]
+    assert len(requests) == 1
+    prompt = requests[0]["messages"][0]["content"]
+    assert reference_from_prompt(prompt)["body"]
+    assert "required JSON object's tweet field" in prompt
+    assert "normal JSON decline contract" in prompt
+    assert "Return your chosen body only." not in prompt
+    assert requests[0]["output_config"]["format"]["schema"] == writer.WRITER_OUTPUT_SCHEMA
+    assert models.stages() == (["writer"] if decline else ["writer", "safety", "fact_check", "critic"])
+    assert len(fresh_state["drafts"]) == (0 if decline else 1)
+    assert transport.x_posts == [] and transport.gist_patches == 0
