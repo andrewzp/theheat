@@ -43,9 +43,9 @@ def archive_bytes(*, target=DAY, high=330, low=-150, qflag="", station=SID):
 
 def produce_archive(case="fresh", provider="ghcn"):
     cases = {"fresh": {}, "empty": {"target": None}, "stale": {"target": date(2026, 11, 16)},
-             "future": {"target": date(2026, 11, 22)}, "qc": {"qflag": "S"}}
+             "future": {"target": date(2026, 11, 22)}, "qc": {"qflag": "S"}, "invalid_archive": {}}
     assert case in cases
-    payload = archive_bytes(**cases[case])
+    payload = b"invented invalid station archive" if case == "invalid_archive" else archive_bytes(**cases[case])
 
     def archive(_case, *, baseline=False):
         return archive_bytes(target=None) if baseline else payload
@@ -55,5 +55,5 @@ def produce_archive(case="fresh", provider="ghcn"):
 
 
 if __name__ == "__main__":
-    sys.stdout.write(json.dumps({name: produce_archive(name) for name in ("fresh", "empty", "stale", "future", "qc")}
+    sys.stdout.write(json.dumps({name: produce_archive(name) for name in ("fresh", "empty", "stale", "future", "qc", "invalid_archive")}
                                | {"combined": produce_archive(provider="both_global")}, sort_keys=True) + "\n")
