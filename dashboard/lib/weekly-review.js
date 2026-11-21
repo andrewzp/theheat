@@ -5,6 +5,7 @@ import { buildProductHealth } from "./product-health.js"
 import { reportTimestamp } from "./runtime-report.js"
 import { postOutcomes } from "./post-outcomes.js"
 import { coverageRow, sourceOutcome } from "./live-content-status.js"
+import { sourceDetailsAreCurrent } from "./source-health.js"
 
 const DAY = 86400000
 const object = value => value && Object.getPrototypeOf(value) === Object.prototype
@@ -29,7 +30,11 @@ const OWNER_STATES = new Set(["access_expired", "access_refused"]), INPUT_STATES
 function weeklyEvidence(state, posts, inWindow, end, costReconciliation) {
   const latestRun = Array.isArray(state.run_history) ? state.run_history.find(run => object(run) && Array.isArray(run.sources)) : null
   const sources = latestRun ? latestRun.sources.filter(object).map(row => {
-    const outcome = sourceOutcome(row, Array.isArray(state.suppressions) ? state.suppressions.slice(-200) : [])
+    const outcome = sourceOutcome(row, Array.isArray(state.suppressions) ? state.suppressions.slice(-200) : [], {
+      fireReportCurrent: row.source === "fire_footprint"
+        && sourceDetailsAreCurrent(state, latestRun, row, new Date(end).toISOString(), "fire_footprint",
+          ["observed", "promoted", "triaged_in", "triaged_out", "writer_attempted", "drafted"]),
+    })
     const coverage = coverageRow(row)
     return { source: String(row.source || "unknown"), state: outcome.state, label: outcome.label, next_action: outcome.next_action,
       detail: outcome.detail, observed: coverage.observed, promoted: coverage.promoted, drafted: coverage.drafted,

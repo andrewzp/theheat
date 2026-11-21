@@ -1,3 +1,7 @@
+## 0.9.109.150
+
+- Keep saved incident-report holds visible in Sources and Weekly Review, with bound counts and explicit unknowns.
+
 ## 0.9.109.149
 
 - Space routine airport-comparison writing 24 hours after a matching confirmed X publication. Check before selection caps and before the writer; report editorial holds separately from source failures and negative-cache hits.
