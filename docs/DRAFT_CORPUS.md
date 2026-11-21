@@ -11,6 +11,37 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-11-01 — Daily corpus grading (4 drafts)
+
+**Context:** Gist read via git-clone path (success). 4 pending, all fresh to the corpus (first grading since Jul 6; ~118-day gap in the log). Drafts created Oct 30T03:44Z → Oct 31T03:28Z. Note the September 29 evaluation boundary in `docs/QUALITY_TREND.md`: these grades are editorial observations only, not authorization to resume posting.
+
+**Grade distribution:** 0 A, 0 B+, 1 B-, 3 C+ → **A-rate 0% (0/4)**. Gap from 50% bar: 50 pp.
+
+**Headline finding:** All four drafts are flat data delivery with hedge-heavy disclosure ("a CAMS model forecast puts", "model estimates, not station readings", "co-reported"). Violation is present (extreme data), but no draft has a setup→punchline close: the voice stops at the number. P_close fails 4 of 4. Counter-evidence for P_dust: both dust_event drafts now carry a WHO multiple (35×, 5.8×) — first dust_event drafts with a WHO anchor after 11 of 11 without.
+
+### B-
+- **[4] Brazil fire, 978.7 MW** (`draft_20261031_032828_68`, score 80). Biggest magnitude in the batch; the 978.7/624/465 MW trio is a latent comic triple, delivered as a list instead of an accelerating/decelerating beat. Location is raw coordinates ("3.7°S, 45.7°W") rather than a place name — reader has to decode it. No season/ecosystem context (the mechanic that carried earlier fire A-grades). "satellite confidence 100%" is padding on a clean detection. Data-only, valid, but unclosed.
+
+### C+
+- **[1] Riyadh dust, ~4,227 µg/m³** (`..._034425_67`, score 75). Strong number, "~" approximation where an exact value exists (Wodehouse miss), mixes peak (4,227) with mean-based multiple (35× is for the 24h mean) in one sentence — reader can't tell which is which. No close.
+- **[2] Riyadh PM2.5 173 µg/m³, 11.5× WHO** (`..._104126_68`, score 74). Same city, same day as [1] — duplicate-location cluster. "about", "roughly", "co-reported dust values above 3,000 at peak hours" is stilted and restates [1]. Would be redundant if both shipped.
+- **[3] Urumqi dust, 668 µg/m³, 5.8× WHO** (`..._175304_69`, score 71). Low-magnitude, 4th+ Urumqi dust draft in corpus. Trailing "model estimates, not station readings" is a disclaimer tail that kills any chance of a close.
+
+### Patterns named
+1. **P_close: 4 of 4 fail** (bare data end). Ends on number/hedge, no consequence.
+2. **P_dust: partial counter-evidence** — WHO anchor present on [1] and [3] (and [2] air_quality_hazard). Anchor now exists; what's missing is the close, and metric clarity (peak vs mean).
+3. **Wodehouse (P4, shipped): approximation-when-exact in [1], [2]** ("~4,227", "about 173", "roughly 11.5×").
+4. **Duplicate-location** Riyadh [1]+[2] same day, different signal types.
+5. **Location legibility:** raw lat/lon in [4].
+6. No era anchors, no banned-formula openers, no plant comparisons, no political anchors, no tier-jargon leak (P_tier: not observed). No A-grade mechanics to report.
+
+### Staleness review (as of 2026-11-01 ~15:00 UTC)
+[1] ~59h, [2] ~52h old, both reference Oct 30 forecast dates now elapsed → strict bulk-reject candidates. [3] ~45h, forecast date Oct 30 elapsed, under 48h threshold; crosses tomorrow. [4] ~36h, past-tense detection, fine. Bulk-reject write skipped: `gh` token not authorized and gist API paths blocked by the session proxy (no gist:write). Operator should reject [1], [2] via dashboard.
+
+### Followups
+- Operator: consider whether a close is attainable for dust/AQ types without new data (e.g. consequence of the WHO multiple).
+- Fire writer: prefer place name over bare coordinates when a region name is resolvable.
+
 ## 2026-07-06 — Daily corpus grading (0 fresh drafts; 15 carry-overs from Jul 5, previously graded)
 
 **Context:** Gist read via git-clone path (success; no rate limit). Queue: 15 pending drafts —
