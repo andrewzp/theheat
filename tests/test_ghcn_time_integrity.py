@@ -308,7 +308,7 @@ def test_material_revision_history_union_preserves_conflicting_payloads():
 def test_old_qc_record_is_retained_before_freshness_filter(monkeypatch):
     stale = DiffRecord("update", SID, DAY, "TMAX", 39.9, qflag="S", sflag="T")
     fresh = DiffRecord("update", SID, date(2026, 9, 8), "TMAX", 20.0)
-    monkeypatch.setattr(ghcn, "_fetch_diff", lambda _: b"fixture")
+    monkeypatch.setattr(ghcn, "_fetch_diff", lambda _, **_diagnostics: b"fixture")
     monkeypatch.setattr(ghcn, "parse_superghcnd_diff_records_bytes", lambda _: [stale, fresh])
     revisions = []
     values = ghcn._fetch_recent_obs(frozenset([SID]), today=date(2026, 9, 9), lookback_days=1,
@@ -345,7 +345,7 @@ def test_old_diff_qc_revision_survives_archive_failure_end_to_end(tmp_path, monk
     item = draft("posted")
     state = {"drafts": [deepcopy(item)]}
     stale = DiffRecord("update", SID, DAY, "TMAX", 39.9, qflag="S", sflag="T")
-    monkeypatch.setattr(ghcn, "_fetch_diff", lambda _: b"fixture")
+    monkeypatch.setattr(ghcn, "_fetch_diff", lambda _, **_diagnostics: b"fixture")
     monkeypatch.setattr(ghcn, "parse_superghcnd_diff_records_bytes", lambda _, **_diagnostics: [stale])
     metrics = {}
     ghcn.check_extreme_signals_for_stations(stations=[META], db_path=db(tmp_path), bot_state=state,
@@ -498,7 +498,7 @@ def test_real_diff_tar_bytes_retain_old_qc_flags_and_original_payload_fingerprin
         member.size = len(csv)
         archive_file.addfile(member, io.BytesIO(csv))
     payload = gzip.compress(tar_bytes.getvalue(), mtime=0)
-    monkeypatch.setattr(ghcn, "_fetch_diff", lambda _: payload)
+    monkeypatch.setattr(ghcn, "_fetch_diff", lambda _, **_diagnostics: payload)
     revisions = []
     observations = ghcn._fetch_recent_obs(frozenset([SID]), today=date(2026, 9, 9), lookback_days=1,
                                          revisions_out=revisions, tracked_keys={(SID, DAY, "TMAX")})

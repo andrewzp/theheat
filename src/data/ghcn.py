@@ -270,23 +270,58 @@ def _diff_urls_for_end_date(d: date, max_start_lag_days: int = 10) -> list[str]:
     ]
 
 
-def _fetch_diff(d: date, timeout: int = 60) -> bytes | None:
+_DIFF_FETCH_OUTCOMES = (
+    "payload_returned", "http_404", "http_401", "http_403", "http_429",
+    "http_other_4xx", "http_5xx", "http_other_error", "timeout", "connection_error", "request_error",
+)
+
+
+def _fetch_diff(d: date, timeout: int = 60, *, diagnostics_out: dict | None = None) -> bytes | None:
     """Fetch one superghcnd_diff tarball ending on ``d``."""
+    if diagnostics_out is not None:
+        diagnostics_out.clear()
+    counts = dict.fromkeys(_DIFF_FETCH_OUTCOMES, 0)
+    get_calls = 0
     last_error: Exception | None = None
-    for url in _diff_urls_for_end_date(d):
-        try:
-            # bare-get: preserves 404-as-not-yet-published probe before raising.
-            resp = requests.get(url, timeout=timeout)
-            if resp.status_code == 404:
-                continue
-            resp.raise_for_status()
-            return resp.content
-        except requests.RequestException as e:
-            last_error = e
-            log.warning("GHCN diff fetch failed for %s via %s: %s", d, url, e)
-    if last_error is None:
-        log.info("GHCN diff not available for snapshot date %s", d)
-    return None
+    try:
+        for url in _diff_urls_for_end_date(d):
+            try:
+                # Count client invocations only: redirects may add wire requests.
+                get_calls += 1
+                # bare-get: preserves 404-as-not-yet-published probe before raising.
+                resp = requests.get(url, timeout=timeout)
+                if resp.status_code == 404:
+                    counts["http_404"] += 1
+                    continue
+                resp.raise_for_status()
+                content = resp.content
+                counts["payload_returned"] += 1
+                return content
+            except requests.RequestException as e:
+                last_error = e
+                status = getattr(e.response, "status_code", None)
+                if isinstance(e, requests.Timeout):
+                    code = "timeout"
+                elif isinstance(e, requests.ConnectionError):
+                    code = "connection_error"
+                elif status in (401, 403, 429):
+                    code = f"http_{status}"
+                elif type(status) is int and 400 <= status < 500:
+                    code = "http_other_4xx"
+                elif type(status) is int and 500 <= status < 600:
+                    code = "http_5xx"
+                elif isinstance(e, requests.HTTPError):
+                    code = "http_other_error"
+                else:
+                    code = "request_error"
+                counts[code] += 1
+                log.warning("GHCN diff fetch failed for %s via %s: %s", d, url, e)
+        if last_error is None:
+            log.info("GHCN diff not available for snapshot date %s", d)
+        return None
+    finally:
+        if diagnostics_out is not None:
+            diagnostics_out.update(get_calls=get_calls, counts=counts)
 
 
 def _fetch_recent_obs(
@@ -322,13 +357,16 @@ def _fetch_recent_obs(
         # A reused diagnostics sink cannot lend an older completed intake to a
         # new unavailable or malformed fetch. This grants no source verdict.
         metrics_out.pop("diff_intake", None)
+        metrics_out.pop("diff_fetch", None)
         intake_counts = dict.fromkeys((
             "parsed_temperature_rows", "inactive_station_rows", "too_old_rows", "future_rows",
             "usable_updates", "delete_updates", "unusable_updates", "final_values", "final_station_days",
         ), 0)
 
-    # Fetch diffs in parallel (3 requests, lightweight)
+    # Fetch target dates in parallel; each may probe multiple start dates.
+    fetch_started_at = utc_now() if metrics_out is not None and _runtime is None else None
     raw_by_date: dict[date, bytes] = {}
+    fetch_diagnostics: dict[date, dict] = {}
     if _runtime is not None:
         raw_by_date = _runtime.diffs(dates)
     else:
@@ -338,7 +376,11 @@ def _fetch_recent_obs(
         from src.two_bot.call_inventory import submit_in_context
 
         with ThreadPoolExecutor(max_workers=lookback_days) as pool:
-            future_to_date = {submit_in_context(pool, _fetch_diff, d): d for d in dates}
+            if metrics_out is None:
+                future_to_date = {submit_in_context(pool, _fetch_diff, d): d for d in dates}
+            else:
+                fetch_diagnostics = {d: {} for d in dates}
+                future_to_date = {submit_in_context(pool, _fetch_diff, d, diagnostics_out=fetch_diagnostics[d]): d for d in dates}
             for fut in as_completed(future_to_date):
                 d = future_to_date[fut]
                 content = fut.result()
@@ -354,6 +396,25 @@ def _fetch_recent_obs(
                 d.isoformat() for d in dates if d not in raw_by_date
             ],
         })
+        # ReplayIO has retained bytes, not live HTTP observations. Custom fetch
+        # helpers without a complete capture likewise cannot lend HTTP facts.
+        if len(fetch_diagnostics) == len(dates) and dates and all(
+            set(item) == {"get_calls", "counts"}
+            and type(item["get_calls"]) is int and 1 <= item["get_calls"] <= 10
+            and type(item["counts"]) is dict and set(item["counts"]) == set(_DIFF_FETCH_OUTCOMES)
+            and all(type(n) is int and n >= 0 for n in item["counts"].values())
+            and sum(item["counts"].values()) == item["get_calls"]
+            and item["counts"]["payload_returned"] == int(target in raw_by_date)
+            and (target in raw_by_date or item["get_calls"] == 10)
+            for target, item in fetch_diagnostics.items()
+        ):
+            metrics_out["diff_fetch"] = {
+                "schema_version": 1, "scope": "client_get_invocations", "window_day": today.isoformat(),
+                "started_at": fetch_started_at, "ended_at": utc_now(),
+                "target_count": len(dates), "get_calls": sum(item["get_calls"] for item in fetch_diagnostics.values()),
+                "counts": {name: sum(item["counts"][name] for item in fetch_diagnostics.values())
+                           for name in _DIFF_FETCH_OUTCOMES},
+            }
 
     if not raw_by_date:
         raise RuntimeError("GHCN: no diff files available from NOAA")
@@ -752,6 +813,10 @@ def check_extreme_signals_for_stations(
             country_records). Lets the caller surface pipeline visibility
             in telemetry/dashboards without breaking the return contract.
     """
+    if metrics_out is not None:
+        for field in ("diff_fetch", "diff_intake", "diff_dates_attempted", "diff_dates_fetched",
+                      "diff_dates_missing", "diff_missing_dates", "diff_fetch_failed"):
+            metrics_out.pop(field, None)
     resolved_db = Path(db_path) if db_path else _db_path()
 
     if not resolved_db.exists():
@@ -796,10 +861,15 @@ def check_extreme_signals_for_stations(
                    if _runtime is not None else {}),
             )
         except RuntimeError:
+            fetch_metrics["diff_fetch_failed"] = 1
             if not points:
                 raise
             latest_obs = {}
-            fetch_metrics["diff_fetch_failed"] = 1
+        finally:
+            # Passive diagnostics survive the original exception path too.
+            # This does not turn a failed source or parsed body into an input.
+            if metrics_out is not None:
+                metrics_out.update(fetch_metrics)
     else:
         latest_obs = _fetch_obs_fn(active_ids)
     metrics = _empty_pipeline_metrics() | fetch_metrics

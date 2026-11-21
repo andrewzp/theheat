@@ -66,7 +66,9 @@ test("missing, malformed and contradictory counts stay unavailable rather than z
     assert.equal(out.state, "ghcn_intake_unavailable")
     assert.doesNotMatch(JSON.stringify(out), /private-token|<script>|0 temperature updates parsed/)
   }
-  assert.equal(projected(copy("unavailable")).outcome.state, "ghcn_intake_unavailable")
+  const legacy = copy("unavailable")
+  delete metrics(legacy).diff_fetch
+  assert.equal(projected(legacy).outcome.state, "ghcn_intake_unavailable")
 })
 
 test("an older row cannot borrow currency from newer health or another provider", () => {
@@ -124,5 +126,14 @@ test("actual SourcesView names the recorded intake without publication authority
   assert.match(markup, /Saved GHCN intake:/)
   assert.match(markup, /0 station-days retained/)
   assert.doesNotMatch(markup, /Approve \+ Post/)
+  assert.deepEqual(state, before)
+})
+
+test("actual SourcesView displays missing payloads and the recorded client outcome", () => {
+  const state = copy("unavailable"), before = structuredClone(state)
+  const markup = renderToStaticMarkup(createElement(SourcesView, buildSourceHealthPayload(state, { asOf: "2026-11-21T12:02:00Z" })))
+  assert.match(markup, /No GHCN diff payload returned/)
+  assert.match(markup, /30 HTTP 404/)
+  assert.doesNotMatch(markup, /0 station-days retained|Approve \+ Post/)
   assert.deepEqual(state, before)
 })

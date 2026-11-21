@@ -1,3 +1,7 @@
+## 0.9.109.154
+
+- Retain bounded GHCN acquisition outcomes through source failures and show them separately from parsed observations. Bind captures to their collection interval and withhold stale or contradictory diagnostics without adding requests or changing source rules.
+
 ## 0.9.109.153
 
 - Document GHCN dataset processing cadence in versioned product contracts, retaining prior exports and explicit station freshness, access, reuse, quota and cost limits.
