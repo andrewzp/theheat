@@ -1,3 +1,7 @@
+## 0.9.109.146
+
+- Describe saved X engagement lookups as metrics requests and usable responses, rather than weather candidates or drafts. Keep partial, skipped and inconsistent results distinct; missing engagement remains unknown.
+
 ## 0.9.109.145
 
 - Retain bounded GHCN temperature-update intake counts from the existing diff pass, distinguishing inactive stations, old/future rows, usable updates, deletions and unusable updates from final retained station-days. Preserve source requests, filtering, revisions and archive selection.

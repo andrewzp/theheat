@@ -20,6 +20,10 @@ const OUTCOMES = Object.freeze({
   no_event: ["Checked, no qualifying event", "Nothing to do; an empty result is not proof of complete coverage."],
   policy_excluded: ["Excluded by observed-only policy", "Forecast air-quality collection was intentionally skipped. Current service availability is unverified; previous errors remain in history."],
   supplying: ["Supplying candidates", "Review the resulting drafts."],
+  metrics_returned: ["Saved X metrics lookup", "Compare saved samples at matching post ages."],
+  metrics_partial: ["X metrics lookup incomplete", "Inspect the missing samples."],
+  metrics_skipped: ["X metrics polling skipped", "Check the saved polling history."],
+  metrics_unavailable: ["X metrics result unavailable", "Inspect this polling run's status and counts."],
   rainfall_nominations: ["Rainfall report nominations recorded", "Inspect the saved nomination dispositions; nomination and queue counts do not establish a saved draft."],
   rainfall_reports_held: ["Rainfall reports held", "Check the named saved configuration hold; no nomination result was established."],
   rainfall_grid_held: ["Inland rainfall scan held", "Inspect the scan reason; city results remain separate."],
@@ -31,6 +35,32 @@ const OUTCOMES = Object.freeze({
 
 function text(value) { return typeof value === "string" ? value : "" }
 function count(value) { return Number.isInteger(value) && value >= 0 ? value : null }
+
+function twitterMetricsOutcome(row) {
+  const unavailable = () => outcome("metrics_unavailable", row,
+    "The saved polling result is missing or inconsistent. Missing counts are unknown.")
+  // The existing producer's observed/promoted fields mean requested post IDs /
+  // responses with usable public counts. They never denote weather or drafts.
+  if (!["triaged_in", "triaged_out", "writer_attempted", "drafted"].every(key => row[key] === 0)
+      || !safeCount(row.observed) || !safeCount(row.promoted) || row.promoted > row.observed) return unavailable()
+  const noError = row.error == null || row.error === ""
+  if (row.status === "skipped" && noError && row.promoted === 0) {
+    let detail = null
+    if (row.observed === 0 && row.note === "Metrics already polled today") {
+      detail = "The daily polling opportunity was already used; it may have failed."
+    } else if (row.observed === 0 && row.note === "No recent tweet ids to poll") {
+      detail = "No recent post IDs were selected for polling."
+    } else if (row.observed > 0 && row.note === "No Twitter credentials configured") {
+      detail = "Polling credentials were unavailable in this saved run."
+    }
+    return detail ? outcome("metrics_skipped", row, `${detail} No new engagement counts were established.`) : unavailable()
+  }
+  if (row.observed < 1) return unavailable()
+  const detail = `${row.observed} requested posts; ${row.promoted} with usable counts. Missing counts are unknown.`
+  if (row.status === "success" && noError && row.promoted === row.observed) return outcome("metrics_returned", row, detail)
+  if (row.status === "partial_failure" && row.promoted < row.observed) return outcome("metrics_partial", row, detail)
+  return unavailable()
+}
 
 function ghcnIntake(row, context) {
   if (row.source !== "open_meteo_extreme_signals") return null
@@ -238,6 +268,7 @@ function rainfallNomination(row, current) {
 
 export function sourceOutcome(row, rejections = [], { rainfallNominationCurrent = true, ghcnIntakeContext = null } = {}) {
   if (!row || typeof row !== "object") return outcome("unknown", row)
+  if (row.source === "twitter_metrics") return twitterMetricsOutcome(row)
   const error = text(row.error), note = text(row.note), details = row.details && typeof row.details === "object" ? row.details : {}
   const gate = details.rainfall_opportunity?.primary_gate
   if (gate === "credential_expired" || /token expired|credential_expired|expired \d{4}-\d{2}-\d{2}/i.test(error)) {
@@ -310,12 +341,16 @@ function outcome(state, row, detail = null, action = null) {
 
 // Coverage denominators exactly as retained; sampled sources are never "global recall".
 export function coverageRow(row) {
+  const metrics = row?.source === "twitter_metrics" ? twitterMetricsOutcome(row) : null
+  const lookup = ["metrics_returned", "metrics_partial"].includes(metrics?.state)
   const details = row?.details && typeof row.details === "object" ? row.details : {}
   const aq = details.aq_availability && typeof details.aq_availability === "object" ? details.aq_availability : null
   const regions = details.regional_observed?.regions && typeof details.regional_observed.regions === "object"
     ? Object.values(details.regional_observed.regions).filter(r => r?.status === "processed") : null
   const sum = key => regions.reduce((total, r) => total === null || count(r?.[key]) === null ? null : total + r[key], 0)
-  const universe = regions?.length
+  const universe = metrics
+    ? { checked: lookup ? row.observed : null, usable: lookup ? row.promoted : null, label: "requested X post metrics" }
+    : regions?.length
     ? { checked: sum("requested_stations"), usable: sum("qualified_station_days"), label: "named stations in supplied packets" }
     : aq
     ? { checked: count(aq.requested_cities), usable: count(aq.observed_cities), label: "sampled catalogue cities" }
@@ -326,7 +361,9 @@ export function coverageRow(row) {
     source: row?.source ?? null,
     observed: count(row?.observed), promoted: count(row?.promoted), triaged_in: count(row?.triaged_in),
     triaged_out: count(row?.triaged_out), writer_attempted: count(row?.writer_attempted), drafted: count(row?.drafted),
-    universe, scope: "Checked sample only; not global recall and not a count of posts.",
+    universe, scope: metrics
+      ? "Retained post-metrics polling only; not weather observations, story candidates or event recall."
+      : "Checked sample only; not global recall and not a count of posts.",
   }
 }
 
