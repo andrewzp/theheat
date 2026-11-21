@@ -104,7 +104,7 @@ MAX_PACKET_FILES = 16
 
 def _packet_items(packet: Mapping[str, Any], candidate: Any) -> list[dict[str, Any]]:
     """Exact explicit joins; neither geographic resemblance nor report text is authority."""
-    from src.editorial.hazard_episodes import writer_statements, SCHEMA
+    from src.editorial.hazard_episodes import project_binding, validate_projection_update, writer_statements, SCHEMA
     from src.two_bot.bundle_capture import capture_bundle
 
     bundle = candidate.bundle
@@ -145,6 +145,7 @@ def _packet_items(packet: Mapping[str, Any], candidate: Any) -> list[dict[str, A
         if (not isinstance(ledger, dict) or ledger.get("schema") != SCHEMA or not isinstance(joins, list)
                 or not joins or len(joins) != len(set(joins))):
             raise ValueError("report_join_unavailable")
+        validate_projection_update(episode, project_binding(ledger, str(episode.get("episode_id") or "")))
         statements = [row for row in writer_statements(ledger, str(episode.get("episode_id") or ""))
                       if row["join_id"] in joins and row["report_sha256"] == report["report_sha256"]]
         if len(statements) != len(joins):

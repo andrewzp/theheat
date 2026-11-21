@@ -1,3 +1,8 @@
+## 0.9.109.162 — 2026-11-21
+
+- Preserve unresolved source-review holds on both parts of a local episode split; an unverified packet reference never clears the hold.
+- Recover inherited holds from retained assertions and revision-bound split ancestry without rewriting old evidence. Refuse stale hold downgrades, contradictory or malformed labels before applying local edits; preserve ordinary unheld controls and delivered/unknown snapshots, including ledger-only attempts.
+
 ## 0.9.109.161 — 2026-11-21
 
 - After complete captured NOAA diff404s, allow one bounded, untrusted lookup to nominate active untracked stations for the existing20archive verification slots. Only original archive bytes and unchanged QC/history checks supply observations or record claims.

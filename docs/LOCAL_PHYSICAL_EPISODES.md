@@ -70,6 +70,35 @@ Split/merge proposals hold all named expected heads atomically; they do not move
 members or combine old same-event memories. A bounded overflow retains the complete
 source inventory and holds the episode instead of truncating assigned membership.
 
+## Offline ledger edits preserve unresolved source holds
+
+The separate `scripts/hazard_episodes.py` operator works on supplied local JSON;
+it does not select a production backend or grant source or posting authority.
+Splitting a retained episode partitions its revisions while keeping an unresolved
+source-review hold on both parts. An optional packet digest is an unverified
+reference, not adjudication of the source. Further splits or later assertions
+which omit the hold cannot clear it.
+
+Explicit holds in retained member assertions also apply when an older split left
+the episode's top-level field empty. Legacy splits also follow their recorded
+parent revision and its retained assertions, including earlier split ancestry;
+a reciprocal parent split, recorded history transitions and the existing
+assertion digests must agree. Digests check retained consistency, not source truth.
+A later parent hold is not retroactive evidence about the child. Missing,
+inconsistent or cyclic ancestry refuses use (ancestry over64links is unsupported).
+`inspect` keeps that recorded episode intact
+and reports `effective_historical_hold` separately. Conflicting retained hold
+labels and malformed hold types are refused, and no writer statements are granted.
+An older ledger cannot remove a draft's recorded hold or move its projected
+revision backward. The retained-report writer also checks the current candidate
+binding before using a packet's ledger. Publish preflights every affected draft
+and join before applying edits; a refusal leaves both local inputs unchanged.
+Projecting a changed binding revokes pending reviews and approvals while
+preserving delivered and unknown-delivery snapshots, including unknown attempts
+recorded only in the publication ledger. This is local preflight atomicity, not
+transactional production storage. None of these operations resolves missing incident
+evidence, physical duration or cross-border extent.
+
 ## Scope still open
 
 The P18 heat prepass can retain exact station grouping proposals, including

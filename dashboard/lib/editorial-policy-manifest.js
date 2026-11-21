@@ -143,7 +143,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/editorial/delegated_media_review.py": "9f8c0c1b73854b856b833a3bf93cb2222ede1b6c7043422723b45e37307bbeec",
     "src/editorial/draft_admission.py": "a726ca826cc564f43e3dd1169fa0f2a8d671be09d5f8ca80413587a64b857eb7",
     "src/editorial/format_spacing.py": "bd56e3f043e2182dd6ab02c43612e1bf3b399e30206081ea58ba60ecc1b03d9e",
-    "src/editorial/hazard_episodes.py": "2359e93391c4f2ee3a5faf31f37bb153e03ec35ac0efa2f1b0b7022e4315ea08",
+    "src/editorial/hazard_episodes.py": "5f22f7e696ec1bd62d3abe81f2098243eae5a3f09b00252d088787979924cc10",
     "src/editorial/hot10_contract.py": "68dbb3c9081af24c7869ede677659a530a701a7270606307b122624a706fa534",
     "src/editorial/marine_evidence.py": "d6c9bb8c7ca12133eefa9ddf6283977c7a86da65ef50869d686c352263c1099d",
     "src/editorial/newsworthiness.py": "e7643f404fb9e2d75976e096b0b46bc1eac8a35fb9afd4acc30eaf107bbd83e9",
@@ -155,7 +155,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/editorial/policy.py": "08d0e75034a6637c0e77d79702597cab7f641dd6eb1d356dda10f29418966c2b",
     "src/editorial/portfolio.py": "b8a3e7b5a6fc2a1f9843ef4382fa4901fbaf74f6c5834646740a1f65e99fabd5",
     "src/editorial/report_development.py": "e2ed39a9ff957683c8befff0f3b99533fdc9d90d84af88220ed13f2bf1489995",
-    "src/editorial/report_supply.py": "37aa718804a9dce97c105769912c87e8f7513f1b69bdcc3240865eba810c01a6",
+    "src/editorial/report_supply.py": "39c8114ce4d21bfab2f7d220a9413237f15b7852e9de7192174119b9af0255a9",
     "src/editorial/revisions.py": "3dd1a98539d2d8fc98647a847edbcf253d8dd38376f0e8eecb0f087cecb3f34c",
     "src/editorial/scoring/disasters.py": "0b0c76d2b0fa2a014cef538d643f9591282fca00214e11b7d4455ed1b23bf2c8",
     "src/editorial/synthesis.py": "c3230d7f91f287550e158548998ed5df778148592c2989cf7155cd2a3182498b",
@@ -313,5 +313,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "5c5ffcc95358c7df45ae838c228759ad0eb6275c8f9053c8130c0a8824b63d9e"
   },
   "schema_version": 1,
-  "source_sha256": "0ac400396511e8cc71dadecdf4abc44f658157b560c8345ade0c84371d339b9f"
+  "source_sha256": "7f6654db16a5a2c84d8fa70d901a067a4bce63d5d85992c21fb40a1c81b23710"
 }
