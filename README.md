@@ -34,15 +34,22 @@ writer entry point to test installation.
 
 ## Workflows
 
-- `theheat-bot`: hourly auto-publish at `30 * * * *`, daily leaderboard at
-  `0 12 * * *`, and alert polling at `0 0,4,8,16,20 * * *`.
+- `theheat-bot`: hourly due-sender processing at `41 * * * *`, daily
+  leaderboard plus alerts at `11 12 * * *`, and other alert slots at
+  `11 0,4,8,16,20 * * *`. The hourly worker may also reserve an additional
+  alerts pass when retained collection history is stale.
 - `refresh-thresholds`: weekly station-threshold refresh at `0 2 * * 0`.
-- `voice-regression`: daily 3-fixture billing/voice canary at `17 9 * * 1-6`,
+- `voice-regression`: daily canary preflight at `17 9 * * 1-6`,
   weekly full replay Sundays at `0 9 * * 0`, automatic PR gate on writer-path
   changes (`src/two_bot/prompts/**`, `writer.py`), and opt-in PR checks via
-  the `voice-check` label (economics P0.4).
+  the `voice-check` label (economics P0.4). Paid stages still require their
+  explicit qualification and spending gates.
 - `source-health-sentinel`: source-health issue reconciliation at
-  `30 * * * *`.
+  `23 * * * *`.
+
+These are configured UTC schedules, not evidence that GitHub created or ran an
+opportunity on time. A successful due-sender job does not establish source
+collection, a saved draft or an X publication; use the dated run and X receipt.
 
 ## State
 

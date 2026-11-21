@@ -24,6 +24,11 @@ without production credentials or a production `.env`; do not copy production
 state into a fixture workspace. Package installation needs package-registry
 access. It is separate from the offline test run.
 
+The orchestrator unit tests in `tests/test_main.py` also refuse unfaked socket
+connections. An unrelated adapter that a fixture leaves unstubbed therefore
+cannot turn that test into a live source request. Explicit HTTP/SDK fixtures
+still exercise their normal consumers; this guard grants no source/check pass.
+
 Install the dashboard from its committed lockfile:
 
 ```sh
@@ -52,6 +57,7 @@ python scripts/gen_dashboard_graphic_runtime.py --check
 python scripts/gen_state_contract.py --check
 python scripts/gen_usage_cost_contract.py --check
 python scripts/gen_runtime_report_workflow.py --check
+python scripts/gen_imerg_country_tiles.py --check
 git diff --check
 ```
 
@@ -88,12 +94,12 @@ their own verification; the CI profile is not a complete cross-platform lock.
 
 ## Generated contracts and release
 
-The six `--check` commands verify committed artifacts without regenerating them.
+The seven `--check` commands verify committed artifacts without regenerating them.
 If an intentional source change affects the source inventory, regenerate it first.
 For policy-bound changes, regenerate the editorial policy **before** the packaged
 graphic runtime; the runtime identity embeds the policy even when its archive is
 unchanged. Use the corresponding scripts without `--check`, review the generated
-diffs, then run all six checks again.
+diffs, then run all seven checks again.
 
 Use an isolated branch and retain unrelated local work. Required CI must pass at
 the reviewed head before merge. Dashboard or generated dashboard-policy changes

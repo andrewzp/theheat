@@ -1,3 +1,7 @@
+## 0.9.109.152
+
+- Refuse unfaked connections in orchestrator unit tests and align development documentation with configured UTC schedules and all seven generated checks.
+
 ## 0.9.109.151
 
 - Keep NIFC identifier kinds separate through candidate IDs and saved-draft tiers; hold ambiguous legacy tracking before writing while retaining qualified report history for read-only memory.
