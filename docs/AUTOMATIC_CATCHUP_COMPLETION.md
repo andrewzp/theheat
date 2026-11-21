@@ -10,9 +10,13 @@ access and no Gist, model, X or other provider credentials. It requires GitHub's
 bot actor and triggering actor, the first main bot attempt, and an automatic-only
 alerts request. It reads at most two same-repository metadata responses: the
 scheduled sentinel parent and that parent's first-attempt jobs. Both responses
-are bounded to 64 KiB, with no retry, redirect or pagination. It requires the
+are bounded to 64 KiB, with no retry, redirect or pagination. Declared lengths
+must match the received bytes; chunked responses must terminate completely.
+Ambiguous or unknown framing is held. It requires the
 same source revision, a parent created within 30 minutes, and one successfully
-completed catchup job and dispatch step with consistent timestamps. Other
+completed catchup job and dispatch step with consistent timestamps, normalizing
+documented explicit UTC offsets. The dispatch command has its own conditional
+step: a decision not to dispatch is skipped, never a successful dispatch. Other
 sentinel reconcilers may fail independently.
 
 This is a match to scheduled-dispatch metadata under GitHub's built-in actor

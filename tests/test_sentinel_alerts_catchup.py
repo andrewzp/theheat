@@ -58,6 +58,8 @@ def _state(tmp_path: Path, age: timedelta | None) -> Path:
 
 def _run_step(workflow, tmp_path: Path, state: Path, *, active: str = "0", list_exit: int = 0):
     step = next(s for s in _job(workflow)["steps"] if s.get("name") == STEP)
+    ready = next(s for s in _job(workflow)["steps"] if s.get("id") == "catchup-ready")
+    assert step["if"] == "steps.catchup-ready.outputs.eligible == 'true'"
     bindir = tmp_path / "bin"
     bindir.mkdir()
     (bindir / "python").symlink_to(sys.executable)
@@ -75,23 +77,25 @@ def _run_step(workflow, tmp_path: Path, state: Path, *, active: str = "0", list_
     runner_temp = tmp_path / "runner"
     runner_temp.mkdir()
     (runner_temp / "state.json").write_text(state.read_text())
+    output = runner_temp / "output"
+    env = {
+        "PATH": f"{bindir}:{os.environ.get('PATH', '')}",
+        "RUNNER_TEMP": str(runner_temp), "GITHUB_OUTPUT": str(output),
+        "GITHUB_REPOSITORY": "andrewzp/theheat", "GITHUB_RUN_ID": "12344",
+        "GH_CALLS": str(calls), "GH_ACTIVE": active, "GH_LIST_EXIT": str(list_exit),
+    }
     result = subprocess.run(
-        ["/bin/bash", "-e", "-o", "pipefail", "-c", step["run"]],
-        cwd=ROOT,
-        env={
-            "PATH": f"{bindir}:{os.environ.get('PATH', '')}",
-            "RUNNER_TEMP": str(runner_temp),
-            "GITHUB_REPOSITORY": "andrewzp/theheat",
-            "GITHUB_RUN_ID": "12344",
-            "GH_CALLS": str(calls),
-            "GH_ACTIVE": active,
-            "GH_LIST_EXIT": str(list_exit),
-        },
+        ["/bin/bash", "-e", "-o", "pipefail", "-c", ready["run"]],
+        cwd=ROOT, env=env,
         text=True,
         capture_output=True,
         timeout=20,
     )
     assert result.returncode == 0, result.stderr
+    if output.exists() and output.read_text() == "eligible=true\n":
+        dispatched = subprocess.run(["/bin/bash", "-e", "-o", "pipefail", "-c", step["run"]],
+            cwd=ROOT, env=env, text=True, capture_output=True, timeout=20)
+        assert dispatched.returncode == 0, dispatched.stderr
     return calls.read_text().splitlines() if calls.exists() else []
 
 

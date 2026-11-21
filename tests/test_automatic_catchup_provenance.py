@@ -1,6 +1,8 @@
 """Real bounded metadata seam and sender completion, with invented HTTP only."""
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
+import http.client
+import io
 import json
 from types import SimpleNamespace
 
@@ -36,7 +38,8 @@ def bodies():
     return [parent, {"total_count": 1, "jobs": [job]}]
 
 
-def transport(monkeypatch, values=None, *, status=200, encoding="identity", content_type="application/json"):
+def transport(monkeypatch, values=None, *, status=200, encoding="identity", content_type="application/json",
+              length=None, complete=True, transfer=""):
     pending = list(values if values is not None else bodies())
     calls, reads, closed = [], [], []
 
@@ -48,6 +51,7 @@ def transport(monkeypatch, values=None, *, status=200, encoding="identity", cont
             calls.append((method, path))
             assert method == "GET" and path.startswith("/repos/andrewzp/theheat/actions/runs/12344")
             assert headers["Authorization"] == "Bearer invented-reader"
+            assert headers["X-GitHub-Api-Version"] == "2026-03-10"
 
         def getresponse(self):
             assert pending, "A third request or retry was attempted"
@@ -62,7 +66,8 @@ def transport(monkeypatch, values=None, *, status=200, encoding="identity", cont
 
             return SimpleNamespace(status=status, read=read,
                 getheader=lambda name, default="": {"Content-Encoding": encoding,
-                    "Content-Type": content_type}.get(name, default))
+                    "Content-Type": content_type, "Content-Length": str(len(body)) if length is None else length,
+                    "Transfer-Encoding": transfer}.get(name, default), isclosed=lambda: complete)
 
         def close(self):
             closed.append(True)
@@ -181,3 +186,78 @@ def test_proof_job_has_no_funded_material_and_is_a_dependency_not_a_new_trigger(
     assert "github.actor == 'github-actions[bot]'" in job["if"]
     assert "github.triggering_actor == 'github-actions[bot]'" in job["if"]
     assert STEP == proof.DISPATCH_STEP
+
+
+@pytest.mark.parametrize("length", ["65545", "999", "-1", "invalid", "1"])
+def test_declared_length_cannot_certify_a_complete_json_prefix(monkeypatch, length):
+    transport(monkeypatch, [b'{"id":1}'], length=length)
+    with pytest.raises(ValueError):
+        proof._get("/repos/andrewzp/theheat/actions/runs/12344", "invented-reader")
+
+
+def test_documented_offset_timestamps_preserve_the_same_ordered_instants(monkeypatch):
+    values = bodies()
+    values[1]["jobs"][0]["steps"][0].update(started_at="2026-11-21T07:57:00.000-08:00",
+                                            completed_at="2026-11-21T15:57:30.000+00:00")
+    transport(monkeypatch, values)
+    assert proof.verify(context(), now=NOW)
+
+
+def test_only_the_actual_dispatch_step_can_supply_successful_dispatch_metadata():
+    doc = yaml.load((ROOT / ".github/workflows/source-health-sentinel.yml").read_text(), Loader=yaml.BaseLoader)
+    job = doc["jobs"]["alerts-catchup"]
+    step = next(step for step in job["steps"] if step.get("name") == proof.DISPATCH_STEP)
+    assert step.get("if") == "steps.catchup-ready.outputs.eligible == 'true'"
+    assert "exit 0" not in step["run"] and "gh run list" not in step["run"]
+
+
+@pytest.mark.parametrize("header,entity,accepted", [
+    (b"Content-Length: 8\r\n", b'{"id":1}', True),
+    (b"Content-Length: 200\r\n", b'{"id":1}', False),
+    (b"Content-Length: 65545\r\n", b'{"id":1}', False),
+    (b"", b'{"id":1}', False),
+    (b"Transfer-Encoding: chunked\r\n", b'8\r\n{"id":1}\r\n0\r\n\r\n', True),
+    (b"Transfer-Encoding: chunked\r\n", b'8\r\n{"id":1}\r\n', False),
+    (b"Content-Length: 8\r\nTransfer-Encoding: chunked\r\n", b'8\r\n{"id":1}\r\n0\r\n\r\n', False),
+], ids=["length", "short-prefix", "oversize-declared", "unknown-framing", "chunked", "cut-chunks", "ambiguous"])
+def test_real_http_response_framing_not_a_complete_label(monkeypatch, header, entity, accepted):
+    raw = b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n" + header + b"\r\n" + entity
+    response = http.client.HTTPResponse(SimpleNamespace(makefile=lambda *args: io.BytesIO(raw)))
+    response.begin()
+    calls = []
+
+    class Connection:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def request(self, method, path, **kwargs):
+            calls.append((method, path))
+
+        def getresponse(self):
+            return response
+
+        def close(self):
+            response.close()
+
+    monkeypatch.setattr(proof.http.client, "HTTPSConnection", Connection)
+    if accepted:
+        assert proof._get("/repos/andrewzp/theheat/actions/runs/12344", "invented-reader") == {"id": 1}
+    else:
+        with pytest.raises((ValueError, http.client.HTTPException)):
+            proof._get("/repos/andrewzp/theheat/actions/runs/12344", "invented-reader")
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize("stamp", ["2026-11-21T15:55:00-00:00", "2026-11-21T15:55:00+00:60",
+    "2026-11-21T15:55:00+24:00", "2026-11-21T15:55:00.0000001Z"])
+def test_unknown_or_malformed_offset_still_holds(monkeypatch, stamp):
+    values = bodies()
+    values[0]["created_at"] = stamp
+    transport(monkeypatch, values)
+    assert not proof.verify(context(), now=NOW)
+
+
+def test_valid_json_before_entity_termination_is_still_incomplete(monkeypatch):
+    transport(monkeypatch, [b'{"id":1}'], complete=False)
+    with pytest.raises(ValueError):
+        proof._get("/repos/andrewzp/theheat/actions/runs/12344", "invented-reader")

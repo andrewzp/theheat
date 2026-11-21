@@ -25,13 +25,14 @@ MAX_PARENT_AGE = timedelta(minutes=30)
 UTC = timezone.utc
 _ID = re.compile(r"[1-9][0-9]{0,19}\Z")
 _SHA = re.compile(r"[a-f0-9]{40}\Z")
-_TIME = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?Z\Z")
+_TIME = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?"
+                   r"(?:Z|[+-](?:0\d|1\d|2[0-3]):[0-5]\d)\Z")
 
 
 def _time(value: Any) -> datetime:
-    if not isinstance(value, str) or not _TIME.fullmatch(value):
+    if not isinstance(value, str) or not _TIME.fullmatch(value) or value.endswith("-00:00"):
         raise ValueError("timestamp")
-    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(UTC)
 
 
 def context_eligible(env: Mapping[str, str]) -> bool:
@@ -74,16 +75,25 @@ def _get(path: str, token: str) -> dict:
     connection = http.client.HTTPSConnection("api.github.com", timeout=5)
     try:
         connection.request("GET", path, headers={"Authorization": f"Bearer {token}",
-            "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28",
+            "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2026-03-10",
             "User-Agent": "theheat-automatic-catchup-provenance"})
         response = connection.getresponse()
         if response.status != 200 or response.getheader("Content-Encoding", "identity") != "identity":
             raise ValueError("http")
         if response.getheader("Content-Type", "").split(";")[0].strip() != "application/json":
             raise ValueError("content_type")
+        declared = response.getheader("Content-Length", None)
+        transfer = response.getheader("Transfer-Encoding", "").strip().lower()
+        if declared is not None:
+            if (not isinstance(declared, str) or not re.fullmatch(r"[0-9]{1,6}", declared)
+                    or int(declared) > MAX_BYTES or transfer):
+                raise ValueError("content_length")
+        elif transfer != "chunked":
+            raise ValueError("framing_unknown")
         body = response.read(MAX_BYTES + 1)
-        if len(body) > MAX_BYTES:
-            raise ValueError("size")
+        if (len(body) > MAX_BYTES or not response.isclosed()
+                or (declared is not None and len(body) != int(declared))):
+            raise ValueError("incomplete_or_oversize")
         value = json.loads(body.decode("utf-8"), object_pairs_hook=_pairs,
                            parse_constant=_constant, parse_float=_float)
         if not isinstance(value, dict):
