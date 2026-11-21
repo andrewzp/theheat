@@ -1,3 +1,7 @@
+## 0.9.109.153
+
+- Document GHCN dataset processing cadence in versioned product contracts, retaining prior exports and explicit station freshness, access, reuse, quota and cost limits.
+
 ## 0.9.109.152
 
 - Refuse unfaked connections in orchestrator unit tests and align development documentation with configured UTC schedules and all seven generated checks.

@@ -34,7 +34,7 @@ def test_complete_previous_export_bytes_are_preserved(schema, expected):
 
 def test_v3_adds_only_two_exact_late_daily_legs_and_keeps_unknowns():
     old = products.product_contract_document(schema=V2)
-    new = products.product_contract_document()
+    new = products.product_contract_document(schema=V3)
     assert new["schema"] == V3
     before, after = by_id(old), by_id(new)
     assert set(before) == set(after)
