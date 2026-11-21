@@ -77,8 +77,9 @@ python scripts/backup_gist.py \
 These are placeholders for an operator-approved capture, not an instruction to
 run one now. The output must be a new private directory. Existing files are never
 overwritten. The current fixed limits are 32 files, 8 MiB per file, 64 MiB total
-payload, 16 MiB metadata, four metadata requests / 30 seconds, and 180 seconds
-for the downloader. The descriptor input is limited to 1 MiB. These are refusal
+payload, 16 MiB per metadata response, and four metadata requests within one
+30-second deadline. The separate downloader has a 180-second bound. The descriptor
+input is limited to 1 MiB. These are refusal
 bounds, not storage-retention guarantees or permission to split an oversized
 backup into untracked pieces.
 
@@ -86,8 +87,12 @@ Keep descriptors, the complete manifest, objects and the final completion
 receipt together. Only the parent process verifies every file's recorded size,
 SHA-256 and private regular-file properties before writing `COMPLETE.json`.
 A directory, some downloaded bytes, an earlier completion receipt or exit code
-alone is insufficient evidence of a complete new capture. On failure retain
-`INCOMPLETE.json` and any original partial evidence. Never rename an incomplete
+alone is insufficient evidence of a complete new capture. On failure retain the
+actual refusal and any original partial evidence, including `INCOMPLETE.json`
+when emitted. Descriptor preflight, output creation or the initial descriptor
+write can fail before that marker exists; the upstream descriptor request can
+also fail before the downloader starts. A missing marker proves neither success
+nor permission to retry. Never rename an incomplete
 capture to complete or fill missing bytes from a newer revision.
 
 This route is bounded and does not retry automatically. Its implementation
