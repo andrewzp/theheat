@@ -110,9 +110,13 @@ function ghcnFetch(m, context) {
     && Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value
   const start = typeof context?.started_at === "string" ? Date.parse(context.started_at) : NaN
   const end = typeof context?.ended_at === "string" ? Date.parse(context.ended_at) : NaN
+  const fetchStart = typeof f?.started_at === "string" ? Date.parse(f.started_at) : NaN
+  const fetchEnd = typeof f?.ended_at === "string" ? Date.parse(f.ended_at) : NaN
   if (context?.current !== true || !Number.isFinite(start) || !Number.isFinite(end) || end < start
       || !f || Array.isArray(f) || f.schema_version !== 1 || f.scope !== "client_get_invocations"
-      || Object.keys(f).sort().join() !== "counts,get_calls,schema_version,scope,target_count,window_day"
+      || Object.keys(f).sort().join() !== "counts,ended_at,get_calls,schema_version,scope,started_at,target_count,window_day"
+      || !Number.isFinite(fetchStart) || !Number.isFinite(fetchEnd)
+      || fetchStart < start || fetchEnd > end || fetchEnd < fetchStart
       || !day(f.window_day) || f.window_day < new Date(start).toISOString().slice(0, 10)
       || f.window_day > new Date(end).toISOString().slice(0, 10)
       || !integer(f.target_count) || f.target_count < 1 || f.target_count > 366
@@ -129,7 +133,8 @@ function ghcnFetch(m, context) {
   const targets = new Set(Array.from({ length: f.target_count }, (_, i) =>
     new Date(Date.parse(f.window_day) - (i + 1) * 86400000).toISOString().slice(0, 10)))
   if (!m.diff_missing_dates.every(value => day(value) && targets.has(value))
-      || (c.payload_returned === 0 && (m.diff_fetch_failed !== 1 || m.station_obs_pairs !== 0 || m.stations_with_obs !== 0))) return null
+      || (c.payload_returned === 0 && (m.diff_fetch_failed !== 1 || Object.hasOwn(m, "diff_intake")
+        || ![m.station_obs_pairs, m.stations_with_obs].every(n => n === undefined || n === 0)))) return null
   const labels = {
     http_404: "HTTP 404", http_401: "HTTP 401", http_403: "HTTP 403", http_429: "HTTP 429",
     http_other_4xx: "other HTTP 4xx", http_5xx: "HTTP 5xx", http_other_error: ["other HTTP error", "other HTTP errors"],
@@ -150,9 +155,9 @@ function ghcnIntake(row, context) {
     : ["both", "both_global"].includes(d.provider) ? d.ghcn_pipeline_metrics : null
   if (d.provider !== "ghcn" && !["both", "both_global"].includes(d.provider)) return null
   const acquisition = ghcnFetch(m, context)
-  if (acquisition?.noPayload) return { state: "ghcn_fetch_unavailable", detail: acquisition.detail }
+  if (acquisition?.noPayload) return { state: "ghcn_fetch_unavailable", detail: acquisition.detail, acquisitionDetail: acquisition.detail }
   const unavailable = { state: "ghcn_intake_unavailable", detail: "Saved GHCN intake details are unavailable or inconsistent."
-    + (acquisition ? ` ${acquisition.detail}` : "") }
+    + (acquisition ? ` ${acquisition.detail}` : ""), acquisitionDetail: acquisition?.detail ?? null }
   const trace = m?.diff_intake, c = trace?.counts
   const names = ["parsed_temperature_rows", "inactive_station_rows", "too_old_rows", "future_rows",
     "usable_updates", "delete_updates", "unusable_updates", "final_values", "final_station_days"]
@@ -379,7 +384,10 @@ export function sourceOutcome(row, rejections = [], { rainfallNominationCurrent 
     ? Object.entries(regional).filter(([, r]) => r?.status !== "processed").map(([id, r]) => `${id}: ${text(r?.text) || text(r?.hold)}`)
     : []
   if (held.length && !((count(row.promoted) ?? 0) > 0)) return outcome("regional_hold", row, held.join("; "))
-  if (row.status === "failed") return outcome("unavailable", row, named)
+  if (row.status === "failed") {
+    const acquisition = ghcnIntake(row, ghcnIntakeContext)?.acquisitionDetail
+    return outcome("unavailable", row, [named, acquisition].filter(Boolean).join(" ") || null)
+  }
   // Only the collector's exact zero-work marker explains this policy exclusion.
   // Keep explicit access/incident failures above it; old copy rejections below
   // do not turn this current no-work policy skip into a new check attempt.

@@ -364,6 +364,7 @@ def _fetch_recent_obs(
         ), 0)
 
     # Fetch target dates in parallel; each may probe multiple start dates.
+    fetch_started_at = utc_now() if metrics_out is not None and _runtime is None else None
     raw_by_date: dict[date, bytes] = {}
     fetch_diagnostics: dict[date, dict] = {}
     if _runtime is not None:
@@ -409,6 +410,7 @@ def _fetch_recent_obs(
         ):
             metrics_out["diff_fetch"] = {
                 "schema_version": 1, "scope": "client_get_invocations", "window_day": today.isoformat(),
+                "started_at": fetch_started_at, "ended_at": utc_now(),
                 "target_count": len(dates), "get_calls": sum(item["get_calls"] for item in fetch_diagnostics.values()),
                 "counts": {name: sum(item["counts"][name] for item in fetch_diagnostics.values())
                            for name in _DIFF_FETCH_OUTCOMES},
@@ -811,6 +813,10 @@ def check_extreme_signals_for_stations(
             country_records). Lets the caller surface pipeline visibility
             in telemetry/dashboards without breaking the return contract.
     """
+    if metrics_out is not None:
+        for field in ("diff_fetch", "diff_intake", "diff_dates_attempted", "diff_dates_fetched",
+                      "diff_dates_missing", "diff_missing_dates", "diff_fetch_failed"):
+            metrics_out.pop(field, None)
     resolved_db = Path(db_path) if db_path else _db_path()
 
     if not resolved_db.exists():
@@ -855,10 +861,15 @@ def check_extreme_signals_for_stations(
                    if _runtime is not None else {}),
             )
         except RuntimeError:
+            fetch_metrics["diff_fetch_failed"] = 1
             if not points:
                 raise
             latest_obs = {}
-            fetch_metrics["diff_fetch_failed"] = 1
+        finally:
+            # Passive diagnostics survive the original exception path too.
+            # This does not turn a failed source or parsed body into an input.
+            if metrics_out is not None:
+                metrics_out.update(fetch_metrics)
     else:
         latest_obs = _fetch_obs_fn(active_ids)
     metrics = _empty_pipeline_metrics() | fetch_metrics

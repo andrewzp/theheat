@@ -26,7 +26,8 @@ def test_real_source_carries_only_actual_fixed_fetch_counts_through_json(case, e
     trace = m["diff_fetch"]
     assert trace["schema_version"] == 1 and trace["scope"] == "client_get_invocations"
     assert trace["window_day"] == "2026-11-21" and trace["target_count"] == 3
-    assert set(trace) == {"schema_version", "scope", "window_day", "target_count", "get_calls", "counts"}
+    assert set(trace) == {"schema_version", "scope", "window_day", "target_count", "get_calls", "counts", "started_at", "ended_at"}
+    assert trace["started_at"] == trace["ended_at"] == NOW
     assert trace["get_calls"] == (3 if case == "payload" else 30)
     assert trace["counts"][expected] == trace["get_calls"]
     assert sum(trace["counts"].values()) == trace["get_calls"]
@@ -110,3 +111,30 @@ def test_unexpected_exception_is_not_converted_into_a_captured_http_result_or_a_
         ghcn._fetch_diff(TODAY, diagnostics_out=diagnostics)
     assert len(calls) == 1 and diagnostics["get_calls"] == 1
     assert sum(diagnostics["counts"].values()) == 0
+
+
+def test_failed_source_without_tracked_history_keeps_complete_acquisition_and_stays_failed():
+    state = produce_fetch("404", tracked=False)
+    row = state["run_history"][0]["sources"][0]
+    assert row["status"] == "failed" and state["request_count"] == 30
+    assert metrics(state)["diff_fetch"]["counts"]["http_404"] == 30
+    assert state["drafts"] == []
+
+
+def test_empty_public_collection_clears_prior_capture_and_preserves_unrelated_caller_fields(tmp_path):
+    path = tmp_path / "existing.sqlite"
+    path.touch()
+    m = deepcopy(metrics(produce_fetch("payload")))
+    m["caller_marker"] = {"retained": True}
+    assert "diff_fetch" in m and "diff_intake" in m
+    assert ghcn.check_extreme_signals_for_stations(stations=[], db_path=path, metrics_out=m) == ([], [])
+    assert "diff_fetch" not in m and "diff_intake" not in m
+    assert "diff_dates_attempted" not in m and "diff_dates_fetched" not in m
+    assert m["caller_marker"] == {"retained": True} and m["stations_active"] == 0
+
+
+def test_returned_invalid_bytes_keep_their_acquisition_but_never_become_valid_inputs():
+    state = produce_fetch("invalid_payload", tracked=False)
+    assert state["run_history"][0]["sources"][0]["status"] == "failed"
+    assert metrics(state)["diff_fetch"]["counts"]["payload_returned"] == 3
+    assert "diff_intake" not in metrics(state) and state["drafts"] == []

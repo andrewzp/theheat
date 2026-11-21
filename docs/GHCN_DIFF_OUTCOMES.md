@@ -16,8 +16,12 @@ diagnosis of credentials; HTTP404 does not establish zero weather observations.
 An all-unavailable capture shows the actual counts and no returned payload.
 
 The readout checks exact fields, conserved counts, the existing target/probe
-bounds, missing-date and payload denominators, and the source run's date and
-currency. Malformed, contradictory, older or unobserved captures remain unknown.
+bounds, missing-date and payload denominators, and an acquisition interval within
+the current source run. The interval describes collection, not observation time.
+Zero returned payloads cannot coexist with a completed intake. Malformed,
+contradictory, older or unobserved captures remain unknown. Complete passive
+diagnostics survive source failure without changing the failure outcome; reused
+caller sinks lose earlier captures even when no stations are checked.
 Retained-byte replay and custom uninstrumented fetches do not acquire live HTTP
 facts. Existing intake records remain readable, and source/check rejection and
 alternate-product precedence are preserved. The readout grants no review or

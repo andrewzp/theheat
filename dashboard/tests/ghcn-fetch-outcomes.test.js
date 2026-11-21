@@ -13,7 +13,7 @@ const fixtures = JSON.parse(output.stdout), key = "open_meteo_extreme_signals"
 const copy = name => structuredClone(fixtures[name])
 const row = state => state.run_history[0].sources[0]
 const metrics = state => row(state).details.pipeline_metrics ?? row(state).details.ghcn_pipeline_metrics
-const projected = state => buildSourceHealthPayload(state, { asOf: "2026-11-21T12:02:00Z" }).sources.find(s => s.source === key).outcome
+const projected = state => buildSourceHealthPayload(state, { asOf: "2026-11-21T12:12:00Z" }).sources.find(s => s.source === key).outcome
 
 test("actual HTTP and transport outcomes reach the source readout without becoming zero weather", () => {
   for (const [name, expected] of [["404", /30 HTTP 404/], ["401", /30 HTTP 401/], ["403", /30 HTTP 403/],
@@ -42,6 +42,9 @@ test("missing, stale, contradictory or unbound acquisition facts remain unknown"
     m => { m.diff_fetch.schema_version = 2 },
     m => { m.diff_fetch.scope = "wire_requests" },
     m => { m.diff_fetch.window_day = "2026-11-20" },
+    m => { m.diff_fetch.started_at = "2026-11-21T11:58:59Z" },
+    m => { m.diff_fetch.ended_at = "2026-11-21T12:01:01Z" },
+    m => { m.diff_fetch.started_at = "2026-11-21T12:00:01Z" },
     m => { m.diff_fetch.target_count = 2 },
     m => { m.diff_fetch.get_calls = 31 },
     m => { m.diff_fetch.counts.http_404 = "30" },
@@ -77,4 +80,37 @@ test("old useful intakes and recorded checker rejection retain their original me
   rejected.suppressions = [{ source: key, stage: "critic" }]
   assert.equal(projected(rejected).state, "writer_or_check_rejection")
   assert.match(projected(rejected).detail, /Saved GHCN intake:/)
+})
+
+test("failed source keeps its status and complete acquisition detail without tracked history", () => {
+  const state = copy("untracked_404"), out = projected(state)
+  assert.equal(out.state, "unavailable")
+  assert.equal(out.status, "failed")
+  assert.match(out.detail, /30 HTTP 404/)
+  assert.doesNotMatch(out.detail, /0 station-days retained/)
+})
+
+test("a later same-day source run cannot borrow an earlier acquisition cause", () => {
+  const state = copy("later_401")
+  assert.match(projected(state).detail, /30 HTTP 401/)
+  metrics(state).diff_fetch = structuredClone(metrics(copy("404")).diff_fetch)
+  const out = projected(state)
+  assert.equal(out.state, "ghcn_intake_unavailable")
+  assert.doesNotMatch(out.detail, /30 HTTP 404|30 client calls/)
+})
+
+test("completed parsing contradicts a zero-payload capture", () => {
+  const state = copy("404")
+  metrics(state).diff_intake = structuredClone(metrics(copy("payload")).diff_intake)
+  const out = projected(state)
+  assert.equal(out.state, "ghcn_intake_unavailable")
+  assert.doesNotMatch(out.detail, /30 HTTP 404|30 client calls/)
+})
+
+test("returned invalid bodies keep acquisition detail without changing source failure", () => {
+  const out = projected(copy("invalid_payload"))
+  assert.equal(out.state, "unavailable")
+  assert.equal(out.status, "failed")
+  assert.match(out.detail, /3 client calls; 3 payloads returned/)
+  assert.doesNotMatch(out.detail, /station-days retained|valid archive|source recovered/i)
 })
