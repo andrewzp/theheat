@@ -11,7 +11,8 @@ bot actor and triggering actor, the first main bot attempt, and an automatic-onl
 alerts request. It reads at most two same-repository metadata responses: the
 scheduled sentinel parent and that parent's first-attempt jobs. Both responses
 are bounded to 64 KiB, with no retry, redirect or pagination. Declared lengths
-must match the received bytes; chunked responses must terminate completely.
+must match the received bytes; chunked responses must terminate completely with
+the empty trailer section. Nonempty trailers are explicitly unsupported and held.
 Ambiguous or unknown framing is held. It requires the
 same source revision, a parent created within 30 minutes, and one successfully
 completed catchup job and dispatch step with consistent timestamps, normalizing

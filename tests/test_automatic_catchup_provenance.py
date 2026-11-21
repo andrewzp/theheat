@@ -218,11 +218,13 @@ def test_only_the_actual_dispatch_step_can_supply_successful_dispatch_metadata()
     (b"", b'{"id":1}', False),
     (b"Transfer-Encoding: chunked\r\n", b'8\r\n{"id":1}\r\n0\r\n\r\n', True),
     (b"Transfer-Encoding: chunked\r\n", b'8\r\n{"id":1}\r\n', False),
+    (b"Transfer-Encoding: chunked\r\n", b'8\r\n{"id":1}\r\n0\r\nX-Trace: cut', False),
+    (b"Transfer-Encoding: chunked\r\n", b'8\r\n{"id":1}\r\n0\r\nX-Trace: full\r\n\r\n', False),
     (b"Content-Length: 8\r\nTransfer-Encoding: chunked\r\n", b'8\r\n{"id":1}\r\n0\r\n\r\n', False),
-], ids=["length", "short-prefix", "oversize-declared", "unknown-framing", "chunked", "cut-chunks", "ambiguous"])
+], ids=["length", "short-prefix", "oversize-declared", "unknown-framing", "chunked", "cut-chunks", "cut-trailer", "unsupported-trailer", "ambiguous"])
 def test_real_http_response_framing_not_a_complete_label(monkeypatch, header, entity, accepted):
     raw = b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n" + header + b"\r\n" + entity
-    response = http.client.HTTPResponse(SimpleNamespace(makefile=lambda *args: io.BytesIO(raw)))
+    response = proof._MetadataResponse(SimpleNamespace(makefile=lambda *args: io.BytesIO(raw)))
     response.begin()
     calls = []
 
@@ -234,6 +236,7 @@ def test_real_http_response_framing_not_a_complete_label(monkeypatch, header, en
             calls.append((method, path))
 
         def getresponse(self):
+            assert self.response_class is proof._MetadataResponse
             return response
 
         def close(self):
@@ -261,3 +264,11 @@ def test_valid_json_before_entity_termination_is_still_incomplete(monkeypatch):
     transport(monkeypatch, [b'{"id":1}'], complete=False)
     with pytest.raises(ValueError):
         proof._get("/repos/andrewzp/theheat/actions/runs/12344", "invented-reader")
+
+
+@pytest.mark.parametrize("stamp", ["0001-01-01T00:00:00+01:00", "9999-12-31T23:59:59-01:00"])
+def test_timestamp_normalization_overflow_is_a_bounded_false_result(monkeypatch, stamp):
+    values = bodies()
+    values[0]["created_at"] = stamp
+    transport(monkeypatch, values)
+    assert not proof.verify(context(), now=NOW)

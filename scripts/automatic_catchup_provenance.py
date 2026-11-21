@@ -32,7 +32,28 @@ _TIME = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?"
 def _time(value: Any) -> datetime:
     if not isinstance(value, str) or not _TIME.fullmatch(value) or value.endswith("-00:00"):
         raise ValueError("timestamp")
-    return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(UTC)
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(UTC)
+    except (ValueError, OverflowError) as exc:
+        raise ValueError("timestamp") from exc
+
+
+class _MetadataResponse(http.client.HTTPResponse):
+    """Require the empty trailer terminator that the stdlib tolerates at EOF.
+
+    Nonempty trailers are outside this bounded metadata contract. Refuse them
+    rather than add an independent HTTP header parser or trust a partial line.
+    This hook is tested against the same Python3.12 response reader used here.
+    """
+
+    def __init__(self, *args, **kwargs):
+        self.metadata_trailers_complete = False
+        super().__init__(*args, **kwargs)
+
+    def _read_and_discard_trailer(self):
+        if self.fp is None or self.fp.readline(3) != b"\r\n":
+            raise http.client.IncompleteRead(b"")
+        self.metadata_trailers_complete = True
 
 
 def context_eligible(env: Mapping[str, str]) -> bool:
@@ -73,6 +94,7 @@ def _get(path: str, token: str) -> dict:
     # Fixed host and numeric path segments only. http.client has neither a
     # redirect handler nor automatic retries/proxy discovery.
     connection = http.client.HTTPSConnection("api.github.com", timeout=5)
+    connection.response_class = _MetadataResponse
     try:
         connection.request("GET", path, headers={"Authorization": f"Bearer {token}",
             "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2026-03-10",
@@ -92,7 +114,9 @@ def _get(path: str, token: str) -> dict:
             raise ValueError("framing_unknown")
         body = response.read(MAX_BYTES + 1)
         if (len(body) > MAX_BYTES or not response.isclosed()
-                or (declared is not None and len(body) != int(declared))):
+                or (declared is not None and len(body) != int(declared))
+                or (transfer == "chunked" and (not isinstance(response, _MetadataResponse)
+                    or not response.metadata_trailers_complete))):
             raise ValueError("incomplete_or_oversize")
         value = json.loads(body.decode("utf-8"), object_pairs_hook=_pairs,
                            parse_constant=_constant, parse_float=_float)

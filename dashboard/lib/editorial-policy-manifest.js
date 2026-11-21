@@ -42,7 +42,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "data/geography/imerg_country_tiles_v1.json": "b863cd2dabb132da6dbda68d75c3649d68b8f95cf5768da9ea719a9c9f84ea16",
     "data/geography/ne_110m_admin_0_countries_v5_1_2.geojson": "6866c877d39cba9c357620878839b336d569f8c662d3cfab4cb1dbe2d39c977f",
     "data/place_registry.json": "e9678ac76bfd68d03032a80858a7cb6eed6353508bbcc2cafbdf3186a38cda64",
-    "scripts/automatic_catchup_provenance.py": "c9afff6ecf50f284cd4151cf2717324aa82330e6515cdd4f92424a7d73773432",
+    "scripts/automatic_catchup_provenance.py": "44b989c7ddf9ff885ea1015d28ffe316b978d1d23df7e43bdc8cafb309889f8d",
     "scripts/gen_imerg_country_tiles.py": "0853945aa4a357ef359169793fa99710fd30c7b9876fc755c7b7fde98d7f14a9",
     "scripts/gen_runtime_report_workflow.py": "70aac2fc2b67d1d91cdbdfc5a91e8537cecf96717be8b4b34d990d60afe5394d",
     "scripts/post_collection_sender.py": "4eb1b271a9d17f572da25fb5d148f6011cc3b099ca151f5b160c6c35a66e25dd",
@@ -312,5 +312,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "5c5ffcc95358c7df45ae838c228759ad0eb6275c8f9053c8130c0a8824b63d9e"
   },
   "schema_version": 1,
-  "source_sha256": "6b7a2233d200cc7b6f7a3ef75f1f6eb866624e741ae2286c22f23f8e732fb3bd"
+  "source_sha256": "69bc58d3111f97818eeaa67361d5bf5b46cdf0416121cacc7558941e4ea4fdf6"
 }
