@@ -80,6 +80,7 @@ POLICY_FILES = (
     "data/geography/imerg_country_tiles_v1.json",
     "src/orchestrator/metar_report.py",
     "scripts/post_collection_sender.py",
+    "scripts/automatic_catchup_provenance.py",
     "src/commands/postgres_batch_results.py", "src/commands/postgres_checks.py",
     "src/commands/check_execution_journal.py", "src/two_bot/check_executor.py",
     "src/two_bot/check_requests.py", "src/two_bot/check_transport.py",

@@ -40,6 +40,42 @@ def test_one_scheduled_completion_waits_then_invokes_the_unchanged_sender(monkey
     assert events == [("sleep", 65), ("process", [sys.executable, "-m", "src.main", "auto_publish_due"], {"check": False})]
 
 
+def test_verified_automatic_catchup_finishes_the_same_cycle(monkeypatch):
+    env = {**environment(), "GITHUB_EVENT_NAME": "workflow_dispatch",
+        "GITHUB_ACTOR": "github-actions[bot]", "GITHUB_TRIGGERING_ACTOR": "github-actions[bot]",
+        "THEHEAT_AUTOMATIC_SELECTION_ONLY": "1", "THEHEAT_VERIFIED_AUTOMATIC_CATCHUP": "true"}
+    events = install(monkeypatch, env)
+    assert sender.main(["--mode", "alerts"]) == 0
+    assert events == [("sleep", 65), ("process", [sys.executable, "-m", "src.main", "auto_publish_due"], {"check": False})]
+
+
+@pytest.mark.parametrize("key,value", [
+    ("THEHEAT_VERIFIED_AUTOMATIC_CATCHUP", "false"), ("THEHEAT_VERIFIED_AUTOMATIC_CATCHUP", "1"),
+    ("THEHEAT_VERIFIED_AUTOMATIC_CATCHUP", ""), ("GITHUB_ACTOR", "invented-person"),
+    ("GITHUB_TRIGGERING_ACTOR", "invented-person"), ("THEHEAT_AUTOMATIC_SELECTION_ONLY", "0"),
+    ("GITHUB_RUN_ATTEMPT", "2"), ("THEHEAT_PRODUCTION_PAUSED", "1"),
+    ("THEHEAT_MAX_DRAFTS_PER_CYCLE", "2"), ("THEHEAT_WRITER_SAMPLES", "2"),
+    ("THEHEAT_REFILL_ENABLED", "1"), ("THEHEAT_CRITIC_REVISE_ENABLED", "1"),
+])
+def test_a_proof_label_cannot_bypass_manual_or_existing_completion_limits(monkeypatch, key, value):
+    env = {**environment(), "GITHUB_EVENT_NAME": "workflow_dispatch",
+        "GITHUB_ACTOR": "github-actions[bot]", "GITHUB_TRIGGERING_ACTOR": "github-actions[bot]",
+        "THEHEAT_AUTOMATIC_SELECTION_ONLY": "1", "THEHEAT_VERIFIED_AUTOMATIC_CATCHUP": "true"}
+    env[key] = value
+    events = install(monkeypatch, env)
+    assert sender.main(["--mode", "alerts"]) == 0 and events == []
+
+
+def test_automatic_catchup_proof_cannot_expand_to_both_or_survive_revocation_during_wait(monkeypatch):
+    env = {**environment(), "GITHUB_EVENT_NAME": "workflow_dispatch",
+        "GITHUB_ACTOR": "github-actions[bot]", "GITHUB_TRIGGERING_ACTOR": "github-actions[bot]",
+        "THEHEAT_AUTOMATIC_SELECTION_ONLY": "1", "THEHEAT_VERIFIED_AUTOMATIC_CATCHUP": "true"}
+    events = install(monkeypatch, env)
+    assert sender.main(["--mode", "both"]) == 0 and events == []
+    monkeypatch.setattr(sender.time, "sleep", lambda delay: monkeypatch.setenv("THEHEAT_VERIFIED_AUTOMATIC_CATCHUP", "false"))
+    assert sender.main(["--mode", "alerts"]) == 0 and events == []
+
+
 @pytest.mark.parametrize("mode", ["metar_report", "observed_report", "manual_tweet", "auto_publish_due", "leaderboard"])
 def test_a_different_role_never_waits_or_starts_a_sender(monkeypatch, mode):
     events = install(monkeypatch, environment())

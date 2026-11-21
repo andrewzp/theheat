@@ -36,6 +36,10 @@ on:
         required: false
         default: false
         type: boolean
+      automatic_catchup_run_id:
+        description: 'Scheduled sentinel parent run; metadata verification is required, never an approval'
+        required: false
+        type: string
       report_month:
         description: 'Observed report only: previous completed month, YYYY-MM'
         required: false
@@ -369,8 +373,38 @@ jobs:
           GH_DISPATCH_TOKEN: ${{ github.token }}
         run: node scripts/consume-gist-commands.mjs --inbox "$RUNNER_TEMP/inbox" --report "$RUNNER_TEMP/consume-report.json"
 
+  automatic-catchup-proof:
+    # Metadata only: no Gist, model, sender or provider secrets in this role.
+    if: >-
+      github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+      && github.run_attempt == '1' && github.actor == 'github-actions[bot]'
+      && github.triggering_actor == 'github-actions[bot]' && inputs.mode == 'alerts'
+      && inputs.automatic_only && inputs.automatic_catchup_run_id != ''
+    permissions:
+      contents: read
+      actions: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      eligible: ${{ steps.provenance.outputs.eligible }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Verify scheduled sentinel dispatch metadata
+        id: provenance
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUESTED_MODE: ${{ inputs.mode }}
+          THEHEAT_AUTOMATIC_SELECTION_ONLY: ${{ inputs.automatic_only && '1' || '0' }}
+          THEHEAT_AUTOMATIC_CATCHUP_RUN_ID: ${{ inputs.automatic_catchup_run_id }}
+        run: python scripts/automatic_catchup_provenance.py
+
   run:
-    needs: [test, commands-before]
+    needs: [test, commands-before, automatic-catchup-proof]
+    env:
+      THEHEAT_VERIFIED_AUTOMATIC_CATCHUP: ${{ needs.automatic-catchup-proof.result == 'success' && needs.automatic-catchup-proof.outputs.eligible == 'true' && 'true' || 'false' }}
     permissions:
       contents: read
       issues: write
@@ -727,7 +761,10 @@ jobs:
 
       - name: Service due drafts after scheduled collection
         if: >-
-          success() && github.event_name == 'schedule' && github.ref == 'refs/heads/main'
+          success() && (github.event_name == 'schedule'
+          || (github.event_name == 'workflow_dispatch' && inputs.mode == 'alerts' && inputs.automatic_only
+          && needs.automatic-catchup-proof.result == 'success' && needs.automatic-catchup-proof.outputs.eligible == 'true'))
+          && github.ref == 'refs/heads/main'
           && github.run_attempt == '1' && vars.THEHEAT_POST_COLLECTION_SENDER == '1'
           && (steps.mode.outputs.mode == 'alerts' || steps.mode.outputs.mode == 'both')
           && (steps.mode.outputs.catchup != '1' || steps.catchup-reservation.outputs.confirmed == '1')

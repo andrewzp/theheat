@@ -36,7 +36,8 @@ def test_only_the_catchup_job_can_start_workflows(workflow):
     assert "permissions" not in workflow["jobs"]["sentinel"]
     job = _job(workflow)
     assert job["permissions"] == {"contents": "read", "actions": "write"}
-    assert job["if"] == "vars.THEHEAT_PRODUCTION_PAUSED != '1' && github.ref == 'refs/heads/main'"
+    assert job["if"].strip() == ("vars.THEHEAT_PRODUCTION_PAUSED != '1' && github.ref == 'refs/heads/main' "
+        "&& github.event_name == 'schedule' && github.run_attempt == '1'")
     assert "needs" not in job  # a sentinel failure must not hold the catch-up
     step = next(s for s in job["steps"] if s.get("name") == STEP)
     assert step["env"] == {"GH_TOKEN": "${{ github.token }}"}
@@ -81,6 +82,7 @@ def _run_step(workflow, tmp_path: Path, state: Path, *, active: str = "0", list_
             "PATH": f"{bindir}:{os.environ.get('PATH', '')}",
             "RUNNER_TEMP": str(runner_temp),
             "GITHUB_REPOSITORY": "andrewzp/theheat",
+            "GITHUB_RUN_ID": "12344",
             "GH_CALLS": str(calls),
             "GH_ACTIVE": active,
             "GH_LIST_EXIT": str(list_exit),
@@ -96,7 +98,8 @@ def _run_step(workflow, tmp_path: Path, state: Path, *, active: str = "0", list_
 def test_stale_lane_with_no_active_bot_run_dispatches_one_alerts_run(workflow, tmp_path):
     calls = _run_step(workflow, tmp_path, _state(tmp_path, timedelta(hours=9)))
     assert len(calls) == 2 and calls[0].startswith("run list ")
-    assert calls[1] == "workflow run bot.yml --repo andrewzp/theheat --ref main -f mode=alerts"
+    assert calls[1] == ("workflow run bot.yml --repo andrewzp/theheat --ref main -f mode=alerts "
+        "-f automatic_only=true -f automatic_catchup_run_id=12344")
 
 
 @pytest.mark.parametrize("age", [timedelta(hours=1), timedelta(minutes=280)])

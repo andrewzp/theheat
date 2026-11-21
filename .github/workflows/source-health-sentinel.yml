@@ -75,7 +75,9 @@ jobs:
     # ask for one ordinary alerts run; a workflow_dispatch starts right away.
     # Separate job so only this step's token can start workflows; the
     # reconcilers above keep their read-only Actions scope.
-    if: vars.THEHEAT_PRODUCTION_PAUSED != '1' && github.ref == 'refs/heads/main'
+    if: >-
+      vars.THEHEAT_PRODUCTION_PAUSED != '1' && github.ref == 'refs/heads/main'
+      && github.event_name == 'schedule' && github.run_attempt == '1'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -110,5 +112,6 @@ jobs:
             echo "alerts catch-up: bot run already active ($active); not dispatching"
             exit 0
           fi
-          gh workflow run bot.yml --repo "$GITHUB_REPOSITORY" --ref main -f mode=alerts
+          gh workflow run bot.yml --repo "$GITHUB_REPOSITORY" --ref main -f mode=alerts \
+            -f automatic_only=true -f automatic_catchup_run_id="$GITHUB_RUN_ID"
           echo "alerts catch-up: dispatched one alerts run"

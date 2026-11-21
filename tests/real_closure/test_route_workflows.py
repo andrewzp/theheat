@@ -12,6 +12,7 @@ bot.yml titles manual_tweet runs by publish intent; admission refusal markers us
 from __future__ import annotations
 
 from pathlib import Path
+import json
 import re
 import subprocess
 
@@ -99,7 +100,11 @@ def test_bot_drains_only_in_route_mode_and_keeps_every_existing_default():
         assert drain["run"].startswith("node scripts/consume-gist-commands.mjs")
         assert {key: drain["env"][key] for key in ROUTE_DRAIN_ENV} == ROUTE_DRAIN_ENV
     assert doc["jobs"]["commands-after"]["needs"] == ["commands-before", "run"]
-    assert doc["jobs"]["run"]["needs"] == ["test", "commands-before"]
+    # The additional metadata-only role cannot mutate Gist or receive sender keys.
+    assert doc["jobs"]["run"]["needs"] == ["test", "commands-before", "automatic-catchup-proof"]
+    proof = doc["jobs"]["automatic-catchup-proof"]
+    assert proof["permissions"] == {"contents": "read", "actions": "read"}
+    assert "secrets." not in json.dumps(proof)
     assert doc["jobs"]["run"]["if"].startswith("always()")
     # The schedule stagger changes only minutes. Keep every slot and all other cron fields.
     expected_schedules = [
@@ -151,7 +156,8 @@ def test_bot_drains_only_in_route_mode_and_keeps_every_existing_default():
     for flag in ("THEHEAT_AWC_OBSERVED_CONTRAST", "THEHEAT_POST_COLLECTION_SENDER"):
         assert step["env"][flag] == "${{ vars." + flag + " || '0' }}"
     assert step["env"]["THEHEAT_SENDER_TEXT_SOURCE"] == "${{ github.event.inputs.text_source }}"
-    assert set(doc["on"]["workflow_dispatch"]["inputs"]) - set(old["on"]["workflow_dispatch"]["inputs"]) == {"text_source", "automatic_only", "report_month"}
+    assert set(doc["on"]["workflow_dispatch"]["inputs"]) - set(old["on"]["workflow_dispatch"]["inputs"]) == {
+        "text_source", "automatic_only", "report_month", "automatic_catchup_run_id"}
     assert step["env"]["THEHEAT_HOT10_NORMALS_PRODUCT"] == "${{ vars.THEHEAT_HOT10_NORMALS_PRODUCT || 'meteostat-normals-point-v1' }}"
     assert step["env"]["THEHEAT_NWPS_MAJOR_FORECASTS"] == "${{ vars.THEHEAT_NWPS_MAJOR_FORECASTS || '0' }}"
     assert step["env"]["THEHEAT_OBSERVED_WEATHER_ONLY"] == "${{ vars.THEHEAT_OBSERVED_WEATHER_ONLY || '0' }}"
@@ -159,7 +165,8 @@ def test_bot_drains_only_in_route_mode_and_keeps_every_existing_default():
     assert step["env"]["THEHEAT_AUTOMATIC_SELECTION_ONLY"] == "${{ github.event_name == 'workflow_dispatch' && inputs.automatic_only && '1' || '0' }}"
     marker = step["env"]["THEHEAT_SERIALIZED_WRITER"]
     assert evaluate(marker, "") == "" and evaluate(marker, "serialized") == "format('{0}:run', github.run_id)"
-    assert set(old["jobs"]) == set(doc["jobs"]) - {"commands-before", "commands-after", "test-dashboard"}
+    assert set(old["jobs"]) == set(doc["jobs"]) - {
+        "commands-before", "commands-after", "test-dashboard", "automatic-catchup-proof"}
 
 
 def test_other_gist_writer_workflows_join_the_group_only_in_route_mode():

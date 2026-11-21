@@ -1,4 +1,4 @@
-"""Default-off completion of a genuine scheduled collector's delivery cycle.
+"""Default-off completion of a scheduled or verified automatic recovery cycle.
 
 This grants no approval and never generates content. After the existing delay,
 the unchanged due sender reloads Gist and applies its normal current checks,
@@ -18,9 +18,14 @@ DELAY_SECONDS = 65
 
 
 def eligible(env, mode):
+    automatic_catchup = (mode == "alerts"
+        and env.get("GITHUB_EVENT_NAME") == "workflow_dispatch"
+        and env.get("GITHUB_ACTOR") == env.get("GITHUB_TRIGGERING_ACTOR") == "github-actions[bot]"
+        and env.get("THEHEAT_AUTOMATIC_SELECTION_ONLY") == "1"
+        and env.get("THEHEAT_VERIFIED_AUTOMATIC_CATCHUP") == "true")
     return (mode in {"alerts", "both"}
         and env.get(FLAG) == "1"
-        and env.get("GITHUB_EVENT_NAME") == "schedule"
+        and (env.get("GITHUB_EVENT_NAME") == "schedule" or automatic_catchup)
         and env.get("GITHUB_REF") == "refs/heads/main"
         and env.get("GITHUB_REPOSITORY") == "andrewzp/theheat"
         and env.get("GITHUB_WORKFLOW_REF") == "andrewzp/theheat/.github/workflows/bot.yml@refs/heads/main"
