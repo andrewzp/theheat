@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass
-from decimal import Decimal
+from decimal import Decimal, DecimalException
 import hashlib
 import json
 import math
@@ -75,9 +75,12 @@ def _refuse_constant(name: str):
 
 
 def _finite_float(value: str) -> Decimal:
-    result = Decimal(value)
-    if not result.is_finite() or not math.isfinite(float(result)):
-        raise ReportError("input_non_finite_number")
+    try:
+        result = Decimal(value)
+        if not result.is_finite() or not math.isfinite(float(result)):
+            raise ReportError("input_non_finite_number")
+    except (DecimalException, OverflowError, ValueError) as exc:
+        raise ReportError("input_non_finite_number") from exc
     return result
 
 

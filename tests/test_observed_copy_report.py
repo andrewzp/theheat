@@ -371,3 +371,13 @@ def test_stdout_distinguishes_missing_suppression_history_from_empty(tmp_path, c
 def test_zero_body_sentences_have_their_own_histogram_bin(text):
     result = oc.build_report([oc.parse_export("s.json", json.dumps([draft("empty", text)]).encode())])[0]
     assert result["sentences"] == {"0": 1}
+
+
+@pytest.mark.parametrize("exponent", ["99999999999999999999999", "-99999999999999999999999"])
+def test_decimal_exponent_outside_runtime_range_is_a_bounded_cli_refusal(tmp_path, capsys, exponent):
+    source = tmp_path / "huge-exponent.json"
+    source.write_text('{"drafts":[],"value":1e'+exponent+'}')
+    out = tmp_path / "output"
+    assert cli.main(["--input", str(source), "--out", str(out)]) == 2
+    assert json.loads(capsys.readouterr().out) == {"error": "input_non_finite_number"}
+    assert not out.exists()
