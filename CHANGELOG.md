@@ -1,7 +1,7 @@
 ## 0.9.109.162 — 2026-11-21
 
 - Preserve unresolved source-review holds on both parts of a local episode split; an unverified packet reference never clears the hold.
-- Derive inherited holds from retained assertions, expose the effective hold without rewriting old evidence, and refuse conflicting labels. Keep ordinary unheld edits and delivered/unknown snapshots unchanged.
+- Recover inherited holds from retained assertions and revision-bound split ancestry without rewriting old evidence. Refuse stale hold downgrades, contradictory or malformed labels before applying local edits; preserve ordinary unheld controls and delivered/unknown snapshots, including ledger-only attempts.
 
 ## 0.9.109.161 — 2026-11-21
 

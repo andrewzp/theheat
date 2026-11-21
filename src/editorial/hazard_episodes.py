@@ -92,8 +92,54 @@ def _expect(episode: Mapping[str, Any], expected_revision: int) -> None:
         raise ValueError("episode_expected_revision_mismatch")
 
 
-def _historical_hold(episode: Mapping[str, Any], incoming: Mapping[str, Any] | None = None) -> str | None:
-    """Retained member holds remain authoritative even if an old split lost its label."""
+def _hold_values(values: Sequence[Any]) -> str | None:
+    if any(value is not None and type(value) is not str for value in values):
+        raise ValueError("episode_historical_hold_invalid")
+    holds = {value for value in values if value is not None and value != ""}
+    if len(holds) > 1:
+        raise ValueError("episode_conflicting_historical_holds")
+    return next(iter(holds)) if holds else None
+
+
+def _origin_hold(ledger: Mapping[str, Any], episode_id: str, revision: int,
+                 seen: frozenset[str]) -> str | None:
+    """Read explicit assertions at a split's recorded origin, never later parent labels.
+
+    Holds are monotonic, so prior additions suffice; no physical event or source
+    adjudication is inferred. Missing ancestry/assertions cannot establish release.
+    """
+    if (type(episode_id) is not str or episode_id in seen or len(seen) >= 64
+            or type(revision) is not int or revision < 1):
+        raise ValueError("episode_historical_hold_origin_unavailable")
+    parent = ledger["episodes"].get(episode_id)
+    if not isinstance(parent, Mapping) or not isinstance(parent.get("history"), list):
+        raise ValueError("episode_historical_hold_origin_unavailable")
+    history = parent["history"]
+    if revision > len(history):
+        raise ValueError("episode_historical_hold_origin_unavailable")
+    if any(not isinstance(row, Mapping) or type(row.get("revision")) is not int for row in history):
+        raise ValueError("episode_historical_hold_origin_unavailable")
+    records = [row for row in history if row["revision"] <= revision]
+    if [row["revision"] for row in records] != list(range(1, revision + 1)):
+        raise ValueError("episode_historical_hold_origin_unavailable")
+    values = []
+    for row in records:
+        if "split_from" in row:
+            values.append(_origin_hold(ledger, row["split_from"], row.get("origin_revision"), seen | {episode_id}))
+        for field in ("added", "reassigned_in"):
+            if field not in row:
+                continue
+            matches = [member.get("assertion") for item in ledger["episodes"].values()
+                       for member in item.get("members", []) if member.get("source_revision") == row[field]]
+            if not matches or any(not isinstance(assertion, Mapping) for assertion in matches):
+                raise ValueError("episode_historical_hold_origin_unavailable")
+            values.extend(assertion.get("historical_hold") for assertion in matches)
+    return _hold_values(values)
+
+
+def _historical_hold(episode: Mapping[str, Any], incoming: Mapping[str, Any] | None = None,
+                     *, ledger: Mapping[str, Any]) -> str | None:
+    """Retained holds and revision-bound legacy split ancestry remain authoritative."""
     values = [episode.get("historical_hold")]
     for member in episode.get("members") or []:
         assertion = member.get("assertion") if isinstance(member, Mapping) else None
@@ -101,16 +147,15 @@ def _historical_hold(episode: Mapping[str, Any], incoming: Mapping[str, Any] | N
             values.append(assertion.get("historical_hold"))
     if incoming is not None:
         values.append(incoming.get("historical_hold"))
-    holds = [value for value in values if value]
-    if any(type(value) is not str for value in holds):
-        raise ValueError("episode_historical_hold_invalid")
-    if len(set(holds)) > 1:
-        raise ValueError("episode_conflicting_historical_holds")
-    return holds[0] if holds else None
+    for row in episode.get("history") or []:
+        if "split_from" in row:
+            values.append(_origin_hold(ledger, row["split_from"], row.get("origin_revision"),
+                                       frozenset({episode["episode_id"]})))
+    return _hold_values(values)
 
 
-def _held(episode: Mapping[str, Any], evidence_packet_sha256: str | None) -> None:
-    hold = _historical_hold(episode)
+def _held(ledger: Mapping[str, Any], episode: Mapping[str, Any], evidence_packet_sha256: str | None) -> None:
+    hold = _historical_hold(episode, ledger=ledger)
     if hold and not (type(evidence_packet_sha256) is str and re.fullmatch(r"[0-9a-f]{64}", evidence_packet_sha256)):
         raise ValueError(f"historical_hold:{hold}")
 
@@ -121,7 +166,7 @@ def assign(ledger: dict[str, Any], assertion: Mapping[str, Any], *, actor: str =
     revision = source_revision(assertion)
     # Validate before mutating the ledger. Omission is not an adjudication, and
     # contradictory labels cannot be resolved by choosing the newest assertion.
-    hold = _historical_hold(ledger["episodes"].get(key) or {}, assertion)
+    hold = _historical_hold(ledger["episodes"].get(key) or {}, assertion, ledger=ledger)
     episode = ledger["episodes"].setdefault(key, {
         "episode_id": key, "hazard": assertion["hazard"], "issuer": assertion["issuer"], "revision": 0,
         "members": [], "history": [], "status": "active", "historical_hold": assertion.get("historical_hold"),
@@ -170,8 +215,8 @@ def split(ledger: dict[str, Any], episode_id: str, revisions: Sequence[str], *, 
     """Partition revisions without clearing holds; a packet digest is only a reference."""
     source = _episode(ledger, episode_id)
     _expect(source, expected_revision)
-    _held(source, evidence_packet_sha256)
-    hold = _historical_hold(source)
+    _held(ledger, source, evidence_packet_sha256)
+    hold = _historical_hold(source, ledger=ledger)
     moving = [m for m in source["members"] if m["source_revision"] in set(revisions)]
     if not moving or len(moving) == len(source["members"]) or len(moving) != len(set(revisions)):
         raise ValueError("episode_split_selection")
@@ -198,7 +243,8 @@ def reassign(ledger: dict[str, Any], revision: str, *, source_episode: str, targ
     source, target = _episode(ledger, source_episode), _episode(ledger, target_episode)
     _expect(source, expected_revisions.get(source_episode, -1))
     _expect(target, expected_revisions.get(target_episode, -1))
-    _held(source, None)
+    _held(ledger, source, None)
+    _held(ledger, target, None)
     if source["hazard"] != target["hazard"]:
         raise ValueError("episode_reassign_hazard")
     member = next((m for m in source["members"] if m["source_revision"] == revision), None)
@@ -217,7 +263,7 @@ def reassign(ledger: dict[str, Any], revision: str, *, source_episode: str, targ
 def supersede(ledger: dict[str, Any], old: str, new: str, *, expected_revision: int, actor: str) -> dict[str, Any]:
     episode = _episode(ledger, old)
     _expect(episode, expected_revision)
-    _held(episode, None)
+    _held(ledger, episode, None)
     _episode(ledger, new)
     episode["status"] = "superseded"
     episode["superseded_by"] = new
@@ -240,14 +286,14 @@ def affected_drafts(state: Mapping[str, Any], episode_ids: Sequence[str]) -> lis
 
 def invalidate_dependents(state: dict[str, Any], episode_ids: Sequence[str]) -> dict[str, list[str]]:
     """Revoke review/approval of pending dependents; delivered or unknown-delivery snapshots stay untouched."""
-    from src.editorial.revisions import revoke_approval
+    from src.editorial.revisions import has_unresolved_publish, revoke_approval
 
     changed, preserved = [], []
     ids = set(affected_drafts(state, episode_ids))
     for draft in state.get("drafts") or []:
         if str(draft.get("id")) not in ids:
             continue
-        if draft.get("status") == "posted" or draft.get("publish_outcome") == "unknown":
+        if draft.get("status") == "posted" or has_unresolved_publish(draft, state):
             preserved.append(str(draft.get("id")))
             continue
         revoke_approval(draft)
@@ -314,7 +360,7 @@ def writer_statements(ledger: Mapping[str, Any], episode_id: str) -> list[dict[s
     """Only matched, attributed statements with their own times; never a scientific warrant."""
     episode = _episode(ledger, episode_id)
     try:
-        held = _historical_hold(episode)
+        held = _historical_hold(episode, ledger=ledger)
     except ValueError:
         return []  # Contradictory/malformed retained holds grant no writer statements.
     if episode.get("status") != "active" or held:
@@ -350,10 +396,21 @@ def project_binding(ledger: Mapping[str, Any], episode_id: str) -> dict[str, Any
     episode = _episode(ledger, episode_id)
     return {"episode_status": episode["status"], "superseded_by": episode.get("superseded_by"),
             "episode_revision": episode["revision"],
-            "historical_hold": _historical_hold(episode) or episode.get("historical_hold"),
+            "historical_hold": _historical_hold(episode, ledger=ledger),
             "relationships": [deepcopy(row) for row in ledger["relationships"] if episode_id in row["episodes"]],
             "report_joins": [{key: deepcopy(row.get(key)) for key in JOIN_VIEW_FIELDS}
                              for row in ledger["report_joins"] if row["episode_id"] == episode_id]}
+
+
+def validate_projection_update(binding: Mapping[str, Any], projection: Mapping[str, Any]) -> None:
+    """An older packet/ledger cannot undo a candidate's retained disposition."""
+    hold = _hold_values([binding.get("historical_hold")])
+    if hold and hold != projection.get("historical_hold"):
+        raise ValueError("episode_historical_hold_downgrade")
+    revision, projected = binding.get("episode_revision"), projection.get("episode_revision")
+    if (type(projected) is not int or projected < 1 or revision is not None
+            and (type(revision) is not int or revision < 1 or revision > projected)):
+        raise ValueError("episode_stale_projection")
 
 
 def publish_bindings(ledger: dict[str, Any], state: dict[str, Any]) -> dict[str, list[str]]:
@@ -365,36 +422,58 @@ def publish_bindings(ledger: dict[str, Any], state: dict[str, Any]) -> dict[str,
     changed review context: pending dependents lose review and approval; delivered or
     unknown-delivery snapshots are never rewritten.
     """
-    from src.editorial.revisions import revoke_approval
+    from src.editorial.revisions import has_unresolved_publish, revoke_approval
 
+    # Work on private copies until every affected hold/revision/edit is validated.
+    # This is local preflight atomicity, not a transaction over production Gist.
+    working = deepcopy(ledger)
     withdrawn = []
     for draft in state.get("drafts") or []:
+        if draft.get("status") == "posted" or has_unresolved_publish(draft, state):
+            continue
         binding = (draft.get("review_context") or {}).get("physical_episode") if isinstance(draft, dict) else None
         for row in binding.get("report_joins") or [] if isinstance(binding, dict) else []:
-            active = next((j for j in ledger["report_joins"] if j["join_id"] == row.get("join_id") and not j["removed"]),
+            active = next((j for j in working["report_joins"] if j["join_id"] == row.get("join_id") and not j["removed"]),
                           None)
             if row.get("removed") and active is not None:
-                remove_join(ledger, active["join_id"], actor=f"editor:{row.get('removed_by') or 'dashboard'}")
+                remove_join(working, active["join_id"], actor=f"editor:{row.get('removed_by') or 'dashboard'}")
                 withdrawn.append(active["join_id"])
     changed, preserved = [], []
+    plans = []
     for draft in state.get("drafts") or []:
         binding = (draft.get("review_context") or {}).get("physical_episode") if isinstance(draft, dict) else None
         if not isinstance(binding, dict) or binding.get("episode_id") not in ledger["episodes"]:
             continue
-        projection = project_binding(ledger, binding["episode_id"])
+        if draft.get("status") == "posted" or has_unresolved_publish(draft, state):
+            preserved.append(str(draft.get("id")))
+            continue
+        projection = project_binding(working, binding["episode_id"])
+        validate_projection_update(binding, projection)
         removed = {row.get("join_id") for row in binding.get("report_joins") or [] if row.get("removed")}
         for row in projection["report_joins"]:
             row["removed"] = bool(row["removed"] or row["join_id"] in removed)
         if all(binding.get(key) == value for key, value in projection.items()):
             continue
-        if draft.get("status") == "posted" or draft.get("publish_outcome") == "unknown":
-            preserved.append(str(draft.get("id")))
-            continue
-        binding.update(projection)
-        revoke_approval(draft)
-        draft.pop("review_binding", None)
-        draft["episode_invalidated"] = True
+        prepared = deepcopy(draft)
+        prepared["review_context"]["physical_episode"].update(projection)
+        revoke_approval(prepared)
+        prepared.pop("review_binding", None)
+        prepared["episode_invalidated"] = True
+        plans.append((draft, binding, projection, prepared))
         changed.append(str(draft.get("id")))
+    # No refusal below this point. Preserve existing draft/binding object identities.
+    for original, updated in zip(ledger["report_joins"], working["report_joins"], strict=True):
+        original.update(updated)
+    ledger["operations"].extend(working["operations"][len(ledger["operations"]):])
+    for draft, binding, projection, prepared in plans:
+        binding.update(projection)
+        for key in set(draft) | set(prepared):
+            if key == "review_context":
+                continue
+            if key in prepared:
+                draft[key] = prepared[key]
+            else:
+                draft.pop(key, None)
     return {"invalidated": changed, "preserved_delivered": preserved, "withdrawn_joins": withdrawn}
 
 
@@ -542,4 +621,4 @@ __all__ = ["BINDING_SCHEMA", "FLAG", "HAZARDS", "HISTORICAL_HOLDS", "SCHEMA", "A
            "firms_assertion", "gdacs_assertion", "invalidate_dependents", "join_report", "lineage",
            "material_update", "nws_assertion", "poll", "project_binding", "propose_join", "publish_bindings",
            "reassign", "remove_join",
-           "source_revision", "split", "supersede", "writer_statements"]
+           "source_revision", "split", "supersede", "validate_projection_update", "writer_statements"]

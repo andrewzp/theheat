@@ -80,11 +80,21 @@ reference, not adjudication of the source. Further splits or later assertions
 which omit the hold cannot clear it.
 
 Explicit holds in retained member assertions also apply when an older split left
-the episode's top-level field empty. `inspect` keeps that recorded episode intact
+the episode's top-level field empty. Legacy splits also follow their recorded
+parent revision and its retained assertions, including earlier split ancestry;
+a later parent hold is not retroactive evidence about the child. Missing,
+inconsistent or cyclic ancestry refuses use (ancestry over64links is unsupported).
+`inspect` keeps that recorded episode intact
 and reports `effective_historical_hold` separately. Conflicting retained hold
-labels are refused, and no writer statements are granted. Projecting a changed
-binding revokes pending reviews and approvals while preserving delivered and
-unknown-delivery snapshots. None of these operations resolves missing incident
+labels and malformed hold types are refused, and no writer statements are granted.
+An older ledger cannot remove a draft's recorded hold or move its projected
+revision backward. The retained-report writer also checks the current candidate
+binding before using a packet's ledger. Publish preflights every affected draft
+and join before applying edits; a refusal leaves both local inputs unchanged.
+Projecting a changed binding revokes pending reviews and approvals while
+preserving delivered and unknown-delivery snapshots, including unknown attempts
+recorded only in the publication ledger. This is local preflight atomicity, not
+transactional production storage. None of these operations resolves missing incident
 evidence, physical duration or cross-border extent.
 
 ## Scope still open
