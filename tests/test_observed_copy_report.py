@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import stat
+from itertools import permutations
 
 import pytest
 
@@ -76,12 +77,13 @@ def test_stages_are_reported_as_recorded_never_upgraded():
     stages = summary["stages"]
     assert stages["writer_to_saved"] == {"final_differs_from_accepted_writer_output": 1,
                                          "final_equals_accepted_writer_output": 1, "unjoined": 3}
-    # A draft with no recorded status is unknown, not "not published".
-    assert stages["publication"] == {"not_published": 2, "recorded_receipt": 1, "status_posted_without_receipt": 1,
+    # Nonposted status describes the retained record, not actual X visibility.
+    assert stages["publication"] == {"no_publication_recorded": 2, "recorded_receipt": 1, "status_posted_without_receipt": 1,
                                      "unknown": 1}
     assert stages["fact_check"] == {"passed": 3, "unknown": 2}
     assert stages["generation"] == {"recorded": 2, "unknown": 3}
-    assert summary["generation_failures_recorded"] == {"fact_check": 2, "unknown": 1}
+    assert summary["retained_suppressions"]["stage_counts"] == {"fact_check": 2, "unknown": 1}
+    assert summary["retained_suppressions"]["unique_failed_generations"] is None
 
 
 # --- deterministic text measures --------------------------------------------------------------------
@@ -162,3 +164,143 @@ def test_public_documentation_uses_only_invented_examples():
     doc = Path(__file__).resolve().parents[1] / "docs" / "observed-copy-report.md"
     text = doc.read_text()
     assert "Invented" in text and "advisory" in text.lower()
+
+
+# Root O3 integration repairs: retained rows are not paid/model denominators.
+def report_export(label, suppressions, *, capture="one", include_history=True):
+    payload = {"drafts": [draft("invented-one", GOOD)], "capture_label": capture}
+    if include_history:
+        payload["suppressions"] = suppressions
+    return oc.parse_export(label, json.dumps(payload).encode())
+
+
+def test_repeated_export_and_exact_copy_do_not_inflate_suppression_counts():
+    one = report_export("one.json", [{"id": "invented-kill", "stage": "fact_check"}])
+    copy = report_export("copy.json", [{"id": "invented-kill", "stage": "fact_check"}])
+    original = oc.build_report([one])[0]
+    repeated, markdown, _ = oc.build_report([one, one, copy])
+    assert original["retained_suppressions"]["stage_counts"] == {"fact_check": 1}
+    assert repeated["retained_suppressions"]["stage_counts"] == {"fact_check": 1}
+    assert len(repeated["inputs"]) == 3
+    [row] = repeated["retained_suppressions"]["rows"]
+    assert [p["argument_index"] for p in row["pointers"]] == [0, 1, 2]
+    assert [p["input"] for p in row["pointers"]] == ["one.json", "one.json", "copy.json"]
+    assert "generation_failures_recorded" not in repeated
+    assert "not unique failed generations or paid attempts" in markdown
+
+
+def test_anonymous_rows_keep_row_and_capture_scope_without_fake_uniqueness():
+    rows = [{"stage": "fact_check"}, {"stage": "fact_check"}]
+    first = report_export("first.json", rows, capture="one")
+    second = report_export("second.json", rows, capture="two")
+    summary, _, _ = oc.build_report([first, first, second])
+    retained = summary["retained_suppressions"]
+    assert retained["stage_counts"] == {"fact_check": 4}
+    assert retained["anonymous_rows_included"] == 4
+    assert retained["unique_failed_generations"] is None
+    assert retained["paid_attempts"] is None
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+def test_identified_repeated_row_across_distinct_captures_counts_once(reverse):
+    row = {"id": "invented-stable-row", "stage": "score_gate"}
+    inputs = [report_export("one.json", [row], capture="one"),
+              report_export("two.json", [row], capture="two")]
+    if reverse:
+        inputs.reverse()
+    summary, _, _ = oc.build_report(inputs)
+    assert summary["retained_suppressions"]["stage_counts"] == {"score_gate": 1}
+    assert summary["retained_suppressions"]["identified_rows_included"] == 1
+
+
+@pytest.mark.parametrize("order", list(permutations(range(3))))
+def test_conflicting_suppression_ids_are_held_in_every_input_order(order):
+    inputs = [report_export("one.json", [{"id": "invented-conflict", "stage": "fact_check"}], capture="one"),
+              report_export("two.json", [{"id": "invented-conflict", "stage": "score_gate"}], capture="two"),
+              report_export("three.json", [{"id": "invented-independent", "stage": "critic"}], capture="three")]
+    summary, _, _ = oc.build_report([inputs[i] for i in order])
+    retained = summary["retained_suppressions"]
+    assert retained["stage_counts"] == {"critic": 1}
+    assert retained["conflicting_ids_held"] == 1
+    assert retained["identified_rows_included"] == 1
+    assert len(retained["conflicts"]) == 1
+    assert retained["conflicts"][0]["variants"] == 2
+    assert {p["input"] for p in retained["conflicts"][0]["pointers"]} == {"one.json", "two.json"}
+
+
+def test_missing_suppression_history_is_unknown_not_an_empty_observation():
+    missing = report_export("missing.json", None, include_history=False)
+    empty = report_export("empty.json", [])
+    summary, markdown, _ = oc.build_report([missing, empty])
+    retained = summary["retained_suppressions"]
+    assert retained["exports_without_history"] == 1
+    assert retained["exports_with_retained_list"] == 1
+    assert retained["stage_counts"] == {}
+    assert retained["availability"] == "partial_or_unavailable"
+    assert "unavailable" in markdown.lower()
+
+
+@pytest.mark.parametrize("raw,code", [
+    (b'{"drafts":[],"drafts":[]}', "input_duplicate_key"),
+    (b'{"drafts":[{"id":"a","text":"Invented","text":"Other"}]}', "input_duplicate_key"),
+    (b'{"drafts":[],"extra":1e309}', "input_non_finite_number"),
+    (b'{"drafts":[],"extra":-1e309}', "input_non_finite_number"),
+    (b'{"drafts":[],"suppressions":"unknown"}', "suppression_history_invalid"),
+    (b'{"drafts":[],"suppressions":[null]}', "suppression_without_object"),
+    (b'{"drafts":[],"suppressions":[{"stage":{}}]}', "suppression_invalid_stage"),
+    (b'{"drafts":[],"suppressions":[{"id":true}]}', "suppression_invalid_identity"),
+    (b'{"drafts":[{"id":"a","text":"\\ud800"}]}', "input_invalid_string"),
+])
+def test_ambiguous_or_malformed_export_is_a_bounded_refusal(raw, code):
+    with pytest.raises(oc.ReportError) as caught:
+        oc.parse_export("invented.json", raw)
+    assert caught.value.code == code
+
+
+def test_bare_list_pointer_addresses_the_actual_input_array():
+    export = oc.parse_export("list.json", json.dumps([draft("invented-list", GOOD)]).encode())
+    summary, _, _ = oc.build_report([export])
+    assert summary["drafts"][0]["pointers"][0]["pointer"] == "/0"
+
+
+@pytest.mark.parametrize("outcome", ["unknown", "submitted", "confirmed"])
+def test_pending_status_never_erases_unresolved_or_contradictory_delivery(outcome):
+    row = draft("invented-delivery", GOOD, publish_outcome=outcome)
+    summary, _, _ = oc.build_report([oc.parse_export("s.json", json.dumps([row]).encode())])
+    assert summary["stages"]["publication"] == {"unknown": 1}
+
+
+def test_cli_never_echoes_copy_in_untrusted_stage_labels(tmp_path, capsys):
+    private = "Invented private copy must never be printed"
+    row = draft("invented-label", GOOD, status=private,
+                review_context={"two_bot": {"critic": {"verdict": private}}})
+    source = export(tmp_path, "state.json", [row], suppressions=[{"stage": private}])
+    assert cli.main(["--input", str(source), "--out", str(tmp_path / "report")]) == 0
+    stdout = capsys.readouterr().out
+    assert private not in stdout and GOOD not in stdout
+    result = json.loads(stdout)
+    assert result["stages"]["status"] == {"unknown": 1}
+    assert result["stages"]["critic"] == {"unknown": 1}
+    assert result["retained_suppression_rows_by_stage"] == {"unknown": 1}
+
+
+def test_malformed_optional_stage_and_fact_fields_stay_unknown():
+    row = draft("invented-malformed", GOOD, status={},
+                review_context={"two_bot": {"bundle": {"current_facts": 7}}})
+    summary, _, sheet = oc.build_report([oc.parse_export("s.json", json.dumps([row]).encode())])
+    assert summary["stages"]["status"] == {"unknown": 1}
+    assert summary["stages"]["publication"] == {"unknown": 1}
+    assert "no retained source facts" in sheet
+
+
+def test_cli_count_summary_agrees_without_printing_private_text(tmp_path, capsys):
+    path = tmp_path / "invented.json"
+    path.write_text(json.dumps({"drafts": [draft("invented-one", GOOD)],
+                                "suppressions": [{"id": "invented-row", "stage": "fact_check"}]}))
+    out = tmp_path / "result"
+    assert cli.main(["--input", str(path), "--input", str(path), "--out", str(out)]) == 0
+    printed = capsys.readouterr().out
+    assert GOOD not in printed
+    value = json.loads(printed)
+    saved = json.loads((out / "report.json").read_bytes())
+    assert value["retained_suppression_rows_by_stage"] == saved["retained_suppressions"]["stage_counts"] == {"fact_check": 1}

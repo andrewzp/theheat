@@ -17,10 +17,11 @@ from collections import Counter
 from dataclasses import dataclass
 import hashlib
 import json
+import math
 import re
 from typing import Any
 
-SCHEMA = "theheat.observed-copy-report/v1"
+SCHEMA = "theheat.observed-copy-report/v2"
 MAX_INPUT_BYTES = 64 * 1024 * 1024
 MAX_INPUTS = 16
 MAX_DRAFTS = 5000
@@ -46,30 +47,58 @@ def _refuse_constant(name: str):
     raise ReportError("input_non_finite_number")
 
 
+def _finite_float(value: str) -> float:
+    result = float(value)
+    if not math.isfinite(result):
+        raise ReportError("input_non_finite_number")
+    return result
+
+
+def _unique_object(pairs: list[tuple[str, Any]]) -> dict:
+    result: dict = {}
+    for key, value in pairs:
+        if key in result:
+            raise ReportError("input_duplicate_key")
+        result[key] = value
+    return result
+
+
 @dataclass(frozen=True)
 class Export:
     label: str
     sha256: str
     drafts: list
-    suppressions: list
+    suppressions: list | None
+    draft_pointer_prefix: str = "/drafts"
 
 
 def parse_export(label: str, raw: bytes) -> Export:
     """Validate one export's shape; fail visibly instead of guessing."""
+    if len(raw) > MAX_INPUT_BYTES:
+        raise ReportError("input_size_limit")
     try:
-        data = json.loads(raw.decode("utf-8"), parse_constant=_refuse_constant)
+        data = json.loads(raw.decode("utf-8"), parse_constant=_refuse_constant,
+                          parse_float=_finite_float, object_pairs_hook=_unique_object)
     except ReportError:
         raise
-    except (UnicodeDecodeError, ValueError) as exc:
+    except (UnicodeDecodeError, ValueError, RecursionError) as exc:
         raise ReportError("input_not_json") from exc
+    try:
+        _canonical(data).encode("utf-8")
+        label.encode("utf-8")
+    except UnicodeError as exc:
+        raise ReportError("input_invalid_string") from exc
     drafts: list
-    suppressions: list = []
+    suppressions: list | None = None
+    prefix = "/drafts"
     if isinstance(data, list):
         drafts = data
+        prefix = ""
     elif isinstance(data, dict) and isinstance(data.get("drafts"), list):
         drafts = data["drafts"]
-        if isinstance(data.get("suppressions"), list):
-            suppressions = data["suppressions"]
+        suppressions = data.get("suppressions")
+        if suppressions is not None and not isinstance(suppressions, list):
+            raise ReportError("suppression_history_invalid")
     else:
         raise ReportError("input_has_no_draft_list")
     if len(drafts) > MAX_DRAFTS:
@@ -79,7 +108,19 @@ def parse_export(label: str, raw: bytes) -> Export:
             raise ReportError("draft_without_identity")
         if not isinstance(draft.get("text"), str):
             raise ReportError("draft_without_text")
-    return Export(label=label, sha256=_sha(raw), drafts=drafts, suppressions=suppressions)
+    for row in suppressions or []:
+        if not isinstance(row, dict):
+            raise ReportError("suppression_without_object")
+        identity, stage = row.get("id"), row.get("stage")
+        if identity not in (None, "") and (not isinstance(identity, str)
+                or not identity.strip() or len(identity) > 256
+                or any(ord(c) < 32 for c in identity)):
+            raise ReportError("suppression_invalid_identity")
+        if stage is not None and (not isinstance(stage, str) or len(stage) > 128
+                                 or any(ord(c) < 32 for c in stage)):
+            raise ReportError("suppression_invalid_stage")
+    return Export(label=label, sha256=_sha(raw), drafts=drafts,
+                  suppressions=suppressions, draft_pointer_prefix=prefix)
 
 
 # --- deterministic text measures ------------------------------------------------------------------
@@ -170,11 +211,19 @@ def stages(draft: dict) -> dict:
                   else "passed" if fact["passed"] else "failed")
     critic = two_bot.get("critic")
     verdict = critic.get("verdict") if isinstance(critic, dict) else None
-    status = draft.get("status")
-    if status == "posted":
-        publication = "recorded_receipt" if draft.get("tweet_id") else "status_posted_without_receipt"
-    elif status in {"pending", "approved", "rejected"}:
-        publication = "not_published"
+    raw_status = draft.get("status")
+    status = raw_status if isinstance(raw_status, str) and raw_status in {
+        "pending", "approved", "rejected", "posted", "suppressed", "parked"} else "unknown"
+    outcome, tweet_id = draft.get("publish_outcome"), draft.get("tweet_id")
+    if outcome in ("unknown", "submitted"):
+        publication = "unknown"
+    elif status == "posted":
+        receipt = isinstance(tweet_id, str) and bool(tweet_id.strip())
+        publication = "recorded_receipt" if receipt else "status_posted_without_receipt"
+    elif outcome not in (None, "not_sent") or tweet_id:
+        publication = "unknown"
+    elif status in {"pending", "approved", "rejected", "suppressed", "parked"}:
+        publication = "no_publication_recorded"
     else:
         publication = "unknown"
     join = "unjoined"
@@ -182,15 +231,80 @@ def stages(draft: dict) -> dict:
         join = "final_equals_accepted_writer_output" if accepted["text_sha256"] == _sha(draft["text"]) else \
             "final_differs_from_accepted_writer_output"
     return {"generation": generation, "fact_check": fact_check,
-            "critic": verdict if isinstance(verdict, str) else "unknown", "save": "saved",
-            "status": status if isinstance(status, str) else "unknown", "publication": publication,
+            "critic": verdict if isinstance(verdict, str) and verdict in {"PASS", "REVISE", "KILL"}
+            else "unknown", "save": "saved", "status": status, "publication": publication,
             "writer_to_saved": join}
 
 
 # --- report -----------------------------------------------------------------------------------------
 
-def _pointer(export: Export, index: int) -> dict:
-    return {"input": export.label, "input_sha256": export.sha256, "pointer": f"/drafts/{index}"}
+def _pointer(export: Export, index: int, argument: int) -> dict:
+    return {"input": export.label, "input_sha256": export.sha256,
+            "argument_index": argument, "pointer": f"{export.draft_pointer_prefix}/{index}"}
+
+
+_SUPPRESSION_STAGES = frozenset({
+    "score_gate", "writer", "safety", "honesty_gate", "evidence_contract",
+    "evidence_readiness", "fact_check", "critic", "budget_exhausted",
+    "pipeline_error", "triage_cap", "triage_error", "cycle_cap", "source",
+    "source_scope", "automatic_policy", "automatic_eligibility", "model_preflight",
+    "preflight", "billing", "billing_pause", "duplicate", "cooldown", "unknown",
+})
+
+
+def _retained_suppressions(exports: list[Export]) -> dict:
+    """Declared row IDs and anonymous capture/index rows, never attempt IDs."""
+    identified: dict[str, dict] = {}
+    anonymous: dict[tuple[str, int], dict] = {}
+    available, unavailable = set(), set()
+    supplied = 0
+    for argument, export in enumerate(exports):
+        if export.suppressions is None:
+            unavailable.add(export.sha256)
+            continue
+        available.add(export.sha256)
+        supplied += len(export.suppressions)
+        for index, row in enumerate(export.suppressions):
+            pointer = {"input": export.label, "input_sha256": export.sha256,
+                       "argument_index": argument, "pointer": f"/suppressions/{index}"}
+            digest = _sha(_canonical(row))
+            if row.get("id"):
+                entry = identified.setdefault(row["id"], {"variants": {}, "pointers": []})
+                entry["variants"].setdefault(digest, row)
+                entry["pointers"].append(pointer)
+            else:
+                entry = anonymous.setdefault((export.sha256, index),
+                                             {"row": row, "row_sha256": digest, "pointers": []})
+                entry["pointers"].append(pointer)
+    included, conflicts = [], []
+    for identity in sorted(identified):
+        entry = identified[identity]
+        if len(entry["variants"]) != 1:
+            conflicts.append({"id_sha256": _sha(identity), "variants": len(entry["variants"]),
+                              "pointers": entry["pointers"]})
+            continue
+        [(digest, row)] = entry["variants"].items()
+        included.append({"identity_kind": "declared_suppression_id", "id_sha256": _sha(identity),
+                         "row_sha256": digest, "pointers": entry["pointers"], "row": row})
+    for key in sorted(anonymous):
+        included.append({"identity_kind": "anonymous_export_row", **anonymous[key]})
+    counts: Counter = Counter()
+    rows = []
+    for entry in included:
+        stage = entry["row"].get("stage")
+        # A source's arbitrary stage string is not a safe stdout label or proof
+        # of a model failure. Preserve its row hash/pointers, classify it unknown.
+        stage = stage if stage in _SUPPRESSION_STAGES else "unknown"
+        counts[stage] += 1
+        rows.append({k: v for k, v in entry.items() if k != "row"} | {"stage": stage})
+    return {"availability": "partial_or_unavailable" if unavailable else "retained_lists_supplied",
+            "counts_scope": "retained_rows_not_generation_or_paid_attempts",
+            "exports_with_retained_list": len(available), "exports_without_history": len(unavailable),
+            "supplied_rows": supplied, "identified_ids": len(identified),
+            "identified_rows_included": len(identified) - len(conflicts),
+            "anonymous_rows_included": len(anonymous), "conflicting_ids_held": len(conflicts),
+            "stage_counts": dict(sorted(counts.items())), "rows": rows, "conflicts": conflicts,
+            "unique_failed_generations": None, "paid_attempts": None}
 
 
 def build_report(exports: list[Export]) -> tuple[dict, str, str]:
@@ -198,11 +312,11 @@ def build_report(exports: list[Export]) -> tuple[dict, str, str]:
     if not exports or len(exports) > MAX_INPUTS:
         raise ReportError("input_count_out_of_range")
     seen: dict[str, dict] = {}
-    for export in exports:
+    for argument, export in enumerate(exports):
         for index, draft in enumerate(export.drafts):
             entry = seen.setdefault(draft["id"], {"variants": {}, "pointers": []})
             entry["variants"].setdefault(_sha(_canonical(draft)), draft)
-            entry["pointers"].append(_pointer(export, index))
+            entry["pointers"].append(_pointer(export, index, argument))
     included, conflicts = [], []
     for draft_id in sorted(seen):
         entry = seen[draft_id]
@@ -224,26 +338,22 @@ def build_report(exports: list[Export]) -> tuple[dict, str, str]:
             "warnings": warnings_for(text, observed=None if observed is None else observed in OBSERVED_TYPES),
             "pointers": pointers,
         })
-    suppression_stages: Counter = Counter()
-    for export in exports:
-        for row in export.suppressions:
-            if isinstance(row, dict):
-                suppression_stages[str(row.get("stage") or "unknown")] += 1
-
     def count(key, field=None):
         return dict(sorted(Counter((row[key][field] if field else row[key]) for row in rows).items()))
 
     sentence_bins = Counter("1" if row["sentences"] == 1 else "2" if row["sentences"] == 2 else "3+" for row in rows)
     summary = {
         "schema": SCHEMA, "advisory_only": True,
-        "inputs": [{"label": export.label, "sha256": export.sha256, "drafts": len(export.drafts),
-                    "suppressions": len(export.suppressions)} for export in exports],
+        "inputs": [{"argument_index": argument, "label": export.label, "sha256": export.sha256,
+                    "drafts": len(export.drafts),
+                    "suppressions": None if export.suppressions is None else len(export.suppressions)}
+                   for argument, export in enumerate(exports)],
         "identities": {"supplied_records": sum(len(export.drafts) for export in exports), "distinct_ids": len(seen),
                        "included": len(included), "conflicting_held_and_excluded": len(conflicts)},
         "conflicts": conflicts,
         "stages": {name: count("stages", name) for name in
                    ("generation", "fact_check", "critic", "status", "publication", "writer_to_saved")},
-        "generation_failures_recorded": dict(sorted(suppression_stages.items())),
+        "retained_suppressions": _retained_suppressions(exports),
         "length": {"max": max((row["length"] for row in rows), default=0),
                    "over_200": sum(row["length"] > 200 for row in rows),
                    "with_source_url": sum(row["urls"] > 0 for row in rows)},
@@ -255,6 +365,8 @@ def build_report(exports: list[Export]) -> tuple[dict, str, str]:
             "A recorded tweet id is a stored receipt, not verified X visibility or engagement.",
             "Sentence counts protect URLs, decimals, listed abbreviations and dates; other abbreviations may over-count.",
             "Warnings are lexical prompts for a human editor, not factual or quality verdicts.",
+            "Suppression rows are retained activity, not unique failed generations or paid attempts; missing history is unavailable.",
+            "No publication recorded is not proof of nonpublication; unresolved or contradictory delivery stays unknown.",
         ],
     }
     return summary, _markdown(summary), _review_sheet(included)
@@ -268,8 +380,11 @@ def _markdown(summary: dict) -> str:
              f"{ids['conflicting_held_and_excluded']}.", ""]
     for name, values in summary["stages"].items():
         lines.append(f"- {name}: " + ", ".join(f"{key} {value}" for key, value in values.items()))
-    lines += ["", "Recorded generation failures (activity, not zero): " +
-              (", ".join(f"{k} {v}" for k, v in summary["generation_failures_recorded"].items()) or "none recorded"),
+    retained = summary["retained_suppressions"]
+    lines += ["", "Retained suppression rows (not unique failed generations or paid attempts): " +
+              (", ".join(f"{k} {v}" for k, v in retained["stage_counts"].items()) or "no included retained rows"),
+              f"Suppression history: {retained['exports_with_retained_list']} exports with retained lists; "
+              f"{retained['exports_without_history']} unavailable; {retained['conflicting_ids_held']} conflicting IDs held.",
               f"Sentences: {summary['sentences']}. Length: {summary['length']}.",
               f"Warnings: {summary['warnings'] or 'none'}.", "", "## Limits", ""]
     lines += [f"- {limit}" for limit in summary["limits"]]
@@ -278,15 +393,17 @@ def _markdown(summary: dict) -> str:
 
 def _review_sheet(included: list) -> str:
     lines = ["# Private review sheet (nonblind editorial notes; source truth not verified)", "",
-             "Each row shows what the retained source bundle supports and what the copy says. The reader-value "
+             "Each row shows unverified retained bundle fields and what the copy says. The reader-value "
              "line is an editor's nonblind judgment to be filled in, never a computed score.", ""]
     for draft, pointers in included:
         bundle = _bundle(draft)
-        facts = [f"{row.get('label')}: {row.get('value')}" for row in bundle.get("current_facts") or []
+        retained_facts = bundle.get("current_facts")
+        facts = [f"{row.get('label')}: {row.get('value')}" for row in
+                 (retained_facts if isinstance(retained_facts, list) else [])
                  if isinstance(row, dict) and row.get("label") and row.get("value") not in (None, "")][:8]
         lines += [f"## {draft.get('type') or 'unknown kind'} · {_sha(draft['id'])[:12]} · {draft.get('status') or 'unknown'}",
                   f"- Evidence pointer: {pointers[0]['input']} {pointers[0]['pointer']} (input sha256 {pointers[0]['input_sha256'][:16]}…)",
-                  f"- Source supports: {'; '.join(facts) if facts else 'no retained source facts in this export (unknown)'}",
+                  f"- Retained bundle says (unverified): {'; '.join(facts) if facts else 'no retained source facts in this export (unknown)'}",
                   f"- Copy says: {draft['text']}",
                   "- Why a reader should care (editor, nonblind): ____", ""]
     return "\n".join(lines) + "\n"

@@ -1,3 +1,8 @@
+## 0.9.109.159 — 2026-11-21
+
+- Add an offline advisory copy report over explicitly supplied private exports, with retained-row identity handling, strict JSON parsing and separate unknown delivery outcomes.
+- Keep repeated exports from inflating suppression counts; withhold conflicting identities and distinguish missing history from an empty list. The report never establishes unique paid attempts, source truth or X visibility.
+
 ## 0.9.109.158 — 2026-11-21
 
 - Validate the exact Gist route configuration before selecting existing writer credentials; missing route credentials never fall back to legacy names.

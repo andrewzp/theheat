@@ -45,6 +45,7 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps({"error": "output_exists"}))
         return 2
     print(json.dumps({"identities": summary["identities"], "stages": summary["stages"],
+                      "retained_suppression_rows_by_stage": summary["retained_suppressions"]["stage_counts"],
                       "warnings": summary["warnings"], "sentences": summary["sentences"]}, sort_keys=True))
     return 0
 
