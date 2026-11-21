@@ -24,11 +24,57 @@ const OUTCOMES = Object.freeze({
   rainfall_reports_held: ["Rainfall reports held", "Check the named saved configuration hold; no nomination result was established."],
   rainfall_grid_held: ["Inland rainfall scan held", "Inspect the scan reason; city results remain separate."],
   rainfall_nominations_unavailable: ["Rainfall report nomination unavailable", "Inspect this source run's retained details; missing or inconsistent counts are not zero."],
+  ghcn_intake_empty: ["No usable GHCN station-days retained", "Inspect the recorded exclusions and missing diffs; historical record qualification is a separate step."],
+  ghcn_intake_unavailable: ["GHCN intake details unavailable", "Inspect a complete bound source run; missing or contradictory diagnostics cannot establish zero observations."],
   unknown: ["Unknown", "No retained run row explains this source yet."],
 })
 
 function text(value) { return typeof value === "string" ? value : "" }
 function count(value) { return Number.isInteger(value) && value >= 0 ? value : null }
+
+function ghcnIntake(row, context) {
+  if (row.source !== "open_meteo_extreme_signals") return null
+  const d = row.details ?? {}
+  const m = d.provider === "ghcn" ? d.pipeline_metrics
+    : ["both", "both_global"].includes(d.provider) ? d.ghcn_pipeline_metrics : null
+  if (d.provider !== "ghcn" && !["both", "both_global"].includes(d.provider)) return null
+  const unavailable = { state: "ghcn_intake_unavailable", detail: "Saved GHCN intake details are unavailable or inconsistent." }
+  const trace = m?.diff_intake, c = trace?.counts
+  const names = ["parsed_temperature_rows", "inactive_station_rows", "too_old_rows", "future_rows",
+    "usable_updates", "delete_updates", "unusable_updates", "final_values", "final_station_days"]
+  const integer = n => Number.isSafeInteger(n) && n >= 0
+  const day = value => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)
+    && Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value
+  const timestamp = value => typeof value === "string" ? Date.parse(value) : NaN
+  const start = timestamp(context?.started_at), end = timestamp(context?.ended_at)
+  if (context?.current !== true || !Number.isFinite(start) || !Number.isFinite(end) || end < start
+      || !m || m.threshold_verification !== "success" || !["success", "degraded"].includes(m.status)
+      || !trace || trace.schema_version !== 1 || Object.keys(trace).sort().join() !== "counts,cutoff_day,schema_version,window_day"
+      || !day(trace.window_day) || !day(trace.cutoff_day) || trace.cutoff_day > trace.window_day
+      || trace.window_day < new Date(start).toISOString().slice(0, 10)
+      || trace.window_day > new Date(end).toISOString().slice(0, 10)
+      || !c || Array.isArray(c) || Object.keys(c).sort().join() !== [...names].sort().join()
+      || !names.every(name => integer(c[name]))) return unavailable
+  const partition = c.inactive_station_rows + c.too_old_rows + c.future_rows
+    + c.usable_updates + c.delete_updates + c.unusable_updates
+  if (!Number.isSafeInteger(partition) || partition !== c.parsed_temperature_rows
+      || c.final_values > c.usable_updates || c.final_values < c.final_station_days
+      || (c.usable_updates > 0 && c.delete_updates === 0 && c.unusable_updates === 0 && c.final_values === 0)
+      || c.final_values > 2 * c.final_station_days
+      || !integer(m.station_obs_pairs) || m.station_obs_pairs !== c.final_station_days
+      || !integer(m.stations_with_obs) || m.stations_with_obs > c.final_station_days
+      || (m.stations_with_obs === 0) !== (c.final_station_days === 0)
+      || ![m.diff_dates_attempted, m.diff_dates_fetched, m.diff_dates_missing].every(integer)
+      || m.diff_dates_fetched < 1 || m.diff_dates_fetched + m.diff_dates_missing !== m.diff_dates_attempted
+      || (Object.hasOwn(m, "diff_fetch_failed") && m.diff_fetch_failed !== 0)) return unavailable
+  const n = (value, noun) => `${value} ${noun}${value === 1 ? "" : "s"}`
+  const detail = `Saved GHCN intake: ${n(c.parsed_temperature_rows, "temperature update")} parsed; `
+    + `${n(c.inactive_station_rows, "inactive-station row")}; ${c.too_old_rows} older than the window; ${c.future_rows} future-dated; `
+    + `${n(c.usable_updates, "usable update")}; ${n(c.delete_updates, "deletion")}; ${n(c.unusable_updates, "unusable update")}; `
+    + `${n(c.final_values, "daily value")}; ${n(c.final_station_days, "station-day")} retained. `
+    + `${m.diff_dates_fetched} of ${m.diff_dates_attempted} diffs fetched.`
+  return { state: c.final_station_days === 0 ? "ghcn_intake_empty" : null, detail }
+}
 
 function nwsAdmissionDetail(row) {
   if (row.source !== "nws_alerts" || row.status !== "success") return null
@@ -190,7 +236,7 @@ function rainfallNomination(row, current) {
     + " Retained decisions, not coverage, source truth, drafts or posts." }
 }
 
-export function sourceOutcome(row, rejections = [], { rainfallNominationCurrent = true } = {}) {
+export function sourceOutcome(row, rejections = [], { rainfallNominationCurrent = true, ghcnIntakeContext = null } = {}) {
   if (!row || typeof row !== "object") return outcome("unknown", row)
   const error = text(row.error), note = text(row.note), details = row.details && typeof row.details === "object" ? row.details : {}
   const gate = details.rainfall_opportunity?.primary_gate
@@ -231,7 +277,8 @@ export function sourceOutcome(row, rejections = [], { rainfallNominationCurrent 
   // A scan explanation cannot borrow currency from a mismatched source interval
   // or bypass the strict city/grid nomination denominators above.
   const gridHold = rainfall?.state === "rainfall_nominations" ? rainfallGridHold(row) : null
-  const admission = [nwsAdmissionDetail(row) ?? rainfall?.detail, gridHold].filter(Boolean).join(" ") || null
+  const intake = ghcnIntake(row, ghcnIntakeContext)
+  const admission = [nwsAdmissionDetail(row) ?? rainfall?.detail, gridHold, intake?.detail].filter(Boolean).join(" ") || null
   if (rejections.some(r => r?.source === row.source && ["writer", "safety", "fact_check", "critic", "honesty_gate", "copy_gate"].includes(r?.stage))) {
     return outcome("writer_or_check_rejection", row, admission)
   }
@@ -251,6 +298,7 @@ export function sourceOutcome(row, rejections = [], { rainfallNominationCurrent 
   }
   if (incident?.product_state === "alternate_served") return outcome("alternate_served", row, named)
   if (rainfall) return outcome(rainfall.state, row, rainfall.detail)
+  if (intake?.state) return outcome(intake.state, row, admission)
   if (["success", "degraded", "partial_failure"].includes(row.status)) return outcome("no_event", row, admission)
   return outcome("unknown", row)
 }

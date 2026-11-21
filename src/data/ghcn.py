@@ -317,6 +317,15 @@ def _fetch_recent_obs(
     today = today or date.today()
     dates = [today - timedelta(days=i) for i in range(1, lookback_days + 1)]
     obs_age_cutoff = today - timedelta(days=max_obs_age_days)
+    intake_counts = None
+    if metrics_out is not None:
+        # A reused diagnostics sink cannot lend an older completed intake to a
+        # new unavailable or malformed fetch. This grants no source verdict.
+        metrics_out.pop("diff_intake", None)
+        intake_counts = dict.fromkeys((
+            "parsed_temperature_rows", "inactive_station_rows", "too_old_rows", "future_rows",
+            "usable_updates", "delete_updates", "unusable_updates", "final_values", "final_station_days",
+        ), 0)
 
     # Fetch diffs in parallel (3 requests, lightweight)
     raw_by_date: dict[date, bytes] = {}
@@ -355,11 +364,21 @@ def _fetch_recent_obs(
     # cutoff are skipped entirely (they're backfill, not news).
     obs_by_key: dict[tuple[str, date, str], DailyObs] = {}
     skipped_stale = 0
+    all_fetched_recognized = True
     for d in sorted(raw_by_date):
         retrieved_at = _runtime.diff_time(d) if _runtime is not None else utc_now()
         source_revision = hashlib.sha256(raw_by_date[d]).hexdigest()
-        records = parse_superghcnd_diff_records_bytes(raw_by_date[d])
+        if intake_counts is None:
+            records = parse_superghcnd_diff_records_bytes(raw_by_date[d])
+        else:
+            parse_diagnostics: dict[str, bool] = {}
+            records = parse_superghcnd_diff_records_bytes(raw_by_date[d], diagnostics_out=parse_diagnostics)
+            all_fetched_recognized = all_fetched_recognized and parse_diagnostics.get("recognized_archive") is True
         for rec in records:
+            if intake_counts is not None:
+                intake_counts["parsed_temperature_rows"] += 1
+                if rec.station_id not in active_ids:
+                    intake_counts["inactive_station_rows"] += 1
             key = (rec.station_id, rec.obs_date, rec.element)
             if rec.station_id not in active_ids and key not in (tracked_keys or set()):
                 continue
@@ -368,12 +387,18 @@ def _fetch_recent_obs(
             if rec.station_id not in active_ids:
                 continue
             if rec.obs_date < obs_age_cutoff or rec.obs_date > today:
+                if intake_counts is not None:
+                    intake_counts["too_old_rows" if rec.obs_date < obs_age_cutoff else "future_rows"] += 1
                 skipped_stale += 1
                 continue
             obs = rec.to_daily_obs()
             if obs is None:
+                if intake_counts is not None:
+                    intake_counts["delete_updates" if rec.action == "delete" else "unusable_updates"] += 1
                 obs_by_key.pop(key, None)
             else:
+                if intake_counts is not None:
+                    intake_counts["usable_updates"] += 1
                 obs_by_key[key] = replace(obs, retrieved_at=retrieved_at, source_revision=source_revision)
 
     by_station_date: dict[tuple[str, date], list[DailyObs]] = {}
@@ -388,6 +413,12 @@ def _fetch_recent_obs(
     )
     if not by_station_date and revisions_out is None:
         raise RuntimeError("GHCN: diff files parsed but contained no active TMAX/TMIN observations within obs-age cutoff")
+    if metrics_out is not None and intake_counts is not None and all_fetched_recognized:
+        intake_counts.update(final_values=len(obs_by_key), final_station_days=len(by_station_date))
+        metrics_out["diff_intake"] = {
+            "schema_version": 1, "window_day": today.isoformat(), "cutoff_day": obs_age_cutoff.isoformat(),
+            "counts": intake_counts,
+        }
     return by_station_date
 
 

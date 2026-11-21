@@ -346,7 +346,7 @@ def test_old_diff_qc_revision_survives_archive_failure_end_to_end(tmp_path, monk
     state = {"drafts": [deepcopy(item)]}
     stale = DiffRecord("update", SID, DAY, "TMAX", 39.9, qflag="S", sflag="T")
     monkeypatch.setattr(ghcn, "_fetch_diff", lambda _: b"fixture")
-    monkeypatch.setattr(ghcn, "parse_superghcnd_diff_records_bytes", lambda _: [stale])
+    monkeypatch.setattr(ghcn, "parse_superghcnd_diff_records_bytes", lambda _, **_diagnostics: [stale])
     metrics = {}
     ghcn.check_extreme_signals_for_stations(stations=[META], db_path=db(tmp_path), bot_state=state,
         _fetch_archive_fn=lambda _: b"invalid", _now_fn=lambda: NOW, metrics_out=metrics)

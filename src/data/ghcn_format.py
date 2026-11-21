@@ -537,19 +537,28 @@ def parse_superghcnd_diff_text(
 def parse_superghcnd_diff_records_bytes(
     data: bytes,
     elements: frozenset[str] | None = frozenset({"TMAX", "TMIN"}),
+    *, diagnostics_out: dict[str, bool] | None = None,
 ) -> list[DiffRecord]:
     """Parse NOAA superghcnd_diff bytes.
 
     Live NOAA files are tar.gz archives of CSV members. Plain gzip/plain text is
-    accepted for fixture convenience.
+    accepted for fixture convenience. Optional diagnostics identify a recognized
+    archive only after the existing tar/member parse succeeds; fallback records
+    and their eligibility are unchanged.
     """
+    if diagnostics_out is not None:
+        diagnostics_out.pop("recognized_archive", None)
     if not data:
         return []
 
     try:
-        return _parse_superghcnd_diff_tar_bytes(data, elements)
+        records = _parse_superghcnd_diff_tar_bytes(data, elements)
     except tarfile.TarError:
         pass
+    else:
+        if diagnostics_out is not None:
+            diagnostics_out["recognized_archive"] = True
+        return records
 
     if data[:2] == b"\x1f\x8b":
         data = gzip.decompress(data)

@@ -1,3 +1,8 @@
+## 0.9.109.145
+
+- Retain bounded GHCN temperature-update intake counts from the existing diff pass, distinguishing inactive stations, old/future rows, usable updates, deletions and unusable updates from final retained station-days. Preserve source requests, filtering, revisions and archive selection.
+- Show those saved counts in Sources only when their source interval and denominators agree. Keep legacy, missing, contradictory and malformed input unavailable; preserve writer-rejection and other supplying-leg outcomes.
+
 ## 0.9.109.144
 
 - Read scalar numeric IMERG metadata stored as one-element arrays by NetCDF, preserving the existing numeric types, identity scaling and missing-value exclusions. Ambiguous arrays and unsupported scaling remain held.
