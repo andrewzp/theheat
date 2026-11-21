@@ -70,6 +70,23 @@ Split/merge proposals hold all named expected heads atomically; they do not move
 members or combine old same-event memories. A bounded overflow retains the complete
 source inventory and holds the episode instead of truncating assigned membership.
 
+## Offline ledger edits preserve unresolved source holds
+
+The separate `scripts/hazard_episodes.py` operator works on supplied local JSON;
+it does not select a production backend or grant source or posting authority.
+Splitting a retained episode partitions its revisions while keeping an unresolved
+source-review hold on both parts. An optional packet digest is an unverified
+reference, not adjudication of the source. Further splits or later assertions
+which omit the hold cannot clear it.
+
+Explicit holds in retained member assertions also apply when an older split left
+the episode's top-level field empty. `inspect` keeps that recorded episode intact
+and reports `effective_historical_hold` separately. Conflicting retained hold
+labels are refused, and no writer statements are granted. Projecting a changed
+binding revokes pending reviews and approvals while preserving delivered and
+unknown-delivery snapshots. None of these operations resolves missing incident
+evidence, physical duration or cross-border extent.
+
 ## Scope still open
 
 The P18 heat prepass can retain exact station grouping proposals, including

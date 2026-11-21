@@ -2,7 +2,7 @@
 """Operator commands over a retained hazard-episode ledger (W07). Offline only.
 
 inspect      show an episode, its history, relationships and report joins
-split        move named source revisions to a new episode (expected revision required)
+split        move named source revisions to a new episode; unresolved holds stay on both
 reassign     move one source revision between episodes (expected revisions required)
 supersede    mark an episode superseded by another (expected revision required)
 remove-join  withdraw a report↔physical join (report hash stays retained)
@@ -45,7 +45,7 @@ def main(argv: list[str] | None = None) -> int:
     sp.add_argument("--revision", action="append", required=True)
     sp.add_argument("--new-source-id", required=True)
     sp.add_argument("--expected", type=int, required=True)
-    sp.add_argument("--evidence-packet-sha256")
+    sp.add_argument("--evidence-packet-sha256", help="unverified packet reference; never clears a source-review hold")
     ra = sub.add_parser("reassign")
     ra.add_argument("--revision", required=True)
     ra.add_argument("--from-episode", required=True)
@@ -71,6 +71,7 @@ def main(argv: list[str] | None = None) -> int:
             episode = ledger["episodes"][args.episode]
             sys.stdout.write(json.dumps({
                 "episode": episode,
+                "effective_historical_hold": he.project_binding(ledger, args.episode)["historical_hold"],
                 "relationships": [r for r in ledger["relationships"] if args.episode in r["episodes"]],
                 "report_joins": [j for j in ledger["report_joins"] if j["episode_id"] == args.episode],
                 "writer_statements": he.writer_statements(ledger, args.episode)}, sort_keys=True, indent=1) + "\n")
