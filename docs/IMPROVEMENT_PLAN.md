@@ -2,6 +2,15 @@
 
 Living plan for closing the gap between the bot's current voice quality and the **resumption bar** (majority A-grade rate per cycle). Refined daily by the autonomous grading agent (cron `0 15 * * *`), reviewed and implemented by the human operator.
 
+> **Oct 14: 15 pending, all fresh (Oct 7–10), 0% A-rate (0 A; 2 B, 4 B-, 8 C+, 1 C) — first graded batch since Jul 6.**
+> 6 cyclone drafts (`cyclone_tier_crossing` new to corpus + `cyclone_rapid_intensification`) are bare NHC
+> bulletins. **P_tier: 3/3 RI drafts cite the NHC 30 kt threshold as the hook** (Isaias ×2, Simon) —
+> now 8 cycles / ~15 instances / 6 signal types. **P_dust: first dust_event drafts with a WHO anchor**
+> (Quetta, Arequipa, Riyadh) — fix landing; 0 of 3 fail. **P_close 17th cycle:** 5 CAMS-derived drafts all
+> close on a model/station disclaimer. **New P_cluster:** same-storm drafts (Isaias ×3, Simon ×3) and
+> same-model-cell twins (Shah Alam/Klang). All 15 are stale (>48h, forecast dates elapsed or advisories
+> superseded); bulk-reject skipped — `gh` token invalid. Queue static since Oct 10.
+>
 > **Jul 6: 0 fresh drafts — queue is an exact match to Jul 5's 15 graded drafts (same
 > `draft_id`s, scores, text); no re-grading performed, all grades stand at Jul 5's levels.**
 > No active-proposal evidence updates: P_close (16 cycles), P_tier (7 cycles/10 instances),
@@ -185,16 +194,16 @@ Living plan for closing the gap between the bot's current voice quality and the 
 |---|---|
 | Bot commit | `0.9.81.0`+ per BRIEFING.md 2026-06-28 (reganom recency window + honesty-gating, PR #347; world-half eval-gating fix, PR #345; reganom writer-voice upgrade, PR #349. Prior: 0.9.67.0, R-02 NOAA HMS independent fire witness; 30-item audit backlog complete [S-01..S-35]; source-redundancy lane R-00..R-09; bot active since 2026-06-01) |
 | Voice engine version | **two-bot + Attenborough/Economist voice + all-sources triage + evidence contract + diversity gate + automation dashboard** (Sonnet 4.6 writer prompt-cached + Gemini 2.5 Flash fact-checker [skips unknown kinds] + Gemini 2.5 Pro critic [assesses relative to available data]; all 23 sources on triage path via PR #150; evidence contract gates writer via 0.9.0.0; pending-type cap default 3 + per-type TTL sweep [fast 7d, coral/DHW 21d] via 0.9.6.0/0.9.16.0; `THEHEAT_TRIAGE_ENABLED=1` in CI; `THEHEAT_WRITER_SAMPLES=1` + `THEHEAT_CRITIC_REVISE_ENABLED=0` since 2026-07-14 (economics P0 paired flip; was 2/1 from 2026-06-13); reganom (`reanalysis_anomaly`) enabled `manual_only` since 2026-06-27 with 2-day recency + honesty-gating [PR #347]; routine beacon writes the `ROUTINE_BEACON` repo variable via `gh variable set` each cycle) |
-| Last cycle A-rate | **— (0 fresh drafts, Jul 6).** Most recent measured: **20% (1/5 fresh, Jul 5)** — eastern Siberia fire A- (4th confirmation of the permafrost-carbon fire mechanic), 1 B+, 1 B, 1 B-, 1 C+. Prior: 20% (2/10, Jul 4); 33% (1/3, Jul 3); 0% (0/3, Jul 2); 0% (0/4, Jul 1); 22% (2/9 non-stale, Jun 30); 80% Jun 29 [BAR CLEARED]. |
+| Last cycle A-rate | **0% (0/15, Oct 14)** — 2 B, 4 B-, 8 C+, 1 C; cyclone bulletins + CAMS disclaimer closes. Prior measured: 20% (1/5, Jul 5); 20% (2/10, Jul 4). |
 | Resumption bar | majority A (>50%) sustained — **cleared Jun 29 (80%, n=5); Jun 30 returned 22%; Jul 1 0% (n=4); Jul 2 0% (n=3); Jul 3 33% (n=3); Jul 4 20% (n=10); Jul 5 20% (n=5); Jul 6 no fresh drafts to measure**. |
-| Gap | **30 pp below bar** (50% − 20%, most recent measured cycle Jul 5, n=5). No fresh measurement Jul 6. Seven cycles since the Jun 29 peak have ranged 0–33% depending on signal mix. P_tier and P_close remain the two most active-capping levers, both unchanged since Jul 5 (no fresh evidence Jul 6). |
+| Gap | **50 pp below bar** (50% − 0%, Oct 14, n=15). Largest sample since Jun 29; none of it near A. |
 | Posting | paused; operator decision pending — Jun 29 cleared bar (80%), Jun 30–Jul 5 all below, Jul 6 no fresh drafts. **Queue unchanged at 15 pending as of Jul 6** (exact match to Jul 5's graded batch) — zero new drafts entered between the Jul 5 and Jul 6 pulls. |
 | Coverage | **638 cities × 180 countries** (was 613 × 179; +25 via PR #81) |
-| Queue status | **15 pending as of Jul 6 grading, unchanged from Jul 5** (10 carry-overs from Jul 4: 2 A- [Typhoon Bavi, Loxahatchee FL], 2 B+ [Island Pond VT, Antwerpen], 6 B [Barrow, Astana, Basrah, Al Başrah al Qadīmah, Rocky Mountains CO fire, Urumqi Jul 4 reading]; 5 from Jul 5: 1 A- eastern Siberia fire, 1 B+ Johannesburg air_quality_hazard, 1 B Doha absolute_extreme, 1 B- Urumqi Jul 5 reading, 1 C+ Phalodi dust_event). **2 of the 15 ([4] Basrah, [6] Al Başrah al Qadīmah) are now strict staleness bulk-reject candidates** (>48h old, forecast date July 4 elapsed) — flagged for operator, write unavailable this session. Bot at 0.9.81.0+ (no newer BRIEFING.md handoff confirmed this cycle); reganom enabled post-PR #347 with writer-voice upgrade (PR #349); `THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live. |
+| Queue status | **15 pending as of Oct 14**, all Oct 7–10, all stale; none graded before. Nothing new since Oct 10. |
 
 ## Active proposals
 
-Ordered by leverage. Priority as of Jul 6 (unchanged from Jul 5 — zero fresh drafts means no
+Ordered by leverage. Oct 14: P_tier gains 3 cyclone instances, P_close 17th cycle, P_dust anchor gap closed (0/3), new P_cluster at the bottom. Prior priority as of Jul 6 (unchanged from Jul 5 — zero fresh drafts means no
 new evidence to reorder against): **P_close** (16 cycles, last evidence Jul 5: 2 positive/3
 failing) > **P_tier** (7 cycles/10 instances across 4 signal types, 1st cross-location
 confirmation via Doha, Jul 5) > **P_dust** (9 cycles, last evidence Jul 5, 11 of 11
@@ -534,7 +543,7 @@ FAILING, same subtype as every prior dust_event close). Urumqi dust_event, 3rd i
 ("the topography traps it" = resolution-form, FAILING, near-verbatim repeat of its own prior
 two closes). P_close now confirmed across 14 signal types (unchanged — no new type this
 cycle).
-**Last seen:** Jul 5 (2 positive, 3 failing).
+**Last seen:** Oct 14 (17th cycle: Quetta, Arequipa, Riyadh, Shah Alam, Klang all close on a model-methodology or no-station-data disclaimer instead of a consequence; fire/cyclone drafts have no close). Prior Jul 5 (2 positive, 3 failing).
 
 **Proposed fix (PROMPT LANGUAGE — surgical):** Add to `src/two_bot/prompts/writer_prompt.py`
 in the system-clause / second-sentence guidance section (near the "delete the system clause"
@@ -585,7 +594,7 @@ structure ("[City]: model-estimated dust daily maximum of X µg/m³ on [date] �
 depth at Y.") and AOD-only metric. Jun 24's Al Aḥmadī Kuwait (air_quality_hazard) stated the
 WHO multiple (10.1×) — confirming the gap is specific to the dust_event signal type, not the
 PM signal path generally.
-**Last seen:** Jun 28. Taiz [3] C+ ("model-estimated dust daily maximum of 728 μg/m³ on June 27 —
+**Last seen:** Oct 14 — **counter-evidence:** Quetta (3.8×), Arequipa (2.7×), Riyadh (10.7×) all state the WHO multiple, first dust_event drafts to do so (0 of 3 fail). Keep until 3 consecutive anchored cycles, then archive. Prior Jun 28. Taiz [3] C+ ("model-estimated dust daily maximum of 728 μg/m³ on June 27 —
 aerosol optical depth at 0.77. Taiz sits at the southwest corner of the Arabian Peninsula where the
 summer monsoon low pulls Red Sea and Arabian dust inland through the Tihama coastal plain" —
 mechanism-only close, no WHO anchor, 728 ≈ 16× WHO PM10 limit unstated). Urumqi "traps it"
@@ -704,7 +713,7 @@ ingestion or a regional quirk. Doha's close is also the best `absolute_extreme` 
 instance in the corpus ("closing off the evaporative cooling that makes extreme dry heat
 survivable") and it still caps at B — reconfirms P_tier overrides close quality entirely,
 unlike P_close or P_compound which are soft caps.
-**Last seen:** Jul 5 (7 cycles / 10 instances / 4 signal types; 1st cross-location
+**Last seen:** Oct 14 (8 cycles; +3 cyclone_rapid_intensification instances citing "NHC rapid-intensification threshold" — Isaias ×2, Simon — plus [14] Cerrado "top tier of VIIRS detections" and [1] PNG "very-high-intensity" variants; fix should cover the cyclone bundle's threshold field). Prior Jul 5 (7 cycles / 10 instances / 4 signal types; 1st cross-location
 confirmation within `absolute_extreme`; 1 clean counter-instance remains, from Jul 4's
 Typhoon Bavi).
 
@@ -963,6 +972,16 @@ load-bearing. If it leaves them thinking "oh, fair enough", expository.
 **Status:** SHIPPED in PR #85 second commit. Empirical test: next graded cycle —
 do system clauses do work (consequence/contrast/causal/rate) rather than just
 describing geography?
+
+### P_cluster — Same-event drafts at successive states / adjacent locations (new Oct 14)
+
+**Observed:** Oct 14 batch — **Isaias** drafted 3× in ~36h (RI to Cat 1 [5]; Cat 3 tier crossing [10]; RI Cat 1→3 [11]); **Simon** 3× (Cat 2 [12], RI [13], Cat 3 [15]); **Shah Alam / Klang** PM2.5 (identical 152 µg/m³, 10×, same CAMS cell, 1h apart). Distinct from the exact-duplicate pattern: different text, same news. Earlier similar: Jul 2 Ft Green, Jul 3 Canadian Arctic fire.
+
+**Cycles observed:** Oct 14 (1 cycle as a named pattern; 3 clusters; earlier instances logged in corpus as duplicate-location concerns).
+**Last seen:** Oct 14.
+**Proposed fix:** Prompt/gate language only: when several pending drafts share a storm name or model cell, only the latest state should be eligible, and RI + tier-crossing for the same advisory should merge into one draft. Check whether an existing per-storm cooldown applies to RI vs tier-crossing event types.
+**Expected impact:** Removes 5–6 of 15 drafts per cyclone cycle from the queue; raises the average, not the A-rate.
+**Status:** Active, 1 cycle; watch next cyclone cycle.
 
 ## Awaiting evidence
 
