@@ -1,3 +1,7 @@
+## 0.9.109.148
+
+- Show reported count changes between the latest two comparable saved API observations of one published post. Preserve missing counts, decreases and ambiguous timing; keep single samples separate from a zero baseline.
+
 ## 0.9.109.147
 
 - Let operators read retained rejected drafts in Suppressed, with saved-context validation and keyboard/mobile disclosure. Rejections remain separate from checks and approval.
