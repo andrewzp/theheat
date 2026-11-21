@@ -1,5 +1,33 @@
 # Station discovery when GHCN diff files are missing
 
+## Failed lookup diagnostics
+
+A 400 response remains an unavailable lookup, with no weather observations or
+nominations. During that same request only, the collector may read at most 8193
+payload bytes to accept a complete diagnostic of at most 8192 bytes before the
+shared HTTP helper closes the error. It retains only a fingerprint, byte count
+and up to 8 supported input-field/classification pairs. Input messages are bounded
+to 240 Unicode scalars while parsing; arbitrary provider text is never retained.
+One documented public units-error template maps to a fixed classification; other
+supported text is withheld. Raw responses, echoed values, URLs and headers are not retained. Unsupported,
+truncated, oversized or late diagnostics remain unavailable without a retry.
+The existing cooperative 15 s read deadline and 5 s socket timeout still apply; this is not a
+hard DNS/OS/header wall deadline or source SLA.
+
+The Sources display labels these classifications as **untrusted provider errors**. They
+are inert operator text, never weather facts, a verified failure diagnosis or
+instructions to change a request. Lookup metadata v2 is limited to this 400 case;
+the original v1 success/other-error records remain supported. A new ordinary run
+must supply the actual diagnostic before any request repair. Collection slots,
+tracked-archive work, QC/history/comparator checks and writer limits are unchanged.
+The optional read checks cancellation before and after each client read; once
+control returns, cancellation prevents the next read and later archive requests.
+Supported chunk framing has plain hexadecimal size lines, CRLF separators and an
+empty trailer. Other framing stays unsupported. These same framing checks also
+protect ordinary successful lookup payloads; no global HTTP class is patched.
+
+## Nomination and archive boundaries
+
 Missing daily diff files need not confine archive checks to stations already in
 revision history. The existing legacy GHCN collector can make one additional
 lookup request to NOAA's [documented access service](https://www.ncei.noaa.gov/support/access-data-service-api-user-documentation).
