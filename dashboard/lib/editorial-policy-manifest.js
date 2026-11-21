@@ -140,7 +140,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/editorial/automatic_text.py": "907744454a6fcc4b1977446a4038a2c1d1120a6504a2a2e7cbaef884ad0031f5",
     "src/editorial/delegated_media_review.py": "9f8c0c1b73854b856b833a3bf93cb2222ede1b6c7043422723b45e37307bbeec",
     "src/editorial/draft_admission.py": "a726ca826cc564f43e3dd1169fa0f2a8d671be09d5f8ca80413587a64b857eb7",
-    "src/editorial/format_spacing.py": "49458f2f4771819206df64883cbe3c808d5b2cae87c28177e014037171e0faf2",
+    "src/editorial/format_spacing.py": "bd56e3f043e2182dd6ab02c43612e1bf3b399e30206081ea58ba60ecc1b03d9e",
     "src/editorial/hazard_episodes.py": "2359e93391c4f2ee3a5faf31f37bb153e03ec35ac0efa2f1b0b7022e4315ea08",
     "src/editorial/hot10_contract.py": "68dbb3c9081af24c7869ede677659a530a701a7270606307b122624a706fa534",
     "src/editorial/marine_evidence.py": "d6c9bb8c7ca12133eefa9ddf6283977c7a86da65ef50869d686c352263c1099d",
@@ -225,7 +225,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/orchestrator/sources/river_gauges.py": "cf8e08b50ce78297f1138319a0f8ac91b91bcfc08c597538b011934fb80ae943",
     "src/orchestrator/sources/synthesis.py": "e1e101948dde8a2ac07be65d78e37ed0cd8e080c43523ea0ded1b1071cd31522",
     "src/orchestrator/triage.py": "d66dbc0be83f38e8b340cbfed0dea5eb5121117153ce9442b56b41a5165445b9",
-    "src/orchestrator/triage_queue.py": "f4c8b31b9ba85dfb945c9f12e1f3472e8a13183cb982c2c6b401ab789266e7ea",
+    "src/orchestrator/triage_queue.py": "f30bac51de872a0f6491b3acc7015675b4a50783888e7a9f9b61a8325d2bbf48",
     "src/orchestrator/two_bot_dispatch.py": "3f19fc38fc4ab63cbffb1391201f22a6790c45e6b51743e805b9943ec014fb80",
     "src/posting/bluesky.py": "30333265f7978e905a4f4c45039c7bdae997cb192811e9e93701bf31976105a4",
     "src/posting/delivery_receipts.py": "c944f22458726d02bcdbbf70d274d4831486013dc2eb1e47fd6f2a569abd4147",
@@ -311,5 +311,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "5c5ffcc95358c7df45ae838c228759ad0eb6275c8f9053c8130c0a8824b63d9e"
   },
   "schema_version": 1,
-  "source_sha256": "9a52a80c47a601c556d38efa281ce32a324e04d262176c0a6656ec21da7bfc52"
+  "source_sha256": "fceb8538fdc4db6b35fcbcf8ab99f7ee28a6d9e5408cdfb4af79d1242c3df96f"
 }

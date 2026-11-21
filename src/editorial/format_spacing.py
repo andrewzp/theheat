@@ -49,6 +49,8 @@ def awc_format_hold(bot_state: Mapping[str, Any], *, now: datetime) -> str | Non
                 or type(receipt.get("attempt_conflicts", [])) is not list
                 or receipt.get("attempt_conflicts") or not binding_matches(draft, receipt)):
             continue
+        if "text" in receipt and (type(receipt["text"]) is not str or receipt["text"] != draft.get("text")):
+            continue
         at, confirmed = _time(receipt.get("at")), _time(receipt.get("confirmed_at"))
         if at is not None and confirmed is not None and at <= confirmed <= clock and clock - confirmed < SPACING:
             return "awc_format_spacing"

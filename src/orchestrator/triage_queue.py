@@ -791,6 +791,12 @@ def _refill_drain(
             _pre_writer_kill(candidate, "negative_cache", f"pre-writer: {negcache_reason}")
             continue
 
+        # A publication can become visible after ranking/other preflight work.
+        # Check loaded receipt state at the reservation boundary as well.
+        from src.editorial.format_spacing import candidate_format_hold
+        if spacing := candidate_format_hold(bot_state, candidate, now=_utc_now()):
+            _pre_writer_kill(candidate, "editorial_spacing", f"pre-writer: {spacing}")
+            continue
         # Reserve before the paid boundary; a rejected attempt keeps its slot.
         if not budget.reserve(budget_key):
             _budget_cut(candidate)
@@ -1182,7 +1188,8 @@ def _drain_and_write_triage_queue(
                    "held_manual_types": sum(held_types.values()), "held_types": dict(sorted(held_types.items()))}
         note = f"automatic type preflight: {len(ready)} potential; {sum(held_types.values())} held; required checks still apply"
         if source_holds:
-            details.update(policy_only=False, source_ready_count=len(ready),
+            details.update(policy_only=False,
+                           source_ready_count=sum(possible and hold is None for _, possible, hold, _ in classified),
                            held_source_candidates=sum(source_holds.values()), source_holds=dict(sorted(source_holds.items())))
             note = f"automatic preflight: {len(ready)} potential; {sum(held_types.values())} type holds; {sum(source_holds.values())} source holds; required checks still apply"
         if editorial_holds:
@@ -1375,6 +1382,10 @@ def _drain_and_write_triage_queue(
             _legacy_pre_writer_row(
                 candidate, "duplicate_draft", "pre-writer: event already handled this operation"
             )
+            continue
+        from src.editorial.format_spacing import candidate_format_hold
+        if spacing := candidate_format_hold(bot_state, candidate, now=_utc_now()):
+            _legacy_pre_writer_row(candidate, "editorial_spacing", f"pre-writer: {spacing}")
             continue
         # Reserve before the paid boundary; a rejected attempt keeps its slot.
         if not budget.reserve(budget_key):

@@ -257,3 +257,74 @@ def test_actual_fixture_publisher_receipt_survives_normal_json_storage(monkeypat
     monkeypatch.setattr(source, "_read", forbidden)
     assert awc_format_hold(stored, now=NOW + timedelta(hours=18)) == "awc_format_spacing"
     assert len(transport.x_posts) == 1
+
+
+@pytest.mark.parametrize("text", ["A different actually transported body.", None, 7])
+def test_present_contradictory_receipt_text_is_not_a_matching_publication(fresh_state, text):
+    _draft, receipt = prior_publication(fresh_state)
+    receipt["text"] = text
+    assert awc_format_hold(fresh_state, now=NOW) is None
+
+
+def test_matching_or_absent_optional_receipt_text_keeps_hash_bound_history(fresh_state):
+    draft, receipt = prior_publication(fresh_state)
+    assert "text" not in receipt
+    assert awc_format_hold(fresh_state, now=NOW) == "awc_format_spacing"
+    receipt["text"] = draft["text"]
+    assert awc_format_hold(fresh_state, now=NOW) == "awc_format_spacing"
+
+
+@pytest.mark.parametrize("mode", ["triage", "legacy", "refill"])
+def test_receipt_appearing_after_selection_or_last_cache_check_never_reserves_writer(monkeypatch, fresh_state, mode):
+    from src.orchestrator import funnel, triage_queue, triage
+    from src.orchestrator.sources.awc_observed import run_awc_observed
+    from src.two_bot import negative_cache
+    from tests.test_observed_airport_body_budget import ordinary
+    transport, models, run, budget = ordinary(monkeypatch, fresh_state, triage="0" if mode == "legacy" else "1")
+    with freeze_time(NOW, tick=True):
+        run_awc_observed(fresh_state, run)
+        [queued] = fresh_state["_triage_queue"]
+        inserted = []
+        if mode == "triage":
+            original = triage.select_survivors
+            def publish_after_selection(state, pool, **kwargs):
+                result = original(state, pool, **kwargs)
+                prior_publication(state)
+                inserted.append(True)
+                return result
+            monkeypatch.setattr(triage, "select_survivors", publish_after_selection)
+        else:
+            original = negative_cache.should_skip
+            def publish_after_cache(state, *args, **kwargs):
+                result = original(state, *args, **kwargs)
+                if not inserted:
+                    prior_publication(state)
+                    inserted.append(True)
+                return result
+            monkeypatch.setattr(negative_cache, "should_skip", publish_after_cache)
+        monkeypatch.setenv("THEHEAT_REFILL_ENABLED", "1" if mode == "refill" else "0")
+        sink = funnel.new_funnel()
+        assert triage_queue._drain_and_write_triage_queue(fresh_state, run, candidate_budget=budget, funnel_sink=sink) == 0
+    assert inserted == [True]
+    assert models.stages() == [] and budget.attempts == 0 and not budget.seen("event:" + queued.event_id)
+    assert sink["_slate_terminal"][queued.event_id] == "editorial_spacing"
+    assert transport.x_posts == [] and transport.gist_patches == 0
+
+
+def test_editorial_hold_does_not_reduce_source_ready_denominator(monkeypatch, fresh_state):
+    from dataclasses import replace
+    from src.orchestrator import triage_queue
+    from src.orchestrator.sources.awc_observed import run_awc_observed
+    from tests.test_observed_airport_body_budget import ordinary
+    _transport, models, run, budget = ordinary(monkeypatch, fresh_state)
+    with freeze_time(NOW, tick=True):
+        run_awc_observed(fresh_state, run)
+        [valid] = fresh_state["_triage_queue"]
+        fresh_state["_triage_queue"].append(replace(valid, event_id=valid.event_id + "_different"))
+        prior_publication(fresh_state)
+        assert triage_queue._drain_and_write_triage_queue(fresh_state, run, candidate_budget=budget) == 0
+    details = next(row for row in run["sources"] if row["source"] == "automatic_selection")["details"]
+    assert details["potential_type_count"] == 2
+    assert details["held_source_candidates"] == 1 and details["held_editorial_candidates"] == 1
+    assert details["source_ready_count"] == 1
+    assert models.stages() == [] and budget.attempts == 0
