@@ -167,3 +167,53 @@ def test_changed_same_value_file_at_live_boundary_still_refuses(encoding, monkey
     transport.on_request = lambda count: setattr(transport, "payload", revised.getvalue()) if count == 2 else None
     collect(ordinary_grid_world)
     assert state["drafts"] == [] and models.stages() == [] and transport.x_posts == []
+
+
+def stored_attribute_frame(case, field, shape, *, padding=None):
+    """Write the original HDF5 type/bytes, without a lossy high-level read."""
+    buffer = io.BytesIO(nasa_frame())
+    with h5py.File(buffer, "r+") as handle:
+        path, key = field
+        node = handle[path]
+        value = node.attrs[key].encode("ascii")
+        del node.attrs[key]
+        if case == "opaque":
+            dtype = h5py.opaque_dtype(np.dtype(f"S{len(value)}"))
+            node.attrs.create(key, np.array(value if shape == () else [value], dtype=dtype))
+        elif case == "wide":
+            node.attrs.create(key, np.array(value if shape == () else [value], dtype="S129"))
+        else:
+            width = len(value) + 8
+            data = value + (b"\x00hour" if case == "suffix" else b" ")
+            type_id = h5py.h5t.C_S1.copy()
+            type_id.set_size(width)
+            type_id.set_strpad(h5py.h5t.STR_NULLTERM if padding is None else padding)
+            space_id = h5py.h5s.create(h5py.h5s.SCALAR) if shape == () else h5py.h5s.create_simple(shape)
+            attribute = h5py.h5a.create(node.id, key.encode("ascii"), type_id, space_id)
+            raw = np.zeros(shape, dtype=f"S{width}")
+            if case == "positive":
+                data = value + (b" " * (width - len(value)) if padding == h5py.h5t.STR_SPACEPAD else b"\x00")
+            raw[...] = data
+            attribute.write(raw, mtype=type_id)
+            attribute.close()
+            space_id.close()
+            type_id.close()
+    return buffer.getvalue()
+
+
+@pytest.mark.parametrize("field", [("precipitation", "units"), ("lon", "units"),
+                                   ("lat", "units"), ("time", "units"), ("time", "calendar")])
+@pytest.mark.parametrize("shape", [(), (1,)])
+@pytest.mark.parametrize("case", ["opaque", "suffix", "wide"])
+def test_original_storage_type_width_and_hidden_suffix_refuse(case, shape, field):
+    raw = stored_attribute_frame(case, field, shape)
+    result = scanned(raw)
+    assert result["status"] == "held" and result["rows"] == [], (case, shape, field, result)
+
+
+@pytest.mark.parametrize("shape", [(), (1,)])
+@pytest.mark.parametrize("padding", [h5py.h5t.STR_NULLTERM, h5py.h5t.STR_NULLPAD, h5py.h5t.STR_SPACEPAD])
+def test_declared_padding_is_decoded_without_dropping_nonpadding_bytes(shape, padding):
+    raw = stored_attribute_frame("positive", ("precipitation", "units"), shape, padding=padding)
+    result = scanned(raw)
+    assert result["status"] == "qualified" and result["rows"][0]["mm_per_day"] == 190.5

@@ -5,6 +5,7 @@ cartographic mask; a selected cell never establishes an area maximum or impact.
 """
 from __future__ import annotations
 
+from contextlib import closing
 from datetime import UTC, date, datetime, timedelta
 from hashlib import sha256
 import math
@@ -17,7 +18,7 @@ SHAPE = (1, 3600, 1800)
 
 
 def _attribute(value):
-    """One bounded ASCII string, including explicit HDF5 scalar arrays.
+    """Value-level decoding only; the caller must verify stored HDF5 types.
 
     Do not stringify objects or join multi-valued attributes. NumPy's fixed
     string scalar extraction removes its storage padding; embedded NUL remains
@@ -51,6 +52,45 @@ def _attribute(value):
     if type(value) is str and 0 < len(value) <= 128 and all(" " <= char <= "~" for char in value):
         return value
     return None
+
+
+def _text_attribute(dataset, name):
+    """Validate stored type/shape/width/padding before h5py can discard them."""
+    import h5py
+    import numpy as np
+
+    if name not in dataset.attrs:
+        return None
+    with closing(dataset.attrs.get_id(name)) as attribute, closing(attribute.get_type()) as storage:
+        shape = attribute.shape
+        if shape not in {(), (1,)} or storage.get_class() != h5py.h5t.STRING:
+            return None
+        if storage.get_cset() not in {h5py.h5t.CSET_ASCII, h5py.h5t.CSET_UTF8}:
+            return None
+        if storage.is_variable_str():
+            return _attribute(dataset.attrs[name])
+        width = storage.get_size()
+        if not 0 < width <= 128:
+            return None
+        padding = storage.get_strpad()
+        if padding not in {h5py.h5t.STR_NULLTERM, h5py.h5t.STR_NULLPAD, h5py.h5t.STR_SPACEPAD}:
+            return None
+        buffer = np.zeros(shape, dtype=f"S{width}")
+        # Identical file/memory types preserve all original fixed-width bytes,
+        # including a nonzero suffix that high-level NULLTERM conversion hides.
+        attribute.read(buffer, mtype=storage)
+        raw = buffer.tobytes()
+        if padding == h5py.h5t.STR_SPACEPAD:
+            raw = raw.rstrip(b" ")
+        else:
+            terminator = raw.find(b"\x00")
+            if terminator >= 0:
+                if any(raw[terminator:]):
+                    return None
+                raw = raw[:terminator]
+            elif padding == h5py.h5t.STR_NULLTERM:
+                return None
+        return _attribute(raw)
 
 
 def _dataset(handle, path, shape, *, integer=False):
@@ -102,8 +142,8 @@ def _missing(dataset, values, *, sentinels=None):
 
 
 def _source_time(dataset, day):
-    units = _attribute(dataset.attrs.get("units"))
-    calendar = _attribute(dataset.attrs.get("calendar"))
+    units = _text_attribute(dataset, "units")
+    calendar = _text_attribute(dataset, "calendar")
     contract.require(calendar in {"gregorian", "standard", "proleptic_gregorian"}
                      and isinstance(units, str), "rainfall_grid_time_invalid")
     match = re.fullmatch(r"(seconds|hours|days) since (\d{4}-\d{2}-\d{2})"
@@ -145,11 +185,11 @@ def scan(handle, dataset, grid, raw, *, day: date, product: str, now=None):
     def node(name, shape, **options):
         return _dataset(handle, f"{parent}/{name}" if parent else name, shape, **options)
 
-    units = _attribute(dataset.attrs.get("units"))
+    units = _text_attribute(dataset, "units")
     contract.require(units in contract.UNITS, "rainfall_grid_units_invalid")
     lon_node, lat_node = node("lon", (3600,)), node("lat", (1800,))
-    contract.require(_attribute(lon_node.attrs.get("units")) == "degrees_east"
-                     and _attribute(lat_node.attrs.get("units")) == "degrees_north",
+    contract.require(_text_attribute(lon_node, "units") == "degrees_east"
+                     and _text_attribute(lat_node, "units") == "degrees_north",
                      "rainfall_grid_axes_invalid")
     longitude, latitude = lon_node[...], lat_node[...]
     contract.require(np.all(np.isfinite(longitude)) and np.all(np.isfinite(latitude))
