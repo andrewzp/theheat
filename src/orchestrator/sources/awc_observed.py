@@ -51,6 +51,16 @@ def run_awc_observed(bot_state: BotState, current_run: dict | None) -> None:
             _record_source_run(current_run, bot_state, "awc_observed", started, status="success",
                                observed=1, promoted=0, drafted=0, note="Station pair/day already retained")
             return
+        from src.editorial.format_spacing import awc_format_hold
+        from src.orchestrator.common import _utc_now
+        if spacing := awc_format_hold(bot_state, now=_utc_now()):
+            _record_source_run(current_run, bot_state, "awc_observed", started, status="success",
+                               observed=1, promoted=0, drafted=0,
+                               note=("Airport comparison writing is spaced 24 hours after a confirmed X publication"
+                                     if spacing == "awc_format_spacing" else
+                                     "Publication history is unavailable for airport comparison spacing"),
+                               details={"editorial_hold": spacing})
+            return
         score = _build_score(source.KIND, severity=70, novelty=75, timeliness=95,
             confidence=85, shareability=85, sensitivity=0, threshold=72,
             reasons=["Same-time observations at two named airports; not a record or rarity finding"])
