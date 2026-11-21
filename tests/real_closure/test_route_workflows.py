@@ -22,7 +22,7 @@ ROOT = Path(__file__).resolve().parents[2]
 # Released .51 main: the comparison point for "no existing default changed".
 BASE = "7d3ad7ce57cd021d7b3919dad42ec402b5c742c2"
 WF = ROOT / ".github/workflows"
-ROUTE = re.compile(r"\$\{\{ vars\.THEHEAT_GIST_WRITE_ROUTE == 'serialized' && (.+?) \|\| (.+?) \}\}")
+ROUTE = re.compile(r"\$\{\{ (?:vars\.THEHEAT_GIST_WRITE_ROUTE|steps\.route-mode\.outputs\.mode) == 'serialized' && (.+?) \|\| (.+?) \}\}")
 # Legacy secret name -> its route-era name (ROUTE-CONTRACT-v2 §6).
 RENAMED = {"GH_GIST_TOKEN": "THEHEAT_GIST_WRITER_TOKEN", "TWITTER_API_KEY": "THEHEAT_X_API_KEY",
            "TWITTER_API_SECRET": "THEHEAT_X_API_SECRET", "TWITTER_ACCESS_TOKEN": "THEHEAT_X_ACCESS_TOKEN",
@@ -30,8 +30,8 @@ RENAMED = {"GH_GIST_TOKEN": "THEHEAT_GIST_WRITER_TOKEN", "TWITTER_API_KEY": "THE
            "BLUESKY_APP_PASSWORD": "THEHEAT_BLUESKY_APP_PASSWORD"}
 PRESENCE = "${{ " + " || ".join(f"secrets.{name} != ''" for name in RENAMED) + " }}"
 ROUTE_DRAIN_ENV = {
-    "GITHUB_TOKEN": "${{ secrets.THEHEAT_GIST_WRITER_TOKEN }}",
-    "THEHEAT_GIST_CREDENTIAL": "${{ secrets.THEHEAT_GIST_WRITER_TOKEN != '' && 'route' || '' }}",
+    "GITHUB_TOKEN": "${{ steps.route-mode.outputs.mode != '' && secrets.THEHEAT_GIST_WRITER_TOKEN || '' }}",
+    "THEHEAT_GIST_CREDENTIAL": "${{ steps.route-mode.outputs.mode != '' && secrets.THEHEAT_GIST_WRITER_TOKEN != '' && 'route' || '' }}",
     "THEHEAT_LEGACY_CREDENTIALS_PRESENT": PRESENCE,
     "THEHEAT_COMMAND_SEAL_KEY": "${{ secrets.THEHEAT_COMMAND_SEAL_KEY }}",
     "THEHEAT_ROUTE_CONTROL_KEY": "${{ secrets.THEHEAT_ROUTE_CONTROL_KEY }}",
@@ -80,7 +80,7 @@ def test_gist_commands_admits_outside_the_group_and_consumes_inside_it():
     # Root checkpoint R1 (deliberate): the inbox reads the consumer's settled-run continuation (read only).
     assert fetch["env"] == {"GH_TOKEN": "${{ github.token }}", "THEHEAT_REPOSITORY": "${{ github.repository }}",
                             "GIST_ID": "${{ secrets.GIST_ID }}",
-                            "THEHEAT_GIST_READ_TOKEN": "${{ secrets.THEHEAT_GIST_WRITER_TOKEN }}"}
+                            "THEHEAT_GIST_READ_TOKEN": "${{ steps.route-mode.outputs.mode != '' && secrets.THEHEAT_GIST_WRITER_TOKEN || '' }}"}
     run = next(s for s in consume["steps"] if s.get("name") == "Consume serially inside theheat-bot")
     assert run["env"]["THEHEAT_SERIALIZED_WRITER"] == "${{ github.run_id }}:consume"
     assert {key: run["env"][key] for key in ROUTE_DRAIN_ENV} == ROUTE_DRAIN_ENV and run["env"]["GIST_ID"] == "${{ secrets.GIST_ID }}"
@@ -117,8 +117,8 @@ def test_bot_drains_only_in_route_mode_and_keeps_every_existing_default():
     for env_key, legacy in renamed.items():
         assert old_step["env"][env_key] == "${{ secrets.%s }}" % legacy
         if env_key == "GITHUB_TOKEN" or env_key.startswith("TWITTER_"):
-            mode = "vars.THEHEAT_GIST_WRITE_ROUTE"
-            expected = "${{ (" + mode + " == 'serialized' && secrets." + RENAMED[legacy] + ") || ((" + mode + " == '' || " + mode + " == 'legacy') && secrets." + legacy + ") || '' }}"
+            mode = "steps.route-mode.outputs.mode"
+            expected = "${{ (" + mode + " == 'serialized' && secrets." + RENAMED[legacy] + ") || (" + mode + " == 'legacy' && secrets." + legacy + ") || '' }}"
         else:
             expected = "${{ secrets.%s || secrets.%s }}" % (RENAMED[legacy], legacy)
         assert step["env"][env_key] == expected
@@ -215,7 +215,7 @@ def test_new_secret_names_are_exactly_the_approved_names():
         for line in path.read_text().splitlines():
             for name in RENAMED:
                 if f"secrets.{name}" in line:
-                    mode = "vars.THEHEAT_GIST_WRITE_ROUTE"
+                    mode = "steps.route-mode.outputs.mode"
                     explicit = (f"({mode} == 'serialized' && secrets.{RENAMED[name]})" in line
-                                and f"(({mode} == '' || {mode} == 'legacy') && secrets.{name}) || ''" in line)
+                                and f"({mode} == 'legacy' && secrets.{name}) || ''" in line)
                     assert explicit or f"secrets.{RENAMED[name]} || secrets.{name}" in line or f"secrets.{name} != ''" in line, (path.name, line)

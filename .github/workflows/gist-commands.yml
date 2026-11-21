@@ -97,29 +97,34 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: '24'
+      - name: Validate exact Gist route mode
+        id: route-mode
+        env:
+          THEHEAT_GIST_WRITE_ROUTE: ${{ vars.THEHEAT_GIST_WRITE_ROUTE }}
+        run: python scripts/gist_route_mode.py
       - name: Fetch every admitted command artifact
         env:
           GH_TOKEN: ${{ github.token }}
           THEHEAT_REPOSITORY: ${{ github.repository }}
           # Reads the consumer's settled-run continuation from the state Gist (read only; review R1).
           GIST_ID: ${{ secrets.GIST_ID }}
-          THEHEAT_GIST_READ_TOKEN: ${{ secrets.THEHEAT_GIST_WRITER_TOKEN }}
+          THEHEAT_GIST_READ_TOKEN: ${{ steps.route-mode.outputs.mode != '' && secrets.THEHEAT_GIST_WRITER_TOKEN || '' }}
         run: python scripts/gist_command_inbox.py fetch --repo "$THEHEAT_REPOSITORY" --out "$RUNNER_TEMP/inbox"
       - name: Consume serially inside theheat-bot
         working-directory: dashboard
         env:
           GIST_ID: ${{ secrets.GIST_ID }}
-          GITHUB_TOKEN: ${{ secrets.THEHEAT_GIST_WRITER_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.route-mode.outputs.mode != '' && secrets.THEHEAT_GIST_WRITER_TOKEN || '' }}
           # Selected writer NAME and legacy-name presence only; actual old-ref fencing requires
           # separate credential delivery and revocation (booleans only, never values or lengths).
-          THEHEAT_GIST_CREDENTIAL: ${{ secrets.THEHEAT_GIST_WRITER_TOKEN != '' && 'route' || '' }}
+          THEHEAT_GIST_CREDENTIAL: ${{ steps.route-mode.outputs.mode != '' && secrets.THEHEAT_GIST_WRITER_TOKEN != '' && 'route' || '' }}
           THEHEAT_LEGACY_CREDENTIALS_PRESENT: ${{ secrets.GH_GIST_TOKEN != '' || secrets.TWITTER_API_KEY != '' || secrets.TWITTER_API_SECRET != '' || secrets.TWITTER_ACCESS_TOKEN != '' || secrets.TWITTER_ACCESS_SECRET != '' || secrets.BLUESKY_HANDLE != '' || secrets.BLUESKY_APP_PASSWORD != '' }}
           # Opens sealed commands (ROUTE-CONTRACT-v2 §1); held only by consume/drain jobs and the dashboard.
           THEHEAT_COMMAND_SEAL_KEY: ${{ secrets.THEHEAT_COMMAND_SEAL_KEY }}
           # Shared signing/verification HMAC for activate/deactivate (root and trusted consumers; never dashboard).
           THEHEAT_ROUTE_CONTROL_KEY: ${{ secrets.THEHEAT_ROUTE_CONTROL_KEY }}
           THEHEAT_FEEDBACK_GIST_ID: ${{ secrets.THEHEAT_FEEDBACK_GIST_ID }}
-          THEHEAT_GIST_WRITE_ROUTE: ${{ vars.THEHEAT_GIST_WRITE_ROUTE }}
+          THEHEAT_GIST_WRITE_ROUTE: ${{ steps.route-mode.outputs.mode }}
           THEHEAT_SERIALIZED_WRITER: ${{ github.run_id }}:consume
           THEHEAT_AUTOMATIC_PUBLICATION_ENABLED: ${{ vars.THEHEAT_AUTOMATIC_PUBLICATION_ENABLED || '0' }}
           THEHEAT_AUTOMATIC_PUBLICATION_EPOCH: ${{ vars.THEHEAT_AUTOMATIC_PUBLICATION_EPOCH }}

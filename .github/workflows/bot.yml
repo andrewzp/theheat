@@ -335,29 +335,34 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: '24'
+      - name: Validate exact Gist route mode
+        id: route-mode
+        env:
+          THEHEAT_GIST_WRITE_ROUTE: ${{ vars.THEHEAT_GIST_WRITE_ROUTE }}
+        run: python scripts/gist_route_mode.py
       - name: Fetch every admitted command artifact
         env:
           GH_TOKEN: ${{ github.token }}
           THEHEAT_REPOSITORY: ${{ github.repository }}
           # Reads the consumer's settled-run continuation from the state Gist (read only; review R1).
           GIST_ID: ${{ secrets.GIST_ID }}
-          THEHEAT_GIST_READ_TOKEN: ${{ secrets.THEHEAT_GIST_WRITER_TOKEN }}
+          THEHEAT_GIST_READ_TOKEN: ${{ steps.route-mode.outputs.mode != '' && secrets.THEHEAT_GIST_WRITER_TOKEN || '' }}
         run: python scripts/gist_command_inbox.py fetch --repo "$THEHEAT_REPOSITORY" --out "$RUNNER_TEMP/inbox"
       - name: Drain the command inbox before the run
         working-directory: dashboard
         env:
           GIST_ID: ${{ secrets.GIST_ID }}
-          GITHUB_TOKEN: ${{ secrets.THEHEAT_GIST_WRITER_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.route-mode.outputs.mode != '' && secrets.THEHEAT_GIST_WRITER_TOKEN || '' }}
           # Selected writer NAME and legacy-name presence only; actual old-ref fencing requires
           # separate credential delivery and revocation (booleans only, never values or lengths).
-          THEHEAT_GIST_CREDENTIAL: ${{ secrets.THEHEAT_GIST_WRITER_TOKEN != '' && 'route' || '' }}
+          THEHEAT_GIST_CREDENTIAL: ${{ steps.route-mode.outputs.mode != '' && secrets.THEHEAT_GIST_WRITER_TOKEN != '' && 'route' || '' }}
           THEHEAT_LEGACY_CREDENTIALS_PRESENT: ${{ secrets.GH_GIST_TOKEN != '' || secrets.TWITTER_API_KEY != '' || secrets.TWITTER_API_SECRET != '' || secrets.TWITTER_ACCESS_TOKEN != '' || secrets.TWITTER_ACCESS_SECRET != '' || secrets.BLUESKY_HANDLE != '' || secrets.BLUESKY_APP_PASSWORD != '' }}
           # Opens sealed commands (ROUTE-CONTRACT-v2 §1); held only by consume/drain jobs and the dashboard.
           THEHEAT_COMMAND_SEAL_KEY: ${{ secrets.THEHEAT_COMMAND_SEAL_KEY }}
           # Shared signing/verification HMAC for activate/deactivate (root and trusted consumers; never dashboard).
           THEHEAT_ROUTE_CONTROL_KEY: ${{ secrets.THEHEAT_ROUTE_CONTROL_KEY }}
           THEHEAT_FEEDBACK_GIST_ID: ${{ secrets.THEHEAT_FEEDBACK_GIST_ID }}
-          THEHEAT_GIST_WRITE_ROUTE: ${{ vars.THEHEAT_GIST_WRITE_ROUTE }}
+          THEHEAT_GIST_WRITE_ROUTE: ${{ steps.route-mode.outputs.mode }}
           THEHEAT_SERIALIZED_WRITER: ${{ github.run_id }}:commands-before
           THEHEAT_AUTOMATIC_PUBLICATION_ENABLED: ${{ vars.THEHEAT_AUTOMATIC_PUBLICATION_ENABLED || '0' }}
           THEHEAT_AUTOMATIC_PUBLICATION_EPOCH: ${{ vars.THEHEAT_AUTOMATIC_PUBLICATION_EPOCH }}
@@ -397,6 +402,11 @@ jobs:
 
       - run: pip install -r requirements.txt
 
+      - name: Validate exact Gist route mode
+        id: route-mode
+        env:
+          THEHEAT_GIST_WRITE_ROUTE: ${{ vars.THEHEAT_GIST_WRITE_ROUTE }}
+        run: python scripts/gist_route_mode.py
       - name: Determine mode
         id: mode
         env:
@@ -411,7 +421,7 @@ jobs:
             ${{ github.event_name == 'schedule' && github.event.schedule == '41 * * * *'
             && github.ref == 'refs/heads/main' && github.run_attempt == '1'
             && vars.THEHEAT_SCHEDULED_ALERTS_CATCHUP == '1'
-            && ((vars.THEHEAT_GIST_WRITE_ROUTE == 'serialized' && secrets.THEHEAT_GIST_WRITER_TOKEN) || ((vars.THEHEAT_GIST_WRITE_ROUTE == '' || vars.THEHEAT_GIST_WRITE_ROUTE == 'legacy') && secrets.GH_GIST_TOKEN) || '') || '' }}
+            && ((steps.route-mode.outputs.mode == 'serialized' && secrets.THEHEAT_GIST_WRITER_TOKEN) || (steps.route-mode.outputs.mode == 'legacy' && secrets.GH_GIST_TOKEN) || '') || '' }}
         run: |
           if [[ "${THEHEAT_AUTOMATIC_SELECTION_ONLY:-0}" == 1 ]] &&
               [[ "${GITHUB_EVENT_NAME:-}" != workflow_dispatch || "${GITHUB_REF:-}" != refs/heads/main ||
@@ -465,16 +475,16 @@ jobs:
           THEHEAT_GHCN_THRESHOLD_VERIFICATION: ${{ steps.thresholds-verify.outcome || 'unknown' }}
           # Keep already-written output visible if the runner exits abruptly.
           PYTHONUNBUFFERED: "1"
-          TWITTER_API_KEY: ${{ (vars.THEHEAT_GIST_WRITE_ROUTE == 'serialized' && secrets.THEHEAT_X_API_KEY) || ((vars.THEHEAT_GIST_WRITE_ROUTE == '' || vars.THEHEAT_GIST_WRITE_ROUTE == 'legacy') && secrets.TWITTER_API_KEY) || '' }}
-          TWITTER_API_SECRET: ${{ (vars.THEHEAT_GIST_WRITE_ROUTE == 'serialized' && secrets.THEHEAT_X_API_SECRET) || ((vars.THEHEAT_GIST_WRITE_ROUTE == '' || vars.THEHEAT_GIST_WRITE_ROUTE == 'legacy') && secrets.TWITTER_API_SECRET) || '' }}
-          TWITTER_ACCESS_TOKEN: ${{ (vars.THEHEAT_GIST_WRITE_ROUTE == 'serialized' && secrets.THEHEAT_X_ACCESS_TOKEN) || ((vars.THEHEAT_GIST_WRITE_ROUTE == '' || vars.THEHEAT_GIST_WRITE_ROUTE == 'legacy') && secrets.TWITTER_ACCESS_TOKEN) || '' }}
-          TWITTER_ACCESS_SECRET: ${{ (vars.THEHEAT_GIST_WRITE_ROUTE == 'serialized' && secrets.THEHEAT_X_ACCESS_SECRET) || ((vars.THEHEAT_GIST_WRITE_ROUTE == '' || vars.THEHEAT_GIST_WRITE_ROUTE == 'legacy') && secrets.TWITTER_ACCESS_SECRET) || '' }}
+          TWITTER_API_KEY: ${{ (steps.route-mode.outputs.mode == 'serialized' && secrets.THEHEAT_X_API_KEY) || (steps.route-mode.outputs.mode == 'legacy' && secrets.TWITTER_API_KEY) || '' }}
+          TWITTER_API_SECRET: ${{ (steps.route-mode.outputs.mode == 'serialized' && secrets.THEHEAT_X_API_SECRET) || (steps.route-mode.outputs.mode == 'legacy' && secrets.TWITTER_API_SECRET) || '' }}
+          TWITTER_ACCESS_TOKEN: ${{ (steps.route-mode.outputs.mode == 'serialized' && secrets.THEHEAT_X_ACCESS_TOKEN) || (steps.route-mode.outputs.mode == 'legacy' && secrets.TWITTER_ACCESS_TOKEN) || '' }}
+          TWITTER_ACCESS_SECRET: ${{ (steps.route-mode.outputs.mode == 'serialized' && secrets.THEHEAT_X_ACCESS_SECRET) || (steps.route-mode.outputs.mode == 'legacy' && secrets.TWITTER_ACCESS_SECRET) || '' }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GIST_ID: ${{ secrets.GIST_ID }}
           # Select names by route mode. Missing route material never borrows a legacy value.
           # Name selection is not old-ref fencing; approved custody and revocation remain required.
-          GITHUB_TOKEN: ${{ (vars.THEHEAT_GIST_WRITE_ROUTE == 'serialized' && secrets.THEHEAT_GIST_WRITER_TOKEN) || ((vars.THEHEAT_GIST_WRITE_ROUTE == '' || vars.THEHEAT_GIST_WRITE_ROUTE == 'legacy') && secrets.GH_GIST_TOKEN) || '' }}
+          GITHUB_TOKEN: ${{ (steps.route-mode.outputs.mode == 'serialized' && secrets.THEHEAT_GIST_WRITER_TOKEN) || (steps.route-mode.outputs.mode == 'legacy' && secrets.GH_GIST_TOKEN) || '' }}
           BLUESKY_HANDLE: ${{ secrets.THEHEAT_BLUESKY_HANDLE || secrets.BLUESKY_HANDLE }}
           BLUESKY_APP_PASSWORD: ${{ secrets.THEHEAT_BLUESKY_APP_PASSWORD || secrets.BLUESKY_APP_PASSWORD }}
           NASA_FIRMS_API_KEY: ${{ secrets.NASA_FIRMS_API_KEY }}
@@ -631,8 +641,8 @@ jobs:
           THEHEAT_SIGNALS_PROVIDER: ${{ vars.THEHEAT_SIGNALS_PROVIDER || 'both' }}
           # P00c serialized Gist route (default off): in route mode this job is the serialized
           # writer; outside route mode both stay empty and every writer behaves as before.
-          THEHEAT_GIST_WRITE_ROUTE: ${{ vars.THEHEAT_GIST_WRITE_ROUTE }}
-          THEHEAT_SERIALIZED_WRITER: ${{ vars.THEHEAT_GIST_WRITE_ROUTE == 'serialized' && format('{0}:run', github.run_id) || '' }}
+          THEHEAT_GIST_WRITE_ROUTE: ${{ steps.route-mode.outputs.mode }}
+          THEHEAT_SERIALIZED_WRITER: ${{ steps.route-mode.outputs.mode == 'serialized' && format('{0}:run', github.run_id) || '' }}
           TWEET_TEXT: ${{ github.event.inputs.tweet_text }}
           # P00c route sender: references only; the text is resolved privately from state (review R2).
           THEHEAT_SENDER_TEXT_SOURCE: ${{ github.event.inputs.text_source }}
@@ -656,9 +666,9 @@ jobs:
         if: steps.mode.outputs.catchup == '1'
         env:
           GIST_ID: ${{ secrets.GIST_ID }}
-          GITHUB_TOKEN: ${{ (vars.THEHEAT_GIST_WRITE_ROUTE == 'serialized' && secrets.THEHEAT_GIST_WRITER_TOKEN) || ((vars.THEHEAT_GIST_WRITE_ROUTE == '' || vars.THEHEAT_GIST_WRITE_ROUTE == 'legacy') && secrets.GH_GIST_TOKEN) || '' }}
-          THEHEAT_GIST_WRITE_ROUTE: ${{ vars.THEHEAT_GIST_WRITE_ROUTE }}
-          THEHEAT_SERIALIZED_WRITER: ${{ vars.THEHEAT_GIST_WRITE_ROUTE == 'serialized' && format('{0}:run', github.run_id) || '' }}
+          GITHUB_TOKEN: ${{ (steps.route-mode.outputs.mode == 'serialized' && secrets.THEHEAT_GIST_WRITER_TOKEN) || (steps.route-mode.outputs.mode == 'legacy' && secrets.GH_GIST_TOKEN) || '' }}
+          THEHEAT_GIST_WRITE_ROUTE: ${{ steps.route-mode.outputs.mode }}
+          THEHEAT_SERIALIZED_WRITER: ${{ steps.route-mode.outputs.mode == 'serialized' && format('{0}:run', github.run_id) || '' }}
           THEHEAT_SCHEDULED_ALERTS_CATCHUP: ${{ vars.THEHEAT_SCHEDULED_ALERTS_CATCHUP || '0' }}
           THEHEAT_TRIAGE_ENABLED: ${{ vars.THEHEAT_TRIAGE_ENABLED || '1' }}
           THEHEAT_MAX_DRAFTS_PER_CYCLE: ${{ vars.THEHEAT_MAX_DRAFTS_PER_CYCLE || '3' }}
@@ -751,29 +761,34 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: '24'
+      - name: Validate exact Gist route mode
+        id: route-mode
+        env:
+          THEHEAT_GIST_WRITE_ROUTE: ${{ vars.THEHEAT_GIST_WRITE_ROUTE }}
+        run: python scripts/gist_route_mode.py
       - name: Fetch every admitted command artifact
         env:
           GH_TOKEN: ${{ github.token }}
           THEHEAT_REPOSITORY: ${{ github.repository }}
           # Reads the consumer's settled-run continuation from the state Gist (read only; review R1).
           GIST_ID: ${{ secrets.GIST_ID }}
-          THEHEAT_GIST_READ_TOKEN: ${{ secrets.THEHEAT_GIST_WRITER_TOKEN }}
+          THEHEAT_GIST_READ_TOKEN: ${{ steps.route-mode.outputs.mode != '' && secrets.THEHEAT_GIST_WRITER_TOKEN || '' }}
         run: python scripts/gist_command_inbox.py fetch --repo "$THEHEAT_REPOSITORY" --out "$RUNNER_TEMP/inbox"
       - name: Drain the command inbox after the final save
         working-directory: dashboard
         env:
           GIST_ID: ${{ secrets.GIST_ID }}
-          GITHUB_TOKEN: ${{ secrets.THEHEAT_GIST_WRITER_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.route-mode.outputs.mode != '' && secrets.THEHEAT_GIST_WRITER_TOKEN || '' }}
           # Selected writer NAME and legacy-name presence only; actual old-ref fencing requires
           # separate credential delivery and revocation (booleans only, never values or lengths).
-          THEHEAT_GIST_CREDENTIAL: ${{ secrets.THEHEAT_GIST_WRITER_TOKEN != '' && 'route' || '' }}
+          THEHEAT_GIST_CREDENTIAL: ${{ steps.route-mode.outputs.mode != '' && secrets.THEHEAT_GIST_WRITER_TOKEN != '' && 'route' || '' }}
           THEHEAT_LEGACY_CREDENTIALS_PRESENT: ${{ secrets.GH_GIST_TOKEN != '' || secrets.TWITTER_API_KEY != '' || secrets.TWITTER_API_SECRET != '' || secrets.TWITTER_ACCESS_TOKEN != '' || secrets.TWITTER_ACCESS_SECRET != '' || secrets.BLUESKY_HANDLE != '' || secrets.BLUESKY_APP_PASSWORD != '' }}
           # Opens sealed commands (ROUTE-CONTRACT-v2 §1); held only by consume/drain jobs and the dashboard.
           THEHEAT_COMMAND_SEAL_KEY: ${{ secrets.THEHEAT_COMMAND_SEAL_KEY }}
           # Shared signing/verification HMAC for activate/deactivate (root and trusted consumers; never dashboard).
           THEHEAT_ROUTE_CONTROL_KEY: ${{ secrets.THEHEAT_ROUTE_CONTROL_KEY }}
           THEHEAT_FEEDBACK_GIST_ID: ${{ secrets.THEHEAT_FEEDBACK_GIST_ID }}
-          THEHEAT_GIST_WRITE_ROUTE: ${{ vars.THEHEAT_GIST_WRITE_ROUTE }}
+          THEHEAT_GIST_WRITE_ROUTE: ${{ steps.route-mode.outputs.mode }}
           THEHEAT_SERIALIZED_WRITER: ${{ github.run_id }}:commands-after
           THEHEAT_AUTOMATIC_PUBLICATION_ENABLED: ${{ vars.THEHEAT_AUTOMATIC_PUBLICATION_ENABLED || '0' }}
           THEHEAT_AUTOMATIC_PUBLICATION_EPOCH: ${{ vars.THEHEAT_AUTOMATIC_PUBLICATION_EPOCH }}

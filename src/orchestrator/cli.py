@@ -39,6 +39,9 @@ def main(dispatchers: dict[str, RunMode]) -> None:
     except gist_route.RouteRefused as exc:
         print(gist_route.refusal_line("bot_run_final_save", exc.code))
         sys.exit(1)
+    except state.StateReadError as exc:
+        print(f"[main] ERROR: {exc}")
+        sys.exit(1)
 
     try:
         bot_state = state.read_state()
