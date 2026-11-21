@@ -1,3 +1,8 @@
+## 0.9.109.160 — 2026-11-21
+
+- Let verified automatic sentinel recovery finish the existing alerts delivery cycle, with a separate read-only metadata job and the unchanged delayed due sender.
+- Keep human dispatches, reruns, unknown provenance and changed limits excluded. Preserve existing checks, approval, freshness and uncertain-send protections; no new scheduler trigger or retry is added.
+
 ## 0.9.109.159 — 2026-11-21
 
 - Add an offline advisory copy report over explicitly supplied private exports, with retained-row identity handling, strict JSON parsing and separate unknown delivery outcomes.

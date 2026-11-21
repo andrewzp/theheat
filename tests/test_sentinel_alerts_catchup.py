@@ -36,7 +36,8 @@ def test_only_the_catchup_job_can_start_workflows(workflow):
     assert "permissions" not in workflow["jobs"]["sentinel"]
     job = _job(workflow)
     assert job["permissions"] == {"contents": "read", "actions": "write"}
-    assert job["if"] == "vars.THEHEAT_PRODUCTION_PAUSED != '1' && github.ref == 'refs/heads/main'"
+    assert job["if"].strip() == ("vars.THEHEAT_PRODUCTION_PAUSED != '1' && github.ref == 'refs/heads/main' "
+        "&& github.event_name == 'schedule' && github.run_attempt == '1'")
     assert "needs" not in job  # a sentinel failure must not hold the catch-up
     step = next(s for s in job["steps"] if s.get("name") == STEP)
     assert step["env"] == {"GH_TOKEN": "${{ github.token }}"}
@@ -57,6 +58,8 @@ def _state(tmp_path: Path, age: timedelta | None) -> Path:
 
 def _run_step(workflow, tmp_path: Path, state: Path, *, active: str = "0", list_exit: int = 0):
     step = next(s for s in _job(workflow)["steps"] if s.get("name") == STEP)
+    ready = next(s for s in _job(workflow)["steps"] if s.get("id") == "catchup-ready")
+    assert step["if"] == "steps.catchup-ready.outputs.eligible == 'true'"
     bindir = tmp_path / "bin"
     bindir.mkdir()
     (bindir / "python").symlink_to(sys.executable)
@@ -74,29 +77,33 @@ def _run_step(workflow, tmp_path: Path, state: Path, *, active: str = "0", list_
     runner_temp = tmp_path / "runner"
     runner_temp.mkdir()
     (runner_temp / "state.json").write_text(state.read_text())
+    output = runner_temp / "output"
+    env = {
+        "PATH": f"{bindir}:{os.environ.get('PATH', '')}",
+        "RUNNER_TEMP": str(runner_temp), "GITHUB_OUTPUT": str(output),
+        "GITHUB_REPOSITORY": "andrewzp/theheat", "GITHUB_RUN_ID": "12344",
+        "GH_CALLS": str(calls), "GH_ACTIVE": active, "GH_LIST_EXIT": str(list_exit),
+    }
     result = subprocess.run(
-        ["/bin/bash", "-e", "-o", "pipefail", "-c", step["run"]],
-        cwd=ROOT,
-        env={
-            "PATH": f"{bindir}:{os.environ.get('PATH', '')}",
-            "RUNNER_TEMP": str(runner_temp),
-            "GITHUB_REPOSITORY": "andrewzp/theheat",
-            "GH_CALLS": str(calls),
-            "GH_ACTIVE": active,
-            "GH_LIST_EXIT": str(list_exit),
-        },
+        ["/bin/bash", "-e", "-o", "pipefail", "-c", ready["run"]],
+        cwd=ROOT, env=env,
         text=True,
         capture_output=True,
         timeout=20,
     )
     assert result.returncode == 0, result.stderr
+    if output.exists() and output.read_text() == "eligible=true\n":
+        dispatched = subprocess.run(["/bin/bash", "-e", "-o", "pipefail", "-c", step["run"]],
+            cwd=ROOT, env=env, text=True, capture_output=True, timeout=20)
+        assert dispatched.returncode == 0, dispatched.stderr
     return calls.read_text().splitlines() if calls.exists() else []
 
 
 def test_stale_lane_with_no_active_bot_run_dispatches_one_alerts_run(workflow, tmp_path):
     calls = _run_step(workflow, tmp_path, _state(tmp_path, timedelta(hours=9)))
     assert len(calls) == 2 and calls[0].startswith("run list ")
-    assert calls[1] == "workflow run bot.yml --repo andrewzp/theheat --ref main -f mode=alerts"
+    assert calls[1] == ("workflow run bot.yml --repo andrewzp/theheat --ref main -f mode=alerts "
+        "-f automatic_only=true -f automatic_catchup_run_id=12344")
 
 
 @pytest.mark.parametrize("age", [timedelta(hours=1), timedelta(minutes=280)])
