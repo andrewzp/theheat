@@ -11,6 +11,87 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-10-18 — Daily corpus grading (15 drafts)
+
+**Context:** Gist read via git-clone path (success). First graded cycle since Jul 6 (a 104-day
+gap in this record; `main`'s docs were last refined Jul 6). Queue: 15 pending, **none previously
+graded**: 13 drafts from Oct 7–9 (9–11 days old), 2 from Oct 16–17 (Guam). Pipeline changes since
+July (writer samples, critic, evidence contract) are not visible in this sample beyond the
+facts that every draft carries a WHO/NHC anchor and a source/limits disclaimer.
+
+**Grade distribution:** A: 0 · B: 4 (all B-) · C: 9 · D: 2. **A-rate: 0% (0/15)**, 50 pp below bar.
+
+**Headline finding:** The queue is a data-delivery queue with no voice. Every draft states a
+number, a multiple or a category and stops. Two new failure shapes dominate: (1) **defensive
+provenance closers** ("These are model estimates, not station measurements"; "No station data to
+verify; model forecast only") on 5 of 6 air-quality/dust drafts, which spend the closing slot on a
+disclaimer instead of a consequence; (2) **cyclone rapid-intensification template convergence**,
+3 of 3 RI drafts share one skeleton (storm + "intensified N kt in 24 hours — from X to Category Y"
++ NHC threshold + raw URL). Also a duplicate-event cluster (Isaias ×3, Malaysia PM2.5 ×2, Guam ×2).
+
+### B range (4, all B-)
+
+- **[4] Riyadh dust_event, 2,347 µg/m³, 10.7× WHO (B-).** Strong number with WHO anchor (P_dust
+  anchor present for the first time on a Riyadh draft). Closer is the disclaimer. 10.7× is
+  consistent with the PM10 mean. No mechanic; the consequence is never named.
+- **[7] Kano air_quality_hazard, PM2.5 ~230 µg/m³, ~15× WHO (B-).** Correct multiple (230/15).
+  Second sentence adds dust >300 µg/m³: real second fact, not padding. Flat, no closer move.
+- **[9] Eastern Mongolian steppe fire, 600.5 / 568.6 / 543.6 MW (B-).** Three-fire cluster reads
+  as a comic triple of numbers, a good setup, but the punchline slot is occupied by "all at 01:13
+  UTC", a timestamp. Nothing stranded, nothing landed. Steppe ecosystem unused.
+- **[11] Isaias RI, Cat 1 → Cat 3, 30 kt to 105 kt (B-).** "Exactly the NHC rapid-intensification
+  threshold" is the one observational beat in the cyclone set (deadpan, near-understatement).
+  Still template-shaped, trailing URL.
+
+### C range (9)
+
+- **[1] Papua New Guinea fire, 1,026 MW (C).** "is radiating 1,026 MW" is the banned opener verb
+  (P3 pattern; seen again after months). "very-high-intensity, satellite-confirmed at 94%
+  confidence" is internal scoring vocabulary (P_tier-adjacent). Elite number, zero voice.
+- **[2] Quetta dust (C+).** Mixes two metrics (523 µg/m³ dust vs 173 µg/m³ PM10 mean); reader
+  can't tell which is the headline. "nearly 4×" is accurate (173/45 = 3.8). Source line as closer.
+- **[3] Arequipa dust (C+).** Near-clone of [2] (same cadence, same 2-metric pairing). 2.7× checks
+  (121/45). Parenthetical "(CAMS global model, 45 km resolution)" is process, not voice.
+- **[5] Isaias RI, TS → Cat 1, 35 kt (C+).** Reads out advisory number, mb, and lat/long. Raw coordinates
+  and URL leak the source feed. "surpassing the NHC rapid intensification threshold of 30 kt" is the
+  threshold-name pattern (P_tier family).
+- **[6] Shah Alam PM2.5 ~152 µg/m³, ~10× (C+).** Correct. Closer "No station data to verify; model
+  forecast only." is a hedge, not a punch.
+- **[8] Klang PM2.5 ~152 µg/m³ (C).** Same value, same disclaimer as [6], neighbouring city, same day.
+  Duplicate cluster; one of the two should never reach pending.
+- **[10] Isaias Cat 3 tier-crossing (C+).** Duplicate event with [11] (same storm, same advisory
+  cycle). "as of NHC Advisory 012a — up from Category 2 within the same advisory cycle" is bureaucratic.
+- **[12] East Pacific Simon RI (C+).** [5]'s skeleton verbatim; parenthetical "(NHC advisory 009a)".
+- **[13] Brazil Cerrado fire, 519 MW (C).** "intense enough to register in the top tier of VIIRS
+  detections" leaks a tier; the second hotspot (529 MW) is larger than the headline one, which
+  undercuts "top tier" framing. Cerrado ecosystem unused.
+
+### D range (2)
+
+- **[14] Guam / Typhoon Champi, severe_weather (D).** "preparation window is closing: life-threatening
+  winds could arrive tonight ... the NWS warns." No number, paraphrased agency headline, alarm
+  register (violates calm-register / benign-violation condition), real-time-baked "tonight".
+  Safety-alert content may be right to post, but it is not this bot's voice product.
+- **[15] Guam, same text (D).** Exact duplicate of [14], re-queued 8h later; no score field. Dedupe gap.
+
+### Patterns named
+
+1. **Defensive provenance closer** (air_quality_hazard/dust, 5 of 6: [2]/[3] via source line,
+   [4], [6], [8] disclaimers). Folded into P_close (closing slot spent on caveat).
+2. **Cyclone RI template convergence** (3 of 3: [5], [11], [12]) plus tier-crossing [10]. New
+   proposal **P_cyclone**.
+3. **Duplicate-event clustering**: Isaias ×3, Malaysia ×2, Guam ×2 reached pending together.
+4. **Banned-formula verb recurrence**: "is radiating N MW" ([1]).
+5. **Tier/threshold leak** ([1] "very-high-intensity", [5] threshold, [13] "top tier"): P_tier.
+6. **Era anchors: none. Political anchors: none. Plant-comparison regex misses: none.**
+7. **A-grade mechanics: none**; no pooled evidence for promoting a mechanic this cycle.
+8. P_dust anchor gap *closed in this sample*: 3 of 3 dust drafts with a WHO multiple ([2],[3],[4]).
+
+### Followups
+
+- Operator: consider dedupe on same-storm / same-value neighbouring-city drafts.
+- Staleness: 13 of 15 are >48h and baked to a past date or advisory; bulk-reject skipped (see QUALITY_TREND).
+
 ## 2026-07-06 — Daily corpus grading (0 fresh drafts; 15 carry-overs from Jul 5, previously graded)
 
 **Context:** Gist read via git-clone path (success; no rate limit). Queue: 15 pending drafts —
