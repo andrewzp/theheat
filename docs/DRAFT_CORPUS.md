@@ -11,6 +11,68 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-11-21 — Daily corpus grading (1 fresh draft; 1 carry-over, previously graded)
+
+**Context:** Gist read via git-clone path (success; gist HEAD Nov 21 12:37Z, `_state_rev` 3442,
+`publication_control.enabled=true`). 2 pending: fresh `draft_20261121_123609_62` (`observed_metar_contrast`,
+created Nov 21 12:36Z, ~2.5h old at grading, score 80, held `automatic_text_over_200_scalars`) and
+`draft_20261118_143656_56` (Sarh/Yakutsk, graded B Nov 18, not re-graded).
+
+**Since the Nov 20 pull:** Shepherd Bay/Tete rejected `awc_source_window_elapsed`. No new posts and no
+drafts created and rejected between pulls. METAR pairs posted: still 2 of 11.
+
+**Staleness:** Sarh/Yakutsk is now ~72.5h old with a dated observation ("14:00 UTC, 18 Nov"). It's a strict
+candidate for the 2nd cycle running. The AWC sweep has now cleared five other METAR drafts but still not
+this one, the only one with `publish_outcome: not_sent`. That supports Nov 20's guess that a failed publish
+attempt exempts a draft from the sweep. Gist write 403 again ("Gist writes are not permitted through this
+proxy"); reject skipped.
+
+**Grade distribution (fresh):** 0 A / 1 B / 0 C / 0 D-F. **A-rate 0% (n=1)**; bar not cleared.
+
+**Headline finding:** the card skeleton is now 7 for 7. Mixed precision is gone (both readings whole
+degrees), and Magadan is a new cold anchor. But Tete is the warm half again, ~23h after Shepherd Bay/Tete.
+So the repeat-anchor problem isn't just Yakutsk: either end of the pair can recur.
+
+### B
+**[2] Tete / Magadan observed_metar_contrast (score 80)** — "Tete airport, Mozambique: 42°C; Magadan/Sokol
+airport, Russia: −31°C — a 73°C airport gap at 12:00 UTC, 21 Nov." + source URL.
+- Violation: yes. 42°C in the Zambezi valley and −31°C on the Sea of Okhotsk coast in the same hour.
+- Benign: yes. Flat, no record claim, scope held to two observations.
+- Setup→punchline: correct (readings, then gap). Mechanic: deadpan juxtaposition / pure data delivery.
+- Wodehouse: clean. Whole degrees on both sides, so the "73°C" gap reads as a fact, not a calculation.
+  Fixes Nov 20's "68.2°C".
+- Caps: same colon-label card; "airport" ×3; "airport gap" noun stack. "Magadan/Sokol" is the official
+  station name pasted in with a slash, the 2nd time after "Nouakchott/Oumtounsy" (Nov 19). Nothing past
+  the gap.
+- Grade parity with Sarh/Nouakchott/Shepherd Bay (B). Clean precision and a new cold anchor, offset by
+  the slash name and the repeat warm anchor.
+
+### Carry-over (not re-graded)
+- Sarh/Yakutsk — B (Nov 18). ~72.5h old; strict staleness candidate, 2nd cycle (see above).
+
+### Patterns
+1. **P_metar_card +1 cycle (4 graded cycles).** 7/7 METAR drafts since Nov 18 on the card layout, every
+   graded instance B. The station-name slash is a 2nd instance; the proposed fix already covers it
+   ("name each place once, as a place").
+2. **P_event_sat +1 cycle, warm-anchor subtype.** Tete is the warm half of 2 pairs in ~23h (Shepherd Bay
+   Nov 20 13:42Z, Magadan Nov 21 12:36Z). The Nov 18 addendum keys on "the anchor station"; the fix should
+   key on both stations of the pair. Yakutsk 9/11.
+3. **P_close +1 (weak).** Ends on the gap again. Same caveat as before; folded into P_metar_card's fix.
+4. Mixed-precision gap (Nov 20) did not recur. One instance, not a proposal; the rounding line in
+   P_metar_card's fix stays.
+5. No era-anchor, political-anchor, banned-opener (P3 regex) or plant-comparison hits. No A-grade
+   mechanic to log.
+
+### Followups
+- **Operator: Sarh/Yakutsk is ~72h old** with a dated observation. Reject from the dashboard, and check
+  whether `not_sent` drafts are excluded from the `awc_source_window_elapsed` sweep. It's now the only
+  METAR draft the sweep has missed, 2 cycles running.
+- Operator: when P_event_sat ships, key the METAR repeat window on both stations, not only the cold one.
+- Infra (carried): `gh` token invalid; gist writes 403 at the proxy. Gist reject, `gh pr` and
+  `ROUTINE_BEACON` writes blocked.
+
+---
+
 ## 2026-11-20 — Daily corpus grading (1 fresh draft; 1 carry-over, previously graded)
 
 **Context:** Gist read via git-clone path (success; gist HEAD Nov 20 13:43Z, `_state_rev` 3425,
