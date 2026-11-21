@@ -1,3 +1,7 @@
+## 0.9.109.149
+
+- Space routine airport-comparison writing 24 hours after a matching confirmed X publication. Check before selection caps and before the writer; report editorial holds separately from source failures and negative-cache hits.
+
 ## 0.9.109.148
 
 - Log bounded status, media, destination-group and redirect labels from the existing IMERG datapool response without printing URLs or response bodies. Preserve request, content, error and fallback behavior.
