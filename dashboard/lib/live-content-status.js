@@ -113,10 +113,53 @@ function ghcnArchiveIntake(m, context) {
   const start = timestamp(context?.started_at), end = timestamp(context?.ended_at), at = timestamp(t?.retrieved_at)
   const names = ["temperature_rows", "inactive_station_rows", "too_old_rows", "future_rows",
     "unusable_rows", "accepted_values", "station_days", "stations_with_obs"]
+  const trackedOnly = t?.schema_version === 1 && t.scope === "already_verified_tracked_archives"
+  const discovered = t?.schema_version === 2 && t.scope === "verified_selected_station_archives"
+    && t.nomination_source === "untrusted_daily_service_hints"
+  const archiveKeys = ["active_archives", "counts", "cutoff_day", "retrieved_at", "schema_version", "scope",
+    "trigger", "verified_archives", "window_day", ...(discovered ? ["nomination_source", "nominated_stations"] : [])]
+  const suppliedLookup = Object.hasOwn(m ?? {}, "station_discovery"), h = m?.station_discovery
+  const hintKeys = ["schema_version", "scope", "status", "reason", "http_status", "window_day", "cutoff_day", "get_calls", "max_get_calls",
+    "eligible_untracked_stations", "response_bytes", "response_sha256", "rows_received", "held_stations",
+    "numeric_hints", "nominated_stations"]
+  let hintDetail = ""
+  if (suppliedLookup) {
+    if (!object(h) || Object.keys(h).sort().join() !== hintKeys.sort().join()
+        || h.schema_version !== 1 || h.scope !== "discovery_hints_not_observations"
+        || !["nominated", "no_nominations", "unavailable"].includes(h.status)
+        || !["nominated", "no_nominations", "http_error", "transport_unavailable", "headers_unsupported",
+          "body_limit", "read_deadline", "body_length_mismatch", "nomination_unavailable"].includes(h.reason)
+        || !(h.http_status === null || (integer(h.http_status) && h.http_status >= 100 && h.http_status <= 599))
+        || h.get_calls !== 1 || h.max_get_calls !== 1
+        || !integer(h.eligible_untracked_stations) || h.eligible_untracked_stations < 1
+        || h.eligible_untracked_stations > m.stations_active
+        || !day(h.window_day) || !day(h.cutoff_day) || h.window_day !== t?.window_day
+        || h.cutoff_day < t?.cutoff_day || h.cutoff_day >= h.window_day
+        || Date.parse(h.window_day) - Date.parse(h.cutoff_day) > 4 * 86400000
+        || !integer(h.nominated_stations) || h.nominated_stations > h.eligible_untracked_stations) return null
+    const noBody = h.response_bytes === null && h.response_sha256 === null
+    const body = integer(h.response_bytes) && h.response_bytes <= 32 * 1024 * 1024
+      && typeof h.response_sha256 === "string" && /^[a-f0-9]{64}$/.test(h.response_sha256)
+    if (!noBody && !body) return null
+    if (h.status === "unavailable") {
+      if (["nominated", "no_nominations"].includes(h.reason) || h.nominated_stations !== 0
+          || [h.rows_received, h.held_stations, h.numeric_hints].some(v => v !== null)
+          || (h.reason === "http_error" && (h.http_status === null || h.http_status === 200))) return null
+    } else if (!body || ![h.rows_received, h.held_stations, h.numeric_hints].every(integer)
+        || h.reason !== h.status || h.http_status !== 200
+        || h.rows_received > 300000 || h.numeric_hints > 2 * h.rows_received
+        || h.held_stations + h.nominated_stations > h.eligible_untracked_stations
+        || h.nominated_stations > h.numeric_hints || (h.status === "nominated") !== (h.nominated_stations > 0)) return null
+    const reason = { http_error: `HTTP ${h.http_status}`, transport_unavailable: "transport incomplete",
+      headers_unsupported: "unsupported headers", body_limit: "body limit", read_deadline: "read deadline",
+      body_length_mismatch: "length mismatch", nomination_unavailable: "unsupported reply or nomination inputs" }[h.reason]
+    hintDetail = ` Additional station lookup: 1 client call; ${h.status === "unavailable" ? `reply unavailable (${reason})` : `${h.nominated_stations} archive nomination${h.nominated_stations === 1 ? "" : "s"}`}.`
+      + " Lookup values are not observations; zero nominations do not establish no events."
+  }
   if (context?.current !== true || !object(m) || m.status !== "degraded" || m.threshold_verification !== "success"
       || !Number.isFinite(start) || !Number.isFinite(end) || end < start || !Number.isFinite(at) || at < start || at > end
-      || !object(t) || Object.keys(t).sort().join() !== "active_archives,counts,cutoff_day,retrieved_at,schema_version,scope,trigger,verified_archives,window_day"
-      || t.schema_version !== 1 || t.scope !== "already_verified_tracked_archives" || t.trigger !== "no_diff_payload"
+      || !object(t) || Object.keys(t).sort().join() !== archiveKeys.sort().join()
+      || (!trackedOnly && !discovered) || t.trigger !== "no_diff_payload"
       || !day(t.window_day) || !day(t.cutoff_day) || t.cutoff_day > t.window_day
       || t.window_day !== new Date(at).toISOString().slice(0, 10)
       || Date.parse(t.window_day) - Date.parse(t.cutoff_day) > 366 * 86400000
@@ -129,21 +172,50 @@ function ghcnArchiveIntake(m, context) {
       || selection.bucket_hours !== 4 || timestamp(selection.bucket_start) !== Math.floor(at / 14400000) * 14400000
       || ![selection.selected_unique_stations, selection.limit].every(integer)
       || selection.selected_unique_stations !== m.archive_verification_attempted || selection.limit > 20
-      || selection.selected_unique_stations > selection.limit || selection.candidates?.pool_stations !== 0
+      || selection.selected_unique_stations > selection.limit
       || !object(tracked) || ![tracked.pool_stations, tracked.selected_stations, tracked.unselected_stations,
         tracked.verified_stations, tracked.unverified_stations, tracked.reserved_slots, selection.eligible_unique_stations,
         selection.unselected_unique_stations, m.tracked_stations_unscanned, m.archive_verification_exhausted].every(integer)
-      || selection.overlap_stations !== 0 || selection.eligible_unique_stations !== tracked.pool_stations
-      || selection.selected_unique_stations !== Math.min(selection.limit, tracked.pool_stations)
-      || tracked.selected_stations !== selection.selected_unique_stations || tracked.reserved_slots !== tracked.selected_stations
-      || tracked.unselected_stations !== tracked.pool_stations - tracked.selected_stations
-      || selection.unselected_unique_stations !== tracked.unselected_stations || m.archive_verification_exhausted !== tracked.unselected_stations
-      || tracked.verified_stations !== t.verified_archives || tracked.unverified_stations !== tracked.pool_stations - t.verified_archives
-      || m.tracked_stations_unscanned !== tracked.unverified_stations
       || ![m.diff_dates_attempted, m.diff_dates_fetched, m.diff_dates_missing].every(integer)
       || m.diff_dates_attempted < 1 || m.diff_dates_attempted > 366 || m.diff_dates_fetched !== 0
       || m.diff_dates_missing !== m.diff_dates_attempted || m.diff_fetch_failed !== 1 || Object.hasOwn(m, "diff_intake")
       || !object(c) || Object.keys(c).sort().join() !== [...names].sort().join() || !names.every(k => integer(c[k]))) return null
+  if (trackedOnly) {
+    if ((suppliedLookup && h.nominated_stations !== 0) || selection.candidates?.pool_stations !== 0
+        || selection.overlap_stations !== 0 || selection.eligible_unique_stations !== tracked.pool_stations
+        || selection.selected_unique_stations !== Math.min(selection.limit, tracked.pool_stations)
+        || tracked.selected_stations !== selection.selected_unique_stations || tracked.reserved_slots !== tracked.selected_stations
+        || tracked.unselected_stations !== tracked.pool_stations - tracked.selected_stations
+        || selection.unselected_unique_stations !== tracked.unselected_stations || m.archive_verification_exhausted !== tracked.unselected_stations
+        || tracked.verified_stations !== t.verified_archives || tracked.unverified_stations !== tracked.pool_stations - t.verified_archives
+        || m.tracked_stations_unscanned !== tracked.unverified_stations) return null
+  } else {
+    const candidate = selection.candidates
+    if (!suppliedLookup || h.status !== "nominated" || !integer(t.nominated_stations)
+        || t.nominated_stations !== h.nominated_stations || !object(candidate)
+        || ![candidate.pool_stations, candidate.reserved_slots, candidate.selected_stations, candidate.unselected_stations,
+          candidate.verified_stations, candidate.unverified_stations].every(integer)
+        || candidate.pool_stations !== h.nominated_stations || selection.overlap_stations !== 0
+        || selection.eligible_unique_stations !== tracked.pool_stations + candidate.pool_stations
+        || selection.selected_unique_stations !== Math.min(selection.limit, selection.eligible_unique_stations)
+        || selection.unselected_unique_stations !== selection.eligible_unique_stations - selection.selected_unique_stations
+        || m.archive_verification_exhausted !== selection.unselected_unique_stations
+        || tracked.verified_stations > tracked.selected_stations || candidate.verified_stations > candidate.selected_stations
+        || tracked.verified_stations + candidate.verified_stations !== t.verified_archives
+        || t.active_archives < candidate.verified_stations
+        || tracked.unselected_stations !== tracked.pool_stations - tracked.selected_stations
+        || candidate.unselected_stations !== candidate.pool_stations - candidate.selected_stations
+        || tracked.unverified_stations !== tracked.pool_stations - tracked.verified_stations
+        || candidate.unverified_stations !== candidate.pool_stations - candidate.verified_stations
+        || m.tracked_stations_unscanned !== tracked.unverified_stations) return null
+    const budget = selection.selected_unique_stations, phase = Math.floor(at / 14400000) % 2
+    let tr = Math.min(tracked.pool_stations, Math.floor(budget / 2) + (phase === 0 ? budget % 2 : 0))
+    let ca = Math.min(candidate.pool_stations, Math.floor(budget / 2) + (phase === 1 ? budget % 2 : 0))
+    const spare = budget - tr - ca, extra = Math.min(spare, tracked.pool_stations - tr)
+    tr += extra; ca += Math.min(spare - extra, candidate.pool_stations - ca)
+    if (tracked.reserved_slots !== tr || tracked.selected_stations !== tr
+        || candidate.reserved_slots !== ca || candidate.selected_stations !== ca) return null
+  }
   const partition = c.inactive_station_rows + c.too_old_rows + c.future_rows + c.unusable_rows + c.accepted_values
   const days = (Date.parse(t.window_day) - Date.parse(t.cutoff_day)) / 86400000 + 1
   const missing = new Set(Array.from({ length: m.diff_dates_attempted }, (_, i) =>
@@ -163,11 +235,11 @@ function ghcnArchiveIntake(m, context) {
       || m.station_obs_pairs !== c.station_days || m.stations_with_obs !== c.stations_with_obs) return null
   if (t.active_archives === 0) return { unavailable: true, detail: `Saved GHCN station-archive sample: `
     + `${m.archive_verification_attempted} attempted; ${m.archive_verification_failed} failed; ${t.verified_archives} verified; `
-    + "0 active. No verified active station sample establishes current observations. Diff acquisition remains unavailable." }
-  return { empty: c.accepted_values === 0, detail: `Saved GHCN already-verified station archives: ${t.verified_archives} checked; `
+    + "0 active. No verified active station sample establishes current observations. Diff acquisition remains unavailable." + hintDetail }
+  return { empty: c.accepted_values === 0, detail: `Saved GHCN ${discovered ? "selected verified" : "already-verified"} station archives: ${t.verified_archives} checked; `
     + `${t.active_archives} active; ${c.accepted_values} accepted daily values; ${c.station_days} station-day${c.station_days === 1 ? "" : "s"}. `
     + `Excluded rows: ${c.inactive_station_rows} inactive; ${c.too_old_rows} old; ${c.future_rows} future; ${c.unusable_rows} unusable. `
-    + "Diff acquisition remains unavailable. Checked station sample only; record qualification is separate." }
+    + "Diff acquisition remains unavailable. Checked station sample only; record qualification is separate." + hintDetail }
 }
 
 function ghcnFetch(m, context, archive = null) {

@@ -68,7 +68,8 @@
       "evidence_files": [
         "src/orchestrator/sources/open_meteo.py",
         "src/data/temperature_evidence.py",
-        "src/data/ghcn.py"
+        "src/data/ghcn.py",
+        "src/data/ghcn_discovery.py"
       ]
     },
     {
@@ -706,7 +707,8 @@
     "src/data/fire_source_contract.py": "851fcf3800b742f89f0780b8c8348bd9aa701b1cc93771fd5433cd6fee3c3d72",
     "src/data/firms.py": "760c6157ec3cf3e84003ec764763f0c108539350e6bceba84c33532d8e75c422",
     "src/data/gdacs.py": "acd12ae1dd53550d5a377b8adc3f8f6179ae9b86239aa606717a0d07f0875457",
-    "src/data/ghcn.py": "58ad57e724b76571b7192d7938885ef60d4447e05fd44c2109cd9e7b7151a9b8",
+    "src/data/ghcn.py": "32b9f388d05b0b9b6590860f685b2e85f91b13bf8d8e3bf6cfb9e07ae4f157d9",
+    "src/data/ghcn_discovery.py": "2ed4b38fbd1734af8b0ae0622c2cd4cd51a69fcbe664a923489e1b8a187c5790",
     "src/data/gpm_imerg.py": "df451bcfeca581f1afcfb91063c2f8163352af53b52b20e41f1f84a94a0560ae",
     "src/data/ice_mass.py": "6352519b96130b565a9507f558a289126b1e9524cc79437239c55c5f4f2dd737",
     "src/data/jtwc.py": "1ad213e88299c9333c149cde0dbfd28d689e31b89e1c51440995536c64776e56",
@@ -726,7 +728,7 @@
     "src/data/regional_observations.py": "eef66077194e446991db077d558f3e2da664e6c1c7a1deb5e2b4ea9cec08d88e",
     "src/data/river_gauges.py": "7f7f5bfa89c84d95f6d8b872476a9512116047e86a62e4d4db0412c87ee7ee14",
     "src/data/sea_ice.py": "373dc72240b8ee7439995cf194b9b190b9a1940df393723119849cdeeff455f8",
-    "src/data/source_registry.py": "1a2ee2ccdf173e18afaae1af5c0623c648e9c9d5c5ad05d1013af6a96b23a528",
+    "src/data/source_registry.py": "999c9a722f4b3176f6d1ea70be0b6e468a0cf26c33f2d4f9b31ec8f23e5e8c21",
     "src/data/temperature_evidence.py": "940dfab7d54645262f16785b21532a18ffd6af6cbf7cf0c6e116463741192458",
     "src/data/usgs_quakes.py": "d074863aba46097e0aa31a0c16c48158a2769c1403cac51e1e2054b2deb96650",
     "src/data/water_levels.py": "4868999eaaf6a95800439c3455efa4d67753e7b328161598b11d140d75e93c9e",
@@ -775,5 +777,5 @@
     "src/two_bot/intern/warnings.py": "04e0a4506ffbb29124c8d2960a5e5025305699297fcf8f9178b23caac2cd7a37"
   },
   "evidence_scope": "Referenced local code inventory; not live/provider/transitive-source qualification.",
-  "registry_sha256": "7258ed7d84ec066d0427b1334d8ae8d52611865f2d2122fc261d1027ca95b307"
+  "registry_sha256": "c7ea3fc8c1c1bc629d21e9ea5de778b0ae8d0bdc7f68568958ad450740437093"
 }

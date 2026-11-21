@@ -29,7 +29,7 @@ def test_v4_scopes_dataset_cadence_without_granting_station_freshness_or_rights(
     before = by_id(products.product_contract_document(schema=V3))
     document = products.product_contract_document(schema=V4)
     after = by_id(document)
-    assert products.SCHEMA == V4
+    assert products.GHCN_SCHEMA == V4  # Historical cadence contract stays pinned to v4.
     assert set(before) == set(after)
     assert {key for key in before if before[key] != after[key]} == GHCN
     for key in GHCN:
