@@ -74,7 +74,7 @@ CONTRACTS = (
             "Configured cities and station candidates; not every place worldwide.", "mixed",
             "Open-Meteo forecasts/models and the separately gated GHCN station path.",
             "Keep forecast, model and station evidence distinct; a station record needs its qualified history.",
-            support=("src/data/temperature_evidence.py", "src/data/ghcn.py")),
+            support=("src/data/temperature_evidence.py", "src/data/ghcn.py", "src/data/ghcn_discovery.py")),
     _source("firms", "firms", "run_firms", "Configured fire-cluster selection and available source legs.", "mixed",
             "FIRMS satellite detections; an alternate leg retains its own provenance.",
             "A detection or alternate footprint is not burned area, a death toll or proof of fire cause.",

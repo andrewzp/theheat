@@ -1,6 +1,6 @@
 {
   "identity": {
-    "archive_sha256": "d6491c20fc35867a342890977600e563f588977f56c5eb32966fdecc188ed8bb",
+    "archive_sha256": "5365939627d42af42f62449461ad4204321d17ded840dedb72a308112fddac9a",
     "deployment_files": {
       "api/graphic_preview.py": "984de6284b9eddef85db41cee9ab26c9d92954f12c7e13b6f87bf0bfb6640157",
       "api/graphic_reader_status.py": "5e9685d699625a4eea9d5be884b6e266939a0ad344a2997351ba79bd114407ba",
@@ -36,7 +36,7 @@
       "src/data/fire_evidence.py": "cc270db0d383a5264270a001ba6a8e0ecdb1a7d22c808c4a09930fee7e86f7bf",
       "src/data/fire_identity.py": "badc8f086211c5ef2eb4cfb2812ce4bd3a70f0dee4c6340ed5d0d5ecf260b961",
       "src/data/fire_source_contract.py": "851fcf3800b742f89f0780b8c8348bd9aa701b1cc93771fd5433cd6fee3c3d72",
-      "src/data/ghcn.py": "58ad57e724b76571b7192d7938885ef60d4447e05fd44c2109cd9e7b7151a9b8",
+      "src/data/ghcn.py": "78e49e03171841eefca96e317a6aa88efae7909f085e45884bfaae2eaa905bdd",
       "src/data/ghcn_db.py": "ccec1ad5673354de3dbadb07c637c294122d7f7c0ffcdfb7e8fd3e5090ee81d5",
       "src/data/ghcn_format.py": "d1c7b728416369e6a67f60f964b17a8762990fed0794ab4a3214cd3e7b21fb30",
       "src/data/json_evidence.py": "06cfc76cbb5aaa39348a5d437742c2c37fc2f06b9f6489ff2ba6b6dbe16c1624",
@@ -123,7 +123,7 @@
       "src/two_bot/types.py": "65afc3d850c31c843bc1e7b58dcc0b13eb274969dcff657e2622641bd85239ee"
     },
     "format": "saved-source-svg-preview-v2",
-    "policy_source_sha256": "69bc58d3111f97818eeaa67361d5bf5b46cdf0416121cacc7558941e4ea4fdf6",
+    "policy_source_sha256": "0ac400396511e8cc71dadecdf4abc44f658157b560c8345ade0c84371d339b9f",
     "resource_sources": {
       "src/data/registry/cities.csv": "data/cities.csv",
       "src/data/registry/country_codes.json": "data/country_codes.json",
@@ -133,5 +133,5 @@
     },
     "schema_version": 1
   },
-  "runtime_sha256": "453b7c34973505f00841f5ddf8c98686e531fc3772f0cca2c217c12817bc11e7"
+  "runtime_sha256": "4e93d6a42d48e476e2001ba9c33e17fc341f2c99cab0fd2fbd6010d33352c250"
 }

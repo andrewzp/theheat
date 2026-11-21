@@ -815,7 +815,8 @@ def check_extreme_signals_for_stations(
     """
     if metrics_out is not None:
         for field in ("diff_fetch", "diff_intake", "diff_dates_attempted", "diff_dates_fetched",
-                      "diff_dates_missing", "diff_missing_dates", "diff_fetch_failed", "station_archive_intake"):
+                      "diff_dates_missing", "diff_missing_dates", "diff_fetch_failed", "station_archive_intake",
+                      "station_discovery"):
             metrics_out.pop(field, None)
     resolved_db = Path(db_path) if db_path else _db_path()
 
@@ -891,6 +892,37 @@ def check_extreme_signals_for_stations(
         if sid in active_ids and _could_need_baseline(obs, cached[sid])
     }
     tracked_stations = {sid for sid, _, _ in points}
+    # No lookup can replace a partially parsed diff or a missing/QC-failed
+    # observation. This additional request ONLY nominates untracked stations
+    # after complete captured404s, in the existing legacy collector. Cold starts,
+    # explicit retained readers and a fully tracked active set remain unchanged.
+    untracked_active = frozenset(sid for sid in active_ids - tracked_stations
+                                if isinstance(sid, str) and re.fullmatch(r"[A-Z0-9]{11}", sid))
+    capture = fetch_metrics.get("diff_fetch") or {}
+    counts = capture.get("counts") or {}
+    lookup = None
+    if (archive_observations and _runtime is None and _fetch_obs_fn is None
+            and active_ids & tracked_stations and untracked_active
+            and type(archive_verification_limit) is int and archive_verification_limit > 0
+            and type(MAX_OBS_AGE_DAYS) is int and 1 <= MAX_OBS_AGE_DAYS <= 366
+            and capture.get("schema_version") == 1 and capture.get("scope") == "client_get_invocations"
+            and capture.get("window_day") == now[:10]
+            and type(capture.get("get_calls")) is int and capture["get_calls"] > 0
+            and set(counts) == set(_DIFF_FETCH_OUTCOMES)
+            and all(type(n) is int and n >= 0 for n in counts.values())
+            and counts["http_404"] == capture["get_calls"] == 10 * fetch_metrics["diff_dates_attempted"]
+            and sum(counts.values()) == capture["get_calls"]):
+        # Collector-only import: the sealed pure graphic runtime grants no
+        # authority to call the access service or interpret its lookup values.
+        from src.data.ghcn_discovery import fetch_nominations
+
+        nominees, lookup = fetch_nominations(
+            frozenset(untracked_active), cached, today=date.fromisoformat(now[:10]),
+            max_age_days=MAX_OBS_AGE_DAYS,
+            anomaly=min(ANOMALY_HOT_THRESHOLD_C, ANOMALY_COLD_THRESHOLD_C),
+        )
+        candidates.update(nominees)
+        metrics["station_discovery"] = lookup
     selected, selection = _select_archive_stations(
         tracked_stations, candidates, now=now, limit=archive_verification_limit,
     )
@@ -907,10 +939,22 @@ def check_extreme_signals_for_stations(
             except (requests.RequestException, OSError, ValueError, TypeError, UnicodeError):
                 metrics["archive_verification_failed"] += 1
     else:
-        from src.two_bot.call_inventory import submit_in_context
+        from src.two_bot.call_inventory import submit_in_context, current_cancel_token, OperationCancelled
+
+        def current_archive(sid):
+            def current():
+                if lookup is not None:
+                    token = current_cancel_token()
+                    if token is not None and token.cancelled:
+                        raise OperationCancelled(str(token.reason))
+
+            current()
+            payload = fetch_archive(sid)
+            current()
+            return payload
 
         with ThreadPoolExecutor(max_workers=4) as pool:
-            futures = {submit_in_context(pool, fetch_archive, sid): sid for sid in selected}
+            futures = {submit_in_context(pool, current_archive, sid): sid for sid in selected}
             for future in as_completed(futures):
                 sid = futures[future]
                 try:
@@ -949,6 +993,13 @@ def check_extreme_signals_for_stations(
             snapshots, active_ids, now=now,
             max_age_days=_runtime.max_age if _runtime is not None else MAX_OBS_AGE_DAYS,
         )
+        if lookup is not None and candidates:
+            # The unchanged archive parser/QC/history path above supplied every
+            # value. Hints contributed only station IDs to the existing lane.
+            metrics["station_archive_intake"].update(
+                schema_version=2, scope="verified_selected_station_archives",
+                nomination_source="untrusted_daily_service_hints", nominated_stations=len(candidates),
+            )
     if not latest_obs and not tracked_stations:
         if metrics_out is not None:
             metrics_out.update(metrics | {"stations_active": len(stations)})

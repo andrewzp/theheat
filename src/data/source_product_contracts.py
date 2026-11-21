@@ -21,8 +21,12 @@ from src.data.source_registry import SCHEMA_VERSION as REGISTRY_SCHEMA_VERSION
 LEGACY_SCHEMA = "theheat.source-product-contracts/v1"
 PREVIOUS_SCHEMA = "theheat.source-product-contracts/v2"
 GPM_SCHEMA = "theheat.source-product-contracts/v3"
-SCHEMA = "theheat.source-product-contracts/v4"
-_SCHEMAS = frozenset({LEGACY_SCHEMA, PREVIOUS_SCHEMA, GPM_SCHEMA, SCHEMA})
+GHCN_SCHEMA = "theheat.source-product-contracts/v4"
+SCHEMA = "theheat.source-product-contracts/v5"
+_SCHEMAS = frozenset({LEGACY_SCHEMA, PREVIOUS_SCHEMA, GPM_SCHEMA, GHCN_SCHEMA, SCHEMA})
+_DISCOVERY_PRODUCT = "open_meteo_extreme_signals.ghcn_daily_access_hints"
+_ARCHIVE_OBSERVATIONS = "open_meteo_extreme_signals.ghcn_archive_observations"
+_V5_PRODUCTS = frozenset({_DISCOVERY_PRODUCT, _ARCHIVE_OBSERVATIONS})
 PURPOSE = "product_and_serving_leg_inventory_not_activation_or_claim_permission"
 UNKNOWN_FIELDS = ("provider_cadence", "provider_quota", "reuse_rights", "cost")
 
@@ -94,7 +98,7 @@ def _provider_fields(leg: ProductLeg, *, schema=SCHEMA) -> dict[str, Any]:
             "partial", "Published item terms disclaim accuracy, completeness and fitness.",
             "No affirmative reuse license for every contributing dataset or base map is established by this metadata.",
             _NIFC_ITEM_DOC)
-    elif schema in {GPM_SCHEMA, SCHEMA} and product_id in {"gpm_imerg.imerg_late_opendap", "gpm_imerg.imerg_late_grid_datapool"}:
+    elif schema in {GPM_SCHEMA, GHCN_SCHEMA, SCHEMA} and product_id in {"gpm_imerg.imerg_late_opendap", "gpm_imerg.imerg_late_grid_datapool"}:
         if (leg.provider, leg.upstream) != ("nasa_gesdisc", "nasa_gesdisc.gpm_3imergdl_07"):
             return fields
         fields["provider_cadence"] = _provider_fact(
@@ -109,8 +113,8 @@ def _provider_fields(leg: ProductLeg, *, schema=SCHEMA) -> dict[str, Any]:
             "Dataset access and citation guidance only; account entitlement, route availability and "
             "third-party maps, logos or imagery are not cleared here.",
             _GPM_DAILY_DOC, _GPM_POLICY_DOC, checked_at=_GPM_CHECKED_AT)
-    elif schema == SCHEMA and product_id in {"open_meteo_extreme_signals.ghcn_daily",
-                                             "open_meteo_extreme_signals.ghcn_station_history"}:
+    elif schema in {GHCN_SCHEMA, SCHEMA} and product_id in {"open_meteo_extreme_signals.ghcn_daily",
+                                             "open_meteo_extreme_signals.ghcn_station_history", _ARCHIVE_OBSERVATIONS}:
         upstream = ("noaa_ncei.ghcn_daily_superghcnd_diff" if product_id.endswith(".ghcn_daily")
                     else "noaa_ncei.ghcn_daily_station_archive")
         if (leg.provider, leg.upstream) != ("noaa_ncei_ghcn", upstream):
@@ -137,6 +141,7 @@ STATUSES = frozenset({"wired", "conditional", "retired", "unresolved"})
 PROVIDER_KINDS = {
     "open_meteo": frozenset({"forecast_model", "reanalysis"}),
     "noaa_ncei_ghcn": frozenset({"observed_station"}),
+    "noaa_ncei_discovery": frozenset({"discovery"}),
     "nasa_firms": frozenset({"satellite_derived"}),
     "noaa_nesdis_hms": frozenset({"satellite_derived"}),
     "us_drought_monitor": frozenset({"expert_analysis"}),
@@ -177,7 +182,7 @@ PROVIDER_KINDS = {
 # Upstream product keys are namespaced by their provider, so a leg cannot borrow
 # another provider's product (or kind) by relabelling.
 PROVIDER_NAMESPACES = {
-    "open_meteo": "open_meteo", "noaa_ncei_ghcn": "noaa_ncei", "nasa_firms": "nasa_firms",
+    "open_meteo": "open_meteo", "noaa_ncei_ghcn": "noaa_ncei", "noaa_ncei_discovery": "noaa_ncei", "nasa_firms": "nasa_firms",
     "noaa_nesdis_hms": "noaa_nesdis", "us_drought_monitor": "usdm", "nifc_wfigs": "nifc", "noaa_gml": "noaa_gml",
     "nws": "nws", "nhc": "nhc", "jtwc": "jtwc", "gdacs": "gdacs", "usgs_earthquake": "usgs",
     "copernicus_ems": "copernicus_ems", "copernicus_c3s": "copernicus_c3s", "nsidc": "nsidc", "osi_saf": "osi_saf", "noaa_cpc": "noaa_cpc",
@@ -235,6 +240,7 @@ RESTRICTIONS: dict[str, tuple[str, Any]] = {
     "record_needs_qualified_history": ("A record claim needs a qualified history for that station product.",
                                        (("open_meteo_extreme_signals.ghcn_daily", _GHCN_HISTORY),
                                         ("open_meteo_extreme_signals.ghcn_station_history", _GHCN_HISTORY),
+                                        (_ARCHIVE_OBSERVATIONS, _GHCN_HISTORY),
                                         ("regional_observed",
                                          "src/data/temperature_evidence.py:temperature_claim_failures"))),
     "threshold_not_record": ("A trigger threshold is not an archive record.", (("gpm_imerg", _CLAIMS),)),
@@ -380,6 +386,30 @@ LEGS: tuple[ProductLeg, ...] = (
          "NOAA NCEI per-station archive.", ("record_needs_qualified_history", "reference_not_reading"),
          ("src/data/ghcn.py:_fetch_station_archive", "src/data/ghcn.py:record_comparison_qualified"),
          status="conditional", disposition="Used only by the separately gated GHCN record comparison."),
+    _leg("open_meteo_extreme_signals", "ghcn_archive_observations", "station", "alternate_route", "noaa_ncei_ghcn",
+         "noaa_ncei.ghcn_daily_station_archive", "observed_station", "Current values in verified GHCN station archives",
+         "At most20selected station archives; not every active station or country.",
+         "Original station source-calendar day, bounded age and actual QC; not the lookup day or a UTC interval.",
+         "Original .dly TMAX/TMIN tenths of degreesC converted by the existing parser.",
+         "Current observations and history read from the same original NOAA archive; not an independent source.",
+         ("record_needs_qualified_history", "alternate_not_primary_recovery"),
+         ("src/data/ghcn.py:_verified_archive_observations", "src/data/ghcn.py:_thresholds_from_verified_archive",
+          "src/data/ghcn.py:record_comparison_qualified"), status="conditional",
+         bound="Shares the existing20archive cap with history verification; no additional archive request budget.",
+         disposition="Only a complete no-diff-payload outcome may reuse independently parsed archive readings. "
+             "A failed diff remains failed; lookup hints grant no permission."),
+    _leg("open_meteo_extreme_signals", "ghcn_daily_access_hints", "station_discovery", "primary", "noaa_ncei_discovery",
+         "noaa_ncei.daily_summaries_discovery_hints", "discovery", "Untrusted NOAA station nominations",
+         "Active untracked registered stations returned by a bounded lookup; not a global census.",
+         "At most four source-calendar days plus the requested current day; response schema/availability unverified.",
+         "Metric temperature values requested only as nomination hints; never supplied as observations.",
+         "NOAA's documented daily-summaries service; only original station archives supply facts.",
+         ("discovery_not_qualified", "not_station_observation", "record_needs_qualified_history"),
+         ("src/data/ghcn_discovery.py:fetch_nominations", "src/data/ghcn.py:check_extreme_signals_for_stations"),
+         status="conditional", bound="One additional counted GET, no redirect or retry, at most32MiB; "
+             "only after complete captured404s and with available archive slots. Existing20archive cap unchanged.",
+         disposition="Nomination-only fallback in the existing legacy GHCN collector; cold starts and retained runtimes excluded. "
+             "No source recovery, rights, quota, current schema or coverage qualification is established."),
     # 2. GPM full grid, bounded OPeNDAP fallback and Open-Meteo model witness.
     _leg("gpm_imerg", "imerg_late_opendap", "imerg_late", "primary", "nasa_gesdisc",
          "nasa_gesdisc.gpm_3imergdl_07", "satellite_derived", "IMERG Late daily (V07) point subsets",
@@ -785,8 +815,10 @@ LEGS += (
 )
 
 
-def validate_legs(legs=LEGS, registry=REGISTRY_CONTRACTS) -> None:
+def validate_legs(legs=LEGS, registry=REGISTRY_CONTRACTS, *, schema=SCHEMA) -> None:
     """Reject unknown identities, invalid parents/keys and unsupported permissions."""
+    if type(schema) is not str or schema not in _SCHEMAS:
+        raise ValueError("source_product_export_schema")
     parents = {row.source_id: row for row in registry}
     if not 1 <= len(legs) <= 256:
         raise ValueError("source_product_size")
@@ -858,6 +890,8 @@ def validate_legs(legs=LEGS, registry=REGISTRY_CONTRACTS) -> None:
         if len({selector for selector, _ref in enforcement}) != len(enforcement):
             raise ValueError("source_product_enforcement_scope")
         for selector, ref in enforcement:
+            if schema != SCHEMA and selector in _V5_PRODUCTS:
+                continue
             carriers = [leg for leg in legs if code in leg.claim_restrictions
                         and selector in {leg.product_id, leg.source_id}]
             if not carriers or not _CODE_REF.fullmatch(ref):
@@ -1152,11 +1186,16 @@ def _unmet_criteria(legs, *, schema=SCHEMA) -> list[dict[str, Any]]:
     return unmet
 
 
+def _schema_legs(legs, schema):
+    return legs if schema == SCHEMA else tuple(leg for leg in legs if leg.product_id not in _V5_PRODUCTS)
+
+
 def product_contract_document(legs=LEGS, registry=REGISTRY_CONTRACTS, *, schema=SCHEMA) -> dict[str, Any]:
-    """Dated v4 facts or exact prior v1/v2/v3 documents; none grants authority."""
+    """v5 nomination inventory or exact prior v1/v2/v3/v4 documents; no authority."""
     if type(schema) is not str or schema not in _SCHEMAS:
         raise ValueError("source_product_export_schema")
-    validate_legs(legs, registry)
+    validate_legs(legs, registry, schema=schema)
+    legs = _schema_legs(legs, schema)
     adapters = []
     for row in registry:
         members = [leg for leg in legs if leg.source_id == row.source_id]
@@ -1183,7 +1222,7 @@ def product_contract_document(legs=LEGS, registry=REGISTRY_CONTRACTS, *, schema=
         restrictions[code] = {"meaning": meaning, "basis": "advisory" if advisory else "scoped_checks",
                               "reference": _ADVISORY if advisory else None,
                               "checks": [] if advisory else [{"applies_to": selector, "reference": ref}
-                                                             for selector, ref in enforcement]}
+                                  for selector, ref in enforcement if schema == SCHEMA or selector not in _V5_PRODUCTS]}
     body = {
         "schema": schema,
         "registry_schema_version": REGISTRY_SCHEMA_VERSION,
@@ -1271,8 +1310,8 @@ def decode_product_contract_document(document: Any) -> dict[str, Any]:
     if type(rows) is not list or len(rows) > 256:
         raise ValueError("source_product_export_row")
     legs = tuple(_decode_leg(row, schema=document["schema"]) for row in rows)
-    validate_legs(legs, REGISTRY_CONTRACTS)
-    if legs != LEGS:
+    validate_legs(legs, REGISTRY_CONTRACTS, schema=document["schema"])
+    if legs != _schema_legs(LEGS, document["schema"]):
         raise ValueError("source_product_export_inventory")
     expected = product_contract_document(legs, schema=document["schema"])
     if [row["restriction_enforcement"] for row in rows] != [row["restriction_enforcement"] for row in expected["products"]]:
