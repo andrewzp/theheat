@@ -23,6 +23,7 @@ import os
 import re
 import threading
 from typing import Any
+from urllib.parse import urlsplit
 
 import requests
 
@@ -1493,6 +1494,46 @@ def _fetch_grid_bytes(
     raise ValueError(f"grid fetch not supported for source: {source}")
 
 
+def _datapool_response_context(resp: requests.Response) -> str:
+    """Fixed metadata labels only; no body, URL, header value or account proof."""
+    status = media = destination = redirects = "unknown"
+    # Real requests responses store these as ordinary attributes. Do not invoke
+    # arbitrary adapter properties merely to produce optional diagnostics.
+    if type(resp) is not requests.Response:
+        return f"status={status} media={media} destination={destination} redirects={redirects}"
+    fields = vars(resp)
+    code = fields.get("status_code")
+    if type(code) is int and 100 <= code <= 599:
+        status = str(code)
+    headers = fields.get("headers")
+    if headers is not None and type(headers) in (dict, requests.structures.CaseInsensitiveDict):
+        try:
+            value = headers.get("Content-Type", headers.get("content-type"))
+            if "Content-Type" not in headers and "content-type" not in headers:
+                media = "missing"
+            elif type(value) is str and len(value) <= 256 and not re.search(r"[\x00-\x08\x0a-\x1f\x7f]", value):
+                mime = value.partition(";")[0].strip(" \t").lower()
+                media = {"text/html": "html", "application/x-netcdf": "netcdf",
+                         "application/netcdf": "netcdf", "application/x-hdf5": "hdf",
+                         "application/x-hdf": "hdf", "application/octet-stream": "octet_stream"}.get(mime, "other")
+        except (AttributeError, KeyError, TypeError, ValueError):
+            pass
+    url = fields.get("url")
+    if type(url) is str and 0 < len(url) <= 4096 and not re.search(r"[\x00-\x20\x7f]", url):
+        try:
+            parts = urlsplit(url)
+            destination = ({"data.gesdisc.earthdata.nasa.gov": "datapool",
+                            "gpm1.gesdisc.eosdis.nasa.gov": "opendap",
+                            "urs.earthdata.nasa.gov": "earthdata_login"}.get(parts.hostname or "", "other")
+                           if parts.scheme == "https" and "@" not in parts.netloc and parts.port in (None, 443) else "other")
+        except (TypeError, ValueError, UnicodeError):
+            pass
+    history = fields.get("history")
+    if type(history) is list and len(history) <= 30:
+        redirects = str(len(history))
+    return f"status={status} media={media} destination={destination} redirects={redirects}"
+
+
 def _fetch_grid_bytes_datapool(*, target_date: date, product: str, token: str) -> bytes:
     """GET the daily .nc4 from the GES DISC data pool (authenticated HTTPS).
 
@@ -1509,6 +1550,11 @@ def _fetch_grid_bytes_datapool(*, target_date: date, product: str, token: str) -
         )
     except (requests.ConnectionError, requests.Timeout) as exc:
         raise _GridTransient(f"datapool connection error: {exc}") from exc
+    try:
+        print(f"[gpm_imerg] datapool response context: {_datapool_response_context(resp)}")
+    except Exception:
+        # Optional metadata or log failure must not change request outcomes.
+        pass
     if resp.status_code == 404:
         raise _GridNotFound(f"datapool 404 for {url}")
     if resp.status_code in (401, 403):
