@@ -121,12 +121,20 @@ def test_unrequested_high_value_is_not_a_nomination_even_when_eligible_and_cache
 
 
 @pytest.mark.parametrize("now", ["", "not-a-date", "2026-11-21T00:00:00",
-    "2026-11-20T23:59:59Z", "2026-11-22T00:00:00Z", 42, True])
+    "2026-11-20T23:59:59Z", "2026-11-22T00:00:00Z", 42, True,
+    "2026-11-21T08:00:00+00:60", "2026-11-21T08:00:00+00:00:70",
+    "2026-11-21T08:00:00-01:60", "2026-11-21T08:00:00+24:00"])
 def test_invalid_clock_refuses_before_egress(now):
     with patch.object(discovery.requests, "get", side_effect=AssertionError("No send allowed")):
         with pytest.raises(ValueError, match="unsupported_discovery_clock"):
             discovery.fetch_nominations(frozenset({TARGET}), {}, today=DAY,
                                        max_age_days=4, anomaly=8, now=now)
+
+
+def test_valid_non_utc_offset_uses_the_same_normalized_utc_bucket():
+    (_, a), first = fetch(pool(1001), now="2026-11-21T09:30:00+01:30")
+    (_, b), second = fetch(pool(1001), now="2026-11-21T08:00:00Z")
+    assert a == b and first[1]["params"] == second[1]["params"]
 
 
 def test_uri_limit_is_an_actual_before_send_guard(monkeypatch):

@@ -285,7 +285,9 @@ def nominate(body: bytes, eligible: frozenset[str], cached: dict[str, StationThr
 def _station_window(eligible: frozenset[str], today: date, now: str | None) -> tuple[frozenset[str], dict[str, Any]]:
     """A finite lookup sample, not source availability or global coverage."""
     try:
-        if now is not None and type(now) is not str:
+        if now is not None and (type(now) is not str or not re.fullmatch(
+                r"[0-9]{4}-[0-9]{2}-[0-9]{2}T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]"
+                r"(?:\.[0-9]{1,6})?(?:Z|[+-](?:[01][0-9]|2[0-3]):[0-5][0-9])", now)):
             raise ValueError
         instant = (datetime.fromisoformat(now.replace("Z", "+00:00")) if now is not None
                    else datetime(today.year, today.month, today.day, tzinfo=timezone.utc))

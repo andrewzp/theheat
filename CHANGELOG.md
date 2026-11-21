@@ -1,6 +1,7 @@
 ## 0.9.109.165 — 2026-11-21
 
 - Supply an explicit bounded station selector to the existing NOAA nomination lookup. Rotate finite station subsets using the captured UTC clock, cap the prepared URI and report selected versus unselected scope. Lookup values still only nominate original archive checks; request, archive, QC, history and writer limits remain unchanged.
+- Preserve archive and untrusted error details in Sources while validating the new selection counts, bucket, fingerprints and URI bound. Reject malformed clock offsets before dispatch.
 
 ## 0.9.109.164 — 2026-11-21
 
