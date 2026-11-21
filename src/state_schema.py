@@ -14,6 +14,10 @@ from __future__ import annotations
 
 from typing import Any, NotRequired, TypedDict
 
+# A reserved key in the existing tier map, disjoint from every source bare ID.
+# It records unavailable stored history; presence never grants a tier or expires.
+NIFC_TIER_TRACKING_UNAVAILABLE = "/nifc-report-tracking/unavailable/v1"
+
 
 class Hot10Snapshot(TypedDict, total=False):
     """The most recent global Hot 10 leaderboard tweeted."""

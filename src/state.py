@@ -11,6 +11,7 @@ import requests
 
 from src.state_schema import (
     BotState,
+    NIFC_TIER_TRACKING_UNAVAILABLE,
     CoverageRecord,  # noqa: F401 — re-exported for callers
     CycloneWindObservation,
     DroughtSnapshot,
@@ -967,6 +968,15 @@ def _strat_max_by_key(floor: Any) -> Callable[..., Any]:
     return merge
 
 
+def _merge_fire_complex_tiers(base: Any, nxt: Any) -> Any:
+    """Never turn corrupt tracking into a fresh empty map during persistence."""
+    if type(base) is not dict or type(nxt) is not dict:
+        if type(base) is type(nxt) and base == nxt:
+            return deepcopy(base)
+        raise ValueError("nifc_tier_tracking_unmergeable")
+    return _strat_max_by_key(-1)(base, nxt)
+
+
 def _strat_reduce_by_key(reducer: Callable[[Any, Any], Any]) -> Callable[..., Any]:
     """Per-key reduce over the key union via ``reducer(base_v, next_v)``.
 
@@ -1255,11 +1265,15 @@ def _touch_tier(state: BotState, store_key: str, item_key: str, *, now: datetime
 def _prune_tier_store(state: BotState, store_key: str, ttl_days: int, now_dt: datetime) -> None:
     state_dict = cast(dict, state)
     tiers = cast(dict, state_dict.setdefault(store_key, {}))
+    if type(tiers) is not dict:
+        return  # Preserve malformed tracking; it cannot authorize a new draft.
     touches = cast(dict, state.setdefault("tier_touch_ts", {}))
     cutoff = now_dt - timedelta(days=ttl_days)
     now_iso = _utc_iso(now_dt)
 
     for item_key in sorted(list(tiers.keys())):
+        if store_key == "fire_complex_tiers" and item_key == NIFC_TIER_TRACKING_UNAVAILABLE:
+            continue  # An unknown-history hold cannot become fresh by aging out.
         touch_key = _tier_touch_key(store_key, str(item_key))
         touched_at = touches.get(touch_key)
         if not touched_at:
@@ -1692,7 +1706,16 @@ def _read_gist_state(*, strict: bool = False, route_sink: list | None = None) ->
             content = raw_resp.text
         else:
             content = file_meta["content"]
-        return _normalize_state(_decode_gist_state_json(content))
+        decoded = _decode_gist_state_json(content)
+        if type(decoded) is not dict:
+            raise StateReadError("Gist state root must be a JSON object")
+        normalized = _normalize_state(decoded)
+        if "fire_complex_tiers" not in decoded:
+            # Stored absence is not the explicit initialized empty map. Keep
+            # this distinction in the existing map through ordinary merges;
+            # do not reinterpret partial in-process merge inputs as Gist reads.
+            normalized["fire_complex_tiers"] = {NIFC_TIER_TRACKING_UNAVAILABLE: 0}
+        return normalized
     except requests.RequestException as exc:
         if strict:
             raise StateReadError(f"Failed to read gist state: {exc}") from exc
@@ -2384,7 +2407,7 @@ MERGE_SPEC: dict[str, Callable[..., Any]] = {
     "snow_recent_by_station": _merge_recent_mm_rows,
     "snow_annual_count": _strat_max_by_key(0),
     "seasonal_snow_records": _merge_max_mm_records,
-    "fire_complex_tiers": _strat_max_by_key(-1),
+    "fire_complex_tiers": _merge_fire_complex_tiers,
     "coral_dhw_last_tier": _strat_max_by_key(0),
     "coral_dhw_annual_count": _strat_max_by_key(0),
     "air_quality_pm25_tiers": _strat_reduce_by_key(_pick_newer_city_tier),
@@ -2526,9 +2549,9 @@ def record_coverage_observation(
 
 
 def update_fire_complex_tier(state: BotState, complex_id: str, tier: int) -> BotState:
-    """Record the highest tier we've tweeted for a fire complex.
+    """Record the highest successfully SAVED draft tier for this tracking key.
 
-    Takes max so concurrent cron runs don't lose a tier bump.
+    Takes max in this loaded state; this is not distributed fencing on Gist.
     """
     tiers = state.setdefault("fire_complex_tiers", {})
     current = int(tiers.get(complex_id, -1))

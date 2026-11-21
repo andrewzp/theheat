@@ -25,6 +25,7 @@ from typing import Any
 
 from src.data._http import fetch_with_retry
 from src.data.source_status import SourceFetchError
+from src.state_schema import NIFC_TIER_TRACKING_UNAVAILABLE
 
 # Hectare thresholds for per-fire-complex tweet dedup. A complex is
 # eligible for a draft each time it crosses into a higher tier. Integer
@@ -80,6 +81,44 @@ KIND = "reported_fire_incident_size"
 REPORT_SCHEMA = "nifc-incident-size-capture-v1"
 MAX_RESPONSE_BYTES = 2 * 1024 * 1024
 MAX_AGE_DAYS = 4
+IDENTITY_SCHEMA = "nifc-source-memory/v1"
+
+
+def report_record_identity(attrs: dict) -> dict:
+    """One source-declared namespace, not physical-incident continuity.
+
+    Keep the parser's existing preference and normalization. An invalid truthy
+    preferred identifier must not silently borrow the fallback identifier.
+    """
+    identifier = attrs.get("UniqueFireIdentifier") or attrs.get("IrwinID")
+    if type(identifier) is not str or not identifier.strip() or len(identifier) > 100:
+        raise ValueError("identity")
+    identifier = identifier.strip().strip("{}")
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}", identifier):
+        raise ValueError("identity")
+    return {"schema": IDENTITY_SCHEMA, "issuer": "nifc-wfigs", "event_type": "WF",
+            "identifier_kind": "UniqueFireIdentifier" if attrs.get("UniqueFireIdentifier") else "IrwinID",
+            "source_event_id": identifier}
+
+
+def _report_key(identity: dict) -> str:
+    # Include the exact product as well as the memory identity. Neither ID
+    # prefixes nor case folding can merge different full source identifiers.
+    return "nifc_report_v1_" + _report_digest(identity)
+
+
+def _report_digest(identity: dict) -> str:
+    return _canonical_sha({"source_product": SOURCE_PRODUCT, **identity})
+
+
+def report_tracking_key(fc: FireComplex) -> str:
+    packet = validated_report(fc)
+    if packet is None:
+        raise ValueError("nifc_report_unverified")
+    identity = report_record_identity(packet["source_record"])
+    # Slash is forbidden in every accepted legacy bare identifier. A legal old
+    # source ID therefore cannot masquerade as this identity's new watermark.
+    return "nifc-report/v1/" + _report_digest(identity)
 
 
 def _canonical_sha(value: Any) -> str:
@@ -108,12 +147,8 @@ def _record_values(attrs: dict, captured: datetime) -> dict:
     hectares = size / _ACRES_PER_HECTARE
     if hectares < HECTARES_FLOOR:
         raise ValueError("below_floor")
-    identifier = attrs.get("UniqueFireIdentifier") or attrs.get("IrwinID")
-    if type(identifier) is not str or not identifier.strip() or len(identifier) > 100:
-        raise ValueError("identity")
-    identifier = identifier.strip().strip("{}")
-    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}", identifier):
-        raise ValueError("identity")
+    identity = report_record_identity(attrs)
+    identifier = identity["source_event_id"]
     region = attrs.get("POOState")
     if type(region) is not str or not region.startswith("US-"):
         raise ValueError("region")
@@ -139,7 +174,7 @@ def _record_values(attrs: dict, captured: datetime) -> dict:
     tier = _classify_tier(hectares)
     return {"complex_id": identifier, "name": name, "country": "US", "region": region,
             "hectares": hectares, "start_date": started.date() if started is not None else None,
-            "tier": tier, "event_id": f"fire_footprint_{identifier}_tier{tier}"}
+            "tier": tier, "event_id": f"{_report_key(identity)}_tier{tier}"}
 
 
 def _utc_iso(value: datetime) -> str:
@@ -180,8 +215,7 @@ def validated_report(fc: FireComplex) -> dict | None:
         return None
 
 
-def report_bundle_hold(bundle) -> str | None:
-    """Rebuild the source facts at the real admission/check boundary, offline."""
+def _report_bundle_hold(bundle, *, historical: bool) -> str | None:
     try:
         raw = bundle.raw_signal_dump
         packet = raw["evidence"]
@@ -195,6 +229,11 @@ def report_bundle_hold(bundle) -> str | None:
         # capture-time field semantics identical after JSON restore or expiry.
         from src.two_bot.intern.fire import build_fire_footprint_bundle
         expected = build_fire_footprint_bundle(fc)
+        if historical and bundle.event_id == f"fire_footprint_{fc.complex_id}_tier{fc.tier}":
+            # Exact old projection only, confined to the read-only memory
+            # reader. Every other field is rebuilt and compared as before.
+            expected.event_id = bundle.event_id
+            expected.raw_signal_dump["event_id"] = bundle.event_id
         if any(getattr(bundle, key) != getattr(expected, key) for key in (
             "signal_kind", "event_id", "where", "when", "headline_metric", "current_facts",
             "historical_context", "country", "raw_signal_dump",
@@ -203,6 +242,16 @@ def report_bundle_hold(bundle) -> str | None:
         return None
     except (TypeError, KeyError, AttributeError, ValueError, OverflowError, RecursionError):
         return "nifc_report_unverified"
+
+
+def report_bundle_hold(bundle) -> str | None:
+    """Current admission/check boundary; legacy IDs cannot grant authority."""
+    return _report_bundle_hold(bundle, historical=False)
+
+
+def historical_report_bundle_hold(bundle) -> str | None:
+    """Qualified old report context only; never use for source admission."""
+    return _report_bundle_hold(bundle, historical=True)
 
 
 def fetch_active_fire_perimeters(*, strict: bool = False, metrics_out: dict | None = None) -> list["FireComplex"]:
@@ -264,19 +313,86 @@ def fetch_active_fire_perimeters(*, strict: bool = False, metrics_out: dict | No
 def detect_tier_crossings(
     complexes: list[FireComplex],
     state: dict,
+    *,
+    tracking_holds: list[str] | None = None,
 ) -> list[FireComplex]:
-    """Return complexes whose current tier is strictly higher than the
-    last tier we've already tweeted about.
+    """Return reports above the last successfully SAVED draft tier.
 
-    Does not mutate state. The caller writes the updated tier only after
-    a draft is successfully saved.
+    No migration or ownership is inferred from legacy bare keys. Missing or
+    malformed tracking and visible ambiguous legacy history hold before writing.
+    This loaded-state guard is not a distributed lock on Gist.
     """
-    last_tiers = state.get("fire_complex_tiers", {}) or {}
     crossings: list[FireComplex] = []
     for fc in complexes:
         if fc.tier < 0:
             continue
-        previous = last_tiers.get(fc.complex_id, -1)
+        previous, hold = _previous_report_tier(fc, state)
+        if hold is not None:
+            if tracking_holds is not None:
+                tracking_holds.append(hold)
+            continue
         if fc.tier > previous:
             crossings.append(fc)
     return crossings
+
+
+def _previous_report_tier(fc: FireComplex, state: dict) -> tuple[int, str | None]:
+    try:
+        key = report_tracking_key(fc)
+    except (ValueError, TypeError, KeyError):
+        return -1, "nifc_report_unverified"
+    tiers = state.get("fire_complex_tiers")
+    if type(tiers) is not dict:
+        return -1, "nifc_tier_tracking_unavailable"
+    if NIFC_TIER_TRACKING_UNAVAILABLE in tiers:
+        return -1, "nifc_tier_tracking_unavailable"
+    if fc.complex_id in tiers:
+        return -1, "nifc_legacy_tier_namespace_ambiguous"
+    legacy_prefix = f"fire_footprint_{fc.complex_id}_tier"
+    current_prefix = fc.event_id.rsplit("_tier", 1)[0] + "_tier"
+    posted = state.get("posted_events")
+    drafts = state.get("drafts")
+    memory = state.get("memory")
+    ledger = state.get("publish_ledger")
+    if (type(posted) is not list or type(drafts) is not list or type(memory) is not dict
+            or type(ledger) is not dict):
+        return -1, "nifc_tier_tracking_unavailable"
+    if any(type(event) is not str or not event for event in posted) or any(type(event) is not str or not event for event in ledger):
+        return -1, "nifc_tier_tracking_unavailable"
+    event_ids = list(posted) + list(ledger)
+    for rows in (drafts, memory.get("shipped_tweets"), memory.get("ongoing_events"), list(ledger.values())):
+        if type(rows) is not list:
+            return -1, "nifc_tier_tracking_unavailable"
+        for row in rows:
+            if type(row) is not dict:
+                return -1, "nifc_tier_tracking_unavailable"
+            event = row.get("event_id")
+            family = row.get("type", row.get("signal_kind"))
+            if family in (KIND, "fire_footprint") and (type(event) is not str or not event):
+                return -1, "nifc_tier_tracking_unavailable"
+            event_ids.append(event)
+    current_tiers = []
+    for event in event_ids:
+        if not isinstance(event, str):
+            continue
+        legacy = re.fullmatch(r"fire_footprint_(.+)_tier([0-5])", event)
+        if legacy is not None:
+            if legacy[1] == fc.complex_id:
+                return -1, "nifc_legacy_event_namespace_ambiguous"
+        elif event.startswith(legacy_prefix):
+            return -1, "nifc_legacy_event_namespace_ambiguous"
+        if event.startswith(current_prefix):
+            suffix = event[len(current_prefix):]
+            if not re.fullmatch(r"[0-5]", suffix):
+                return -1, "nifc_saved_event_invalid"
+            current_tiers.append(int(suffix))
+    if key not in tiers:
+        if current_tiers:
+            return -1, "nifc_saved_tier_missing"
+        return -1, None
+    previous = tiers[key]
+    if type(previous) is not int or not 0 <= previous < len(TIERS_HECTARES):
+        return -1, "nifc_saved_tier_invalid"
+    if current_tiers and max(current_tiers) > previous:
+        return -1, "nifc_saved_tier_contradiction"
+    return previous, None

@@ -1,3 +1,7 @@
+## 0.9.109.151
+
+- Keep NIFC identifier kinds separate through candidate IDs and saved-draft tiers; hold ambiguous legacy tracking before writing while retaining qualified report history for read-only memory.
+
 ## 0.9.109.150
 
 - Keep saved incident-report holds visible in Sources and Weekly Review, with bound counts and explicit unknowns.
