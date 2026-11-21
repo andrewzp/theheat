@@ -68,6 +68,7 @@ test("missing, malformed and contradictory counts stay unavailable rather than z
   }
   const legacy = copy("unavailable")
   delete metrics(legacy).diff_fetch
+  delete metrics(legacy).station_archive_intake
   assert.equal(projected(legacy).outcome.state, "ghcn_intake_unavailable")
 })
 
@@ -129,10 +130,11 @@ test("actual SourcesView names the recorded intake without publication authority
   assert.deepEqual(state, before)
 })
 
-test("actual SourcesView displays missing payloads and the recorded client outcome", () => {
+test("actual SourcesView separates missing diffs from already-verified archive inputs", () => {
   const state = copy("unavailable"), before = structuredClone(state)
   const markup = renderToStaticMarkup(createElement(SourcesView, buildSourceHealthPayload(state, { asOf: "2026-11-21T12:02:00Z" })))
-  assert.match(markup, /No GHCN diff payload returned/)
+  assert.match(markup, /already-verified station archives/)
+  assert.match(markup, /Diff acquisition remains unavailable/)
   assert.match(markup, /30 HTTP 404/)
   assert.doesNotMatch(markup, /0 station-days retained|Approve \+ Post/)
   assert.deepEqual(state, before)

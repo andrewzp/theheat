@@ -1,3 +1,7 @@
+## 0.9.109.157
+
+- Reuse fresh accepted readings from station archives already fetched for revision checks when every GHCN diff is unavailable. Preserve request limits, source dates, QC and record qualification; show the checked archive sample separately from failed diff acquisition.
+
 ## 0.9.109.156
 
 - Join backup and recovery procedures with explicit state/media/catalog coverage, protected retention and incomplete-capture handling. Keep local restore evidence distinct from production recovery.

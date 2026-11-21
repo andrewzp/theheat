@@ -19,8 +19,9 @@ test("actual HTTP and transport outcomes reach the source readout without becomi
   for (const [name, expected] of [["404", /30 HTTP 404/], ["401", /30 HTTP 401/], ["403", /30 HTTP 403/],
     ["429", /30 HTTP 429/], ["503", /30 HTTP 5xx/], ["timeout", /30 timeouts/], ["connection", /30 connection errors/]]) {
     const state = copy(name), before = structuredClone(state), out = projected(state)
-    assert.equal(out.state, "ghcn_fetch_unavailable")
-    assert.match(out.label, /No GHCN diff payload returned/)
+    assert.equal(out.state, "no_event")
+    assert.match(out.detail, /already-verified station archives/)
+    assert.match(out.detail, /Diff acquisition remains unavailable/)
     assert.match(out.detail, /30 client calls/)
     assert.match(out.detail, expected)
     assert.doesNotMatch(JSON.stringify(out), /invented-private-detail|secret\.invalid|token=invented|no extreme weather|healthy feed/i)
@@ -38,7 +39,6 @@ test("returned bodies retain the separate real parsing and station-day denominat
 
 test("missing, stale, contradictory or unbound acquisition facts remain unknown", () => {
   const changes = [
-    m => { delete m.diff_fetch },
     m => { m.diff_fetch.schema_version = 2 },
     m => { m.diff_fetch.scope = "wire_requests" },
     m => { m.diff_fetch.window_day = "2026-11-20" },
@@ -54,7 +54,7 @@ test("missing, stale, contradictory or unbound acquisition facts remain unknown"
     m => { m.diff_fetch.extra = "invented-private-detail" },
     m => { m.diff_missing_dates = ["2026-11-20", "2026-11-20", "2026-11-20"] },
     m => { m.diff_fetch_failed = 0 },
-    m => { m.stations_with_obs = 1 },
+    m => { m.stations_with_obs++ },
   ]
   for (const change of changes) {
     const state = copy("404")
@@ -69,6 +69,12 @@ test("missing, stale, contradictory or unbound acquisition facts remain unknown"
   const duplicate = copy("404")
   duplicate.run_history[0].sources.push(structuredClone(row(duplicate)))
   assert.equal(projected(duplicate).state, "ghcn_intake_unavailable")
+  const noCapture = copy("404")
+  delete metrics(noCapture).diff_fetch
+  assert.match(projected(noCapture).detail, /already-verified station archives/)
+  assert.doesNotMatch(projected(noCapture).detail, /30 HTTP 404|client calls/)
+  delete metrics(noCapture).station_archive_intake
+  assert.equal(projected(noCapture).state, "ghcn_intake_unavailable")
 })
 
 test("old useful intakes and recorded checker rejection retain their original meaning", () => {

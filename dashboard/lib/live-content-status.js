@@ -31,6 +31,8 @@ const OUTCOMES = Object.freeze({
   ghcn_intake_empty: ["No usable GHCN station-days retained", "Inspect the recorded exclusions and missing diffs; historical record qualification is a separate step."],
   ghcn_intake_unavailable: ["GHCN intake details unavailable", "Inspect a complete bound source run; missing or contradictory diagnostics cannot establish zero observations."],
   ghcn_fetch_unavailable: ["No GHCN diff payload returned", "Inspect the recorded HTTP or transport outcomes; archive validity and station observations remain unverified."],
+  ghcn_archive_intake_empty: ["No current values in checked station archives", "Diff acquisition remains unavailable. The checked archive sample does not establish complete coverage."],
+  ghcn_archive_intake_unavailable: ["No verified active station archive sample", "Inspect archive verification and active-station availability; missing samples do not establish zero observations."],
   fire_reports_held: ["Incident reports held", "Inspect the held reports and admission decisions; a partial or withheld result is not an empty feed."],
   fire_reports_checked: ["Incident reports checked", "No candidate was queued in this saved run. Inspect size-tier, duplicate and selection decisions; complete event coverage is not established."],
   fire_reports_unavailable: ["Incident report details unavailable", "Inspect a complete bound source run; missing or inconsistent counts are unknown, not zero."],
@@ -101,7 +103,74 @@ function twitterMetricsOutcome(row) {
   return unavailable()
 }
 
-function ghcnFetch(m, context) {
+function ghcnArchiveIntake(m, context) {
+  const t = m?.station_archive_intake, c = t?.counts, selection = m?.archive_selection, tracked = selection?.tracked
+  const object = v => v !== null && typeof v === "object" && !Array.isArray(v)
+  const integer = n => Number.isSafeInteger(n) && n >= 0
+  const day = v => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v)
+    && Number.isFinite(Date.parse(v)) && new Date(v).toISOString().slice(0, 10) === v
+  const timestamp = v => typeof v === "string" ? Date.parse(v) : NaN
+  const start = timestamp(context?.started_at), end = timestamp(context?.ended_at), at = timestamp(t?.retrieved_at)
+  const names = ["temperature_rows", "inactive_station_rows", "too_old_rows", "future_rows",
+    "unusable_rows", "accepted_values", "station_days", "stations_with_obs"]
+  if (context?.current !== true || !object(m) || m.status !== "degraded" || m.threshold_verification !== "success"
+      || !Number.isFinite(start) || !Number.isFinite(end) || end < start || !Number.isFinite(at) || at < start || at > end
+      || !object(t) || Object.keys(t).sort().join() !== "active_archives,counts,cutoff_day,retrieved_at,schema_version,scope,trigger,verified_archives,window_day"
+      || t.schema_version !== 1 || t.scope !== "already_verified_tracked_archives" || t.trigger !== "no_diff_payload"
+      || !day(t.window_day) || !day(t.cutoff_day) || t.cutoff_day > t.window_day
+      || t.window_day !== new Date(at).toISOString().slice(0, 10)
+      || Date.parse(t.window_day) - Date.parse(t.cutoff_day) > 366 * 86400000
+      || ![t.verified_archives, t.active_archives, m.archive_verification_verified,
+        m.archive_verification_attempted, m.archive_verification_failed, m.stations_active].every(integer)
+      || t.verified_archives > 20 || t.verified_archives !== m.archive_verification_verified
+      || t.active_archives > t.verified_archives || t.active_archives > m.stations_active
+      || t.verified_archives + m.archive_verification_failed !== m.archive_verification_attempted
+      || !object(selection) || selection.schema_version !== 1 || selection.strategy !== "four_hour_cumulative_lane_windows"
+      || selection.bucket_hours !== 4 || timestamp(selection.bucket_start) !== Math.floor(at / 14400000) * 14400000
+      || ![selection.selected_unique_stations, selection.limit].every(integer)
+      || selection.selected_unique_stations !== m.archive_verification_attempted || selection.limit > 20
+      || selection.selected_unique_stations > selection.limit || selection.candidates?.pool_stations !== 0
+      || !object(tracked) || ![tracked.pool_stations, tracked.selected_stations, tracked.unselected_stations,
+        tracked.verified_stations, tracked.unverified_stations, tracked.reserved_slots, selection.eligible_unique_stations,
+        selection.unselected_unique_stations, m.tracked_stations_unscanned, m.archive_verification_exhausted].every(integer)
+      || selection.overlap_stations !== 0 || selection.eligible_unique_stations !== tracked.pool_stations
+      || selection.selected_unique_stations !== Math.min(selection.limit, tracked.pool_stations)
+      || tracked.selected_stations !== selection.selected_unique_stations || tracked.reserved_slots !== tracked.selected_stations
+      || tracked.unselected_stations !== tracked.pool_stations - tracked.selected_stations
+      || selection.unselected_unique_stations !== tracked.unselected_stations || m.archive_verification_exhausted !== tracked.unselected_stations
+      || tracked.verified_stations !== t.verified_archives || tracked.unverified_stations !== tracked.pool_stations - t.verified_archives
+      || m.tracked_stations_unscanned !== tracked.unverified_stations
+      || ![m.diff_dates_attempted, m.diff_dates_fetched, m.diff_dates_missing].every(integer)
+      || m.diff_dates_attempted < 1 || m.diff_dates_attempted > 366 || m.diff_dates_fetched !== 0
+      || m.diff_dates_missing !== m.diff_dates_attempted || m.diff_fetch_failed !== 1 || Object.hasOwn(m, "diff_intake")
+      || !object(c) || Object.keys(c).sort().join() !== [...names].sort().join() || !names.every(k => integer(c[k]))) return null
+  const partition = c.inactive_station_rows + c.too_old_rows + c.future_rows + c.unusable_rows + c.accepted_values
+  const days = (Date.parse(t.window_day) - Date.parse(t.cutoff_day)) / 86400000 + 1
+  const missing = new Set(Array.from({ length: m.diff_dates_attempted }, (_, i) =>
+    new Date(Date.parse(t.window_day) - (i + 1) * 86400000).toISOString().slice(0, 10)))
+  if (!Array.isArray(m.diff_missing_dates) || m.diff_missing_dates.length !== missing.size
+      || new Set(m.diff_missing_dates).size !== missing.size || !m.diff_missing_dates.every(d => day(d) && missing.has(d))
+      || !Number.isSafeInteger(partition) || partition !== c.temperature_rows
+      || c.accepted_values < c.station_days || c.accepted_values > 2 * c.station_days
+      || c.station_days > days * c.stations_with_obs || c.stations_with_obs > t.active_archives
+      || c.stations_with_obs > c.station_days || (c.station_days === 0) !== (c.stations_with_obs === 0)
+      || (t.verified_archives === 0 && c.temperature_rows !== 0)
+      || (t.verified_archives === t.active_archives && c.inactive_station_rows !== 0)
+      || c.inactive_station_rows < t.verified_archives - t.active_archives
+      || c.temperature_rows - c.inactive_station_rows < t.active_archives
+      || (t.active_archives === 0 && c.inactive_station_rows !== c.temperature_rows)
+      || ![m.station_obs_pairs, m.stations_with_obs].every(integer)
+      || m.station_obs_pairs !== c.station_days || m.stations_with_obs !== c.stations_with_obs) return null
+  if (t.active_archives === 0) return { unavailable: true, detail: `Saved GHCN station-archive sample: `
+    + `${m.archive_verification_attempted} attempted; ${m.archive_verification_failed} failed; ${t.verified_archives} verified; `
+    + "0 active. No verified active station sample establishes current observations. Diff acquisition remains unavailable." }
+  return { empty: c.accepted_values === 0, detail: `Saved GHCN already-verified station archives: ${t.verified_archives} checked; `
+    + `${t.active_archives} active; ${c.accepted_values} accepted daily values; ${c.station_days} station-day${c.station_days === 1 ? "" : "s"}. `
+    + `Excluded rows: ${c.inactive_station_rows} inactive; ${c.too_old_rows} old; ${c.future_rows} future; ${c.unusable_rows} unusable. `
+    + "Diff acquisition remains unavailable. Checked station sample only; record qualification is separate." }
+}
+
+function ghcnFetch(m, context, archive = null) {
   const f = m?.diff_fetch, c = f?.counts
   const names = ["payload_returned", "http_404", "http_401", "http_403", "http_429",
     "http_other_4xx", "http_5xx", "http_other_error", "timeout", "connection_error", "request_error"]
@@ -134,7 +203,7 @@ function ghcnFetch(m, context) {
     new Date(Date.parse(f.window_day) - (i + 1) * 86400000).toISOString().slice(0, 10)))
   if (!m.diff_missing_dates.every(value => day(value) && targets.has(value))
       || (c.payload_returned === 0 && (m.diff_fetch_failed !== 1 || Object.hasOwn(m, "diff_intake")
-        || ![m.station_obs_pairs, m.stations_with_obs].every(n => n === undefined || n === 0)))) return null
+        || (!archive && ![m.station_obs_pairs, m.stations_with_obs].every(n => n === undefined || n === 0))))) return null
   const labels = {
     http_404: "HTTP 404", http_401: "HTTP 401", http_403: "HTTP 403", http_429: "HTTP 429",
     http_other_4xx: "other HTTP 4xx", http_5xx: "HTTP 5xx", http_other_error: ["other HTTP error", "other HTTP errors"],
@@ -154,10 +223,16 @@ function ghcnIntake(row, context) {
   const m = d.provider === "ghcn" ? d.pipeline_metrics
     : ["both", "both_global"].includes(d.provider) ? d.ghcn_pipeline_metrics : null
   if (d.provider !== "ghcn" && !["both", "both_global"].includes(d.provider)) return null
-  const acquisition = ghcnFetch(m, context)
-  if (acquisition?.noPayload) return { state: "ghcn_fetch_unavailable", detail: acquisition.detail, acquisitionDetail: acquisition.detail }
+  const archive = ghcnArchiveIntake(m, context)
+  const acquisition = ghcnFetch(m, context, archive)
   const unavailable = { state: "ghcn_intake_unavailable", detail: "Saved GHCN intake details are unavailable or inconsistent."
     + (acquisition ? ` ${acquisition.detail}` : ""), acquisitionDetail: acquisition?.detail ?? null }
+  if (Object.hasOwn(m ?? {}, "station_archive_intake")) {
+    if (!archive || (Object.hasOwn(m, "diff_fetch") && !acquisition)) return unavailable
+    return { state: archive.unavailable ? "ghcn_archive_intake_unavailable" : archive.empty ? "ghcn_archive_intake_empty" : null,
+      detail: archive.detail + (acquisition ? ` ${acquisition.detail}` : ""), acquisitionDetail: acquisition?.detail ?? null }
+  }
+  if (acquisition?.noPayload) return { state: "ghcn_fetch_unavailable", detail: acquisition.detail, acquisitionDetail: acquisition.detail }
   const trace = m?.diff_intake, c = trace?.counts
   const names = ["parsed_temperature_rows", "inactive_station_rows", "too_old_rows", "future_rows",
     "usable_updates", "delete_updates", "unusable_updates", "final_values", "final_station_days"]
