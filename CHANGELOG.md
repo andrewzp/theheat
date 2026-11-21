@@ -1,3 +1,7 @@
+## 0.9.109.166 — 2026-11-21
+
+- Open retained post history on recent saved API observations instead of an old empty receipt. Show observation counts in the selector; preserve explicit selection, page and focus during refreshes. Keep unknown/conflicting evidence visible and all metric collection, age, source and publication rules unchanged.
+
 ## 0.9.109.165 — 2026-11-21
 
 - Supply an explicit bounded station selector to the existing NOAA nomination lookup. Rotate finite station subsets using the captured UTC clock, cap the prepared URI and report selected versus unselected scope. Lookup values still only nominate original archive checks; request, archive, QC, history and writer limits remain unchanged.

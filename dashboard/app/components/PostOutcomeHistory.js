@@ -1,7 +1,7 @@
 "use client"
 
-import React, { useId, useState } from "react"
-import { perPostMetricChange } from "../../lib/per-post-metric-change.js"
+import React, { useEffect, useId, useState } from "react"
+import { perPostMetricChange, preferredOutcomePost } from "../../lib/per-post-metric-change.js"
 
 const h = React.createElement
 const fields = { likes: "Likes", retweets: "Reposts", replies: "Replies", quotes: "Quotes", impressions: "Impressions", bookmarks: "Bookmarks" }
@@ -46,9 +46,13 @@ function MetricChange({ post }) {
 
 export default function PostOutcomeHistory({ outcomes }) {
   const id = useId()
-  const [view, setView] = useState({ post: "", page: 0 })
-  const posts = outcomes?.posts || []
-  const selected = posts.find(post => post.tweet_id === view.post) || posts[0]
+  const [view, setView] = useState(() => ({ post: preferredOutcomePost(outcomes?.posts)?.tweet_id || "", page: 0 }))
+  const posts = Array.isArray(outcomes?.posts) ? outcomes.posts : []
+  const selected = posts.find(post => post.tweet_id === view.post) || preferredOutcomePost(posts)
+  useEffect(() => {
+    if (selected) setView(current => posts.some(post => post.tweet_id === current.post)
+      ? current : { post: selected.tweet_id, page: 0 })
+  }, [posts, selected?.tweet_id])
   const observations = Array.isArray(selected?.observations) && selected.observations.every(item => item !== null && typeof item === "object" && !Array.isArray(item))
     ? selected.observations : null
   const total = observations?.length || 0
@@ -57,12 +61,18 @@ export default function PostOutcomeHistory({ outcomes }) {
   return h("details", { className: "runtime-details", style: { minWidth: 0 } },
     h("summary", { style: { minHeight: 44 } }, "Retained post history"),
     h("p", { className: "runtime-note" }, "Saved observations only. Opening this view does not collect metrics. Missing values are unknown, not zero."),
+    posts.length > 1 && h("p", { className: "runtime-note" }, "Opens on recent saved metrics when available. Every retained receipt is available below."),
     !posts.length ? h("p", { className: "runtime-note", role: "status" }, outcomes?.status === "no_retained_receipts"
       ? "No publication receipts are retained in this view." : "Retained publication evidence is unavailable.") : h(React.Fragment, null,
       h("label", { htmlFor: id, className: "runtime-note" }, "Post with a retained receipt"),
       h("select", { id, value: selected.tweet_id, onChange: event => setView({ post: event.target.value, page: 0 }),
         style: { display: "block", width: "100%", minHeight: 44, margin: "8px 0 12px", background: "#161616", color: "#ddd", border: "1px solid #666", padding: 8, font: "inherit" } },
-      ...posts.map(post => h("option", { key: post.tweet_id, value: post.tweet_id }, `Post ${post.tweet_id}`))),
+      ...posts.map(post => {
+        const count = Array.isArray(post.observations) && post.observations.every(item => item !== null && typeof item === "object" && !Array.isArray(item))
+          ? post.observations.length : null
+        return h("option", { key: post.tweet_id, value: post.tweet_id },
+          `Post ${post.tweet_id} · ${count === null ? "Unknown observations" : `${count} saved observation${count === 1 ? "" : "s"}`}`)
+      })),
       h("div", { "aria-live": "polite", "aria-atomic": true },
         h("p", { className: "runtime-note" }, selected.revision_status === "conflict" ? "Published revision conflicts; no text has been selected."
           : selected.revision_status === "unknown" ? "Published revision is unknown. Today's draft text is not used."
