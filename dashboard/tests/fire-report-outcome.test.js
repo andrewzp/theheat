@@ -9,6 +9,7 @@ import { renderToStaticMarkup } from "react-dom/server"
 import { transformSync } from "next/dist/build/swc/index.js"
 import { sourceOutcome } from "../lib/live-content-status.js"
 import { buildSourceHealthPayload } from "../lib/source-health.js"
+import { buildWeeklyReview } from "../lib/weekly-review.js"
 
 // Invented census, shaped by the real NIFC parser/runner; no source request.
 const row = { source: "fire_footprint", status: "degraded", observed: 3, promoted: 0,
@@ -17,6 +18,45 @@ const row = { source: "fire_footprint", status: "degraded", observed: 3, promote
     row_holds: { stale: 2, invalid_size: 3, child: 1, below_floor: 2 }, coverage_truncated: false } }
 const context = { fireReportCurrent: true }
 const current = r => sourceOutcome(r, [], context)
+
+function boundState(r) {
+  const metrics = Object.fromEntries(["observed", "promoted", "triaged_in", "triaged_out", "writer_attempted", "drafted"]
+    .filter(key => r[key] !== 0).map(key => [key, r[key]]))
+  return { drafts: [], publish_ledger: {}, source_health: { fire_footprint: { degraded: 1,
+    runs: [{ ts: "2026-11-18T02:00:01Z", status: r.status, ...metrics }] } },
+    run_history: [{ id: "invented-fire-run", mode: "alerts", started_at: "2026-11-18T02:00:00Z",
+      ended_at: "2026-11-18T02:00:02Z", sources: [structuredClone(r)] }] }
+}
+
+test("review R1: the real weekly reader and Sources agree on current supplied reports", () => {
+  const state = boundState({ ...row, promoted: 1 })
+  const asOf = "2026-11-18T03:00:00Z"
+  const source = buildSourceHealthPayload(state, { asOf }).sources[0].outcome
+  const weekly = buildWeeklyReview({ state, asOf }).evidence.source_outcomes.rows[0]
+  assert.equal(source.state, "supplying")
+  assert.equal(weekly.state, source.state)
+  assert.equal(weekly.detail, source.detail)
+})
+
+test("review R2: unavailable census keeps the existing recorded check-rejection outcome", () => {
+  const missing = { ...row }; delete missing.details
+  const value = sourceOutcome(missing, [{ source: "fire_footprint", stage: "critic" }], context)
+  assert.equal(value.state, "writer_or_check_rejection")
+  assert.match(value.detail, /unavailable or inconsistent/)
+})
+
+for (const key of ["triaged_in", "triaged_out", "writer_attempted", "drafted"]) {
+  test(`review R3: a positive ${key} cannot borrow an omitted durable zero`, () => {
+    const state = boundState({ ...row, promoted: 1 })
+    state.run_history[0].sources[0][key] = 1
+    const value = buildSourceHealthPayload(state, { asOf: "2026-11-18T03:00:00Z" }).sources[0].outcome
+    assert.equal(value.state, "fire_reports_unavailable")
+  })
+  test(`review R3: zero queued with positive ${key} is contradictory`, () => {
+    const value = current({ ...row, [key]: 1 })
+    assert.equal(value.state, "fire_reports_unavailable")
+  })
+}
 
 test("known report holds cannot read as an empty feed with nothing to do", () => {
   const before = structuredClone(row)

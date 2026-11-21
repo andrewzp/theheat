@@ -422,7 +422,7 @@ export function queueWatch(drafts, now = new Date()) {
   }]
 }
 
-function sourceDetailsAreCurrent(state, run, row, clock, sourceKey) {
+export function sourceDetailsAreCurrent(state, run, row, clock, sourceKey, metrics = ["observed", "promoted"]) {
   const timestamp = value => typeof value === "string" ? Date.parse(value) : NaN
   const start = timestamp(run?.started_at), end = timestamp(run?.ended_at)
   if (!Number.isFinite(start) || !Number.isFinite(end) || end < start || end > timestamp(clock)
@@ -440,7 +440,7 @@ function sourceDetailsAreCurrent(state, run, row, clock, sourceKey) {
     && (latest[key] === row[key] || (row[key] === 0 && !Object.hasOwn(latest, key)))
   return Number.isFinite(at) && at >= start && at <= end
     && latest.status === (row.status === "partial_failure" ? "degraded" : row.status)
-    && metricMatches("observed") && metricMatches("promoted")
+    && metrics.every(metricMatches)
 }
 
 export function buildSourceHealthPayload(state, { runsLimit = 20, asOf = new Date().toISOString() } = {}) {
@@ -484,7 +484,8 @@ export function buildSourceHealthPayload(state, { runsLimit = 20, asOf = new Dat
         started_at: run?.started_at, ended_at: run?.ended_at,
       } : null,
       fireReportCurrent: source.source === "fire_footprint"
-        && sourceDetailsAreCurrent(state, run, latest, clock, "fire_footprint"),
+        && sourceDetailsAreCurrent(state, run, latest, clock, "fire_footprint",
+          ["observed", "promoted", "triaged_in", "triaged_out", "writer_attempted", "drafted"]),
     })
     source.coverage_row = latest ? coverageRow(latest) : null
     source.incidents = sourceIncidents(state?.run_history, source.source)

@@ -62,7 +62,7 @@ function fireReportStatus(row, current) {
   const admission = Object.hasOwn(d, "admission_holds") ? d.admission_holds : 0
   if (!integer(partition) || partition + d.qualified_rows !== d.raw_rows || held !== d.held_rows
       || row.observed !== d.qualified_rows || !integer(admission) || admission + row.promoted > d.qualified_rows) return unavailable
-  if (row.drafted > row.promoted) return unavailable
+  if (["triaged_in", "triaged_out", "writer_attempted", "drafted"].some(key => row[key] > row.promoted)) return unavailable
   const hasHold = held > 0 || admission > 0 || d.coverage_truncated
   if (row.status !== (hasHold ? "degraded" : "success")) return unavailable
   const holdReasons = Object.entries(d.row_holds).filter(([key, n]) => !excluded.has(key) && n > 0)
@@ -349,10 +349,10 @@ export function sourceOutcome(row, rejections = [], { rainfallNominationCurrent 
   const intake = ghcnIntake(row, ghcnIntakeContext)
   const fire = fireReportStatus(row, fireReportCurrent)
   const admission = [nwsAdmissionDetail(row) ?? rainfall?.detail, gridHold, intake?.detail, fire?.detail].filter(Boolean).join(" ") || null
-  if (fire?.state === "fire_reports_unavailable") return outcome(fire.state, row, fire.detail)
   if (rejections.some(r => r?.source === row.source && ["writer", "safety", "fact_check", "critic", "honesty_gate", "copy_gate"].includes(r?.stage))) {
     return outcome("writer_or_check_rejection", row, admission)
   }
+  if (fire?.state === "fire_reports_unavailable") return outcome(fire.state, row, fire.detail)
   if ((count(row.promoted) ?? 0) > 0) {
     const drafted = Number.isSafeInteger(row.drafted) && row.drafted >= 0 ? row.drafted : null
     const action = drafted === null
