@@ -1707,6 +1707,8 @@ def _read_gist_state(*, strict: bool = False, route_sink: list | None = None) ->
         else:
             content = file_meta["content"]
         decoded = _decode_gist_state_json(content)
+        if type(decoded) is not dict:
+            raise StateReadError("Gist state root must be a JSON object")
         normalized = _normalize_state(decoded)
         if "fire_complex_tiers" not in decoded:
             # Stored absence is not the explicit initialized empty map. Keep

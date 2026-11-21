@@ -220,6 +220,25 @@ def test_actual_gist_missing_tracking_stays_unknown_through_write_read_and_reten
     assert source.detect_tier_crossings([fc], merged) == []
 
 
+@pytest.mark.parametrize("shape", ["double-encoded-map", "string", "list", "number", "null", "boolean"])
+def test_nonobject_gist_root_is_refused_without_normalization_or_history_rewrite(monkeypatch, world, capture, shape):
+    transport, _, _, calls, _ = world
+    monkeypatch.setenv("THEHEAT_STATE_BACKEND", "gist")
+    monkeypatch.setattr(store, "GIST_ID", h.GIST_ID)
+    monkeypatch.setattr(store, "GITHUB_TOKEN", h.INVENTED_TOKEN)
+    fc, = parsed(capture)
+    saved = deepcopy(store.DEFAULT_STATE)
+    saved["fire_complex_tiers"][source.report_tracking_key(fc)] = fc.tier
+    value = {"double-encoded-map": json.dumps(saved), "string": "fire_complex_tiers",
+             "list": [saved], "number": 1, "null": None, "boolean": True}[shape]
+    raw = json.dumps(value)
+    transport.gist = {"state.json": raw}
+    with pytest.raises(store.StateReadError, match="root must be a JSON object"):
+        store.read_state()
+    assert transport.gist == {"state.json": raw}
+    assert transport.gist_patches == 0 and transport.x_posts == [] and calls == []
+
+
 @pytest.mark.parametrize("invalid", [None, [], "unavailable"])
 def test_malformed_tracking_is_not_normalized_away_in_durable_merge(capture, invalid):
     raw = deepcopy(store.DEFAULT_STATE)
