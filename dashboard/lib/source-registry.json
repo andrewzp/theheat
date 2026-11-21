@@ -727,7 +727,7 @@
     "src/data/river_gauges.py": "7f7f5bfa89c84d95f6d8b872476a9512116047e86a62e4d4db0412c87ee7ee14",
     "src/data/sea_ice.py": "373dc72240b8ee7439995cf194b9b190b9a1940df393723119849cdeeff455f8",
     "src/data/source_registry.py": "1a2ee2ccdf173e18afaae1af5c0623c648e9c9d5c5ad05d1013af6a96b23a528",
-    "src/data/temperature_evidence.py": "c15caea1b3d1564209756c80250c49216370176e0c534500d969309e733feb12",
+    "src/data/temperature_evidence.py": "42d5f7d417652e1bc502a4c543ce48b5947aa0bb0c86a1bb8d8d4aff65d5bc2f",
     "src/data/usgs_quakes.py": "d074863aba46097e0aa31a0c16c48158a2769c1403cac51e1e2054b2deb96650",
     "src/data/water_levels.py": "4868999eaaf6a95800439c3455efa4d67753e7b328161598b11d140d75e93c9e",
     "src/editorial/nhc_advisory.py": "ffa814251ed31011de5642d9fc3fc1a4aec92ea7ddd82d0a733ce49741400f7b",
@@ -775,5 +775,5 @@
     "src/two_bot/intern/warnings.py": "04e0a4506ffbb29124c8d2960a5e5025305699297fcf8f9178b23caac2cd7a37"
   },
   "evidence_scope": "Referenced local code inventory; not live/provider/transitive-source qualification.",
-  "registry_sha256": "6ef87dbe28ac8de670cc41f0f71e9b054ce344088d3061889d0d94d2109e7b38"
+  "registry_sha256": "c6767f1b4aa0d61b049b5863a70bc70673a88f14c4be7320f369888326c20020"
 }
