@@ -21,6 +21,8 @@ directory must not exist; it is created `0700` with three `0600` files:
 - **Identities:** the same draft id with identical JSON content in two exports counts once.
   Different content for the same id is a conflict, held and excluded, never picked. Every
   supplied argument and record pointer stays listed, including repeated paths and exact copies.
+  Row comparisons retain exact decimal numeric values, including values too close for binary
+  floats to distinguish. This report identity is separate from production revision fingerprints.
 - **Retained suppression rows:** an explicit suppression id with identical content counts once
   across captures; conflicting variants are held and excluded, with every pointer retained.
   Rows without ids are scoped to the exact input bytes and row index. Repeating an export or
@@ -36,10 +38,18 @@ directory must not exist; it is created `0700` with three `0600` files:
   - Recorded suppression rows are activity; missing history is not a zero count.
   - A saved draft is not a post.
   - A stored tweet id is a recorded receipt, not verified X visibility.
+    Receipt credit requires a numeric stored ID and compatible confirmed or historical absent
+    delivery outcome; conflicting or malformed fields remain unknown.
   - A nonposted status means `no_publication_recorded`, not proof of nonpublication.
     Unknown, submitted or contradictory delivery remains `unknown`.
   - Unrecognized stage labels are classified as `unknown`; arbitrary source text is never
     copied into stdout's count labels.
+  - Generation needs a recognizable retained observation or candidate structure. Writer-text
+    comparison needs the existing valid accepted-observation shape and SHA-256 digest; unusable
+    records remain unknown or unjoined. No recorded shape proves an actual model call.
+  - Both stdout and saved summaries distinguish missing suppression history, retained empty
+    lists and conflicting IDs. Zero-sentence bodies have their own `0` histogram bin.
+  - Only supported report kind/evidence labels enter summary JSON; other labels are unknown.
 - **Text measures:** length, body length without links, link count, and sentence count. The
   sentence counter protects links, decimals, listed abbreviations and dates. An unlisted
   abbreviation followed by a capital letter can over-count.

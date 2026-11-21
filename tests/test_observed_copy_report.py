@@ -64,11 +64,13 @@ def test_unusable_supplied_evidence_fails_visibly(raw, code):
 
 def test_stages_are_reported_as_recorded_never_upgraded():
     sha = hashlib.sha256(GOOD.encode()).hexdigest()
+    observation = {"schema_version": 1, "basis": "accepted_writer_result", "event_id": "invented-event",
+                   "angle_chosen": "observed", "bundle_sha256": "1" * 64, "text_sha256": sha}
     rows = [
-        draft("joined", GOOD, review_context={"two_bot": {"accepted_writer_observation": {"text_sha256": sha},
+        draft("joined", GOOD, review_context={"two_bot": {"accepted_writer_observation": observation,
                                                           "fact_check": {"passed": True}}}),
-        draft("edited", GOOD, review_context={"two_bot": {"accepted_writer_observation": {"text_sha256": "0" * 64}}}),
-        draft("posted", GOOD, status="posted", tweet_id="invented-1"),
+        draft("edited", GOOD, review_context={"two_bot": {"accepted_writer_observation": {**observation, "text_sha256": "0" * 64}}}),
+        draft("posted", GOOD, status="posted", tweet_id="123456"),
         draft("posted-no-receipt", GOOD, status="posted"),
         {"id": "bare", "text": GOOD},
     ]
@@ -304,3 +306,68 @@ def test_cli_count_summary_agrees_without_printing_private_text(tmp_path, capsys
     value = json.loads(printed)
     saved = json.loads((out / "report.json").read_bytes())
     assert value["retained_suppression_rows_by_stage"] == saved["retained_suppressions"]["stage_counts"] == {"fact_check": 1}
+
+
+@pytest.mark.parametrize("numbers", [("9007199254740992.0", "9007199254740993.0"), ("1e-1000", "0.0")])
+def test_distinct_numeric_claims_are_conflicts_not_rounded_duplicates(numbers):
+    inputs = [oc.parse_export(f"{i}.json", ('{"drafts":[{"id":"same","text":"Invented",'
+        '"value":'+number+'}],"suppressions":[{"id":"same-row","stage":"critic","value":'+number+'}]}').encode())
+        for i, number in enumerate(numbers)]
+    for ordered in (inputs, inputs[::-1]):
+        result = oc.build_report(ordered)[0]
+        assert result["identities"]["conflicting_held_and_excluded"] == 1
+        assert result["retained_suppressions"]["conflicting_ids_held"] == 1
+        assert result["retained_suppressions"]["stage_counts"] == {}
+
+
+def test_equal_exact_numeric_values_and_user_numeric_lookalikes_remain_distinct():
+    equal = [oc.parse_export(str(i), ('{"drafts":[],"suppressions":[{"id":"n","value":'+n+'}]}').encode())
+             for i, n in enumerate(("1000", "1e3", "1000.0"))]
+    result = oc.build_report(equal)[0]["retained_suppressions"]
+    assert result["identified_rows_included"] == 1 and result["conflicting_ids_held"] == 0
+    numeric = oc.parse_export("n", b'{"drafts":[],"suppressions":[{"id":"n","value":1.2}]}')
+    lookalike = oc.parse_export("fake", b'{"drafts":[],"suppressions":[{"id":"n","value":["number",0,"12",-1]}]}')
+    assert oc.build_report([numeric, lookalike])[0]["retained_suppressions"]["conflicting_ids_held"] == 1
+
+
+@pytest.mark.parametrize("outcome,tweet_id", [("not_sent", "123456"), ("invented-bad", "123456"),
+                                             ("confirmed", "placeholder"), (None, True)])
+def test_invalid_or_contradictory_posted_receipts_stay_unknown(outcome, tweet_id):
+    row = draft("invented-posted", GOOD, status="posted", tweet_id=tweet_id, publish_outcome=outcome)
+    assert oc.stages(row)["publication"] == "unknown"
+
+
+def test_private_text_cannot_enter_summary_json_through_untrusted_labels():
+    row = draft("invented-labels", GOOD, type=GOOD,
+                review_context={"two_bot": {"bundle": {"raw_signal_dump": {
+                    "evidence": {"evidence_type": GOOD}}}}})
+    summary, md, sheet = oc.build_report([oc.parse_export("s.json", json.dumps([row]).encode())])
+    assert GOOD not in json.dumps(summary) and GOOD not in md and GOOD in sheet
+    assert summary["drafts"][0]["kind"] == "unknown"
+    assert summary["drafts"][0]["evidence_type"] == "unknown"
+
+
+@pytest.mark.parametrize("fields", [{"candidates": "malformed"}, {"writer_observations": "bad"},
+    {"review_context": {"two_bot": {"accepted_writer_observation": {"text_sha256": "bad"}}}}])
+def test_malformed_writer_records_do_not_establish_generation_or_comparison(fields):
+    result = oc.stages(draft("invented-writer", GOOD, **fields))
+    assert result["generation"] == "unknown"
+    assert result["writer_to_saved"] == "unjoined"
+
+
+def test_stdout_distinguishes_missing_suppression_history_from_empty(tmp_path, capsys):
+    results = []
+    for i, payload in enumerate(({"drafts": []}, {"drafts": [], "suppressions": []})):
+        path = tmp_path / f"{i}.json"
+        path.write_text(json.dumps(payload))
+        assert cli.main(["--input", str(path), "--out", str(tmp_path / f"out-{i}")]) == 0
+        results.append(json.loads(capsys.readouterr().out))
+    assert results[0] != results[1]
+    assert results[0]["suppression_history"]["exports_without_history"] == 1
+    assert results[1]["suppression_history"]["exports_without_history"] == 0
+
+
+@pytest.mark.parametrize("text", ["", "https://example.invalid/only-link"])
+def test_zero_body_sentences_have_their_own_histogram_bin(text):
+    result = oc.build_report([oc.parse_export("s.json", json.dumps([draft("empty", text)]).encode())])[0]
+    assert result["sentences"] == {"0": 1}

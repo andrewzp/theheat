@@ -15,11 +15,14 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass
+from decimal import Decimal
 import hashlib
 import json
 import math
 import re
 from typing import Any
+
+from src.editorial.revisions import valid_writer_observation
 
 SCHEMA = "theheat.observed-copy-report/v2"
 MAX_INPUT_BYTES = 64 * 1024 * 1024
@@ -40,16 +43,40 @@ def _sha(data: bytes | str) -> str:
 
 
 def _canonical(value: Any) -> str:
-    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)
+    # Report identities preserve exact JSON numbers, independently of the
+    # production revision protocol's deliberately shared IEEE-754 contract.
+    # Tag all node types so no user object/string can imitate a numeric node.
+    def node(item):
+        if item is None:
+            return ["null"]
+        if isinstance(item, bool):
+            return ["boolean", item]
+        if isinstance(item, (int, Decimal)):
+            sign, raw_digits, exponent = Decimal(item).as_tuple()
+            if not isinstance(exponent, int):
+                raise ReportError("input_non_finite_number")
+            digits = list(raw_digits)
+            if not any(digits):
+                return ["number", 0, "0", 0]
+            while digits[-1] == 0:
+                digits.pop()
+                exponent += 1
+            return ["number", sign, "".join(map(str, digits)), exponent]
+        if isinstance(item, list):
+            return ["array", [node(v) for v in item]]
+        if isinstance(item, dict):
+            return ["object", [[key, node(item[key])] for key in sorted(item)]]
+        return ["string", item]
+    return json.dumps(node(value), separators=(",", ":"), ensure_ascii=False, allow_nan=False)
 
 
 def _refuse_constant(name: str):
     raise ReportError("input_non_finite_number")
 
 
-def _finite_float(value: str) -> float:
-    result = float(value)
-    if not math.isfinite(result):
+def _finite_float(value: str) -> Decimal:
+    result = Decimal(value)
+    if not result.is_finite() or not math.isfinite(float(result)):
         raise ReportError("input_non_finite_number")
     return result
 
@@ -86,7 +113,7 @@ def parse_export(label: str, raw: bytes) -> Export:
     try:
         _canonical(data).encode("utf-8")
         label.encode("utf-8")
-    except UnicodeError as exc:
+    except (UnicodeError, RecursionError) as exc:
         raise ReportError("input_invalid_string") from exc
     drafts: list
     suppressions: list | None = None
@@ -141,6 +168,16 @@ _SOURCE_LEAD = re.compile(r"^\W*(?:NWS|NOAA|GHCN|ERA5|AEMET|NASA|USGS|GDACS|CAMS
 _QUALIFIERS = re.compile(r"\b(?:available|accepted|preliminary|provisional|sampled|according to|data show|reported|"
                          r"estimated|unofficial|at least)\b", re.IGNORECASE)
 OBSERVED_TYPES = frozenset({"observed"})
+EVIDENCE_TYPES = frozenset({"observed", "forecast", "reanalysis"})
+# Report labels only; membership grants no source or publication eligibility.
+REPORT_KINDS = frozenset({
+    "observed_metar_contrast", "monthly_climate_report", "coastal_observed_report",
+    "satellite_precipitation_report", "all_time_high", "all_time_low", "monthly_high",
+    "monthly_low", "record_high", "record_low", "country_record", "record_streak",
+    "hot10", "co2_milestone", "ch4_milestone", "fire_spike", "thermal_anomaly",
+    "nifc_fire_update", "rainfall", "precipitation_extreme", "gdacs_alert",
+    "air_quality_hazard", "dust_event", "marine_heatwave", "coral_bleaching",
+})
 
 
 def body_of(text: str) -> str:
@@ -198,14 +235,22 @@ def _evidence_type(draft: dict) -> str | None:
     raw = _bundle(draft).get("raw_signal_dump")
     evidence = raw.get("evidence") if isinstance(raw, dict) else None
     kind = evidence.get("evidence_type") if isinstance(evidence, dict) else None
-    return kind if isinstance(kind, str) else None
+    return kind if isinstance(kind, str) and kind in EVIDENCE_TYPES else None
 
 
 def stages(draft: dict) -> dict:
     two_bot = _two_bot(draft)
     accepted = two_bot.get("accepted_writer_observation")
-    generation = ("recorded" if isinstance(accepted, dict) or draft.get("writer_observations") or draft.get("candidates")
-                  else "unknown")
+    accepted_valid = valid_writer_observation(accepted, admitted=False)
+    observations, candidates = draft.get("writer_observations"), draft.get("candidates")
+    recorded_observation = isinstance(observations, dict) and any(
+        valid_writer_observation(row) for row in observations.values())
+    recorded_candidate = isinstance(candidates, list) and any(
+        isinstance(row, dict) and isinstance(row.get("text"), str) and bool(row["text"].strip())
+        and type(row.get("rank")) is int and row["rank"] >= 0
+        and isinstance(row.get("source"), str) and bool(row["source"])
+        for row in candidates)
+    generation = "recorded" if accepted_valid or recorded_observation or recorded_candidate else "unknown"
     fact = two_bot.get("fact_check")
     fact_check = ("unknown" if not isinstance(fact, dict) or not isinstance(fact.get("passed"), bool)
                   else "passed" if fact["passed"] else "failed")
@@ -218,8 +263,11 @@ def stages(draft: dict) -> dict:
     if outcome in ("unknown", "submitted"):
         publication = "unknown"
     elif status == "posted":
-        receipt = isinstance(tweet_id, str) and bool(tweet_id.strip())
-        publication = "recorded_receipt" if receipt else "status_posted_without_receipt"
+        receipt = isinstance(tweet_id, str) and re.fullmatch(r"[1-9][0-9]{0,31}", tweet_id) is not None
+        if outcome not in (None, "confirmed") or (tweet_id is not None and not receipt):
+            publication = "unknown"
+        else:
+            publication = "recorded_receipt" if receipt else "status_posted_without_receipt"
     elif outcome not in (None, "not_sent") or tweet_id:
         publication = "unknown"
     elif status in {"pending", "approved", "rejected", "suppressed", "parked"}:
@@ -227,7 +275,7 @@ def stages(draft: dict) -> dict:
     else:
         publication = "unknown"
     join = "unjoined"
-    if isinstance(accepted, dict) and isinstance(accepted.get("text_sha256"), str):
+    if accepted_valid and isinstance(accepted, dict):
         join = "final_equals_accepted_writer_output" if accepted["text_sha256"] == _sha(draft["text"]) else \
             "final_differs_from_accepted_writer_output"
     return {"generation": generation, "fact_check": fact_check,
@@ -331,7 +379,8 @@ def build_report(exports: list[Export]) -> tuple[dict, str, str]:
         text = draft["text"]
         observed = _evidence_type(draft)
         rows.append({
-            "id_sha256": _sha(draft["id"]), "kind": draft.get("type") if isinstance(draft.get("type"), str) else "unknown",
+            "id_sha256": _sha(draft["id"]), "kind": draft.get("type") if
+            isinstance(draft.get("type"), str) and draft["type"] in REPORT_KINDS else "unknown",
             "evidence_type": observed or "unknown", "text_sha256": _sha(text), "length": len(text),
             "body_length": len(body_of(text)), "urls": len(URL.findall(text)), "sentences": sentence_count(text),
             "stages": stages(draft),
@@ -341,7 +390,7 @@ def build_report(exports: list[Export]) -> tuple[dict, str, str]:
     def count(key, field=None):
         return dict(sorted(Counter((row[key][field] if field else row[key]) for row in rows).items()))
 
-    sentence_bins = Counter("1" if row["sentences"] == 1 else "2" if row["sentences"] == 2 else "3+" for row in rows)
+    sentence_bins = Counter(str(row["sentences"]) if row["sentences"] < 3 else "3+" for row in rows)
     summary = {
         "schema": SCHEMA, "advisory_only": True,
         "inputs": [{"argument_index": argument, "label": export.label, "sha256": export.sha256,

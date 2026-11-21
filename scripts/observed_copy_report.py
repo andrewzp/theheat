@@ -46,6 +46,9 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     print(json.dumps({"identities": summary["identities"], "stages": summary["stages"],
                       "retained_suppression_rows_by_stage": summary["retained_suppressions"]["stage_counts"],
+                      "suppression_history": {key: summary["retained_suppressions"][key] for key in
+                          ("availability", "counts_scope", "exports_with_retained_list", "exports_without_history",
+                           "identified_rows_included", "anonymous_rows_included", "conflicting_ids_held")},
                       "warnings": summary["warnings"], "sentences": summary["sentences"]}, sort_keys=True))
     return 0
 
