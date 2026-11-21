@@ -1,3 +1,7 @@
+## 0.9.109.164 — 2026-11-21
+
+- Decode one bounded HDF5 string attribute from supported scalar or one-element string arrays in the existing inland rainfall collector. Preserve exact unit, coordinate, calendar, complete-day, source-file and required-check guards; reject ambiguous, malformed, untyped and oversized metadata without guessing.
+
 ## 0.9.109.163 — 2026-11-21
 
 - Keep a small, completely framed provider-error classification from the already-budgeted NOAA lookup400 before closing its response. Arbitrary message text is withheld; no query change, extra send, redirect or retry.
