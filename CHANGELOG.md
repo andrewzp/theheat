@@ -1,3 +1,7 @@
+## 0.9.109.155
+
+- Reject explicit previous-record values or years that contradict the selected retained GHCN comparator. Preserve quotation and question context, exact C/F display rounding and required model verification for other wording.
+
 ## 0.9.109.154
 
 - Retain bounded GHCN acquisition outcomes through source failures and show them separately from parsed observations. Bind captures to their collection interval and withhold stale or contradictory diagnostics without adding requests or changing source rules.

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from datetime import date, datetime, time, timedelta, timezone
+from decimal import Context, Decimal, DecimalException, ROUND_HALF_EVEN, localcontext
 import hashlib
 import json
 import math
@@ -13,6 +14,23 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 ARCHIVE_MODEL = "era5"
 ARCHIVE_PRODUCT = "openmeteo-era5-daily-v2"
 FORECAST_PRODUCT = "openmeteo-best-match-forecast-daily-v1"
+
+_GHCN_RECORD_COMPARATORS = {
+    "open_meteo_archive_high": ("high", "all_time"),
+    "open_meteo_archive_low": ("low", "all_time"),
+    "monthly_high": ("high", "monthly"), "monthly_low": ("low", "monthly"),
+    "calendar_record": ("high", "calendar"), "calendar_record_low": ("low", "calendar"),
+}
+_PRIOR_RECORD = re.compile(
+    r"^\s*(?:(?:beating|surpassing)\s+)?(?:the\s+)?(?:previous|prior)\s+"
+    r"(?:(?P<scope>all[- ]time|monthly|calendar[- ]date|station|archive)\s+)?record\b",
+    re.I,
+)
+_PRIOR_VALUE = re.compile(
+    r"\s*(?:(?:of|was|stood at)\s+|[:=]\s*)?"
+    r"(?P<value>[+−-]?[0-9]{1,3}(?:\.[0-9]{1,2})?)\s*°\s*(?P<unit>[CF])\b", re.I,
+)
+_PRIOR_YEAR = re.compile(r"\s+(?:was\s+)?(?:set\s+)?(?:in|from)\s+(?P<year>[0-9]{4})\b", re.I)
 
 
 def utc_now() -> str:
@@ -123,12 +141,6 @@ def ghcn_record_point_failures(bundle) -> list[str]:
     Forecast/aggregate families keep their own contracts. Imports stay scoped:
     unrelated hazards must not load station collectors in the sealed runtime.
     """
-    comparators = {
-        "open_meteo_archive_high": ("high", "all_time"),
-        "open_meteo_archive_low": ("low", "all_time"),
-        "monthly_high": ("high", "monthly"), "monthly_low": ("low", "monthly"),
-        "calendar_record": ("high", "calendar"), "calendar_record_low": ("low", "calendar"),
-    }
     if not isinstance(bundle.signal_kind, str):
         return []
     raw = bundle.raw_signal_dump
@@ -152,7 +164,7 @@ def ghcn_record_point_failures(bundle) -> list[str]:
                 or fact.get("label") == "source_product" and "ghcn" in str(fact.get("value", "")).lower())
                 for fact in facts)):
         return []
-    if bundle.signal_kind not in comparators:
+    if bundle.signal_kind not in _GHCN_RECORD_COMPARATORS:
         # Missing required fields cannot reclassify a retained record as an
         # exempt anomaly/absolute family. Identity or either side of its dated
         # comparison is enough to retain the record boundary.
@@ -161,7 +173,7 @@ def ghcn_record_point_failures(bundle) -> list[str]:
             return ["GHCN individual record has an unsupported or changed signal kind"]
         return []  # Non-record GHCN families retain their separate contracts.
     try:
-        return _ghcn_record_point_failures(bundle, comparators[bundle.signal_kind])
+        return _ghcn_record_point_failures(bundle, _GHCN_RECORD_COMPARATORS[bundle.signal_kind])
     except (AttributeError, KeyError, TypeError, ValueError, OverflowError):
         return ["Missing or malformed GHCN individual-record warrant"]
 
@@ -409,6 +421,140 @@ def temperature_claim_failures(tweet: str, bundle) -> list[str]:
     return failures
 
 
+def _assertive_record_clauses(tweet):
+    """Keep quoted/bracketed context and question termination across separators."""
+    pairs = {'"': '"', "'": "'", '“': '”', '‘': '’', '«': '»', '‹': '›',
+             '`': '`', '(': ')', '[': ']', '{': '}'}
+    quote_ends = {'"', "'", '”', '’', '»', '›', '`'}
+    stack: list[str] = []
+    context_ends: list[tuple[int, int, str]] = []
+    protected = [False] * len(tweet)
+    for index, char in enumerate(tweet):
+        protected[index] = bool(stack)
+        if (char in "'’" and 0 < index < len(tweet)-1
+            and tweet[index-1].isalnum() and tweet[index+1].isalnum()):
+            continue  # A word's apostrophe does not open or close a quotation.
+        if stack and char == stack[-1]:
+            stack.pop()
+            if not stack:
+                tail = index-1
+                while tail >= 0 and (tweet[tail].isspace() or tweet[tail] in pairs.values()):
+                    tail -= 1
+                if tail >= 0 and protected[tail] and tweet[tail] in ".!?":
+                    # A period inside a closing quote/bracket also ends its
+                    # sentence. The next ordinary sentence is outside context.
+                    context_ends.append((index+1, index+1, "."))
+        elif not stack or stack[-1] not in quote_ends:
+            if char in pairs:
+                stack.append(pairs[char])
+                protected[index] = True
+    boundaries = sorted(context_ends + [(m.start(), m.end(), m.group())
+                        for m in re.finditer(r"[;!?\r\n]|\.(?![0-9])", tweet)])
+    questions: list[tuple[int, int]] = []
+    sentence_start = 0
+    for end, following, mark in boundaries:
+        if end < len(tweet) and protected[end]:
+            continue
+        if mark == "?":
+            questions.append((sentence_start, following))
+            sentence_start = following
+        elif mark in {".", "!", "\r", "\n"}:
+            sentence_start = following
+    start = 0
+    for end, following, _mark in [*boundaries, (len(tweet), len(tweet), "")]:
+        if not any(protected[start:end]) and not any(a < end and start < b for a, b in questions):
+            yield tweet[start:end]
+        start = following
+
+
+def _ghcn_previous_record_failures(tweet, bundle):
+    """Reject explicit prior-record contradictions, never grant verification.
+
+    Whole field-like clauses only: [beating/surpassing] [the] previous/prior
+    [scope] record, then a degree C/F value (up to two decimals) and/or
+    'in/from YYYY'. Everything else, including quotes, negatives, conditions,
+    old/former/indefinite references and extra context, needs model verification.
+    Other numbers, current readings and archive cutoffs are not prior assertions.
+    A differently named period is never bound to this selected period. Values
+    use exact decimal C/F conversion and half-even rounding to shown precision.
+    Read only the selected retained scalar; never replay the full archive here.
+    """
+    if not isinstance(bundle.signal_kind, str):
+        return []
+    comparator = _GHCN_RECORD_COMPARATORS.get(bundle.signal_kind)
+    raw = bundle.raw_signal_dump
+    evidence = raw.get("evidence") or {}
+    if (comparator is None or evidence.get("source_product") != "noaa-ghcn-daily-v2"
+        or evidence.get("evidence_type") != "observed"):
+        return []
+    assertions = []
+    for clause in _assertive_record_clauses(tweet):
+        anchor = _PRIOR_RECORD.match(clause)
+        if anchor is None:
+            continue
+        named_scope = (anchor["scope"] or "").lower().replace("-", " ")
+        period = {"all time": "all_time", "archive": "all_time", "station": "all_time",
+                  "monthly": "monthly", "calendar date": "calendar"}.get(named_scope)
+        if period is not None and period != comparator[1]:
+            continue  # Another period's claim still requires the model; do not misbind it.
+        value = _PRIOR_VALUE.match(clause, anchor.end())
+        year = _PRIOR_YEAR.match(clause, value.end() if value else anchor.end())
+        end = year.end() if year else value.end() if value else anchor.end()
+        if (value or year) and not clause[end:].strip():
+            assertions.append((value, year))
+    if not assertions:
+        return []
+    try:
+        direction, period = comparator
+        valid = date.fromisoformat(bundle.when)
+        variable = "temperature_2m_max" if direction == "high" else "temperature_2m_min"
+        scope = evidence["baseline"]["variables"][variable]
+        key = None if period == "all_time" else bundle.when[5:7] if period == "monthly" else bundle.when[5:]
+        if "ghcn_claim_view" in raw:
+            selected = scope["selected_comparison"]
+            if (selected["purpose"] != "record_comparator" or selected["period"] != period
+                or selected["key"] != key):
+                raise ValueError
+            prior, prior_day = selected["prior_value_c"], selected["prior_date"]
+        else:
+            prior, prior_day = scope["record_values_c"][period], scope["record_dates"][period]
+            if key is not None:
+                prior, prior_day = prior[key], prior_day[key]
+        prior_date = date.fromisoformat(prior_day)
+        if (not finite(prior) or not finite(raw.get("old_record_c")) or raw["old_record_c"] != prior
+            or type(raw.get("old_record_year")) is not int or raw["old_record_year"] != prior_date.year
+            or not finite(bundle.historical_context.get("prior_record_c"))
+            or bundle.historical_context["prior_record_c"] != prior
+            or type(bundle.historical_context.get("prior_record_year")) is not int
+            or bundle.historical_context["prior_record_year"] != prior_date.year
+            or prior_date >= valid or evidence.get("unit") != "C"
+            or scope.get("verified_source_cutoff") != (valid-timedelta(days=1)).isoformat()
+            or period == "monthly" and prior_date.month != valid.month
+            or period == "calendar" and prior_day[5:] != bundle.when[5:]):
+            raise ValueError
+    except (KeyError, TypeError, ValueError, AttributeError, OverflowError):
+        return ["ghcn_previous_record_unqualified: selected retained comparator projections disagree"]
+    failures = set()
+    for value, year in assertions:
+        if value:
+            shown = value["value"].replace("−", "-")
+            try:
+                # Do not inherit numeric settings changed by another library.
+                with localcontext(Context(prec=32)):
+                    expected = Decimal(str(prior))
+                    if value["unit"].upper() == "F":
+                        expected = expected * Decimal("1.8") + 32
+                    precision = len(shown.split(".")[1]) if "." in shown else 0
+                    expected = expected.quantize(Decimal(1).scaleb(-precision), rounding=ROUND_HALF_EVEN)
+            except DecimalException:
+                return ["ghcn_previous_record_unqualified: retained comparator cannot be represented at the stated precision"]
+            if Decimal(shown) != expected:
+                failures.add("ghcn_previous_record_value_mismatch: stated previous record disagrees with the selected retained comparator")
+        if year and int(year["year"]) != prior_date.year:
+            failures.add("ghcn_previous_record_year_mismatch: stated previous record year disagrees with the selected retained comparator")
+    return sorted(failures)
+
+
 def _temperature_claim_failures(tweet: str, bundle) -> list[str]:
     """Narrow deterministic containment of the audited forecast-to-observed error.
 
@@ -461,6 +607,8 @@ def _temperature_claim_failures(tweet: str, bundle) -> list[str]:
             return ["temperature evidence: station record comparison must name available/accepted GHCN archive scope and verified cutoff; missing/QC-rejected samples are exclusions"]
         if re.search(r"\b(?:national record|official record|complete (?:weather|observation) history)\b", tweet, re.I):
             return ["temperature evidence: available GHCN samples do not certify national records or a complete observation history"]
+        if prior_failures := _ghcn_previous_record_failures(tweet, bundle):
+            return prior_failures
     forecast = (
         evidence.get("evidence_type") == "forecast"
         or facts.get("evidence_type") == "forecast"
