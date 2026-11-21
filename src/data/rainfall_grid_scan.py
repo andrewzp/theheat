@@ -50,9 +50,11 @@ def _numeric_attribute(value):
     import numpy as np
 
     number = np.asarray(value)
-    contract.require(number.shape == () and number.dtype.kind in "fiu" and number.dtype.itemsize <= 8,
+    # NetCDF represents scalar numeric attributes as one-element HDF5 arrays.
+    # Accept only that exact scalar representation, never an ambiguous array.
+    contract.require(number.shape in {(), (1,)} and number.dtype.kind in "fiu" and number.dtype.itemsize <= 8,
                      "rainfall_grid_attribute_invalid")
-    scalar = float(number)
+    scalar = float(number.reshape(()))
     # NaN is a valid missing-value sentinel, but never a scaling identity.
     return scalar
 
