@@ -896,7 +896,8 @@ def check_extreme_signals_for_stations(
     # observation. This additional request ONLY nominates untracked stations
     # after complete captured404s, in the existing legacy collector. Cold starts,
     # explicit retained readers and a fully tracked active set remain unchanged.
-    untracked_active = active_ids - tracked_stations
+    untracked_active = frozenset(sid for sid in active_ids - tracked_stations
+                                if isinstance(sid, str) and re.fullmatch(r"[A-Z0-9]{11}", sid))
     capture = fetch_metrics.get("diff_fetch") or {}
     counts = capture.get("counts") or {}
     lookup = None

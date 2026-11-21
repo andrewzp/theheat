@@ -15,6 +15,10 @@ The bounded reader supports one explicit JSON lookup shape (`STATION`, `DATE`,
 `TMAX`/`TMIN`); unsupported or conflicting responses nominate nothing. Its tests
 use invented data and establish neither current provider response format nor
 availability, global coverage, source rights or the absence of missed events.
+Each nomination needs a finite existing cached comparator. Missing history never
+becomes a reason to spend an archive slot, and numeric conflicts are compared
+exactly before any conversion. Invalid optional station IDs or an unsupported
+lookup cannot cancel the original tracked-station checks.
 
 The extra request requires all of these conditions:
 
@@ -30,8 +34,11 @@ The extra request requires all of these conditions:
 
 The lookup uses the existing counted `source_http_get` call declaration. No secret
 or implicit netrc authentication is used. Encoded bodies and ambiguous/unsupported
-length headers are refused. Raw reads are bounded to32MiB and300000JSON rows,
-with a15second cooperative deadline checked around raw client reads and a5second
+length headers are refused. A redirect is refused before the client's redirect preparation can read its
+body or consult credentials. Chunked replies need a complete empty trailer through
+the supported response reader; truncated or nonempty trailers are held.
+Raw reads are bounded to32MiB and300000JSON rows, with a15second cooperative
+deadline checked around raw client reads and a5second
 socket inactivity timeout. It cannot interrupt DNS/OS or header/chunk-framing
 work inside the client; this is not a hard wall deadline, SLA or financial cap.
 An operation cancelled before dispatch still refuses before the request is sent.

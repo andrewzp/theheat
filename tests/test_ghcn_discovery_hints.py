@@ -4,17 +4,19 @@ from datetime import date
 from hashlib import sha256
 from io import BytesIO
 import json
+import http.client
 from unittest.mock import patch
 
 from freezegun import freeze_time
 import requests
 import pytest
+from urllib3.response import HTTPResponse as RawHTTPResponse
 
 from dashboard.tests.fixtures.ghcn_archive_intake_producer import NOW, archive_bytes
 from src.data import ghcn
 from src.data import ghcn_discovery as discovery
 from src.data.ghcn_db import open_db, upsert_thresholds
-from src.data.ghcn_format import DiffRecord, compute_thresholds, parse_dly_text
+from src.data.ghcn_format import DiffRecord, StationThresholds, compute_thresholds, parse_dly_text
 from src.data.temperature_history import record_observation_revision
 from src.storage.ghcn_runtime_inputs import InventedResponse, ReplayIO, configuration
 from tests.ghcn_intake_cases import SID
@@ -65,14 +67,21 @@ class Reply:
 
 def invoke(tmp_path, *, hint_value=49, payload=None, limit=20, hint_status=200, hint_body=None,
            tracked_payload=None, runtime=False, injected=None, diff_status=404, stations=None, extra_stations=0,
-           on_hint=None, calls_out=None):
+           on_hint=None, calls_out=None, missing_cached_baseline=False):
     path = tmp_path / "invented.sqlite"
     extra_ids = [f"SFX{index:08d}" for index in range(3, 3 + extra_stations)]
     metadata = METADATA + [dict(METADATA[1], station_id=sid) for sid in extra_ids]
     with open_db(path) as conn:
+        for meta in metadata:
+            conn.execute("INSERT INTO stations (station_id,name,country_code,country_name,lat,lon,archive_years,is_active) "
+                         "VALUES (?,?,?,?,?,?,?,?)", (meta["station_id"], meta["name"], meta["country_code"],
+                         meta["country_name"], meta["lat"], meta["lon"], 27, 1))
         for sid in (SID, TARGET, *extra_ids):
+            if missing_cached_baseline and sid == TARGET:
+                continue
             baseline = archive_bytes(station=sid, target=None)
             upsert_thresholds(conn, compute_thresholds(parse_dly_text(baseline.decode())))
+        conn.commit()
     state = {"drafts": [], "publish_ledger": {"invented-unknown": {"phase": "unknown"}}}
     record_observation_revision(state, DiffRecord("insert", SID, date(2000, 1, 1), "TMAX", 25),
                                 retrieved_at=NOW, source_revision=sha256(archive_bytes(target=None)).hexdigest())
@@ -186,7 +195,7 @@ def hint(day="2026-11-18", value="49", station=TARGET):
 
 
 def nominate(rows):
-    return discovery.nominate(json.dumps(rows).encode(), frozenset({TARGET}), {TARGET: None},
+    return discovery.nominate(json.dumps(rows).encode(), frozenset({TARGET}), known_cache(),
         today=date(2026, 11, 21), cutoff=date(2026, 11, 17), anomaly=8)
 
 
@@ -235,11 +244,11 @@ def fetch_reply(reply, *, clock=None):
 
     with patch.object(discovery.requests, "get", get):
         if clock is None:
-            result = discovery.fetch_nominations(frozenset({TARGET}), {TARGET: None},
+            result = discovery.fetch_nominations(frozenset({TARGET}), known_cache(),
                 today=date(2026, 11, 21), max_age_days=4, anomaly=8)
         else:
             with patch.object(discovery.time, "monotonic", clock):
-                result = discovery.fetch_nominations(frozenset({TARGET}), {TARGET: None},
+                result = discovery.fetch_nominations(frozenset({TARGET}), known_cache(),
                     today=date(2026, 11, 21), max_age_days=4, anomaly=8)
     assert reply.closed == 1 and len(calls) == 1
     return result
@@ -266,8 +275,7 @@ def test_read_deadline_cannot_promote_the_complete_json_returned_too_late():
 def test_body_bound_rejects_oversized_stream_without_retry(monkeypatch):
     monkeypatch.setattr(discovery, "MAX_BYTES", 128)
     reply = Reply(json.dumps([hint()]).encode() + b" " * 129)
-    reply.headers.pop("Content-Length")
-    reply.headers["Transfer-Encoding"] = "chunked"
+    reply.headers["Content-Length"] = "100"
     candidates, metadata = fetch_reply(reply)
     assert not candidates and metadata["status"] == "unavailable"
 
@@ -396,3 +404,99 @@ def test_cancellation_after_selection_is_checked_again_before_each_archive_reque
          pytest.raises(OperationCancelled, match="cancelled_after_selection"):
         run_cancellable(token, invoke, tmp_path, calls_out=calls)
     assert len(calls) == 31 and all("/all/" not in url for url, _ in calls)
+
+
+def known_cache():
+    return {TARGET: StationThresholds(station_id=TARGET, all_time_max_c=25, all_time_min_c=15)}
+
+
+def test_missing_cache_does_not_nominate_an_ordinary_lookup_value_or_displace_tracked_work(tmp_path):
+    (bundles, _), metrics, calls, _ = invoke(tmp_path, hint_value=0, missing_cached_baseline=True,
+                                           tracked_payload=archive_bytes())
+    assert len(bundles) == 1 and bundles[0].station_id == SID
+    assert metrics["station_discovery"]["nominated_stations"] == 0
+    assert len(calls) == 32 and not any(url.endswith(f"/{TARGET}.dly") for url, _ in calls)
+
+
+def test_one_invalid_untracked_identifier_cannot_abort_existing_tracked_checks(tmp_path):
+    stations = METADATA + [dict(METADATA[1], station_id="INVALID")]
+    (bundles, _), _, calls, _ = invoke(tmp_path, stations=stations, tracked_payload=archive_bytes())
+    assert {b.station_id for b in bundles} == {SID, TARGET}
+    assert len(calls) == 33 and not any("INVALID" in url for url, _ in calls)
+
+
+def test_unrepresentable_decimal_reply_is_refused_without_aborting_tracked_archives(tmp_path):
+    body = b'[{"STATION":"SFX00000002","DATE":"2026-11-18","TMAX":1e999999999999999999999}]'
+    (bundles, _), metrics, calls, _ = invoke(tmp_path, hint_body=body, tracked_payload=archive_bytes())
+    assert len(bundles) == 1 and bundles[0].station_id == SID
+    assert metrics["station_discovery"]["status"] == "unavailable"
+    assert len(calls) == 32
+
+
+def test_exact_decimal_conflicts_cannot_disappear_through_float_rounding():
+    a = b'{"STATION":"SFX00000002","DATE":"2026-11-18","TMAX":49}'
+    b = b'{"STATION":"SFX00000002","DATE":"2026-11-18","TMAX":49.000000000000001}'
+    for rows in (a + b"," + b, b + b"," + a):
+        candidates, counts = discovery.nominate(b"[" + rows + b"]", frozenset({TARGET}), known_cache(),
+            today=date(2026, 11, 21), cutoff=date(2026, 11, 17), anomaly=8)
+        assert not candidates and counts["held_stations"] == 1
+
+
+@pytest.mark.parametrize("trailer,expected", [(b"\r\n", {TARGET}), (b"", set()),
+                                             (b"X-Foo: cut", set()), (b"X-Foo: valid\r\n\r\n", set())])
+def test_real_stdlib_and_urllib3_chunk_reader_requires_complete_supported_trailer(trailer, expected):
+    body = json.dumps([hint()]).encode()
+    wire = (b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nTransfer-Encoding: chunked\r\n\r\n"
+            + f"{len(body):x}\r\n".encode() + body + b"\r\n0\r\n" + trailer)
+
+    class Sock:
+        def makefile(self, *_args, **_kwargs):
+            return BytesIO(wire)
+
+    original = http.client.HTTPResponse(Sock())
+    original.begin()
+    raw = RawHTTPResponse(body=original, headers={"Transfer-Encoding": "chunked"}, status=200,
+                          preload_content=False, decode_content=False)
+    reply = Reply(body)
+    reply.headers.pop("Content-Length")
+    reply.headers["Transfer-Encoding"] = "chunked"
+    reply.raw = raw
+    candidates, _ = fetch_reply(reply)
+    assert candidates == expected
+
+
+def test_real_requests_redirect_preparation_cannot_consume_body_or_consult_netrc(monkeypatch):
+    class Counted(BytesIO):
+        consumed = 0
+
+        def read(self, *args, **kwargs):
+            result = super().read(*args, **kwargs)
+            self.consumed += len(result)
+            return result
+
+    raw = Counted(b"x" * 96)
+    response = requests.Response()
+    response.status_code = 302
+    response.headers.update({"Location": "https://invented.invalid/", "Content-Length": "96"})
+    response.raw = raw
+
+    class Adapter(requests.adapters.BaseAdapter):
+        sent = 0
+
+        def send(self, request, **kwargs):
+            self.sent += 1
+            response.request, response.url = request, request.url
+            return response
+
+        def close(self):
+            pass
+
+    session, adapter = requests.Session(), Adapter()
+    session.mount("https://", adapter)
+    monkeypatch.setattr(discovery, "MAX_BYTES", 16)
+    with patch.object(requests.sessions, "Session", return_value=session), \
+         patch.object(requests.sessions, "get_netrc_auth", return_value=None) as netrc:
+        candidates, metadata = discovery.fetch_nominations(frozenset({TARGET}), known_cache(),
+            today=date(2026, 11, 21), max_age_days=4, anomaly=8)
+    assert not candidates and metadata["http_status"] == 302
+    assert (raw.consumed, netrc.call_count, adapter.sent) == (0, 0, 1)

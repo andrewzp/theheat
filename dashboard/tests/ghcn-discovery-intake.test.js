@@ -45,7 +45,7 @@ test("QC refusal and unavailable lookup never become healthy or absence of weath
   }
 })
 
-test("v2 needs its real lookup, selection and archive conservation links", () => {
+test("v2 needs its real lookup, selection and archive conservation links", async t => {
   const changes = [
     m => { delete m.station_discovery },
     m => { m.station_discovery.scope = "observations" },
@@ -68,15 +68,37 @@ test("v2 needs its real lookup, selection and archive conservation links", () =>
     m => { m.archive_selection.tracked.selected_stations = 2 },
     m => { m.archive_selection.selected_unique_stations = 3 },
     m => { m.archive_verification_attempted = 1 },
+    m => { delete m.diff_fetch },
+    m => { m.diff_fetch.counts.http_404 = 0; m.diff_fetch.counts.http_401 = 30 },
+    m => { m.station_discovery.response_bytes = 0 },
+    m => { m.station_discovery.response_bytes = 4 },
   ]
   for (const change of changes) {
-    const s = structuredClone(fixtures.fresh)
-    change(metrics(s))
-    const out = project(s)
-    // The independent promoted count still means candidates were supplied.
-    // Inconsistent supplemental intake evidence must not supply numeric claims.
-    assert.equal(out.state, "supplying", change.toString())
-    assert.match(out.detail, /intake details are unavailable or inconsistent/, change.toString())
-    assert.doesNotMatch(out.detail, /selected verified station archives|2 accepted daily values|archive nomination/, change.toString())
+    await t.test(change.toString(), () => {
+      const s = structuredClone(fixtures.fresh)
+      change(metrics(s))
+      const out = project(s)
+      // The independent promoted count still means candidates were supplied.
+      // Inconsistent supplemental intake evidence must not supply numeric claims.
+      assert.equal(out.state, "supplying", change.toString())
+      assert.match(out.detail, /intake details are unavailable or inconsistent/, change.toString())
+      assert.doesNotMatch(out.detail, /selected verified station archives|2 accepted daily values|archive nomination/, change.toString())
+    })
+  }
+})
+
+test("an unavailable lookup on the original tracked-only scope still requires all-404 acquisition", async t => {
+  for (const name of ["unavailable", "malformed"]) {
+    for (const change of [m => { delete m.diff_fetch },
+      m => { m.diff_fetch.counts.http_404 = 0; m.diff_fetch.counts.http_401 = 30 }]) {
+      await t.test(`${name}: ${change}`, () => {
+        const s = structuredClone(fixtures[name])
+        assert.equal(metrics(s).station_archive_intake.schema_version, 1)
+        change(metrics(s))
+        const out = project(s)
+        assert.match(out.detail, /intake details are unavailable or inconsistent/)
+        assert.doesNotMatch(out.detail, /verified station archives|accepted daily values|archive nomination/)
+      })
+    }
   }
 })

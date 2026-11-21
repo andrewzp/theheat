@@ -8,12 +8,14 @@ are not established by the existence of this client or by its offline tests.
 from __future__ import annotations
 
 from datetime import date, timedelta
-from decimal import Decimal
+from decimal import Decimal, DecimalException
 import hashlib
+import http.client
 import json
 import math
 import re
 import time
+from types import MethodType
 from typing import TYPE_CHECKING, Any
 
 import requests
@@ -51,6 +53,44 @@ def _constant(_):
     raise ValueError("nonfinite_hint_json")
 
 
+def _json_number(value):
+    if len(value) > 64:
+        raise ValueError("unsupported_hint_number")
+    try:
+        result = Decimal(value)
+    except DecimalException:
+        raise ValueError("unsupported_hint_number") from None
+    if not result.is_finite():
+        raise ValueError("unsupported_hint_number")
+    return result
+
+
+def _reject_redirect(response, *args, **kwargs):
+    # Requests prepares response.next even with allow_redirects=False. That
+    # preparation reads the redirect body and may consult netrc. Abort in the
+    # response hook, before either action; never inspect response.content.
+    if 300 <= response.status_code < 400:
+        response.close()
+        raise requests.HTTPError("lookup_redirect_refused", response=response)
+    return response
+
+
+def _chunk_termination(raw):
+    """Strict empty trailer on this response only; never mutate a global class."""
+    response = getattr(raw, "_fp", None)
+    if not isinstance(response, http.client.HTTPResponse):
+        raise ValueError("unsupported_lookup_framing")
+    setattr(response, "_theheat_chunk_complete", False)
+
+    def trailer(owner):
+        if owner.fp.readline(2) != b"\r\n":
+            raise ValueError("incomplete_or_unsupported_lookup_trailer")
+        owner._theheat_chunk_complete = True
+
+    setattr(response, "_read_and_discard_trailer", MethodType(trailer, response))
+    return response
+
+
 def _value(value):
     if value is None or value == "":
         return None
@@ -58,10 +98,10 @@ def _value(value):
         raise ValueError("unsupported_hint_value")
     if isinstance(value, str) and (len(value) > 32 or not _NUMBER.fullmatch(value)):
         raise ValueError("unsupported_hint_value")
-    number = float(value)
+    number = Decimal(value)
     if number == -9999:
         return None
-    if not math.isfinite(number) or not -120 <= number <= 70:
+    if not number.is_finite() or not -120 <= number <= 70:
         raise ValueError("unsupported_hint_value")
     return number
 
@@ -69,18 +109,18 @@ def _value(value):
 def _nominates(day, element, value, thresholds, anomaly):
     """A cached comparison is a lookup heuristic, never record qualification."""
     if thresholds is None:
-        return True
+        return False
     high = element == "TMAX"
     bounds = [thresholds.all_time_max_c if high else thresholds.all_time_min_c]
     monthly = thresholds.monthly_max if high else thresholds.monthly_min
     calendar = thresholds.calendar_date_max if high else thresholds.calendar_date_min
     bounds.extend((monthly.get(day.month, (None,))[0], calendar.get((day.month, day.day), (None,))[0]))
     if any(prior is not None and math.isfinite(prior)
-           and (value > prior if high else value < prior) for prior in bounds):
+           and (value > Decimal(str(prior)) if high else value < Decimal(str(prior))) for prior in bounds):
         return True
     mean = (thresholds.climatological_mean if high else thresholds.climatological_mean_min).get(day.month)
     return (mean is not None and math.isfinite(mean) and math.isfinite(anomaly)
-            and anomaly > 0 and abs(value - mean) >= anomaly)
+            and anomaly > 0 and abs(value - Decimal(str(mean))) >= Decimal(str(anomaly)))
 
 
 def nominate(body: bytes, eligible: frozenset[str], cached: dict[str, StationThresholds | None], *,
@@ -89,10 +129,10 @@ def nominate(body: bytes, eligible: frozenset[str], cached: dict[str, StationThr
     if len(body) > MAX_BYTES:
         raise ValueError("hint_size")
     rows = json.loads(body.decode("utf-8"), object_pairs_hook=_object,
-                      parse_float=Decimal, parse_constant=_constant)
+                      parse_float=_json_number, parse_constant=_constant)
     if not isinstance(rows, list) or len(rows) > MAX_ROWS:
         raise ValueError("unsupported_hint_rows")
-    values: dict[tuple[str, date, str], float | None] = {}
+    values: dict[tuple[str, date, str], Decimal | None] = {}
     held: set[str] = set()
     recognized_rows = 0
     for row in rows:
@@ -123,7 +163,7 @@ def nominate(body: bytes, eligible: frozenset[str], cached: dict[str, StationThr
             key = (sid, day, element)
             try:
                 value = _value(row[element])
-            except (ValueError, OverflowError):
+            except (ValueError, OverflowError, DecimalException):
                 held.add(sid)
                 continue
             if key in values and values[key] != value:
@@ -172,7 +212,7 @@ def fetch_nominations(eligible: frozenset[str], cached: dict[str, StationThresho
             params={"dataset": "daily-summaries", "startDate": cutoff.isoformat(), "endDate": today.isoformat(),
                     "dataTypes": "TMAX,TMIN", "units": "metric", "format": "json"},
             headers={"Accept": "application/json", "Accept-Encoding": "identity"},
-            allow_redirects=False, stream=True, auth=_NoAuth())
+            allow_redirects=False, stream=True, auth=_NoAuth(), hooks={"response": _reject_redirect})
         metadata["http_status"] = response.status_code
         if response.status_code != 200:
             metadata["reason"] = "http_error"
@@ -192,6 +232,7 @@ def fetch_nominations(eligible: frozenset[str], cached: dict[str, StationThresho
             return set(), metadata
         if length is None and not transfer:
             return set(), metadata
+        framed = _chunk_termination(response.raw) if transfer else None
         metadata["reason"] = "transport_unavailable"
         chunks, received = [], 0
         while True:
@@ -212,6 +253,8 @@ def fetch_nominations(eligible: frozenset[str], cached: dict[str, StationThresho
         if length is not None and received != int(length):
             metadata["reason"] = "body_length_mismatch"
             return set(), metadata
+        if framed is not None and not getattr(framed, "_theheat_chunk_complete", False):
+            return set(), metadata
         body = b"".join(chunks)
         metadata.update(response_bytes=received, response_sha256=hashlib.sha256(body).hexdigest())
         metadata["reason"] = "nomination_unavailable"
@@ -223,7 +266,7 @@ def fetch_nominations(eligible: frozenset[str], cached: dict[str, StationThresho
         metadata.update(reason="http_error", http_status=getattr(exc.response, "status_code", None))
         return set(), metadata
     except (requests.RequestException, StreamError, OSError, ValueError, TypeError,
-            UnicodeError, RecursionError, OverflowError):
+            UnicodeError, RecursionError, OverflowError, DecimalException):
         return set(), metadata
     finally:
         try:

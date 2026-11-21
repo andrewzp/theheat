@@ -112,9 +112,9 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/data/firms.py": "760c6157ec3cf3e84003ec764763f0c108539350e6bceba84c33532d8e75c422",
     "src/data/gdacs.py": "acd12ae1dd53550d5a377b8adc3f8f6179ae9b86239aa606717a0d07f0875457",
     "src/data/gdacs_intake.py": "3239711de2ee42281120b5300c19d94aad7b0539aebfe04f76d960e9b3adbd2c",
-    "src/data/ghcn.py": "440ee29e658e9e8f129c054db62e7762c7f5e1b38cb37ece946ea52cf9ef6fd3",
+    "src/data/ghcn.py": "78e49e03171841eefca96e317a6aa88efae7909f085e45884bfaae2eaa905bdd",
     "src/data/ghcn_db.py": "ccec1ad5673354de3dbadb07c637c294122d7f7c0ffcdfb7e8fd3e5090ee81d5",
-    "src/data/ghcn_discovery.py": "cbfbfc142433965bb334ee1dcb8cb5a76e92f569d210609d190fdb2a90aef97c",
+    "src/data/ghcn_discovery.py": "1a3d4b7a0cf8d2172831527267625aefc78ac38971c0e89494c9644beb9014ce",
     "src/data/ghcn_format.py": "d1c7b728416369e6a67f60f964b17a8762990fed0794ab4a3214cd3e7b21fb30",
     "src/data/ghcn_publication.py": "90d1a0203575dba008439eb1d2c6f156c0fe094afc57941a9589f62a8973e9ea",
     "src/data/ghcnd_monthly_normals.py": "d8bea306ae035da31204f9dd7bd8f9ed360d8bb8e38958a61d55316a7fdd959d",
@@ -313,5 +313,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "5c5ffcc95358c7df45ae838c228759ad0eb6275c8f9053c8130c0a8824b63d9e"
   },
   "schema_version": 1,
-  "source_sha256": "a6d05281ff42e7a2c2a65c08cc2ed4b74405d397f0bba2d73283e0df3d4ead60"
+  "source_sha256": "0ac400396511e8cc71dadecdf4abc44f658157b560c8345ade0c84371d339b9f"
 }

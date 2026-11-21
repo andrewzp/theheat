@@ -147,6 +147,7 @@ function ghcnArchiveIntake(m, context) {
           || (h.reason === "http_error" && (h.http_status === null || h.http_status === 200))) return null
     } else if (!body || ![h.rows_received, h.held_stations, h.numeric_hints].every(integer)
         || h.reason !== h.status || h.http_status !== 200
+        || h.response_bytes < (h.rows_received > 0 ? 3 * h.rows_received + 53 : 2)
         || h.rows_received > 300000 || h.numeric_hints > 2 * h.rows_received
         || h.held_stations + h.nominated_stations > h.eligible_untracked_stations
         || h.nominated_stations > h.numeric_hints || (h.status === "nominated") !== (h.nominated_stations > 0)) return null
@@ -300,10 +301,14 @@ function ghcnIntake(row, context) {
   const unavailable = { state: "ghcn_intake_unavailable", detail: "Saved GHCN intake details are unavailable or inconsistent."
     + (acquisition ? ` ${acquisition.detail}` : ""), acquisitionDetail: acquisition?.detail ?? null }
   if (Object.hasOwn(m ?? {}, "station_archive_intake")) {
-    if (!archive || (Object.hasOwn(m, "diff_fetch") && !acquisition)) return unavailable
+    if (!archive || (Object.hasOwn(m, "diff_fetch") && !acquisition)
+        || (Object.hasOwn(m, "station_discovery") && (!acquisition
+          || m.diff_fetch?.counts?.http_404 !== m.diff_fetch?.get_calls
+          || m.diff_fetch?.get_calls !== 10 * m.diff_dates_attempted))) return unavailable
     return { state: archive.unavailable ? "ghcn_archive_intake_unavailable" : archive.empty ? "ghcn_archive_intake_empty" : null,
       detail: archive.detail + (acquisition ? ` ${acquisition.detail}` : ""), acquisitionDetail: acquisition?.detail ?? null }
   }
+  if (Object.hasOwn(m ?? {}, "station_discovery")) return unavailable
   if (acquisition?.noPayload) return { state: "ghcn_fetch_unavailable", detail: acquisition.detail, acquisitionDetail: acquisition.detail }
   const trace = m?.diff_intake, c = trace?.counts
   const names = ["parsed_temperature_rows", "inactive_station_rows", "too_old_rows", "future_rows",
