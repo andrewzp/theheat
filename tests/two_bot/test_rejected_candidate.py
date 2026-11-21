@@ -323,9 +323,25 @@ const response = await GET(new Request("http://localhost/api/suppressions?source
   headers: {authorization: `Basic ${Buffer.from("fixture:offline-only").toString("base64")}`}}));
 assert.equal(response.status, 200);
 const payload = await response.json();
-assert.deepEqual(payload.suppressions, before);
+// The display projection is additive: every original retained field must still
+// round-trip exactly, and the new preview has its own independent expectation.
+const retained = payload.suppressions.map(({rejected_copy, ...raw}, index) => {
+  assert.deepEqual(raw, before[index]);
+  const packet = before[index].rejected_candidate;
+  if (!packet) assert.deepEqual(rejected_copy, {status: "missing"});
+  else if (packet.status === "unavailable") assert.deepEqual(rejected_copy, {status: "unavailable"});
+  else {
+    const stage = before[index].stage;
+    const reasons = stage === "fact_check" ? packet.verdict.failures
+      : [stage === "critic" ? packet.verdict.kill_reason : packet.verdict.reason];
+    assert.deepEqual(rejected_copy, {status: "retained", stage, attempt: packet.attempt,
+      text: packet.text, characters: [...packet.text].length, reasons});
+  }
+  return raw;
+});
+assert.deepEqual(retained, before);
 assert.equal(payload.stats.stage_counts[before[0].stage], 1);
-process.stdout.write(JSON.stringify(payload.suppressions));
+process.stdout.write(JSON.stringify(retained));
 '''
     result = subprocess.run(["node", "--input-type=module", "-e", script],
         cwd=Path(__file__).resolve().parents[2]/"dashboard", input=json.dumps(loaded),
