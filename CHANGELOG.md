@@ -1,3 +1,7 @@
+## 0.9.109.156
+
+- Join backup and recovery procedures with explicit state/media/catalog coverage, protected retention and incomplete-capture handling. Keep local restore evidence distinct from production recovery.
+
 ## 0.9.109.155
 
 - Reject explicit previous-record values or years that contradict the selected retained GHCN comparator. Preserve quotation and question context, exact C/F display rounding and required model verification for other wording.
