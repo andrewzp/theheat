@@ -52,6 +52,17 @@ test("an actual1001-station source pool displays the finite500-station request, 
   assert.equal(state.request_count, 33)
 })
 
+test("disjoint eligible untracked and verified active tracked sets must fit the active population", async t => {
+  for (const name of ["error400", "sampled"]) await t.test(name, () => {
+    const state = structuredClone(fixtures[name])
+    metrics(state).stations_active--
+    const out = project(state)
+    assert.equal(out.state, name === "sampled" ? "supplying" : "ghcn_intake_unavailable")
+    assert.match(out.detail, /intake details are unavailable or inconsistent/)
+    assert.doesNotMatch(out.detail, /eligible stations requested|verified station archives|Untrusted provider error/)
+  })
+})
+
 test("a supplied inconsistent selection cannot borrow older lookup or archive diagnostics", async t => {
   const changes = [
     s => { s.schema_version = 2 }, s => { s.scope = "all_current_weather" },

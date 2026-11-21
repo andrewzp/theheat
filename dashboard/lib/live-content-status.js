@@ -290,6 +290,12 @@ function ghcnArchiveIntake(m, context) {
     if (tracked.reserved_slots !== tr || tracked.selected_stations !== tr
         || candidate.reserved_slots !== ca || candidate.selected_stations !== ca) return null
   }
+  if (suppliedLookup && Object.hasOwn(h, "station_selection")) {
+    // The lookup gate requires an active tracked station. Verified active
+    // nominees are a disjoint subset of the eligible untracked population.
+    const activeTracked = Math.max(1, t.active_archives - (discovered ? selection.candidates.verified_stations : 0))
+    if (h.eligible_untracked_stations + activeTracked > m.stations_active) return null
+  }
   const partition = c.inactive_station_rows + c.too_old_rows + c.future_rows + c.unusable_rows + c.accepted_values
   const days = (Date.parse(t.window_day) - Date.parse(t.cutoff_day)) / 86400000 + 1
   const missing = new Set(Array.from({ length: m.diff_dates_attempted }, (_, i) =>
