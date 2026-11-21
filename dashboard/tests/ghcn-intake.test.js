@@ -84,6 +84,15 @@ test("an older row cannot borrow currency from newer health or another provider"
   assert.doesNotMatch(projected(other).outcome.detail ?? "", /Saved GHCN intake:/)
 })
 
+test("a usable update cannot vanish without a removal-capable update", () => {
+  const state = copy("no_temperature"), c = metrics(state).diff_intake.counts
+  c.parsed_temperature_rows = c.usable_updates = 1
+  assert.equal(c.delete_updates + c.unusable_updates, 0)
+  assert.equal(projected(state).outcome.state, "ghcn_intake_unavailable")
+  // The real producer's later delete/QC updates can legitimately remove all keys.
+  assert.equal(projected(copy("empty")).outcome.state, "ghcn_intake_empty")
+})
+
 test("writer rejection and other supplying legs retain precedence", () => {
   const rejected = copy("mixed")
   rejected.suppressions = [{ source: key, stage: "critic" }]

@@ -364,10 +364,16 @@ def _fetch_recent_obs(
     # cutoff are skipped entirely (they're backfill, not news).
     obs_by_key: dict[tuple[str, date, str], DailyObs] = {}
     skipped_stale = 0
+    all_fetched_recognized = True
     for d in sorted(raw_by_date):
         retrieved_at = _runtime.diff_time(d) if _runtime is not None else utc_now()
         source_revision = hashlib.sha256(raw_by_date[d]).hexdigest()
-        records = parse_superghcnd_diff_records_bytes(raw_by_date[d])
+        if intake_counts is None:
+            records = parse_superghcnd_diff_records_bytes(raw_by_date[d])
+        else:
+            parse_diagnostics: dict[str, bool] = {}
+            records = parse_superghcnd_diff_records_bytes(raw_by_date[d], diagnostics_out=parse_diagnostics)
+            all_fetched_recognized = all_fetched_recognized and parse_diagnostics.get("recognized_archive") is True
         for rec in records:
             if intake_counts is not None:
                 intake_counts["parsed_temperature_rows"] += 1
@@ -407,7 +413,7 @@ def _fetch_recent_obs(
     )
     if not by_station_date and revisions_out is None:
         raise RuntimeError("GHCN: diff files parsed but contained no active TMAX/TMIN observations within obs-age cutoff")
-    if metrics_out is not None and intake_counts is not None:
+    if metrics_out is not None and intake_counts is not None and all_fetched_recognized:
         intake_counts.update(final_values=len(obs_by_key), final_station_days=len(by_station_date))
         metrics_out["diff_intake"] = {
             "schema_version": 1, "window_day": today.isoformat(), "cutoff_day": obs_age_cutoff.isoformat(),

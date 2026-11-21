@@ -59,6 +59,7 @@ function ghcnIntake(row, context) {
     + c.usable_updates + c.delete_updates + c.unusable_updates
   if (!Number.isSafeInteger(partition) || partition !== c.parsed_temperature_rows
       || c.final_values > c.usable_updates || c.final_values < c.final_station_days
+      || (c.usable_updates > 0 && c.delete_updates === 0 && c.unusable_updates === 0 && c.final_values === 0)
       || c.final_values > 2 * c.final_station_days
       || !integer(m.station_obs_pairs) || m.station_obs_pairs !== c.final_station_days
       || !integer(m.stations_with_obs) || m.stations_with_obs > c.final_station_days
