@@ -23,10 +23,13 @@ from tests.ghcn_intake_cases import SID
 from tests.test_ghcn_discovery_hints import API, METADATA, Reply
 
 
-def produce(case="fresh", provider="ghcn"):
+def produce(case="fresh", provider="ghcn", *, extra_stations=0):
     assert case in {"fresh", "qc", "unavailable", "malformed", "two_nominees",
                     "error400", "error400_unknown", "error400_unicode", "error400_private"}
+    assert type(extra_stations) is int and 0 <= extra_stations <= 1000
+    assert case != "two_nominees" or extra_stations == 0
     metadata = METADATA + ([dict(METADATA[1], station_id="SFX00000003")] if case == "two_nominees" else [])
+    metadata += [dict(METADATA[1], station_id=f"SFX{index:08d}") for index in range(3, 3 + extra_stations)]
     state = deepcopy(DEFAULT_STATE)
     baseline = archive_bytes(target=None)
     record_observation_revision(state, DiffRecord("insert", SID, date(2000, 1, 1), "TMAX", 25),
@@ -64,6 +67,8 @@ def produce(case="fresh", provider="ghcn"):
                 db.execute("INSERT INTO stations (station_id,name,country_code,country_name,lat,lon,archive_years,is_active) "
                            "VALUES (?,?,?,?,?,?,?,?)", (meta["station_id"], meta["name"], meta["country_code"],
                            meta["country_name"], meta["lat"], meta["lon"], 27, 1))
+                if extra_stations and meta["station_id"] not in {m["station_id"] for m in METADATA}:
+                    continue  # An uncached station is eligible for lookup, never nominated without a baseline.
                 raw = archive_bytes(station=meta["station_id"], target=None)
                 thresholds = compute_thresholds(parse_dly_text(raw.decode()))
                 assert thresholds is not None

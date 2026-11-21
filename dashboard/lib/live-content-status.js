@@ -126,6 +126,42 @@ function providerErrorDetail(value) {
   return ` Untrusted provider error: ${value.fields.map(row => `${row.field}: ${messages[row.message_code]}`).join("; ")}.`
 }
 
+function stationSelectionDetail(h, archiveAt, archiveSelection) {
+  const s = h.station_selection
+  const object = v => v !== null && typeof v === "object" && !Array.isArray(v)
+  const integer = n => Number.isSafeInteger(n) && n >= 0
+  const sha = v => typeof v === "string" && /^[a-f0-9]{64}$/.test(v)
+  const names = ["schema_version", "scope", "strategy", "limit", "bucket_start", "cycle_chunks", "chunk_index",
+    "eligible_stations", "selected_stations", "unselected_stations", "pool_sha256", "selection_sha256",
+    "coverage_guaranteed", "request_uri_bytes"]
+  if (!object(s) || Object.keys(s).sort().join() !== names.sort().join()
+      || s.schema_version !== 1 || s.scope !== "requested_nomination_subset_only"
+      || s.strategy !== "four_hour_stable_pool_cycle" || s.limit !== 500 || s.coverage_guaranteed !== false
+      || ![s.eligible_stations, s.selected_stations, s.unselected_stations, s.cycle_chunks,
+        s.chunk_index, s.request_uri_bytes].every(integer)
+      || s.eligible_stations !== h.eligible_untracked_stations || s.eligible_stations < 1
+      || s.selected_stations < 1 || s.selected_stations > 500
+      || s.unselected_stations !== s.eligible_stations - s.selected_stations
+      || s.cycle_chunks !== Math.ceil(s.eligible_stations / 500) || s.chunk_index >= s.cycle_chunks
+      || s.selected_stations !== Math.min(500, s.eligible_stations - s.chunk_index * 500)
+      || h.nominated_stations > s.selected_stations
+      || !sha(s.pool_sha256) || !sha(s.selection_sha256)
+      || (s.eligible_stations <= 500) !== (s.pool_sha256 === s.selection_sha256)
+      || !Number.isFinite(archiveAt) || s.request_uri_bytes > 8192) return null
+  const bucket = Math.floor(archiveAt / 14400000) * 14400000
+  const ordinal = Date.parse(h.window_day) / 86400000 + 719163
+  if (s.bucket_start !== new Date(bucket).toISOString().replace(".000Z", "Z")
+      || s.bucket_start !== archiveSelection?.bucket_start
+      || s.chunk_index !== (ordinal * 6 + new Date(bucket).getUTCHours() / 4) % s.cycle_chunks) return null
+  const params = new URLSearchParams({ dataset: "daily-summaries", startDate: h.cutoff_day,
+    endDate: h.window_day, dataTypes: "TMAX,TMIN", units: "metric", format: "json",
+    stations: Array(s.selected_stations).fill("SFX00000000").join(",") })
+  const expectedBytes = new TextEncoder().encode(`https://www.ncei.noaa.gov/access/services/data/v1?${params}`).length
+  if (s.request_uri_bytes !== expectedBytes) return null
+  return ` ${s.selected_stations} of ${s.eligible_stations} eligible stations requested; ${s.unselected_stations} outside this request.`
+    + " Requested sample only; availability and recall are not established."
+}
+
 function ghcnArchiveIntake(m, context) {
   const t = m?.station_archive_intake, c = t?.counts, selection = m?.archive_selection, tracked = selection?.tracked
   const object = v => v !== null && typeof v === "object" && !Array.isArray(v)
@@ -144,7 +180,8 @@ function ghcnArchiveIntake(m, context) {
   const suppliedLookup = Object.hasOwn(m ?? {}, "station_discovery"), h = m?.station_discovery
   const hintKeys = ["schema_version", "scope", "status", "reason", "http_status", "window_day", "cutoff_day", "get_calls", "max_get_calls",
     "eligible_untracked_stations", "response_bytes", "response_sha256", "rows_received", "held_stations",
-    "numeric_hints", "nominated_stations", ...(h?.schema_version === 2 ? ["provider_error"] : [])]
+    "numeric_hints", "nominated_stations", ...(h?.schema_version === 2 ? ["provider_error"] : []),
+    ...(Object.hasOwn(h ?? {}, "station_selection") ? ["station_selection"] : [])]
   let hintDetail = ""
   if (suppliedLookup) {
     if (!object(h) || Object.keys(h).sort().join() !== hintKeys.sort().join()
@@ -160,6 +197,8 @@ function ghcnArchiveIntake(m, context) {
         || h.cutoff_day < t?.cutoff_day || h.cutoff_day >= h.window_day
         || Date.parse(h.window_day) - Date.parse(h.cutoff_day) > 4 * 86400000
         || !integer(h.nominated_stations) || h.nominated_stations > h.eligible_untracked_stations) return null
+    const sampleDetail = Object.hasOwn(h, "station_selection") ? stationSelectionDetail(h, at, selection) : ""
+    if (sampleDetail === null) return null
     const noBody = h.response_bytes === null && h.response_sha256 === null
     const body = integer(h.response_bytes) && h.response_bytes <= 32 * 1024 * 1024
       && typeof h.response_sha256 === "string" && /^[a-f0-9]{64}$/.test(h.response_sha256)
@@ -178,12 +217,13 @@ function ghcnArchiveIntake(m, context) {
         || h.rows_received > 300000 || h.numeric_hints > 2 * h.rows_received
         || h.held_stations + h.nominated_stations > h.rows_received
         || h.held_stations + h.nominated_stations > h.eligible_untracked_stations
+        || Object.hasOwn(h, "station_selection") && h.held_stations + h.nominated_stations > h.station_selection.selected_stations
         || h.nominated_stations > h.numeric_hints || (h.status === "nominated") !== (h.nominated_stations > 0)) return null
     const reason = { http_error: `HTTP ${h.http_status}`, transport_unavailable: "transport incomplete",
       headers_unsupported: "unsupported headers", body_limit: "body limit", read_deadline: "read deadline",
       body_length_mismatch: "length mismatch", nomination_unavailable: "unsupported reply or nomination inputs" }[h.reason]
     hintDetail = ` Additional station lookup: 1 client call; ${h.status === "unavailable" ? `reply unavailable (${reason})` : `${h.nominated_stations} archive nomination${h.nominated_stations === 1 ? "" : "s"}`}.`
-      + " Lookup values are not observations; zero nominations do not establish no events."
+      + " Lookup values are not observations; zero nominations do not establish no events." + sampleDetail
     if (h.schema_version === 2) {
       const diagnostic = providerErrorDetail(h.provider_error)
       if (diagnostic === null) return null
@@ -249,6 +289,12 @@ function ghcnArchiveIntake(m, context) {
     tr += extra; ca += Math.min(spare - extra, candidate.pool_stations - ca)
     if (tracked.reserved_slots !== tr || tracked.selected_stations !== tr
         || candidate.reserved_slots !== ca || candidate.selected_stations !== ca) return null
+  }
+  if (suppliedLookup && Object.hasOwn(h, "station_selection")) {
+    // The lookup gate requires an active tracked station. Verified active
+    // nominees are a disjoint subset of the eligible untracked population.
+    const activeTracked = Math.max(1, t.active_archives - (discovered ? selection.candidates.verified_stations : 0))
+    if (h.eligible_untracked_stations + activeTracked > m.stations_active) return null
   }
   const partition = c.inactive_station_rows + c.too_old_rows + c.future_rows + c.unusable_rows + c.accepted_values
   const days = (Date.parse(t.window_day) - Date.parse(t.cutoff_day)) / 86400000 + 1
