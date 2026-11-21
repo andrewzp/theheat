@@ -1,3 +1,7 @@
+## 0.9.109.165 — 2026-11-21
+
+- Supply an explicit bounded station selector to the existing NOAA nomination lookup. Rotate finite station subsets using the captured UTC clock, cap the prepared URI and report selected versus unselected scope. Lookup values still only nominate original archive checks; request, archive, QC, history and writer limits remain unchanged.
+
 ## 0.9.109.164 — 2026-11-21
 
 - Decode one bounded HDF5 string attribute from supported scalar or one-element string arrays in the existing inland rainfall collector. Preserve exact unit, coordinate, calendar, complete-day, source-file and required-check guards; reject ambiguous, malformed, untyped and oversized metadata without guessing.

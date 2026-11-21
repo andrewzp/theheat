@@ -920,6 +920,7 @@ def check_extreme_signals_for_stations(
             frozenset(untracked_active), cached, today=date.fromisoformat(now[:10]),
             max_age_days=MAX_OBS_AGE_DAYS,
             anomaly=min(ANOMALY_HOT_THRESHOLD_C, ANOMALY_COLD_THRESHOLD_C),
+            now=now,
         )
         candidates.update(nominees)
         metrics["station_discovery"] = lookup

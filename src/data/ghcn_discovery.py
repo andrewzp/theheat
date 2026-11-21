@@ -7,7 +7,7 @@ are not established by the existence of this client or by its offline tests.
 """
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, DecimalException
 import hashlib
 import http.client
@@ -28,6 +28,8 @@ if TYPE_CHECKING:
 URL = "https://www.ncei.noaa.gov/access/services/data/v1"
 MAX_BYTES = 32 * 1024 * 1024
 MAX_ROWS = 300_000
+MAX_STATIONS = 500
+MAX_REQUEST_URI_BYTES = 8192
 READ_DEADLINE_SECONDS = 15
 SOCKET_TIMEOUT_SECONDS = 5
 _STATION = re.compile(r"[A-Z0-9]{11}\Z")
@@ -280,8 +282,41 @@ def nominate(body: bytes, eligible: frozenset[str], cached: dict[str, StationThr
                         "nominated_stations": len(candidates)}
 
 
+def _station_window(eligible: frozenset[str], today: date, now: str | None) -> tuple[frozenset[str], dict[str, Any]]:
+    """A finite lookup sample, not source availability or global coverage."""
+    try:
+        if now is not None and type(now) is not str:
+            raise ValueError
+        instant = (datetime.fromisoformat(now.replace("Z", "+00:00")) if now is not None
+                   else datetime(today.year, today.month, today.day, tzinfo=timezone.utc))
+        if instant.tzinfo is None or instant.utcoffset() is None:
+            raise ValueError
+        instant = instant.astimezone(timezone.utc)
+        if instant.date() != today:
+            raise ValueError
+    except (ValueError, TypeError, OverflowError):
+        raise ValueError("unsupported_discovery_clock") from None
+    ordered = sorted(eligible)
+    windows = (len(ordered) + MAX_STATIONS - 1) // MAX_STATIONS
+    bucket_hour = instant.hour // 4 * 4
+    slot = (today.toordinal() * 6 + bucket_hour // 4) % windows
+    selection = ordered[slot * MAX_STATIONS:(slot + 1) * MAX_STATIONS]
+    metadata = {"schema_version": 1, "scope": "requested_nomination_subset_only",
+                "strategy": "four_hour_stable_pool_cycle", "limit": MAX_STATIONS,
+                "bucket_start": instant.replace(hour=bucket_hour, minute=0, second=0,
+                                                 microsecond=0).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "cycle_chunks": windows, "chunk_index": slot,
+                "eligible_stations": len(ordered), "selected_stations": len(selection),
+                "unselected_stations": len(ordered) - len(selection),
+                "pool_sha256": hashlib.sha256("\n".join(ordered).encode()).hexdigest(),
+                "selection_sha256": hashlib.sha256("\n".join(selection).encode()).hexdigest(),
+                "coverage_guaranteed": False}
+    return frozenset(selection), metadata
+
+
 def fetch_nominations(eligible: frozenset[str], cached: dict[str, StationThresholds | None], *,
-                      today: date, max_age_days: int, anomaly: float) -> tuple[set[str], dict[str, Any]]:
+                      today: date, max_age_days: int, anomaly: float,
+                      now: str | None = None) -> tuple[set[str], dict[str, Any]]:
     """One counted request, no redirect/retry; unknown replies nominate nothing.
 
     The deadline is checked around raw client reads, with a socket inactivity
@@ -295,12 +330,21 @@ def fetch_nominations(eligible: frozenset[str], cached: dict[str, StationThresho
             or not eligible or any(not isinstance(sid, str) or not _STATION.fullmatch(sid) for sid in eligible)):
         raise ValueError("unsupported_discovery_input")
     cutoff = today - timedelta(days=min(max_age_days, 4))
+    selected, station_selection = _station_window(eligible, today, now)
+    params = {"dataset": "daily-summaries", "startDate": cutoff.isoformat(), "endDate": today.isoformat(),
+              "dataTypes": "TMAX,TMIN", "units": "metric", "format": "json",
+              "stations": ",".join(sorted(selected))}
+    uri = requests.Request("GET", URL, params=params).prepare().url
+    if uri is None or len(uri.encode("ascii")) > MAX_REQUEST_URI_BYTES:
+        raise ValueError("discovery_request_uri_limit")
+    station_selection["request_uri_bytes"] = len(uri.encode("ascii"))
     metadata: dict[str, Any] = {"schema_version": 1, "scope": "discovery_hints_not_observations",
         "status": "unavailable", "reason": "transport_unavailable", "http_status": None,
         "window_day": today.isoformat(), "cutoff_day": cutoff.isoformat(),
         "get_calls": 0, "max_get_calls": 1, "eligible_untracked_stations": len(eligible),
         "response_bytes": None, "response_sha256": None, "rows_received": None,
-        "held_stations": None, "numeric_hints": None, "nominated_stations": 0}
+        "held_stations": None, "numeric_hints": None, "nominated_stations": 0,
+        "station_selection": station_selection}
 
     def send(url, **kwargs):
         metadata["get_calls"] += 1
@@ -320,8 +364,7 @@ def fetch_nominations(eligible: frozenset[str], cached: dict[str, StationThresho
     try:
         deadline = time.monotonic() + READ_DEADLINE_SECONDS
         response = fetch_with_retry(URL, attempts=1, timeout=SOCKET_TIMEOUT_SECONDS, request=send,
-            params={"dataset": "daily-summaries", "startDate": cutoff.isoformat(), "endDate": today.isoformat(),
-                    "dataTypes": "TMAX,TMIN", "units": "metric", "format": "json"},
+            params=params,
             headers={"Accept": "application/json", "Accept-Encoding": "identity"},
             allow_redirects=False, stream=True, auth=_NoAuth(), hooks={"response": _reject_redirect})
         metadata["http_status"] = response.status_code
@@ -369,7 +412,7 @@ def fetch_nominations(eligible: frozenset[str], cached: dict[str, StationThresho
         body = b"".join(chunks)
         metadata.update(response_bytes=received, response_sha256=hashlib.sha256(body).hexdigest())
         metadata["reason"] = "nomination_unavailable"
-        candidates, counts = nominate(body, eligible, cached, today=today, cutoff=cutoff, anomaly=anomaly)
+        candidates, counts = nominate(body, selected, cached, today=today, cutoff=cutoff, anomaly=anomaly)
         metadata.update(counts, status="nominated" if candidates else "no_nominations")
         metadata["reason"] = metadata["status"]
         return candidates, metadata

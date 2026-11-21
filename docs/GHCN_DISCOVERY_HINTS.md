@@ -28,6 +28,24 @@ protect ordinary successful lookup payloads; no global HTTP class is patched.
 
 ## Nomination and archive boundaries
 
+The request supplies the documented comma-separated `stations` selector using
+only currently eligible untracked station IDs. A client limit of500IDs and8192
+bytes of the actual prepared URI prevents an oversized request. These are local
+limits, not asserted provider quotas. The sorted pool is divided into consecutive
+chunks; the collector's captured UTC four-hour bucket selects one chunk. With an
+unchanged pool, successive buckets visit each chunk once per cycle. Pool changes,
+missing runs, unavailable data and reporting delays grant no coverage guarantee.
+For12,522eligible stations that is26chunks, not a global query on every run.
+
+The lookup diagnostics retain the pool/selection fingerprints, bucket, selected
+and unselected counts and prepared URI length. Only the selected subset may be
+nominated from a returned response. Unrequested high values cannot consume an
+archive slot. Standalone calls without a captured clock use the supplied day's
+UTC midnight; malformed, naive or mismatched-day clocks refuse before dispatch.
+The request's dates and station observations retain their existing meanings.
+This local request correction follows an ordinary400 diagnostic naming stations;
+it does not prove service recovery, current observations or a useful story.
+
 Missing daily diff files need not confine archive checks to stations already in
 revision history. The existing legacy GHCN collector can make one additional
 lookup request to NOAA's [documented access service](https://www.ncei.noaa.gov/support/access-data-service-api-user-documentation).

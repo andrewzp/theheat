@@ -182,7 +182,7 @@ def test_lookup_request_is_fixed_public_origin_without_auth_redirects_or_extra_f
     assert kw["allow_redirects"] is False and kw["stream"] is True
     assert kw["timeout"] == 5
     assert kw["params"] == {"dataset": "daily-summaries", "startDate": "2026-11-17",
-        "endDate": "2026-11-21", "dataTypes": "TMAX,TMIN", "units": "metric", "format": "json"}
+        "endDate": "2026-11-21", "dataTypes": "TMAX,TMIN", "units": "metric", "format": "json", "stations": TARGET}
     assert kw["headers"]["Accept-Encoding"] == "identity"
     prepared = requests.Request("GET", API).prepare()
     assert kw["auth"](prepared) is prepared and "Authorization" not in prepared.headers

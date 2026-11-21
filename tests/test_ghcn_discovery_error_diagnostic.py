@@ -286,5 +286,5 @@ def test_genuine_requests_and_shared_fetch_close_once_without_redirect_auth_or_s
     assert not candidates and metadata["provider_error"]["fields"][0]["field"] == "units"
     assert (adapter.sent, metadata["get_calls"], raw.close_calls, raw.consumed, netrc.call_count) == (1, 1, 1, len(body), 0)
     assert adapter.prepared.url == (discovery.URL + "?dataset=daily-summaries&startDate=2026-11-17"
-        "&endDate=2026-11-21&dataTypes=TMAX%2CTMIN&units=metric&format=json")
+        "&endDate=2026-11-21&dataTypes=TMAX%2CTMIN&units=metric&format=json&stations=SFX00000002")
     assert "Authorization" not in adapter.prepared.headers
