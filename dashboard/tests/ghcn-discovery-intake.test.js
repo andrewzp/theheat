@@ -102,3 +102,26 @@ test("an unavailable lookup on the original tracked-only scope still requires al
     }
   }
 })
+
+test("each nominated station needs a distinct row and its minimum supported encoded bytes", async t => {
+  const original = fixtures.two_nominees
+  assert.equal(metrics(original).station_discovery.rows_received, 2)
+  assert.equal(metrics(original).station_discovery.response_bytes, 128)
+  assert.match(project(original).detail, /2 archive nominations/)
+  assert.equal(original.request_count, 34)
+  const smallest = JSON.stringify(["SFX00000002", "SFX00000003"]
+    .map(STATION => ({ STATION, DATE: "2026-11-18", TMAX: 0 })))
+  assert.equal(Buffer.byteLength(smallest), 111)
+  for (const change of [m => { m.station_discovery.rows_received = 1 },
+    m => { m.station_discovery.response_bytes = 59 },
+    m => { m.station_discovery.held_stations = 1; m.station_discovery.eligible_untracked_stations = 3 }]) {
+    await t.test(change.toString(), () => {
+      const s = structuredClone(original)
+      change(metrics(s))
+      const out = project(s)
+      assert.equal(out.state, "supplying")
+      assert.match(out.detail, /intake details are unavailable or inconsistent/)
+      assert.doesNotMatch(out.detail, /verified station archives|archive nominations|accepted daily values/)
+    })
+  }
+})

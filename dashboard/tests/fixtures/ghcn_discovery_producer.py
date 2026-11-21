@@ -20,11 +20,12 @@ from src.data.temperature_history import record_observation_revision
 from src.orchestrator.sources.open_meteo import run_extreme_signals
 from src.state import DEFAULT_STATE
 from tests.ghcn_intake_cases import SID
-from tests.test_ghcn_discovery_hints import API, METADATA, TARGET, Reply
+from tests.test_ghcn_discovery_hints import API, METADATA, Reply
 
 
 def produce(case="fresh", provider="ghcn"):
-    assert case in {"fresh", "qc", "unavailable", "malformed"}
+    assert case in {"fresh", "qc", "unavailable", "malformed", "two_nominees"}
+    metadata = METADATA + ([dict(METADATA[1], station_id="SFX00000003")] if case == "two_nominees" else [])
     state = deepcopy(DEFAULT_STATE)
     baseline = archive_bytes(target=None)
     record_observation_revision(state, DiffRecord("insert", SID, date(2000, 1, 1), "TMAX", 25),
@@ -38,18 +39,20 @@ def produce(case="fresh", provider="ghcn"):
         if "/superghcnd/" in url:
             return Reply(b"", 404)
         if url == API:
-            body = json.dumps([{"STATION": TARGET, "DATE": "2026-11-18", "TMAX": "49"}]).encode()
+            body = json.dumps([{"STATION": meta["station_id"], "DATE": "2026-11-18", "TMAX": "49"}
+                               for meta in metadata[1:]]).encode()
             return Reply(b"[" if case == "malformed" else body, 503 if case == "unavailable" else 200)
         if url.endswith(f"/all/{SID}.dly"):
             return Reply(baseline)
-        if url.endswith(f"/all/{TARGET}.dly"):
-            return Reply(archive_bytes(station=TARGET, qflag="S" if case == "qc" else ""))
+        for meta in metadata[1:]:
+            if url.endswith(f"/all/{meta['station_id']}.dly"):
+                return Reply(archive_bytes(station=meta["station_id"], qflag="S" if case == "qc" else ""))
         return forbidden()
 
     with TemporaryDirectory(prefix="invented-noaa-lookup-") as directory:
         path = Path(directory) / "fixture.sqlite"
         with open_db(path) as db:
-            for meta in METADATA:
+            for meta in metadata:
                 db.execute("INSERT INTO stations (station_id,name,country_code,country_name,lat,lon,archive_years,is_active) "
                            "VALUES (?,?,?,?,?,?,?,?)", (meta["station_id"], meta["name"], meta["country_code"],
                            meta["country_name"], meta["lat"], meta["lon"], 27, 1))
@@ -71,5 +74,5 @@ def produce(case="fresh", provider="ghcn"):
 
 
 if __name__ == "__main__":
-    sys.stdout.write(json.dumps({name: produce(name) for name in ("fresh", "qc", "unavailable", "malformed")}
+    sys.stdout.write(json.dumps({name: produce(name) for name in ("fresh", "qc", "unavailable", "malformed", "two_nominees")}
                                | {"combined": produce(provider="both_global")}, sort_keys=True) + "\n")

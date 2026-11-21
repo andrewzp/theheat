@@ -147,8 +147,11 @@ function ghcnArchiveIntake(m, context) {
           || (h.reason === "http_error" && (h.http_status === null || h.http_status === 200))) return null
     } else if (!body || ![h.rows_received, h.held_stations, h.numeric_hints].every(integer)
         || h.reason !== h.status || h.http_status !== 200
-        || h.response_bytes < (h.rows_received > 0 ? 3 * h.rows_received + 53 : 2)
+        // One recognized row needs 52 bytes more than an empty object. Each
+        // nominated station needs its own row, even with two numeric hints.
+        || h.response_bytes < (h.rows_received > 0 ? 3 * h.rows_received + 1 + 52 * Math.max(1, h.nominated_stations) : 2)
         || h.rows_received > 300000 || h.numeric_hints > 2 * h.rows_received
+        || h.held_stations + h.nominated_stations > h.rows_received
         || h.held_stations + h.nominated_stations > h.eligible_untracked_stations
         || h.nominated_stations > h.numeric_hints || (h.status === "nominated") !== (h.nominated_stations > 0)) return null
     const reason = { http_error: `HTTP ${h.http_status}`, transport_unavailable: "transport incomplete",
