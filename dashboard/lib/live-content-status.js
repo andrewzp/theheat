@@ -30,6 +30,7 @@ const OUTCOMES = Object.freeze({
   rainfall_nominations_unavailable: ["Rainfall report nomination unavailable", "Inspect this source run's retained details; missing or inconsistent counts are not zero."],
   ghcn_intake_empty: ["No usable GHCN station-days retained", "Inspect the recorded exclusions and missing diffs; historical record qualification is a separate step."],
   ghcn_intake_unavailable: ["GHCN intake details unavailable", "Inspect a complete bound source run; missing or contradictory diagnostics cannot establish zero observations."],
+  ghcn_fetch_unavailable: ["No GHCN diff payload returned", "Inspect the recorded HTTP or transport outcomes; archive validity and station observations remain unverified."],
   fire_reports_held: ["Incident reports held", "Inspect the held reports and admission decisions; a partial or withheld result is not an empty feed."],
   fire_reports_checked: ["Incident reports checked", "No candidate was queued in this saved run. Inspect size-tier, duplicate and selection decisions; complete event coverage is not established."],
   fire_reports_unavailable: ["Incident report details unavailable", "Inspect a complete bound source run; missing or inconsistent counts are unknown, not zero."],
@@ -100,13 +101,58 @@ function twitterMetricsOutcome(row) {
   return unavailable()
 }
 
+function ghcnFetch(m, context) {
+  const f = m?.diff_fetch, c = f?.counts
+  const names = ["payload_returned", "http_404", "http_401", "http_403", "http_429",
+    "http_other_4xx", "http_5xx", "http_other_error", "timeout", "connection_error", "request_error"]
+  const integer = n => Number.isSafeInteger(n) && n >= 0
+  const day = value => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)
+    && Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value
+  const start = typeof context?.started_at === "string" ? Date.parse(context.started_at) : NaN
+  const end = typeof context?.ended_at === "string" ? Date.parse(context.ended_at) : NaN
+  if (context?.current !== true || !Number.isFinite(start) || !Number.isFinite(end) || end < start
+      || !f || Array.isArray(f) || f.schema_version !== 1 || f.scope !== "client_get_invocations"
+      || Object.keys(f).sort().join() !== "counts,get_calls,schema_version,scope,target_count,window_day"
+      || !day(f.window_day) || f.window_day < new Date(start).toISOString().slice(0, 10)
+      || f.window_day > new Date(end).toISOString().slice(0, 10)
+      || !integer(f.target_count) || f.target_count < 1 || f.target_count > 366
+      || !integer(f.get_calls) || !c || Array.isArray(c)
+      || Object.keys(c).sort().join() !== [...names].sort().join() || !names.every(name => integer(c[name]))
+      || names.reduce((total, name) => total + c[name], 0) !== f.get_calls
+      || ![m.diff_dates_attempted, m.diff_dates_fetched, m.diff_dates_missing].every(integer)
+      || m.diff_dates_attempted !== f.target_count || c.payload_returned !== m.diff_dates_fetched
+      || m.diff_dates_fetched + m.diff_dates_missing !== f.target_count
+      || f.get_calls > 10 * f.target_count
+      || f.get_calls < c.payload_returned + 10 * (f.target_count - c.payload_returned)
+      || !Array.isArray(m.diff_missing_dates) || m.diff_missing_dates.length !== m.diff_dates_missing
+      || new Set(m.diff_missing_dates).size !== m.diff_dates_missing) return null
+  const targets = new Set(Array.from({ length: f.target_count }, (_, i) =>
+    new Date(Date.parse(f.window_day) - (i + 1) * 86400000).toISOString().slice(0, 10)))
+  if (!m.diff_missing_dates.every(value => day(value) && targets.has(value))
+      || (c.payload_returned === 0 && (m.diff_fetch_failed !== 1 || m.station_obs_pairs !== 0 || m.stations_with_obs !== 0))) return null
+  const labels = {
+    http_404: "HTTP 404", http_401: "HTTP 401", http_403: "HTTP 403", http_429: "HTTP 429",
+    http_other_4xx: "other HTTP 4xx", http_5xx: "HTTP 5xx", http_other_error: ["other HTTP error", "other HTTP errors"],
+    timeout: ["timeout", "timeouts"], connection_error: ["connection error", "connection errors"], request_error: ["other request error", "other request errors"],
+  }
+  const errors = Object.entries(labels).filter(([key]) => c[key] > 0)
+    .map(([key, label]) => `${c[key]} ${Array.isArray(label) ? label[c[key] === 1 ? 0 : 1] : label}`)
+  const detail = `Saved GHCN acquisition: ${f.get_calls} client calls; ${c.payload_returned} payloads returned`
+    + (errors.length ? `; ${errors.join("; ")}` : "")
+    + ". Redirects can add network requests; returned payloads still need validation."
+  return { detail, noPayload: c.payload_returned === 0 }
+}
+
 function ghcnIntake(row, context) {
   if (row.source !== "open_meteo_extreme_signals") return null
   const d = row.details ?? {}
   const m = d.provider === "ghcn" ? d.pipeline_metrics
     : ["both", "both_global"].includes(d.provider) ? d.ghcn_pipeline_metrics : null
   if (d.provider !== "ghcn" && !["both", "both_global"].includes(d.provider)) return null
-  const unavailable = { state: "ghcn_intake_unavailable", detail: "Saved GHCN intake details are unavailable or inconsistent." }
+  const acquisition = ghcnFetch(m, context)
+  if (acquisition?.noPayload) return { state: "ghcn_fetch_unavailable", detail: acquisition.detail }
+  const unavailable = { state: "ghcn_intake_unavailable", detail: "Saved GHCN intake details are unavailable or inconsistent."
+    + (acquisition ? ` ${acquisition.detail}` : "") }
   const trace = m?.diff_intake, c = trace?.counts
   const names = ["parsed_temperature_rows", "inactive_station_rows", "too_old_rows", "future_rows",
     "usable_updates", "delete_updates", "unusable_updates", "final_values", "final_station_days"]
@@ -141,7 +187,8 @@ function ghcnIntake(row, context) {
     + `${n(c.usable_updates, "usable update")}; ${n(c.delete_updates, "deletion")}; ${n(c.unusable_updates, "unusable update")}; `
     + `${n(c.final_values, "daily value")}; ${n(c.final_station_days, "station-day")} retained. `
     + `${m.diff_dates_fetched} of ${m.diff_dates_attempted} diffs fetched.`
-  return { state: c.final_station_days === 0 ? "ghcn_intake_empty" : null, detail }
+  return { state: c.final_station_days === 0 ? "ghcn_intake_empty" : null,
+    detail: detail + (acquisition ? ` ${acquisition.detail}` : "") }
 }
 
 function nwsAdmissionDetail(row) {
