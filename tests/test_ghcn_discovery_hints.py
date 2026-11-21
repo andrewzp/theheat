@@ -64,7 +64,8 @@ class Reply:
 
 
 def invoke(tmp_path, *, hint_value=49, payload=None, limit=20, hint_status=200, hint_body=None,
-           tracked_payload=None, runtime=False, injected=None, diff_status=404, stations=None, extra_stations=0):
+           tracked_payload=None, runtime=False, injected=None, diff_status=404, stations=None, extra_stations=0,
+           on_hint=None, calls_out=None):
     path = tmp_path / "invented.sqlite"
     extra_ids = [f"SFX{index:08d}" for index in range(3, 3 + extra_stations)]
     metadata = METADATA + [dict(METADATA[1], station_id=sid) for sid in extra_ids]
@@ -76,7 +77,7 @@ def invoke(tmp_path, *, hint_value=49, payload=None, limit=20, hint_status=200, 
     record_observation_revision(state, DiffRecord("insert", SID, date(2000, 1, 1), "TMAX", 25),
                                 retrieved_at=NOW, source_revision=sha256(archive_bytes(target=None)).hexdigest())
     before = deepcopy(state)
-    calls = []
+    calls = [] if calls_out is None else calls_out
     body = json.dumps([{"STATION": sid, "DATE": DAY.isoformat(), "TMAX": str(hint_value)}
                        for sid in (TARGET, *extra_ids)]).encode()
     hints = Reply(body if hint_body is None else hint_body, hint_status)
@@ -84,6 +85,8 @@ def invoke(tmp_path, *, hint_value=49, payload=None, limit=20, hint_status=200, 
     def get(url, **kwargs):
         calls.append((url, kwargs))
         if url == API:
+            if on_hint is not None:
+                on_hint()
             return hints
         if "/superghcnd/" in url:
             return Reply(b"", diff_status)
@@ -348,6 +351,14 @@ def test_new_inventory_marks_lookup_as_non_observational_and_never_a_second_inde
     assert row["data_kind"] == "discovery" and row["claim_permission_granted"] is False
     assert all(row[name] is None for name in products.UNKNOWN_FIELDS)
     assert products.max_independent_source_count([product, "open_meteo_extreme_signals.ghcn_station_history"]) == 1
+    archived = next(row for row in document["products"]
+                    if row["product_id"] == "open_meteo_extreme_signals.ghcn_archive_observations")
+    assert archived["data_kind"] == "observed_station"
+    assert "reference_not_reading" not in archived["claim_restrictions"]
+    assert archived["restriction_enforcement"]["record_needs_qualified_history"] == {
+        "basis": "check", "reference": "src/data/ghcn.py:record_comparison_qualified"}
+    assert products.max_independent_source_count([product, archived["product_id"],
+        "open_meteo_extreme_signals.ghcn_station_history"]) == 1
     for schema in (products.LEGACY_SCHEMA, products.PREVIOUS_SCHEMA, products.GPM_SCHEMA, products.GHCN_SCHEMA):
         old = products.product_contract_document(schema=schema)
         assert product not in [row["product_id"] for row in old["products"]]
@@ -355,3 +366,33 @@ def test_new_inventory_marks_lookup_as_non_observational_and_never_a_second_inde
     legs = tuple(replace(leg, data_kind="observed_station") if leg.product_id == product else leg for leg in products.LEGS)
     with pytest.raises(ValueError, match="kind_provider"):
         products.validate_legs(legs)
+
+
+def test_cancelled_lookup_response_cannot_start_even_one_later_archive_request(tmp_path):
+    from src.two_bot.call_inventory import CancelToken, OperationCancelled, run_cancellable
+
+    token = CancelToken("invented-collector")
+    calls = []
+    with pytest.raises(OperationCancelled, match="cancelled_while_in_flight"):
+        run_cancellable(token, invoke, tmp_path, calls_out=calls,
+                        on_hint=lambda: token.cancel("cancelled_while_in_flight"))
+    assert len(calls) == 31 and sum(url == API for url, _ in calls) == 1
+    assert all("/all/" not in url for url, _ in calls)
+
+
+def test_cancellation_after_selection_is_checked_again_before_each_archive_request(tmp_path):
+    from src.two_bot.call_inventory import CancelToken, OperationCancelled, run_cancellable
+
+    token = CancelToken("invented-selected-source")
+    calls = []
+    original = ghcn._select_archive_stations
+
+    def select(*args, **kwargs):
+        result = original(*args, **kwargs)
+        token.cancel("cancelled_after_selection")
+        return result
+
+    with patch.object(ghcn, "_select_archive_stations", select), \
+         pytest.raises(OperationCancelled, match="cancelled_after_selection"):
+        run_cancellable(token, invoke, tmp_path, calls_out=calls)
+    assert len(calls) == 31 and all("/all/" not in url for url, _ in calls)

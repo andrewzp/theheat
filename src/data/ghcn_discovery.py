@@ -143,9 +143,10 @@ def fetch_nominations(eligible: frozenset[str], cached: dict[str, StationThresho
                       today: date, max_age_days: int, anomaly: float) -> tuple[set[str], dict[str, Any]]:
     """One counted request, no redirect/retry; unknown replies nominate nothing.
 
-    The read deadline is checked around read1 (one socket read), with the normal
-    client socket timeout as the final read bound. This is not a DNS/OS deadline,
-    a source SLA, a financial cap or a claim that the hints are observations.
+    The deadline is checked around raw client reads, with a socket inactivity
+    timeout. It cannot interrupt DNS/OS or header/chunk-framing work inside the
+    client; it is not a hard wall deadline or source SLA. Cancellation fences
+    subsequent work once control returns. Hints are never observations.
     """
     from src.data._http import fetch_with_retry
 
@@ -225,5 +226,14 @@ def fetch_nominations(eligible: frozenset[str], cached: dict[str, StationThresho
             UnicodeError, RecursionError, OverflowError):
         return set(), metadata
     finally:
-        if response is not None:
-            response.close()
+        try:
+            if response is not None:
+                response.close()
+        finally:
+            # A request already in flight stays spent. A response arriving
+            # after cancellation cannot start the subsequent archive pool.
+            from src.two_bot.call_inventory import current_cancel_token, OperationCancelled
+
+            token = current_cancel_token()
+            if token is not None and token.cancelled:
+                raise OperationCancelled(str(token.reason))

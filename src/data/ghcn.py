@@ -938,10 +938,22 @@ def check_extreme_signals_for_stations(
             except (requests.RequestException, OSError, ValueError, TypeError, UnicodeError):
                 metrics["archive_verification_failed"] += 1
     else:
-        from src.two_bot.call_inventory import submit_in_context
+        from src.two_bot.call_inventory import submit_in_context, current_cancel_token, OperationCancelled
+
+        def current_archive(sid):
+            def current():
+                if lookup is not None:
+                    token = current_cancel_token()
+                    if token is not None and token.cancelled:
+                        raise OperationCancelled(str(token.reason))
+
+            current()
+            payload = fetch_archive(sid)
+            current()
+            return payload
 
         with ThreadPoolExecutor(max_workers=4) as pool:
-            futures = {submit_in_context(pool, fetch_archive, sid): sid for sid in selected}
+            futures = {submit_in_context(pool, current_archive, sid): sid for sid in selected}
             for future in as_completed(futures):
                 sid = futures[future]
                 try:

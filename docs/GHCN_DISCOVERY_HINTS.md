@@ -31,9 +31,12 @@ The extra request requires all of these conditions:
 The lookup uses the existing counted `source_http_get` call declaration. No secret
 or implicit netrc authentication is used. Encoded bodies and ambiguous/unsupported
 length headers are refused. Raw reads are bounded to32MiB and300000JSON rows,
-with a15second read deadline checked around individual socket reads and a5second
-socket timeout. This is not a hard DNS/OS deadline, provider SLA or financial cap.
+with a15second cooperative deadline checked around raw client reads and a5second
+socket inactivity timeout. It cannot interrupt DNS/OS or header/chunk-framing
+work inside the client; this is not a hard wall deadline, SLA or financial cap.
 An operation cancelled before dispatch still refuses before the request is sent.
+A cancellation observed after a lookup or around an archive read also refuses
+subsequent work; an already dispatched request remains spent.
 
 Archive verification stays capped at20, with the same tracked/candidate lane
 reservations, four-hour rotation and unchanged scope of its conditional sweep
@@ -48,3 +51,8 @@ selected/verified archive lanes. Failed lookup counts remain supplied-but-
 unavailable. A failed diff remains failed even when selected archives supply
 qualified values. Neither the trace nor a successful run certifies global recall
 or that a draft was written or published.
+
+Source-product inventory v5 also distinguishes current archive observations from
+the archive's historical-reference role. They are the same upstream bytes and
+are not independent sources. The nomination row is discovery-only; it cannot be
+relabelled as a station observation. Complete v1–v4 exports remain byte-identical.

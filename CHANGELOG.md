@@ -1,7 +1,7 @@
 ## 0.9.109.161 — 2026-11-21
 
 - After complete captured NOAA diff404s, allow one bounded, untrusted lookup to nominate active untracked stations for the existing20archive verification slots. Only original archive bytes and unchanged QC/history checks supply observations or record claims.
-- Explain the extra lookup and independently verified archive sample separately. Preserve exact source-product exports v1–v4; v5 adds a discovery-only inventory row without source, rights, coverage or publishing permission.
+- Explain the extra lookup and independently verified archive sample separately. Preserve exact source-product exports v1–v4; v5 distinguishes original archive observations from discovery-only hints without adding rights, coverage or publishing permission.
 
 ## 0.9.109.160 — 2026-11-21
 
