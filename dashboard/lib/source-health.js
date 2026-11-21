@@ -483,6 +483,8 @@ export function buildSourceHealthPayload(state, { runsLimit = 20, asOf = new Dat
         current: sourceDetailsAreCurrent(state, run, latest, clock, "open_meteo_extreme_signals"),
         started_at: run?.started_at, ended_at: run?.ended_at,
       } : null,
+      fireReportCurrent: source.source === "fire_footprint"
+        && sourceDetailsAreCurrent(state, run, latest, clock, "fire_footprint"),
     })
     source.coverage_row = latest ? coverageRow(latest) : null
     source.incidents = sourceIncidents(state?.run_history, source.source)

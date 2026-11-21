@@ -30,11 +30,49 @@ const OUTCOMES = Object.freeze({
   rainfall_nominations_unavailable: ["Rainfall report nomination unavailable", "Inspect this source run's retained details; missing or inconsistent counts are not zero."],
   ghcn_intake_empty: ["No usable GHCN station-days retained", "Inspect the recorded exclusions and missing diffs; historical record qualification is a separate step."],
   ghcn_intake_unavailable: ["GHCN intake details unavailable", "Inspect a complete bound source run; missing or contradictory diagnostics cannot establish zero observations."],
+  fire_reports_held: ["Incident reports held", "Inspect the held reports and admission decisions; a partial or withheld result is not an empty feed."],
+  fire_reports_checked: ["Incident reports checked", "No candidate was queued in this saved run. Inspect size-tier, duplicate and selection decisions; complete event coverage is not established."],
+  fire_reports_unavailable: ["Incident report details unavailable", "Inspect a complete bound source run; missing or inconsistent counts are unknown, not zero."],
   unknown: ["Unknown", "No retained run row explains this source yet."],
 })
 
 function text(value) { return typeof value === "string" ? value : "" }
 function count(value) { return Number.isInteger(value) && value >= 0 ? value : null }
+
+function fireReportStatus(row, current) {
+  if (row.source !== "fire_footprint" || !["success", "degraded", "partial_failure"].includes(row.status)) return null
+  const unavailable = { state: "fire_reports_unavailable", detail: "Saved incident-report counts are unavailable or inconsistent." }
+  const d = row.details
+  const integer = n => Number.isSafeInteger(n) && n >= 0 && n <= 2000
+  const object = value => value !== null && typeof value === "object" && !Array.isArray(value)
+  const reasons = new Set(["child", "inactive_or_other_type", "invalid_size", "below_floor", "identity", "region",
+    "report_clock", "discovery_clock", "stale", "name", "record_shape", "record_invalid"])
+  const excluded = new Set(["child", "inactive_or_other_type", "below_floor"])
+  const labels = { invalid_size: "invalid size", identity: "missing or invalid identity", region: "unsupported region",
+    report_clock: "invalid report time", discovery_clock: "invalid discovery time", stale: "stale report",
+    name: "invalid incident name", record_shape: "invalid record shape", record_invalid: "invalid record" }
+  if (current !== true || !object(d) || !object(d.row_holds)
+      || ![d.raw_rows, d.qualified_rows, d.held_rows, row.observed, row.promoted].every(integer)
+      || !["triaged_in", "triaged_out", "writer_attempted", "drafted"].every(key => integer(row[key]))
+      || !Object.keys(d).every(key => ["raw_rows", "qualified_rows", "held_rows", "row_holds", "coverage_truncated", "admission_holds"].includes(key))
+      || typeof d.coverage_truncated !== "boolean"
+      || !Object.entries(d.row_holds).every(([key, value]) => reasons.has(key) && integer(value))) return unavailable
+  const partition = Object.values(d.row_holds).reduce((a, b) => a + b, 0)
+  const held = Object.entries(d.row_holds).filter(([key]) => !excluded.has(key)).reduce((a, [, n]) => a + n, 0)
+  const admission = Object.hasOwn(d, "admission_holds") ? d.admission_holds : 0
+  if (!integer(partition) || partition + d.qualified_rows !== d.raw_rows || held !== d.held_rows
+      || row.observed !== d.qualified_rows || !integer(admission) || admission + row.promoted > d.qualified_rows) return unavailable
+  if (row.drafted > row.promoted) return unavailable
+  const hasHold = held > 0 || admission > 0 || d.coverage_truncated
+  if (row.status !== (hasHold ? "degraded" : "success")) return unavailable
+  const holdReasons = Object.entries(d.row_holds).filter(([key, n]) => !excluded.has(key) && n > 0)
+    .sort(([a], [b]) => a.localeCompare(b)).map(([key, n]) => `${labels[key]}: ${n}`).join("; ")
+  const detail = `Saved incident reports: ${d.qualified_rows} qualified; ${held} held; ${admission} admission holds; ${row.promoted} queued. `
+    + (holdReasons ? `Held rows: ${holdReasons}. ` : "")
+    + `${d.coverage_truncated ? "Provider coverage was truncated." : "No provider truncation was recorded."} `
+    + "These are report rows, not a complete count of fires or published posts."
+  return { state: hasHold ? "fire_reports_held" : "fire_reports_checked", detail }
+}
 
 function twitterMetricsOutcome(row) {
   const unavailable = () => outcome("metrics_unavailable", row,
@@ -266,7 +304,7 @@ function rainfallNomination(row, current) {
     + " Retained decisions, not coverage, source truth, drafts or posts." }
 }
 
-export function sourceOutcome(row, rejections = [], { rainfallNominationCurrent = true, ghcnIntakeContext = null } = {}) {
+export function sourceOutcome(row, rejections = [], { rainfallNominationCurrent = true, ghcnIntakeContext = null, fireReportCurrent = false } = {}) {
   if (!row || typeof row !== "object") return outcome("unknown", row)
   if (row.source === "twitter_metrics") return twitterMetricsOutcome(row)
   const error = text(row.error), note = text(row.note), details = row.details && typeof row.details === "object" ? row.details : {}
@@ -309,7 +347,9 @@ export function sourceOutcome(row, rejections = [], { rainfallNominationCurrent 
   // or bypass the strict city/grid nomination denominators above.
   const gridHold = rainfall?.state === "rainfall_nominations" ? rainfallGridHold(row) : null
   const intake = ghcnIntake(row, ghcnIntakeContext)
-  const admission = [nwsAdmissionDetail(row) ?? rainfall?.detail, gridHold, intake?.detail].filter(Boolean).join(" ") || null
+  const fire = fireReportStatus(row, fireReportCurrent)
+  const admission = [nwsAdmissionDetail(row) ?? rainfall?.detail, gridHold, intake?.detail, fire?.detail].filter(Boolean).join(" ") || null
+  if (fire?.state === "fire_reports_unavailable") return outcome(fire.state, row, fire.detail)
   if (rejections.some(r => r?.source === row.source && ["writer", "safety", "fact_check", "critic", "honesty_gate", "copy_gate"].includes(r?.stage))) {
     return outcome("writer_or_check_rejection", row, admission)
   }
@@ -330,6 +370,7 @@ export function sourceOutcome(row, rejections = [], { rainfallNominationCurrent 
   if (incident?.product_state === "alternate_served") return outcome("alternate_served", row, named)
   if (rainfall) return outcome(rainfall.state, row, rainfall.detail)
   if (intake?.state) return outcome(intake.state, row, admission)
+  if (fire) return outcome(fire.state, row, fire.detail)
   if (["success", "degraded", "partial_failure"].includes(row.status)) return outcome("no_event", row, admission)
   return outcome("unknown", row)
 }
