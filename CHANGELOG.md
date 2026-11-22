@@ -1,3 +1,7 @@
+## 0.9.109.167 — 2026-11-22
+
+- Bring the public original-package ledger current: distinguish the twelve accepted bounded contracts from the remaining partial work and untouched regional tranche. Correct stale recovery, restore, publication and outcome wording while preserving all original package identities, evidence limits and production cutover gates.
+
 ## 0.9.109.166 — 2026-11-21
 
 - Open retained post history on recent saved API observations instead of an old empty receipt. Show observation counts in the selector; preserve explicit selection, page and focus during refreshes. Keep unknown/conflicting evidence visible and all metric collection, age, source and publication rules unchanged.
