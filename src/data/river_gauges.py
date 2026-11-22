@@ -7,7 +7,9 @@ NOAA NWPS provides the replacement flood-stage metadata for AHPS/WaterWatch.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import UTC, date, datetime
+import math
+import re
 
 import requests
 
@@ -40,6 +42,35 @@ MAJOR_STATIONS = [
 
 # USGS parameter codes
 GAUGE_HEIGHT_CODE = "00065"  # Gage height, ft
+_MEASUREMENT_TIME = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.(\d{1,9}))?(?:Z|[+-]\d{2}:\d{2})")
+
+
+def _utc_now() -> datetime:
+    return datetime.now(UTC)
+
+
+def _measurement_day(value: object, now: datetime) -> tuple[str | None, str | None]:
+    """Qualify this selected reading only; another station cannot renew it."""
+    if type(value) is not str or len(value) > 80:
+        return None, "invalid_timestamp"
+    raw = value.strip()
+    match = _MEASUREMENT_TIME.fullmatch(raw)
+    if match is None or raw.endswith("-00:00"):
+        return None, "invalid_timestamp"
+    try:
+        observed = datetime.fromisoformat(raw.replace("Z", "+00:00")).astimezone(UTC)
+    except (ValueError, OverflowError):
+        return None, "invalid_timestamp"
+    # fromisoformat truncates fractions after microseconds. Do not round a
+    # genuinely future submicrosecond instant back onto the trusted clock.
+    fraction = match.group(1) or ""
+    if observed > now or (observed == now and any(digit != "0" for digit in fraction[6:])):
+        return None, "future_timestamp"
+    # Preserve the existing two-calendar-day allowance, using the same UTC
+    # clock for every row and the real measurement day for identity and prose.
+    if (now.date() - observed.date()).days > 2:
+        return None, "stale"
+    return observed.date().isoformat(), None
 
 # Open-Meteo Flood / GloFAS witness (R-05). Coordinates are authoritative USGS
 # station coordinates captured in the R-05 groundwork doc. GloFAS samples the
@@ -191,8 +222,11 @@ def _fetch_river_levels_primary(*, strict: bool = False) -> list[RiverReading]:
 
         flood_stages = _fetch_flood_stages(strict=strict)
         readings = []
-        payload_dates = []
-        today = date.today().isoformat()
+        time_holds: set[str] = set()
+        now = _utc_now()
+        if not isinstance(now, datetime) or now.tzinfo is None or now.utcoffset() is None:
+            raise SourceFetchError("river_gauges freshness check failed: invalid UTC clock")
+        now = now.astimezone(UTC)
 
         time_series = data.get("value", {}).get("timeSeries", [])
         for series in time_series:
@@ -208,14 +242,23 @@ def _fetch_river_levels_primary(*, strict: bool = False) -> list[RiverReading]:
 
             # Get most recent reading
             latest = values[-1]
-            payload_dates.append(latest.get("dateTime"))
+            raw_height = latest.get("value", 0)
+            if type(raw_height) is bool:
+                continue
             try:
-                gauge_ft = float(latest.get("value", 0))
-            except (ValueError, TypeError):
+                gauge_ft = float(raw_height)
+            except (ValueError, TypeError, OverflowError):
                 continue
 
-            if gauge_ft <= 0:
+            if not math.isfinite(gauge_ft) or gauge_ft <= 0:
                 continue
+
+            measurement_day, time_hold = _measurement_day(latest.get("dateTime"), now)
+            if time_hold is not None:
+                time_holds.add(time_hold)
+                continue
+            if measurement_day is None:
+                raise SourceFetchError("river_gauges freshness check failed: selected observation day unavailable")
 
             river, location = site_map[site_id]
             flood_stage = flood_stages.get(site_id)
@@ -228,12 +271,15 @@ def _fetch_river_levels_primary(*, strict: bool = False) -> list[RiverReading]:
                 gauge_height_ft=round(gauge_ft, 2),
                 flood_stage_ft=flood_stage,
                 above_flood=above,
-                date=today,
-                event_id=f"river_{site_id}_{today}",
+                date=measurement_day,
+                event_id=f"river_{site_id}_{measurement_day}",
             ))
 
-        if newest_date := newest_freshness_date(payload_dates):
-            assert_freshness(newest_date, "river_gauges", max_age_days=2)
+        if not readings and time_holds:
+            if time_holds == {"stale"}:
+                raise SourceFetchError("river_gauges stale data: no selected readings within two UTC calendar days")
+            raise SourceFetchError("river_gauges freshness check failed: no valid selected observation time ("
+                                   + ", ".join(sorted(time_holds)) + ")")
         return readings
 
     except (requests.RequestException, ValueError, KeyError) as exc:

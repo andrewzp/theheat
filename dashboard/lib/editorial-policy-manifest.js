@@ -134,6 +134,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/data/rainfall_observed.py": "808e7e025e92f18cdb37b6ea80e444a9e2704aaf8ff681efc11dcc4264e605d9",
     "src/data/rainfall_supply.py": "ca68b5078f504437894fc19bffcdcf07e6b7b066f2649f640ea90f24458cde46",
     "src/data/regional_observations.py": "eef66077194e446991db077d558f3e2da664e6c1c7a1deb5e2b4ea9cec08d88e",
+    "src/data/river_gauges.py": "b19357fdc3830844438a1b726a90071a56ca38f7fc84c02c1064af3a7ebeefb0",
     "src/data/temperature_evidence.py": "940dfab7d54645262f16785b21532a18ffd6af6cbf7cf0c6e116463741192458",
     "src/data/temperature_history.py": "c1369f662d76b2a788e49f30bdc00a57377f686e08bcefd0e958322e3ed33d84",
     "src/data/water_levels.py": "4868999eaaf6a95800439c3455efa4d67753e7b328161598b11d140d75e93c9e",
@@ -152,7 +153,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/editorial/observed_scope.py": "a132970b736b75a650454674f496a746be9c2ee0d45d8c17a6d23228276cc152",
     "src/editorial/official_warning.py": "e37a232fe19e8ef90bfc825c92b95b89d9c9f9df7818b4a3352466ad2beeff87",
     "src/editorial/operator_claim_references.py": "f7d1d14d75b55cc9f273d3a98459f158f57c533521d153b1e86ee5bc7d95d1fd",
-    "src/editorial/policy.py": "08d0e75034a6637c0e77d79702597cab7f641dd6eb1d356dda10f29418966c2b",
+    "src/editorial/policy.py": "4ab29fdf329d8ec8556b0bd3da96cf29ea5b16a6327941013ffae9e1f0135ad9",
     "src/editorial/portfolio.py": "b8a3e7b5a6fc2a1f9843ef4382fa4901fbaf74f6c5834646740a1f65e99fabd5",
     "src/editorial/report_development.py": "e2ed39a9ff957683c8befff0f3b99533fdc9d90d84af88220ed13f2bf1489995",
     "src/editorial/report_supply.py": "39c8114ce4d21bfab2f7d220a9413237f15b7852e9de7192174119b9af0255a9",
@@ -313,5 +314,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "5c5ffcc95358c7df45ae838c228759ad0eb6275c8f9053c8130c0a8824b63d9e"
   },
   "schema_version": 1,
-  "source_sha256": "4a3abb8bcded3d6268ee4c7a4fadec2d974ba1c7d1b86d091df554295c07e8b9"
+  "source_sha256": "16a995d301a68286908be583fc15d2baa9f9074d89752abb42bac3f958380f17"
 }
