@@ -11,6 +11,67 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-11-22 — Daily corpus grading (0 fresh drafts; 1 carry-over, previously graded)
+
+**Context:** Gist read via git-clone path (success; gist HEAD Nov 22 07:28Z, `_state_rev` 3455,
+`publication_control.enabled=true`). 1 pending: `draft_20261118_143656_56` (Sarh/Yakutsk, graded B Nov 18,
+not re-graded). No fresh pending draft.
+
+**Why the queue is dry:** one METAR pair was created since the Nov 21 pull and it auto-posted, so it never
+reached pending. Tete/Magadan was rejected `awc_source_window_elapsed` at 19:16:54Z. Teresina/Yakutsk
+(`draft_20261121_191726_63`) was created 32s later (19:17:26Z) and auto-posted at 19:18:55Z (tweet
+2124221032890261771): "Teresina Arpt, Brazil: 39°C; Yakutsk Arpt, Russia: −33°C — a 72°C airport gap at
+19:00 UTC, 21 Nov." It's not graded, since it was never pending at a pull. It's logged here as observational
+evidence. METAR pairs posted: 3 of 12.
+
+**Staleness:** Sarh/Yakutsk is ~96.5h old with a dated observation ("14:00 UTC, 18 Nov"), a strict candidate
+for the 3rd cycle. It's still `not_sent`, and its `post_error` reads "NWS warning needs fresh source review:
+awc_current_source_unavailable". That's an NWS label on a METAR draft, which looks like a shared error
+string. The AWC sweep has now cleared 6 other METAR drafts but not this one. Gist PATCH 403 again
+("Gist writes are not permitted through this proxy"); reject skipped.
+
+**Grade distribution (fresh):** none. **A-rate N/A (n=0).**
+
+**Headline finding:** the posted Teresina pair shows a new name form: "Arpt" in place of "airport" on both
+stations, while the gap clause still says "airport gap". The card is otherwise unchanged (8/8 since Nov 18).
+Yakutsk is back as the cold anchor (10/12) and on the feed for the 3rd time in ~66h (Nov 19 01:56Z, Nov 20
+07:10Z, Nov 21 19:18Z).
+
+### Observed (not graded)
+**Teresina / Yakutsk observed_metar_contrast (posted, auto)**
+- Same colon-label card. "Arpt" is a station-database abbreviation pasted into copy, the 3rd raw-name
+  artifact after "Nouakchott/Oumtounsy" (Nov 19) and "Magadan/Sokol" (Nov 21). It's also inconsistent inside
+  one sentence: "Arpt" ×2, then "airport gap".
+- It auto-posted, while Tete/Magadan (111 chars before the URL) was held `automatic_text_over_200_scalars`.
+  Teresina is 99 chars. Whether the abbreviation is what got it under the hold is unverified.
+- Would likely grade B−: the same B ceiling, plus a visible abbreviation on the timeline.
+
+### Carry-over (not re-graded)
+- Sarh/Yakutsk — B (Nov 18). ~96.5h old; strict staleness candidate, 3rd cycle.
+
+### Patterns
+1. **P_metar_card +1 cycle (observational; 5 cycles).** 8/8 METAR drafts on the card. Raw station-name
+   forms are now 3 instances across 3 different shapes (slash ×2, "Arpt" ×1). The proposed fix's "name each
+   place once, as a place" covers all three.
+2. **P_event_sat +1 cycle (8 cycles).** Yakutsk is the cold anchor of all 3 posted METAR pairs, and the 3
+   posts are ~29h and ~36h apart. The two-station 24h key would not have held this one (Yakutsk's previous
+   post was >24h earlier). A 48h repeat window per station would have held it.
+3. **P_close:** not counted. Teresina ends on the gap, but it's ungraded and the type is already folded
+   into P_metar_card.
+4. No era-anchor, political-anchor, banned-opener (P3 regex) or plant-comparison hits. No A-grade
+   mechanic to log.
+
+### Followups
+- **Operator: Sarh/Yakutsk is ~96h old.** Reject from the dashboard. It's the only `not_sent` METAR draft,
+  and the AWC sweep has missed it for 3 cycles. Its `post_error` says "NWS warning", which is worth a look
+  when checking that path.
+- Operator: when P_metar_card ships, include the "Arpt" case. Station names come from a database field and
+  need normalising before they reach copy.
+- Infra (carried): `gh` token invalid; gist writes 403 at the proxy. Gist reject, `gh pr` and
+  `ROUTINE_BEACON` writes blocked.
+
+---
+
 ## 2026-11-21 — Daily corpus grading (1 fresh draft; 1 carry-over, previously graded)
 
 **Context:** Gist read via git-clone path (success; gist HEAD Nov 21 12:37Z, `_state_rev` 3442,

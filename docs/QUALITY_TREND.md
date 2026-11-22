@@ -95,6 +95,7 @@ We grade drafts on an A through F rubric in `docs/DRAFT_CORPUS.md` (the longitud
 | 2026-11-19 | 1 | 0 | 1 | 0 | 0 | **0%** | ✗ | n=1 fresh: Nouakchott (Mauritania) 37°C / Yakutsk −35°C `observed_metar_contrast` B. Same colon-label card as Sarh — 3rd identical skeleton in a row; "Nouakchott/Oumtounsy" official-name slash. 1 carry-over (Sarh B, not re-graded). **First METAR pair posted** (Kununurra/Yakutsk, auto, 01:56Z; not graded — never pending at a pull). Yakutsk anchor 7/7, 3 in 22h. P_close +1 (weak), P_event_sat +1. No stale drafts. |
 | 2026-11-20 | 1 | 0 | 1 | 0 | 0 | **0%** | ✗ | n=1 fresh: Shepherd Bay (Canada) −28.2°C / Tete (Mozambique) 40°C `observed_metar_contrast` B. First non-Yakutsk pair (Yakutsk 9/10); same colon-label card, 6 in a row; mixed precision gives a "68.2°C" gap. 1 carry-over (Sarh B, >48h). Kununurra/Yakutsk posted a 2nd time (07:10Z, ~29h after the first; 2/10 posted). San José/Yakutsk created+rejected between pulls (not graded). P_close +1 (weak), P_event_sat +1, new P_metar_card. |
 | 2026-11-21 | 1 | 0 | 1 | 0 | 0 | **0%** | ✗ | n=1 fresh: Tete (Mozambique) 42°C / Magadan (Russia) −31°C `observed_metar_contrast` B. Card layout 7/7; whole-degree readings (Nov 20 mixed precision gone); "Magadan/Sokol" slash name (2nd). Tete warm half twice in ~23h. 1 carry-over (Sarh B, ~72h, strict stale). Shepherd Bay rejected `awc_source_window_elapsed`; no new posts (2/11). P_close +1 (weak), P_event_sat +1, P_metar_card +1. |
+| 2026-11-22 | 0 | — | — | — | — | **N/A** | — | No fresh drafts. 1 carry-over (Sarh B, ~96.5h, strict stale, 3rd cycle). Tete/Magadan rejected `awc_source_window_elapsed`; Teresina/Yakutsk created 32s later and auto-posted (3/12 posted; ungraded). It uses "Arpt" in place of "airport", the 3rd raw station-name form. Yakutsk on the feed 3× in ~66h. P_metar_card +1, P_event_sat +1 (both observational). |
 
 **Trend interpretation:**
 The Apr 25 jump to 43% was real but came from a small cohort (7 drafts) and didn't sustain into Apr 27. The Apr 27 regression has named causes (Sonnet rewrite path, verb-list gap in opener regex, era-anchor over-deployment, political anchor curation error). All four have proposed fixes documented in `docs/DRAFT_CORPUS.md` Apr 27 implications section. Next data point: tomorrow's scheduled grader (fires 2026-04-27 06:00 UTC) on the Apr 26-27 cycle output under v2.5 + post-humor-lens fixes.
@@ -104,6 +105,10 @@ We've been in the 9-43% band for three cycles. Need to clear 50% sustained.
 ## Rejection events
 
 Drafts that got rejected, with dates.
+
+### 2026-11-22 — Staleness bulk-reject: 1 strict candidate (3rd cycle); write skipped
+
+Sarh/Yakutsk `draft_20261118_143656_56` is ~96.5h old with a dated observation ("14:00 UTC, 18 Nov"). Gist PATCH returned 403 ("Gist writes are not permitted through this proxy"); reject skipped. Operator should reject it via the dashboard. The bot's sweep rejected Tete/Magadan `awc_source_window_elapsed` (Nov 21 19:16Z) but still hasn't cleared Sarh, the only METAR draft with `publish_outcome: not_sent`. No other pending drafts.
 
 ### 2026-11-21 — Staleness bulk-reject: 1 strict candidate (2nd cycle); write skipped
 
