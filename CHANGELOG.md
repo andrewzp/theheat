@@ -1,3 +1,7 @@
+## 0.9.109.170 — 2026-11-22
+
+- Qualify each selected USGS river reading against its own observation time, preserve the measurement's UTC date through flood detection and writer bundles, and reject invalid or future timestamps and nonfinite heights. Bind the parser to editorial policy so old checks and approvals expire after eligibility changes; retain existing source budgets, typed fallback and manual river review.
+
 ## 0.9.109.169 — 2026-11-22
 
 - Carry NOAA Coral Reef Watch's dated reuse and credit statement through the existing product-contract reader and readiness assessment for four exact CRW products. Preserve all six historical exports, existing cadence and scientific restrictions; the statement does not clear third-party material, establish operating cost or activate image publication.
