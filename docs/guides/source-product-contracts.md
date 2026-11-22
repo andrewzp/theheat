@@ -9,7 +9,7 @@ and unit limits, provenance, any code request bound and the claim restrictions
 already in force.
 
 `product_contract_document()` returns a separate versioned export
-(`theheat.source-product-contracts/v4`). The v1 registry and its dashboard JSON
+(`theheat.source-product-contracts/v6`). The v1 registry and its dashboard JSON
 are unchanged; nothing is added to old registry rows.
 
 What the contracts do not do:
@@ -25,7 +25,7 @@ What the contracts do not do:
   `restriction_enforcement`, and the unresolved products are listed in
   `unmet_criteria`.
 - Provider fields are `null` where documentation remains unknown. Exact named
-  AWC, NIFC, two GPM Late daily legs and two GHCN legs carry dated primary-document facts with source URLs and snapshot
+  AWC, NIFC, GPM Late daily, GHCN and CRW SSTA legs carry dated primary-document facts with source URLs and snapshot
   hashes. A `partial` fact stays in `unmet_criteria`; only its exact documented
   product/field can leave that list. Costs remain unknown. A configured collection
   rule is not a provider promise, and a request bound is not a spending cap.
@@ -59,7 +59,7 @@ fire/drought/heat overlap, and the CRW DHW / regional SST anomaly pairing. The
 pairing keeps each component's own date and footprint; a configured association
 is not a shared footprint.
 
-`decode_product_contract_document()` validates a detached v1, v2, v3 or v4 export. A matching
+`decode_product_contract_document()` validates a detached v1 through v6 export. A matching
 digest only binds bytes. The rows must decode to the supported finite inventory
 with valid kinds, parents, health keys, restrictions and scoped enforcement.
 `missing_work`, `unmet_criteria` and the upstream groups are recomputed from those
@@ -72,7 +72,7 @@ environment, credentials or files.
 
 ## Dated provider documentation
 
-The reviewed facts are scoped to eight legs, not whole providers:
+The reviewed facts are scoped to eleven legs, not whole providers:
 
 | Product | Documented cadence | Remaining limits |
 | --- | --- | --- |
@@ -80,7 +80,8 @@ The reviewed facts are scoped to eight legs, not whole providers:
 | AWC station catalogue | Cache daily. | Cache quota unknown; this reference is not a temperature reading. |
 | NIFC WFIGS current incidents, including the newsworthiness leg | IRWIN synchronization every five minutes; fall-off hourly. | The declared 2,000-row default is not a rate quota, census or measurement clock; other query modes remain unqualified. |
 | GPM IMERG Late daily V07, OPeNDAP and HTTPS grid legs | The derived daily file follows its last half-hourly input; its target is no earlier than 14 hours after the UTC day closes. | A latency target, not an availability guarantee. Quotas and costs remain unknown; S3 and Final are outside this documentation tranche. |
-| GHCN-Daily differences and station histories | The integrated dataset receives daily updates and weekend reconstruction. | Dataset processing is not each station's reporting clock or guaranteed access/freshness. Values and QC flags can change. Reuse rights, quotas and costs remain unknown. |
+| GHCN-Daily differences, station histories and verified archive observations | The integrated dataset receives daily updates and weekend reconstruction. | Dataset processing is not each station's reporting clock or guaranteed access/freshness. Values and QC flags can change. Reuse rights, quotas and costs remain unknown. |
+| CRW v3.1 5 km SST anomaly, ERDDAP and native-file routes | The SSTA product's data and images are updated daily. | Product production, not either route's delivery clock, an individual cell's observation time or a freshness/access/uptime guarantee. Quotas, reuse rights and costs remain unknown. |
 
 Sources: [AWC API documentation](https://aviationweather.gov/data/api/) and the
 [exact NIFC item metadata](https://www.arcgis.com/sharing/rest/content/items/4181a117dc9e43db8598533e29972015?f=pjson),
@@ -102,6 +103,13 @@ reporting interval nor publication-time QC, guaranteed updates or endpoint healt
 The provider's general cloud-migration notice is not a diagnosis of a particular
 failed request. No replacement URL, source-age/QC rule or reuse clearance follows.
 
+The [NOAA CRW methodology](https://coralreefwatch.noaa.gov/product/5km/methodology.php)
+documents daily updates in its SST Anomaly section. Version6 joins that fact only
+to the two existing `noaa_crw.ssta_daily_v3_1` serving legs. They remain one upstream
+product, not independent corroboration. The separate DHW grid and regional virtual
+stations receive no new fact. No update hour, route availability, absolute SST,
+station measurement, baseline change or image reuse clearance is inferred.
+
 Reuse evidence remains partial. The [NWS policy](https://www.weather.gov/disclaimer)
 distinguishes its own material from third-party inputs; it does not clear every
 international source or map. NIFC's item publishes a disclaimer without identifying
@@ -114,11 +122,14 @@ logos or imagery, or infer zero operating cost.
 
 `checked_at` records the UTC documentation review time, not a provider update or
 weather observation. The readiness consumer holds a documented component when any
-review postdates its assessment cutoff. Explicit exports `schema=LEGACY_SCHEMA`,
-`schema=PREVIOUS_SCHEMA` and `schema=GPM_SCHEMA` preserve complete v1, v2 and v3
-documents byte-for-byte, including their original dates and unknown fields.
-Decoding them does not insert later facts. Version3 adds only the two named GPM
-legs; the default version4 adds cadence only for the two named GHCN legs.
+review postdates its assessment cutoff. Explicit exports for v1 through v5 preserve
+their complete documents for the same code inventory, including original dates
+and unknown fields. Decoding them does not insert later facts. Version3 adds the
+two named GPM legs' facts; version4 adds the original GHCN dataset cadence.
+Version5 adds non-observational GHCN nomination hints and the verified-archive
+observation route, with their separate restrictions. Default version6 retains that
+inventory and adds only the two named SSTA cadence facts. `NOMINATION_SCHEMA`
+keeps the exact original v5 export available.
 Unknown schemas, altered facts/references
 and falsely cleared gaps are refused even if their digest is recomputed.
 

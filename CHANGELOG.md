@@ -1,3 +1,7 @@
+## 0.9.109.168 — 2026-11-22
+
+- Add dated NOAA CRW SST-anomaly cadence metadata to the existing product-contract reader and readiness assessment. Preserve historical exports and all remaining access, cost and source-qualification limits.
+
 ## 0.9.109.167 — 2026-11-22
 
 - Bring the public original-package ledger current: distinguish the twelve accepted bounded contracts from the remaining partial work and untouched regional tranche. Correct stale recovery, restore, publication and outcome wording while preserving all original package identities, evidence limits and production cutover gates.

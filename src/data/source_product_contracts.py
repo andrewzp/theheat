@@ -22,8 +22,10 @@ LEGACY_SCHEMA = "theheat.source-product-contracts/v1"
 PREVIOUS_SCHEMA = "theheat.source-product-contracts/v2"
 GPM_SCHEMA = "theheat.source-product-contracts/v3"
 GHCN_SCHEMA = "theheat.source-product-contracts/v4"
-SCHEMA = "theheat.source-product-contracts/v5"
-_SCHEMAS = frozenset({LEGACY_SCHEMA, PREVIOUS_SCHEMA, GPM_SCHEMA, GHCN_SCHEMA, SCHEMA})
+NOMINATION_SCHEMA = "theheat.source-product-contracts/v5"
+SCHEMA = "theheat.source-product-contracts/v6"
+_SCHEMAS = frozenset({LEGACY_SCHEMA, PREVIOUS_SCHEMA, GPM_SCHEMA, GHCN_SCHEMA, NOMINATION_SCHEMA, SCHEMA})
+_EXPANDED_INVENTORY_SCHEMAS = frozenset({NOMINATION_SCHEMA, SCHEMA})
 _DISCOVERY_PRODUCT = "open_meteo_extreme_signals.ghcn_daily_access_hints"
 _ARCHIVE_OBSERVATIONS = "open_meteo_extreme_signals.ghcn_archive_observations"
 _V5_PRODUCTS = frozenset({_DISCOVERY_PRODUCT, _ARCHIVE_OBSERVATIONS})
@@ -53,6 +55,9 @@ _GHCN_DAILY_DOC = (
     "https://www.ncei.noaa.gov/products/land-based-station/global-historical-climatology-network-daily",
     "fcc22f1e025b3002df6ae09867d70375691b839da616f39a7120519131bf7fb0")
 _GHCN_CHECKED_AT = "2026-11-21T07:47:37Z"
+_CRW_SSTA_DOC = ("https://coralreefwatch.noaa.gov/product/5km/methodology.php",
+                 "402f7b1c4629bdec4e2749e37351826e8e202bd8900afa9fd9ad415b02f66273")
+_CRW_CHECKED_AT = "2026-11-22T01:46:45Z"
 
 
 def _provider_fact(status, summary, limits, *references, checked_at="2026-11-18T07:44:10Z"):
@@ -98,7 +103,7 @@ def _provider_fields(leg: ProductLeg, *, schema=SCHEMA) -> dict[str, Any]:
             "partial", "Published item terms disclaim accuracy, completeness and fitness.",
             "No affirmative reuse license for every contributing dataset or base map is established by this metadata.",
             _NIFC_ITEM_DOC)
-    elif schema in {GPM_SCHEMA, GHCN_SCHEMA, SCHEMA} and product_id in {"gpm_imerg.imerg_late_opendap", "gpm_imerg.imerg_late_grid_datapool"}:
+    elif schema in {GPM_SCHEMA, GHCN_SCHEMA, NOMINATION_SCHEMA, SCHEMA} and product_id in {"gpm_imerg.imerg_late_opendap", "gpm_imerg.imerg_late_grid_datapool"}:
         if (leg.provider, leg.upstream) != ("nasa_gesdisc", "nasa_gesdisc.gpm_3imergdl_07"):
             return fields
         fields["provider_cadence"] = _provider_fact(
@@ -113,7 +118,7 @@ def _provider_fields(leg: ProductLeg, *, schema=SCHEMA) -> dict[str, Any]:
             "Dataset access and citation guidance only; account entitlement, route availability and "
             "third-party maps, logos or imagery are not cleared here.",
             _GPM_DAILY_DOC, _GPM_POLICY_DOC, checked_at=_GPM_CHECKED_AT)
-    elif schema in {GHCN_SCHEMA, SCHEMA} and product_id in {"open_meteo_extreme_signals.ghcn_daily",
+    elif schema in {GHCN_SCHEMA, NOMINATION_SCHEMA, SCHEMA} and product_id in {"open_meteo_extreme_signals.ghcn_daily",
                                              "open_meteo_extreme_signals.ghcn_station_history", _ARCHIVE_OBSERVATIONS}:
         upstream = ("noaa_ncei.ghcn_daily_superghcnd_diff" if product_id.endswith(".ghcn_daily")
                     else "noaa_ncei.ghcn_daily_station_archive")
@@ -124,6 +129,14 @@ def _provider_fields(leg: ProductLeg, *, schema=SCHEMA) -> dict[str, Any]:
             "Dataset processing, not each station's reporting clock or an availability/freshness guarantee. "
             "Values and QC flags can change after archive-quality inputs arrive; no publication-time certainty.",
             _GHCN_DAILY_DOC, checked_at=_GHCN_CHECKED_AT)
+    elif schema == SCHEMA and product_id in {"ocean_sst_anomaly.coastwatch_erddap", "ocean_sst_anomaly.noaa_star_nc"}:
+        if (leg.provider, leg.upstream) != ("noaa_crw", "noaa_crw.ssta_daily_v3_1"):
+            return fields
+        fields["provider_cadence"] = _provider_fact(
+            "documented", "CRW v3.1 global 5 km SST anomaly data and images are updated daily.",
+            "Product production frequency, not a route delivery clock, each cell's observation time "
+            "or a freshness, access or uptime guarantee.",
+            _CRW_SSTA_DOC, checked_at=_CRW_CHECKED_AT)
     return fields
 
 DATA_KINDS = frozenset({
@@ -890,7 +903,7 @@ def validate_legs(legs=LEGS, registry=REGISTRY_CONTRACTS, *, schema=SCHEMA) -> N
         if len({selector for selector, _ref in enforcement}) != len(enforcement):
             raise ValueError("source_product_enforcement_scope")
         for selector, ref in enforcement:
-            if schema != SCHEMA and selector in _V5_PRODUCTS:
+            if schema not in _EXPANDED_INVENTORY_SCHEMAS and selector in _V5_PRODUCTS:
                 continue
             carriers = [leg for leg in legs if code in leg.claim_restrictions
                         and selector in {leg.product_id, leg.source_id}]
@@ -1187,11 +1200,11 @@ def _unmet_criteria(legs, *, schema=SCHEMA) -> list[dict[str, Any]]:
 
 
 def _schema_legs(legs, schema):
-    return legs if schema == SCHEMA else tuple(leg for leg in legs if leg.product_id not in _V5_PRODUCTS)
+    return legs if schema in _EXPANDED_INVENTORY_SCHEMAS else tuple(leg for leg in legs if leg.product_id not in _V5_PRODUCTS)
 
 
 def product_contract_document(legs=LEGS, registry=REGISTRY_CONTRACTS, *, schema=SCHEMA) -> dict[str, Any]:
-    """v5 nomination inventory or exact prior v1/v2/v3/v4 documents; no authority."""
+    """v6 product facts or exact prior v1-v5 documents; no authority."""
     if type(schema) is not str or schema not in _SCHEMAS:
         raise ValueError("source_product_export_schema")
     validate_legs(legs, registry, schema=schema)
@@ -1222,7 +1235,7 @@ def product_contract_document(legs=LEGS, registry=REGISTRY_CONTRACTS, *, schema=
         restrictions[code] = {"meaning": meaning, "basis": "advisory" if advisory else "scoped_checks",
                               "reference": _ADVISORY if advisory else None,
                               "checks": [] if advisory else [{"applies_to": selector, "reference": ref}
-                                  for selector, ref in enforcement if schema == SCHEMA or selector not in _V5_PRODUCTS]}
+                                  for selector, ref in enforcement if schema in _EXPANDED_INVENTORY_SCHEMAS or selector not in _V5_PRODUCTS]}
     body = {
         "schema": schema,
         "registry_schema_version": REGISTRY_SCHEMA_VERSION,

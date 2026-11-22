@@ -353,7 +353,8 @@ def test_new_inventory_marks_lookup_as_non_observational_and_never_a_second_inde
     from src.data import source_product_contracts as products
 
     product = "open_meteo_extreme_signals.ghcn_daily_access_hints"
-    document = products.product_contract_document()
+    # Preserve the original v5 inventory contract independently of later facts.
+    document = products.product_contract_document(schema="theheat.source-product-contracts/v5")
     assert document["schema"] == "theheat.source-product-contracts/v5"
     row = next(row for row in document["products"] if row["product_id"] == product)
     assert row["data_kind"] == "discovery" and row["claim_permission_granted"] is False
