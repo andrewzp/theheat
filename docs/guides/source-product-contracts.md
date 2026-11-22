@@ -25,7 +25,7 @@ What the contracts do not do:
   `restriction_enforcement`, and the unresolved products are listed in
   `unmet_criteria`.
 - Provider fields are `null` where documentation remains unknown. Exact named
-  AWC, NIFC, GPM Late daily, GHCN and CRW SSTA legs carry dated primary-document facts with source URLs and snapshot
+  AWC, NIFC, GPM Late daily, GHCN, CRW and FIRMS legs carry dated primary-document facts with source URLs and snapshot
   hashes. A `partial` fact stays in `unmet_criteria`; only its exact documented
   product/field can leave that list. Costs remain unknown. A configured collection
   rule is not a provider promise, and a request bound is not a spending cap.
@@ -72,8 +72,9 @@ environment, credentials or files.
 
 ## Dated provider documentation
 
-The reviewed facts are scoped to thirteen legs, not whole providers. Cadence
-documentation covers eleven of these; the two DHW legs add reuse terms only:
+The reviewed facts are scoped to sixteen legs, not whole providers. Cadence
+documentation covers eleven; two DHW legs add reuse terms only, and three FIRMS
+area-CSV legs add partial service-quota documentation only:
 
 | Product | Documented cadence | Remaining limits |
 | --- | --- | --- |
@@ -83,6 +84,7 @@ documentation covers eleven of these; the two DHW legs add reuse terms only:
 | GPM IMERG Late daily V07, OPeNDAP and HTTPS grid legs | The derived daily file follows its last half-hourly input; its target is no earlier than 14 hours after the UTC day closes. | A latency target, not an availability guarantee. Quotas and costs remain unknown; S3 and Final are outside this documentation tranche. |
 | GHCN-Daily differences, station histories and verified archive observations | The integrated dataset receives daily updates and weekend reconstruction. | Dataset processing is not each station's reporting clock or guaranteed access/freshness. Values and QC flags can change. Reuse rights, quotas and costs remain unknown. |
 | CRW v3.1 5 km SST anomaly, ERDDAP and native-file routes | The SSTA product's data and images are updated daily. | Product production, not either route's delivery clock, an individual cell's observation time or a freshness/access/uptime guarantee. Quotas and costs remain unknown; v7 reuse terms are scoped below. |
+| FIRMS VIIRS NOAA-21 NRT, VIIRS NOAA-20 NRT and MODIS NRT area CSV | Unknown here. | Partial MAP_KEY service-quota documentation only; actual capacity, transaction weights, enforcement, rights and costs remain unverified. |
 
 Sources: [AWC API documentation](https://aviationweather.gov/data/api/) and the
 [exact NIFC item metadata](https://www.arcgis.com/sharing/rest/content/items/4181a117dc9e43db8598533e29972015?f=pjson),
