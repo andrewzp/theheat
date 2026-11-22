@@ -169,3 +169,20 @@ def test_submicrosecond_future_timestamp_is_not_rounded_back_to_clock(monkeypatc
     prepare(monkeypatch, [row(0, "2026-11-22T05:00:00.000000001Z")])
     with pytest.raises(SourceFetchError, match="freshness check failed"):
         river._fetch_river_levels_primary(strict=True)
+
+
+@pytest.mark.parametrize("offset", ["+00:60", "-00:60", "+00:99", "-00:99", "+24:00", "-24:00"])
+def test_malformed_offset_cannot_be_normalized_into_a_flood_bundle(monkeypatch, offset):
+    prepare(monkeypatch, [row(0, f"2026-11-21T05:00:00{offset}")])
+    bundles = []
+    with pytest.raises(SourceFetchError, match="freshness check failed"):
+        readings = river._fetch_river_levels_primary(strict=True)
+        bundles.extend(build_river_flood_bundle(event) for event in river.detect_floods(readings))
+    assert bundles == []
+
+
+@pytest.mark.parametrize("offset,day", [("+23:59", "2026-11-20"), ("-23:59", "2026-11-22")])
+def test_valid_numeric_offset_boundary_retains_actual_utc_day(monkeypatch, offset, day):
+    prepare(monkeypatch, [row(0, f"2026-11-21T05:00:00{offset}")])
+    reading, = river._fetch_river_levels_primary(strict=True)
+    assert reading.date == day
