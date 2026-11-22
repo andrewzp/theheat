@@ -1,4 +1,4 @@
-"""CRW product cadence reaches the existing dated reader without new grants."""
+"""Historical v6 CRW cadence remains exact through the existing dated reader."""
 from copy import deepcopy
 from dataclasses import replace
 import hashlib
@@ -19,9 +19,9 @@ URL = "https://coralreefwatch.noaa.gov/product/5km/methodology.php"
 DOCUMENT_SHA = "402f7b1c4629bdec4e2749e37351826e8e202bd8900afa9fd9ad415b02f66273"
 
 
-def test_default_current_document_includes_crw_cadence_without_replacing_v5_inventory():
+def test_v6_document_includes_crw_cadence_without_replacing_v5_inventory():
     before = products.product_contract_document(schema=V5)
-    current = products.product_contract_document()
+    current = products.product_contract_document(schema=V6)
     assert current["schema"] == V6
     old, new = by_id(before), by_id(current)
     assert set(old) == set(new)
@@ -39,7 +39,7 @@ def test_default_current_document_includes_crw_cadence_without_replacing_v5_inve
 
 @pytest.mark.parametrize("product_id", sorted(CRW))
 def test_exact_ssta_routes_have_daily_product_cadence_not_delivery_or_coverage(product_id):
-    row = by_id(products.product_contract_document())[product_id]
+    row = by_id(products.product_contract_document(schema=V6))[product_id]
     fact = row["provider_cadence"]
     assert fact is not None
     assert fact["status"] == "documented" and fact["checked_at"] == CHECKED
@@ -73,7 +73,7 @@ def test_complete_existing_v5_export_remains_byte_identical():
     (None, "2026-11-22T01:46:46Z", "current"),
 ])
 def test_real_readiness_cli_does_not_backdate_crw_documentation(schema, cutoff, status, tmp_path):
-    document = products.product_contract_document(**({"schema": schema} if schema else {}))
+    document = products.product_contract_document(schema=schema or V6)
     source, output = tmp_path / "input.json", tmp_path / "result"
     source.write_text(json.dumps({"schema_version": 1, "assessment_cutoff": cutoff,
         "components": [{"component_type": "source_products", "export": document}]}))
@@ -105,14 +105,14 @@ def test_source_fact_cannot_be_borrowed_by_a_relabelled_product(provider, upstre
     lambda row: row.__setitem__("cost", 0),
 ])
 def test_rehash_cannot_change_documented_cadence_or_clear_other_unknowns(mutation):
-    document = products.product_contract_document()
+    document = products.product_contract_document(schema=V6)
     mutation(by_id(document)[sorted(CRW)[0]])
     with pytest.raises(ValueError, match="source_product_export_permission"):
         products.decode_product_contract_document(rehash(document))
 
 
 def test_unrelated_crw_products_and_missing_work_keep_their_own_bounds():
-    document = products.product_contract_document()
+    document = products.product_contract_document(schema=V6)
     rows = by_id(document)
     missing = {row["field"]:set(row["products"]) for row in document["unmet_criteria"]
                if row.get("status") == "unknown" and "products" in row}
@@ -127,10 +127,10 @@ def test_unrelated_crw_products_and_missing_work_keep_their_own_bounds():
 
 
 def test_new_facts_do_not_mutate_later_exports_or_clear_availability():
-    document = products.product_contract_document()
+    document = products.product_contract_document(schema=V6)
     previous = deepcopy(document)
     by_id(document)[sorted(CRW)[0]]["provider_cadence"]["summary"] = "changed"
-    assert products.product_contract_document() == previous
+    assert products.product_contract_document(schema=V6) == previous
     assert previous["current_availability"] == "unverified"
     assert previous["operational_recovery"] == previous["source_independence"] == "not_established"
     assert previous["coverage_denominator"] is None and previous["claim_permission_granted"] is False

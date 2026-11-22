@@ -1,3 +1,7 @@
+## 0.9.109.169 — 2026-11-22
+
+- Carry NOAA Coral Reef Watch's dated reuse and credit statement through the existing product-contract reader and readiness assessment for four exact CRW products. Preserve all six historical exports, existing cadence and scientific restrictions; the statement does not clear third-party material, establish operating cost or activate image publication.
+
 ## 0.9.109.168 — 2026-11-22
 
 - Add dated NOAA CRW SST-anomaly cadence metadata to the existing product-contract reader and readiness assessment. Preserve historical exports and all remaining access, cost and source-qualification limits.

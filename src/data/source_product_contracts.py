@@ -23,9 +23,11 @@ PREVIOUS_SCHEMA = "theheat.source-product-contracts/v2"
 GPM_SCHEMA = "theheat.source-product-contracts/v3"
 GHCN_SCHEMA = "theheat.source-product-contracts/v4"
 NOMINATION_SCHEMA = "theheat.source-product-contracts/v5"
-SCHEMA = "theheat.source-product-contracts/v6"
-_SCHEMAS = frozenset({LEGACY_SCHEMA, PREVIOUS_SCHEMA, GPM_SCHEMA, GHCN_SCHEMA, NOMINATION_SCHEMA, SCHEMA})
-_EXPANDED_INVENTORY_SCHEMAS = frozenset({NOMINATION_SCHEMA, SCHEMA})
+CRW_CADENCE_SCHEMA = "theheat.source-product-contracts/v6"
+SCHEMA = "theheat.source-product-contracts/v7"
+_SCHEMAS = frozenset({LEGACY_SCHEMA, PREVIOUS_SCHEMA, GPM_SCHEMA, GHCN_SCHEMA, NOMINATION_SCHEMA,
+                      CRW_CADENCE_SCHEMA, SCHEMA})
+_EXPANDED_INVENTORY_SCHEMAS = frozenset({NOMINATION_SCHEMA, CRW_CADENCE_SCHEMA, SCHEMA})
 _DISCOVERY_PRODUCT = "open_meteo_extreme_signals.ghcn_daily_access_hints"
 _ARCHIVE_OBSERVATIONS = "open_meteo_extreme_signals.ghcn_archive_observations"
 _V5_PRODUCTS = frozenset({_DISCOVERY_PRODUCT, _ARCHIVE_OBSERVATIONS})
@@ -58,6 +60,15 @@ _GHCN_CHECKED_AT = "2026-11-21T07:47:37Z"
 _CRW_SSTA_DOC = ("https://coralreefwatch.noaa.gov/product/5km/methodology.php",
                  "402f7b1c4629bdec4e2749e37351826e8e202bd8900afa9fd9ad415b02f66273")
 _CRW_CHECKED_AT = "2026-11-22T01:46:45Z"
+_CRW_REUSE_DOC = ("https://coralreefwatch.noaa.gov/satellite/docs/recommendations_crw_citation.php",
+                 "eaf0a271b96c1950eb5897691a8f56899cba5c9c97316216421b0f645c59f93a")
+_CRW_REUSE_CHECKED_AT = "2026-11-22T02:59:20Z"
+_CRW_REUSE_PRODUCTS = {
+    "ocean_sst_anomaly.coastwatch_erddap": "noaa_crw.ssta_daily_v3_1",
+    "ocean_sst_anomaly.noaa_star_nc": "noaa_crw.ssta_daily_v3_1",
+    "coral_dhw.crw_virtual_station": "noaa_crw.regional_virtual_stations",
+    "coral_dhw.crw_erddap": "noaa_crw.dhw_daily_v3_1",
+}
 
 
 def _provider_fact(status, summary, limits, *references, checked_at="2026-11-18T07:44:10Z"):
@@ -103,7 +114,7 @@ def _provider_fields(leg: ProductLeg, *, schema=SCHEMA) -> dict[str, Any]:
             "partial", "Published item terms disclaim accuracy, completeness and fitness.",
             "No affirmative reuse license for every contributing dataset or base map is established by this metadata.",
             _NIFC_ITEM_DOC)
-    elif schema in {GPM_SCHEMA, GHCN_SCHEMA, NOMINATION_SCHEMA, SCHEMA} and product_id in {"gpm_imerg.imerg_late_opendap", "gpm_imerg.imerg_late_grid_datapool"}:
+    elif schema in {GPM_SCHEMA, GHCN_SCHEMA, NOMINATION_SCHEMA, CRW_CADENCE_SCHEMA, SCHEMA} and product_id in {"gpm_imerg.imerg_late_opendap", "gpm_imerg.imerg_late_grid_datapool"}:
         if (leg.provider, leg.upstream) != ("nasa_gesdisc", "nasa_gesdisc.gpm_3imergdl_07"):
             return fields
         fields["provider_cadence"] = _provider_fact(
@@ -118,7 +129,7 @@ def _provider_fields(leg: ProductLeg, *, schema=SCHEMA) -> dict[str, Any]:
             "Dataset access and citation guidance only; account entitlement, route availability and "
             "third-party maps, logos or imagery are not cleared here.",
             _GPM_DAILY_DOC, _GPM_POLICY_DOC, checked_at=_GPM_CHECKED_AT)
-    elif schema in {GHCN_SCHEMA, NOMINATION_SCHEMA, SCHEMA} and product_id in {"open_meteo_extreme_signals.ghcn_daily",
+    elif schema in {GHCN_SCHEMA, NOMINATION_SCHEMA, CRW_CADENCE_SCHEMA, SCHEMA} and product_id in {"open_meteo_extreme_signals.ghcn_daily",
                                              "open_meteo_extreme_signals.ghcn_station_history", _ARCHIVE_OBSERVATIONS}:
         upstream = ("noaa_ncei.ghcn_daily_superghcnd_diff" if product_id.endswith(".ghcn_daily")
                     else "noaa_ncei.ghcn_daily_station_archive")
@@ -129,7 +140,7 @@ def _provider_fields(leg: ProductLeg, *, schema=SCHEMA) -> dict[str, Any]:
             "Dataset processing, not each station's reporting clock or an availability/freshness guarantee. "
             "Values and QC flags can change after archive-quality inputs arrive; no publication-time certainty.",
             _GHCN_DAILY_DOC, checked_at=_GHCN_CHECKED_AT)
-    elif schema == SCHEMA and product_id in {"ocean_sst_anomaly.coastwatch_erddap", "ocean_sst_anomaly.noaa_star_nc"}:
+    elif schema in {CRW_CADENCE_SCHEMA, SCHEMA} and product_id in {"ocean_sst_anomaly.coastwatch_erddap", "ocean_sst_anomaly.noaa_star_nc"}:
         if (leg.provider, leg.upstream) != ("noaa_crw", "noaa_crw.ssta_daily_v3_1"):
             return fields
         fields["provider_cadence"] = _provider_fact(
@@ -137,6 +148,14 @@ def _provider_fields(leg: ProductLeg, *, schema=SCHEMA) -> dict[str, Any]:
             "Product production frequency, not a route delivery clock, each cell's observation time "
             "or a freshness, access or uptime guarantee.",
             _CRW_SSTA_DOC, checked_at=_CRW_CHECKED_AT)
+    if (schema == SCHEMA and product_id in _CRW_REUSE_PRODUCTS
+            and (leg.provider, leg.upstream) == ("noaa_crw", _CRW_REUSE_PRODUCTS[product_id])):
+        fields["reuse_rights"] = _provider_fact(
+            "documented", "CRW declares its internet data and site content public domain and freely distributable; "
+            "it requests NOAA Coral Reef Watch credit and dataset citation.",
+            "Exact CRW product data only, not independent clearance of third-party layers, logos or linked publications. "
+            "No service access, quota, cost, scientific qualification or publication activation is established.",
+            _CRW_REUSE_DOC, checked_at=_CRW_REUSE_CHECKED_AT)
     return fields
 
 DATA_KINDS = frozenset({
@@ -1204,7 +1223,7 @@ def _schema_legs(legs, schema):
 
 
 def product_contract_document(legs=LEGS, registry=REGISTRY_CONTRACTS, *, schema=SCHEMA) -> dict[str, Any]:
-    """v6 product facts or exact prior v1-v5 documents; no authority."""
+    """v7 product facts or exact prior v1-v6 documents; no authority."""
     if type(schema) is not str or schema not in _SCHEMAS:
         raise ValueError("source_product_export_schema")
     validate_legs(legs, registry, schema=schema)
