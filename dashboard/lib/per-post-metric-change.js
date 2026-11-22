@@ -13,6 +13,37 @@ function instant(value) {
   return BigInt(milliseconds) * 1000n + BigInt(match[2])
 }
 
+/** Initial display choice only; never eligibility, reach ranking or an age proxy. */
+export function preferredOutcomePost(posts) {
+  if (!Array.isArray(posts)) return undefined
+  let selected = posts[0], latest = null, created = null
+  for (const post of posts) {
+    const timed = (Array.isArray(post?.observations) ? post.observations : [])
+      .filter(row => object(row) && row.kind === "sample" && row.association === "recorded")
+      .map(row => ({ row, time: instant(row.collected_at) })).filter(item => item.time !== null)
+    if (!timed.length) continue
+    const time = timed.reduce((value, item) => item.time > value ? item.time : value, timed[0].time)
+    const starts = timed.filter(item => item.time === time).map(item => {
+      const start = instant(item.row.platform_created_at)
+      return item.row.age_status === "recorded" && item.row.conflict === false && start !== null
+        && item.time >= start && Number.isFinite(item.row.post_age_seconds)
+        && item.row.post_age_seconds === Number(item.time - start) / 1_000_000 ? start : null
+    })
+    let start = starts[0]
+    if (start === null || starts.some(value => value !== start)
+      || timed.some(item => {
+        const prior = instant(item.row.platform_created_at)
+        return item.row.age_status === "recorded" && prior !== null && prior !== start
+      })) start = null
+    // A newer conflicting sample stays visible; only the same-poll tiebreak
+    // requires a consistent platform clock. Identifiers and counts never rank.
+    if (latest === null || time > latest || time === latest && start !== null && (created === null || start > created)) {
+      selected = post; latest = time; created = start
+    }
+  }
+  return selected
+}
+
 export function perPostMetricChange(post) {
   if (!object(post) || post.revision_status !== "recorded"
     || typeof post.tweet_id !== "string" || !/^[0-9]{1,30}$/.test(post.tweet_id)) return held("published_revision_unavailable")
