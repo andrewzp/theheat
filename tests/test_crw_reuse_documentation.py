@@ -32,9 +32,9 @@ LEGACY_HASHES = (
 )
 
 
-def test_default_v7_adds_only_four_reuse_facts_and_preserves_all_source_bounds():
+def test_historical_v7_adds_only_four_reuse_facts_and_preserves_all_source_bounds():
     old = products.product_contract_document(schema=V6)
-    current = products.product_contract_document()
+    current = products.product_contract_document(schema=V7)
     assert current["schema"] == V7
     before, after = by_id(old), by_id(current)
     assert set(before) == set(after)
@@ -51,7 +51,7 @@ def test_default_v7_adds_only_four_reuse_facts_and_preserves_all_source_bounds()
 
 @pytest.mark.parametrize("product_id", sorted(CRW))
 def test_new_terms_name_crw_data_credit_and_exclusions_without_a_claim_grant(product_id):
-    row = by_id(products.product_contract_document())[product_id]
+    row = by_id(products.product_contract_document(schema=V7))[product_id]
     fact = row["reuse_rights"]
     assert fact is not None and fact["status"] == "partial" and fact["checked_at"] == CHECKED
     assert "public domain" in fact["summary"] and "credit" in fact["summary"]
@@ -114,14 +114,14 @@ def test_terms_require_exact_product_provider_and_upstream(product_id, change):
     lambda row: row.__setitem__("claim_permission_granted", True),
 ])
 def test_rehash_cannot_change_or_expand_documented_terms(mutation):
-    document = products.product_contract_document()
+    document = products.product_contract_document(schema=V7)
     mutation(by_id(document)[sorted(CRW)[0]])
     with pytest.raises(ValueError, match="source_product_export_permission"):
         products.decode_product_contract_document(rehash(document))
 
 
 def test_rights_gaps_change_only_for_the_named_products_and_exports_are_detached():
-    document = products.product_contract_document()
+    document = products.product_contract_document(schema=V7)
     old = products.product_contract_document(schema=V6)
     before, after = by_id(old), by_id(document)
     def gaps(doc, field):
@@ -141,11 +141,11 @@ def test_rights_gaps_change_only_for_the_named_products_and_exports_are_detached
     assert document["claim_permission_granted"] is False
     original = deepcopy(document)
     after[sorted(CRW)[0]]["reuse_rights"]["summary"] = "changed"
-    assert products.product_contract_document() == original
+    assert products.product_contract_document(schema=V7) == original
 
 
 def test_crw_terms_cannot_clear_other_noaa_or_derived_combination_products():
-    document = products.product_contract_document()
+    document = products.product_contract_document(schema=V7)
     rows = by_id(document)
     for target in ("awc_observed.metar_observations", "synthesis_fire_drought_heat.marine_compound"):
         altered = deepcopy(document)
@@ -155,7 +155,7 @@ def test_crw_terms_cannot_clear_other_noaa_or_derived_combination_products():
 
 
 def test_availability_and_website_redistribution_statements_have_separate_scopes():
-    rows = by_id(products.product_contract_document())
+    rows = by_id(products.product_contract_document(schema=V7))
     for product_id in CRW:
         fact = rows[product_id]["reuse_rights"]
         assert fact["status"] == "partial"
@@ -168,7 +168,7 @@ def test_availability_and_website_redistribution_statements_have_separate_scopes
 
 
 def test_partial_terms_keep_every_exact_product_in_unmet_redistribution_work():
-    document = products.product_contract_document()
+    document = products.product_contract_document(schema=V7)
     partial = next(row for row in document["unmet_criteria"]
                    if row["field"] == "reuse_rights" and row["status"] == "partial")
     assert CRW.keys() <= set(partial["products"])
