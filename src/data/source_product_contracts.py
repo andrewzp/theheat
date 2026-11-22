@@ -151,9 +151,11 @@ def _provider_fields(leg: ProductLeg, *, schema=SCHEMA) -> dict[str, Any]:
     if (schema == SCHEMA and product_id in _CRW_REUSE_PRODUCTS
             and (leg.provider, leg.upstream) == ("noaa_crw", _CRW_REUSE_PRODUCTS[product_id])):
         fields["reuse_rights"] = _provider_fact(
-            "documented", "CRW declares its internet data and site content public domain and freely distributable; "
-            "it requests NOAA Coral Reef Watch credit and dataset citation.",
-            "Exact CRW product data only, not independent clearance of third-party layers, logos or linked publications. "
+            "partial", "CRW internet data are freely available to the public; "
+            "CRW website content is public domain and freely distributable; "
+            "NOAA Coral Reef Watch credit and dataset citation are requested.",
+            "Redistribution rights for separately served material remain unresolved where identity with CRW website content is unestablished. "
+            "No independent clearance of third-party layers, logos or linked publications. "
             "No service access, quota, cost, scientific qualification or publication activation is established.",
             _CRW_REUSE_DOC, checked_at=_CRW_REUSE_CHECKED_AT)
     return fields

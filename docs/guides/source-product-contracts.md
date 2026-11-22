@@ -113,10 +113,13 @@ station measurement, baseline change or image reuse clearance is inferred.
 
 Version7 adds the [CRW citation and reuse statement](https://coralreefwatch.noaa.gov/satellite/docs/recommendations_crw_citation.php)
 to the two exact SSTA routes, the CRW regional virtual-station product and the
-CRW DHW grid product. CRW declares its internet data and site content public
-domain and freely distributable, requests NOAA Coral Reef Watch credit and gives
-dataset citation guidance. The export records that dated provider statement for
-those exact product/provider/upstream identities. It does not independently clear
+CRW DHW grid product. CRW describes its internet data as freely available; it
+assigns public-domain status and free redistribution to content on its own
+website. It requests NOAA Coral Reef Watch credit and gives dataset citation
+guidance. The export records both scopes as partial reuse evidence for those
+exact product/provider/upstream identities. Redistribution rights for separately
+served material remain unresolved where identity with CRW website content has
+not been established; all four products remain in unmet reuse work. It does not independently clear
 third-party layers, logos or linked publications, or establish service access,
 quotas, cost, scientific qualification or permission to activate publication.
 The marine compound is a separate derived product and receives no borrowed terms.

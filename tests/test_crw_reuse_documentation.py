@@ -53,7 +53,7 @@ def test_default_v7_adds_only_four_reuse_facts_and_preserves_all_source_bounds()
 def test_new_terms_name_crw_data_credit_and_exclusions_without_a_claim_grant(product_id):
     row = by_id(products.product_contract_document())[product_id]
     fact = row["reuse_rights"]
-    assert fact is not None and fact["status"] == "documented" and fact["checked_at"] == CHECKED
+    assert fact is not None and fact["status"] == "partial" and fact["checked_at"] == CHECKED
     assert "public domain" in fact["summary"] and "credit" in fact["summary"]
     assert "NOAA Coral Reef Watch" in fact["summary"] and "citation" in fact["summary"]
     assert all(word in fact["limits"] for word in ("third-party", "logos", "access", "cost", "qualification"))
@@ -126,8 +126,13 @@ def test_rights_gaps_change_only_for_the_named_products_and_exports_are_detached
     before, after = by_id(old), by_id(document)
     def gaps(doc, field):
         return {key for row in doc["unmet_criteria"] if row["field"] == field for key in row["products"]}
-    assert gaps(old, "reuse_rights") - gaps(document, "reuse_rights") == CRW.keys()
-    assert gaps(document, "reuse_rights") <= gaps(old, "reuse_rights")
+    assert gaps(document, "reuse_rights") == gaps(old, "reuse_rights")
+    for status in ("unknown", "partial"):
+        before_ids = next(set(row["products"]) for row in old["unmet_criteria"]
+                          if row["field"] == "reuse_rights" and row["status"] == status)
+        after_ids = next(set(row["products"]) for row in document["unmet_criteria"]
+                         if row["field"] == "reuse_rights" and row["status"] == status)
+        assert after_ids == (before_ids - CRW.keys() if status == "unknown" else before_ids | CRW.keys())
     for field in ("provider_cadence", "provider_quota", "cost"):
         assert gaps(old, field) == gaps(document, field)
     assert all(after[key] == before[key] for key in before.keys() - CRW.keys())
@@ -147,3 +152,28 @@ def test_crw_terms_cannot_clear_other_noaa_or_derived_combination_products():
         by_id(altered)[target]["reuse_rights"] = deepcopy(rows[sorted(CRW)[0]]["reuse_rights"])
         with pytest.raises(ValueError, match="source_product_export_permission"):
             products.decode_product_contract_document(rehash(altered))
+
+
+def test_availability_and_website_redistribution_statements_have_separate_scopes():
+    rows = by_id(products.product_contract_document())
+    for product_id in CRW:
+        fact = rows[product_id]["reuse_rights"]
+        assert fact["status"] == "partial"
+        assert fact["summary"].split("; ") == [
+            "CRW internet data are freely available to the public",
+            "CRW website content is public domain and freely distributable",
+            "NOAA Coral Reef Watch credit and dataset citation are requested.",
+        ]
+        assert "separately served material remain unresolved" in fact["limits"]
+
+
+def test_partial_terms_keep_every_exact_product_in_unmet_redistribution_work():
+    document = products.product_contract_document()
+    partial = next(row for row in document["unmet_criteria"]
+                   if row["field"] == "reuse_rights" and row["status"] == "partial")
+    assert CRW.keys() <= set(partial["products"])
+    assert products.verify_product_contract_document(document) == document["contracts_sha256"]
+    altered = deepcopy(document)
+    by_id(altered)[sorted(CRW)[0]]["reuse_rights"]["status"] = "documented"
+    with pytest.raises(ValueError, match="source_product_export_permission"):
+        products.decode_product_contract_document(rehash(altered))
