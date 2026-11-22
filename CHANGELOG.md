@@ -1,3 +1,7 @@
+## 0.9.109.171 — 2026-11-22
+
+- Carry the published NASA FIRMS MAP_KEY transaction limit and weighted-query caveat through the existing source-contract reader for three exact area-CSV products. Preserve all seven historical exports, partial quota status and unknown capacity, enforcement, reuse rights and cost; no collection or publishing setting changes.
+
 ## 0.9.109.170 — 2026-11-22
 
 - Qualify each selected USGS river reading against its own observation time, preserve the measurement's UTC date through flood detection and writer bundles, and reject invalid or future timestamps and nonfinite heights. Bind the parser to editorial policy so old checks and approvals expire after eligibility changes; retain existing source budgets, typed fallback and manual river review.

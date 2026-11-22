@@ -24,10 +24,11 @@ GPM_SCHEMA = "theheat.source-product-contracts/v3"
 GHCN_SCHEMA = "theheat.source-product-contracts/v4"
 NOMINATION_SCHEMA = "theheat.source-product-contracts/v5"
 CRW_CADENCE_SCHEMA = "theheat.source-product-contracts/v6"
-SCHEMA = "theheat.source-product-contracts/v7"
+CRW_REUSE_SCHEMA = "theheat.source-product-contracts/v7"
+SCHEMA = "theheat.source-product-contracts/v8"
 _SCHEMAS = frozenset({LEGACY_SCHEMA, PREVIOUS_SCHEMA, GPM_SCHEMA, GHCN_SCHEMA, NOMINATION_SCHEMA,
-                      CRW_CADENCE_SCHEMA, SCHEMA})
-_EXPANDED_INVENTORY_SCHEMAS = frozenset({NOMINATION_SCHEMA, CRW_CADENCE_SCHEMA, SCHEMA})
+                      CRW_CADENCE_SCHEMA, CRW_REUSE_SCHEMA, SCHEMA})
+_EXPANDED_INVENTORY_SCHEMAS = frozenset({NOMINATION_SCHEMA, CRW_CADENCE_SCHEMA, CRW_REUSE_SCHEMA, SCHEMA})
 _DISCOVERY_PRODUCT = "open_meteo_extreme_signals.ghcn_daily_access_hints"
 _ARCHIVE_OBSERVATIONS = "open_meteo_extreme_signals.ghcn_archive_observations"
 _V5_PRODUCTS = frozenset({_DISCOVERY_PRODUCT, _ARCHIVE_OBSERVATIONS})
@@ -68,6 +69,13 @@ _CRW_REUSE_PRODUCTS = {
     "ocean_sst_anomaly.noaa_star_nc": "noaa_crw.ssta_daily_v3_1",
     "coral_dhw.crw_virtual_station": "noaa_crw.regional_virtual_stations",
     "coral_dhw.crw_erddap": "noaa_crw.dhw_daily_v3_1",
+}
+_FIRMS_AREA_DOC = ("https://firms.modaps.eosdis.nasa.gov/api/area/",
+                   "cf7e8c1a26561bd42f4829ae6b45c697195d4ff24798f3be6aa2242ad14fcb64")
+_FIRMS_CHECKED_AT = "2026-11-22T05:08:14Z"
+_FIRMS_AREA_PRODUCTS = {
+    f"firms.{name}": f"nasa_firms.{name}"
+    for name in ("viirs_noaa21_nrt", "viirs_noaa20_nrt", "modis_nrt")
 }
 
 
@@ -114,7 +122,7 @@ def _provider_fields(leg: ProductLeg, *, schema=SCHEMA) -> dict[str, Any]:
             "partial", "Published item terms disclaim accuracy, completeness and fitness.",
             "No affirmative reuse license for every contributing dataset or base map is established by this metadata.",
             _NIFC_ITEM_DOC)
-    elif schema in {GPM_SCHEMA, GHCN_SCHEMA, NOMINATION_SCHEMA, CRW_CADENCE_SCHEMA, SCHEMA} and product_id in {"gpm_imerg.imerg_late_opendap", "gpm_imerg.imerg_late_grid_datapool"}:
+    elif schema in {GPM_SCHEMA, GHCN_SCHEMA, NOMINATION_SCHEMA, CRW_CADENCE_SCHEMA, CRW_REUSE_SCHEMA, SCHEMA} and product_id in {"gpm_imerg.imerg_late_opendap", "gpm_imerg.imerg_late_grid_datapool"}:
         if (leg.provider, leg.upstream) != ("nasa_gesdisc", "nasa_gesdisc.gpm_3imergdl_07"):
             return fields
         fields["provider_cadence"] = _provider_fact(
@@ -129,7 +137,7 @@ def _provider_fields(leg: ProductLeg, *, schema=SCHEMA) -> dict[str, Any]:
             "Dataset access and citation guidance only; account entitlement, route availability and "
             "third-party maps, logos or imagery are not cleared here.",
             _GPM_DAILY_DOC, _GPM_POLICY_DOC, checked_at=_GPM_CHECKED_AT)
-    elif schema in {GHCN_SCHEMA, NOMINATION_SCHEMA, CRW_CADENCE_SCHEMA, SCHEMA} and product_id in {"open_meteo_extreme_signals.ghcn_daily",
+    elif schema in {GHCN_SCHEMA, NOMINATION_SCHEMA, CRW_CADENCE_SCHEMA, CRW_REUSE_SCHEMA, SCHEMA} and product_id in {"open_meteo_extreme_signals.ghcn_daily",
                                              "open_meteo_extreme_signals.ghcn_station_history", _ARCHIVE_OBSERVATIONS}:
         upstream = ("noaa_ncei.ghcn_daily_superghcnd_diff" if product_id.endswith(".ghcn_daily")
                     else "noaa_ncei.ghcn_daily_station_archive")
@@ -140,7 +148,7 @@ def _provider_fields(leg: ProductLeg, *, schema=SCHEMA) -> dict[str, Any]:
             "Dataset processing, not each station's reporting clock or an availability/freshness guarantee. "
             "Values and QC flags can change after archive-quality inputs arrive; no publication-time certainty.",
             _GHCN_DAILY_DOC, checked_at=_GHCN_CHECKED_AT)
-    elif schema in {CRW_CADENCE_SCHEMA, SCHEMA} and product_id in {"ocean_sst_anomaly.coastwatch_erddap", "ocean_sst_anomaly.noaa_star_nc"}:
+    elif schema in {CRW_CADENCE_SCHEMA, CRW_REUSE_SCHEMA, SCHEMA} and product_id in {"ocean_sst_anomaly.coastwatch_erddap", "ocean_sst_anomaly.noaa_star_nc"}:
         if (leg.provider, leg.upstream) != ("noaa_crw", "noaa_crw.ssta_daily_v3_1"):
             return fields
         fields["provider_cadence"] = _provider_fact(
@@ -148,7 +156,7 @@ def _provider_fields(leg: ProductLeg, *, schema=SCHEMA) -> dict[str, Any]:
             "Product production frequency, not a route delivery clock, each cell's observation time "
             "or a freshness, access or uptime guarantee.",
             _CRW_SSTA_DOC, checked_at=_CRW_CHECKED_AT)
-    if (schema == SCHEMA and product_id in _CRW_REUSE_PRODUCTS
+    if (schema in {CRW_REUSE_SCHEMA, SCHEMA} and product_id in _CRW_REUSE_PRODUCTS
             and (leg.provider, leg.upstream) == ("noaa_crw", _CRW_REUSE_PRODUCTS[product_id])):
         fields["reuse_rights"] = _provider_fact(
             "partial", "CRW internet data are freely available to the public; "
@@ -158,6 +166,16 @@ def _provider_fields(leg: ProductLeg, *, schema=SCHEMA) -> dict[str, Any]:
             "No independent clearance of third-party layers, logos or linked publications. "
             "No service access, quota, cost, scientific qualification or publication activation is established.",
             _CRW_REUSE_DOC, checked_at=_CRW_REUSE_CHECKED_AT)
+    if (schema == SCHEMA and product_id in _FIRMS_AREA_PRODUCTS
+            and (leg.provider, leg.upstream) == ("nasa_firms", _FIRMS_AREA_PRODUCTS[product_id])):
+        fields["provider_quota"] = _provider_fact(
+            "partial", "The FIRMS area API documents a default MAP_KEY allowance of 5000 transactions "
+            "per 10-minute interval; larger queries may consume multiple transactions.",
+            "Published default, not this key's actual negotiated allowance or remaining balance. "
+            "Not a one-HTTP-request-one-transaction rule, reserved capacity, shared runtime enforcement, "
+            "cost guarantee or current availability. This quota does not grant source qualification, "
+            "reuse rights or independent serving hosts.",
+            _FIRMS_AREA_DOC, checked_at=_FIRMS_CHECKED_AT)
     return fields
 
 DATA_KINDS = frozenset({

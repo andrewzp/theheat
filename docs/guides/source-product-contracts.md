@@ -9,7 +9,7 @@ and unit limits, provenance, any code request bound and the claim restrictions
 already in force.
 
 `product_contract_document()` returns a separate versioned export
-(`theheat.source-product-contracts/v7`). The v1 registry and its dashboard JSON
+(`theheat.source-product-contracts/v8`). The v1 registry and its dashboard JSON
 are unchanged; nothing is added to old registry rows.
 
 What the contracts do not do:
@@ -59,7 +59,7 @@ fire/drought/heat overlap, and the CRW DHW / regional SST anomaly pairing. The
 pairing keeps each component's own date and footprint; a configured association
 is not a shared footprint.
 
-`decode_product_contract_document()` validates a detached v1 through v7 export. A matching
+`decode_product_contract_document()` validates a detached v1 through v8 export. A matching
 digest only binds bytes. The rows must decode to the supported finite inventory
 with valid kinds, parents, health keys, restrictions and scoped enforcement.
 `missing_work`, `unmet_criteria` and the upstream groups are recomputed from those
@@ -125,6 +125,17 @@ quotas, cost, scientific qualification or permission to activate publication.
 The marine compound is a separate derived product and receives no borrowed terms.
 Both DHW legs keep their unknown cadence; SSTA cadence remains exactly as in v6.
 
+Version8 adds partial quota documentation for exactly the three installed NASA
+FIRMS area-CSV products: VIIRS NOAA-21 NRT, VIIRS NOAA-20 NRT and MODIS NRT.
+The [official area API documentation](https://firms.modaps.eosdis.nasa.gov/api/area/)
+states a default MAP_KEY allowance of 5000 transactions per 10-minute interval;
+larger queries can consume multiple transactions. This is not the actual key's
+negotiated allowance or remaining balance, one HTTP request per transaction,
+reserved capacity, shared runtime enforcement, a cost cap or current availability.
+Each product remains in unmet quota work. HMS's separate host and retired S-NPP
+receive no borrowed quota. Cadence, reuse rights and cost remain unknown for
+these three rows; the access-limit page supplies no imagery or publication grant.
+
 Other reuse evidence remains partial. The [NWS policy](https://www.weather.gov/disclaimer)
 distinguishes its own material from third-party inputs; it does not clear every
 international source or map. NIFC's item publishes a disclaimer without identifying
@@ -137,7 +148,7 @@ logos or imagery, or infer zero operating cost.
 
 `checked_at` records the UTC documentation review time, not a provider update or
 weather observation. The readiness consumer holds a documented component when any
-review postdates its assessment cutoff. Explicit exports for v1 through v6 preserve
+review postdates its assessment cutoff. Explicit exports for v1 through v7 preserve
 their complete documents for the same code inventory, including original dates
 and unknown fields. Decoding them does not insert later facts. Version3 adds the
 two named GPM legs' facts; version4 adds the original GHCN dataset cadence.
@@ -145,8 +156,10 @@ Version5 adds non-observational GHCN nomination hints and the verified-archive
 observation route, with their separate restrictions. Version6 retains that
 inventory and adds only the two named SSTA cadence facts. `NOMINATION_SCHEMA`
 and `CRW_CADENCE_SCHEMA` keep the exact original v5 and v6 exports available.
-Default version7 preserves all their facts and adds only the four scoped CRW
-reuse statements; it never inserts them into an older export or assessment.
+Version7 preserves all their facts and adds only the four scoped CRW
+reuse statements; `CRW_REUSE_SCHEMA` retains that exact export. Default version8
+preserves those facts and adds only the three partial FIRMS quota statements.
+Neither change inserts later facts into an older export or assessment.
 Unknown schemas, altered facts/references
 and falsely cleared gaps are refused even if their digest is recomputed.
 
