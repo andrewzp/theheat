@@ -11,6 +11,60 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-11-23 — Daily corpus grading (0 fresh drafts; 1 carry-over, previously graded)
+
+**Context:** Gist read via git-clone path (success; gist HEAD Nov 23 14:32Z, `_state_rev` 3474,
+`publication_control.enabled=true`). 1 pending: `draft_20261118_143656_56` (Sarh/Yakutsk, graded B Nov 18,
+not re-graded). No fresh pending draft.
+
+**Why the queue is dry:** one METAR pair was created since the Nov 22 pull and it auto-posted, so it never
+reached pending. Tambacounda/Yakutsk (`draft_20261123_111857_64`) was created 11:18:57Z and posted 11:20:30Z
+(tweet 2124825410018181304): "Tambacounda Arpt, Senegal: 36°C; Yakutsk Arpt, Russia: −36°C — a 72°C airport
+gap at 11:00 UTC, 23 Nov." Not graded, since it was never pending at a pull. Logged as observational
+evidence. No drafts were created and rejected between pulls. METAR pairs posted: 4 of 13.
+
+**Staleness:** Sarh/Yakutsk is ~120.5h old with a dated observation ("14:00 UTC, 18 Nov"), a strict
+candidate for the 4th cycle. Still `not_sent`, `post_error` "NWS warning needs fresh source review:
+awc_current_source_unavailable". Gist PATCH 403 again ("Gist writes are not permitted through this proxy");
+reject skipped.
+
+**Grade distribution (fresh):** none. **A-rate N/A (n=0).**
+
+**Headline finding:** "Arpt" is now on two posts in a row (Teresina Nov 21, Tambacounda Nov 23), on both
+stations each time. It looks like a pipeline change in the station-name field around Nov 21, not a one-off
+writer choice: every pair before Teresina wrote "airport". Yakutsk is the cold half of all 4 posted pairs,
+the latest ~40h after Teresina. A 24h station key misses it; the 48h key from the Nov 22 addendum holds it.
+
+### Observed (not graded)
+**Tambacounda / Yakutsk observed_metar_contrast (posted, auto)**
+- Same colon-label card, 9/9 since Nov 18. "Arpt" ×2, then "airport gap", the same mixed form as Teresina.
+- Repeats: Yakutsk 11/13 pairs, 4/4 posts. Senegal is a repeat country for the warm half (Saint Louis,
+  Nov 17). The 72°C gap matches Teresina's to the degree, so two consecutive posts read almost alike.
+- Whole-degree readings; no precision issue. Would likely grade B−, as Teresina would.
+
+### Carry-over (not re-graded)
+- Sarh/Yakutsk — B (Nov 18). ~120.5h old; strict staleness candidate, 4th cycle.
+
+### Patterns
+1. **P_metar_card +1 cycle (observational; 6 cycles).** 9/9 on the card. Raw station-name forms: 4
+   instances (slash ×2, "Arpt" ×2). Two "Arpt" posts in a row suggests the source label changed; the fix
+   should normalise the name before it reaches the writer, as well as telling the writer not to print it.
+2. **P_event_sat +1 cycle (9 cycles).** Yakutsk on the feed 4× in ~105h (Nov 19 01:56Z, Nov 20 07:10Z,
+   Nov 21 19:18Z, Nov 23 11:20Z). Intervals ~29h, ~36h, ~40h: every one clears a 24h key, none clears 48h.
+3. **P_close:** not counted (ungraded, folded into P_metar_card).
+4. No era-anchor, political-anchor, banned-opener (P3 regex) or plant-comparison hits. No A-grade
+   mechanic to log.
+
+### Followups
+- **Operator: Sarh/Yakutsk is ~120h old.** Reject from the dashboard. 4th cycle flagged; the AWC sweep
+  has not cleared it.
+- Operator: check where "Arpt" enters the station name (catalog field vs writer). If it's the field, a
+  name normaliser fixes all future pairs without a prompt change.
+- Infra (carried): `gh` token invalid; gist writes 403 at the proxy. Gist reject, `gh pr` and
+  `ROUTINE_BEACON` writes blocked.
+
+---
+
 ## 2026-11-22 — Daily corpus grading (0 fresh drafts; 1 carry-over, previously graded)
 
 **Context:** Gist read via git-clone path (success; gist HEAD Nov 22 07:28Z, `_state_rev` 3455,
