@@ -480,7 +480,7 @@ def _automatic_source_hold(candidate: "TriageCandidateBundle") -> str | None:
         return ghcn_publication.automatic_calendar_hold({
             "type": candidate.legacy_type, "event_id": candidate.event_id,
             "review_context": {"two_bot": {"bundle": bundle.to_dict()}},
-        }, now=_utc_now)
+        }, now=_utc_now, minimum_delay=timedelta(minutes=90))
     from src.data import coastal_observed
     from src.data import awc_observed
     from src.data import rainfall_observed

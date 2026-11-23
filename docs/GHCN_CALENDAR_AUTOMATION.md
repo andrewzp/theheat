@@ -18,6 +18,13 @@ live station-archive reads and reconstructs the original observation and
 comparator. Changed or unavailable source bytes stop the send; an earlier check
 is not reused as a current-source pass.
 
+Before paid selection, the observation must stay fresh through the minimum
+90-minute review delay. Arming checks the actual due time after deferral.
+Immediately before sending, the calendar route rechecks its current publication
+epoch, autoship switch, critic result, minimum review window, scheduled due time
+and oldest-source freshness, including after source reads and intent persistence.
+Withdrawal or expiry stops the send and preserves an accurate not-sent outcome.
+
 This uses existing observed-only and automatic-publication/autoship controls.
 It adds no activation flag, source endpoint, source allowance or model. Both
 calendar signal names receive the existing automatic copy-budget hint; this hint

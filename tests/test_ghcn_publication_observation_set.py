@@ -89,6 +89,11 @@ def test_unretained_rejected_original_is_not_invented_to_match_a_flag(archive_ht
 def test_real_senders_replay_high_low_source_before_invented_send(
     paired_variants, fake_transport, archive_http, monkeypatch, key, mode,
 ):
+    # Automatic calendar records require the observed-only operating profile.
+    # Manual and other comparator cases keep their original profile.
+    if mode == "auto" and key[1] == "calendar_date":
+        monkeypatch.setenv("THEHEAT_OBSERVED_WEATHER_ONLY", "1")
+        monkeypatch.setenv("THEHEAT_AUTOSHIP_ON_CRITIC_PASS", "1")
     draft = approved_record({("high", "all_time"): paired_variants[key]}, mode)
     original = deepcopy(draft)
     state = state_for(draft)

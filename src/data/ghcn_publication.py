@@ -138,7 +138,38 @@ def _calendar_automatic_require(draft, payload):
              "ghcn_calendar_source_required")
 
 
-def automatic_calendar_hold(draft, *, now=None):
+def is_automatic_calendar(draft):
+    if not isinstance(draft, dict):
+        return False
+    binding = draft.get("approval_binding")
+    automatic = (isinstance(binding, dict) and binding.get("mode") == "auto"
+                 or draft.get("approval_mode") in ("auto", "policy_auto")
+                 or draft.get("autoship_on_critic_pass") is True)
+    return automatic and _calendar_family(draft, _payload(draft))
+
+
+def calendar_timing_hold(draft, *, now=None, minimum_delay=timedelta(0), publish_at=None):
+    """Reuse the sender's oldest-source clock; a timer cannot outlive freshness."""
+    from src.editorial.approval import autoship_max_age_hours
+    from src.orchestrator.posting import _autoship_freshness_anchor, _parse_iso_utc
+
+    try:
+        clock = _clock(now)
+        anchor = _autoship_freshness_anchor(draft)
+        due = clock + minimum_delay if publish_at is None else _parse_iso_utc(publish_at)
+        _require(anchor is not None and anchor <= clock and due is not None,
+                 "ghcn_calendar_time_invalid")
+        _require(clock <= anchor + timedelta(hours=autoship_max_age_hours())
+                 and due <= anchor + timedelta(hours=autoship_max_age_hours()),
+                 "ghcn_calendar_review_window_stale")
+        return None
+    except SourceHeld as exc:
+        return str(exc)
+    except Exception:  # noqa: BLE001 — invalid timing cannot grant automatic arming
+        return "ghcn_calendar_time_invalid"
+
+
+def automatic_calendar_hold(draft, *, now=None, minimum_delay=timedelta(0)):
     """Positive source proof for automatic calendar records; no read or grant.
 
     Manual and unrelated products are not converted into GHCN evidence. The
@@ -155,7 +186,7 @@ def automatic_calendar_hold(draft, *, now=None):
         _calendar_automatic_require(draft, payload)
         _retained(draft, payload, before)
         _require(_clock(now) >= before, "ghcn_source_clock_changed")
-        return None
+        return calendar_timing_hold(draft, now=now, minimum_delay=minimum_delay)
     except SourceHeld as exc:
         return str(exc)
     except Exception:  # noqa: BLE001 — malformed evidence never buys automatic writing
@@ -246,11 +277,7 @@ def current_draft_hold(draft, *, live=False, now=None):
     if not isinstance(draft, dict):
         return None
     payload = _payload(draft)
-    binding = draft.get("approval_binding")
-    automatic = (isinstance(binding, dict) and binding.get("mode") == "auto"
-                 or draft.get("approval_mode") in ("auto", "policy_auto")
-                 or draft.get("autoship_on_critic_pass") is True)
-    calendar_auto = automatic and _calendar_family(draft, payload)
+    calendar_auto = is_automatic_calendar(draft)
     if not calendar_auto and not _family(draft, payload):
         return None
     try:

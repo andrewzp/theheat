@@ -4,7 +4,7 @@ All weather bytes and SDK replies are invented; real source/audit/review/arming
 code runs. No model quality, actual NOAA availability or X outcome is asserted.
 """
 from copy import deepcopy
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 import socket
 from types import SimpleNamespace
 
@@ -89,6 +89,9 @@ def test_actual_required_sdk_checks_save_a_delayed_automatic_calendar_draft(monk
     assert draft["approval_policy"]["recommended_delay_minutes"] == 90
     assert draft["approval_binding"]["mode"] == "auto"
     assert draft.get("auto_approve_at") and not draft.get("tweet_id")
+    due = datetime.fromisoformat(draft["auto_approve_at"].replace("Z", "+00:00"))
+    requested = datetime.fromisoformat(draft["auto_approve_requested_at"].replace("Z", "+00:00"))
+    assert due >= requested + timedelta(minutes=90)
     assert not state.get("publish_ledger")
 
 
@@ -181,6 +184,37 @@ def test_calendar_preflight_keeps_existing_source_age_ceiling(monkeypatch, recor
     _models(monkeypatch, copy=copy_for(kind))
     with freeze_time("2026-09-09T13:00:00Z"):
         assert triage_queue._automatic_source_hold(candidate(bundle, kind)) == "autoship_source_stale"
+
+
+def test_calendar_preflight_preserves_enough_freshness_for_the_review_delay(monkeypatch, record):
+    bundle, kind = record
+    models = _models(monkeypatch, copy=copy_for(kind))
+    with freeze_time("2026-09-09T11:30:00Z"):
+        assert triage_queue._automatic_source_hold(candidate(bundle, kind)) == "ghcn_calendar_review_window_stale"
+    assert not models.stages()
+
+
+@pytest.mark.parametrize("timing", ["late", "deferred"])
+def test_calendar_save_checks_the_actual_due_time_before_arming(monkeypatch, record, timing):
+    from tests.revision_helpers import model_review_context
+
+    bundle, kind = record
+    text = copy_for(kind)
+    _models(monkeypatch, copy=text)
+    payload = json_tree(bundle.to_dict())
+    context = model_review_context(text)
+    context["two_bot"]["bundle"] = payload
+    context["two_bot"]["reviewed_bundle_sha256"] = fingerprint(payload)
+    if timing == "deferred":
+        monkeypatch.setattr("src.orchestrator.draft_save._maybe_defer_auto_approve_at",
+                            lambda _due: "2026-09-09T13:00:00Z")
+    state = deepcopy(DEFAULT_STATE)
+    with freeze_time("2026-09-09T11:30:00Z" if timing == "late" else NOW):
+        assert common.save_draft(text, state, kind, bundle.event_id, review_context=context)
+    [draft] = state["drafts"]
+    assert draft["approval_mode"] == "manual"
+    assert draft["automatic_source_hold"] == "ghcn_calendar_review_window_stale"
+    assert not draft.get("approval_binding") and not draft.get("auto_approve_at")
 
 
 def test_real_source_admission_and_single_candidate_drain_arm_the_checked_calendar_story(monkeypatch, record):

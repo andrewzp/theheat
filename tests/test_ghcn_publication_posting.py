@@ -25,7 +25,9 @@ def source_at_sender(fake_transport, archive_http):
 
 def approved_record(variants, mode):
     draft = deepcopy(variants[("high", "all_time")])
-    draft.update(status="pending", created_at="2026-09-09T11:00:00Z", updated_at="2026-09-09T11:00:00Z")
+    created = ("2026-09-09T10:00:00Z" if mode == "auto" and draft["type"] in {"record", "record_low"}
+               else "2026-09-09T11:00:00Z")
+    draft.update(status="pending", created_at=created, updated_at=created)
     if mode == "manual":
         revisions.initialize_revision(draft)
         revisions.record_human_review(draft)
@@ -36,6 +38,8 @@ def approved_record(variants, mode):
         # and source checks, not real model performance or production arming.
         draft.update(approval_mode="auto", auto_approve_at="2026-09-09T11:50:00Z",
                      approval_policy={"mode": "armed_auto", "can_auto_approve": True})
+        if draft["type"] in {"record", "record_low"}:
+            draft["auto_approve_requested_at"] = created
         bind_reviewed_draft(draft, mode)
     assert revisions.approval_is_current(draft, mode)
     return draft
