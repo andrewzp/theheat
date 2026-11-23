@@ -1,6 +1,7 @@
 """Real workflow selection with invented state; no workflow dispatch or network."""
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+import subprocess
 
 import pytest
 import yaml
@@ -73,6 +74,18 @@ def test_dispatch_remains_its_explicit_role_without_the_auxiliary_state_read(tmp
     assert _select(tmp_path, schedule=AUXILIARY, event="workflow_dispatch",
                    state=_now_state(12)) == "mode=alerts\n"
     assert not (tmp_path / "gist-queried").exists()
+
+
+@pytest.mark.parametrize("schedule", [
+    "11 1-3,5-7,9-11,13-15,17-19,21-23 * * *",
+    "41 0-23 * * *", "11 0,4,8,16,21 * * *", "",
+])
+def test_unrecognized_schedule_cannot_fall_through_to_unconditional_collection(tmp_path, schedule):
+    with pytest.raises(subprocess.CalledProcessError) as error:
+        _select(tmp_path, schedule=schedule, state=_now_state(1))
+    assert error.value.returncode == 2
+    assert not (tmp_path / "gist-queried").exists()
+    assert not (tmp_path / "github-output").exists()
 
 
 def test_exact_credential_expression_preserves_all_existing_context_and_route_guards():

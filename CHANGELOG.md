@@ -1,6 +1,6 @@
 ## 0.9.109.175 — 2026-11-23
 
-- Add queue checks in the eighteen hours without primary collection slots, retaining the original hourly checks and six source slots. Apply the existing guarded stale-alerts catch-up, reservation, sender ordering, credential scope and per-run limits to those checks; log their schedule without source or tweet text. Configured opportunities do not establish actual delivery, content yield, spend or posting cadence.
+- Add queue checks in the eighteen hours without primary collection slots, retaining the original hourly checks and six source slots. Apply the existing guarded stale-alerts catch-up, reservation, sender ordering, credential scope and per-run limits to those checks; log their schedule without source or tweet text. Refuse unrecognized schedule strings before selecting a runnable role. Configured opportunities do not establish actual delivery, content yield, spend or posting cadence.
 
 ## 0.9.109.174 — 2026-11-23
 

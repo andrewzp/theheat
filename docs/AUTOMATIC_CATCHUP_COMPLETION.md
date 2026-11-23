@@ -10,7 +10,8 @@ With `THEHEAT_SCHEDULED_ALERTS_CATCHUP` enabled, either queue schedule can recov
 collection only after the existing 285-minute stale-alerts check, with first
 attempt/main context, bounded state read and the existing durable reservation.
 Fresh, unreadable or unknown history keeps the sender role. Failed collection
-still resets the clock. Extra opportunities can recover funded ordinary work
+still resets the clock. Unrecognized schedule strings refuse collection; editing
+a cron requires updating its explicit role mapping. Extra opportunities can recover funded ordinary work
 that would otherwise be missed; per-run candidate/sample/source limits remain,
 and neither total spend nor a monthly ceiling is established by this schedule.
 Source qualification, useful drafts, actual X receipts and sustained cadence

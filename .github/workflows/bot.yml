@@ -493,8 +493,11 @@ jobs:
             # Match the triggering schedule so a delayed run still handles
             # both the leaderboard and alerts.
             echo "mode=both" >> $GITHUB_OUTPUT
-          else
+          elif [ "${{ github.event.schedule }}" = "11 0,4,8,16,20 * * *" ]; then
             echo "mode=alerts" >> $GITHUB_OUTPUT
+          else
+            echo "Unrecognized scheduled mode; refusing collection." >&2
+            exit 2
           fi
 
       # Fast, deterministic guard that replaces the full-suite gate for production
