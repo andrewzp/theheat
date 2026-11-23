@@ -1,6 +1,8 @@
 """Invented lookup→original archives→real source runner→durable JSON; no SDK/X."""
 from copy import deepcopy
+from contextlib import nullcontext
 from datetime import date
+from functools import partial
 from hashlib import sha256
 import json
 import os
@@ -15,6 +17,7 @@ from freezegun import freeze_time
 from dashboard.tests.fixtures.ghcn_archive_intake_producer import NOW, archive_bytes
 from dashboard.tests.fixtures.ghcn_intake_producer import forbidden
 from src.data.ghcn_db import open_db, upsert_thresholds
+from src.data import ghcn
 from src.data.ghcn_format import DiffRecord, compute_thresholds, parse_dly_text
 from src.data.temperature_history import record_observation_revision
 from src.orchestrator.sources.open_meteo import run_extreme_signals
@@ -23,10 +26,13 @@ from tests.ghcn_intake_cases import SID
 from tests.test_ghcn_discovery_hints import API, METADATA, Reply
 
 
-def produce(case="fresh", provider="ghcn", *, extra_stations=0, candidates_out=None):
+def produce(case="fresh", provider="ghcn", *, extra_stations=0, candidates_out=None,
+            archive_failure=False, archive_limit=20):
     assert case in {"fresh", "qc", "unavailable", "malformed", "two_nominees",
                     "error400", "error400_unknown", "error400_unicode", "error400_private", "error400_sampled"}
     assert type(extra_stations) is int and 0 <= extra_stations <= 1000
+    assert type(archive_failure) is bool
+    assert type(archive_limit) is int and 0 <= archive_limit <= 20
     assert case != "two_nominees" or extra_stations == 0
     metadata = METADATA + ([dict(METADATA[1], station_id="SFX00000003")] if case == "two_nominees" else [])
     metadata += [dict(METADATA[1], station_id=f"SFX{index:08d}") for index in range(3, 3 + extra_stations)]
@@ -54,10 +60,11 @@ def produce(case="fresh", provider="ghcn", *, extra_stations=0, candidates_out=N
                                for meta in metadata[1:]]).encode()
             return Reply(b"[" if case == "malformed" else body, 503 if case == "unavailable" else 200)
         if url.endswith(f"/all/{SID}.dly"):
-            return Reply(baseline)
+            return Reply(b"", 503) if archive_failure else Reply(baseline)
         for meta in metadata[1:]:
             if url.endswith(f"/all/{meta['station_id']}.dly"):
-                return Reply(archive_bytes(station=meta["station_id"], qflag="S" if case == "qc" else ""))
+                return (Reply(b"", 503) if archive_failure else
+                        Reply(archive_bytes(station=meta["station_id"], qflag="S" if case == "qc" else "")))
         return forbidden()
 
     with TemporaryDirectory(prefix="invented-noaa-lookup-") as directory:
@@ -82,9 +89,15 @@ def produce(case="fresh", provider="ghcn", *, extra_stations=0, candidates_out=N
         env = {"THEHEAT_GHCN_DB_PATH": str(path), "THEHEAT_SIGNALS_PROVIDER": provider,
                "THEHEAT_GHCN_THRESHOLD_VERIFICATION": "success", "THEHEAT_OBSERVED_WEATHER_ONLY": "1",
                "THEHEAT_TRIAGE_ENABLED": "1", "THEHEAT_CONCURRENT_SOURCES": "0"}
+        # Delegate to the unchanged real collector with its supported explicit
+        # allowance, only for the one-slot fixture. Default source calls remain
+        # untouched; no source/QC/check function is replaced by a success stub.
+        limit_context = (patch.object(ghcn, "check_extreme_signals_for_stations",
+            partial(ghcn.check_extreme_signals_for_stations, archive_verification_limit=archive_limit))
+            if archive_limit != 20 else nullcontext())
         with patch.dict(os.environ, env), freeze_time(NOW), patch("requests.get", get), \
              patch.object(socket.socket, "connect", forbidden), patch.object(socket, "create_connection", forbidden), \
-             patch.object(socket, "getaddrinfo", forbidden), patch("builtins.print"):
+             patch.object(socket, "getaddrinfo", forbidden), patch("builtins.print"), limit_context:
             run_extreme_signals(state, run, [], {}, {})
             if candidates_out is not None:
                 candidates_out.extend(state.get("_triage_queue", []))
