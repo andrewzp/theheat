@@ -175,8 +175,11 @@ function ghcnArchiveIntake(m, context) {
   const trackedOnly = t?.schema_version === 1 && t.scope === "already_verified_tracked_archives"
   const discovered = t?.schema_version === 2 && t.scope === "verified_selected_station_archives"
     && t.nomination_source === "untrusted_daily_service_hints"
+  const sampled = t?.schema_version === 3 && t.scope === "verified_unhinted_station_archive_sample"
+    && t.sampling_source === "cached_active_stations_after_lookup_400"
   const archiveKeys = ["active_archives", "counts", "cutoff_day", "retrieved_at", "schema_version", "scope",
-    "trigger", "verified_archives", "window_day", ...(discovered ? ["nomination_source", "nominated_stations"] : [])]
+    "trigger", "verified_archives", "window_day", ...(discovered ? ["nomination_source", "nominated_stations"] : []),
+    ...(sampled ? ["sampling_source", "sampling_pool_stations"] : [])]
   const suppliedLookup = Object.hasOwn(m ?? {}, "station_discovery"), h = m?.station_discovery
   const hintKeys = ["schema_version", "scope", "status", "reason", "http_status", "window_day", "cutoff_day", "get_calls", "max_get_calls",
     "eligible_untracked_stations", "response_bytes", "response_sha256", "rows_received", "held_stations",
@@ -233,7 +236,7 @@ function ghcnArchiveIntake(m, context) {
   if (context?.current !== true || !object(m) || m.status !== "degraded" || m.threshold_verification !== "success"
       || !Number.isFinite(start) || !Number.isFinite(end) || end < start || !Number.isFinite(at) || at < start || at > end
       || !object(t) || Object.keys(t).sort().join() !== archiveKeys.sort().join()
-      || (!trackedOnly && !discovered) || t.trigger !== "no_diff_payload"
+      || (!trackedOnly && !discovered && !sampled) || t.trigger !== "no_diff_payload"
       || !day(t.window_day) || !day(t.cutoff_day) || t.cutoff_day > t.window_day
       || t.window_day !== new Date(at).toISOString().slice(0, 10)
       || Date.parse(t.window_day) - Date.parse(t.cutoff_day) > 366 * 86400000
@@ -254,6 +257,25 @@ function ghcnArchiveIntake(m, context) {
       || m.diff_dates_attempted < 1 || m.diff_dates_attempted > 366 || m.diff_dates_fetched !== 0
       || m.diff_dates_missing !== m.diff_dates_attempted || m.diff_fetch_failed !== 1 || Object.hasOwn(m, "diff_intake")
       || !object(c) || Object.keys(c).sort().join() !== [...names].sort().join() || !names.every(k => integer(c[k]))) return null
+  if (sampled) {
+    const selectorKeys = ["schema_version", "strategy", "bucket_start", "bucket_hours", "limit",
+      "eligible_unique_stations", "overlap_stations", "selected_unique_stations", "unselected_unique_stations",
+      "tracked", "candidates", "coverage_bound_scope", "verification_scope",
+      "same_bucket_retries_reuse_selection", "timely_verification_guaranteed"]
+    const laneKeys = ["pool_stations", "reserved_slots", "stable_sweep_opportunities", "verified_stations",
+      "unverified_stations", "selected_stations", "unselected_stations"]
+    const lookupCutoff = new Date(Math.max(Date.parse(t.cutoff_day), Date.parse(t.window_day) - 4 * 86400000))
+      .toISOString().slice(0, 10)
+    if (!suppliedLookup || h.schema_version !== 2 || !Object.hasOwn(h, "provider_error")
+        || !Object.hasOwn(h, "station_selection") || h.cutoff_day !== lookupCutoff
+        || selection.limit < 1 || tracked.pool_stations < 1
+        || Object.keys(selection).sort().join() !== selectorKeys.sort().join()
+        || [tracked, selection.candidates].some(lane => !object(lane)
+          || Object.keys(lane).sort().join() !== laneKeys.sort().join())
+        || selection.same_bucket_retries_reuse_selection !== true || selection.timely_verification_guaranteed !== false
+        || selection.coverage_bound_scope !== "Selection only; stable lane membership and limit, with a run in every consecutive four-hour bucket. Source failures and news freshness are not covered."
+        || selection.verification_scope !== "Current archive fetched and parsed; candidate QC and comparator coverage remain separate qualification gates.") return null
+  }
   if (trackedOnly) {
     if ((suppliedLookup && h.nominated_stations !== 0) || selection.candidates?.pool_stations !== 0
         || selection.overlap_stations !== 0 || selection.eligible_unique_stations !== tracked.pool_stations
@@ -265,11 +287,15 @@ function ghcnArchiveIntake(m, context) {
         || m.tracked_stations_unscanned !== tracked.unverified_stations) return null
   } else {
     const candidate = selection.candidates
-    if (!suppliedLookup || h.status !== "nominated" || !integer(t.nominated_stations)
-        || t.nominated_stations !== h.nominated_stations || !object(candidate)
+    const pool = sampled ? t.sampling_pool_stations : t.nominated_stations
+    if (!suppliedLookup || !integer(pool) || pool < 1
+        || (discovered && (h.status !== "nominated" || pool !== h.nominated_stations))
+        || (sampled && (h.status !== "unavailable" || h.reason !== "http_error" || h.http_status !== 400
+          || h.nominated_stations !== 0 || pool > h.eligible_untracked_stations))
+        || !object(candidate)
         || ![candidate.pool_stations, candidate.reserved_slots, candidate.selected_stations, candidate.unselected_stations,
           candidate.verified_stations, candidate.unverified_stations].every(integer)
-        || candidate.pool_stations !== h.nominated_stations || selection.overlap_stations !== 0
+        || candidate.pool_stations !== pool || selection.overlap_stations !== 0
         || selection.eligible_unique_stations !== tracked.pool_stations + candidate.pool_stations
         || selection.selected_unique_stations !== Math.min(selection.limit, selection.eligible_unique_stations)
         || selection.unselected_unique_stations !== selection.eligible_unique_stations - selection.selected_unique_stations
@@ -289,11 +315,27 @@ function ghcnArchiveIntake(m, context) {
     tr += extra; ca += Math.min(spare - extra, candidate.pool_stations - ca)
     if (tracked.reserved_slots !== tr || tracked.selected_stations !== tr
         || candidate.reserved_slots !== ca || candidate.selected_stations !== ca) return null
+    if (sampled) {
+      const allocate = parity => {
+        let tr = Math.min(tracked.pool_stations, Math.floor(budget / 2) + (parity === 0 ? budget % 2 : 0))
+        let ca = Math.min(candidate.pool_stations, Math.floor(budget / 2) + (parity === 1 ? budget % 2 : 0))
+        const spare = budget - tr - ca, extra = Math.min(spare, tracked.pool_stations - tr)
+        tr += extra; ca += Math.min(spare - extra, candidate.pool_stations - ca)
+        return [tr, ca]
+      }
+      const even = allocate(0), odd = allocate(1)
+      for (const [index, lane] of [tracked, candidate].entries()) {
+        const pair = even[index] + odd[index]
+        const bound = pair === 0 ? null : Math.floor((lane.pool_stations - 1) / pair) * 2
+          + ((lane.pool_stations - 1) % pair + 1 <= Math.min(even[index], odd[index]) ? 1 : 2)
+        if (bound !== null && !integer(bound) || lane.stable_sweep_opportunities !== bound) return null
+      }
+    }
   }
   if (suppliedLookup && Object.hasOwn(h, "station_selection")) {
     // The lookup gate requires an active tracked station. Verified active
     // nominees are a disjoint subset of the eligible untracked population.
-    const activeTracked = Math.max(1, t.active_archives - (discovered ? selection.candidates.verified_stations : 0))
+    const activeTracked = Math.max(1, t.active_archives - (discovered || sampled ? selection.candidates.verified_stations : 0))
     if (h.eligible_untracked_stations + activeTracked > m.stations_active) return null
   }
   const partition = c.inactive_station_rows + c.too_old_rows + c.future_rows + c.unusable_rows + c.accepted_values
@@ -313,13 +355,14 @@ function ghcnArchiveIntake(m, context) {
       || (t.active_archives === 0 && c.inactive_station_rows !== c.temperature_rows)
       || ![m.station_obs_pairs, m.stations_with_obs].every(integer)
       || m.station_obs_pairs !== c.station_days || m.stations_with_obs !== c.stations_with_obs) return null
+  const samplingDetail = sampled ? ` Unhinted archive sample: ${selection.candidates.selected_stations} of ${t.sampling_pool_stations} cached active stations selected independently of lookup values; no timely or global coverage is established.` : ""
   if (t.active_archives === 0) return { unavailable: true, detail: `Saved GHCN station-archive sample: `
     + `${m.archive_verification_attempted} attempted; ${m.archive_verification_failed} failed; ${t.verified_archives} verified; `
-    + "0 active. No verified active station sample establishes current observations. Diff acquisition remains unavailable." + hintDetail }
-  return { empty: c.accepted_values === 0, detail: `Saved GHCN ${discovered ? "selected verified" : "already-verified"} station archives: ${t.verified_archives} checked; `
+    + "0 active. No verified active station sample establishes current observations. Diff acquisition remains unavailable." + hintDetail + samplingDetail }
+  return { empty: c.accepted_values === 0, detail: `Saved GHCN ${discovered ? "selected verified" : sampled ? "sampled verified" : "already-verified"} station archives: ${t.verified_archives} checked; `
     + `${t.active_archives} active; ${c.accepted_values} accepted daily values; ${c.station_days} station-day${c.station_days === 1 ? "" : "s"}. `
     + `Excluded rows: ${c.inactive_station_rows} inactive; ${c.too_old_rows} old; ${c.future_rows} future; ${c.unusable_rows} unusable. `
-    + "Diff acquisition remains unavailable. Checked station sample only; record qualification is separate." + hintDetail }
+    + "Diff acquisition remains unavailable. Checked station sample only; record qualification is separate." + hintDetail + samplingDetail }
 }
 
 function ghcnFetch(m, context, archive = null) {
