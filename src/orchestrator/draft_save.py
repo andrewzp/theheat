@@ -249,6 +249,9 @@ def save_draft(
     from src.editorial.automatic_text import automatic_text_hold
     text_hold = automatic_text_hold(tweet_text)
     source_hold = air_quality_admission
+    if source_hold is None and publication_policy["enabled"] and autoship_on_critic_pass_enabled():
+        from src.data.ghcn_publication import automatic_calendar_hold
+        source_hold = automatic_calendar_hold(draft, now=clock)
     if source_hold is None and tweet_type in ("air_quality_hazard", "dust_event"):
         from src.data import air_quality_current
         if air_quality_current.auto_text_enabled(tweet_type):

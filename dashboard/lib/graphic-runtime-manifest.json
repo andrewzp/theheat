@@ -1,6 +1,6 @@
 {
   "identity": {
-    "archive_sha256": "0485c2b6bcba02b972e0951a8f1e08b703cdaa903b62276014b83876b7f6974e",
+    "archive_sha256": "d2a55e6fec73a6f5747b062b912d8e21950421d0f134c492eef0834ef34a5d9e",
     "deployment_files": {
       "api/graphic_preview.py": "984de6284b9eddef85db41cee9ab26c9d92954f12c7e13b6f87bf0bfb6640157",
       "api/graphic_reader_status.py": "5e9685d699625a4eea9d5be884b6e266939a0ad344a2997351ba79bd114407ba",
@@ -58,7 +58,7 @@
       "src/data/water_levels.py": "4868999eaaf6a95800439c3455efa4d67753e7b328161598b11d140d75e93c9e",
       "src/editorial/__init__.py": "ae88e85a4a7a2d49e32df9e41a7e424f8d61492db308742ece8f2fb6cac24896",
       "src/editorial/_util.py": "98efd5327d85052022b73cbee72931790a8457e7f133f0ff2bbd109cee5bfa05",
-      "src/editorial/approval.py": "3a822e3a470bc4ac30f8a57aaa488c4eb8cded096fd137731fd1620d0939d306",
+      "src/editorial/approval.py": "56d49ab6562c3960e719ff2371ac593b18e2a1d1c844c9fd2219c59e9dc14351",
       "src/editorial/candidates.py": "80d50c488f44fd879c137751701a306cfae78eb376c3da33b9b7f3150cf9270d",
       "src/editorial/hot10_contract.py": "68dbb3c9081af24c7869ede677659a530a701a7270606307b122624a706fa534",
       "src/editorial/marine_evidence.py": "d6c9bb8c7ca12133eefa9ddf6283977c7a86da65ef50869d686c352263c1099d",
@@ -123,7 +123,7 @@
       "src/two_bot/types.py": "65afc3d850c31c843bc1e7b58dcc0b13eb274969dcff657e2622641bd85239ee"
     },
     "format": "saved-source-svg-preview-v2",
-    "policy_source_sha256": "e562b09284db4b57c88b3a55110009e718ee64da7e52599390a22eb94d8aefbe",
+    "policy_source_sha256": "49901b14b028a593c65829a3a016da5e1492bd80cc8dc6058fe486de4fc4cfc7",
     "resource_sources": {
       "src/data/registry/cities.csv": "data/cities.csv",
       "src/data/registry/country_codes.json": "data/country_codes.json",
@@ -133,5 +133,5 @@
     },
     "schema_version": 1
   },
-  "runtime_sha256": "997337a680659722597928fc1950b3d2712a7a312786b1ed82aaf1d15ab36ff7"
+  "runtime_sha256": "ccb1488617296480d1cf869b528b690b4349be115ead3bdc00d0b1355399ada7"
 }
