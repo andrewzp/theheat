@@ -24,6 +24,8 @@ _TYPES = {"open_meteo_archive_high": "all_time_high", "open_meteo_archive_low": 
           "monthly_high": "monthly_high", "monthly_low": "monthly_low",
           "calendar_record": "record", "calendar_record_low": "record_low"}
 _EVENT = re.compile(r"(?:all_time_(?:high|low)_[A-Z0-9]{11}|monthly_(?:high|low)_[A-Z0-9]{11}_\d{2}|cal_(?:high|low)_[A-Z0-9]{11})_\d{4}-\d{2}-\d{2}")
+CALENDAR_TYPES = frozenset({"record", "record_low"})
+CALENDAR_SIGNALS = frozenset({"calendar_record", "calendar_record_low"})
 
 
 class SourceHeld(ValueError):
@@ -119,6 +121,78 @@ def _retained(draft, payload, clock):
     return bundle, evidence, baseline
 
 
+def _calendar_family(draft, payload):
+    kind = draft.get("type")
+    signal = payload.get("signal_kind") if isinstance(payload, dict) else None
+    return (isinstance(kind, str) and kind in CALENDAR_TYPES
+            or isinstance(signal, str) and signal in CALENDAR_SIGNALS)
+
+
+def _calendar_automatic_require(draft, payload):
+    from src.editorial.observed_scope import enabled
+
+    _require(enabled(), "ghcn_calendar_observed_scope_required")
+    _require(isinstance(payload, dict) and isinstance(payload.get("signal_kind"), str)
+             and payload["signal_kind"] in CALENDAR_SIGNALS
+             and draft.get("type") == _TYPES[payload["signal_kind"]],
+             "ghcn_calendar_source_required")
+
+
+def is_automatic_calendar(draft):
+    if not isinstance(draft, dict):
+        return False
+    binding = draft.get("approval_binding")
+    automatic = (isinstance(binding, dict) and binding.get("mode") == "auto"
+                 or draft.get("approval_mode") in ("auto", "policy_auto")
+                 or draft.get("autoship_on_critic_pass") is True)
+    return automatic and _calendar_family(draft, _payload(draft))
+
+
+def calendar_timing_hold(draft, *, now=None, minimum_delay=timedelta(0), publish_at=None):
+    """Reuse the sender's oldest-source clock; a timer cannot outlive freshness."""
+    from src.editorial.approval import autoship_max_age_hours
+    from src.orchestrator.posting import _autoship_freshness_anchor, _parse_iso_utc
+
+    try:
+        clock = _clock(now)
+        anchor = _autoship_freshness_anchor(draft)
+        due = clock + minimum_delay if publish_at is None else _parse_iso_utc(publish_at)
+        _require(anchor is not None and anchor <= clock and due is not None,
+                 "ghcn_calendar_time_invalid")
+        _require(clock <= anchor + timedelta(hours=autoship_max_age_hours())
+                 and due <= anchor + timedelta(hours=autoship_max_age_hours()),
+                 "ghcn_calendar_review_window_stale")
+        return None
+    except SourceHeld as exc:
+        return str(exc)
+    except Exception:  # noqa: BLE001 — invalid timing cannot grant automatic arming
+        return "ghcn_calendar_time_invalid"
+
+
+def automatic_calendar_hold(draft, *, now=None, minimum_delay=timedelta(0)):
+    """Positive source proof for automatic calendar records; no read or grant.
+
+    Manual and unrelated products are not converted into GHCN evidence. The
+    existing full retained validator supplies all QC/comparator checks; live
+    boundaries independently retain their original archive reread below.
+    """
+    if not isinstance(draft, dict):
+        return "ghcn_calendar_source_required"
+    payload = _payload(draft)
+    if not _calendar_family(draft, payload):
+        return None
+    try:
+        before = _clock(now)
+        _calendar_automatic_require(draft, payload)
+        _retained(draft, payload, before)
+        _require(_clock(now) >= before, "ghcn_source_clock_changed")
+        return calendar_timing_hold(draft, now=now, minimum_delay=minimum_delay)
+    except SourceHeld as exc:
+        return str(exc)
+    except Exception:  # noqa: BLE001 — malformed evidence never buys automatic writing
+        return "ghcn_retained_source_invalid"
+
+
 def _read(station_id):
     from src.data._http import fetch_with_retry
     from src.two_bot.call_inventory import current_cancel_token
@@ -203,10 +277,13 @@ def current_draft_hold(draft, *, live=False, now=None):
     if not isinstance(draft, dict):
         return None
     payload = _payload(draft)
-    if not _family(draft, payload):
+    calendar_auto = is_automatic_calendar(draft)
+    if not calendar_auto and not _family(draft, payload):
         return None
     try:
         before = _clock(now)
+        if calendar_auto:
+            _calendar_automatic_require(draft, payload)
         bundle, evidence, baseline = _retained(draft, payload, before)
         if live:
             _current(bundle, evidence, baseline)

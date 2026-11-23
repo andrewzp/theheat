@@ -128,7 +128,7 @@ def test_existing_arming_branches_are_potential_routes(world, kind):
     assert triage_queue._automatic_type_may_arm(kind, 80) is True
 
 
-@pytest.mark.parametrize("kind", ["anomaly_hot", "anomaly_cold", "record", "country_high", "ozone_hole_peak", "unknown",
+@pytest.mark.parametrize("kind", ["anomaly_hot", "anomaly_cold", "country_high", "ozone_hole_peak", "unknown",
                                  "fire", "dust_event", "air_quality_hazard", "nhc_advisory", "severe_weather", "official_warning"])
 def test_suggested_auto_and_flag_off_families_are_not_automatic_routes(world, kind):
     assert triage_queue._automatic_type_may_arm(kind, 99) is False

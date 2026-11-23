@@ -89,10 +89,10 @@ class TestAutoshipEligibility:
               review_context=_critic_ctx(passed=False, verdict="KILL"))
         assert _only_draft(bot_state)["approval_mode"] == "manual"
 
-    def test_non_allowlist_type_never_arms(self, monkeypatch):
+    def test_calendar_label_without_qualified_source_never_arms(self, monkeypatch):
         monkeypatch.setenv("THEHEAT_AUTOSHIP_ON_CRITIC_PASS", "1")
         bot_state = _fresh_state()
-        # 'record' is low-sensitivity suggested_auto but NOT in the hard allowlist.
+        # Calendar automation requires its positive observed GHCN warrant.
         _save(bot_state, tweet_type="record", event_id="r1", review_context=_critic_ctx())
         d = _only_draft(bot_state)
         assert d["approval_mode"] == "manual"
@@ -412,6 +412,7 @@ class TestRecordsAutoshipExpansion:
         from src.editorial.approval import AUTOSHIP_ALLOWLIST
         assert {"all_time_high", "all_time_low", "monthly_high", "monthly_low",
                 "marine_heatwave"} <= AUTOSHIP_ALLOWLIST
-        for excluded in ("regional_anomaly", "record", "record_low", "fire",
+        assert {"record", "record_low"} <= AUTOSHIP_ALLOWLIST
+        for excluded in ("regional_anomaly", "fire",
                          "anomaly_hot", "absolute_extreme", "coral_bleaching"):
             assert excluded not in AUTOSHIP_ALLOWLIST

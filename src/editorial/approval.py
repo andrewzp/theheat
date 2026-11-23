@@ -22,8 +22,11 @@ from src.editorial.observed_scope import enabled, FORECAST_KINDS, MESSAGE
 #   - leaderboard + global atmospheric milestones: hot10, co2_milestone, ch4_milestone
 #   - station/all-time + monthly temperature records: all_time_high/low, monthly_high/low
 #   - ocean SST streak record: marine_heatwave (single well-known dataset, low-harm)
-# DELIBERATELY EXCLUDED (stay manual): calendar-day records ("record"/"record_low" —
-# high-volume, fire routinely → would flood); regional_anomaly + anomaly_* +
+# Calendar-day record/record_low may use this path only with the positive full
+# observed GHCN calendar warrant at selection, arming and publication. Other
+# products/legacy record labels gain no automatic route. Existing candidate,
+# review-delay, publication and source limits still apply.
+# DELIBERATELY EXCLUDED (stay manual): regional_anomaly + anomaly_* +
 # absolute_extreme (interpretive framing / bare-region honesty risk); country_high/low
 # (national records — rare but elite enough to keep a human polish window); and every
 # human-impact type (fire, cyclone_*, coral_bleaching, dust, air_quality, wet_bulb,
@@ -36,6 +39,7 @@ AUTOSHIP_ALLOWLIST: frozenset[str] = frozenset({
     "hot10", "co2_milestone", "ch4_milestone",
     "all_time_high", "all_time_low",
     "monthly_high", "monthly_low",
+    "record", "record_low",
     "marine_heatwave",
 })
 

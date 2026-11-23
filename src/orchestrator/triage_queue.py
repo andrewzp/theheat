@@ -474,6 +474,13 @@ def _automatic_source_hold(candidate: "TriageCandidateBundle") -> str | None:
         })
         if anchor is not None and now - anchor > timedelta(hours=autoship_max_age_hours()):
             return "autoship_source_stale"
+    from src.data import ghcn_publication
+    if (candidate.legacy_type in ghcn_publication.CALENDAR_TYPES
+            or getattr(bundle, "signal_kind", None) in ghcn_publication.CALENDAR_SIGNALS):
+        return ghcn_publication.automatic_calendar_hold({
+            "type": candidate.legacy_type, "event_id": candidate.event_id,
+            "review_context": {"two_bot": {"bundle": bundle.to_dict()}},
+        }, now=_utc_now, minimum_delay=timedelta(minutes=90))
     from src.data import coastal_observed
     from src.data import awc_observed
     from src.data import rainfall_observed
@@ -1167,6 +1174,7 @@ def _drain_and_write_triage_queue(
                 stage = ("air_quality_source" if source_hold.startswith("air_quality_") else
                          "autoship_source" if source_hold.startswith("autoship_") else
                          "awc_source" if source_hold.startswith("awc_") else
+                         "ghcn_source" if source_hold.startswith("ghcn_") else
                          "coastal_source" if source_hold.startswith("coastal_") else "nws_source")
             reason = spacing or source_hold or "type_has_no_automatic_arming_route"
             _bump_source_field_in_run(current_run, candidate.source, "triaged_out")

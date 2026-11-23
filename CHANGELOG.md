@@ -1,3 +1,7 @@
+## 0.9.109.173 — 2026-11-23
+
+- Let qualified observed GHCN calendar-date station highs and lows enter the existing automatic-text pipeline. Require positive full source/comparator evidence before paid selection and arming, and independently recheck it at publication; legacy and forecast record labels stay held. Preserve the 90-minute delay, freshness, current model checks, critic pass, short-copy ceiling, single-candidate/sample limits and live station-archive rereads. Supply the same existing copy-length budget to these two calendar signal aliases.
+
 ## 0.9.109.172 — 2026-11-23
 
 - When the bounded station lookup returns HTTP 400 after unavailable daily diffs, share the existing archive-check allowance with eligible untracked cached stations. Only original station archives can supply observations through unchanged QC, time and history checks; preserve failed-lookup diagnostics, tracked-lane reservations, required editorial checks and writer limits. Show unhinted sampling separately from provider nominations and global coverage.

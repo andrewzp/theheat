@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
 import os
 
 from src.editorial.publication import automatic_publication_policy
@@ -249,6 +250,9 @@ def save_draft(
     from src.editorial.automatic_text import automatic_text_hold
     text_hold = automatic_text_hold(tweet_text)
     source_hold = air_quality_admission
+    if source_hold is None and publication_policy["enabled"] and autoship_on_critic_pass_enabled():
+        from src.data.ghcn_publication import automatic_calendar_hold
+        source_hold = automatic_calendar_hold(draft, now=clock, minimum_delay=timedelta(minutes=90))
     if source_hold is None and tweet_type in ("air_quality_hazard", "dust_event"):
         from src.data import air_quality_current
         if air_quality_current.auto_text_enabled(tweet_type):
@@ -279,11 +283,19 @@ def save_draft(
         # (fail-closed): a disabled/absent critic verdict never auto-ships.
         if _critic_passed(review_context) and review_is_current(draft):
             delay = policy.recommended_delay_minutes or 30
-            draft["auto_approve_at"] = _maybe_defer_auto_approve_at(_utc_after_minutes_iso(delay))
-            draft["auto_approve_requested_at"] = _utc_now_iso()
-            draft["approval_mode"] = "auto"
-            draft["autoship_on_critic_pass"] = True
-            authorize_draft(draft, "auto", publication_epoch=publication_policy["epoch"])
+            from src.data.ghcn_publication import CALENDAR_TYPES, calendar_timing_hold
+            requested_at = _utc_now_iso() if tweet_type in CALENDAR_TYPES else None
+            due_at = _maybe_defer_auto_approve_at(_utc_after_minutes_iso(delay))
+            timing_hold = (calendar_timing_hold(draft, now=_utc_now, publish_at=due_at)
+                           if tweet_type in CALENDAR_TYPES else None)
+            if timing_hold:
+                draft["automatic_source_hold"] = timing_hold
+            else:
+                draft["auto_approve_at"] = due_at
+                draft["auto_approve_requested_at"] = requested_at or _utc_now_iso()
+                draft["approval_mode"] = "auto"
+                draft["autoship_on_critic_pass"] = True
+                authorize_draft(draft, "auto", publication_epoch=publication_policy["epoch"])
     elif (
         publication_policy["enabled"]
         and policy.mode == "armed_auto"

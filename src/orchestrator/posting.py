@@ -41,6 +41,9 @@ def _current_nws_source(draft, *, live, bot_state=None):
     from src.two_bot.intern.nwps_forecast import current_nwps_forecast
     from src.data.c3s_monthly import current_draft_hold
     from src.data import coastal_observed, awc_observed, rainfall_observed, ghcn_publication
+    calendar_hold = _current_calendar_automatic(draft, bot_state)
+    if calendar_hold:
+        return calendar_hold
     # An NHC advisory needs this process's own owner: static before intent,
     # a fresh fixed read at the live boundaries (manual entry, after intent).
     return (current_warning_source(draft) or current_advisory_source(draft, live=live)
@@ -53,7 +56,32 @@ def _current_nws_source(draft, *, live, bot_state=None):
             or awc_observed.current_draft_hold(draft, live=live, now=_utc_now)
             or rainfall_observed.current_draft_hold(draft, live=live, now=_utc_now)
             or rainfall_observed.operation_hold(draft, bot_state)
-            or ghcn_publication.current_draft_hold(draft, live=live, now=_utc_now))
+            or ghcn_publication.current_draft_hold(draft, live=live, now=_utc_now)
+            or _current_calendar_automatic(draft, bot_state))
+
+
+def _current_calendar_automatic(draft, bot_state):
+    """Calendar authority and timing stay current after safety, storage and I/O."""
+    from src.data import ghcn_publication
+
+    if not ghcn_publication.is_automatic_calendar(draft):
+        return None
+    if (not autoship_on_critic_pass_enabled()
+            or not automatic_approval_allowed(draft, bot_state or {})
+            or not _critic_passed(draft.get("review_context"))):
+        return "ghcn_calendar_automatic_authority_changed"
+    clock = _utc_now()
+    try:
+        created = _parse_iso_utc(draft.get("created_at"))
+        requested = _parse_iso_utc(draft.get("auto_approve_requested_at"))
+        due = _parse_iso_utc(draft.get("auto_approve_at"))
+    except (AttributeError, TypeError, ValueError, OverflowError):
+        return "ghcn_calendar_time_invalid"
+    if (created is None or requested is None or due is None
+            or due < max(created, requested) + timedelta(minutes=90)
+            or due > clock):
+        return "ghcn_calendar_review_window_not_due"
+    return ghcn_publication.calendar_timing_hold(draft, now=clock)
 
 
 def _current_warning_auto_source(draft) -> str | None:
@@ -301,6 +329,9 @@ def post_approved(draft_or_text: dict | str, bot_state: BotState) -> str:
         print("[post] Untracked text cannot publish; create and review a sourced draft")
         return "failed"
     mode = (draft.get("approval_binding") or {}).get("mode")
+    if calendar_hold := _current_calendar_automatic(draft, bot_state):
+        _hold_nws_draft(draft, calendar_hold)
+        return "failed"
     if mode == "auto" and not automatic_approval_allowed(draft, bot_state):
         draft["post_error"] = "Automatic publication paused or approval belongs to an obsolete release epoch"
         return "failed"

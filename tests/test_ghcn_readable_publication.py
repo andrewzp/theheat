@@ -68,6 +68,10 @@ def test_actual_senders_bind_saved_wire_and_recheck_full_source_twice(
     key,
     mode,
 ):
+    # Keep the positive calendar-auto case inside its required observed profile.
+    if mode == "auto" and key[1] == "calendar_date":
+        monkeypatch.setenv("THEHEAT_OBSERVED_WEATHER_ONLY", "1")
+        monkeypatch.setenv("THEHEAT_AUTOSHIP_ON_CRITIC_PASS", "1")
     draft = approved_record({("high", "all_time"): readable_variants[key]}, mode)
     original = deepcopy(draft)
     state = state_for(draft)

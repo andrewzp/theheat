@@ -154,7 +154,9 @@ def _memory_json(memory: MemorySlice) -> str:
 
 def automatic_copy_budget(bundle: StoryBundle) -> dict | None:
     """Advisory preparation only: the final automatic cap still decides arming."""
-    if (not observed_mode_enabled() or bundle.signal_kind not in AUTOSHIP_ALLOWLIST
+    kind = {"calendar_record": "record", "calendar_record_low": "record_low"}.get(
+        bundle.signal_kind, bundle.signal_kind)
+    if (not observed_mode_enabled() or kind not in AUTOSHIP_ALLOWLIST
             or observed_story_hold(bundle) is not None):
         return None
     citation = source_citation(bundle)
