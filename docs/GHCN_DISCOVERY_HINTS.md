@@ -1,5 +1,33 @@
 # Station discovery when GHCN diff files are missing
 
+## Bounded archive sampling after a rejected lookup
+
+When the existing collector has a complete all-404 diff capture and its single
+lookup returns HTTP 400, it can independently sample active untracked stations
+from its installed cache. Cached comparison values and the error response are
+not current weather. A station needs a matching cached identity, a finite
+temperature comparator and the configured minimum archive years merely to enter
+this sample. Only newly fetched original `.dly` bytes can provide observations;
+the existing source, age, QC, coverage and comparator checks still decide whether
+anything is usable.
+
+The unchanged two-lane selector shares the existing maximum of 20 archive checks
+between tracked history and the unhinted pool. Same-bucket retries and input order
+do not change selection; the one-slot case still alternates the lanes. Previously
+unused allowance can be consumed, but there is no extra lookup or higher archive
+ceiling. Authentication, rate, server and transport failures, successful or quiet
+lookups, partial/malformed diff intake, cold starts and explicit retained readers
+do not enable this path. Cancellation still fences every subsequent request.
+
+Schema 3 archive-intake telemetry explicitly names the unhinted sampling origin
+and pool, preserving zero provider nominations and the failed lookup. Sources
+checks the current interval, both lane allocations and counts before interpreting
+it. This sample is not a repaired diff or lookup, a new independent source, a
+global or timely coverage guarantee, or permission to write or publish a claim.
+With a large station pool and a small allowance, a full sweep may take months;
+missing runs or changing membership further weaken that selection-only bound.
+Actual useful output and coverage remain to be measured in ordinary runs.
+
 ## Failed lookup diagnostics
 
 A 400 response remains an unavailable lookup, with no weather observations or

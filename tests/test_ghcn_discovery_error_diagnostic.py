@@ -228,7 +228,9 @@ def test_weather_shaped_error_cannot_reach_the_nomination_parser():
 
 def test_error_diagnostic_refusal_keeps_original_tracked_signal_and_never_enters_its_evidence(tmp_path):
     (signals, _), metrics, calls, _ = invoke(tmp_path, hint_status=400, hint_body=error_body(),
-                                            tracked_payload=archive_bytes())
+                                            tracked_payload=archive_bytes(), missing_cached_baseline=True)
+    # This remains the tracked-only diagnostic control. Eligible cached peers
+    # are exercised separately by test_ghcn_unhinted_archives through real DLYs.
     assert len(signals) == 1 and signals[0].station_id == SID and len(calls) == 32
     assert metrics["station_discovery"]["provider_error"] is not None
     assert "Unsupported units" not in json.dumps([asdict(row) for row in signals], default=str)

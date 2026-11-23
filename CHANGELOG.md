@@ -1,3 +1,7 @@
+## 0.9.109.172 — 2026-11-23
+
+- When the bounded station lookup returns HTTP 400 after unavailable daily diffs, share the existing archive-check allowance with eligible untracked cached stations. Only original station archives can supply observations through unchanged QC, time and history checks; preserve failed-lookup diagnostics, tracked-lane reservations, required editorial checks and writer limits. Show unhinted sampling separately from provider nominations and global coverage.
+
 ## 0.9.109.171 — 2026-11-22
 
 - Carry the published NASA FIRMS MAP_KEY transaction limit and weighted-query caveat through the existing source-contract reader for three exact area-CSV products. Preserve all seven historical exports, partial quota status and unknown capacity, enforcement, reuse rights and cost; no collection or publishing setting changes.

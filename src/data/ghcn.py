@@ -34,6 +34,7 @@ Coverage notes:
 from __future__ import annotations
 
 import logging
+import math
 import os
 import re
 import hashlib
@@ -901,6 +902,7 @@ def check_extreme_signals_for_stations(
     capture = fetch_metrics.get("diff_fetch") or {}
     counts = capture.get("counts") or {}
     lookup = None
+    sampling_pool: set[str] = set()
     if (archive_observations and _runtime is None and _fetch_obs_fn is None
             and active_ids & tracked_stations and untracked_active
             and type(archive_verification_limit) is int and archive_verification_limit > 0
@@ -924,6 +926,20 @@ def check_extreme_signals_for_stations(
         )
         candidates.update(nominees)
         metrics["station_discovery"] = lookup
+        if (lookup.get("status") == "unavailable" and lookup.get("reason") == "http_error"
+                and lookup.get("http_status") == 400):
+            # A rejected lookup contributes no observation or nomination. The
+            # existing public archive allowance may independently sample active
+            # cached stations instead of remaining confined to revision history.
+            # Only the original archive/QC/history path below can supply facts.
+            for sid in untracked_active:
+                prior = cached.get(sid)
+                if (prior is not None and prior.station_id == sid and type(prior.archive_years) is int
+                        and prior.archive_years >= MIN_ARCHIVE_YEARS
+                        and any(value is not None and type(value) in (int, float) and math.isfinite(value)
+                                for value in (prior.all_time_max_c, prior.all_time_min_c))):
+                    sampling_pool.add(sid)
+            candidates.update(sampling_pool)
     selected, selection = _select_archive_stations(
         tracked_stations, candidates, now=now, limit=archive_verification_limit,
     )
@@ -994,7 +1010,13 @@ def check_extreme_signals_for_stations(
             snapshots, active_ids, now=now,
             max_age_days=_runtime.max_age if _runtime is not None else MAX_OBS_AGE_DAYS,
         )
-        if lookup is not None and candidates:
+        if sampling_pool:
+            metrics["station_archive_intake"].update(
+                schema_version=3, scope="verified_unhinted_station_archive_sample",
+                sampling_source="cached_active_stations_after_lookup_400",
+                sampling_pool_stations=len(sampling_pool),
+            )
+        elif lookup is not None and candidates:
             # The unchanged archive parser/QC/history path above supplied every
             # value. Hints contributed only station IDs to the existing lane.
             metrics["station_archive_intake"].update(
@@ -1072,7 +1094,7 @@ def check_extreme_signals_for_stations(
 
 
 def _verified_archive_observations(snapshots, active_ids, *, now, max_age_days):
-    """Reuse this invocation's verified tracked archives; no new source reads.
+    """Reuse this invocation's selected verified archives; no new source reads.
 
     A failed diff remains failed. These are only the already-selected station
     samples, not a replacement global scan, historical freshness or source SLA.

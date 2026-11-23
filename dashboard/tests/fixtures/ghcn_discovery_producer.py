@@ -23,9 +23,9 @@ from tests.ghcn_intake_cases import SID
 from tests.test_ghcn_discovery_hints import API, METADATA, Reply
 
 
-def produce(case="fresh", provider="ghcn", *, extra_stations=0):
+def produce(case="fresh", provider="ghcn", *, extra_stations=0, candidates_out=None):
     assert case in {"fresh", "qc", "unavailable", "malformed", "two_nominees",
-                    "error400", "error400_unknown", "error400_unicode", "error400_private"}
+                    "error400", "error400_unknown", "error400_unicode", "error400_private", "error400_sampled"}
     assert type(extra_stations) is int and 0 <= extra_stations <= 1000
     assert case != "two_nominees" or extra_stations == 0
     metadata = METADATA + ([dict(METADATA[1], station_id="SFX00000003")] if case == "two_nominees" else [])
@@ -69,6 +69,11 @@ def produce(case="fresh", provider="ghcn", *, extra_stations=0):
                            meta["country_name"], meta["lat"], meta["lon"], 27, 1))
                 if extra_stations and meta["station_id"] not in {m["station_id"] for m in METADATA}:
                     continue  # An uncached station is eligible for lookup, never nominated without a baseline.
+                if case.startswith("error400") and case != "error400_sampled" and meta["station_id"] != SID:
+                    # Preserve these historical tracked-only diagnostic cases
+                    # with an explicitly absent untracked heuristic cache. The
+                    # sampled400 case retains the full cache and original DLYs.
+                    continue
                 raw = archive_bytes(station=meta["station_id"], target=None)
                 thresholds = compute_thresholds(parse_dly_text(raw.decode()))
                 assert thresholds is not None
@@ -81,6 +86,8 @@ def produce(case="fresh", provider="ghcn", *, extra_stations=0):
              patch.object(socket.socket, "connect", forbidden), patch.object(socket, "create_connection", forbidden), \
              patch.object(socket, "getaddrinfo", forbidden), patch("builtins.print"):
             run_extreme_signals(state, run, [], {}, {})
+            if candidates_out is not None:
+                candidates_out.extend(state.get("_triage_queue", []))
     assert not state["drafts"] and len(run["sources"]) == 1
     return json.loads(json.dumps({"source_health": state["source_health"], "run_history": [run],
                                   "drafts": [], "request_count": len(calls)}))
