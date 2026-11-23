@@ -502,6 +502,14 @@ def post_approved(draft_or_text: dict | str, bot_state: BotState) -> str:
         draft.pop("autoship_attempted", None)
         _touch_draft(draft)
         return "failed"
+    # Global automatic authority is separate from the editorial fingerprint.
+    # Source, storage and policy work cannot carry an obsolete epoch to X.
+    if mode == "auto" and not automatic_approval_allowed(snapshot, bot_state):
+        row["phase"] = "not_sent"
+        draft["publish_outcome"] = "not_sent"
+        draft.pop("autoship_attempted", None)
+        _demote_autoship_to_manual(draft, "Automatic publication authority changed before transport; nothing sent")
+        return "failed"
     with outbox_outcome.recording() as stage_report:
         try:
             result = post_tweet(tweet_text, media_png=media_png, alt_text=alt_text)

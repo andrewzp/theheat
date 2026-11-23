@@ -1,3 +1,7 @@
+## 0.9.109.174 — 2026-11-23
+
+- Recheck current automatic-publication authority immediately before transport, after source, storage and policy work. Stop obsolete epochs or paused/invalid controls with a not-sent disposition and revoked approval; preserve manual authorization and earlier unknown or confirmed deliveries.
+
 ## 0.9.109.173 — 2026-11-23
 
 - Let qualified observed GHCN calendar-date station highs and lows enter the existing automatic-text pipeline. Require positive full source/comparator evidence before paid selection and arming, and independently recheck it at publication; legacy and forecast record labels stay held. Preserve the 90-minute delay, freshness, current model checks, critic pass, short-copy ceiling, single-candidate/sample limits and live station-archive rereads. Supply the same existing copy-length budget to these two calendar signal aliases.
