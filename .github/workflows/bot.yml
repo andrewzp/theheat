@@ -14,6 +14,9 @@ on:
     - cron: '41 * * * *'           # Hourly auto-approval queue processing
     - cron: '11 12 * * *'          # Daily leaderboard + alerts
     - cron: '11 0,4,8,16,20 * * *' # Remaining four-hour alert slots
+    # Extra queue/catch-up opportunities between primary collection hours.
+    # All nominal bot slots remain 30 minutes apart; per-run limits stay unchanged.
+    - cron: '11 1,2,3,5,6,7,9,10,11,13,14,15,17,18,19,21,22,23 * * *'
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -448,11 +451,13 @@ jobs:
           THEHEAT_AUTOMATIC_SELECTION_ONLY: ${{ github.event_name == 'workflow_dispatch' && inputs.automatic_only && '1' || '0' }}
           THEHEAT_SCHEDULED_ALERTS_CATCHUP: ${{ vars.THEHEAT_SCHEDULED_ALERTS_CATCHUP || '0' }}
           GIST_ID: >-
-            ${{ github.event_name == 'schedule' && github.event.schedule == '41 * * * *'
+            ${{ github.event_name == 'schedule' && (github.event.schedule == '41 * * * *'
+            || github.event.schedule == '11 1,2,3,5,6,7,9,10,11,13,14,15,17,18,19,21,22,23 * * *')
             && github.ref == 'refs/heads/main' && github.run_attempt == '1'
             && vars.THEHEAT_SCHEDULED_ALERTS_CATCHUP == '1' && secrets.GIST_ID || '' }}
           GH_TOKEN: >-
-            ${{ github.event_name == 'schedule' && github.event.schedule == '41 * * * *'
+            ${{ github.event_name == 'schedule' && (github.event.schedule == '41 * * * *'
+            || github.event.schedule == '11 1,2,3,5,6,7,9,10,11,13,14,15,17,18,19,21,22,23 * * *')
             && github.ref == 'refs/heads/main' && github.run_attempt == '1'
             && vars.THEHEAT_SCHEDULED_ALERTS_CATCHUP == '1'
             && ((steps.route-mode.outputs.mode == 'serialized' && secrets.THEHEAT_GIST_WRITER_TOKEN) || (steps.route-mode.outputs.mode == 'legacy' && secrets.GH_GIST_TOKEN) || '') || '' }}
@@ -465,8 +470,10 @@ jobs:
           fi
           if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
             echo "mode=$REQUESTED_MODE" >> "$GITHUB_OUTPUT"
-          elif [ "${{ github.event.schedule }}" = "41 * * * *" ]; then
-            # Check for missed collection only on eligible hourly runs. A failed or
+          elif [[ "${{ github.event.schedule }}" == "41 * * * *" ||
+                  "${{ github.event.schedule }}" == "11 1,2,3,5,6,7,9,10,11,13,14,15,17,18,19,21,22,23 * * *" ]]; then
+            echo "Queue schedule: ${{ github.event.schedule }}"
+            # Check for missed collection only on eligible queue runs. A failed or
             # inconclusive read preserves the sender role. The existing alerts prelude
             # services due drafts before any eligible catch-up collection.
             mode=auto_publish_due

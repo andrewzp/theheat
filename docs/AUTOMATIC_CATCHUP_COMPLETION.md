@@ -1,5 +1,22 @@
 # Completing automatic alerts recovery
 
+The ordinary bot keeps its six primary collection slots and hourly `:41` queue
+check. Additional `:11` checks in the other eighteen hours use the same queue
+role. The 48 nominal bot opportunities are thirty minutes apart; actual GitHub
+schedule delivery can be delayed or dropped. Queue logs name the triggering
+schedule so an admitted auxiliary check can be distinguished from configuration.
+
+With `THEHEAT_SCHEDULED_ALERTS_CATCHUP` enabled, either queue schedule can recover
+collection only after the existing 285-minute stale-alerts check, with first
+attempt/main context, bounded state read and the existing durable reservation.
+Fresh, unreadable or unknown history keeps the sender role. Failed collection
+still resets the clock. Extra opportunities can recover funded ordinary work
+that would otherwise be missed; per-run candidate/sample/source limits remain,
+and neither total spend nor a monthly ceiling is established by this schedule.
+Source qualification, useful drafts, actual X receipts and sustained cadence
+require ordinary runtime evidence. The independent sentinel path below retains
+its existing checks.
+
 The existing source-health sentinel can request one alerts cycle when retained
 alerts history is stale and no bot run is active. Only its first scheduled main
 run may do so. It supplies `automatic_only=true` and its numeric run ID; these

@@ -1,3 +1,7 @@
+## 0.9.109.175 — 2026-11-23
+
+- Add queue checks in the eighteen hours without primary collection slots, retaining the original hourly checks and six source slots. Apply the existing guarded stale-alerts catch-up, reservation, sender ordering, credential scope and per-run limits to those checks; log their schedule without source or tweet text. Configured opportunities do not establish actual delivery, content yield, spend or posting cadence.
+
 ## 0.9.109.174 — 2026-11-23
 
 - Recheck current automatic-publication authority immediately before transport, after source, storage and policy work. Stop obsolete epochs or paused/invalid controls with a not-sent disposition and revoked approval; preserve manual authorization and earlier unknown or confirmed deliveries.

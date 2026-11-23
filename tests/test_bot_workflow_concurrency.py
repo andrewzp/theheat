@@ -56,6 +56,7 @@ def test_prs_use_separate_queues_that_can_cancel_only_their_old_heads(workflow, 
 def test_every_existing_schedule_keeps_the_production_lock(workflow):
     assert {s["cron"] for s in workflow["on"]["schedule"]} == {
         "41 * * * *", "11 12 * * *", "11 0,4,8,16,20 * * *",
+        "11 1,2,3,5,6,7,9,10,11,13,14,15,17,18,19,21,22,23 * * *",
     }
     # No schedule or mode enters the expression: all use the same literal group.
     assert _queue_policy(workflow, "schedule") == ("theheat-bot", False)
@@ -72,6 +73,7 @@ def test_sentinel_keeps_its_hourly_cadence_in_a_separate_slot(workflow):
     "event,schedule,manual,expected",
     [
         ("schedule", "41 * * * *", "", "auto_publish_due"),
+        ("schedule", "11 1,2,3,5,6,7,9,10,11,13,14,15,17,18,19,21,22,23 * * *", "", "auto_publish_due"),
         ("schedule", "11 12 * * *", "", "both"),
         ("schedule", "11 0,4,8,16,20 * * *", "", "alerts"),
         ("workflow_dispatch", "", "leaderboard", "leaderboard"),
