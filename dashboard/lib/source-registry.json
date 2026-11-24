@@ -22,15 +22,16 @@
       ],
       "kind": "adapter",
       "entry_point": "src/orchestrator/sources/awc_observed.py:run_awc_observed",
-      "scope": "Two explicitly named reporting airports in different countries at the same UTC observation time.",
+      "scope": "Named reporting airports: same-time cross-country temperatures or one qualified observed gust.",
       "data_family": "station_points",
       "provenance": "NOAA Aviation Weather Center decoded METARs and reporting-station catalogue.",
       "collection_rule": "Default OFF; explicit observed-only opt-in and one-candidate/sample budget, no refill.",
       "time_rule": "Same UTC timestamp, at most two hours old; exact historical METAR and station metadata reread before writing, admission and sending.",
-      "claim_limit": "Observed airport temperatures only: no global ranking, record, rarity, climate cause, hazard or forecast claim.",
+      "claim_limit": "Observed airport temperature contrast or primary-body 50–100 kt gust; no sustained-wind, impact, global ranking, record, rarity, cause or forecast claim.",
       "evidence_files": [
         "src/orchestrator/sources/awc_observed.py",
         "src/data/awc_observed.py",
+        "src/data/awc_gust.py",
         "src/orchestrator/metar_report.py"
       ]
     },
@@ -692,7 +693,8 @@
   "referenced_code_sha256": {
     "src/data/air_quality_availability.py": "fe4ec7eba42a0b41d296407c54d168e73b76def9f58739a48ecda94a9f6eb536",
     "src/data/air_quality_contract.py": "7f9de8f7fcd6836a3e4fb32ea8c1a35a3c9981bcede6aea2d74770f12539d667",
-    "src/data/awc_observed.py": "b3e1425b11f7b58f9569622903a8fb9f3ded1e9da05be3b819565f62c5fb4535",
+    "src/data/awc_gust.py": "cfd2fa5f958ad510b8d86584c8d65788e8a47a87bc89e496392264238a8dc5e6",
+    "src/data/awc_observed.py": "4b85ea0b156b82014314eaf0d034b050c7f2c065f7a72370e30b8523b790e558",
     "src/data/c3s_monthly.py": "babc1416c324b4edda24bdd0a7bd7a8a39ceda2bee7bf826ae4b5f54302d16c1",
     "src/data/climate_indices.py": "ee020029a91261d26ece8dd5ed27859b963e8cc8321d27c51afdce6ce3dc74d7",
     "src/data/co2.py": "63d9578eb77bcc56b438ef85ee56fc7a1695982a46f2b3133e04b65adefa3d5f",
@@ -728,7 +730,7 @@
     "src/data/regional_observations.py": "eef66077194e446991db077d558f3e2da664e6c1c7a1deb5e2b4ea9cec08d88e",
     "src/data/river_gauges.py": "8d055bb13c3d91dbff84f9ceccc389d6880ff04fa5429d611f5ed4f9f97a055f",
     "src/data/sea_ice.py": "373dc72240b8ee7439995cf194b9b190b9a1940df393723119849cdeeff455f8",
-    "src/data/source_registry.py": "999c9a722f4b3176f6d1ea70be0b6e468a0cf26c33f2d4f9b31ec8f23e5e8c21",
+    "src/data/source_registry.py": "d996d5022dfb5716ccfedc5fb163f00b90d92ac06f67ddbe155e3febf623c8fc",
     "src/data/temperature_evidence.py": "940dfab7d54645262f16785b21532a18ffd6af6cbf7cf0c6e116463741192458",
     "src/data/usgs_quakes.py": "d074863aba46097e0aa31a0c16c48158a2769c1403cac51e1e2054b2deb96650",
     "src/data/water_levels.py": "4868999eaaf6a95800439c3455efa4d67753e7b328161598b11d140d75e93c9e",
@@ -742,7 +744,7 @@
     "src/orchestrator/observed_report.py": "ade51e85bc55f487fad98c46aa28cb0e05a7fb859938f4d3780bfdefb4d978e2",
     "src/orchestrator/run_alerts.py": "c488b68fc63b38dc40482a0622a5f25f616420449c9ec5e929df32e316109f42",
     "src/orchestrator/sources/air_quality.py": "9a3d031de277b0c5d3bf3c26b02681895f1a54f74dacacaa7260e4513c64b3a6",
-    "src/orchestrator/sources/awc_observed.py": "860fb5e0b3edb16694a1c88d8b7f2fa561fdd4e834f3f82ab2452143c0cb400f",
+    "src/orchestrator/sources/awc_observed.py": "56beba716e16af1b4bd02bb853701fc5deac9dba6930a607e0a79284ac4ed092",
     "src/orchestrator/sources/climate_indices.py": "e46485639d62d426b5d55b6f02191a47b0434bb31eb23e8f4a6bece33e980208",
     "src/orchestrator/sources/co2.py": "2ed59676536ab5ff9fc45d3116c91ffad10986a5a4380687a7191f2bd518d4a6",
     "src/orchestrator/sources/co_ops.py": "4a7b875e7ecce4df0c76c63807951b64bf3316859bfcfb411966c472a85a5af5",
@@ -777,5 +779,5 @@
     "src/two_bot/intern/warnings.py": "04e0a4506ffbb29124c8d2960a5e5025305699297fcf8f9178b23caac2cd7a37"
   },
   "evidence_scope": "Referenced local code inventory; not live/provider/transitive-source qualification.",
-  "registry_sha256": "a8334f52a14cc364a7a26c91b68bbee84054d0de89c099af145dc4d9d3437d2f"
+  "registry_sha256": "9ff24e8c5d3a530878466b9fd006f8d4988acbc660174936e6e7aa844d1eadd9"
 }

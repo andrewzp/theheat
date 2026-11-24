@@ -171,6 +171,11 @@ def save_draft(
     if (rainfall_observed.current_draft_hold(rainfall_draft, live=True, now=_utc_now)
             or rainfall_observed.operation_hold(rainfall_draft, bot_state)):
         return False
+    from src.data import awc_gust
+    if tweet_type == awc_gust.KIND:
+        bundle = (review_context or {}).get("two_bot", {}).get("bundle", {})
+        if awc_gust.operation_hold(bundle, bot_state, now=_utc_now):
+            return False
     from src.data.awc_observed import current_draft_hold as awc_draft_hold
     if awc_draft_hold({"type": tweet_type, "event_id": event_id, "text": tweet_text,
                        "review_context": review_context}, live=True, now=_utc_now):
@@ -284,7 +289,7 @@ def save_draft(
         if _critic_passed(review_context) and review_is_current(draft):
             delay = policy.recommended_delay_minutes or 30
             from src.data.ghcn_publication import CALENDAR_TYPES, calendar_timing_hold
-            requested_at = _utc_now_iso() if tweet_type in CALENDAR_TYPES else None
+            requested_at = _utc_now_iso() if tweet_type in CALENDAR_TYPES or tweet_type == awc_gust.KIND else None
             due_at = _maybe_defer_auto_approve_at(_utc_after_minutes_iso(delay))
             timing_hold = (calendar_timing_hold(draft, now=_utc_now, publish_at=due_at)
                            if tweet_type in CALENDAR_TYPES else None)
@@ -296,6 +301,16 @@ def save_draft(
                 draft["approval_mode"] = "auto"
                 draft["autoship_on_critic_pass"] = True
                 authorize_draft(draft, "auto", publication_epoch=publication_policy["epoch"])
+                if tweet_type == awc_gust.KIND:
+                    # The approval's own clock is bound to the decision. Mutable
+                    # scheduling fields cannot shorten its minimum review time.
+                    authorized = _parse_iso_utc(draft["approval_binding"]["authorized_at"])
+                    if authorized is None:
+                        raise ValueError("Gust approval requires an aware authorization clock")
+                    minimum_due = authorized + timedelta(minutes=delay)
+                    due = _parse_iso_utc(draft["auto_approve_at"])
+                    if due is None or due < minimum_due:
+                        draft["auto_approve_at"] = _maybe_defer_auto_approve_at(minimum_due.isoformat().replace("+00:00", "Z"))
     elif (
         publication_policy["enabled"]
         and policy.mode == "armed_auto"

@@ -72,7 +72,7 @@ POLICY_FILES = (
     "src/orchestrator/sources/newsworthiness.py",
     "src/data/newsworthiness.py",
     "src/data/places.py", "data/place_registry.json", "data/country_codes.json",
-    "data/country_names.json", "src/data/awc_observed.py", "src/orchestrator/sources/awc_observed.py",
+    "data/country_names.json", "src/data/awc_observed.py", "src/data/awc_gust.py", "src/orchestrator/sources/awc_observed.py",
     "src/data/rainfall_observed.py", "data/cities.csv",
     "src/data/rainfall_grid.py", "src/data/rainfall_grid_scan.py",
     "scripts/gen_imerg_country_tiles.py", "data/geography/NOTICE.json",

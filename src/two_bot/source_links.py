@@ -52,7 +52,7 @@ def _source_url(bundle: StoryBundle) -> str | None:
     facts = bundle.current_facts
     if not isinstance(facts, list):
         return None
-    label = "public_source_url" if bundle.signal_kind in {"monthly_climate_report", "coastal_observed_report", "observed_metar_contrast", "satellite_precipitation_report"} else "public_advisory_url"
+    label = "public_source_url" if bundle.signal_kind in {"monthly_climate_report", "coastal_observed_report", "observed_metar_contrast", "observed_metar_gust", "satellite_precipitation_report"} else "public_advisory_url"
     values = [f.get("value") for f in facts
               if isinstance(f, dict) and f.get("label") == label]
     if not values:
@@ -90,7 +90,7 @@ def _source_url(bundle: StoryBundle) -> str | None:
 
 def source_citation(bundle: StoryBundle) -> str | None:
     """The exact validated citation this formatter can attach; no claim authority."""
-    if bundle.signal_kind not in (CYCLONE_LINK_KINDS | {"monthly_climate_report", "coastal_observed_report", "observed_metar_contrast", "satellite_precipitation_report"}):
+    if bundle.signal_kind not in (CYCLONE_LINK_KINDS | {"monthly_climate_report", "coastal_observed_report", "observed_metar_contrast", "observed_metar_gust", "satellite_precipitation_report"}):
         return None
     return _source_url(bundle)
 
@@ -104,7 +104,7 @@ def format_source_link(tweet_text: str, bundle: StoryBundle) -> str:
     An uncertain abbreviation stays intact. If replacement cannot fit, preserve
     the original text, including its whitespace. The caller checks this final text.
     """
-    if bundle.signal_kind not in (CYCLONE_LINK_KINDS | {"monthly_climate_report", "coastal_observed_report", "observed_metar_contrast", "satellite_precipitation_report"}) or not tweet_text.strip():
+    if bundle.signal_kind not in (CYCLONE_LINK_KINDS | {"monthly_climate_report", "coastal_observed_report", "observed_metar_contrast", "observed_metar_gust", "satellite_precipitation_report"}) or not tweet_text.strip():
         return tweet_text
     url = source_citation(bundle)
     if url is None or url in tweet_text.split():

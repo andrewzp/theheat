@@ -255,6 +255,15 @@ def build_writer_user_prompt(
                    "sample time (HH:MM UTC) and UTC reporting date (day plus month, e.g. 13 Nov); "
                    "preserve preliminary status when present. Do not describe an older sample as conditions now. "
                    "Use one supported residual value as intelligible context; the source link is appended before checks.")
+    if bundle.signal_kind == "observed_metar_gust":
+        prompt += ("\n\nLead with the reported gust at the complete named airport and its country. "
+                   "Include sample_clock_utc as HH:MM UTC and sample_date_utc as day plus month. "
+                   "Say gust or gusts, never sustained wind. Use gust_kmh with km/h and optionally "
+                   "gust_mph with mph, or the original gust_kt in knots. These supplied conversions "
+                   "are rounded; do not invent other numbers, impacts, records or forecasts. "
+                   "Do not replace the airport with a nearby city or describe a regional wind maximum. "
+                   "Use one compact place-first sentence, fitting body_max_scalars; the exact "
+                   "source URL is appended before all required checks. Decline if the full claim cannot fit.")
     if bundle.signal_kind == "observed_metar_contrast":
         prompt += ("\n\nobserved_airport_copy_requirements: Include BOTH named airports and countries, "
                    "retaining each complete airport name, including slash-separated name parts, "

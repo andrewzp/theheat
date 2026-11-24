@@ -1,3 +1,7 @@
+## 0.9.109.177 — 2026-11-24
+
+- Add a separately enabled observed airport-gust text route using the existing NOAA METAR caches. Bind primary-body knot gusts to exact source reports, airport identity and UTC time; preserve required checks, current-source rereads, one-candidate/sample limits, duplicate and unknown-send protections. Share cache acquisition with temperature comparisons while retaining their existing spacing. The gust route defaults off; deployment alone does not activate it or establish posting cadence.
+
 ## 0.9.109.176 — 2026-11-24
 
 - Interpret a genuinely absent IMERG time-calendar attribute using the documented CF standard calendar. Keep malformed or unsupported present values, custom-calendar definitions, missing units, incorrect dates, stale frames and incomplete rainfall cells blocked. Existing source, nomination, paid-slot and publication limits remain.

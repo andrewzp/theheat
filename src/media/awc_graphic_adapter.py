@@ -41,6 +41,8 @@ def awc_graphic_spec(bundle, *, expected_bundle_sha256, synthetic=False):
         raise AWCGraphicRefused("invalid airport graphic input")
     if fingerprint(bundle) != expected_bundle_sha256:
         raise AWCGraphicRefused("the retained airport bundle changed")
+    if bundle.get("signal_kind") != awc_observed.KIND:
+        raise AWCGraphicRefused("only the retained temperature pair has this graphic")
     try:
         raw = bundle["raw_signal_dump"]["evidence"]
         captured = awc_observed._time(raw["retrieved_at"])

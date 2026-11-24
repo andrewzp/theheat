@@ -58,7 +58,7 @@ def _expired_unsent_airport(draft: dict, state: BotState, now: datetime) -> bool
     """
     from src.data import awc_observed as awc
 
-    if draft.get("type") != awc.KIND or draft.get("publish_outcome") != "not_sent":
+    if draft.get("type") not in (awc.KIND, "observed_metar_gust") or draft.get("publish_outcome") != "not_sent":
         return False
     if (draft.get("tweet_id") is not None
             or any(key in draft for key in ("posted_at", "published_revision", "publication_observations",
@@ -82,7 +82,7 @@ def _expired_unsent_airport(draft: dict, state: BotState, now: datetime) -> bool
                 return False
     try:
         bundle = draft["review_context"]["two_bot"]["bundle"]
-        if bundle["event_id"] != draft["event_id"] or bundle["signal_kind"] != awc.KIND:
+        if bundle["event_id"] != draft["event_id"] or bundle["signal_kind"] != draft.get("type"):
             return False
         captured = datetime.fromisoformat(bundle["raw_signal_dump"]["evidence"]["retrieved_at"].replace("Z", "+00:00"))
         if captured > now:
