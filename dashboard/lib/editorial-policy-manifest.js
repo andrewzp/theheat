@@ -95,7 +95,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/data/air_quality_contract.py": "7f9de8f7fcd6836a3e4fb32ea8c1a35a3c9981bcede6aea2d74770f12539d667",
     "src/data/air_quality_current.py": "dded4e4fc18ff7635756edeb88c55fe1fa8f573e1b79ef04d6e0d648493dfa38",
     "src/data/air_quality_evidence.py": "677713bb8916c4bcd51d407a5b19072f54532f5f46db116914af6b3fcac9f4f7",
-    "src/data/awc_gust.py": "23477ecd7af34f681c32d2b48f522cb861dc7529dbed2c27ba25a7c72001167e",
+    "src/data/awc_gust.py": "cfd2fa5f958ad510b8d86584c8d65788e8a47a87bc89e496392264238a8dc5e6",
     "src/data/awc_observed.py": "4b85ea0b156b82014314eaf0d034b050c7f2c065f7a72370e30b8523b790e558",
     "src/data/c3s_monthly.py": "babc1416c324b4edda24bdd0a7bd7a8a39ceda2bee7bf826ae4b5f54302d16c1",
     "src/data/coastal_observed.py": "6d5f56258134602bd199b16f43f061cd2a53212dc999bfc87307cc23950516be",
@@ -202,14 +202,14 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/orchestrator/cyclone_episodes.py": "92a9fc41d5b1bdc67ed0e210243825d354c5f3579b1f0b885a12f0e78bbcdf0e",
     "src/orchestrator/cyclones.py": "389c6441db0839763b6a9cd42146f75e3ab14d1179125d60a9c368eb1e03697d",
     "src/orchestrator/dedup.py": "e3ad15f1eb544e0d130a29f41e8090fb8839805e57877cf0b45c74438ac8b791",
-    "src/orchestrator/draft_save.py": "4f680201e1f38e0a7c811952394527d2d83cfa0309a1310ab7bc93d021afb145",
+    "src/orchestrator/draft_save.py": "d4d362a977db750f49ecb4a0087c0a887319ab536e52021be9dcead23aae9a59",
     "src/orchestrator/ghcn_source_result_client.py": "d30d22b50ffd270f647187e11fc8b17fe7f7dff28368e492b1d86fc0131cf1cd",
     "src/orchestrator/hot10.py": "1631ebf8949434ac1dd903fddf0354dc1460944d67222553250f002228e06739",
     "src/orchestrator/metar_report.py": "a170fc77cefdf3be42fc11803680c91250c88dcc80266c99265c41509b5ff82c",
     "src/orchestrator/nws_publication.py": "36874ce12091624ddd37f607685d7137f3e64fb1ceae6ec1fa9c8476936460e7",
     "src/orchestrator/observed_report.py": "ade51e85bc55f487fad98c46aa28cb0e05a7fb859938f4d3780bfdefb4d978e2",
     "src/orchestrator/portfolio_selection.py": "1ffd9496e71b155e250255e90664410637474d708b9951a863f08b4e9dd99d4c",
-    "src/orchestrator/posting.py": "63e909ccdfc1be9f454aea6a875c9cfd2579da84daebce17c8f4091588f9a084",
+    "src/orchestrator/posting.py": "2fbf8b605487903e32bc9e4e279c455c25454042209e363edcf1af678e67957d",
     "src/orchestrator/run_alerts.py": "c488b68fc63b38dc40482a0622a5f25f616420449c9ec5e929df32e316109f42",
     "src/orchestrator/source_result_client.py": "c1c8ae63f62169dcc26f87c8746b1994302cd36e26d6cb2146ff8a803fe089fb",
     "src/orchestrator/sources/air_quality.py": "9a3d031de277b0c5d3bf3c26b02681895f1a54f74dacacaa7260e4513c64b3a6",
@@ -315,5 +315,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "5c5ffcc95358c7df45ae838c228759ad0eb6275c8f9053c8130c0a8824b63d9e"
   },
   "schema_version": 1,
-  "source_sha256": "5c1bdafa43173fe815a189ef37de1d19b26f03031188460522c3845720870f1d"
+  "source_sha256": "710ddc9cca2c0a5361aa308141b1c97ee9d1221f7c64afcfdbae5a0fd5a3c29e"
 }

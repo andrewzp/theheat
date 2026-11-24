@@ -84,8 +84,10 @@ def _gust_automatic_hold(draft):
         requested = _time(draft.get("auto_approve_requested_at"))
         due = _time(draft.get("auto_approve_at"))
         authorized = _time(draft["approval_binding"].get("authorized_at"))
+        created = _time(draft.get("created_at"))
         clock = _utc_now()
-        if not requested <= authorized <= clock or due < requested + timedelta(minutes=1):
+        if (not created <= requested <= authorized <= clock
+                or due < authorized + timedelta(minutes=1)):
             return "awc_gust_review_window_invalid"
         if clock < due:
             return "awc_gust_review_window_not_due"

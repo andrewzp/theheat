@@ -122,3 +122,28 @@ def test_old_station_draft_cannot_hide_malformed_or_uncertain_conflicts(conflict
     state = {"drafts": [{"type": gust.KIND, "event_id": "metar_gust_TAAA_previous", "attempt_conflicts": conflicts,
              "review_context": {"two_bot": {"bundle": {"raw_signal_dump": {"evidence": old}}}}}], "publish_ledger": {}}
     assert gust.retained_station_hold(state, t.evidence(), now=t.NOW) == "awc_gust_uncertain_previous_attempt"
+
+
+@pytest.mark.parametrize("fields", [
+    {"requested": "2026-11-15T12:08:00Z", "due": "2026-11-15T12:09:00Z"},
+    {"requested": "2026-11-15T12:10:00Z", "due": "2026-11-15T12:10:10Z"},
+])
+def test_mutable_schedule_fields_cannot_shorten_the_bound_approval_window(world, monkeypatch, fields):
+    t.generate(world)
+    draft = world[1]["drafts"][0]
+    draft["auto_approve_requested_at"] = fields["requested"]
+    draft["auto_approve_at"] = fields["due"]
+    t.sender(monkeypatch, world, t.NOW + timedelta(seconds=20))
+    assert world[0].x_posts == [] and not world[1]["publish_ledger"]
+
+
+def test_old_unresolved_attempt_timestamp_blocks_the_actual_writer(world):
+    transport, state, _, called, _ = world
+    previous = deepcopy(t.evidence())
+    previous["points"][0]["valid_time"] = "2026-11-13T12:00:00Z"
+    state["drafts"].append({"type": gust.KIND, "id": "invented-old-draft", "event_id": "metar_gust_TAAA_2026-11-13",
+        "status": "pending", "last_publish_attempt_at": "2026-11-13T12:10:00Z",
+        "review_context": {"two_bot": {"bundle": {"raw_signal_dump": {"evidence": previous}}}}})
+    before = deepcopy(state["drafts"])
+    t.generate(world)
+    assert called == [] and transport.x_posts == [] and state["drafts"] == before

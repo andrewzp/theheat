@@ -291,7 +291,9 @@ def retained_station_hold(bot_state, evidence, *, now=None, exclude_event_id=Non
         try:
             old = draft["review_context"]["two_bot"]["bundle"]["raw_signal_dump"]["evidence"]["points"][0]
             if old["station_id"] == station:
-                if (draft.get("publish_outcome") in ("submitted", "unknown")
+                from src.editorial.revisions import has_unresolved_publish
+                if (has_unresolved_publish(draft, bot_state)
+                        or draft.get("publish_outcome") in ("submitted", "unknown")
                         or any(key in draft and (not isinstance(draft[key], list) or draft[key])
                                for key in ("attempt_conflicts", "revision_conflicts"))
                         or draft.get("autoship_attempted") and draft.get("publish_outcome") not in ("not_sent", "confirmed")):
