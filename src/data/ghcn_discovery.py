@@ -28,7 +28,9 @@ if TYPE_CHECKING:
 URL = "https://www.ncei.noaa.gov/access/services/data/v1"
 MAX_BYTES = 32 * 1024 * 1024
 MAX_ROWS = 300_000
-MAX_STATIONS = 500
+# Current access-service error contract reports a maximum of100 stations.
+# This bounds future ordinary queries; it never authorizes a split/retry.
+MAX_STATIONS = 100
 MAX_REQUEST_URI_BYTES = 8192
 READ_DEADLINE_SECONDS = 15
 SOCKET_TIMEOUT_SECONDS = 5
@@ -37,7 +39,7 @@ _NUMBER = re.compile(r"[+-]?\d{1,4}(?:\.\d{1,6})?\Z")
 ERROR_MAX_BYTES = 8192
 ERROR_FIELDS = frozenset({"dataset", "stations", "startDate", "endDate", "dataTypes", "bbox", "format", "units"})
 UNIT_ERROR_MESSAGE = "Invalid units. Valid units are standard or metric."
-UNIT_ERROR_MESSAGE = "Invalid units. Valid units are standard or metric."
+STATION_LIMIT_ERROR_MESSAGE = "Maximum number of stations exceeded. Maximum number of stations: 100"
 
 
 class _NoAuth(AuthBase):
@@ -186,6 +188,8 @@ def _provider_error(response, deadline):
             # Only a fixed public template becomes a fixed code; unknown text
             # is withheld entirely. No arbitrary provider text reaches storage.
             code = "invalid_units" if row["field"] == "units" and row["message"] == UNIT_ERROR_MESSAGE else "details_withheld"
+            if row["field"] == "stations" and row["message"] == STATION_LIMIT_ERROR_MESSAGE:
+                code = "station_limit_100"
             fields.append({"field": row["field"], "message_code": code})
         return {"schema_version": 1, "scope": "untrusted_provider_error_not_weather",
                 "body_bytes": received, "body_sha256": hashlib.sha256(body).hexdigest(), "fields": fields}
@@ -227,7 +231,8 @@ def _nominates(day, element, value, thresholds, anomaly):
 
 
 def nominate(body: bytes, eligible: frozenset[str], cached: dict[str, StationThresholds | None], *,
-             today: date, cutoff: date, anomaly: float) -> tuple[set[str], dict[str, int]]:
+             today: date, cutoff: date, anomaly: float,
+             _scope_out: dict[str, int] | None = None) -> tuple[set[str], dict[str, int]]:
     """Strict invented/received lookup format; no QC or unit agreement inferred."""
     if len(body) > MAX_BYTES:
         raise ValueError("hint_size")
@@ -238,6 +243,7 @@ def nominate(body: bytes, eligible: frozenset[str], cached: dict[str, StationThr
     values: dict[tuple[str, date, str], Decimal | None] = {}
     held: set[str] = set()
     recognized_rows = 0
+    selected_in_window_rows = 0
     for row in rows:
         if not isinstance(row, dict):
             raise ValueError("unsupported_hint_row")
@@ -260,6 +266,8 @@ def nominate(body: bytes, eligible: frozenset[str], cached: dict[str, StationThr
             continue
         if not cutoff <= day <= today:
             continue
+        if any(element in row for element in ("TMAX", "TMIN")):
+            selected_in_window_rows += 1
         for element in ("TMAX", "TMIN"):
             if element not in row:
                 continue
@@ -274,6 +282,8 @@ def nominate(body: bytes, eligible: frozenset[str], cached: dict[str, StationThr
             values[key] = value
     if rows and not recognized_rows:
         raise ValueError("unsupported_hint_rows")
+    if _scope_out is not None:
+        _scope_out.update(total_rows=len(rows), selected_in_window_rows=selected_in_window_rows)
     candidates = {sid for (sid, day, element), value in values.items()
                   if sid not in held and value is not None
                   and _nominates(day, element, value, cached.get(sid), anomaly)}
@@ -414,7 +424,13 @@ def fetch_nominations(eligible: frozenset[str], cached: dict[str, StationThresho
         body = b"".join(chunks)
         metadata.update(response_bytes=received, response_sha256=hashlib.sha256(body).hexdigest())
         metadata["reason"] = "nomination_unavailable"
-        candidates, counts = nominate(body, selected, cached, today=today, cutoff=cutoff, anomaly=anomaly)
+        scoped: dict[str, int] = {}
+        candidates, counts = nominate(body, selected, cached, today=today, cutoff=cutoff, anomaly=anomaly,
+                                     _scope_out=scoped)
+        if not candidates and scoped["total_rows"] > 0 and scoped["selected_in_window_rows"] == 0:
+            # An unrelated/malformed/stale-only response is not a supported
+            # quiet reply. It cannot start new untracked archive work.
+            return set(), metadata
         metadata.update(counts, status="nominated" if candidates else "no_nominations")
         metadata["reason"] = metadata["status"]
         return candidates, metadata

@@ -1,9 +1,9 @@
 # Station discovery when GHCN diff files are missing
 
-## Bounded archive sampling after a rejected lookup
+## Bounded archive sampling after a rejected or empty lookup
 
 When the existing collector has a complete all-404 diff capture and its single
-lookup returns HTTP 400, it can independently sample active untracked stations
+lookup returns HTTP400 or a complete supported200with no usable nominees, it can independently sample active untracked stations
 from its installed cache. Cached comparison values and the error response are
 not current weather. A station needs a matching cached identity, a finite
 temperature comparator and the configured minimum archive years merely to enter
@@ -15,12 +15,12 @@ The unchanged two-lane selector shares the existing maximum of 20 archive checks
 between tracked history and the unhinted pool. Same-bucket retries and input order
 do not change selection; the one-slot case still alternates the lanes. Previously
 unused allowance can be consumed, but there is no extra lookup or higher archive
-ceiling. Authentication, rate, server and transport failures, successful or quiet
-lookups, partial/malformed diff intake, cold starts and explicit retained readers
+ceiling. Authentication, rate, server and transport failures, malformed lookups,
+partial/malformed diff intake, cold starts and explicit retained readers
 do not enable this path. Cancellation still fences every subsequent request.
 
 Schema 3 archive-intake telemetry explicitly names the unhinted sampling origin
-and pool, preserving zero provider nominations and the failed lookup. Sources
+and pool, preserving zero provider nominations and the precise failed-or-empty lookup. Sources
 checks the current interval, both lane allocations and counts before interpreting
 it. This sample is not a repaired diff or lookup, a new independent source, a
 global or timely coverage guarantee, or permission to write or publish a claim.
@@ -57,13 +57,14 @@ protect ordinary successful lookup payloads; no global HTTP class is patched.
 ## Nomination and archive boundaries
 
 The request supplies the documented comma-separated `stations` selector using
-only currently eligible untracked station IDs. A client limit of500IDs and8192
-bytes of the actual prepared URI prevents an oversized request. These are local
-limits, not asserted provider quotas. The sorted pool is divided into consecutive
+only currently eligible untracked station IDs. The current service reports a maximum of100stationIDs; the client uses
+that100-ID bound and retains its8192-byte prepared-URI guard. The source reply
+is an engineering capacity diagnostic, not weather authority or an availability
+promise. A rejected request never causes a split, retry or automatic refill. The sorted pool is divided into consecutive
 chunks; the collector's captured UTC four-hour bucket selects one chunk. With an
 unchanged pool, successive buckets visit each chunk once per cycle. Pool changes,
 missing runs, unavailable data and reporting delays grant no coverage guarantee.
-For12,522eligible stations that is26chunks, not a global query on every run.
+For12,522eligible stations that is126chunks, not a global query on every run.
 
 The lookup diagnostics retain the pool/selection fingerprints, bucket, selected
 and unselected counts and prepared URI length. Only the selected subset may be
@@ -137,3 +138,28 @@ Source-product inventory v5 also distinguishes current archive observations from
 the archive's historical-reference role. They are the same upstream bytes and
 are not independent sources. The nomination row is discovery-only; it cannot be
 relabelled as a station observation. Complete v1–v4 exports remain byte-identical.
+
+## Empty successful lookups
+
+A complete, supported200response with no usable nomination also retains the
+existing bounded untracked-station archive sample. Its trace explicitly says
+`cached_active_stations_after_lookup_no_nominations`, distinct from the existing
+400case. An empty API response is not proof that every station archive lacks
+fresh observations. Only the same original archives and full QC/history/age/
+comparator readers can supply facts. The20-archive cap and tracked reservations
+remain; no new lookup fallback follows auth, quota, transport or malformed-body
+errors. A returned-but-unusable hint never becomes a weather observation.
+
+The exact fixed stations-limit diagnostic maps to `station_limit_100`; arbitrary
+messages and reflected values remain withheld. This does not establish actual
+source recovery, global recall, a useful draft, X publication or four posts/day.
+
+For a nonempty reply, quiet sampling additionally needs at least one requested
+station with a canonical date in the requested window and a TMAX/TMIN key. An
+unrelated, malformed-date or stale-only reply cannot allocate untracked archive
+work. This is a lookup-scope check, not acceptance of its numeric values.
+The source display ties the new quiet-sampling origin and fixed capacity code
+to the current100-ID producer; genuine historical500-ID traces stay readable in
+their original paths. At exactly two body bytes, a zero-row report must retain
+the digest of `[]`; this specific consistency check authenticates no arbitrary
+longer payload.

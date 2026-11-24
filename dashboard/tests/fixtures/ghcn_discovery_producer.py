@@ -29,7 +29,7 @@ from tests.test_ghcn_discovery_hints import API, METADATA, Reply
 def produce(case="fresh", provider="ghcn", *, extra_stations=0, candidates_out=None,
             archive_failure=False, archive_limit=20):
     assert case in {"fresh", "qc", "unavailable", "malformed", "two_nominees",
-                    "error400", "error400_unknown", "error400_unicode", "error400_private", "error400_sampled"}
+                    "quiet", "error400_capacity", "error400", "error400_unknown", "error400_unicode", "error400_private", "error400_sampled"}
     assert type(extra_stations) is int and 0 <= extra_stations <= 1000
     assert type(archive_failure) is bool
     assert type(archive_limit) is int and 0 <= archive_limit <= 20
@@ -49,12 +49,18 @@ def produce(case="fresh", provider="ghcn", *, extra_stations=0, candidates_out=N
         if "/superghcnd/" in url:
             return Reply(b"", 404)
         if url == API:
+            if case == "quiet":
+                return Reply(b"[]")
             if case.startswith("error400"):
                 message = "🧭" * 240 if case == "error400_unicode" else "Invalid units. Valid units are standard or metric."
                 if case == "error400_private":
                     message = "PRIVATE_FIXTURE_VALUE Authorization: Bearer INVENTED_TOKEN ftp://invented.invalid/private"
+                field = "units"
+                if case == "error400_capacity":
+                    field = "stations"
+                    message = "Maximum number of stations exceeded. Maximum number of stations: 100"
                 body = json.dumps({"errorCode": 400, "errorMessage": "Bad Request", "errors": [
-                    {"field": "units", "message": message, "value": "ignored-provider-value"}]}).encode()
+                    {"field": field, "message": message, "value": "ignored-provider-value"}]}).encode()
                 return Reply(b"{" if case == "error400_unknown" else body, 400)
             body = json.dumps([{"STATION": meta["station_id"], "DATE": "2026-11-18", "TMAX": "49"}
                                for meta in metadata[1:]]).encode()
@@ -108,5 +114,5 @@ def produce(case="fresh", provider="ghcn", *, extra_stations=0, candidates_out=N
 
 if __name__ == "__main__":
     sys.stdout.write(json.dumps({name: produce(name) for name in ("fresh", "qc", "unavailable", "malformed", "two_nominees",
-                                                               "error400", "error400_unknown", "error400_unicode", "error400_private")}
+                                                               "quiet", "error400_capacity", "error400", "error400_unknown", "error400_unicode", "error400_private")}
                                | {"combined": produce(provider="both_global")}, sort_keys=True) + "\n")

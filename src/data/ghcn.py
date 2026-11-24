@@ -903,6 +903,7 @@ def check_extreme_signals_for_stations(
     counts = capture.get("counts") or {}
     lookup = None
     sampling_pool: set[str] = set()
+    sampling_source = None
     if (archive_observations and _runtime is None and _fetch_obs_fn is None
             and active_ids & tracked_stations and untracked_active
             and type(archive_verification_limit) is int and archive_verification_limit > 0
@@ -926,12 +927,18 @@ def check_extreme_signals_for_stations(
         )
         candidates.update(nominees)
         metrics["station_discovery"] = lookup
-        if (lookup.get("status") == "unavailable" and lookup.get("reason") == "http_error"
-                and lookup.get("http_status") == 400):
-            # A rejected lookup contributes no observation or nomination. The
-            # existing public archive allowance may independently sample active
-            # cached stations instead of remaining confined to revision history.
+        rejected = (lookup.get("status") == "unavailable" and lookup.get("reason") == "http_error"
+                    and lookup.get("http_status") == 400)
+        no_hints = (lookup.get("status") == "no_nominations" and lookup.get("reason") == "no_nominations"
+                    and lookup.get("http_status") == 200 and not nominees)
+        if rejected or no_hints:
+            # A rejected or empty nomination lookup supplies no weather facts.
+            # The existing archive allowance can independently sample active
+            # cached stations. A corrected request must not disable that lane
+            # merely by replacing its400with a legitimate empty200response.
             # Only the original archive/QC/history path below can supply facts.
+            sampling_source = ("cached_active_stations_after_lookup_400" if rejected else
+                               "cached_active_stations_after_lookup_no_nominations")
             for sid in untracked_active:
                 prior = cached.get(sid)
                 if (prior is not None and prior.station_id == sid and type(prior.archive_years) is int
@@ -1013,7 +1020,7 @@ def check_extreme_signals_for_stations(
         if sampling_pool:
             metrics["station_archive_intake"].update(
                 schema_version=3, scope="verified_unhinted_station_archive_sample",
-                sampling_source="cached_active_stations_after_lookup_400",
+                sampling_source=sampling_source,
                 sampling_pool_stations=len(sampling_pool),
             )
         elif lookup is not None and candidates:
