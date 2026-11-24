@@ -11,6 +11,76 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-11-24 — Daily corpus grading (0 fresh drafts; 1 carry-over, previously graded)
+
+**Context:** Gist read via git-clone path (success; gist HEAD Nov 24 14:49Z, `_state_rev` 3490,
+`publication_control.enabled=true`). 1 pending: `draft_20261118_143656_56` (Sarh/Yakutsk, graded B Nov 18,
+not re-graded). No fresh pending draft.
+
+**Why the queue is dry:** nothing was drafted, posted or rejected since the Nov 23 pull. Last draft of any
+status: Tambacounda/Yakutsk, created Nov 23 11:18Z (~28h). Alerts runs are succeeding (`drafted_count: 0`).
+The suppression ledger shows three METAR candidates that got as far as a writer text and were killed:
+- `metar_pair_GAKD_UEEE` (14:48Z, critic `weak_signal`): "Kayes Arpt, Mali: 40°C; Yakutsk Arpt, Russia:
+  −27°C — a 67°C airport gap at 14:30 UTC, 24 Nov."
+- `metar_gust_CYUS` (10:54Z, critic `weak_signal`): "Shepherd Bay airport, Canada: a 115 km/h (71 mph) gust
+  reported at 10:34 UTC, 24 Nov."
+- `metar_gust_CYZP` (02:56Z, fact_check `awc_gust_scope_missing`): "Sandspit Arpt, Canada: a gust of
+  122 km/h (76 mph) reported at 02:07 UTC, 24 Nov (METAR SPECI)."
+
+None reached pending, so none is graded. METAR pairs posted: still 4 of 13.
+
+**Staleness:** Sarh/Yakutsk is ~144.5h old with a dated observation ("14:00 UTC, 18 Nov"), a strict
+candidate for the 5th cycle. Still `not_sent`, `post_error` "NWS warning needs fresh source review:
+awc_current_source_unavailable". Gist PATCH 403 again ("Gist writes are not permitted through this proxy");
+reject skipped.
+
+**Grade distribution (fresh):** none. **A-rate N/A (n=0).**
+
+**Headline finding:** "Arpt" is in the bundle, not invented by the writer. The `airport` fact in all three
+killed candidates reads "Kayes Arpt", "Sandspit Arpt", "Shepherd Bay Arpt". Shepherd Bay was "Shepherd Bay
+airport" in the Nov 20 draft, so the catalog label changed upstream between Nov 20 and Nov 21. That answers
+the Nov 23 followup. The writer sometimes repairs it (CYUS gust: "Shepherd Bay airport") and sometimes copies
+it (Kayes, Sandspit). A name normaliser at the catalog field fixes it for both METAR types.
+
+### Observed (not graded)
+**Kayes / Yakutsk observed_metar_contrast (critic-killed)**
+- Card layout again, 10/10 METAR pair texts since Nov 18. "Arpt" ×2, then "airport gap".
+- Yakutsk is the cold half for the 12th time in 14 pairs, ~27h after the Tambacounda post. The critic
+  killed it as `weak_signal` (67°C, the smallest gap since Shepherd Bay's 68.2°C). Whether the critic
+  weighed the repeat is not visible in the stored verdict.
+
+**observed_metar_gust (new type in the ledger, 2 candidates)**
+- Same colon-label opener as the pairs: "Sandspit Arpt, Canada: a gust of …". "(METAR SPECI)" is report-type
+  jargon printed in copy. CYUS is cleaner ("a 115 km/h (71 mph) gust reported at …") but has no close.
+- n=2, both killed, neither graded. Logged as a watch under P_metar_card, not a new proposal.
+
+### Carry-over (not re-graded)
+- Sarh/Yakutsk — B (Nov 18). ~144.5h old; strict staleness candidate, 5th cycle.
+
+### Patterns
+1. **P_metar_card +1 cycle (observational; 7 cycles).** Card 10/10. "Arpt" source confirmed (bundle
+   `airport` field). The gust type opens with the same "Place, Country:" label, so the fix should cover
+   both METAR types.
+2. **P_event_sat +1 cycle (10 cycles).** Yakutsk drafted again ~27h after its 4th post. It was killed
+   before pending, so the critic caught this one, but not via a station key. The 48h station key would
+   have held it upstream at no model cost.
+3. **P_close:** not counted (no graded draft). Not archived: the 3-cycle rule counts graded cycles (see
+   Nov 16 note), and there has been none since Nov 21. The Nov 23 plan note ("archives if unseen Nov 24")
+   was wrong on this and is corrected in the plan.
+4. No era-anchor, political-anchor, banned-opener (P3 regex) or plant-comparison hits. No A-grade
+   mechanic to log.
+
+### Followups
+- **Operator: Sarh/Yakutsk is ~144h old.** Reject from the dashboard. 5th cycle flagged.
+- Operator: normalise the catalog `airport` field ("Arpt" → place name, or drop the suffix) before it
+  reaches the writer. This covers `observed_metar_contrast` and `observed_metar_gust`.
+- Watch: if `observed_metar_gust` drafts reach pending, grade them against P_metar_card (label opener,
+  "METAR SPECI" jargon, no close).
+- Infra (carried): `gh` token invalid; gist writes 403 at the proxy. Gist reject, `gh pr` and
+  `ROUTINE_BEACON` writes blocked.
+
+---
+
 ## 2026-11-23 — Daily corpus grading (0 fresh drafts; 1 carry-over, previously graded)
 
 **Context:** Gist read via git-clone path (success; gist HEAD Nov 23 14:32Z, `_state_rev` 3474,
