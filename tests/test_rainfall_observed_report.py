@@ -140,8 +140,9 @@ def test_source_owned_report_stays_intact_while_other_stories_keep_optional_cont
     assert report.validate_bundle(bundle, now=NOW) == original["raw_signal_dump"]["evidence"]
 
 
-@pytest.mark.parametrize("case", ["wrapper_id", "bundle_id", "retagged", "wrapper_type", "wrapper_marker"])
-def test_withheld_rainfall_identities_cannot_be_borrowed_for_optional_context(bundle, enabled, case):
+@pytest.mark.parametrize("reverse", [False, True])
+@pytest.mark.parametrize("case", ["wrapper_id", "bundle_id", "retagged", "wrapper_type", "wrapper_marker", "alias_chain"])
+def test_withheld_rainfall_identities_cannot_be_borrowed_for_optional_context(bundle, enabled, case, reverse):
     from freezegun import freeze_time
     from src import state
     from src.editorial import newsworthiness
@@ -153,7 +154,8 @@ def test_withheld_rainfall_identities_cannot_be_borrowed_for_optional_context(bu
     independent = _cand(event_id="invented-independent", country="FR", when=DAY)
     rain = replace(_cand(event_id=bundle.event_id, when=DAY, signal_kind=report.KIND),
                    bundle=bundle, source="gpm_imerg")
-    disputed = case in {"wrapper_id", "bundle_id", "retagged"}
+    disputed = case in {"wrapper_id", "bundle_id", "retagged", "alias_chain"}
+    bridge = None
     if case == "wrapper_id":
         rain = replace(rain, event_id=peer.event_id)
     elif case == "bundle_id":
@@ -161,6 +163,10 @@ def test_withheld_rainfall_identities_cannot_be_borrowed_for_optional_context(bu
     elif case == "retagged":
         bundle.event_id, bundle.signal_kind = peer.event_id, peer.bundle.signal_kind
         rain = replace(rain, event_id=peer.event_id)
+    elif case == "alias_chain":
+        bridge = _cand(event_id="invented-bridge", country="FR", when=DAY)
+        bridge.bundle.event_id = peer.event_id
+        rain = replace(rain, event_id=bridge.event_id)
     else:
         rain = _cand(event_id="invented-relabeled", country="FR", when=DAY)
         rain = (replace(rain, legacy_type=report.KIND) if case == "wrapper_type"
@@ -168,7 +174,8 @@ def test_withheld_rainfall_identities_cannot_be_borrowed_for_optional_context(bu
     before = deepcopy(rain.bundle.to_dict())
     bot_state = deepcopy(state.DEFAULT_STATE)
     bot_state["drafts"] = []
-    bot_state["_triage_queue"] = [host, peer, independent, rain]
+    queue = [host, peer, independent, rain] + ([bridge] if bridge is not None else [])
+    bot_state["_triage_queue"] = list(reversed(queue)) if reverse else queue
     seen_news, dispatched = [], []
     attach = newsworthiness.attach_human_impact
 

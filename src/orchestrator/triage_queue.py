@@ -1023,6 +1023,12 @@ def _drain_and_write_triage_queue(
     withheld_rows: set[int] = set()
     withheld_ids: set[str] = set()
     for candidate in queue:
+        identities = [identity for identity in (candidate.event_id, candidate.bundle.event_id)
+                      if isinstance(identity, str) and identity and identity == identity.strip()]
+        # Inspect every original row before filtering. A removed A/B mismatch
+        # must not hide its dispute over B, including across several aliases.
+        if len(identities) != 2 or identities[0] != identities[1]:
+            withheld_ids.update(identities)
         inner = {"signal_kind": candidate.bundle.signal_kind,
                  "event_id": candidate.bundle.event_id,
                  "raw_signal_dump": candidate.bundle.raw_signal_dump}
@@ -1030,9 +1036,7 @@ def _drain_and_write_triage_queue(
         if not (rainfall_observed.is_family(inner) or rainfall_observed.is_family(outer)):
             continue
         withheld_rows.add(id(candidate))
-        for identity in (candidate.event_id, candidate.bundle.event_id):
-            if isinstance(identity, str) and identity and identity == identity.strip():
-                withheld_ids.add(identity)
+        withheld_ids.update(identities)
     enrichment_queue = [candidate for candidate in queue
                         if id(candidate) not in withheld_rows
                         and not any(isinstance(identity, str) and identity in withheld_ids
