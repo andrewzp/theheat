@@ -13,7 +13,7 @@ from tests.test_observed_provider_documentation import by_id, rehash
 
 V8 = "theheat.source-product-contracts/v8"
 V9 = "theheat.source-product-contracts/v9"
-CHECKED = "2026-11-24T19:01:09Z"
+CHECKED = "2026-11-24T19:01:10Z"
 GHCN = {
     "open_meteo_extreme_signals.ghcn_daily": "noaa_ncei.ghcn_daily_superghcnd_diff",
     "open_meteo_extreme_signals.ghcn_station_history": "noaa_ncei.ghcn_daily_station_archive",
@@ -140,10 +140,11 @@ def test_schema_relabelling_does_not_move_use_facts_across_historical_exports(ol
 
 
 @pytest.mark.parametrize("schema,cutoff,status", [
-    (V8, "2026-11-24T19:01:08Z", "current"),
-    (V9, "2026-11-24T19:01:08Z", "held"),
+    (V8, "2026-11-24T19:01:09Z", "current"),
+    (V9, "2026-11-24T19:01:09Z", "held"),
+    (V9, "2026-11-24T19:01:09.100000Z", "held"),
     (V9, CHECKED, "current"),
-    (V9, "2026-11-24T19:01:10Z", "current"),
+    (V9, "2026-11-24T19:01:11Z", "current"),
 ])
 def test_actual_readiness_cli_qualifies_documentation_time_and_keeps_p17_open(schema, cutoff, status, tmp_path):
     source, output = tmp_path / "source.json", tmp_path / "report"

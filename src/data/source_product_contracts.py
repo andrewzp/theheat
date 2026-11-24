@@ -64,7 +64,7 @@ _GHCN_USE_DOC = ("https://www.ncei.noaa.gov/pub/data/cdo/documentation/GHCND_doc
                  "d67e69ce657d175dd301c2b9cdb162ff5be95327c9247f82235b1228577d717b")
 _GHCN_README_DOC = ("https://www.ncei.noaa.gov/pub/data/ghcn/daily/readme.txt",
                     "0e4e6f0e6947cf1add884c328a01760f31c56ef5fb86b85ed57dd5dc4c4aeaa6")
-_GHCN_USE_CHECKED_AT = "2026-11-24T19:01:09Z"
+_GHCN_USE_CHECKED_AT = "2026-11-24T19:01:10Z"
 _CRW_SSTA_DOC = ("https://coralreefwatch.noaa.gov/product/5km/methodology.php",
                  "402f7b1c4629bdec4e2749e37351826e8e202bd8900afa9fd9ad415b02f66273")
 _CRW_CHECKED_AT = "2026-11-22T01:46:45Z"
