@@ -188,7 +188,8 @@ def test_step_exposes_state_credentials_only_on_eligible_hourly_schedules():
     env = _mode_step()["env"]
     assert env["THEHEAT_SCHEDULED_ALERTS_CATCHUP"] == "${{ vars.THEHEAT_SCHEDULED_ALERTS_CATCHUP || '0' }}"
     for name in ("GIST_ID", "GH_TOKEN"):
-        assert env[name].startswith("${{ github.event_name == 'schedule' && github.event.schedule == '41 * * * *'")
+        assert env[name].startswith("${{ github.event_name == 'schedule' && (github.event.schedule == '41 * * * *'")
+        assert "|| github.event.schedule == '11 1,2,3,5,6,7,9,10,11,13,14,15,17,18,19,21,22,23 * * *')" in env[name]
         assert "github.ref == 'refs/heads/main' && github.run_attempt == '1'" in env[name]
         assert "vars.THEHEAT_SCHEDULED_ALERTS_CATCHUP == '1'" in env[name]
     assert os.path.exists(ROOT / "scripts/alerts_lane_catchup.py")
