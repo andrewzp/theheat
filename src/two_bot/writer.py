@@ -257,6 +257,9 @@ def build_writer_user_prompt(
                    "Use one supported residual value as intelligible context; the source link is appended before checks.")
     if bundle.signal_kind == "observed_metar_gust":
         prompt += ("\n\nLead with the reported gust at the complete named airport and its country. "
+                   "Use the word airport explicitly; the catalogue abbreviation Arpt may be expanded "
+                   "to airport, preserving the rest of the complete name. Arpt alone does not meet "
+                   "the required airport scope. "
                    "Include sample_clock_utc as HH:MM UTC and sample_date_utc as day plus month. "
                    "Say gust or gusts, never sustained wind. Use gust_kmh with km/h and optionally "
                    "gust_mph with mph, or the original gust_kt in knots. These supplied conversions "

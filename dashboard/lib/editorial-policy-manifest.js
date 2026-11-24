@@ -311,9 +311,9 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/two_bot/synchronous_writer.py": "3a05a469917cd25e28adf6e046aca20f454dbc68543505628bd17ad31b4cca31",
     "src/two_bot/trial_budget.py": "da8de235919094e69d4b4823f119f2a70ed8d9c2a70889a6c7335ee1344f8f24",
     "src/two_bot/types.py": "65afc3d850c31c843bc1e7b58dcc0b13eb274969dcff657e2622641bd85239ee",
-    "src/two_bot/writer.py": "c3bcfb2582fbdc3b3f2c82d7724c30c1e3c035995e62d8ffb48b3de6c248e19c",
+    "src/two_bot/writer.py": "443e0fa8c67f8a63f91c15d66188120afc9fa563422d92c3492b1e53def99b33",
     "src/voice/safety.py": "5c5ffcc95358c7df45ae838c228759ad0eb6275c8f9053c8130c0a8824b63d9e"
   },
   "schema_version": 1,
-  "source_sha256": "2df5caa8f6b19e930c278231cb72aa79e3488241b325f19c2da0c2762550d45a"
+  "source_sha256": "821d0dd62bcf51a8f0b301ceb8e3638a3edd3ab6cc811a9b1d336c90532b8599"
 }

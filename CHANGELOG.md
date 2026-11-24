@@ -1,3 +1,7 @@
+## 0.9.109.179 — 2026-11-24
+
+- Require explicit airport scope in observed-gust writer guidance and allow expanding the source catalogue's Arpt abbreviation. Keep the existing factual scope check, one-draft budget and all required checks unchanged.
+
 ## 0.9.109.178 — 2026-11-24
 
 - Limit future NOAA discovery lookups to the service-reported 100-station request size, retaining one request and no retry or split. Keep original station-archive discovery within its existing allowance after a complete lookup supplies no usable nominations. Distinguish empty and rejected lookups in the source display, preserve historical 500-station traces, and keep lookup hints separate from source observations, QC, record history and required publication checks.
