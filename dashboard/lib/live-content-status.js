@@ -227,6 +227,10 @@ function ghcnArchiveIntake(m, context) {
         || h.held_stations + h.nominated_stations > h.eligible_untracked_stations
         || Object.hasOwn(h, "station_selection") && h.held_stations + h.nominated_stations > h.station_selection.selected_stations
         || h.nominated_stations > h.numeric_hints || (h.status === "nominated") !== (h.nominated_stations > 0)) return null
+    // At exactly two bytes only [] can be a valid empty JSON array. This
+    // consistency check does not authenticate arbitrary longer source bodies.
+    if (h.rows_received === 0 && h.response_bytes === 2
+        && h.response_sha256 !== "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945") return null
     const reason = { http_error: `HTTP ${h.http_status}`, transport_unavailable: "transport incomplete",
       headers_unsupported: "unsupported headers", body_limit: "body limit", read_deadline: "read deadline",
       body_length_mismatch: "length mismatch", nomination_unavailable: "unsupported reply or nomination inputs" }[h.reason]
@@ -235,6 +239,9 @@ function ghcnArchiveIntake(m, context) {
     if (h.schema_version === 2) {
       const diagnostic = providerErrorDetail(h.provider_error)
       if (diagnostic === null) return null
+      if (Array.isArray(h.provider_error?.fields)
+          && h.provider_error.fields.some(row => row.message_code === "station_limit_100")
+          && (!Object.hasOwn(h, "station_selection") || h.station_selection.limit !== 100)) return null
       hintDetail += diagnostic
     }
   }
@@ -272,7 +279,7 @@ function ghcnArchiveIntake(m, context) {
     const lookupCutoff = new Date(Math.max(Date.parse(t.cutoff_day), Date.parse(t.window_day) - 4 * 86400000))
       .toISOString().slice(0, 10)
     if (!suppliedLookup || (sampled400 && (h.schema_version !== 2 || !Object.hasOwn(h, "provider_error")))
-        || (sampledEmpty && h.schema_version !== 1)
+        || (sampledEmpty && (h.schema_version !== 1 || h.station_selection?.limit !== 100))
         || !Object.hasOwn(h, "station_selection") || h.cutoff_day !== lookupCutoff
         || selection.limit < 1 || tracked.pool_stations < 1
         || Object.keys(selection).sort().join() !== selectorKeys.sort().join()

@@ -153,3 +153,13 @@ errors. A returned-but-unusable hint never becomes a weather observation.
 The exact fixed stations-limit diagnostic maps to `station_limit_100`; arbitrary
 messages and reflected values remain withheld. This does not establish actual
 source recovery, global recall, a useful draft, X publication or four posts/day.
+
+For a nonempty reply, quiet sampling additionally needs at least one requested
+station with a canonical date in the requested window and a TMAX/TMIN key. An
+unrelated, malformed-date or stale-only reply cannot allocate untracked archive
+work. This is a lookup-scope check, not acceptance of its numeric values.
+The source display ties the new quiet-sampling origin and fixed capacity code
+to the current100-ID producer; genuine historical500-ID traces stay readable in
+their original paths. At exactly two body bytes, a zero-row report must retain
+the digest of `[]`; this specific consistency check authenticates no arbitrary
+longer payload.

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict"
+import { createHash } from "node:crypto"
 import { spawnSync } from "node:child_process"
 import { fileURLToPath } from "node:url"
 import test from "node:test"
@@ -72,11 +73,23 @@ test("quiet sampling cannot borrow HTTP400, failed headers or an asserted nomina
     m => { m.station_discovery.schema_version = 2 },
     m => { m.station_archive_intake.sampling_source = "cached_active_stations_after_lookup_400" },
     m => { m.station_discovery.station_selection.limit = 99 },
+    m => { m.station_discovery.station_selection.limit = 500 },
+    m => { m.station_discovery.response_sha256 = createHash("sha256").update("{}").digest("hex") },
   ]
   for (const mutate of changes) await t.test(mutate.toString(), () => {
     const state = structuredClone(fixtures.quiet)
     mutate(metrics(state))
     assert.match(outcome(state).detail, /intake details are unavailable or inconsistent/)
     assert.doesNotMatch(outcome(state).detail, /Unhinted archive sample/)
+  })
+})
+
+test("new capacity diagnostic requires its actual current100 producer selector", async t => {
+  for (const change of ["legacy-limit", "missing-selector"]) await t.test(change, () => {
+    const state = structuredClone(fixtures.capacity)
+    if (change === "legacy-limit") metrics(state).station_discovery.station_selection.limit = 500
+    else delete metrics(state).station_discovery.station_selection
+    assert.match(outcome(state).detail, /intake details are unavailable or inconsistent/)
+    assert.doesNotMatch(outcome(state).detail, /reported maximum of 100/)
   })
 })

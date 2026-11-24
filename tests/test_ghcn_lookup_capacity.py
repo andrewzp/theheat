@@ -67,3 +67,25 @@ def test_unusable_reply_is_not_a_successful_empty_lookup(tmp_path, body):
     (_, _), metrics, calls, _ = invoke(tmp_path, hint_status=200, hint_body=body)
     assert metrics["station_discovery"]["status"] == "unavailable"
     assert not any(url.endswith('/' + TARGET + '.dly') for url in archive_calls(calls))
+
+
+@pytest.mark.parametrize("row", [
+    {"STATION": "ZZX00000000", "DATE": "!NOTADATE!", "TMAX": {}},
+    {"STATION": TARGET, "DATE": "2026-11-99", "TMAX": "20"},
+    {"STATION": "ZZX00000000", "DATE": "2026-11-18", "TMAX": "20"},
+    {"STATION": TARGET, "DATE": "2020-11-18", "TMAX": "20"},
+])
+def test_nonempty_reply_needs_selected_in_window_metric_scope_before_sampling(tmp_path, row):
+    (_, _), metrics, calls, _ = invoke(tmp_path, hint_status=200, hint_body=json.dumps([row]).encode())
+    assert metrics["station_discovery"]["status"] == "unavailable"
+    assert metrics["station_discovery"]["reason"] == "nomination_unavailable"
+    assert len(archive_calls(calls)) == 1
+    assert not any(url.endswith('/' + TARGET + '.dly') for url in archive_calls(calls))
+
+
+def test_selected_current_row_with_bad_metric_is_not_confused_with_unrelated_payload(tmp_path):
+    row = {"STATION": TARGET, "DATE": "2026-11-18", "TMAX": {}}
+    (bundles, _), metrics, calls, _ = invoke(tmp_path, hint_status=200, hint_body=json.dumps([row]).encode())
+    assert metrics["station_discovery"]["status"] == "no_nominations"
+    assert len(archive_calls(calls)) == 2
+    assert any(bundle.station_id == TARGET and bundle.all_time_high.new_temp_c == 33 for bundle in bundles)

@@ -231,7 +231,8 @@ def _nominates(day, element, value, thresholds, anomaly):
 
 
 def nominate(body: bytes, eligible: frozenset[str], cached: dict[str, StationThresholds | None], *,
-             today: date, cutoff: date, anomaly: float) -> tuple[set[str], dict[str, int]]:
+             today: date, cutoff: date, anomaly: float,
+             _scope_out: dict[str, int] | None = None) -> tuple[set[str], dict[str, int]]:
     """Strict invented/received lookup format; no QC or unit agreement inferred."""
     if len(body) > MAX_BYTES:
         raise ValueError("hint_size")
@@ -242,6 +243,7 @@ def nominate(body: bytes, eligible: frozenset[str], cached: dict[str, StationThr
     values: dict[tuple[str, date, str], Decimal | None] = {}
     held: set[str] = set()
     recognized_rows = 0
+    selected_in_window_rows = 0
     for row in rows:
         if not isinstance(row, dict):
             raise ValueError("unsupported_hint_row")
@@ -264,6 +266,8 @@ def nominate(body: bytes, eligible: frozenset[str], cached: dict[str, StationThr
             continue
         if not cutoff <= day <= today:
             continue
+        if any(element in row for element in ("TMAX", "TMIN")):
+            selected_in_window_rows += 1
         for element in ("TMAX", "TMIN"):
             if element not in row:
                 continue
@@ -278,6 +282,8 @@ def nominate(body: bytes, eligible: frozenset[str], cached: dict[str, StationThr
             values[key] = value
     if rows and not recognized_rows:
         raise ValueError("unsupported_hint_rows")
+    if _scope_out is not None:
+        _scope_out.update(total_rows=len(rows), selected_in_window_rows=selected_in_window_rows)
     candidates = {sid for (sid, day, element), value in values.items()
                   if sid not in held and value is not None
                   and _nominates(day, element, value, cached.get(sid), anomaly)}
@@ -418,7 +424,13 @@ def fetch_nominations(eligible: frozenset[str], cached: dict[str, StationThresho
         body = b"".join(chunks)
         metadata.update(response_bytes=received, response_sha256=hashlib.sha256(body).hexdigest())
         metadata["reason"] = "nomination_unavailable"
-        candidates, counts = nominate(body, selected, cached, today=today, cutoff=cutoff, anomaly=anomaly)
+        scoped: dict[str, int] = {}
+        candidates, counts = nominate(body, selected, cached, today=today, cutoff=cutoff, anomaly=anomaly,
+                                     _scope_out=scoped)
+        if not candidates and scoped["total_rows"] > 0 and scoped["selected_in_window_rows"] == 0:
+            # An unrelated/malformed/stale-only response is not a supported
+            # quiet reply. It cannot start new untracked archive work.
+            return set(), metadata
         metadata.update(counts, status="nominated" if candidates else "no_nominations")
         metadata["reason"] = metadata["status"]
         return candidates, metadata
