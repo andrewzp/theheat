@@ -96,6 +96,114 @@ def test_portable_watchlist_uses_the_actual_active_registered_points():
     assert report._watchlist_keys() == expected
 
 
+def test_source_owned_report_stays_intact_while_other_stories_keep_optional_context(bundle, enabled):
+    from freezegun import freeze_time
+    from src import state
+    from src.editorial import newsworthiness
+    from src.orchestrator import common
+    from tests.test_multisignal import _cand
+
+    first = _cand(event_id="invented-regional", country="FR", when=DAY)
+    second = _cand(event_id="invented-fire", country="FR", when=DAY, signal_kind="fire")
+    rainfall = replace(_cand(event_id=bundle.event_id, when=DAY, signal_kind=report.KIND),
+                       bundle=bundle, source="gpm_imerg")
+    bot_state = deepcopy(state.DEFAULT_STATE)
+    bot_state["drafts"] = []
+    bot_state["_triage_queue"] = [rainfall, first, second]
+    original = deepcopy(bundle.to_dict())
+    seen_news, seen_generation = [], {}
+    attach = newsworthiness.attach_human_impact
+
+    def observe_news(queue, events):
+        seen_news.append({candidate.event_id for candidate in queue})
+        return attach(queue, events)
+
+    def observe_generation(packet, _state, _score, **kwargs):
+        seen_generation[kwargs["event_id"]] = [x.event_id for x in packet.related_signals]
+        return False  # Observe this boundary only; never a model/check pass.
+
+    enabled.setenv("THEHEAT_MULTISIGNAL_CONTEXT", "1")
+    enabled.setenv("THEHEAT_NEWSWORTHINESS_ENABLED", "1")
+    enabled.setenv("THEHEAT_NEWS_ENRICH_ENABLED", "1")
+    enabled.setenv("THEHEAT_TRIAGE_ENABLED", "0")
+    enabled.setattr(newsworthiness, "attach_human_impact", observe_news)
+    enabled.setattr(common, "_try_two_bot_draft", observe_generation)
+    with freeze_time(NOW):
+        common._drain_and_write_triage_queue(bot_state, {"id": "invented-mixed-context", "sources": []})
+    assert seen_news == [{first.event_id, second.event_id}]
+    # The preserved one-attempt budget need not select both compatible peers.
+    # Check the real drain's prepared context rather than buy another attempt.
+    assert [x.event_id for x in first.bundle.related_signals] == [second.event_id]
+    assert [x.event_id for x in second.bundle.related_signals] == [first.event_id]
+    assert len(seen_generation) <= 1
+    assert bundle.to_dict() == original
+    assert report.validate_bundle(bundle, now=NOW) == original["raw_signal_dump"]["evidence"]
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+@pytest.mark.parametrize("case", ["wrapper_id", "bundle_id", "retagged", "wrapper_type", "wrapper_marker", "alias_chain"])
+def test_withheld_rainfall_identities_cannot_be_borrowed_for_optional_context(bundle, enabled, case, reverse):
+    from freezegun import freeze_time
+    from src import state
+    from src.editorial import newsworthiness
+    from src.orchestrator import common
+    from tests.test_multisignal import _cand
+
+    host = _cand(event_id="invented-host", country="FR", when=DAY, signal_kind="fire")
+    peer = _cand(event_id="invented-peer", country="FR", when=DAY)
+    independent = _cand(event_id="invented-independent", country="FR", when=DAY)
+    rain = replace(_cand(event_id=bundle.event_id, when=DAY, signal_kind=report.KIND),
+                   bundle=bundle, source="gpm_imerg")
+    disputed = case in {"wrapper_id", "bundle_id", "retagged", "alias_chain"}
+    bridge = None
+    if case == "wrapper_id":
+        rain = replace(rain, event_id=peer.event_id)
+    elif case == "bundle_id":
+        bundle.event_id = peer.event_id
+    elif case == "retagged":
+        bundle.event_id, bundle.signal_kind = peer.event_id, peer.bundle.signal_kind
+        rain = replace(rain, event_id=peer.event_id)
+    elif case == "alias_chain":
+        bridge = _cand(event_id="invented-bridge", country="FR", when=DAY)
+        bridge.bundle.event_id = peer.event_id
+        rain = replace(rain, event_id=bridge.event_id)
+    else:
+        rain = _cand(event_id="invented-relabeled", country="FR", when=DAY)
+        rain = (replace(rain, legacy_type=report.KIND) if case == "wrapper_type"
+                else replace(rain, event_id="rain_report_invented-wrapper"))
+    before = deepcopy(rain.bundle.to_dict())
+    bot_state = deepcopy(state.DEFAULT_STATE)
+    bot_state["drafts"] = []
+    queue = [host, peer, independent, rain] + ([bridge] if bridge is not None else [])
+    bot_state["_triage_queue"] = list(reversed(queue)) if reverse else queue
+    seen_news, dispatched = [], []
+    attach = newsworthiness.attach_human_impact
+
+    def observe_news(queue, events):
+        seen_news.append({candidate.event_id for candidate in queue})
+        return attach(queue, events)
+
+    def observe_generation(packet, *_args, **_kwargs):
+        dispatched.extend(x.event_id for x in packet.related_signals)
+        return False  # Observe dispatch without a model or acceptance verdict.
+
+    enabled.setenv("THEHEAT_MULTISIGNAL_CONTEXT", "1")
+    enabled.setenv("THEHEAT_NEWSWORTHINESS_ENABLED", "1")
+    enabled.setenv("THEHEAT_NEWS_ENRICH_ENABLED", "1")
+    enabled.setenv("THEHEAT_TRIAGE_ENABLED", "0")
+    enabled.setattr(newsworthiness, "attach_human_impact", observe_news)
+    enabled.setattr(common, "_try_two_bot_draft", observe_generation)
+    with freeze_time(NOW):
+        common._drain_and_write_triage_queue(bot_state, {"id": "invented-context-alias", "sources": []})
+    allowed = {host.event_id, independent.event_id} | (set() if disputed else {peer.event_id})
+    assert seen_news == [allowed]
+    assert independent.event_id in {x.event_id for x in host.bundle.related_signals}
+    assert all(x in allowed for x in dispatched)
+    assert {x.event_id for x in host.bundle.related_signals} <= allowed
+    assert not rain.bundle.related_signals and not rain.bundle.human_impact
+    assert rain.bundle.to_dict() == before
+
+
 @pytest.mark.parametrize("triage", ["0", "1"])
 def test_report_operation_budget_survives_disabled_ranking(enabled, triage):
     from src.orchestrator.candidate_budget import CandidateBudget

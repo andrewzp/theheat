@@ -1,3 +1,7 @@
+## 0.9.109.182 — 2026-11-24
+
+- Preserve exact completed-day rainfall packets through optional story enrichment. Prevent added cross-story or impact context from invalidating qualified single-cell reports, while keeping other stories' context, source rereads, required checks and one-candidate limits unchanged.
+
 ## 0.9.109.181 — 2026-11-24
 
 - Use an owned HTTPS IMERG download session so ambient netrc/proxy credentials cannot replace the configured Earthdata token. Preserve TLS verification, standard redirect authorization stripping, timeouts, response handling and request budgets. Source availability and rainfall qualification remain separate checks.
