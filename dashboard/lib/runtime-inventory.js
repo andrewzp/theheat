@@ -4,6 +4,7 @@ import { configurationReportRun, reportTimestamp as timestamp } from "./runtime-
 export const RUNTIME_MAX_AGE_HOURS = 6
 const FLAG_KEYS = [
   "observed_weather_only",
+  "awc_observed_contrast", "awc_observed_gust",
   "automatic_publication_enabled", "automatic_publication_epoch", "automatic_publication_reason",
   "autoship_on_critic_pass", "autoship_max_age_hours", "critic_enabled",
   "critic_revise_enabled", "writer_samples", "triage_enabled", "refill_enabled",

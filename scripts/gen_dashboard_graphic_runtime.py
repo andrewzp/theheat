@@ -53,6 +53,7 @@ SOURCES = (
     'src/editorial/observed_scope.py',
     'src/data/coastal_observed.py',
     'src/data/awc_observed.py',
+    'src/data/awc_gust.py',
     'src/data/rainfall_observed.py',
     'src/data/rainfall_grid.py',
     'src/data/rainfall_supply.py',

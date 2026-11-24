@@ -54,10 +54,22 @@ def _current_nws_source(draft, *, live, bot_state=None):
             or coastal_observed.current_draft_hold(draft, live=live, now=_utc_now)
             or coastal_observed.legacy_station_day_hold(draft, bot_state)
             or awc_observed.current_draft_hold(draft, live=live, now=_utc_now)
+            or _gust_operation_hold(draft, bot_state)
             or rainfall_observed.current_draft_hold(draft, live=live, now=_utc_now)
             or rainfall_observed.operation_hold(draft, bot_state)
             or ghcn_publication.current_draft_hold(draft, live=live, now=_utc_now)
             or _current_calendar_automatic(draft, bot_state))
+
+
+def _gust_operation_hold(draft, bot_state):
+    from src.data import awc_gust
+    if draft.get("type") != awc_gust.KIND:
+        return None
+    try:
+        bundle = draft["review_context"]["two_bot"]["bundle"]
+    except (KeyError, TypeError):
+        return "awc_gust_history_unavailable"
+    return awc_gust.operation_hold(bundle, bot_state, now=_utc_now)
 
 
 def _current_calendar_automatic(draft, bot_state):
@@ -132,7 +144,8 @@ def _hold_nws_draft(draft: dict, reason: str) -> None:
     source_names: dict[object, str] = {"official_warning": "Official warning", "nhc_advisory": "NHC advisory",
                                        "hot10": "Hot10 bulletin", "air_quality_hazard": "PM2.5 forecast",
                                        "dust_event": "Dust forecast", "river_flood": "River forecast", "coastal_observed_report": "Observed coastal report",
-                                       "observed_metar_contrast": "Observed airport report"}
+                                       "observed_metar_contrast": "Observed airport report",
+                                       "observed_metar_gust": "Observed airport gust"}
     source = "GHCN station record" if reason.startswith("ghcn_") else source_names.get(draft.get("type"), "NWS warning")
     draft["post_error"] = f"{source} needs fresh source review: {reason}"
     _touch_draft(draft)

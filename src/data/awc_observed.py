@@ -306,13 +306,13 @@ def _finding(points, captured, capture):
             "difference_c": _difference(points)}
 
 
-def nominate(*, now=None):
+def nominate(*, now=None, capture=None):
     clock = _clock(now)
-    catalog = _read(STATIONS_URL)
+    catalog = _read(STATIONS_URL) if capture is None else capture[0]
     metadata = parse_stations(_unzip(catalog))
     if not metadata:
         return None
-    observations = _read(METARS_URL)
+    observations = _read(METARS_URL) if capture is None else capture[1]
     points = parse_metars(_unzip(observations), metadata, now=clock)
     capture = {"catalog": sha256(catalog).hexdigest(), "observations": sha256(observations).hexdigest()}
     groups: dict[str, list[dict]] = {}
@@ -339,7 +339,7 @@ def nominate(*, now=None):
     return None
 
 
-def _history(points, *, now=None):
+def _history(points, *, now=None, point_reader=None, extra_fields=()):
     ids = sorted(p["station_id"] for p in points)
     target = points[0]["valid_time"]
     params = {"ids": ",".join(ids), "format": "xml", "taf": "false", "hours": 2, "date": target}
@@ -359,7 +359,7 @@ def _history(points, *, now=None):
     selected = {}
     for row in data[0]:
         if any(len(row.findall(key)) != 1 for key in ("station_id", "observation_time", "temp_c",
-                                                      "raw_text", "latitude", "longitude", "metar_type")):
+                                                      "raw_text", "latitude", "longitude", "metar_type", *extra_fields)):
             raise ObservedHeld("awc_history_duplicate_field")
         station, stamp = row.findtext("station_id"), row.findtext("observation_time")
         if station not in ids:
@@ -369,7 +369,7 @@ def _history(points, *, now=None):
         if station in selected:
             raise ObservedHeld("awc_history_duplicate_target")
         values = {key: row.findtext(key) for key in ("station_id", "observation_time", "temp_c",
-                    "raw_text", "latitude", "longitude", "metar_type")}
+                    "raw_text", "latitude", "longitude", "metar_type", *extra_fields)}
         flags = row.findall("quality_control_flags")
         if len(flags) > 1:
             raise ObservedHeld("awc_history_duplicate_flags")
@@ -382,7 +382,7 @@ def _history(points, *, now=None):
             if maintenance and maintenance[0].text not in ("TRUE", "FALSE"):
                 raise ObservedHeld("awc_history_maintenance_unknown")
         values["maintenance_indicator_on"] = flags[0].findtext("maintenance_indicator_on") if flags else None
-        selected[station] = _point(values, metadata, now=_clock(now))
+        selected[station] = (point_reader or _point)(values, metadata, now=_clock(now))
     if set(selected) != set(ids):
         raise ObservedHeld("awc_history_target_missing")
     return sorted(selected.values(), key=lambda p: p["station_id"])
@@ -453,6 +453,9 @@ def build_bundle(evidence, *, now=None):
 
 
 def _family(value):
+    from src.data import awc_gust
+    if awc_gust.is_family(value):
+        return True
     payload = value if isinstance(value, dict) else value.to_dict()
     raw = payload.get("raw_signal_dump")
     evidence = raw.get("evidence") if isinstance(raw, dict) else None
@@ -467,6 +470,9 @@ def is_family(value):
 
 
 def validate_bundle(value, *, now=None):
+    from src.data import awc_gust
+    if awc_gust.is_family(value):
+        return awc_gust.validate_bundle(value, now=now)
     payload = value if isinstance(value, dict) else value.to_dict()
     evidence = payload.get("raw_signal_dump", {}).get("evidence")
     _declared(evidence, now=_clock(now))
@@ -476,6 +482,9 @@ def validate_bundle(value, *, now=None):
 
 
 def current_bundle_hold(value, *, live=False, now=None, minimum_delay=timedelta(0)):
+    from src.data import awc_gust
+    if awc_gust.is_family(value):
+        return awc_gust.current_bundle_hold(value, live=live, now=now, minimum_delay=minimum_delay)
     try:
         if not _family(value):
             return None
@@ -507,6 +516,9 @@ def bundle_failures(bundle):
 
 
 def claim_failures(text, bundle, *, now=None):
+    from src.data import awc_gust
+    if awc_gust.is_family(bundle):
+        return awc_gust.claim_failures(text, bundle, now=now)
     if not _family(bundle):
         return []
     try:
@@ -578,6 +590,9 @@ def current_draft_hold(draft, *, live=False, now=None):
     context = draft.get("review_context")
     two_bot = context.get("two_bot") if isinstance(context, dict) else None
     bundle = two_bot.get("bundle") if isinstance(two_bot, dict) else None
+    from src.data import awc_gust
+    if draft.get("type") == awc_gust.KIND or isinstance(bundle, dict) and awc_gust.is_family(bundle):
+        return awc_gust.current_draft_hold(draft, live=live, now=now)
     if draft.get("type") != KIND and not (isinstance(bundle, dict) and _family(bundle)):
         return None
     if (draft.get("type") != KIND or not isinstance(bundle, dict) or bundle.get("signal_kind") != KIND

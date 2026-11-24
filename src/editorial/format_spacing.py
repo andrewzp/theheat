@@ -59,6 +59,9 @@ def awc_format_hold(bot_state: Mapping[str, Any], *, now: datetime) -> str | Non
 
 def candidate_format_hold(bot_state: Mapping[str, Any], candidate: Any, *, now: datetime) -> str | None:
     bundle = getattr(candidate, "bundle", None)
+    from src.data import awc_gust
+    if bundle is not None and awc_gust.is_family(bundle):
+        return awc_gust.operation_hold(bundle, bot_state, now=now)
     if getattr(candidate, "legacy_type", None) == KIND and getattr(bundle, "signal_kind", None) == KIND:
         return awc_format_hold(bot_state, now=now)
     return None

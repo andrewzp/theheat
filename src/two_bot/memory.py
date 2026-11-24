@@ -347,8 +347,9 @@ def bundle_memory_snapshot(bundle: StoryBundle) -> dict:
                 snapshot[_SOURCE_MEMORY_FIELD] = identity
         if _airport_observation(bundle):
             from src.data.awc_observed import SCHEMA
+            from src.data.awc_gust import KIND as GUST_KIND, SCHEMA as GUST_SCHEMA
             # Retain the existing restrictive family marker, never source proof.
-            snapshot["raw_signal_dump"] = {"report_schema": SCHEMA}
+            snapshot["raw_signal_dump"] = {"report_schema": GUST_SCHEMA if bundle.signal_kind == GUST_KIND else SCHEMA}
     return snapshot
 
 
@@ -652,10 +653,11 @@ def _story_bundle_from_metadata(two_bot: dict, draft: dict) -> StoryBundle | Non
                "source_provenance": {"eventtype": identity["event_type"]}}
     if "physical_episode" not in payload:
         from src.data.awc_observed import SCHEMA, is_family as is_airport_comparison
+        from src.data.awc_gust import KIND as GUST_KIND, SCHEMA as GUST_SCHEMA
         if is_airport_comparison(payload):
             # Other source hints cannot erase this restriction. Explicit physical
             # bindings still go through their original validation first.
-            raw = {"report_schema": SCHEMA}
+            raw = {"report_schema": GUST_SCHEMA if signal_kind == GUST_KIND else SCHEMA}
     restored = StoryBundle(
         signal_kind=signal_kind,
         where=str(payload.get("where") or draft.get("city") or ""),

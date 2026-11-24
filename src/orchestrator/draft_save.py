@@ -171,6 +171,11 @@ def save_draft(
     if (rainfall_observed.current_draft_hold(rainfall_draft, live=True, now=_utc_now)
             or rainfall_observed.operation_hold(rainfall_draft, bot_state)):
         return False
+    from src.data import awc_gust
+    if tweet_type == awc_gust.KIND:
+        bundle = (review_context or {}).get("two_bot", {}).get("bundle", {})
+        if awc_gust.operation_hold(bundle, bot_state, now=_utc_now):
+            return False
     from src.data.awc_observed import current_draft_hold as awc_draft_hold
     if awc_draft_hold({"type": tweet_type, "event_id": event_id, "text": tweet_text,
                        "review_context": review_context}, live=True, now=_utc_now):

@@ -327,7 +327,7 @@ def apply_awc_expired_pending_sweep(bot_state: Any, *, now: datetime | None = No
         return 0
     retired = 0
     for draft in bot_state.get("drafts", []) or []:
-        if not isinstance(draft, dict) or draft.get("status") != "pending" or draft.get("type") != awc.KIND:
+        if not isinstance(draft, dict) or draft.get("status") != "pending" or draft.get("type") not in (awc.KIND, "observed_metar_gust"):
             continue
         try:
             if (not isinstance(draft.get("id"), str) or not draft["id"]
@@ -348,7 +348,7 @@ def apply_awc_expired_pending_sweep(bot_state: Any, *, now: datetime | None = No
             raw = bundle.get("raw_signal_dump")
             evidence = raw.get("evidence") if isinstance(raw, dict) else None
             if (not isinstance(evidence, dict) or bundle["event_id"] != draft["event_id"]
-                    or bundle.get("signal_kind") != awc.KIND):
+                    or bundle.get("signal_kind") != draft.get("type")):
                 continue
             if not isinstance(evidence.get("retrieved_at"), str):
                 continue
