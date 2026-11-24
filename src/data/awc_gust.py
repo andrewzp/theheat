@@ -51,13 +51,25 @@ def _point(row, metadata, *, now):
     winds = re.findall(r"(?<!\S)(?:\d{3}|VRB)\d{2,3}(?:G\d{2,3})?(?:KT|MPS|KMH)(?=\s|$)", body)
     if match is None or len(winds) != 1:
         raise awc.ObservedHeld("awc_gust_primary_wind_missing")
-    speed = awc._number(row.get("wind_speed_kt"), 0, MAX_GUST_KT)
-    gust = awc._number(row.get("wind_gust_kt"), MIN_GUST_KT, MAX_GUST_KT)
+    speed = _wind_integer(row.get("wind_speed_kt"), 0)
+    gust = _wind_integer(row.get("wind_gust_kt"), MIN_GUST_KT)
     if (speed != int(match[1]) or gust != int(match[2]) or speed >= gust
             or gust != int(gust) or speed != int(speed)):
         raise awc.ObservedHeld("awc_gust_quantity_changed")
     point.pop("temperature_c")
     return {**point, "wind_speed_kt": int(speed), "gust_kt": int(gust)}
+
+
+def _wind_integer(value, lower):
+    # Provider CSV/XML numbers are strings. Check the bounded exact decimal
+    # representation before binary floats can round a fraction into a gust.
+    if (type(value) is not str or len(value) > 32
+            or re.fullmatch(r"[0-9]{1,3}(?:\.0+)?", value, re.ASCII) is None):
+        raise awc.ObservedHeld("awc_gust_number_invalid")
+    number = Decimal(value)
+    if not lower <= number <= MAX_GUST_KT:
+        raise awc.ObservedHeld("awc_gust_number_invalid")
+    return int(number)
 
 
 def parse_metars(raw, metadata, *, now=None):
@@ -278,8 +290,14 @@ def retained_station_hold(bot_state, evidence, *, now=None, exclude_event_id=Non
             continue
         try:
             old = draft["review_context"]["two_bot"]["bundle"]["raw_signal_dump"]["evidence"]["points"][0]
-            if old["station_id"] == station and clock - awc._time(old["valid_time"]) < timedelta(hours=24):
-                return "awc_gust_station_spacing"
+            if old["station_id"] == station:
+                if (draft.get("publish_outcome") in ("submitted", "unknown")
+                        or any(key in draft and (not isinstance(draft[key], list) or draft[key])
+                               for key in ("attempt_conflicts", "revision_conflicts"))
+                        or draft.get("autoship_attempted") and draft.get("publish_outcome") not in ("not_sent", "confirmed")):
+                    return "awc_gust_uncertain_previous_attempt"
+                if clock - awc._time(old["valid_time"]) < timedelta(hours=24):
+                    return "awc_gust_station_spacing"
         except (KeyError, IndexError, TypeError, ValueError):
             return "awc_gust_history_unavailable"
     ledger = bot_state.get("publish_ledger", {})
@@ -291,7 +309,7 @@ def retained_station_hold(bot_state, evidence, *, now=None, exclude_event_id=Non
             continue
         if not isinstance(receipt, dict):
             return "awc_gust_history_unavailable"
-        if receipt.get("phase") not in ("confirmed", "not_sent"):
+        if _uncertain_receipt(receipt):
             return "awc_gust_uncertain_previous_attempt"
         try:
             stamp = awc._time(receipt.get("confirmed_at") or receipt.get("at"))
@@ -300,6 +318,26 @@ def retained_station_hold(bot_state, evidence, *, now=None, exclude_event_id=Non
         if clock - stamp < timedelta(hours=24):
             return "awc_gust_station_spacing"
     return None
+
+
+def _uncertain_receipt(receipt):
+    pending = [receipt]
+    count = 0
+    while pending:
+        row = pending.pop()
+        count += 1
+        if count > 1000 or not isinstance(row, dict) or row.get("phase") not in ("confirmed", "not_sent"):
+            return True
+        conflicts = row.get("attempt_conflicts", [])
+        if not isinstance(conflicts, list) or row.get("revision_conflicts"):
+            return True
+        if row.get("phase") == "not_sent" and row.get("tweet_id"):
+            return True
+        if row.get("phase") == "confirmed" and (type(row.get("tweet_id")) is not str
+                or re.fullmatch(r"[1-9][0-9]{0,29}", row["tweet_id"], re.ASCII) is None):
+            return True
+        pending.extend(conflicts)
+    return False
 
 
 def operation_hold(value, bot_state, *, now=None):

@@ -65,11 +65,33 @@ def _gust_operation_hold(draft, bot_state):
     from src.data import awc_gust
     if draft.get("type") != awc_gust.KIND:
         return None
+    if timing_hold := _gust_automatic_hold(draft):
+        return timing_hold
     try:
         bundle = draft["review_context"]["two_bot"]["bundle"]
     except (KeyError, TypeError):
         return "awc_gust_history_unavailable"
     return awc_gust.operation_hold(bundle, bot_state, now=_utc_now)
+
+
+def _gust_automatic_hold(draft):
+    if draft.get("type") != "observed_metar_gust" or (draft.get("approval_binding") or {}).get("mode") != "auto":
+        return None
+    if not autoship_on_critic_pass_enabled():
+        return "awc_gust_autoship_disabled"
+    from src.data.awc_observed import _time, ObservedHeld
+    try:
+        requested = _time(draft.get("auto_approve_requested_at"))
+        due = _time(draft.get("auto_approve_at"))
+        authorized = _time(draft["approval_binding"].get("authorized_at"))
+        clock = _utc_now()
+        if not requested <= authorized <= clock or due < requested + timedelta(minutes=1):
+            return "awc_gust_review_window_invalid"
+        if clock < due:
+            return "awc_gust_review_window_not_due"
+    except (ObservedHeld, KeyError, TypeError):
+        return "awc_gust_review_window_invalid"
+    return None
 
 
 def _current_calendar_automatic(draft, bot_state):
@@ -342,6 +364,10 @@ def post_approved(draft_or_text: dict | str, bot_state: BotState) -> str:
         print("[post] Untracked text cannot publish; create and review a sourced draft")
         return "failed"
     mode = (draft.get("approval_binding") or {}).get("mode")
+    if gust_hold := _gust_automatic_hold(draft):
+        draft["post_error"] = gust_hold
+        _touch_draft(draft)
+        return "failed"
     if calendar_hold := _current_calendar_automatic(draft, bot_state):
         _hold_nws_draft(draft, calendar_hold)
         return "failed"
@@ -517,7 +543,9 @@ def post_approved(draft_or_text: dict | str, bot_state: BotState) -> str:
         return "failed"
     # Global automatic authority is separate from the editorial fingerprint.
     # Source, storage and policy work cannot carry an obsolete epoch to X.
-    if mode == "auto" and not automatic_approval_allowed(snapshot, bot_state):
+    if mode == "auto" and (not automatic_approval_allowed(snapshot, bot_state)
+            or snapshot.get("autoship_on_critic_pass") and not autoship_on_critic_pass_enabled()
+            or _gust_automatic_hold(snapshot)):
         row["phase"] = "not_sent"
         draft["publish_outcome"] = "not_sent"
         draft.pop("autoship_attempted", None)

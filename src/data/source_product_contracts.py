@@ -652,9 +652,9 @@ def _single(source_id, leg, provider, upstream, kind, product, geo, units, prove
 # Every other adapter in the frozen accepted-base inventory, including the leaderboard.
 LEGS += (
     _single("awc_observed", "metar_observations", "noaa_awc", "noaa_awc.metar",
-            "observed_station", "Decoded METAR airport temperatures and primary-body KT gusts", "Named reporting airports; gust profile is a conservative temperature-qualified subset.",
-            "degrees C at the same UTC instant, or one observed gust in knots", "NOAA Aviation Weather Center global METAR cache and exact historical API query.",
-            ("src/data/awc_observed.py:nominate", "src/data/awc_gust.py:nominate", "src/data/awc_observed.py:current_bundle_hold"),
+            "observed_station", "Decoded METAR temperature observations", "Two explicitly named reporting airports.",
+            "degrees C at the same UTC instant", "NOAA Aviation Weather Center global METAR cache and exact historical API query.",
+            ("src/data/awc_observed.py:nominate", "src/data/awc_observed.py:current_bundle_hold"),
             restrictions=("airport_pair_not_record", "region_sample_not_census"), status="conditional",
             time_limit="Non-future and no older than two hours; fresh exact-point rereads at writing, admission and sending.",
             disposition="Explicit default-off observed-only source opt-in; one candidate/sample and all required checks.",

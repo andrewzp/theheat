@@ -359,13 +359,15 @@ def _history(points, *, now=None, point_reader=None, extra_fields=()):
     selected = {}
     for row in data[0]:
         if any(len(row.findall(key)) != 1 for key in ("station_id", "observation_time", "temp_c",
-                                                      "raw_text", "latitude", "longitude", "metar_type", *extra_fields)):
+                                                      "raw_text", "latitude", "longitude", "metar_type")):
             raise ObservedHeld("awc_history_duplicate_field")
         station, stamp = row.findtext("station_id"), row.findtext("observation_time")
         if station not in ids:
             raise ObservedHeld("awc_history_unrequested_identity")
         if _stamp(stamp) != target:
             continue
+        if any(len(row.findall(key)) != 1 for key in extra_fields):
+            raise ObservedHeld("awc_history_duplicate_field")
         if station in selected:
             raise ObservedHeld("awc_history_duplicate_target")
         values = {key: row.findtext(key) for key in ("station_id", "observation_time", "temp_c",

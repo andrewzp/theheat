@@ -289,7 +289,7 @@ def save_draft(
         if _critic_passed(review_context) and review_is_current(draft):
             delay = policy.recommended_delay_minutes or 30
             from src.data.ghcn_publication import CALENDAR_TYPES, calendar_timing_hold
-            requested_at = _utc_now_iso() if tweet_type in CALENDAR_TYPES else None
+            requested_at = _utc_now_iso() if tweet_type in CALENDAR_TYPES or tweet_type == awc_gust.KIND else None
             due_at = _maybe_defer_auto_approve_at(_utc_after_minutes_iso(delay))
             timing_hold = (calendar_timing_hold(draft, now=_utc_now, publish_at=due_at)
                            if tweet_type in CALENDAR_TYPES else None)
