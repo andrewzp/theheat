@@ -70,6 +70,9 @@ concurrency:
   group: ${{ github.event_name == 'pull_request' && format('theheat-ci-{0}', github.event.pull_request.number) || 'theheat-bot' }}
   # Only a newer head of the same PR may cancel its obsolete checks.
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  # Keep pending production work instead of replacing it on each arrival.
+  # GitHub caps max at 100 pending; PR cancellation requires single instead.
+  queue: ${{ github.event_name == 'pull_request' && 'single' || 'max' }}
 
 jobs:
   test-partition:

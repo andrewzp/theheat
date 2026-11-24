@@ -75,7 +75,7 @@ def test_gist_commands_admits_outside_the_group_and_consumes_inside_it():
     assert all("secrets." not in str(step) for step in admit["steps"]), "admission holds no key or token"
     assert upload["with"]["retention-days"] == "2" and upload["if"] == "steps.admit.outputs.admitted == 'true'"
     assert consume["needs"] == "admit"
-    assert consume["concurrency"] == {"group": "theheat-bot", "cancel-in-progress": "false"}
+    assert consume["concurrency"] == {"group": "theheat-bot", "cancel-in-progress": "false", "queue": "max"}
     assert consume["permissions"] == {"contents": "read", "actions": "write"}
     fetch = next(s for s in consume["steps"] if s.get("name") == "Fetch every admitted command artifact")
     # Root checkpoint R1 (deliberate): the inbox reads the consumer's settled-run continuation (read only).
@@ -106,13 +106,17 @@ def test_bot_drains_only_in_route_mode_and_keeps_every_existing_default():
     assert proof["permissions"] == {"contents": "read", "actions": "read"}
     assert "secrets." not in json.dumps(proof)
     assert doc["jobs"]["run"]["if"].startswith("always()")
-    # The schedule stagger changes only minutes. Keep every slot and all other cron fields.
+    # Preserve the three original staggered slots plus the reviewed queue-only
+    # redundancy slot. The latter predates this pending-preservation change.
     expected_schedules = [
         {**entry, "cron": f"{minute} {entry['cron'].split(' ', 1)[1]}"}
         for entry, minute in zip(old["on"]["schedule"], ("41", "11", "11"), strict=True)
     ]
+    expected_schedules.append({"cron": "11 1,2,3,5,6,7,9,10,11,13,14,15,17,18,19,21,22,23 * * *"})
     assert doc["on"]["schedule"] == expected_schedules
-    assert doc["concurrency"] == old["concurrency"]
+    assert doc["concurrency"] == {
+        **old["concurrency"], "queue": "${{ github.event_name == 'pull_request' && 'single' || 'max' }}",
+    }
     assert doc["jobs"]["run"]["permissions"] == old["jobs"]["run"]["permissions"]
     step = next(s for s in doc["jobs"]["run"]["steps"] if s.get("name") == "Run bot")
     old_step = next(s for s in old["jobs"]["run"]["steps"] if s.get("name") == "Run bot")
@@ -149,6 +153,7 @@ def test_bot_drains_only_in_route_mode_and_keeps_every_existing_default():
                                                        "THEHEAT_NWPS_MAJOR_FORECASTS", "THEHEAT_NWPS_PACKET_RETENTION",
                                                        "THEHEAT_AUTOMATIC_SELECTION_ONLY", "THEHEAT_OBSERVED_WEATHER_ONLY",
                                                        "THEHEAT_OBSERVED_REPORT_MONTH", "THEHEAT_AWC_OBSERVED_CONTRAST",
+                                                       "THEHEAT_AWC_OBSERVED_GUST",
                                                        "THEHEAT_POST_COLLECTION_SENDER", "THEHEAT_GPM_OBSERVED_REPORT",
                                                        "THEHEAT_METRICS_MAX_IDS"}
     assert step["env"]["THEHEAT_METRICS_MAX_IDS"] == "${{ vars.THEHEAT_METRICS_MAX_IDS || '10' }}"
