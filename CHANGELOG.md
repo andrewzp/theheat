@@ -1,3 +1,7 @@
+## 0.9.109.185 — 2026-11-24
+
+- Accept the source-supported 0.1-degree resolution or IMERG product name in explicit single-cell satellite precipitation copy, while refusing fractional or multiple-cell qualifiers. Align factual writer guidance with the existing estimate contract; recorded/measured, unsupported impacts, source/date/amount changes and all required checks stay blocked.
+
 ## 0.9.109.184 — 2026-11-24
 
 - Connect retained, individually identified NIFC polygon editions to local incident history, exact revision checks, source-backed memory and the real audited writer-request builder. Keep mapped areas separate from fire growth or duration, exclude unknown-delivery history and leave production enrollment and transport unavailable. Preserve the existing cyclone and graphics contracts.

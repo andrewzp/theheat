@@ -429,6 +429,48 @@ def operation_hold(value, bot_state):
     return legacy_point_day_hold(value, bot_state)
 
 
+def _single_grid_cell_scope(prose):
+    """Recognize explicit whole-cell scope; all remaining claim checks still run."""
+    normalized = re.sub(r"\s+", " ", prose)
+    matches = list(re.finditer(r"\b(?P<count>one|a|1)\s+(?:(?:satellite|IMERG)\s+)?"
+        r"(?:0\.1(?:\s*°|[ \-‐‑–]degrees?)\s+)?grid cell\b", normalized, re.I))
+    for match in matches:
+        prefix = normalized[max(0, match.start() - 100):match.start()]
+        # Partitives govern the footprint, regardless of how a fraction is
+        # written (one-third, 50%, three quarters, etc.). Only explicit whole
+        # forms preserve the warranted complete cell; inspect outer governors too.
+        while True:
+            # These modifiers preserve the count, but must never hide its
+            # governing fraction (e.g. "half of exactly one cell").
+            exact = re.search(r"\b(?:exactly|only)\s*$", prefix, re.I)
+            if exact is not None:
+                prefix = prefix[:exact.start()]
+                continue
+            if not re.search(r"\bof\s*$", prefix, re.I):
+                break
+            whole = re.search(r"(?<!\S)"
+                              r"(?:all|(?:the )?entirety|100(?:\.0+)?\s*(?:%|percent)) of\s*$",
+                              prefix, re.I)
+            if whole is None:
+                return False
+            prefix = prefix[:whole.start()]
+            # A complete percentage token cannot be the upper end of a range.
+            if re.search(r"(?:[\d.%/+\-‐‑‒–—−<>≤≥±]|\b(?:to|between|and))\s*$", prefix, re.I):
+                return False
+        if re.search(r"\b(?:(?:more|less|fewer|greater) than|at (?:least|most)|up to|"
+                     r"(?:half|quarter|part|portion|fraction|some|most) of|half|quarter|"
+                     r"not(?: only| just| quite)?|almost|nearly|approximately|about|roughly|negative|minus)\s*$", prefix, re.I):
+            return False
+        # Do not enumerate mathematical operator spellings: a qualifying token
+        # cannot follow any symbolic operator, including compound ASCII ones.
+        tail = prefix.rstrip()
+        if tail and not tail[-1].isalnum() and tail[-1] not in ",;:.()[]\"'":
+            return False
+        if match.group("count") == "1" and re.search(r"[\d./+\-‐‑‒–—−<>≤≥±]\s*$", prefix):
+            return False
+    return bool(matches)
+
+
 def claim_failures(text, bundle, *, now=None):
     if not is_family(bundle):
         return []
@@ -453,7 +495,9 @@ def claim_failures(text, bundle, *, now=None):
         if not (re.search(r"\bprecipitation\b", prose, re.I)
                 and re.search(r"\bwater[ \-‐‑–]equivalent\b", prose, re.I)):
             return ["rainfall_quantity_label_required"]
-        if grid and not re.search(r"\b(?:one|a|1)\s+(?:satellite\s+)?grid cell\b", prose, re.I):
+        # The validated IMERG warrant is one 0.1-degree cell. Naming that
+        # supported resolution must not erase the explicit single-cell scope.
+        if grid and not _single_grid_cell_scope(prose):
             return ["rainfall_point_scope_required"]
         if not grid and not re.search(r"\bnear\s+" + re.escape(point["city"]) + r"\b", prose, re.I):
             return ["rainfall_point_scope_required"]
