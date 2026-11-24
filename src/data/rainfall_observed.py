@@ -453,7 +453,10 @@ def claim_failures(text, bundle, *, now=None):
         if not (re.search(r"\bprecipitation\b", prose, re.I)
                 and re.search(r"\bwater[ \-‐‑–]equivalent\b", prose, re.I)):
             return ["rainfall_quantity_label_required"]
-        if grid and not re.search(r"\b(?:one|a|1)\s+(?:satellite\s+)?grid cell\b", prose, re.I):
+        # The validated IMERG warrant is one 0.1-degree cell. Naming that
+        # supported resolution must not erase the explicit single-cell scope.
+        if grid and not re.search(r"\b(?:one|a|1)\s+(?:satellite\s+)?"
+                                  r"(?:0\.1(?:\s*°|[ \-‐‑–]degrees?)\s+)?grid cell\b", prose, re.I):
             return ["rainfall_point_scope_required"]
         if not grid and not re.search(r"\bnear\s+" + re.escape(point["city"]) + r"\b", prose, re.I):
             return ["rainfall_point_scope_required"]

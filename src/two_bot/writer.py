@@ -304,6 +304,7 @@ def build_writer_user_prompt(
                  "Use 'near' before the place: this is one satellite cell, not a city-wide total. ")
         prompt += (f"\n\nLead with one daily precipitation amount and the {place}, with country context. "
                    "Credit NASA satellites and say estimate and water-equivalent precipitation. Preserve the UTC calendar date and 24-hour period. "
+                   "Use estimate or estimates; never say recorded or measured. "
                    + scope +
                    "A correct rounded inch conversion may help a reader understand the amount. "
                    "The daily total does not establish rain/snow phase. No historical comparator, gauge measurement or impact finding is supplied. "
