@@ -133,7 +133,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/data/places.py": "c66be0181393620b640f0354d2c7379e427aeacf4c80689b190489022bf2a870",
     "src/data/rainfall_grid.py": "b2f3a8e9e97741276968269ddb45b94c74e9890a76206cbefa5957f7f3ccc50e",
     "src/data/rainfall_grid_scan.py": "01e7a36faaae7bf527cf54f30ad0a7c35b1005a3a8de55c0ec275f1f6d4e9197",
-    "src/data/rainfall_observed.py": "808e7e025e92f18cdb37b6ea80e444a9e2704aaf8ff681efc11dcc4264e605d9",
+    "src/data/rainfall_observed.py": "e018a4a027653e339fc6e9f9500b7984779c0cfe3fd145c7264e7837aacbba18",
     "src/data/rainfall_supply.py": "ca68b5078f504437894fc19bffcdcf07e6b7b066f2649f640ea90f24458cde46",
     "src/data/regional_observations.py": "eef66077194e446991db077d558f3e2da664e6c1c7a1deb5e2b4ea9cec08d88e",
     "src/data/river_gauges.py": "8d055bb13c3d91dbff84f9ceccc389d6880ff04fa5429d611f5ed4f9f97a055f",
@@ -315,9 +315,9 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/two_bot/synchronous_writer.py": "3a05a469917cd25e28adf6e046aca20f454dbc68543505628bd17ad31b4cca31",
     "src/two_bot/trial_budget.py": "da8de235919094e69d4b4823f119f2a70ed8d9c2a70889a6c7335ee1344f8f24",
     "src/two_bot/types.py": "65afc3d850c31c843bc1e7b58dcc0b13eb274969dcff657e2622641bd85239ee",
-    "src/two_bot/writer.py": "137eb7532ac9ad5eca3ef2b4b355359db426187dc912c946f8465d2f010dc267",
+    "src/two_bot/writer.py": "26838183cd62163f7f7692103be21626f247ffedab27ad7019cedbc219176005",
     "src/voice/safety.py": "5c5ffcc95358c7df45ae838c228759ad0eb6275c8f9053c8130c0a8824b63d9e"
   },
   "schema_version": 1,
-  "source_sha256": "70a0c8e92d4425659a8829bfa9b4a73335d78b86956afd7c0b522bea1a7dd1ea"
+  "source_sha256": "a93f768e66cfdae8d53dea79b4f724f064406ba5fa740aa6b65dba9dbc1e5027"
 }

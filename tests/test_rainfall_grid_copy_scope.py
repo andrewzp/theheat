@@ -18,7 +18,7 @@ from tests.test_rainfall_observed_report import NOW
 
 @pytest.mark.parametrize("scope", ["one grid cell", "a satellite grid cell", "1 grid cell",
     "one 0.1° grid cell", "a 0.1-degree grid cell", "one 0.1 degree grid cell",
-    "one satellite 0.1° grid cell"])
+    "one satellite 0.1° grid cell", "one IMERG grid cell", "one IMERG 0.1° grid cell"])
 def test_source_supported_resolution_preserves_the_same_single_cell(evidence, enabled, scope):
     bundle = grid.build_bundle(evidence, now=NOW)
     text = COPY.replace("one grid cell", scope) + "\n" + gpm_public_url()
@@ -26,7 +26,8 @@ def test_source_supported_resolution_preserves_the_same_single_cell(evidence, en
 
 
 @pytest.mark.parametrize("scope", ["two 0.1° grid cells", "one 1° grid cell", "one 0.01° grid cell",
-    "one 0.1-radian grid cell", "one 0.1° grid cells", "one 0.1° region", "the country"])
+    "one 0.1-radian grid cell", "one 0.1° grid cells", "one 0.1° region", "the country",
+    "one other-product grid cell", "two IMERG grid cells", "one IMERG 1° grid cell"])
 def test_other_resolution_plural_or_region_scope_is_still_held(evidence, enabled, scope):
     bundle = grid.build_bundle(evidence, now=NOW)
     assert report.claim_failures(COPY.replace("one grid cell", scope) + "\n" + gpm_public_url(),
@@ -37,7 +38,19 @@ def test_other_resolution_plural_or_region_scope_is_still_held(evidence, enabled
     "at least one 0.1° grid cell", "up to one 0.1° grid cell", "part of one grid cell",
     "less than a satellite grid cell", "not only one 0.1° grid cell", "-1 0.1° grid cell",
     "one-third of a 0.1-degree grid cell", "50% of a 0.1° grid cell",
-    "three quarters of one 0.1° grid cell", "not all of one 0.1° grid cell"])
+    "three quarters of one 0.1° grid cell", "not all of one 0.1° grid cell",
+    "almost all of one 0.1° grid cell", "nearly the entirety of a 0.1-degree grid cell",
+    "~100% of one 0.1° grid cell", "not quite all of one 0.1° grid cell",
+    "50% of exactly one 0.1° grid cell", "50% of only one 0.1° grid cell",
+    "0.100% of one 0.1° grid cell", "90–100% of one 0.1° grid cell",
+    "90 – 100% of exactly one 0.1° grid cell", "90 to 100 percent of one 0.1° grid cell",
+    "half of all of exactly one 0.1° grid cell", "approximately exactly one 0.1° grid cell",
+    "0.1 grid cell", "1/1 grid cell", "<100% of one 0.1° grid cell",
+    "≤100% of one 0.1° grid cell", "> 100% of one 0.1° grid cell",
+    "≥ 100% of exactly one 0.1° grid cell", "±100% of one 0.1° grid cell",
+    "<1 grid cell", "≥1 0.1° grid cell", "<=100% of one 0.1° grid cell",
+    "!=100% of one 0.1° grid cell", "!= 100% of one 0.1° grid cell",
+    "≠ 100% of exactly one 0.1° grid cell", "<=>100% of one 0.1° grid cell"])
 def test_single_cell_words_cannot_hide_partial_plural_or_uncertain_coverage(evidence, enabled, scope):
     bundle = grid.build_bundle(evidence, now=NOW)
     assert report.claim_failures(COPY.replace("one grid cell", scope) + "\n" + gpm_public_url(),
@@ -45,7 +58,9 @@ def test_single_cell_words_cannot_hide_partial_plural_or_uncertain_coverage(evid
 
 
 @pytest.mark.parametrize("scope", ["exactly one 0.1° grid cell", "only one 0.1-degree grid cell",
-    "all of one 0.1° grid cell", "the entirety of a 0.1-degree grid cell"])
+    "all of one 0.1° grid cell", "the entirety of a 0.1-degree grid cell",
+    "100% of one 0.1° grid cell", "100.00 percent of exactly one 0.1° grid cell",
+    "all of exactly one 0.1° grid cell"])
 def test_explicit_single_whole_cell_still_qualifies(evidence, enabled, scope):
     bundle = grid.build_bundle(evidence, now=NOW)
     assert report.claim_failures(COPY.replace("one grid cell", scope) + "\n" + gpm_public_url(),
@@ -68,7 +83,7 @@ def test_the_new_scope_spelling_keeps_all_original_quantity_and_time_checks(evid
     assert report.claim_failures(text, bundle, now=NOW) == [reason]
 
 
-@pytest.mark.parametrize("scope", ["one 0.1° grid cell", "a 0.1-degree grid cell"])
+@pytest.mark.parametrize("scope", ["one 0.1° grid cell", "a 0.1-degree grid cell", "one IMERG grid cell"])
 def test_actual_collector_writer_checks_save_and_fixture_sender_keep_resolution(
     monkeypatch, ordinary_grid_world, scope,
 ):
@@ -88,9 +103,10 @@ def test_actual_collector_writer_checks_save_and_fixture_sender_keep_resolution(
     assert transport.x_posts == [draft["text"]]
 
 
-def test_a_qualified_scope_with_recorded_stops_before_paid_fact_checker_or_critic(ordinary_grid_world):
+@pytest.mark.parametrize("scope", ["one 0.1° grid cell", "one IMERG grid cell"])
+def test_a_qualified_scope_with_recorded_stops_before_paid_fact_checker_or_critic(ordinary_grid_world, scope):
     transport, state, _run, models, _module = ordinary_grid_world
-    models.copy = COPY.replace("one grid cell", "one 0.1° grid cell").replace("estimate.", "estimate recorded.")
+    models.copy = COPY.replace("one grid cell", scope).replace("estimate.", "estimate recorded.")
     assert collect(ordinary_grid_world) is state
     assert state["drafts"] == []
     assert models.stages() == ["writer"]  # local refusal precedes every paid checker
@@ -99,7 +115,8 @@ def test_a_qualified_scope_with_recorded_stops_before_paid_fact_checker_or_criti
     assert transport.x_posts == []
 
 
-@pytest.mark.parametrize("scope", ["more than one 0.1° grid cell", "half of a 0.1-degree grid cell"])
+@pytest.mark.parametrize("scope", ["more than one 0.1° grid cell", "half of a 0.1-degree grid cell",
+    "50% of exactly one 0.1° grid cell", "90–100% of one 0.1° grid cell"])
 def test_actual_collection_refuses_multi_or_partial_cell_before_paid_checks(ordinary_grid_world, scope):
     transport, state, _run, models, _module = ordinary_grid_world
     models.copy = COPY.replace("one grid cell", scope)
