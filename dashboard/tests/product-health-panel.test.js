@@ -50,7 +50,7 @@ test("panel exposes old queue, uncertain delivery and inactive metrics without t
   assert.match(markup, /90d ago/)
   assert.match(markup, /Writing pipeline · unknown/)
   assert.match(markup, /Engagement collection · inactive/)
-  assert.match(markup, /Last post with receipt/)
+  assert.match(markup, /Latest dated X receipt/)
   assert.match(markup, /47d ago/)
   assert.match(markup, /<summary>Bot settings and evidence · unknown/)
   assert.match(markup, /Last saved draft<\/dt><dd>Unknown/)
@@ -80,7 +80,7 @@ test("configuration-only refresh cannot claim continued ingestion or successful 
 const observationClock = Date.parse("2026-11-17T07:00:00Z")
 function publicationEvidence(at) {
   return buildProductHealth({ drafts: [], publish_ledger: at === null ? {} : {
-    invented: { tweet_id: "123456789", at },
+    invented: { phase: "confirmed", tweet_id: "123456789", confirmed_at: at },
   }, source_health: { awc_observed: { runs: [{ ts: "2026-11-17T06:59:00Z", status: "success", observed: 1 }] } } },
   { now: observationClock })
 }
@@ -90,7 +90,7 @@ test("enabled publication with fresh collection but old receipt needs visible at
   assert.equal(value.milestones.source_observed.age_hours, 1 / 60)
   const markup = render({ health: value, config: { flags: { automatic_publication_enabled: true } } })
   assert.match(markup, /data-publication-evidence="old_receipt"/)
-  assert.match(markup, /No recent X receipt in saved data/)
+  assert.match(markup, /No recent dated X receipt in saved data/)
   assert.match(markup, /latest dated receipt is 4d ago/)
   assert.doesNotMatch(markup, /X is down|healthy|publishing has recovered/)
 })

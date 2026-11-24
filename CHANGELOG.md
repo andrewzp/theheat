@@ -1,3 +1,7 @@
+## 0.9.109.180 — 2026-11-24
+
+- Show recorded X posts against the four-per-day goal using distinct receipts and supported UTC dates. Keep conflicting or missing dates uncertain, and stop send-attempt timestamps from making an old post look fresh. Publication, source, model and spending controls are unchanged.
+
 ## 0.9.109.179 — 2026-11-24
 
 - Require explicit airport scope in observed-gust writer guidance and allow expanding the source catalogue's Arpt abbreviation. Keep the existing factual scope check, one-draft budget and all required checks unchanged.

@@ -173,7 +173,7 @@ export async function GET(request) {
 
   try {
     const local = previewConfigured() ? (await localCommandRequest(request, "/state")).payload : null
-    const { state, runtimeReport } = local ? { state: local.state, runtimeReport: null } : await readStateWithRuntimeReport()
+    const { state, runtimeReport, publicationInventoryKnown } = local ? { state: local.state, runtimeReport: null } : await readStateWithRuntimeReport()
     results.local_preview = !!local
     if (local) { results.candidates = local.candidates || []; results.operator_role = local.role; results.operator_subject = local.operator_subject }
     if (local) results.localCostEvidence = localCostEvidence(local.local_cost)
@@ -187,7 +187,7 @@ export async function GET(request) {
     results.sourceHealth = buildSourceHealthPayload(state)
     results.config = buildRuntimeConfig(state, { runtimeReport })
     results.codeRevision = codeRevisionEvidence(state, { deployment: results.deployment, runtimeReport })
-    results.productHealth = buildProductHealth(state, { runtimeReport })
+    results.productHealth = buildProductHealth(state, { runtimeReport, publicationInventoryKnown })
   } catch (error) {
     if (previewConfigured()) return previewError(error)
     results.stateError = `Failed to fetch state store: ${error.message}`

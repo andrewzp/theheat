@@ -1,9 +1,9 @@
 import { dashboardEditorialPolicy } from "./editorial-policy.js"
 import { fingerprint, hasUnresolvedPublish, reviewIsCurrent } from "./draft-revisions.js"
 import { buildRuntimeConfig } from "./runtime-inventory.js"
-import { postOutcomes } from "./post-outcomes.js"
 import { sourceContract } from "./source-registry.js"
 import { automaticTextHold, HOLD_MESSAGES } from "./automatic-text.js"
+import { postingEvidence } from "./posting-cadence.js"
 
 const HOUR = 3600000
 const DAY = 24 * HOUR
@@ -270,13 +270,14 @@ function metricsHealth(state, posts, sources, now) {
 }
 
 /** A read-only evidence projection. Workflow success and generation memory are not product outcomes. */
-export function buildProductHealth(rawState, { now = Date.now(), runtimeReport = null } = {}) {
+export function buildProductHealth(rawState, { now = Date.now(), runtimeReport = null, publicationInventoryKnown } = {}) {
   const clock = now instanceof Date ? now.getTime() : now
   if (!Number.isFinite(clock) || !Number.isFinite(new Date(clock).getTime())) throw new TypeError("Product health requires a valid clock")
   const state = object(rawState) ? rawState : {}
   const drafts = rows(state.drafts)
   const sources = sourceRows(state, clock)
   const posts = receiptPosts(state, drafts, clock)
+  const { cadence, outcomes } = postingEvidence(state, { now: clock, publicationInventoryKnown })
   return {
     generated_at: new Date(clock).toISOString(),
     latest_saved_draft: latestSavedDraft(drafts, state, clock),
@@ -285,12 +286,13 @@ export function buildProductHealth(rawState, { now = Date.now(), runtimeReport =
         && sourceContract(row.source).kind !== "internal" && count(row.observed) > 0).map((row) => ({ time: row.time, source: row.source, observed: row.observed, reported_status: row.status ?? null, evidence: row.evidence, timestamp_precision: row.timestamp_precision ?? "source" })), clock),
       draft_created: milestone(drafts.map((draft) => ({ time: timestamp(draft.created_at, clock), id: draft.id ?? null })), clock),
       draft_reviewed: milestone(drafts.filter((draft) => { try { return reviewIsCurrent(draft, dashboardEditorialPolicy(state, { now: clock, runtimeReport }).policy) } catch { return false } }).map((draft) => ({ time: timestamp(draft.review_binding.reviewed_at, clock), id: draft.id ?? null, review_kind: draft.review_binding.kind })), clock),
-      post_confirmed: milestone(posts.map(({ eligibility_time, ...post }) => post), clock),
+      post_confirmed: cadence.latest_dated_receipt,
     },
     queue: queueHealth(state, drafts, clock),
     writer: writerHealth(state, clock),
     metrics: metricsHealth(state, posts, sources, clock),
-    post_outcomes: postOutcomes(state, { now: clock }),
+    post_outcomes: outcomes,
+    publication_cadence: cadence,
     notes: ["These are latest retained observations, not a complete account history or a health guarantee. Source observations require a positive recorded count; success without an observation count does not establish that input arrived. Source-health rows retain a 7-day window and at most 10 runs per source; run history retains at most 20 runs.", "A current review is bound to the exact retained text and evidence; it is not independent scientific validation. A draft or legacy generation-memory text is not a publication. Only an explicit tweet ID establishes a stored publication receipt; this projection does not re-verify the platform.", "Missing, malformed and future timestamps cannot establish freshness. Retention can hide earlier successes and failures; absence of telemetry is unknown, not a recorded zero."],
   }
 }

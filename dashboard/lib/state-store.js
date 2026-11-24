@@ -14,6 +14,11 @@ import { activeRouteActivation, assertDirectGistWrite, resultsDocumentFromFiles,
 // Durable fields are generated from Python; this legacy dashboard-only queue
 // remains readable for older local fixtures, but the Python bot no longer uses it.
 const DEFAULT_STATE = { ...STATE_DEFAULTS, pending_confirmations: [] }
+// Read-only provenance, returned beside state and never persisted by a writer.
+function publicationInventoryKnown(raw) {
+  return !!raw && typeof raw === "object" && !Array.isArray(raw)
+    && Array.isArray(raw.drafts) && !!raw.publish_ledger && typeof raw.publish_ledger === "object" && !Array.isArray(raw.publish_ledger)
+}
 
 const SQLITE_SCHEMA = `
 PRAGMA foreign_keys = ON;
@@ -556,7 +561,7 @@ async function readGistState({ preserveNumbers = false, includeRuntimeReport = f
   if (!gistId) {
     const state = structuredClone(DEFAULT_STATE)
     return preserveNumbers ? { state, document: parseGistDocument(JSON.stringify(state)), ...(includeRuntimeReport ? { runtimeReport: null } : {}), ...(includeRoute ? { route: null } : {}), ...(includeResults ? { results: {}, resultsDocument: { results: {}, outbox: {}, rejected: {} } } : {}) }
-      : includeRuntimeReport ? { state, runtimeReport: null } : state
+      : includeRuntimeReport ? { state, runtimeReport: null, publicationInventoryKnown: false } : state
   }
   const res = await fetch(`https://api.github.com/gists/${gistId}`, {
     headers: gistHeaders(),
@@ -586,13 +591,13 @@ async function readGistState({ preserveNumbers = false, includeRuntimeReport = f
   if (preserveNumbers) {
     const document = parseGistDocument(content)
     return { state: normalizeState(structuredClone(document.value)), document,
-      ...(includeRuntimeReport ? { runtimeReport: decodeRuntimeReportFile(gist?.files?.[RUNTIME_REPORT_FILE]) } : {}),
+      ...(includeRuntimeReport ? { runtimeReport: decodeRuntimeReportFile(gist?.files?.[RUNTIME_REPORT_FILE]), publicationInventoryKnown: publicationInventoryKnown(document.value) } : {}),
       // P00c: the route record and results ride the same GET; absent files are the legacy state.
       ...(includeRoute ? { route: routeRecordFromFiles(gist?.files) } : {}),
       ...(includeResults ? (() => { const resultsDocument = resultsDocumentFromFiles(gist?.files); return { results: resultsDocument.results, resultsDocument } })() : {}) }
   }
-  const state = normalizeState(JSON.parse(content))
-  return includeRuntimeReport ? { state, runtimeReport: decodeRuntimeReportFile(gist?.files?.[RUNTIME_REPORT_FILE]) } : state
+  const raw = JSON.parse(content), state = normalizeState(raw)
+  return includeRuntimeReport ? { state, runtimeReport: decodeRuntimeReportFile(gist?.files?.[RUNTIME_REPORT_FILE]), publicationInventoryKnown: publicationInventoryKnown(raw) } : state
 }
 
 async function writeGistState(state, document) {
@@ -935,7 +940,7 @@ export async function readStateStore(request) {
 
 export async function readStateWithRuntimeReport(request) {
   if (previewConfigured() || configuredBackend() !== "gist") {
-    return { state: await readStateStore(request), runtimeReport: null }
+    return { state: await readStateStore(request), runtimeReport: null, publicationInventoryKnown: false }
   }
   return readGistState({ includeRuntimeReport: true })
 }
