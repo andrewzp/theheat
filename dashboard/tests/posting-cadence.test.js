@@ -198,14 +198,26 @@ test("padded spellings share one numeric identity and preserve every supplied da
   const ids = ["713", "0713", "00713", "000713"]
   const result = read(state(ids.map(id => draft(id))))
   assert.equal(result.retained_receipt_count, 1)
-  assert.equal(result.today.minimum_count, 1)
-  assert.equal(result.today.target_met, false)
+  assert.equal(result.today.minimum_count, 0)
+  assert.equal(result.today.uncertain_receipt_count, 1)
+  assert.equal(result.today.target_met, null)
   for (const rows of [[draft("713"), draft("0713", "2026-11-20T12:00:00Z")],
     [draft("0713", "2026-11-20T12:00:00Z"), draft("713")]]) {
     assert.equal(read(state(rows)).today.minimum_count, 0)
     assert.equal(read(state(rows)).latest_dated_receipt.status, "unknown")
   }
   assert.equal(read(state([draft("0000")])).retained_receipt_count, 0)
+})
+
+test("a padded receipt cannot hide its canonical platform observation behind a failed exact-spelling join", () => {
+  for (const drafts of [[draft("010001")], [draft("010001"), draft("10001")]]) {
+    const value = withSamples(state(drafts), { original: sample({ posted_at: "2026-11-20T12:00:00Z", post_age_seconds: 342000 }) })
+    const result = read(value)
+    assert.equal(result.retained_receipt_count, 1)
+    assert.equal(result.today.minimum_count, 0)
+    assert.equal(result.today.target_met, null)
+    assert.equal(result.latest_dated_receipt.status, "unknown")
+  }
 })
 
 test("platform timestamps from padded copies are merged without choosing an input-order winner", () => {

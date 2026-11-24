@@ -48,8 +48,9 @@ export function postingEvidence(rawState, { now = Date.now(), publicationInvento
     // A contradictory not-sent row is not a new receipt. Its confirmed children
     // are inspected independently and cannot be erased by the parent's status.
     if (kind === "ledger" && row.phase === "not_sent") { known = false; continue }
-    if (!receipts.has(id)) receipts.set(id, { times: new Map(), attempts: new Set(), confirmations: new Set(), invalid: false })
+    if (!receipts.has(id)) receipts.set(id, { times: new Map(), attempts: new Set(), confirmations: new Set(), invalid: false, noncanonical: false })
     const receipt = receipts.get(id)
+    if (row.tweet_id !== id) receipt.noncanonical = true
     if (kind === "ledger" && (Object.hasOwn(row, "phase") || Object.hasOwn(row, "intent_id"))) {
       const attempt = retainedInstant(row.at, latest)
       if (attempt) receipt.attempts.add(attempt.microseconds.toString())
@@ -95,6 +96,9 @@ export function postingEvidence(rawState, { now = Date.now(), publicationInvento
     if (platform.times.size) { receipt.times = platform.times; receipt.invalid = false }
     if (platform.conflict) receipt.invalid = true
   }
+  // The established outcome reader binds exact stored ID spellings. Grouping
+  // aliases prevents double-counting; it does not repair a missed association.
+  for (const receipt of receipts.values()) if (receipt.noncanonical) receipt.invalid = true
 
   function window(lower) {
     let count = 0, unknown = 0
