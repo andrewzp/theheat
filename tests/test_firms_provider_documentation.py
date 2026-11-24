@@ -22,9 +22,9 @@ FIRMS = {f"firms.{name}": f"nasa_firms.{name}"
 V7_SHA = "9a84f5050f0b5ebb5ea925c3db2a7d6f0d11ee85f39b9376f4945a8cae98573e"
 
 
-def test_default_v8_adds_only_three_partial_firms_quotas_to_existing_inventory():
+def test_historical_v8_adds_only_three_partial_firms_quotas_to_existing_inventory():
     previous = products.product_contract_document(schema=V7)
-    current = products.product_contract_document()
+    current = products.product_contract_document(schema=V8)
     assert current["schema"] == V8
     old, new = by_id(previous), by_id(current)
     assert set(old) == set(new)

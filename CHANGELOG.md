@@ -1,3 +1,7 @@
+## 0.9.109.183 — 2026-11-24
+
+- Record dated GHCN citation guidance and partial international reuse limits for the three existing station-file products. Preserve exact historical exports, unknown route cost/quota, current-availability and publication holds. Credit the original two native graphics templates separately from the still-open wider graphics and image-delivery work.
+
 ## 0.9.109.182 — 2026-11-24
 
 - Preserve exact completed-day rainfall packets through optional story enrichment. Prevent added cross-story or impact context from invalidating qualified single-cell reports, while keeping other stories' context, source rereads, required checks and one-candidate limits unchanged.
