@@ -489,7 +489,7 @@ def test_r1_legitimate_detached_export_stays_readable_and_derives_its_own_summar
     assert {row["field"] for row in view["unmet_criteria"]} >= {*products.UNKNOWN_FIELDS, "current_availability",
                                                                 "restriction_enforcement"}
     with pytest.raises(ValueError, match="export_schema"):
-        products.decode_product_contract_document({**reloaded, "schema": "theheat.source-product-contracts/v9"})
+        products.decode_product_contract_document({**reloaded, "schema": "theheat.source-product-contracts/v999"})
 
 
 def test_r1_marine_compound_supply_called_by_the_runner_is_inventoried():
