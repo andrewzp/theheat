@@ -38,6 +38,32 @@ def test_generator_refuses_an_oversized_allowlist_before_publishing_outputs(monk
     assert (ROOT / "dashboard/graphic-runtime.zip").read_bytes() == original
 
 
+def test_packaged_audit_refuses_mapped_fire_without_importing_local_resolver():
+    code = '''
+import json, socket, sys
+socket.socket.connect = lambda *a, **k: (_ for _ in ()).throw(AssertionError("network"))
+sys.path.insert(0, sys.argv[1])
+from src.two_bot.types import StoryBundle
+from src.two_bot.evidence_contract import audit_story_bundle
+bundle = StoryBundle(signal_kind="source_mapped_fire_perimeter", where="Invented fire",
+    when="2026-11-22T00:00:00Z", event_id="invented-map", headline_metric={"label":"Mapped area","value":12,"unit":"acres"},
+    current_facts=[{"label":"Mapped area","value":12,"unit":"acres"}],
+    raw_signal_dump={"source_product":"nifc.wfigs_interagency_perimeters_current",
+                     "source_url":"https://example.invalid/invented"})
+audit = audit_story_bundle(bundle)
+assert not audit.prompt_ready
+assert any(i.code == "mapped_fire_unqualified" for i in audit.issues)
+assert "src.storage.fire_episodes" not in sys.modules
+assert "src.two_bot.intern.fire_perimeter" not in sys.modules
+assert all(str(getattr(m, "__file__", "")).startswith(sys.argv[1] + "/")
+           for key,m in sys.modules.items() if key == "src" or key.startswith("src."))
+print(json.dumps({"held": True, "local_resolver_imported": False}))
+'''
+    result = subprocess.run([sys.executable, "-I", "-c", code, str(ROOT / "dashboard/graphic-runtime.zip")],
+                            capture_output=True, text=True, check=True, timeout=15)
+    assert json.loads(result.stdout) == {"held": True, "local_resolver_imported": False}
+
+
 @pytest.mark.parametrize("tamper", [None, "archive", "wrapper", "lock", "manifest", "missing", "oversize"])
 def test_sealed_entrypoint_loads_only_verified_zip_and_fails_closed(tmp_path, tamper):
     for name in (*DEPLOYMENT_FILES, "graphic-runtime.zip", "lib/graphic-runtime-manifest.json"):

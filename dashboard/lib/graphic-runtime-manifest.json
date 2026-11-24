@@ -1,6 +1,6 @@
 {
   "identity": {
-    "archive_sha256": "8d336574481b4e1f8e05d379d782a8e0a67665c4010f3c0258811d7e4f67ba50",
+    "archive_sha256": "9059feae01eaa1a2b322e756833e041841c9da637080803af3cedca765439e30",
     "deployment_files": {
       "api/graphic_preview.py": "984de6284b9eddef85db41cee9ab26c9d92954f12c7e13b6f87bf0bfb6640157",
       "api/graphic_reader_status.py": "5e9685d699625a4eea9d5be884b6e266939a0ad344a2997351ba79bd114407ba",
@@ -112,7 +112,7 @@
       "src/media/viirs_map_graphic_adapter.py": "657db3caef8503a4e0b9c9596bad8d28c029c3711e1d974f153fc1b60d3dd8d3",
       "src/state_schema.py": "8ccdc4dfc01ecf0f3e5d2db88736188a9cd8a059a6c95ba0e5a29f9712e6be75",
       "src/two_bot/__init__.py": "57333e1314a97e2fc83e03db569e03b0199c67ff52fad71770853226b9a68f00",
-      "src/two_bot/evidence_contract.py": "d4dd1b703e1444dd9843b384d73056de696f0d2d3eab17f0a7a2875bb2819b5a",
+      "src/two_bot/evidence_contract.py": "3684f2688b19b51245a65429d0e62f6a6a339360b732cd1a07b0bf60649d5bc6",
       "src/two_bot/ghcn_claim_contract.py": "749443ad87f4caac9726200dcc8f0e0aa3c662d5b5aee20f9b0f3dff8fa48bcc",
       "src/two_bot/ghcn_readable_warrant.py": "f0b3fecd6350145627b80db087d8681c7a35899f76e9615d15ef385da6cf24bb",
       "src/two_bot/intern/__init__.py": "2e34d6b9975fb831edbad10ed06d66aad2e8569a29cfd4cf17784177b91205e0",
@@ -124,7 +124,7 @@
       "src/two_bot/types.py": "65afc3d850c31c843bc1e7b58dcc0b13eb274969dcff657e2622641bd85239ee"
     },
     "format": "saved-source-svg-preview-v2",
-    "policy_source_sha256": "5df60fc52c4cd0d76457d4f6e7d3410741b71b7eb53f5d0dd6a1bcc34ab3dea8",
+    "policy_source_sha256": "70a0c8e92d4425659a8829bfa9b4a73335d78b86956afd7c0b522bea1a7dd1ea",
     "resource_sources": {
       "src/data/registry/cities.csv": "data/cities.csv",
       "src/data/registry/country_codes.json": "data/country_codes.json",
@@ -134,5 +134,5 @@
     },
     "schema_version": 1
   },
-  "runtime_sha256": "995fa1eead0a6f11fcbd03316378fc0ef724451a59bfab950e16e2a3940b68c5"
+  "runtime_sha256": "80e4bbdfd48bbfa8b167dd31534170fc318fbbbf1f74a57ce600666020023a84"
 }

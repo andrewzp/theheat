@@ -66,7 +66,7 @@ _UNIT_LABEL_SUFFIXES = (
 )
 
 
-def audit_story_bundle(bundle: StoryBundle) -> EvidenceAudit:
+def audit_story_bundle(bundle: StoryBundle, *, episode_context=None) -> EvidenceAudit:
     """Return prompt-readiness issues for a StoryBundle.
 
     Errors mean the writer would receive an unusable evidence packet. Warnings
@@ -170,6 +170,17 @@ def audit_story_bundle(bundle: StoryBundle) -> EvidenceAudit:
             )
 
     raw_signal_dump = bundle.raw_signal_dump
+    if bundle.signal_kind == "source_mapped_fire_perimeter" or isinstance(raw_signal_dump, dict) and (
+        raw_signal_dump.get("source_product") == "nifc.wfigs_interagency_perimeters_current"
+    ):
+        # Closed optional family: existing sealed-runtime bundles never import
+        # the local PostgreSQL resolver or acquire any new authority.
+        fire_reason: str | None = "resolved_fire_context_required"
+        if episode_context is not None:
+            from src.two_bot.intern.fire_perimeter import bundle_hold
+            fire_reason = bundle_hold(bundle, episode_context)
+        if fire_reason:
+            issues.append(_issue("error", "mapped_fire_unqualified", "raw_signal_dump", fire_reason))
     if not isinstance(raw_signal_dump, dict) or not raw_signal_dump:
         issues.append(
             _issue(
