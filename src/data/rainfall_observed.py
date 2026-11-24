@@ -429,6 +429,22 @@ def operation_hold(value, bot_state):
     return legacy_point_day_hold(value, bot_state)
 
 
+def _single_grid_cell_scope(prose):
+    """Recognize explicit whole-cell scope; all remaining claim checks still run."""
+    normalized = re.sub(r"\s+", " ", prose)
+    matches = list(re.finditer(r"\b(?P<count>one|a|1)\s+(?:satellite\s+)?"
+        r"(?:0\.1(?:\s*°|[ \-‐‑–]degrees?)\s+)?grid cell\b", normalized, re.I))
+    for match in matches:
+        prefix = normalized[max(0, match.start() - 100):match.start()]
+        if re.search(r"\b(?:(?:more|less|fewer|greater) than|at (?:least|most)|up to|"
+                     r"(?:half|quarter|part|portion|fraction|some|most) of|half|quarter|"
+                     r"not(?: only| just)?|negative|minus)\s*$", prefix, re.I):
+            return False
+        if match.group("count") == "1" and prefix.endswith(("-", "−")):
+            return False
+    return bool(matches)
+
+
 def claim_failures(text, bundle, *, now=None):
     if not is_family(bundle):
         return []
@@ -455,8 +471,7 @@ def claim_failures(text, bundle, *, now=None):
             return ["rainfall_quantity_label_required"]
         # The validated IMERG warrant is one 0.1-degree cell. Naming that
         # supported resolution must not erase the explicit single-cell scope.
-        if grid and not re.search(r"\b(?:one|a|1)\s+(?:satellite\s+)?"
-                                  r"(?:0\.1(?:\s*°|[ \-‐‑–]degrees?)\s+)?grid cell\b", prose, re.I):
+        if grid and not _single_grid_cell_scope(prose):
             return ["rainfall_point_scope_required"]
         if not grid and not re.search(r"\bnear\s+" + re.escape(point["city"]) + r"\b", prose, re.I):
             return ["rainfall_point_scope_required"]

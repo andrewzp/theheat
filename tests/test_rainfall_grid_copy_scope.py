@@ -33,6 +33,22 @@ def test_other_resolution_plural_or_region_scope_is_still_held(evidence, enabled
         bundle, now=NOW) == ["rainfall_point_scope_required"]
 
 
+@pytest.mark.parametrize("scope", ["more than one 0.1° grid cell", "half of a 0.1-degree grid cell",
+    "at least one 0.1° grid cell", "up to one 0.1° grid cell", "part of one grid cell",
+    "less than a satellite grid cell", "not only one 0.1° grid cell", "-1 0.1° grid cell"])
+def test_single_cell_words_cannot_hide_partial_plural_or_uncertain_coverage(evidence, enabled, scope):
+    bundle = grid.build_bundle(evidence, now=NOW)
+    assert report.claim_failures(COPY.replace("one grid cell", scope) + "\n" + gpm_public_url(),
+        bundle, now=NOW) == ["rainfall_point_scope_required"]
+
+
+@pytest.mark.parametrize("scope", ["exactly one 0.1° grid cell", "only one 0.1-degree grid cell"])
+def test_explicit_single_whole_cell_still_qualifies(evidence, enabled, scope):
+    bundle = grid.build_bundle(evidence, now=NOW)
+    assert report.claim_failures(COPY.replace("one grid cell", scope) + "\n" + gpm_public_url(),
+        bundle, now=NOW) == []
+
+
 @pytest.mark.parametrize("verb", ["recorded", "measured", "flooding", "record"])
 def test_resolution_qualification_never_clears_an_independent_unsupported_claim(evidence, enabled, verb):
     bundle = grid.build_bundle(evidence, now=NOW)
@@ -77,4 +93,15 @@ def test_a_qualified_scope_with_recorded_stops_before_paid_fact_checker_or_criti
     assert models.stages() == ["writer"]  # local refusal precedes every paid checker
     rejection = next(row for row in state["suppressions"] if row.get("stage") == "fact_check")
     assert rejection["reasons"] == ["rainfall_unsupported_claim"]
+    assert transport.x_posts == []
+
+
+@pytest.mark.parametrize("scope", ["more than one 0.1° grid cell", "half of a 0.1-degree grid cell"])
+def test_actual_collection_refuses_multi_or_partial_cell_before_paid_checks(ordinary_grid_world, scope):
+    transport, state, _run, models, _module = ordinary_grid_world
+    models.copy = COPY.replace("one grid cell", scope)
+    assert collect(ordinary_grid_world) is state
+    assert state["drafts"] == [] and models.stages() == ["writer"]
+    rejection = next(row for row in state["suppressions"] if row.get("stage") == "fact_check")
+    assert rejection["reasons"] == ["rainfall_point_scope_required"]
     assert transport.x_posts == []
