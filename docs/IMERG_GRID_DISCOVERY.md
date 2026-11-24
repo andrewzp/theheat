@@ -29,11 +29,21 @@ the same exact unit, coordinate and calendar checks. Multi-valued, untyped objec
 oversized or malformed attributes are refused. Fixed string storage is limited
 to 128 bytes. Only the declared trailing NUL or space padding is removed; opaque
 data and non-padding bytes after a NUL terminator are refused. Embedded control
-characters remain invalid. No unit conversion, missing
-metadata default or changed interpretation of hourly rates is introduced.
+characters remain invalid. Missing units are refused; no unit conversion or
+changed interpretation of hourly rates is introduced.
 Native NetCDF fixed strings can fill their entire declared width without a
 stored NUL; these remain supported. If a NUL is present, non-padding bytes after
 it still invalidate the attribute.
+
+A genuinely absent time `calendar` uses the `standard` calendar defined by
+[CF section 4.4.1](https://cfconventions.org/Data/cf-conventions/cf-conventions-1.7/cf-conventions.html#calendar).
+This applies only when the attribute is absent. Blank, malformed or unsupported
+present values remain refused. A missing calendar with custom `month_lengths`,
+`leap_year` or `leap_month` attributes is also refused. The existing explicit
+units, post-1582 origin, scalar time, whole-second precision and exact source-day
+checks still apply. On the default-calendar path, the encoded time must represent
+an exact whole second before datetime conversion can round it. This does not supply a date in place of the source time or
+establish source availability or complete rainfall coverage.
 
 At most three reports share the existing city-report slate. Only one routine
 writer candidate and one sample can be paid for, and a paid failure receives no

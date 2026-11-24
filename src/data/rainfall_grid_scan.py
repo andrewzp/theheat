@@ -143,7 +143,15 @@ def _missing(dataset, values, *, sentinels=None):
 
 def _source_time(dataset, day):
     units = _text_attribute(dataset, "units")
-    calendar = _text_attribute(dataset, "calendar")
+    default_calendar = "calendar" not in dataset.attrs
+    if default_calendar:
+        # CF 4.4.1 defines standard as the default only for an absent calendar.
+        # Custom definitions and malformed present attributes cannot borrow it.
+        contract.require(not any(name in dataset.attrs for name in
+                                 ("month_lengths", "leap_year", "leap_month")), "rainfall_grid_time_invalid")
+        calendar = "standard"
+    else:
+        calendar = _text_attribute(dataset, "calendar")
     contract.require(calendar in {"gregorian", "standard", "proleptic_gregorian"}
                      and isinstance(units, str), "rainfall_grid_time_invalid")
     match = re.fullmatch(r"(seconds|hours|days) since (\d{4}-\d{2}-\d{2})"
@@ -155,7 +163,13 @@ def _source_time(dataset, day):
         contract.require(origin.date() >= date(1582, 10, 15), "rainfall_grid_time_invalid")
         scalar = float(dataset[0])
         contract.require(math.isfinite(scalar) and not bool(_missing(dataset, scalar)), "rainfall_grid_time_invalid")
-        source = origin + timedelta(seconds=scalar * {"seconds": 1, "hours": 3600, "days": 86400}[match[1]])
+        scale = {"seconds": 1, "hours": 3600, "days": 86400}[match[1]]
+        if default_calendar:
+            # Check the encoded value before timedelta can round a fractional
+            # microsecond across the source-day boundary.
+            numerator, denominator = scalar.as_integer_ratio()
+            contract.require((numerator * scale) % denominator == 0, "rainfall_grid_time_invalid")
+        source = origin + timedelta(seconds=scalar * scale)
     except (ValueError, OverflowError) as exc:
         raise contract.GridHeld("rainfall_grid_time_invalid") from exc
     contract.require(source.date() == day and source.microsecond == 0, "rainfall_grid_time_invalid")

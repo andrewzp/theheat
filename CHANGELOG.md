@@ -1,3 +1,7 @@
+## 0.9.109.176 — 2026-11-24
+
+- Interpret a genuinely absent IMERG time-calendar attribute using the documented CF standard calendar. Keep malformed or unsupported present values, custom-calendar definitions, missing units, incorrect dates, stale frames and incomplete rainfall cells blocked. Existing source, nomination, paid-slot and publication limits remain.
+
 ## 0.9.109.175 — 2026-11-23
 
 - Add queue checks in the eighteen hours without primary collection slots, retaining the original hourly checks and six source slots. Apply the existing guarded stale-alerts catch-up, reservation, sender ordering, credential scope and per-run limits to those checks; log their schedule without source or tweet text. Refuse unrecognized schedule strings before selecting a runnable role. Configured opportunities do not establish actual delivery, content yield, spend or posting cadence.
