@@ -1534,6 +1534,14 @@ def _datapool_response_context(resp: requests.Response) -> str:
     return f"status={status} media={media} destination={destination} redirects={redirects}"
 
 
+class _DatapoolSession(requests.Session):
+    """Own the configured token; never discover netrc or proxy credentials."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.trust_env = False
+
+
 def _fetch_grid_bytes_datapool(*, target_date: date, product: str, token: str) -> bytes:
     """GET the daily .nc4 from the GES DISC data pool (authenticated HTTPS).
 
@@ -1544,10 +1552,11 @@ def _fetch_grid_bytes_datapool(*, target_date: date, product: str, token: str) -
     url = f"{DATAPOOL_BASE}/{_imerg_relpath(product, target_date)}"
     timeout_s = _request_timeout_s()
     try:
-        # bare-get: migrated in S-09 with GPM datapool status handling.
-        resp = requests.get(
-            url, headers={"Authorization": f"Bearer {token}"}, timeout=timeout_s
-        )
+        # Preserve the existing request/status path without ambient auth lookup.
+        with _DatapoolSession() as session:
+            resp = session.get(
+                url, headers={"Authorization": f"Bearer {token}"}, timeout=timeout_s
+            )
     except (requests.ConnectionError, requests.Timeout) as exc:
         raise _GridTransient(f"datapool connection error: {exc}") from exc
     try:

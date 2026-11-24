@@ -711,7 +711,7 @@
     "src/data/gdacs.py": "acd12ae1dd53550d5a377b8adc3f8f6179ae9b86239aa606717a0d07f0875457",
     "src/data/ghcn.py": "724b2f0157c96fdfc4fb588362fd7c6262b1a7dd2e4ecf2a839b0f1802d0e0c3",
     "src/data/ghcn_discovery.py": "3806953a62265cc1788dcf3fc10b4bfc0cef9ec72da80bbb4f6554c35c44b291",
-    "src/data/gpm_imerg.py": "df451bcfeca581f1afcfb91063c2f8163352af53b52b20e41f1f84a94a0560ae",
+    "src/data/gpm_imerg.py": "f77919149b18648764336c1d4ec8e58bb2aeaa8ef48ceda240a7ec6777839488",
     "src/data/ice_mass.py": "6352519b96130b565a9507f558a289126b1e9524cc79437239c55c5f4f2dd737",
     "src/data/jtwc.py": "1ad213e88299c9333c149cde0dbfd28d689e31b89e1c51440995536c64776e56",
     "src/data/methane.py": "061c60608f1d7c016b5afcce91c4d178d98e9f26ea1fdffb600e5f9cc6161355",
@@ -779,5 +779,5 @@
     "src/two_bot/intern/warnings.py": "04e0a4506ffbb29124c8d2960a5e5025305699297fcf8f9178b23caac2cd7a37"
   },
   "evidence_scope": "Referenced local code inventory; not live/provider/transitive-source qualification.",
-  "registry_sha256": "ff375d926309018714988af4ca5d487dd2812f9a755193a0de6709d81f32aef3"
+  "registry_sha256": "a985d37d1ecc929cdf18df2922b1aa20bed6534b6cb9a64996af873c24f36431"
 }

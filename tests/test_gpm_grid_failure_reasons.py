@@ -134,7 +134,7 @@ def test_http_refusals_do_not_read_error_body_or_probe_another_date(monkeypatch,
     def get(url, **kwargs):
         calls.append(url)
         return Reply()
-    monkeypatch.setattr(requests, "get", get)
+    monkeypatch.setattr(gpm._DatapoolSession, "get", staticmethod(get))
     with pytest.raises((gpm._GridTransient, gpm._GridNotFound)):
         gpm._fetch_grid_bytes_datapool(target_date=DAY, product="late", token=SECRET)
     assert len(calls) == 1
