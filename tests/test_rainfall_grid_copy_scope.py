@@ -35,14 +35,17 @@ def test_other_resolution_plural_or_region_scope_is_still_held(evidence, enabled
 
 @pytest.mark.parametrize("scope", ["more than one 0.1° grid cell", "half of a 0.1-degree grid cell",
     "at least one 0.1° grid cell", "up to one 0.1° grid cell", "part of one grid cell",
-    "less than a satellite grid cell", "not only one 0.1° grid cell", "-1 0.1° grid cell"])
+    "less than a satellite grid cell", "not only one 0.1° grid cell", "-1 0.1° grid cell",
+    "one-third of a 0.1-degree grid cell", "50% of a 0.1° grid cell",
+    "three quarters of one 0.1° grid cell", "not all of one 0.1° grid cell"])
 def test_single_cell_words_cannot_hide_partial_plural_or_uncertain_coverage(evidence, enabled, scope):
     bundle = grid.build_bundle(evidence, now=NOW)
     assert report.claim_failures(COPY.replace("one grid cell", scope) + "\n" + gpm_public_url(),
         bundle, now=NOW) == ["rainfall_point_scope_required"]
 
 
-@pytest.mark.parametrize("scope", ["exactly one 0.1° grid cell", "only one 0.1-degree grid cell"])
+@pytest.mark.parametrize("scope", ["exactly one 0.1° grid cell", "only one 0.1-degree grid cell",
+    "all of one 0.1° grid cell", "the entirety of a 0.1-degree grid cell"])
 def test_explicit_single_whole_cell_still_qualifies(evidence, enabled, scope):
     bundle = grid.build_bundle(evidence, now=NOW)
     assert report.claim_failures(COPY.replace("one grid cell", scope) + "\n" + gpm_public_url(),

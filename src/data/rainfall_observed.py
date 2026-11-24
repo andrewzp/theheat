@@ -436,6 +436,15 @@ def _single_grid_cell_scope(prose):
         r"(?:0\.1(?:\s*°|[ \-‐‑–]degrees?)\s+)?grid cell\b", normalized, re.I))
     for match in matches:
         prefix = normalized[max(0, match.start() - 100):match.start()]
+        # Partitives govern the footprint, regardless of how a fraction is
+        # written (one-third, 50%, three quarters, etc.). Only explicit whole
+        # forms preserve the warranted complete cell; inspect outer governors too.
+        while re.search(r"\bof\s*$", prefix, re.I):
+            whole = re.search(r"\b(?:all|(?:the )?entirety|100(?:\.0+)?\s*(?:%|percent)) of\s*$",
+                              prefix, re.I)
+            if whole is None:
+                return False
+            prefix = prefix[:whole.start()]
         if re.search(r"\b(?:(?:more|less|fewer|greater) than|at (?:least|most)|up to|"
                      r"(?:half|quarter|part|portion|fraction|some|most) of|half|quarter|"
                      r"not(?: only| just)?|negative|minus)\s*$", prefix, re.I):
