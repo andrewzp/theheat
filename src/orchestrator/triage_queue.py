@@ -1018,12 +1018,25 @@ def _drain_and_write_triage_queue(
 
     # Classify identity without serializing optional context: malformed peer
     # context must still reach the existing hold instead of crashing the drain.
+    # Excluded rows still claim identities. Keep their aliases quarantined so
+    # filtering cannot make a conflicting peer look like an unambiguous donor.
+    withheld_rows: set[int] = set()
+    withheld_ids: set[str] = set()
+    for candidate in queue:
+        inner = {"signal_kind": candidate.bundle.signal_kind,
+                 "event_id": candidate.bundle.event_id,
+                 "raw_signal_dump": candidate.bundle.raw_signal_dump}
+        outer = {"signal_kind": candidate.legacy_type, "event_id": candidate.event_id}
+        if not (rainfall_observed.is_family(inner) or rainfall_observed.is_family(outer)):
+            continue
+        withheld_rows.add(id(candidate))
+        for identity in (candidate.event_id, candidate.bundle.event_id):
+            if isinstance(identity, str) and identity and identity == identity.strip():
+                withheld_ids.add(identity)
     enrichment_queue = [candidate for candidate in queue
-                        if not rainfall_observed.is_family({
-                            "signal_kind": candidate.bundle.signal_kind,
-                            "event_id": candidate.bundle.event_id,
-                            "raw_signal_dump": candidate.bundle.raw_signal_dump,
-                        })]
+                        if id(candidate) not in withheld_rows
+                        and not any(isinstance(identity, str) and identity in withheld_ids
+                                    for identity in (candidate.event_id, candidate.bundle.event_id))]
 
     # Phase D: attach optional verifiable cross-signal context (default OFF). Done
     # once here so both the legacy drain and the refill loop see enriched bundles.

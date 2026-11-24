@@ -229,7 +229,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/orchestrator/sources/river_gauges.py": "cf8e08b50ce78297f1138319a0f8ac91b91bcfc08c597538b011934fb80ae943",
     "src/orchestrator/sources/synthesis.py": "e1e101948dde8a2ac07be65d78e37ed0cd8e080c43523ea0ded1b1071cd31522",
     "src/orchestrator/triage.py": "5cc6ea24cb8d7e8ea580f7a4d4e6e6d5d108edc0837168613833a271aeb10e37",
-    "src/orchestrator/triage_queue.py": "32ebe5b0367bebef80eb2fa257dec5fa4045fa7226cc82d94b0f26a5d0dad07f",
+    "src/orchestrator/triage_queue.py": "18d52689b12f39fcf63dc7bb9de66fc8425dbd2cf8b057bd2ec5c584ddba68a0",
     "src/orchestrator/two_bot_dispatch.py": "3f19fc38fc4ab63cbffb1391201f22a6790c45e6b51743e805b9943ec014fb80",
     "src/posting/bluesky.py": "30333265f7978e905a4f4c45039c7bdae997cb192811e9e93701bf31976105a4",
     "src/posting/delivery_receipts.py": "c944f22458726d02bcdbbf70d274d4831486013dc2eb1e47fd6f2a569abd4147",
@@ -315,5 +315,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "5c5ffcc95358c7df45ae838c228759ad0eb6275c8f9053c8130c0a8824b63d9e"
   },
   "schema_version": 1,
-  "source_sha256": "a0b2a10b0717839b349f572c1ae26e0a222cff2c54e5ed0609f7aa1699bb75e5"
+  "source_sha256": "1f14955b746d8abc675fe27be1b97c0f72116a3854e0fb22cab69da958ed0145"
 }
