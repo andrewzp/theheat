@@ -96,6 +96,50 @@ def test_portable_watchlist_uses_the_actual_active_registered_points():
     assert report._watchlist_keys() == expected
 
 
+def test_source_owned_report_stays_intact_while_other_stories_keep_optional_context(bundle, enabled):
+    from freezegun import freeze_time
+    from src import state
+    from src.editorial import newsworthiness
+    from src.orchestrator import common
+    from tests.test_multisignal import _cand
+
+    first = _cand(event_id="invented-regional", country="FR", when=DAY)
+    second = _cand(event_id="invented-fire", country="FR", when=DAY, signal_kind="fire")
+    rainfall = replace(_cand(event_id=bundle.event_id, when=DAY, signal_kind=report.KIND),
+                       bundle=bundle, source="gpm_imerg")
+    bot_state = deepcopy(state.DEFAULT_STATE)
+    bot_state["drafts"] = []
+    bot_state["_triage_queue"] = [rainfall, first, second]
+    original = deepcopy(bundle.to_dict())
+    seen_news, seen_generation = [], {}
+    attach = newsworthiness.attach_human_impact
+
+    def observe_news(queue, events):
+        seen_news.append({candidate.event_id for candidate in queue})
+        return attach(queue, events)
+
+    def observe_generation(packet, _state, _score, **kwargs):
+        seen_generation[kwargs["event_id"]] = [x.event_id for x in packet.related_signals]
+        return False  # Observe this boundary only; never a model/check pass.
+
+    enabled.setenv("THEHEAT_MULTISIGNAL_CONTEXT", "1")
+    enabled.setenv("THEHEAT_NEWSWORTHINESS_ENABLED", "1")
+    enabled.setenv("THEHEAT_NEWS_ENRICH_ENABLED", "1")
+    enabled.setenv("THEHEAT_TRIAGE_ENABLED", "0")
+    enabled.setattr(newsworthiness, "attach_human_impact", observe_news)
+    enabled.setattr(common, "_try_two_bot_draft", observe_generation)
+    with freeze_time(NOW):
+        common._drain_and_write_triage_queue(bot_state, {"id": "invented-mixed-context", "sources": []})
+    assert seen_news == [{first.event_id, second.event_id}]
+    # The preserved one-attempt budget need not select both compatible peers.
+    # Check the real drain's prepared context rather than buy another attempt.
+    assert [x.event_id for x in first.bundle.related_signals] == [second.event_id]
+    assert [x.event_id for x in second.bundle.related_signals] == [first.event_id]
+    assert len(seen_generation) <= 1
+    assert bundle.to_dict() == original
+    assert report.validate_bundle(bundle, now=NOW) == original["raw_signal_dump"]["evidence"]
+
+
 @pytest.mark.parametrize("triage", ["0", "1"])
 def test_report_operation_budget_survives_disabled_ranking(enabled, triage):
     from src.orchestrator.candidate_budget import CandidateBudget

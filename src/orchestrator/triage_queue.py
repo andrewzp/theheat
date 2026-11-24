@@ -1009,6 +1009,22 @@ def _drain_and_write_triage_queue(
     if not queue:
         return 0
 
+    # Completed-day rainfall reports are exact source-owned single-cell packets.
+    # Generic context would change their canonical claim, and a scalar related
+    # summary cannot carry their full file/window/footprint evidence. Keep them
+    # out of both sides of optional enrichment; do not relax their later checks
+    # or remove already supplied fields to repair an invalid packet.
+    from src.data import rainfall_observed
+
+    # Classify identity without serializing optional context: malformed peer
+    # context must still reach the existing hold instead of crashing the drain.
+    enrichment_queue = [candidate for candidate in queue
+                        if not rainfall_observed.is_family({
+                            "signal_kind": candidate.bundle.signal_kind,
+                            "event_id": candidate.bundle.event_id,
+                            "raw_signal_dump": candidate.bundle.raw_signal_dump,
+                        })]
+
     # Phase D: attach optional verifiable cross-signal context (default OFF). Done
     # once here so both the legacy drain and the refill loop see enriched bundles.
     # Errors must never take down the cron — this is a writer enrichment, not a gate.
@@ -1016,7 +1032,7 @@ def _drain_and_write_triage_queue(
 
     if multisignal_context_enabled():
         try:
-            attach_related_signals(queue)
+            attach_related_signals(enrichment_queue)
         except Exception as exc:  # noqa: BLE001
             print(f"[multisignal] attach_related_signals error (continuing): {exc!r}")
 
@@ -1028,7 +1044,7 @@ def _drain_and_write_triage_queue(
 
     if _news.news_enrich_enabled():
         try:
-            enriched = _news.attach_human_impact(queue, bot_state.get("news_events"))
+            enriched = _news.attach_human_impact(enrichment_queue, bot_state.get("news_events"))
             if enriched:
                 print(f"[news_enrich] attached human_impact to {enriched} candidate(s)")
         except Exception as exc:  # noqa: BLE001

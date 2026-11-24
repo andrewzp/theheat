@@ -164,6 +164,78 @@ def gpm_public_url():
     return SOURCE_URL
 
 
+@pytest.mark.parametrize("concurrent", [False, True])
+@pytest.mark.parametrize("triage", [False, True])
+@pytest.mark.parametrize("news_enabled", [False, True])
+def test_multiple_same_region_reports_keep_canonical_evidence_with_context_enabled(
+    monkeypatch, ordinary_grid_world, concurrent, triage, news_enabled,
+):
+    """Optional context must not invalidate two otherwise qualified source packets."""
+    from src.data import rainfall_grid
+
+    transport, state, _run, models, _module = ordinary_grid_world
+    monkeypatch.setenv("THEHEAT_MULTISIGNAL_CONTEXT", "1")
+    monkeypatch.setenv("THEHEAT_NEWSWORTHINESS_ENABLED", "1" if news_enabled else "0")
+    monkeypatch.setenv("THEHEAT_NEWS_ENRICH_ENABLED", "1" if news_enabled else "0")
+    monkeypatch.setenv("THEHEAT_CONCURRENT_SOURCES", "1" if concurrent else "0")
+    monkeypatch.setenv("THEHEAT_TRIAGE_ENABLED", "1" if triage else "0")
+    buffer = io.BytesIO(transport.payload)
+    with h5py.File(buffer, "r+") as handle:
+        # Equal invented amounts keep either legitimate tie order compatible
+        # with the one fixed model fixture; selection is not under test here.
+        handle["precipitation"][0, 1300, 799] = 190.5
+    transport.payload = buffer.getvalue()
+
+    collect(ordinary_grid_world)
+
+    assert models.stages() == ["writer", "safety", "fact_check", "critic"], state.get("suppressions")
+    [draft] = state["drafts"]
+    saved = draft["review_context"]["two_bot"]["bundle"]
+    assert "related_signals" not in saved and "human_impact" not in saved
+    assert rainfall_grid.validate_bundle(saved, now=NOW) == saved["raw_signal_dump"]["evidence"]
+    assert len(transport.nasa_calls) == 3
+    assert draft["approval_binding"]["mode"] == "auto"
+    send(monkeypatch, ordinary_grid_world)
+    assert draft["status"] == "posted" and draft["tweet_id"] == "invented-x-1"
+    send(monkeypatch, ordinary_grid_world, at=NOW + timedelta(minutes=4))
+    assert transport.x_posts == [draft["text"]]
+
+
+@pytest.mark.parametrize("field", ["related_signals", "human_impact", "headline_metric", "country"])
+def test_context_is_not_stripped_to_repair_an_already_changed_rainfall_packet(
+    monkeypatch, ordinary_grid_world, field,
+):
+    from src.two_bot.types import RelatedSignal
+
+    transport, state, _run, models, module = ordinary_grid_world
+    monkeypatch.setenv("THEHEAT_MULTISIGNAL_CONTEXT", "1")
+    original = module.run_gpm_imerg
+    observed = []
+
+    def changed_source(bot_state, current_run, cities):
+        result = original(bot_state, current_run, cities)
+        [candidate] = bot_state["_triage_queue"]
+        packet = candidate.bundle
+        if field == "related_signals":
+            packet.related_signals = [RelatedSignal("invented-other", "invented", "elsewhere", packet.when,
+                                                  {"value": 1}, "BR")]
+        elif field == "human_impact":
+            packet.human_impact = [{"claim": "Invented unsupported impact"}]
+        elif field == "headline_metric":
+            packet.headline_metric["value"] += 1
+        else:
+            packet.country = "FR"
+        observed.append(deepcopy(packet.to_dict()))
+        return result
+
+    monkeypatch.setattr(module, "run_gpm_imerg", changed_source)
+    collect(ordinary_grid_world)
+    assert observed and models.stages() == []
+    assert state["drafts"] == [] and transport.x_posts == []
+    assert any("rainfall_bundle_changed" in reason
+               for row in state.get("suppressions", []) for reason in row.get("reasons", []))
+
+
 @pytest.mark.parametrize("boundary", ["before-writer", "before-admission", "before-send"])
 def test_changed_actual_source_bytes_refuse_at_each_existing_live_boundary(monkeypatch, ordinary_grid_world, boundary):
     transport, state, _run, models, _module = ordinary_grid_world
