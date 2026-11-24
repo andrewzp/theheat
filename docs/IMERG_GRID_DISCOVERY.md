@@ -41,7 +41,8 @@ This applies only when the attribute is absent. Blank, malformed or unsupported
 present values remain refused. A missing calendar with custom `month_lengths`,
 `leap_year` or `leap_month` attributes is also refused. The existing explicit
 units, post-1582 origin, scalar time, whole-second precision and exact source-day
-checks still apply. This does not supply a date in place of the source time or
+checks still apply. On the default-calendar path, the encoded time must represent
+an exact whole second before datetime conversion can round it. This does not supply a date in place of the source time or
 establish source availability or complete rainfall coverage.
 
 At most three reports share the existing city-report slate. Only one routine

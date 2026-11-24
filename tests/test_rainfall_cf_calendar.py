@@ -77,6 +77,36 @@ def test_default_does_not_change_units_origin_precision_or_source_date_guards(ch
         unit_time(change, day=day)
 
 
+@pytest.mark.parametrize("unit,scale", [("days", 86400), ("hours", 3600), ("seconds", 1)])
+@pytest.mark.parametrize("direction", [float("-inf"), float("inf")])
+def test_encoded_fraction_below_datetime_precision_cannot_round_into_a_valid_day(unit, scale, direction):
+    def fractional(node):
+        seconds = (datetime.combine(DAY, datetime.min.time(), UTC) - EPOCH).total_seconds()
+        node.attrs["units"] = f"{unit} since 1980-01-06 00:00:00Z"
+        node[0] = np.nextafter(seconds / scale, direction)
+    with pytest.raises(contract.GridHeld, match="rainfall_grid_time_invalid"):
+        unit_time(fractional)
+
+
+@pytest.mark.parametrize("unit,scale", [("days", 86400), ("hours", 3600), ("seconds", 1)])
+def test_exact_whole_seconds_and_binary_fractional_days_remain_supported(unit, scale):
+    def noon(node):
+        seconds = (datetime.combine(DAY, datetime.min.time(), UTC) - EPOCH).total_seconds() + 43200
+        node.attrs["units"] = f"{unit} since 1980-01-06 00:00:00Z"
+        node[0] = seconds / scale
+    assert unit_time(noon) == DAY.isoformat() + "T12:00:00Z"
+
+
+@pytest.mark.parametrize("direction", [float("-inf"), float("inf")])
+def test_full_grid_cannot_nominate_a_timestamp_rounded_across_midnight(direction):
+    def fractional(handle):
+        cf_time(handle)
+        handle["time"][0] = np.nextafter(handle["time"][0], direction)
+    result = scanned(changed(fractional))
+    assert result["status"] == "held" and result["rows"] == []
+    assert result["hold_code"] == "rainfall_grid_time_invalid"
+
+
 @pytest.mark.parametrize("grouped", [False, True])
 def test_full_grid_default_matches_explicit_standard_and_preserves_each_file_identity(grouped):
     def layout(handle, absent):
