@@ -1,3 +1,7 @@
+## 0.9.109.184 — 2026-11-24
+
+- Connect retained, individually identified NIFC polygon editions to local incident history, exact revision checks, source-backed memory and the real audited writer-request builder. Keep mapped areas separate from fire growth or duration, exclude unknown-delivery history and leave production enrollment and transport unavailable. Preserve the existing cyclone and graphics contracts.
+
 ## 0.9.109.183 — 2026-11-24
 
 - Record dated GHCN citation guidance and partial international reuse limits for the three existing station-file products. Preserve exact historical exports, unknown route cost/quota, current-availability and publication holds. Credit the original two native graphics templates separately from the still-open wider graphics and image-delivery work.

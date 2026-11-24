@@ -54,6 +54,8 @@ POLICY_FILES = (
     "src/commands/hosted_fixture.py", "src/commands/bulk_rejection_client.py",
     "src/commands/postgres_source_results.py", "src/orchestrator/source_result_client.py",
     "src/storage/cyclone_supply.py", "src/storage/physical_events.py",
+    "src/data/nifc_perimeter.py", "src/storage/fire_episodes.py",
+    "src/orchestrator/fire_episodes.py", "src/two_bot/intern/fire_perimeter.py",
     "src/orchestrator/cyclone_episodes.py", "src/orchestrator/cyclones.py",
     "src/editorial/newsworthiness.py", "src/editorial/report_development.py",
     "src/editorial/official_warning.py", "src/editorial/nhc_advisory.py",

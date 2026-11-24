@@ -39,6 +39,7 @@ _SIGNAL_KIND_TO_CATEGORY: dict[str, str] = {
     "fire": "fire",
     "fire_footprint": "fire",
     "reported_fire_incident_size": "fire",
+    "source_mapped_fire_perimeter": "fire",
     "monthly_high": "temperature_record",
     "monthly_low": "temperature_record",
     "calendar_record": "temperature_record",
@@ -314,6 +315,31 @@ def _nifc_snapshot_fits(value: dict) -> bool:
         return False
 
 
+def _physical_binding(value):
+    if isinstance(value, dict) and (str(value.get("episode_id", "")).startswith("ep1:fire:nifc:")
+                                  or value.get("identity_class") == "source_mapped_fire"):
+        from src.storage.fire_episodes import validate_binding
+    else:
+        from src.storage.physical_events import validate_binding
+    return validate_binding(value)
+
+
+def _resolved_episode_context(bundle, context):
+    binding = bundle.raw_signal_dump["physical_episode"]
+    if isinstance(binding, dict) and (str(binding.get("episode_id", "")).startswith("ep1:fire:nifc:")
+                                     or binding.get("identity_class") == "source_mapped_fire"):
+        from src.storage.fire_episodes import FireEpisodeContext
+        from src.two_bot.intern.fire_perimeter import bundle_hold
+        if type(context) is not FireEpisodeContext or bundle_hold(bundle, context) is not None:
+            raise ValueError("resolved_fire_context_required")
+    else:
+        from src.storage.physical_events import EpisodeContext
+        if type(context) is not EpisodeContext:
+            raise ValueError("resolved_episode_context_required")
+        context.validate(binding)
+    return context
+
+
 def bundle_memory_snapshot(bundle: StoryBundle) -> dict:
     """Persist the small bundle subset needed to record publish memory later."""
 
@@ -329,8 +355,7 @@ def bundle_memory_snapshot(bundle: StoryBundle) -> dict:
     }
 
     if "physical_episode" in bundle.raw_signal_dump:
-        from src.storage.physical_events import validate_binding
-        snapshot["physical_episode"] = validate_binding(bundle.raw_signal_dump["physical_episode"])
+        snapshot["physical_episode"] = _physical_binding(bundle.raw_signal_dump["physical_episode"])
     else:
         identity = _source_memory_identity(bundle)
         if identity is not None:
@@ -365,13 +390,11 @@ def build_memory_slice(state: BotState, bundle: StoryBundle, *, now: datetime | 
     standalone_observation = not bound and _standalone_observation(bundle)
     source_identity = _source_memory_identity(bundle) if not bound else None
     if bound:
-        from src.storage.physical_events import EpisodeContext
-        if type(episode_context) is not EpisodeContext:
-            raise ValueError("resolved_episode_context_required")
-        episode_context.validate(bundle.raw_signal_dump["physical_episode"])
+        _resolved_episode_context(bundle, episode_context)
     elif episode_context is not None:
         raise ValueError("unexpected_episode_context")
     memory = _memory(state)
+    fire_bound = bound and bundle.raw_signal_dump["physical_episode"].get("identity_class") == "source_mapped_fire"
     country = _country_for(bundle)
     instant = now if now is not None else datetime.now(UTC)
     if instant.tzinfo is None:
@@ -381,6 +404,8 @@ def build_memory_slice(state: BotState, bundle: StoryBundle, *, now: datetime | 
     same_country_rows = []
     for row in memory.get("shipped_tweets", []):
         if not isinstance(row, dict) or country_key(row.get("country", "")) != country:
+            continue
+        if fire_bound and not episode_context.published_reference(row):
             continue
         shipped_at = _parse_time(row.get("shipped_at"))
         if shipped_at is not None and shipped_at.timestamp() < cutoff:
@@ -398,7 +423,7 @@ def build_memory_slice(state: BotState, bundle: StoryBundle, *, now: datetime | 
         if not isinstance(row, dict):
             continue
         if bound:
-            if episode_context.contains(row):
+            if not fire_bound and episode_context.contains(row):
                 ongoing_event = row
                 break
             continue
@@ -414,6 +439,7 @@ def build_memory_slice(state: BotState, bundle: StoryBundle, *, now: datetime | 
 
     shipped_rows = [
         row for row in memory.get("shipped_tweets", []) if isinstance(row, dict)
+        and (not fire_bound or episode_context.published_reference(row))
     ]
     shipped_rows.sort(
         key=_row_time,
@@ -497,6 +523,10 @@ def build_memory_slice(state: BotState, bundle: StoryBundle, *, now: datetime | 
             "recent_published_texts": [_tweet_text(row) for row in source_rows[:5]],
         }
 
+    if fire_bound:
+        # All map facts are reconstructed from immutable retained source rows;
+        # publishing clocks/first_seen/days_running are never factual duration.
+        ongoing_event = episode_context.map_memory()
     return MemorySlice(
         recent_tweets_same_country=[_tweet_text(row) for row in same_country_rows[:5]],
         recent_tweets_same_event=[_tweet_text(row) for row in same_event_rows[:5]],
@@ -541,8 +571,7 @@ def record_shipped(
     binding = None
     source_identity = None
     if "physical_episode" in bundle.raw_signal_dump:
-        from src.storage.physical_events import validate_binding
-        binding = validate_binding(bundle.raw_signal_dump["physical_episode"])
+        binding = _physical_binding(bundle.raw_signal_dump["physical_episode"])
         shipped_row["physical_episode"] = binding
     else:
         source_identity = _source_memory_identity(bundle)
@@ -569,6 +598,10 @@ def record_shipped(
 
     if writer.angle_chosen:
         _dedup_append(memory.setdefault("used_framings", []), writer.angle_chosen)
+
+    if binding is not None and binding["identity_class"] == "source_mapped_fire":
+        # Publication bookkeeping cannot mint mapped-incident facts or duration.
+        return
 
     if binding is None and (_standalone_observation(bundle) or source_identity is None
                             or source_identity["schema"] == _NIFC_MEMORY_SCHEMA):

@@ -215,14 +215,24 @@ def build_writer_user_prompt(
     episode_context=None,
 ) -> str:
     """Construct current copy instructions; the caller still qualifies evidence."""
-    if "physical_episode" in bundle.raw_signal_dump:
-        from src.storage.physical_events import EpisodeContext
-        if type(episode_context) is not EpisodeContext:
-            raise ValueError("resolved_episode_context_required")
-        episode_context.validate(bundle.raw_signal_dump["physical_episode"])
+    if "physical_episode" in bundle.raw_signal_dump or bundle.signal_kind == "source_mapped_fire_perimeter":
+        if "physical_episode" not in bundle.raw_signal_dump:
+            raise ValueError("resolved_fire_context_required")
+        from src.two_bot.memory import _resolved_episode_context
+        _resolved_episode_context(bundle, episode_context)
+        if bundle.signal_kind == "source_mapped_fire_perimeter" and (
+            memory.ongoing_event != episode_context.map_memory() or memory.source_report_series is not None
+        ):
+            raise ValueError("resolved_fire_memory_required")
     prompt = WRITER_USER_PROMPT_TEMPLATE.format(
         bundle_json=_bundle_json(bundle), memory_json=_memory_json(memory),
     )
+    if bundle.signal_kind == "source_mapped_fire_perimeter":
+        prompt += ("\n\nDescribe separately dated NIFC source-mapped footprints and their source-recorded "
+                   "polygon acres. Preserve the map capture dates and mapping attribution. "
+                   "Do not describe actual fire growth, continuous burning, duration, final burned area "
+                   "or cross-border impacts; map differences cannot establish those claims. "
+                   "Retained published text is only copy history, not new source evidence.")
     from src.editorial.observed_scope import enabled
     if enabled():
         prompt += ("\n\nReport what has happened, with verified factual context explaining its significance. "
