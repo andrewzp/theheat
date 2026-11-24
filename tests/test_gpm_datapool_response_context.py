@@ -24,7 +24,7 @@ def response(*, status=200, url="https://data.gesdisc.earthdata.nasa.gov/example
 def test_actual_existing_get_logs_only_fixed_response_labels(monkeypatch, capsys):
     result = response(url=f"https://urs.earthdata.nasa.gov/login?token={SECRET}", media=f"text/html; private={SECRET}", redirects=1)
     get = Mock(return_value=result)
-    monkeypatch.setattr(gpm.requests, "get", get)
+    monkeypatch.setattr(gpm._DatapoolSession, "get", staticmethod(get))
     expected_timeout = gpm._request_timeout_s()
     assert gpm._fetch_grid_bytes_datapool(target_date=DAY, product="late", token=SECRET) == result._content
     get.assert_called_once_with(f"{gpm.DATAPOOL_BASE}/{gpm._imerg_relpath('late', DAY)}",
@@ -37,7 +37,7 @@ def test_actual_existing_get_logs_only_fixed_response_labels(monkeypatch, capsys
 
 def test_grid_bytes_and_http_status_handling_are_unchanged(monkeypatch, capsys):
     result = response()
-    monkeypatch.setattr(gpm.requests, "get", Mock(return_value=result))
+    monkeypatch.setattr(gpm._DatapoolSession, "get", staticmethod(Mock(return_value=result)))
     assert gpm._fetch_grid_bytes_datapool(target_date=DAY, product="late", token=SECRET) == result._content
     assert "status=200 media=netcdf destination=datapool redirects=0" in capsys.readouterr().out
 
@@ -107,7 +107,7 @@ def test_logging_does_not_read_error_body_or_change_existing_http_exception(monk
     result.raw = Mock()
     result.raw.read.side_effect = AssertionError("No HTTP error body read")
     get = Mock(return_value=result)
-    monkeypatch.setattr(gpm.requests, "get", get)
+    monkeypatch.setattr(gpm._DatapoolSession, "get", staticmethod(get))
     expected = gpm._GridNotFound if status == 404 else gpm._GridTransient
     with pytest.raises(expected):
         gpm._fetch_grid_bytes_datapool(target_date=DAY, product="late", token=SECRET)
@@ -119,7 +119,7 @@ def test_logging_does_not_read_error_body_or_change_existing_http_exception(monk
 
 def test_optional_diagnostic_failure_does_not_change_successful_content(monkeypatch, capsys):
     result = response()
-    monkeypatch.setattr(gpm.requests, "get", Mock(return_value=result))
+    monkeypatch.setattr(gpm._DatapoolSession, "get", staticmethod(Mock(return_value=result)))
     monkeypatch.setattr(gpm, "_datapool_response_context", Mock(side_effect=RuntimeError(SECRET)))
     assert gpm._fetch_grid_bytes_datapool(target_date=DAY, product="late", token=SECRET) == result._content
     assert capsys.readouterr().out == ""
@@ -127,7 +127,7 @@ def test_optional_diagnostic_failure_does_not_change_successful_content(monkeypa
 
 def test_broken_log_output_does_not_swallow_the_provider_refusal(monkeypatch):
     result = response(status=404)
-    monkeypatch.setattr(gpm.requests, "get", Mock(return_value=result))
+    monkeypatch.setattr(gpm._DatapoolSession, "get", staticmethod(Mock(return_value=result)))
     monkeypatch.setattr(gpm, "print", Mock(side_effect=OSError(SECRET)), raising=False)
     with pytest.raises(gpm._GridNotFound):
         gpm._fetch_grid_bytes_datapool(target_date=DAY, product="late", token=SECRET)

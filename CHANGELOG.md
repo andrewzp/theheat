@@ -1,3 +1,7 @@
+## 0.9.109.181 — 2026-11-24
+
+- Use an owned HTTPS IMERG download session so ambient netrc/proxy credentials cannot replace the configured Earthdata token. Preserve TLS verification, standard redirect authorization stripping, timeouts, response handling and request budgets. Source availability and rainfall qualification remain separate checks.
+
 ## 0.9.109.180 — 2026-11-24
 
 - Show recorded X posts against the four-per-day goal using distinct receipts and supported UTC dates. Keep conflicting or missing dates uncertain, and stop send-attempt timestamps from making an old post look fresh. Publication, source, model and spending controls are unchanged.
