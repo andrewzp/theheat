@@ -9,7 +9,7 @@ and unit limits, provenance, any code request bound and the claim restrictions
 already in force.
 
 `product_contract_document()` returns a separate versioned export
-(`theheat.source-product-contracts/v8`). The v1 registry and its dashboard JSON
+(`theheat.source-product-contracts/v9`). The v1 registry and its dashboard JSON
 are unchanged; nothing is added to old registry rows.
 
 What the contracts do not do:
@@ -59,7 +59,7 @@ fire/drought/heat overlap, and the CRW DHW / regional SST anomaly pairing. The
 pairing keeps each component's own date and footprint; a configured association
 is not a shared footprint.
 
-`decode_product_contract_document()` validates a detached v1 through v8 export. A matching
+`decode_product_contract_document()` validates a detached v1 through v9 export. A matching
 digest only binds bytes. The rows must decode to the supported finite inventory
 with valid kinds, parents, health keys, restrictions and scoped enforcement.
 `missing_work`, `unmet_criteria` and the upstream groups are recomputed from those
@@ -82,7 +82,7 @@ area-CSV legs add partial service-quota documentation only:
 | AWC station catalogue | Cache daily. | Cache quota unknown; this reference is not a temperature reading. |
 | NIFC WFIGS current incidents, including the newsworthiness leg | IRWIN synchronization every five minutes; fall-off hourly. | The declared 2,000-row default is not a rate quota, census or measurement clock; other query modes remain unqualified. |
 | GPM IMERG Late daily V07, OPeNDAP and HTTPS grid legs | The derived daily file follows its last half-hourly input; its target is no earlier than 14 hours after the UTC day closes. | A latency target, not an availability guarantee. Quotas and costs remain unknown; S3 and Final are outside this documentation tranche. |
-| GHCN-Daily differences, station histories and verified archive observations | The integrated dataset receives daily updates and weekend reconstruction. | Dataset processing is not each station's reporting clock or guaranteed access/freshness. Values and QC flags can change. Reuse rights, quotas and costs remain unknown. |
+| GHCN-Daily differences, station histories and verified archive observations | The integrated dataset receives daily updates and weekend reconstruction. | Dataset processing is not each station's reporting clock or guaranteed access/freshness. Values and QC flags can change. Citation/use guidance is partial, including international redistribution limits; current applicable reuse clearance, quotas and costs remain unresolved. |
 | CRW v3.1 5 km SST anomaly, ERDDAP and native-file routes | The SSTA product's data and images are updated daily. | Product production, not either route's delivery clock, an individual cell's observation time or a freshness/access/uptime guarantee. Quotas and costs remain unknown; v7 reuse terms are scoped below. |
 | FIRMS VIIRS NOAA-21 NRT, VIIRS NOAA-20 NRT and MODIS NRT area CSV | Unknown here. | Partial MAP_KEY service-quota documentation only; actual capacity, transaction weights, enforcement, rights and costs remain unverified. |
 
@@ -105,6 +105,18 @@ daily-difference and station-history products. It establishes neither a station'
 reporting interval nor publication-time QC, guaranteed updates or endpoint health.
 The provider's general cloud-migration notice is not a diagnosis of a particular
 failed request. No replacement URL, source-age/QC rule or reuse clearance follows.
+
+Version9 adds partial citation/use evidence only to those three existing GHCN
+station-file products. The [dataset README](https://www.ncei.noaa.gov/pub/data/ghcn/daily/readme.txt)
+requests the dataset version, subset and access date in citations, and identifies
+the station archives and difference files. The [hosted GHCN documentation](https://www.ncei.noaa.gov/pub/data/cdo/documentation/GHCND_documentation.pdf),
+last modified in 2016, describes non-commercial use but also international
+commercial-use/re-export restrictions and limits onward provision of non-US
+data or derived products. Current and country-specific applicability remains
+unqualified. This is not blanket social-publication or commercial clearance,
+nor permission to reuse third-party images. All three products remain in unmet
+reuse work. Discovery hints keep their own identity and unknown provider fields;
+no file-route cost, quota, access, source truth or publishing activation follows.
 
 The [NOAA CRW methodology](https://coralreefwatch.noaa.gov/product/5km/methodology.php)
 documents daily updates in its SST Anomaly section. Version6 joins that fact only
@@ -150,7 +162,7 @@ logos or imagery, or infer zero operating cost.
 
 `checked_at` records the UTC documentation review time, not a provider update or
 weather observation. The readiness consumer holds a documented component when any
-review postdates its assessment cutoff. Explicit exports for v1 through v7 preserve
+review postdates its assessment cutoff. Explicit exports for v1 through v8 preserve
 their complete documents for the same code inventory, including original dates
 and unknown fields. Decoding them does not insert later facts. Version3 adds the
 two named GPM legs' facts; version4 adds the original GHCN dataset cadence.
@@ -159,9 +171,11 @@ observation route, with their separate restrictions. Version6 retains that
 inventory and adds only the two named SSTA cadence facts. `NOMINATION_SCHEMA`
 and `CRW_CADENCE_SCHEMA` keep the exact original v5 and v6 exports available.
 Version7 preserves all their facts and adds only the four scoped CRW
-reuse statements; `CRW_REUSE_SCHEMA` retains that exact export. Default version8
-preserves those facts and adds only the three partial FIRMS quota statements.
-Neither change inserts later facts into an older export or assessment.
+reuse statements; `CRW_REUSE_SCHEMA` retains that exact export. Version8
+preserves those facts and adds only the three partial FIRMS quota statements;
+`FIRMS_QUOTA_SCHEMA` retains that exact export. Default version9 adds only the
+three partial GHCN citation/use statements, reviewed after both document captures
+completed. These changes insert no later facts into an older export or assessment.
 Unknown schemas, altered facts/references
 and falsely cleared gaps are refused even if their digest is recomputed.
 
