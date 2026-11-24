@@ -106,6 +106,9 @@ function instant(value, latest) {
   return { microseconds, iso: new Date(parsed).toISOString().replace(".000Z", `.${fraction}Z`) }
 }
 
+// The cadence projection uses the same strict, microsecond-aware retained clock.
+export { instant as retainedInstant }
+
 function observation(raw, kind, key, tweetId, now) {
   const valid = object(raw) && (kind === "legacy" ? (!Object.hasOwn(raw, "tweet_id") || raw.tweet_id === tweetId) : (raw.schema_version === 1 && raw.tweet_id === tweetId && raw.source === "x_api.public_metrics"))
   const time = valid ? instant(kind === "legacy" ? raw.at : raw.sampled_at, now) : null

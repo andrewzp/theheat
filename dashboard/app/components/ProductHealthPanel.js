@@ -13,6 +13,22 @@ function age(hours) {
 }
 function setting(value) { return value === true ? "On" : value === false ? "Off" : value ?? "Unknown" }
 
+function PostingCadence({ value }) {
+  if (!value) return null
+  function amount(window) {
+    if (!Number.isSafeInteger(window?.minimum_count) || window.minimum_count < 0 || !["recorded", "partial"].includes(window.status)) return "Unknown"
+    if (window.status === "partial") return window.minimum_count ? `At least ${window.minimum_count}` : "Unknown (0 dated receipts)"
+    return String(window.minimum_count)
+  }
+  return h("div", { className: "runtime-note", "aria-label": "Recorded X posting cadence" },
+    h("p", null, "X posts · Goal: 4 per day"),
+    h("p", null, `Today (UTC): ${amount(value.today)} · Last 24 hours: ${amount(value.last_24h)}`),
+    h("p", null, "Saved X receipts only. Drafts and send attempts are not posts."),
+    value.inventory_known === false ? h("p", null, "Retained publication data is incomplete.") : null,
+    Number.isSafeInteger(value.uncertain_time_receipts) && value.uncertain_time_receipts > 0
+      ? h("p", null, `${value.uncertain_time_receipts} post IDs have missing or conflicting times.`) : null)
+}
+
 function PublicationEvidenceNotice({ health, enabled }) {
   if (enabled !== true) return null
   const receipt = health.milestones?.post_confirmed
@@ -22,7 +38,7 @@ function PublicationEvidenceNotice({ health, enabled }) {
   if (dated && receipt.age_hours < 24) return null
   return h("p", { className: "runtime-note runtime-publication-notice", role: "status",
     "data-publication-evidence": dated ? "old_receipt" : "undated_receipt" },
-  dated ? `No recent X receipt in saved data. The latest dated receipt is ${age(receipt.age_hours)}.`
+  dated ? `No recent dated X receipt in saved data. The latest dated receipt is ${age(receipt.age_hours)}.`
     : "No dated X receipt is available in saved data. Publication is unverified.",
   " Enabled settings and successful jobs do not verify a newer post. Check writing and delivery results.")
 }
@@ -114,6 +130,7 @@ export function ProductHealthPanel({ health, config, deployment, codeRevision = 
       : flags.automatic_publication_enabled === true ? "Automatic publication was enabled in the last bot report. Approvals must match its release epoch."
         : "Automatic publication state is unverified; scheduling is unavailable until the bot reports its release policy."),
     h(PublicationEvidenceNotice, { health, enabled: flags.automatic_publication_enabled }),
+    h(PostingCadence, { value: health.publication_cadence }),
     config?.report_kind === "configuration_only" ? h("p", { className: "runtime-note" }, "Configuration refreshed only. This did not collect stories, write drafts or verify provider access.") : null,
     codeRevision ? h("p", { className: "runtime-note", "data-code-revision": codeRevision.status },
       `Code revision · ${label(codeRevision.status)}: ${codeRevision.reason}`,
@@ -122,7 +139,7 @@ export function ProductHealthPanel({ health, config, deployment, codeRevision = 
       h(Milestone, { title: "Last nonempty source run", value: health.milestones?.source_observed }),
       h(Milestone, { title: "Last saved draft", value: health.milestones?.draft_created }),
       h(Milestone, { title: "Last current draft review", value: health.milestones?.draft_reviewed }),
-      h(Milestone, { title: "Last post with receipt", value: health.milestones?.post_confirmed })),
+      h(Milestone, { title: "Latest dated X receipt", value: health.milestones?.post_confirmed })),
     h(LatestSavedDraft, { value: health.latest_saved_draft }),
     h("div", { className: "runtime-summary" },
       h("div", null,

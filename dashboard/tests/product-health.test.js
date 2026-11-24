@@ -260,11 +260,11 @@ test("an undated writer error cannot disappear behind older failures and newer c
 
 test("old receipt-backed posts mean metrics are inactive even with stored zero or green collection", () => {
   const result = build({
-    drafts: [post("receipt", "2026-07-23T12:00:00Z")],
-    tweet_metrics: { receipt: { at: "2026-08-01T12:00:00Z", likes: 0, retweets: 0, replies: 0 } },
+    drafts: [post("10001", "2026-07-23T12:00:00Z")],
+    tweet_metrics: { "10001": { at: "2026-08-01T12:00:00Z", likes: 0, retweets: 0, replies: 0 } },
     source_health: { twitter_metrics: { runs: [{ ts: "2026-09-08T12:00:00Z", status: "success" }] } },
   })
-  assert.equal(result.milestones.post_confirmed.tweet_id, "receipt")
+  assert.equal(result.milestones.post_confirmed.tweet_id, "10001")
   assert.equal(result.metrics.status, "inactive")
   assert.equal(result.metrics.receipt_backed_post_count, 1)
   assert.equal(result.metrics.eligible_post_count, 0)
@@ -329,7 +329,7 @@ test("unknown publish evidence remains in the waiting queue after rejection and 
     { id: "rejected", event_id: "event", status: "rejected", text: "Edited text", created_at: "2026-09-01T18:00:00Z", publish_outcome: "unknown" },
     { id: "approved", status: "approved", created_at: "bad-date" },
   ], publish_ledger: {
-    event: { tweet_id: "old-receipt", at: "2026-09-02T18:00:00Z", text: "Old text", attempt_conflicts: [{ phase: "unknown", at: "2026-09-03T18:00:00Z" }] },
+    event: { phase: "confirmed", tweet_id: "10002", at: "2026-09-02T18:00:00Z", text: "Old text", attempt_conflicts: [{ phase: "unknown", at: "2026-09-03T18:00:00Z" }] },
     orphan: { phase: "unknown", at: "2026-08-01T18:00:00Z" },
     refused: { phase: "not_sent", at: "2026-07-01T18:00:00Z" },
   } }
@@ -341,25 +341,26 @@ test("unknown publish evidence remains in the waiting queue after rejection and 
   assert.equal(result.queue.unresolved_publish_count, 2)
   assert.equal(result.queue.oldest_waiting_age_hours, 38 * 24)
   assert.equal(result.queue.unknown_age_count, 1)
-  assert.equal(result.milestones.post_confirmed.tweet_id, "old-receipt")
+  assert.equal(result.milestones.post_confirmed.tweet_id, "10002")
   assert.deepEqual(state, snapshot)
 })
 
 test("receipt deduplication includes conflict receipts but missing dates cannot imply active collection", () => {
-  const result = build({ drafts: [post("one")], publish_ledger: {
-    event: { tweet_id: "one", at: "2026-09-07T12:00:00Z", confirmed_at: "2026-09-07T12:01:00Z", attempt_conflicts: [{ tweet_id: "two", at: "bad-date" }] },
+  const result = build({ drafts: [post("10001")], publish_ledger: {
+    event: { phase: "confirmed", tweet_id: "10001", at: "2026-09-07T12:00:00Z", confirmed_at: "2026-09-07T12:01:00Z", attempt_conflicts: [{ phase: "confirmed", tweet_id: "10002", at: "bad-date" }] },
   } })
   assert.equal(result.metrics.receipt_backed_post_count, 2)
   assert.equal(result.metrics.eligible_post_count, 1)
   assert.equal(result.metrics.undated_receipt_count, 1)
   assert.equal(result.metrics.collector_unseen_receipt_count, 1)
-  assert.equal(result.milestones.post_confirmed.at, "2026-09-07T12:01:00.000Z")
+  assert.equal(result.milestones.post_confirmed.status, "unknown")
+  assert.equal(result.publication_cadence.uncertain_time_receipts, 2)
   assert.equal(build({ drafts: [post("undated", "bad-date")] }).metrics.status, "unknown")
 })
 
 test("a dated conflict receipt is publication evidence but outside the current collector's selection path", () => {
-  const result = build({ publish_ledger: { event: { phase: "not_sent", attempt_conflicts: [{ tweet_id: "nested", at: "2026-09-07T12:00:00Z" }] } } })
-  assert.equal(result.milestones.post_confirmed.tweet_id, "nested")
+  const result = build({ publish_ledger: { event: { phase: "not_sent", attempt_conflicts: [{ phase: "confirmed", tweet_id: "10003", at: "2026-09-07T12:00:00Z" }] } } })
+  assert.equal(result.milestones.post_confirmed.tweet_id, "10003")
   assert.equal(result.metrics.receipt_backed_post_count, 1)
   assert.equal(result.metrics.eligible_post_count, 0)
   assert.equal(result.metrics.collector_unseen_receipt_count, 1)
