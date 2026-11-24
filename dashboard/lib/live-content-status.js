@@ -108,7 +108,7 @@ function providerErrorDetail(value) {
   const object = v => v !== null && typeof v === "object" && !Array.isArray(v)
   const keys = (v, names) => object(v) && Object.keys(v).sort().join() === names.sort().join()
   const fields = ["dataset", "stations", "startDate", "endDate", "dataTypes", "bbox", "format", "units"]
-  const messages = { invalid_units: "invalid units; standard or metric expected", details_withheld: "details withheld" }
+  const messages = { invalid_units: "invalid units; standard or metric expected", station_limit_100: "reported maximum of 100 stations", details_withheld: "details withheld" }
   if (!keys(value, ["schema_version", "scope", "body_bytes", "body_sha256", "fields"])
       || value.schema_version !== 1 || value.scope !== "untrusted_provider_error_not_weather"
       || !Number.isSafeInteger(value.body_bytes) || value.body_bytes < 2 || value.body_bytes > 8192
@@ -116,11 +116,13 @@ function providerErrorDetail(value) {
       || !Array.isArray(value.fields) || value.fields.length < 1 || value.fields.length > 8
       || value.fields.some(row => !keys(row, ["field", "message_code"]) || !fields.includes(row.field)
         || typeof row.message_code !== "string" || !Object.hasOwn(messages, row.message_code)
-        || row.message_code === "invalid_units" && row.field !== "units")) return null
+        || row.message_code === "invalid_units" && row.field !== "units"
+        || row.message_code === "station_limit_100" && row.field !== "stations")) return null
   // The digest is retained consistency evidence, not authentication or cause
   // verification. Even a valid diagnostic grants no observation or nomination.
   const errors = value.fields.map(row => ({ field: row.field,
-    message: row.message_code === "invalid_units" ? "Invalid units. Valid units are standard or metric." : "x" }))
+    message: row.message_code === "invalid_units" ? "Invalid units. Valid units are standard or metric."
+      : row.message_code === "station_limit_100" ? "Maximum number of stations exceeded. Maximum number of stations: 100" : "x" }))
   const minimum = new TextEncoder().encode(JSON.stringify({ errorCode: 400, errorMessage: "x", errors })).length
   if (value.body_bytes < minimum) return null
   return ` Untrusted provider error: ${value.fields.map(row => `${row.field}: ${messages[row.message_code]}`).join("; ")}.`
@@ -136,17 +138,17 @@ function stationSelectionDetail(h, archiveAt, archiveSelection) {
     "coverage_guaranteed", "request_uri_bytes"]
   if (!object(s) || Object.keys(s).sort().join() !== names.sort().join()
       || s.schema_version !== 1 || s.scope !== "requested_nomination_subset_only"
-      || s.strategy !== "four_hour_stable_pool_cycle" || s.limit !== 500 || s.coverage_guaranteed !== false
+      || s.strategy !== "four_hour_stable_pool_cycle" || ![100, 500].includes(s.limit) || s.coverage_guaranteed !== false
       || ![s.eligible_stations, s.selected_stations, s.unselected_stations, s.cycle_chunks,
         s.chunk_index, s.request_uri_bytes].every(integer)
       || s.eligible_stations !== h.eligible_untracked_stations || s.eligible_stations < 1
-      || s.selected_stations < 1 || s.selected_stations > 500
+      || s.selected_stations < 1 || s.selected_stations > s.limit
       || s.unselected_stations !== s.eligible_stations - s.selected_stations
-      || s.cycle_chunks !== Math.ceil(s.eligible_stations / 500) || s.chunk_index >= s.cycle_chunks
-      || s.selected_stations !== Math.min(500, s.eligible_stations - s.chunk_index * 500)
+      || s.cycle_chunks !== Math.ceil(s.eligible_stations / s.limit) || s.chunk_index >= s.cycle_chunks
+      || s.selected_stations !== Math.min(s.limit, s.eligible_stations - s.chunk_index * s.limit)
       || h.nominated_stations > s.selected_stations
       || !sha(s.pool_sha256) || !sha(s.selection_sha256)
-      || (s.eligible_stations <= 500) !== (s.pool_sha256 === s.selection_sha256)
+      || (s.eligible_stations <= s.limit) !== (s.pool_sha256 === s.selection_sha256)
       || !Number.isFinite(archiveAt) || s.request_uri_bytes > 8192) return null
   const bucket = Math.floor(archiveAt / 14400000) * 14400000
   const ordinal = Date.parse(h.window_day) / 86400000 + 719163
@@ -175,8 +177,11 @@ function ghcnArchiveIntake(m, context) {
   const trackedOnly = t?.schema_version === 1 && t.scope === "already_verified_tracked_archives"
   const discovered = t?.schema_version === 2 && t.scope === "verified_selected_station_archives"
     && t.nomination_source === "untrusted_daily_service_hints"
-  const sampled = t?.schema_version === 3 && t.scope === "verified_unhinted_station_archive_sample"
+  const sampled400 = t?.schema_version === 3 && t.scope === "verified_unhinted_station_archive_sample"
     && t.sampling_source === "cached_active_stations_after_lookup_400"
+  const sampledEmpty = t?.schema_version === 3 && t.scope === "verified_unhinted_station_archive_sample"
+    && t.sampling_source === "cached_active_stations_after_lookup_no_nominations"
+  const sampled = sampled400 || sampledEmpty
   const archiveKeys = ["active_archives", "counts", "cutoff_day", "retrieved_at", "schema_version", "scope",
     "trigger", "verified_archives", "window_day", ...(discovered ? ["nomination_source", "nominated_stations"] : []),
     ...(sampled ? ["sampling_source", "sampling_pool_stations"] : [])]
@@ -266,7 +271,8 @@ function ghcnArchiveIntake(m, context) {
       "unverified_stations", "selected_stations", "unselected_stations"]
     const lookupCutoff = new Date(Math.max(Date.parse(t.cutoff_day), Date.parse(t.window_day) - 4 * 86400000))
       .toISOString().slice(0, 10)
-    if (!suppliedLookup || h.schema_version !== 2 || !Object.hasOwn(h, "provider_error")
+    if (!suppliedLookup || (sampled400 && (h.schema_version !== 2 || !Object.hasOwn(h, "provider_error")))
+        || (sampledEmpty && h.schema_version !== 1)
         || !Object.hasOwn(h, "station_selection") || h.cutoff_day !== lookupCutoff
         || selection.limit < 1 || tracked.pool_stations < 1
         || Object.keys(selection).sort().join() !== selectorKeys.sort().join()
@@ -290,8 +296,9 @@ function ghcnArchiveIntake(m, context) {
     const pool = sampled ? t.sampling_pool_stations : t.nominated_stations
     if (!suppliedLookup || !integer(pool) || pool < 1
         || (discovered && (h.status !== "nominated" || pool !== h.nominated_stations))
-        || (sampled && (h.status !== "unavailable" || h.reason !== "http_error" || h.http_status !== 400
-          || h.nominated_stations !== 0 || pool > h.eligible_untracked_stations))
+        || (sampled400 && (h.status !== "unavailable" || h.reason !== "http_error" || h.http_status !== 400))
+        || (sampledEmpty && (h.status !== "no_nominations" || h.reason !== "no_nominations" || h.http_status !== 200))
+        || (sampled && (h.nominated_stations !== 0 || pool > h.eligible_untracked_stations))
         || !object(candidate)
         || ![candidate.pool_stations, candidate.reserved_slots, candidate.selected_stations, candidate.unselected_stations,
           candidate.verified_stations, candidate.unverified_stations].every(integer)

@@ -1,3 +1,7 @@
+## 0.9.109.178 — 2026-11-24
+
+- Limit future NOAA discovery lookups to the service-reported 100-station request size, retaining one request and no retry or split. Keep original station-archive discovery within its existing allowance after a complete lookup supplies no usable nominations. Distinguish empty and rejected lookups in the source display, preserve historical 500-station traces, and keep lookup hints separate from source observations, QC, record history and required publication checks.
+
 ## 0.9.109.177 — 2026-11-24
 
 - Add a separately enabled observed airport-gust text route using the existing NOAA METAR caches. Bind primary-body knot gusts to exact source reports, airport identity and UTC time; preserve required checks, current-source rereads, one-candidate/sample limits, duplicate and unknown-send protections. Share cache acquisition with temperature comparisons while retaining their existing spacing. The gust route defaults off; deployment alone does not activate it or establish posting cadence.

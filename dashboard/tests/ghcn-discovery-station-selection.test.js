@@ -42,13 +42,14 @@ test("older saved lookup shapes remain readable without inventing a sampled deno
   }
 })
 
-test("an actual1001-station source pool displays the finite500-station request, not the full pool as queried", () => {
+test("an actual1001-station source pool displays the finite100-station request, not the full pool as queried", () => {
   const state = fixtures.sampled, out = project(state)
   assert.equal(out.state, "supplying")
-  assert.match(out.detail, /500 of 1001 eligible stations requested; 501 outside this request/)
+  assert.match(out.detail, /100 of 1001 eligible stations requested; 901 outside this request/)
   assert.match(out.detail, /Requested sample only/)
-  assert.match(out.detail, /1 archive nomination/)
-  assert.equal(metrics(state).station_discovery.station_selection.request_uri_bytes, 7167)
+  assert.match(out.detail, /0 archive nominations/)
+  assert.match(out.detail, /Unhinted archive sample/)
+  assert.equal(metrics(state).station_discovery.station_selection.request_uri_bytes, 1567)
   assert.equal(state.request_count, 33)
 })
 

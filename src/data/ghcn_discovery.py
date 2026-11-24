@@ -28,7 +28,9 @@ if TYPE_CHECKING:
 URL = "https://www.ncei.noaa.gov/access/services/data/v1"
 MAX_BYTES = 32 * 1024 * 1024
 MAX_ROWS = 300_000
-MAX_STATIONS = 500
+# Current access-service error contract reports a maximum of100 stations.
+# This bounds future ordinary queries; it never authorizes a split/retry.
+MAX_STATIONS = 100
 MAX_REQUEST_URI_BYTES = 8192
 READ_DEADLINE_SECONDS = 15
 SOCKET_TIMEOUT_SECONDS = 5
@@ -37,7 +39,7 @@ _NUMBER = re.compile(r"[+-]?\d{1,4}(?:\.\d{1,6})?\Z")
 ERROR_MAX_BYTES = 8192
 ERROR_FIELDS = frozenset({"dataset", "stations", "startDate", "endDate", "dataTypes", "bbox", "format", "units"})
 UNIT_ERROR_MESSAGE = "Invalid units. Valid units are standard or metric."
-UNIT_ERROR_MESSAGE = "Invalid units. Valid units are standard or metric."
+STATION_LIMIT_ERROR_MESSAGE = "Maximum number of stations exceeded. Maximum number of stations: 100"
 
 
 class _NoAuth(AuthBase):
@@ -186,6 +188,8 @@ def _provider_error(response, deadline):
             # Only a fixed public template becomes a fixed code; unknown text
             # is withheld entirely. No arbitrary provider text reaches storage.
             code = "invalid_units" if row["field"] == "units" and row["message"] == UNIT_ERROR_MESSAGE else "details_withheld"
+            if row["field"] == "stations" and row["message"] == STATION_LIMIT_ERROR_MESSAGE:
+                code = "station_limit_100"
             fields.append({"field": row["field"], "message_code": code})
         return {"schema_version": 1, "scope": "untrusted_provider_error_not_weather",
                 "body_bytes": received, "body_sha256": hashlib.sha256(body).hexdigest(), "fields": fields}

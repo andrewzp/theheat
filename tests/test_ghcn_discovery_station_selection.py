@@ -58,13 +58,13 @@ def test_implicit_midnight_is_deterministic_and_queries_only_exact_eligible_ids(
     assert metadata["station_selection"]["coverage_guaranteed"] is False
 
 
-@pytest.mark.parametrize("size", [1, 499, 500, 501, 12522])
+@pytest.mark.parametrize("size", [1, 99, 100, 101, 12522])
 def test_large_pool_never_expands_the_single_request_or_internal_uri_bound(size):
     (_, metadata), call = fetch(pool(size))
     ids = selected(call)
     uri = requests.Request("GET", call[0], params=call[1]["params"]).prepare().url
     assert uri is not None and len(uri.encode("ascii")) <= 8192
-    assert 0 < len(ids) <= 500 and len(ids) == len(set(ids))
+    assert 0 < len(ids) <= 100 and len(ids) == len(set(ids))
     assert set(ids) <= pool(size)
     scope = metadata["station_selection"]
     assert scope["eligible_stations"] == size
@@ -76,7 +76,7 @@ def test_large_pool_never_expands_the_single_request_or_internal_uri_bound(size)
 
 
 def test_stable_pool_is_visited_once_per_cycle_without_order_or_repeat_bias():
-    eligible = pool(1001)
+    eligible = pool(201)
     now = datetime(2026, 11, 21, tzinfo=timezone.utc)
     chunks = []
     for offset in range(3):
@@ -87,7 +87,7 @@ def test_stable_pool_is_visited_once_per_cycle_without_order_or_repeat_bias():
         chunks.append(set(selected(call)))
     assert set.union(*chunks) == eligible
     assert all(not chunks[i] & chunks[j] for i in range(3) for j in range(i))
-    assert sorted(map(len, chunks)) == [1, 500, 500]
+    assert sorted(map(len, chunks)) == [1, 100, 100]
 
 
 def test_same_four_hour_bucket_is_stable_and_next_bucket_advances_across_midnight():
