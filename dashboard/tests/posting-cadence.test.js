@@ -6,6 +6,8 @@ import { renderToStaticMarkup } from "react-dom/server"
 import { postingCadence } from "../lib/posting-cadence.js"
 import { buildProductHealth } from "../lib/product-health.js"
 import { ProductHealthPanel } from "../app/components/ProductHealthPanel.js"
+import { readStateWithRuntimeReport } from "../lib/state-store.js"
+import { importFresh } from "./helpers/import-fresh.js"
 
 const now = Date.parse("2026-11-24T12:00:00Z")
 const draft = (id = "10001", at = "2026-11-24T11:00:00Z") => ({ id: `draft-${id}`, status: "posted", tweet_id: id, posted_at: at })
@@ -40,7 +42,7 @@ test("draft, published revision and nested confirmed receipt copies count once i
   const saved = draft(), receipt = { phase: "confirmed", tweet_id: saved.tweet_id, confirmed_at: saved.posted_at }
   const data = state([saved, structuredClone(saved), { published_revision: receipt }], {
     a: receipt, b: { phase: "unknown", attempt_conflicts: [structuredClone(receipt),
-      { phase: "confirmed", tweet_id: "10002", at: "2026-11-24T10:00:00Z" }] },
+      { phase: "confirmed", tweet_id: "10002", confirmed_at: "2026-11-24T10:00:00Z" }] },
   })
   assert.equal(read(data).retained_receipt_count, 2)
   assert.equal(read(data).today.minimum_count, 2)
@@ -101,9 +103,9 @@ test("bad dates, local clocks and future values remain unknown even beside a goo
 })
 
 test("an undated copy can use a genuine confirmation, while unknown attempt dates cannot", () => {
-  const a = state([draft("10001", null)], { event: { phase: "confirmed", tweet_id: "10001", at: "2026-11-24T11:00:00Z" } })
+  const a = state([draft("10001", null)], { event: { phase: "confirmed", tweet_id: "10001", confirmed_at: "2026-11-24T11:00:00Z" } })
   assert.equal(read(a).today.minimum_count, 1)
-  a.publish_ledger.event.phase = "unknown"
+  delete a.publish_ledger.event.confirmed_at; a.publish_ledger.event.at = "2026-11-24T11:00:00Z"; a.publish_ledger.event.phase = "unknown"
   assert.equal(read(a).today.minimum_count, 0)
   assert.equal(read(a).today.uncertain_receipt_count, 1)
 })
@@ -158,7 +160,7 @@ test("unusable associations, unsupported clock labels and inconsistent ages cann
     const result = read(withSamples(state([draft("10001", "2026-11-20T12:00:00Z")]), { unqualified: sample(changes) }))
     assert.equal(result.today.minimum_count, 0)
     assert.equal(result.last_24h.minimum_count, 0)
-    assert.equal(result.latest_dated_receipt.at, "2026-11-20T12:00:00.000Z")
+    assert.equal(result.latest_dated_receipt.at, changes.post_age_seconds === 1 ? null : "2026-11-20T12:00:00.000Z")
   }
   const result = read(withSamples(state([draft()]), { valid: sample(), inconsistent: sample({ post_age_seconds: 1 }) }))
   assert.equal(result.today.uncertain_receipt_count, 1)
@@ -169,7 +171,7 @@ test("a pending draft with a stray ID and metrics is not a publication receipt",
   const result = read(withSamples(state([{ ...draft(), status: "pending" }]), { original: sample() }))
   assert.equal(result.retained_receipt_count, 0)
   assert.equal(result.today.minimum_count, 0)
-  const revision = { phase: "confirmed", tweet_id: "10001", at: "2026-11-24T11:00:00Z" }
+  const revision = { phase: "confirmed", tweet_id: "10001", confirmed_at: "2026-11-24T11:00:00Z" }
   assert.equal(read(state([{ status: "pending", published_revision: revision }])).today.minimum_count, 1)
 })
 
@@ -183,11 +185,113 @@ test("an older dated receipt beside an undated ID is described as dated evidence
 })
 
 test("bounded malformed and cyclic conflict trees withhold inventory certainty", () => {
-  const receipt = { phase: "confirmed", tweet_id: "10001", at: "2026-11-24T11:00:00Z" }
+  const receipt = { phase: "confirmed", tweet_id: "10001", confirmed_at: "2026-11-24T11:00:00Z" }
   receipt.attempt_conflicts = [receipt]
   assert.equal(read(state([], { receipt })).inventory_known, false)
   const tooMany = state(Array.from({ length: 10_001 }, () => draft()))
   assert.equal(read(tooMany).inventory_known, false)
+  assert.equal(read(tooMany).today.minimum_count, 0)
+  assert.equal(read(tooMany).today.target_met, null)
+})
+
+test("padded spellings share one numeric identity and preserve every supplied date", () => {
+  const ids = ["713", "0713", "00713", "000713"]
+  const result = read(state(ids.map(id => draft(id))))
+  assert.equal(result.retained_receipt_count, 1)
+  assert.equal(result.today.minimum_count, 1)
+  assert.equal(result.today.target_met, false)
+  for (const rows of [[draft("713"), draft("0713", "2026-11-20T12:00:00Z")],
+    [draft("0713", "2026-11-20T12:00:00Z"), draft("713")]]) {
+    assert.equal(read(state(rows)).today.minimum_count, 0)
+    assert.equal(read(state(rows)).latest_dated_receipt.status, "unknown")
+  }
+  assert.equal(read(state([draft("0000")])).retained_receipt_count, 0)
+})
+
+test("platform timestamps from padded copies are merged without choosing an input-order winner", () => {
+  for (const ids of [["713", "0713"], ["0713", "713"]]) {
+    const value = state(ids.map(id => draft(id)))
+    value.tweet_metrics = Object.fromEntries(ids.map(id => [id, { samples: { first: sample({ tweet_id: id,
+      posted_at: id === "713" ? "2026-11-23T12:00:00Z" : "2026-11-24T10:00:00Z",
+      post_age_seconds: id === "713" ? 82800 : 3600 }) } }]))
+    assert.equal(read(value).retained_receipt_count, 1)
+    assert.equal(read(value).today.minimum_count, 0)
+    assert.equal(read(value).latest_dated_receipt.status, "unknown")
+  }
+})
+
+test("modern intent clocks cannot substitute for confirmation; legacy receipt clocks remain explicit proxies", () => {
+  for (const row of [{ phase: "confirmed", intent_id: "invented-intent" }, { phase: "posted" }, { intent_id: "invented-intent" }]) {
+    const result = read(state([], { event: { tweet_id: "10001", at: "2026-11-24T11:00:00Z", ...row } }))
+    assert.equal(result.today.minimum_count, 0)
+    assert.equal(result.latest_dated_receipt.status, "unknown")
+  }
+  const legacy = read(state([], { event: { tweet_id: "10001", at: "2026-11-24T11:00:00Z" } }))
+  assert.equal(legacy.today.minimum_count, 1)
+})
+
+test("a lone inconsistent platform age withholds a recent local receipt rather than disappearing", () => {
+  const value = withSamples(state([draft()]), { mismatch: sample({ post_age_seconds: 1 }) })
+  const health = buildProductHealth(value, { now })
+  assert.equal(health.post_outcomes.posts[0].observations[0].age_status, "conflict")
+  assert.equal(health.publication_cadence.today.minimum_count, 0)
+  assert.equal(health.publication_cadence.today.target_met, null)
+  assert.equal(health.milestones.post_confirmed.status, "unknown")
+})
+
+test("a recovered draft cannot relabel the modern pre-send clock as its publication time", () => {
+  const value = state([draft()], { event: { phase: "confirmed", intent_id: "invented-intent", tweet_id: "10001", at: "2026-11-24T11:00:00Z" } })
+  assert.equal(read(value).latest_dated_receipt.status, "unknown")
+  value.publish_ledger.event.confirmed_at = "2026-11-24T11:00:00Z"
+  assert.equal(read(value).today.minimum_count, 1)
+})
+
+test("a capped scan cannot grant lower bounds or a milestone when omitted rows could contradict counted IDs", () => {
+  const rows = Array.from({ length: 10_000 }, (_, i) => draft(String(710 + i % 4)))
+  rows.push(draft("710", "2026-11-20T12:00:00Z"))
+  for (const drafts of [rows, [...rows].reverse()]) {
+    const result = read(state(drafts))
+    assert.equal(result.scan_truncated, true)
+    assert.equal(result.today.minimum_count, 0)
+    assert.equal(result.today.target_met, null)
+    assert.equal(result.latest_dated_receipt.status, "unknown")
+  }
+})
+
+test("raw Gist inventory provenance survives normalization through the actual dashboard handler", async () => {
+  const keys = ["THEHEAT_STATE_BACKEND", "THEHEAT_DB_PATH", "GIST_ID", "DASHBOARD_USERNAME", "DASHBOARD_PASSWORD", "DASHBOARD_AUTH_DISABLED"]
+  const saved = Object.fromEntries(keys.map(key => [key, process.env[key]])), originalFetch = globalThis.fetch
+  Object.assign(process.env, { THEHEAT_STATE_BACKEND: "gist", THEHEAT_DB_PATH: "", GIST_ID: "invented-cadence-gist",
+    DASHBOARD_USERNAME: "invented", DASHBOARD_PASSWORD: "offline-only", DASHBOARD_AUTH_DISABLED: "0" })
+  let raw = {}, reads = 0
+  globalThis.fetch = async (url, options = {}) => {
+    assert.ok(!options.method || options.method === "GET")
+    if (String(url) === "https://api.github.com/gists/invented-cadence-gist") {
+      reads++
+      return Response.json({ files: { "state.json": { content: JSON.stringify(raw) } } })
+    }
+    assert.match(String(url), /^https:\/\/api.github.com\/repos\/andrewzp\/theheat\/actions\/runs/)
+    return Response.json({ workflow_runs: [] })
+  }
+  try {
+    const route = await importFresh("app/api/dashboard/route.js")
+    const headers = { authorization: `Basic ${Buffer.from("invented:offline-only").toString("base64")}` }
+    for (const [value, expected] of [[{}, "unknown"], [state(), "recorded"], [{ drafts: [] }, "unknown"], [state([draft()]), "recorded"]]) {
+      raw = value
+      const loaded = await readStateWithRuntimeReport()
+      assert.equal(Object.hasOwn(loaded.state, "publicationInventoryKnown"), false)
+      assert.equal(buildProductHealth(loaded.state, { now, publicationInventoryKnown: loaded.publicationInventoryKnown }).publication_cadence.today.status, expected)
+      const response = await route.GET(new Request("http://localhost/api/dashboard", { headers }))
+      assert.equal(response.status, 200)
+      const payload = await response.json()
+      assert.equal(payload.stateError, undefined)
+      assert.equal(payload.productHealth.publication_cadence.inventory_known, expected === "recorded")
+    }
+    assert.equal(reads, 8)
+  } finally {
+    globalThis.fetch = originalFetch
+    for (const key of keys) if (saved[key] === undefined) delete process.env[key]; else process.env[key] = saved[key]
+  }
 })
 
 test("the actual panel displays the goal and supported counts without changing publication settings", () => {

@@ -329,7 +329,7 @@ test("unknown publish evidence remains in the waiting queue after rejection and 
     { id: "rejected", event_id: "event", status: "rejected", text: "Edited text", created_at: "2026-09-01T18:00:00Z", publish_outcome: "unknown" },
     { id: "approved", status: "approved", created_at: "bad-date" },
   ], publish_ledger: {
-    event: { phase: "confirmed", tweet_id: "10002", at: "2026-09-02T18:00:00Z", text: "Old text", attempt_conflicts: [{ phase: "unknown", at: "2026-09-03T18:00:00Z" }] },
+    event: { phase: "confirmed", tweet_id: "10002", confirmed_at: "2026-09-02T18:00:00Z", text: "Old text", attempt_conflicts: [{ phase: "unknown", at: "2026-09-03T18:00:00Z" }] },
     orphan: { phase: "unknown", at: "2026-08-01T18:00:00Z" },
     refused: { phase: "not_sent", at: "2026-07-01T18:00:00Z" },
   } }
@@ -359,7 +359,7 @@ test("receipt deduplication includes conflict receipts but missing dates cannot 
 })
 
 test("a dated conflict receipt is publication evidence but outside the current collector's selection path", () => {
-  const result = build({ publish_ledger: { event: { phase: "not_sent", attempt_conflicts: [{ phase: "confirmed", tweet_id: "10003", at: "2026-09-07T12:00:00Z" }] } } })
+  const result = build({ publish_ledger: { event: { phase: "not_sent", attempt_conflicts: [{ phase: "confirmed", tweet_id: "10003", confirmed_at: "2026-09-07T12:00:00Z" }] } } })
   assert.equal(result.milestones.post_confirmed.tweet_id, "10003")
   assert.equal(result.metrics.receipt_backed_post_count, 1)
   assert.equal(result.metrics.eligible_post_count, 0)

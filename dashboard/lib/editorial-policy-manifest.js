@@ -4,7 +4,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     ".github/workflows/bot.yml": "10a29d999deb6611bdaa3c02983dfd49cdfba02e187234bd2b17a34d51bb9d98",
     ".github/workflows/runtime-report.yml": "9a1186837b23bd2ffefaccc6ed8546591ece0c5456e1e5e10992598551290eb4",
     "dashboard/app/api/config/route.js": "81d1f67bd7c58ead93c0fbee5498cb135a61afdacee01a50daf87711d6aed408",
-    "dashboard/app/api/dashboard/route.js": "76c747e80da37634a89fa922b2430e50b6c15c0e67373f87b5ce30cb2e6f50f4",
+    "dashboard/app/api/dashboard/route.js": "62c1db10ea4434d99b8e6504af847bf40a230a66ff45e6a8d24e7e3f4b23ec77",
     "dashboard/app/api/delivery-reconciliation/route.js": "93f2ac6677f748f8a2b6d28407bd7462719d1ae1fb65f6415f9a92dddb0cd263",
     "dashboard/app/api/drafts/route.js": "d2ff21fc10ba17d0dabad04f6142ed93bbaca1e602495f2775616c9b47141d56",
     "dashboard/app/api/episodes/route.js": "e76b489df08aedc236c9336af1fb86ba41a6630470c11ae3202dd5e53e4f63bc",
@@ -34,7 +34,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "dashboard/lib/runtime-inventory.js": "f830344e61efc5f05908f44fc523e40de5256d094ceb41cdbd627934b4091321",
     "dashboard/lib/runtime-report.js": "bd1b84fa6f874ae831f348554fc54cc4af9aee396aebc8d85fd0cbc83e89b9d9",
     "dashboard/lib/saved-claim-evidence.js": "4ae8ac7b809fdf97bdcc1af489cdf63188d3276256f871bab5feffcfd98bf5ec",
-    "dashboard/lib/state-store.js": "90339b78a1f499f8e76ff4159c9eef1b0d0cd0ca7e359a8d5a64468f273985e1",
+    "dashboard/lib/state-store.js": "0125b9ef05506507e4fb32a1f0acda31a53eb6f8654701667cf2a184d82fcf3a",
     "data/cities.csv": "f44979e72a1023ba77555264a961ef64db53bff686655acb8cce28b88542f5f8",
     "data/country_codes.json": "563fd9c963633bb169c88bac593ec0ccb4694e31ae0613e37d31d1c07e276a9d",
     "data/country_names.json": "b2597ac1145b8d764bd9f783c765bbfbfb2d14af7a92e9f483ada7b8353cdc4f",
@@ -315,5 +315,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "5c5ffcc95358c7df45ae838c228759ad0eb6275c8f9053c8130c0a8824b63d9e"
   },
   "schema_version": 1,
-  "source_sha256": "821d0dd62bcf51a8f0b301ceb8e3638a3edd3ab6cc811a9b1d336c90532b8599"
+  "source_sha256": "cbb317525ca7878095f5f711eba794e622e41d4daa6fda4e56aecafdad882949"
 }

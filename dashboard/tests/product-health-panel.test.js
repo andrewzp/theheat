@@ -80,7 +80,7 @@ test("configuration-only refresh cannot claim continued ingestion or successful 
 const observationClock = Date.parse("2026-11-17T07:00:00Z")
 function publicationEvidence(at) {
   return buildProductHealth({ drafts: [], publish_ledger: at === null ? {} : {
-    invented: { phase: "confirmed", tweet_id: "123456789", at },
+    invented: { phase: "confirmed", tweet_id: "123456789", confirmed_at: at },
   }, source_health: { awc_observed: { runs: [{ ts: "2026-11-17T06:59:00Z", status: "success", observed: 1 }] } } },
   { now: observationClock })
 }

@@ -270,14 +270,14 @@ function metricsHealth(state, posts, sources, now) {
 }
 
 /** A read-only evidence projection. Workflow success and generation memory are not product outcomes. */
-export function buildProductHealth(rawState, { now = Date.now(), runtimeReport = null } = {}) {
+export function buildProductHealth(rawState, { now = Date.now(), runtimeReport = null, publicationInventoryKnown } = {}) {
   const clock = now instanceof Date ? now.getTime() : now
   if (!Number.isFinite(clock) || !Number.isFinite(new Date(clock).getTime())) throw new TypeError("Product health requires a valid clock")
   const state = object(rawState) ? rawState : {}
   const drafts = rows(state.drafts)
   const sources = sourceRows(state, clock)
   const posts = receiptPosts(state, drafts, clock)
-  const { cadence, outcomes } = postingEvidence(state, { now: clock })
+  const { cadence, outcomes } = postingEvidence(state, { now: clock, publicationInventoryKnown })
   return {
     generated_at: new Date(clock).toISOString(),
     latest_saved_draft: latestSavedDraft(drafts, state, clock),
