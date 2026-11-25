@@ -25,8 +25,11 @@ def stations(code):
     return values
 
 
-def bundle(code="US"):
-    capture = (gzip.compress(json.dumps(stations(code)).encode(), mtime=0),
+def bundle(code="US", *, site=None):
+    values = stations(code)
+    if site is not None:
+        values[0]["site"] = site
+    capture = (gzip.compress(json.dumps(values).encode(), mtime=0),
                gzip.compress(t.csv_bytes(t.rows(), header=t.GUST_HEADER), mtime=0))
     return gust.build_bundle(gust.nominate(now=t.NOW, capture=capture)[0], now=t.NOW)
 
@@ -77,6 +80,45 @@ def test_country_mapping_mismatch_stays_invalid_even_with_a_valid_looking_label(
     source = bundle()
     source.raw_signal_dump["evidence"]["points"][0]["country"] = "Norway"
     assert gust.claim_failures(cited(copy(), source), source, now=t.NOW) == ["awc_gust_text_source_invalid"]
+
+
+def test_review_code_at_end_of_prose_survives_the_ordinary_citation_newline():
+    source = bundle()
+    body = "A 120 km/h (75 mph) gust at 12:00 UTC, 15 Nov. North Test airport, US"
+    with freeze_time(t.NOW):
+        assert fact_check.local_rejection(cited(body, source), [], source, {}) is None
+
+
+@pytest.mark.parametrize("label", [
+    "North Test airport, US.A.:", "North Test airport, US.example:",
+    "West-North Test airport, US:", "West/North Test airport, US:",
+    "West+North Test airport, US:", "West.North Test airport, US:",
+    "West’North Test airport, US:", "West‐North Test airport, US:",
+])
+def test_review_dotted_codes_and_joined_foreign_airport_names_do_not_bind(label):
+    source = bundle()
+    with freeze_time(t.NOW):
+        result = fact_check.local_rejection(cited(copy(label), source), [], source, {})
+    assert result is not None and result.failures == ["awc_gust_scope_missing"]
+
+
+def test_review_generic_source_name_cannot_supply_an_unrelated_airport_label():
+    source = bundle(site="Airport")
+    with freeze_time(t.NOW):
+        result = fact_check.local_rejection(cited(copy("Unrelated airport, US:"), source), [], source, {})
+    assert result is not None and result.failures == ["awc_gust_scope_missing"]
+
+
+def test_review_real_hyphen_in_the_complete_source_name_remains_accepted():
+    source = bundle(site="North-Test Arpt")
+    with freeze_time(t.NOW):
+        assert fact_check.local_rejection(cited(copy("North-Test airport, US:"), source), [], source, {}) is None
+
+
+def test_review_full_stop_followed_by_whitespace_is_a_country_label_separator():
+    source = bundle()
+    with freeze_time(t.NOW):
+        assert fact_check.local_rejection(cited(copy("North Test airport, US."), source), [], source, {}) is None
 
 
 @pytest.mark.parametrize("change,expected", [
