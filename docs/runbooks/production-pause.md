@@ -86,8 +86,9 @@ routes while production is paused. No external scheduler is changed by this
 runbook; inspect any separately configured scheduler before claiming coverage.
 # Pending production runs
 
-The bot, command consumer, rejection workflow and generated runtime report keep
-one running producer in their existing shared group. They request GitHub's
+The bot and command consumer keep their existing shared execution group. The
+rejection workflow and generated runtime report join it only when the serialized
+route is enabled; their separate legacy groups remain unchanged. These queues request GitHub's
 `queue: max` policy, which retains up to 100 pending items instead of replacing
 the previous pending item on each arrival. An arrival beyond that capacity is
 rejected. PR checks remain isolated and use `single` so obsolete PR heads can
