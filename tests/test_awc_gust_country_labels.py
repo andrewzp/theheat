@@ -121,6 +121,21 @@ def test_review_full_stop_followed_by_whitespace_is_a_country_label_separator():
         assert fact_check.local_rejection(cited(copy("North Test airport, US."), source), [], source, {}) is None
 
 
+@pytest.mark.parametrize("prefix", ["West ", "Other ", "West\u00a0"])
+def test_whole_airport_label_cannot_be_the_tail_of_another_space_separated_name(prefix):
+    source = bundle()
+    with freeze_time(t.NOW):
+        result = fact_check.local_rejection(cited(copy(prefix + "North Test airport, US:"), source), [], source, {})
+    assert result is not None and result.failures == ["awc_gust_scope_missing"]
+
+
+@pytest.mark.parametrize("prefix", ["At ", "from ", "A report. ", "A report:\n"])
+def test_standalone_airport_label_has_an_explicit_sentence_line_or_measurement_introducer(prefix):
+    source = bundle()
+    with freeze_time(t.NOW):
+        assert fact_check.local_rejection(cited(copy(prefix + "North Test airport, US:"), source), [], source, {}) is None
+
+
 @pytest.mark.parametrize("change,expected", [
     ("time", "awc_time_label_missing"), ("amount", "awc_gust_quantity_missing"),
     ("forecast", "awc_gust_unsupported_upgrade"), ("citation", "awc_exact_target_citation_required"),

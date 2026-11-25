@@ -249,8 +249,9 @@ def claim_failures(text, bundle, *, now=None):
             # Keep it uppercase: bare pronouns/prepositions and substrings do
             # not establish country scope. Required models still assess prose.
             country_label = re.search(
-                rf"(?<!\S)(?i:{re.escape(location)}[ \t]+airport)[ \t]*,[ \t]*"
-                rf"{re.escape(point['country_code'])}(?=[ \t]*(?:[:,;]|\.(?=\s|\Z)|\Z))", prose.rstrip())
+                rf"(?:\A|[.!?;:][ \t]+|\n[ \t]*|(?<!\S)(?i:at|from)[ \t]+)"
+                rf"(?i:{re.escape(location)}[ \t]+airport)[ \t]*,[ \t]*"
+                rf"{re.escape(point['country_code'])}(?=[ \t]*(?:[:,;]|\.(?=\s|\Z)|\Z))", prose.strip())
         if (not re.search(re.escape(location), prose, re.I) or not country_label
                 or not re.search(r"\bairport\b", prose, re.I) or not re.search(r"\bgusts?\b", prose, re.I)):
             return ["awc_gust_scope_missing"]
