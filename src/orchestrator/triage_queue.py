@@ -1365,6 +1365,12 @@ def _drain_and_write_triage_queue(
         live_queue.append(candidate)
 
     survivors = live_queue  # default: legacy passthrough
+    if not triage_enabled and budget.limit is not None:
+        from src.editorial.format_spacing import is_context_comparison
+
+        # The free cache/event/save-intent partitions above still run first.
+        # Unlimited legacy order and the portfolio controller stay untouched.
+        survivors = sorted(live_queue, key=is_context_comparison)
     if triage_enabled and live_queue:
         cap = budget.limit if budget.limit is not None else _triage.MAX_DRAFTS_PER_CYCLE
         from src.orchestrator import portfolio_selection as _portfolio

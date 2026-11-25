@@ -1,3 +1,7 @@
+## 0.9.109.187 — 2026-11-24
+
+- Prefer otherwise eligible events over bare airport-temperature comparisons before limited writing; keep comparisons as fallback. Preserve source checks, scores, existing caps, one routine writing attempt and no refill. Keep unlimited legacy order and the optional portfolio controller unchanged, and attribute comparison displacement only when the selection proves it.
+
 ## 0.9.109.186 — 2026-11-24
 
 - Preserve pending production runs across the bot and shared writer workflows instead of replacing the previous pending item. Keep one running producer and isolated PR checks that can cancel obsolete heads. GitHub's 100-pending limit, stale-source checks and all publication/spending controls remain; no new trigger or scheduler is added.

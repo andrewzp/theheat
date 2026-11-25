@@ -1,4 +1,26 @@
-# Manual event portfolio planning
+# Editorial selection
+
+## Ordinary limited writing
+
+After the existing free eligibility and cache checks, default triage prefers
+otherwise selectable events to a bare comparison of two airport temperatures.
+The comparison remains eligible as context when no event can take the slot.
+Gusts are a separate event format. This is an editorial format preference, not
+evidence of a record, rarity, impact or reader preference.
+
+Scores and thresholds stay unchanged. Each class retains score/time ordering;
+bounded legacy writing retains input order within each class, and unlimited
+legacy writing keeps its original order. All category, pending and country caps
+still apply. A declined chosen draft does not buy a replacement writer call.
+The optional refill branch retains its existing bounds and remains opt-in.
+An enabled portfolio controller keeps its existing input and selection contract.
+
+A cap-one suppression adds `context_comparison_fallback` only when the old top
+comparison passed the individual gates and lost its slot to an event. It keeps
+the numeric `global_cap` reason. Without that witness, ordinary reasons remain;
+a format disposition never means source failure or factual invalidity.
+
+## Manual event portfolio planning
 
 `plan_episode_portfolio` connects current retained NHC episodes to a read-only
 editorial plan before any paid writer call. It uses the existing episode resolver,
