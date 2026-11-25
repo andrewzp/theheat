@@ -1,4 +1,4 @@
-"""Editorial pacing from confirmed publications; no source or event inference."""
+"""Editorial format preference and pacing; no source or event inference."""
 from datetime import UTC, datetime, timedelta
 import re
 from typing import Any, Mapping
@@ -7,6 +7,16 @@ from src.data.awc_observed import KIND
 from src.editorial.revisions import binding_matches
 
 SPACING = timedelta(hours=24)
+
+
+def is_context_comparison(candidate: Any) -> bool:
+    """Identify the bare airport comparison format, never its factual validity.
+
+    Both identities must agree. Source admission still refuses disagreements;
+    neither other airport products nor a supplied importance label qualify.
+    """
+    return (getattr(candidate, "legacy_type", None) == KIND
+            and getattr(getattr(candidate, "bundle", None), "signal_kind", None) == KIND)
 
 
 def _time(value: Any) -> datetime | None:
@@ -62,6 +72,6 @@ def candidate_format_hold(bot_state: Mapping[str, Any], candidate: Any, *, now: 
     from src.data import awc_gust
     if bundle is not None and awc_gust.is_family(bundle):
         return awc_gust.operation_hold(bundle, bot_state, now=now)
-    if getattr(candidate, "legacy_type", None) == KIND and getattr(bundle, "signal_kind", None) == KIND:
+    if is_context_comparison(candidate):
         return awc_format_hold(bot_state, now=now)
     return None

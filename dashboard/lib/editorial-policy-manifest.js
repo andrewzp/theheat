@@ -145,7 +145,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/editorial/automatic_text.py": "907744454a6fcc4b1977446a4038a2c1d1120a6504a2a2e7cbaef884ad0031f5",
     "src/editorial/delegated_media_review.py": "9f8c0c1b73854b856b833a3bf93cb2222ede1b6c7043422723b45e37307bbeec",
     "src/editorial/draft_admission.py": "a726ca826cc564f43e3dd1169fa0f2a8d671be09d5f8ca80413587a64b857eb7",
-    "src/editorial/format_spacing.py": "fa9952200113d12e2b47c09e29ba448ad3308a1855f34021102c275822ce490f",
+    "src/editorial/format_spacing.py": "466731916377f1cd3d0fbcac4ad8e1245df8176566681833dcb81904726bb7f7",
     "src/editorial/hazard_episodes.py": "5f22f7e696ec1bd62d3abe81f2098243eae5a3f09b00252d088787979924cc10",
     "src/editorial/hot10_contract.py": "68dbb3c9081af24c7869ede677659a530a701a7270606307b122624a706fa534",
     "src/editorial/marine_evidence.py": "d6c9bb8c7ca12133eefa9ddf6283977c7a86da65ef50869d686c352263c1099d",
@@ -230,8 +230,8 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/orchestrator/sources/regional_observed.py": "ed3eb40b8f5d167262c3cf6bbfe706b2bbd68cf318804dfb817f5171178b65b2",
     "src/orchestrator/sources/river_gauges.py": "cf8e08b50ce78297f1138319a0f8ac91b91bcfc08c597538b011934fb80ae943",
     "src/orchestrator/sources/synthesis.py": "e1e101948dde8a2ac07be65d78e37ed0cd8e080c43523ea0ded1b1071cd31522",
-    "src/orchestrator/triage.py": "5cc6ea24cb8d7e8ea580f7a4d4e6e6d5d108edc0837168613833a271aeb10e37",
-    "src/orchestrator/triage_queue.py": "b32b3c048969ba126669982c16e96d7e5c688ccd653f219d97c8c89fb4632aea",
+    "src/orchestrator/triage.py": "eea5e4bf47609de56065f8710db3beb440434dd9a937966461f83cbe69542946",
+    "src/orchestrator/triage_queue.py": "fe92c19f9fc51abd293e527732195d03bd24ea64b3589567977406645fdaf803",
     "src/orchestrator/two_bot_dispatch.py": "3f19fc38fc4ab63cbffb1391201f22a6790c45e6b51743e805b9943ec014fb80",
     "src/posting/bluesky.py": "30333265f7978e905a4f4c45039c7bdae997cb192811e9e93701bf31976105a4",
     "src/posting/delivery_receipts.py": "c944f22458726d02bcdbbf70d274d4831486013dc2eb1e47fd6f2a569abd4147",
@@ -319,5 +319,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "5c5ffcc95358c7df45ae838c228759ad0eb6275c8f9053c8130c0a8824b63d9e"
   },
   "schema_version": 1,
-  "source_sha256": "383746a6e3c5d2334aa02c2add6f987f048f43017d553e6efa1d4c78d4d87e27"
+  "source_sha256": "addb6adb5a08cbee1b60a445855125a04738614761e8a30d3ac11b5b3589be18"
 }

@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING, Any
 
 from src.data import open_meteo
 from src.data.places import country_key
+from src.editorial.format_spacing import is_context_comparison
 from src.orchestrator.finalize import MAX_DRAFTS_PER_CYCLE
 from src.orchestrator.suppression import _SUPPRESSIONS_LOCK
 from src.state import MAX_SUPPRESSIONS
@@ -526,7 +527,9 @@ def _record_triage_suppression(
     category = getattr(getattr(candidate, "bundle", None), "signal_kind", None) or ""
     threshold = int(getattr(score, "threshold", 0) or 0)
 
-    if reason == "global_cap":
+    if reason == "context_comparison_fallback":
+        reasons_field = [f"global_cap={global_cap}", "context_comparison_fallback"]
+    elif reason == "global_cap":
         reasons_field = [f"global_cap={global_cap}"]
     elif reason == "pending_type_cap":
         reasons_field = [f"pending_type_cap={_pending_type_cap()}"]
@@ -575,7 +578,8 @@ def select_survivors(
     in writer-call order. Records spilled candidates as kill_stage=
     'triage_cap' on bot_state.
 
-    Ranking key: (score.total DESC, created_at DESC).
+    Eligible event formats precede bare airport comparisons. Within each
+    class the key remains (score.total DESC, created_at DESC).
     Tiebreaker on created_at is intentionally DESC (more recent wins).
 
     cooldown_exempt=True is a city-cooldown bypass, NOT a triage-cap bypass.
@@ -590,7 +594,7 @@ def select_survivors(
     if not queue:
         return []
 
-    ranked = sorted(
+    score_ranked = sorted(
         queue,
         key=lambda c: (
             int(getattr(c.score, "total", 0) or 0),
@@ -598,6 +602,9 @@ def select_survivors(
         ),
         reverse=True,
     )
+    # A format preference, not a recalibration of scientific/newsworthiness
+    # scores. Stable partition preserves score/time order and exact ties.
+    ranked = sorted(score_ranked, key=is_context_comparison)
 
     if refill:
         return ranked
@@ -654,8 +661,15 @@ def select_survivors(
             country = ""
         if len(survivors) >= global_cap:
             # Global cap already hit — all remaining spill via the global gate.
-            for remaining in ranked[i:]:
-                spilled.append((remaining, "global_cap"))
+            # Only the walked old-top comparison can prove displacement at
+            # cap one: it passed every individual gate above and an event won.
+            # Unexamined tail rows or larger-cap cases keep the generic reason.
+            displaced = (global_cap == 1 and len(survivors) == 1
+                         and candidate is score_ranked[0] and is_context_comparison(candidate)
+                         and not is_context_comparison(survivors[0]))
+            for offset, remaining in enumerate(ranked[i:]):
+                reason = "context_comparison_fallback" if displaced and offset == 0 else "global_cap"
+                spilled.append((remaining, reason))
             break
         survivors.append(candidate)
         by_category[category] = used + 1
