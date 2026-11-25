@@ -151,6 +151,7 @@ def test_river_gauges_stale_data_raises_freshness():
                 "timeSeries": [
                     {
                         "sourceInfo": {"siteCode": [{"value": "07010000"}]},
+                        "variable": {"variableCode": [{"value": "00065"}], "unit": {"unitCode": "ft"}},
                         "values": [
                             {
                                 "value": [
@@ -170,7 +171,7 @@ def test_river_gauges_stale_data_raises_freshness():
     responses.add(
         responses.GET,
         river_gauges.FLOOD_URL.format(site_id="07010000"),
-        json={"flood": {"categories": {"minor": {"stage": 30.0}}}},
+        json={"flood": {"stageUnits": "ft", "categories": {"minor": {"stage": 30.0}}}},
         status=200,
     )
 
