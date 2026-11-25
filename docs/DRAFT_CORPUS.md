@@ -11,6 +11,91 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-11-25 — Daily corpus grading (1 draft; first graded cycle since Jul 6)
+
+**Context:** Gist read via git-clone path (success). Queue: **1 pending** of 65 drafts in state
+(49 posted, 15 rejected). `publication_control.enabled = true` — automatic publication has been
+live since the `live-20261030T005536Z` epoch (the `p00b-paused-2026-09-09` epoch is retired), so
+most drafts now leave the queue by auto-publish rather than operator review. **No graded cycle
+is recorded between 2026-07-06 and today** (`main`'s corpus stopped at Jul 6; no
+`daily-plan-current` branch exists on origin). The 37 drafts created Jul 7 → Nov 23 passed through
+the queue ungraded; they are not back-graded here (not pending), but a few are cited below as
+post-ship evidence for proposals whose fixes landed Jul 7.
+
+The one pending draft is 7 days old (created Nov 18 14:36Z). It is a member of a 13-draft
+`observed_metar_contrast` run (Nov 17–23: 4 posted, 8 rejected, this 1 pending) — the signal
+type's first appearance in the corpus.
+
+**Grade distribution:** 0 A / 1 B / 0 C / 0 D-F → **0% A-rate (n=1)**
+
+**Headline finding:** `observed_metar_contrast` is clean, accurate and benign, and has no
+voice at all. The writer is held to a fixed fill-in-the-blanks frame
+(`'<airport>, <country>: <reading>°C; <airport>, <country>: <reading>°C—a <gap>°C airport gap at
+HH:MM UTC, DD Mon.'`, `src/two_bot/writer.py` `observed_airport_copy_requirements`, tightened by
+#858 on Nov 21) with an explicit ban on any closing sentence. That frame makes the type
+fact-check-safe and caps it at B: the only mechanic available is the juxtaposition. And
+the juxtaposition is mostly the same one: Yakutsk is the cold pole in **11 of 13** drafts.
+
+### B-range
+
+**[1] `draft_20261118_143656_56` — observed_metar_contrast — score 80 — B-**
+
+> Sarh airport, Chad: 40°C; Yakutsk airport, Russia: −38°C — a 78°C airport gap at 14:00 UTC, 18 Nov.
+> https://aviationweather.gov/api/data/metar?ids=FTTA,UEEE&date=2026-11-18T14:00:00Z&hours=2
+
+- Violation: present, but geographic, not climatic. 78°C simultaneous spread is a striking
+  number, but neither reading is anomalous. Yakutsk at −38°C in mid-November is ordinary
+  Yakutsk, and Sarh at 40°C is a warm dry-season afternoon. Bundle `claim_scope` says so
+  itself: "not a record or a global ranking." The draft never claims otherwise. Honest scope,
+  thin stakes.
+- Benign: yes. Flat register, no alarm.
+- Setup→punchline: the two readings are the setup; "a 78°C airport gap" is the punchline, but it
+  is arithmetic the reader has already done. Math-out-loud by template (P4-class), mild.
+- Named mechanic: deadpan juxtaposition (pure data delivery). Valid, but it is the only move and
+  it repeats every few hours.
+- Wodehouse: passes. Doesn't try. "Airport gap" is a slightly coined unit; "a 78°C gap" alone
+  reads cleaner.
+- Citation: the appended link is a raw METAR API query. It's verifiable, but a reader who
+  clicks gets unformatted METAR text. Logged for the engineer (same class as the Jul 3 JTWC
+  `.txt` link), not folded into the grade.
+- Staleness: the event happened at 14:00 UTC Nov 18, and the draft is now 7 days old. Posting
+  it now would present a week-old snapshot as a live contrast. It is a strict bulk-reject
+  candidate (see QUALITY_TREND rejection events). At ~7.0 days it is also at the fast-type
+  7-day TTL boundary and will likely sweep on the next cycle anyway.
+
+B- rather than B: on its own it's a respectable B. But it is interchangeable with 12 siblings,
+and nothing in it tells a climate account's reader why this pair, today, matters.
+
+### Patterns named
+
+1. **Cold-anchor monoculture (new).** Yakutsk (UEEE) is one pole in 11 of 13
+   `observed_metar_contrast` drafts, and Kununurra (YPKU) is the warm pole in 3 of those 11. The
+   two non-Yakutsk drafts (Shepherd Bay/Tete, Tete/Magadan) were both rejected, so the posted
+   stream is 4 of 4 Yakutsk. Read as a feed, the series is one tweet repeated with different
+   warm airports. → new proposal **P_metar**.
+2. **Frame lock is deliberate and works for compliance.** All 13 drafts score exactly 80. The
+   first 4 (Nov 17–18 morning) varied their syntax ("At 04:30 UTC… logged… while… hit"); from
+   this draft onward all 9 use the identical frame. No fact-check failures in the run. The cost
+   is that the frame bans the one sentence where voice could live.
+3. **Flat score = scorer not discriminating.** 13 drafts, 13 × 80, 4 posted and 8 rejected. The
+   score carries no information about which ones the operator kept. Logging only.
+4. **Post-ship spot-checks (posted, ungraded drafts):** Jul 10 Urumqi dust_event states "PM10
+   averaged 17.7× the WHO 24-hour guideline". This is the first `dust_event` in state with the
+   WHO anchor, after 11 of 11 without, consistent with the Jul 7 P_dust fix (#386). Jul 8–9
+   Barrow/Amsterdam precipitation drafts lead with a ratio-as-punchline ("more than three years'
+   worth in a single week"), not the P9 opener+restate-math template, consistent with #397.
+   There are no tier-jargon phrases in any of the 37 Jul 7–Nov 23 drafts (P_tier fix, #386).
+   These are informal, posted-draft observations, not graded cycles.
+
+### Followups
+
+- Operator: reject `draft_20261118_143656_56` (stale; write path unavailable this session).
+- Operator: decide whether `observed_metar_contrast` should post at all at its current cadence.
+  It is the only type in today's queue and the dominant auto-posted type since Nov 17. See P_metar.
+- Operator: the plan's active proposals were all filed against the pre-Jul-7 writer prompt,
+  which has since been rewritten into a compact evidence-scope spec. P_close / P_compound / P5
+  need a fresh graded cycle against the current prompt before further investment.
+
 ## 2026-07-06 — Daily corpus grading (0 fresh drafts; 15 carry-overs from Jul 5, previously graded)
 
 **Context:** Gist read via git-clone path (success; no rate limit). Queue: 15 pending drafts —
