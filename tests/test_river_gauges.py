@@ -36,6 +36,7 @@ SAMPLE_USGS_RESPONSE = {
                 "sourceInfo": {
                     "siteCode": [{"value": "07010000"}],
                 },
+                "variable": {"variableCode": [{"value": "00065"}], "unit": {"unitCode": "ft"}},
                 "values": [
                     {
                         "value": [
@@ -48,6 +49,7 @@ SAMPLE_USGS_RESPONSE = {
                 "sourceInfo": {
                     "siteCode": [{"value": "07374000"}],
                 },
+                "variable": {"variableCode": [{"value": "00065"}], "unit": {"unitCode": "ft"}},
                 "values": [
                     {
                         "value": [
@@ -62,7 +64,7 @@ SAMPLE_USGS_RESPONSE = {
 
 def _nwps_gauge(stage: float | None) -> dict:
     minor = {"stage": stage} if stage is not None else None
-    return {"flood": {"categories": {"minor": minor}}}
+    return {"flood": {"stageUnits": "ft", "categories": {"minor": minor}}}
 
 
 def _add_nwps_stage(site_id: str, stage: float, *, status: int = 200) -> None:

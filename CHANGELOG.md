@@ -1,3 +1,7 @@
+## 0.9.109.188 — 2026-11-24
+
+- Require explicit feet for NOAA river flood thresholds and the returned USGS gauge-height quantity before comparing levels. Hold unsupported units and nonfinite thresholds as integrity failures, keep valid observation peers, and preserve measurement dates, unknown thresholds, model distinctions and the manual river-review policy.
+
 ## 0.9.109.187 — 2026-11-24
 
 - Prefer otherwise eligible events over bare airport-temperature comparisons before limited writing; keep comparisons as fallback. Preserve source checks, scores, existing caps, one routine writing attempt and no refill. Keep unlimited legacy order and the optional portfolio controller unchanged, and attribute comparison displacement only when the selection proves it.

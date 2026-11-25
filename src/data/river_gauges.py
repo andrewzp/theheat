@@ -167,11 +167,32 @@ def _parse_nwps_minor_flood_stage(payload: object, site_id: str) -> float | None
     if stage in (None, "", -9999, "-9999"):
         return None
     try:
-        return float(str(stage))
+        value = float(str(stage))
     except (TypeError, ValueError) as exc:
         raise SourceFetchError(
             f"river_gauges schema drift: invalid minor flood stage for {site_id}"
         ) from exc
+    if value == -9999:
+        return None
+    if flood.get("stageUnits") != "ft":
+        raise SourceFetchError(
+            f"river_gauges schema drift: minor flood stage for {site_id} requires explicit ft units"
+        )
+    if not math.isfinite(value):
+        raise SourceFetchError(
+            f"river_gauges schema drift: nonfinite minor flood stage for {site_id}"
+        )
+    return value
+
+
+def _gauge_height_in_feet(variable: object) -> bool:
+    """The requested parameter cannot label a different returned quantity."""
+    if not isinstance(variable, dict):
+        return False
+    codes, unit = variable.get("variableCode"), variable.get("unit")
+    return (isinstance(codes, list) and len(codes) == 1
+            and isinstance(codes[0], dict) and codes[0].get("value") == GAUGE_HEIGHT_CODE
+            and isinstance(unit, dict) and unit.get("unitCode") == "ft")
 
 
 def fetch_river_levels(*, strict: bool = False) -> list[RiverReading]:
@@ -223,13 +244,11 @@ def _fetch_river_levels_primary(*, strict: bool = False) -> list[RiverReading]:
         )
         data = resp.json()
 
-        flood_stages = _fetch_flood_stages(strict=strict)
-        readings = []
-        time_holds: set[str] = set()
-        now = _utc_now()
-        if not isinstance(now, datetime) or now.tzinfo is None or now.utcoffset() is None:
-            raise SourceFetchError("river_gauges freshness check failed: invalid UTC clock")
-        now = now.astimezone(UTC)
+        # Classify the returned quantity before any metadata outage can start
+        # a model witness. Units need no clock; dates are checked after fetching
+        # metadata against the same late trusted UTC clock as before.
+        selected: list[tuple[str, float, object]] = []
+        unit_holds = False
 
         time_series = data.get("value", {}).get("timeSeries", [])
         for series in time_series:
@@ -256,7 +275,24 @@ def _fetch_river_levels_primary(*, strict: bool = False) -> list[RiverReading]:
             if not math.isfinite(gauge_ft) or gauge_ft <= 0:
                 continue
 
-            measurement_day, time_hold = _measurement_day(latest.get("dateTime"), now)
+            if not _gauge_height_in_feet(series.get("variable")):
+                unit_holds = True
+                continue
+            selected.append((site_id, gauge_ft, latest.get("dateTime")))
+
+        if not selected and unit_holds:
+            raise SourceFetchError(
+                "river_gauges schema drift: no selected gauge-height readings with explicit 00065/ft units"
+            )
+        flood_stages = _fetch_flood_stages(strict=strict)
+        readings = []
+        time_holds: set[str] = set()
+        now = _utc_now()
+        if not isinstance(now, datetime) or now.tzinfo is None or now.utcoffset() is None:
+            raise SourceFetchError("river_gauges freshness check failed: invalid UTC clock")
+        now = now.astimezone(UTC)
+        for site_id, gauge_ft, measurement_time in selected:
+            measurement_day, time_hold = _measurement_day(measurement_time, now)
             if time_hold is not None:
                 time_holds.add(time_hold)
                 continue
