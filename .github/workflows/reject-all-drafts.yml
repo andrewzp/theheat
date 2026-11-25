@@ -16,6 +16,7 @@ concurrency:
   # P00c: in serialized route mode this Gist writer joins the theheat-bot group; legacy unchanged.
   group: ${{ vars.THEHEAT_GIST_WRITE_ROUTE == 'serialized' && 'theheat-bot' || 'reject-all-drafts' }}
   cancel-in-progress: false
+  queue: max
 
 jobs:
   reject:

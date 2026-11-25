@@ -84,3 +84,19 @@ credentials. A deliberate CLI invocation, an old workflow ref without the guard,
 or an older dashboard deployment can bypass the new controls. Do not use those
 routes while production is paused. No external scheduler is changed by this
 runbook; inspect any separately configured scheduler before claiming coverage.
+# Pending production runs
+
+The bot and command consumer keep their existing shared execution group. The
+rejection workflow and generated runtime report join it only when the serialized
+route is enabled; their separate legacy groups remain unchanged. These queues request GitHub's
+`queue: max` policy, which retains up to 100 pending items instead of replacing
+the previous pending item on each arrival. An arrival beyond that capacity is
+rejected. PR checks remain isolated and use `single` so obsolete PR heads can
+be cancelled.
+
+This preserves registered work; it does not guarantee scheduled creation,
+fencing, recovery or posting cadence. Older workflow revisions retain their old
+settings. Pause controls, source freshness, approvals, required checks and
+spending limits still govern execution. Inspect actual run outcomes before
+considering recovery; never resend an unknown delivery or infer a post from a
+successful workflow. See [GitHub's concurrency rules](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency).
