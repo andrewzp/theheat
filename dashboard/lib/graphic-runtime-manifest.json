@@ -1,6 +1,6 @@
 {
   "identity": {
-    "archive_sha256": "48617c84bbdfad326feef6a3b83712cc5520e8ef2e33e50d9a0130f446fe293e",
+    "archive_sha256": "a688e0813bfcc81008566016129c19efa2a3817682d4977b203ece48a7e85463",
     "deployment_files": {
       "api/graphic_preview.py": "984de6284b9eddef85db41cee9ab26c9d92954f12c7e13b6f87bf0bfb6640157",
       "api/graphic_reader_status.py": "5e9685d699625a4eea9d5be884b6e266939a0ad344a2997351ba79bd114407ba",
@@ -25,7 +25,7 @@
       "src/data/air_quality.py": "89975b423632d9d6a0b3db767df8dae8cc4e7e7c496a350d396d7e303e820e33",
       "src/data/air_quality_contract.py": "7f9de8f7fcd6836a3e4fb32ea8c1a35a3c9981bcede6aea2d74770f12539d667",
       "src/data/air_quality_evidence.py": "677713bb8916c4bcd51d407a5b19072f54532f5f46db116914af6b3fcac9f4f7",
-      "src/data/awc_gust.py": "cfd2fa5f958ad510b8d86584c8d65788e8a47a87bc89e496392264238a8dc5e6",
+      "src/data/awc_gust.py": "f73efbe0793bebcf3346ad637c4027ed71d9979df5fc9cb7340e46b210ebcde7",
       "src/data/awc_observed.py": "4b85ea0b156b82014314eaf0d034b050c7f2c065f7a72370e30b8523b790e558",
       "src/data/c3s_monthly.py": "babc1416c324b4edda24bdd0a7bd7a8a39ceda2bee7bf826ae4b5f54302d16c1",
       "src/data/coastal_observed.py": "6d5f56258134602bd199b16f43f061cd2a53212dc999bfc87307cc23950516be",
@@ -124,7 +124,7 @@
       "src/two_bot/types.py": "65afc3d850c31c843bc1e7b58dcc0b13eb274969dcff657e2622641bd85239ee"
     },
     "format": "saved-source-svg-preview-v2",
-    "policy_source_sha256": "51d979dad3ba0efbe06ad447e660b858104f3f4e7802b9f2c06af137c3f1a35e",
+    "policy_source_sha256": "ae7ffbe4af1c47dd6563b21004ec7afcb6ed99da019cff02e7c4ef8022fc6cf7",
     "resource_sources": {
       "src/data/registry/cities.csv": "data/cities.csv",
       "src/data/registry/country_codes.json": "data/country_codes.json",
@@ -134,5 +134,5 @@
     },
     "schema_version": 1
   },
-  "runtime_sha256": "6b15956d6a659c1151912be92fcd42e3d5d5cd5a7e72f10955d5d3cc72c9b96f"
+  "runtime_sha256": "f90f272aa3fd3c4244a63dc97aabf7e89963a01d91afec5dae3a2f50f906acc7"
 }

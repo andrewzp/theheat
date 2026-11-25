@@ -28,7 +28,12 @@ changed or unavailable source, disabled setting, changed review or policy,
 obsolete publication authority or uncertain send blocks publication.
 
 The draft must retain the complete airport, country, gust, observation clock
-and UTC date. Supplied rounded km/h and mph conversions may make knots more
+and UTC date. The full source country name remains accepted. Its exact uppercase
+two-letter source code may also label that same airport, as in
+`Example airport, US: ...`. The code must end at a label separator or the end
+of the text; an unrelated code, substring, lowercase pronoun or missing country
+does not qualify. This display rule leaves source identity and required factual
+checking unchanged. Supplied rounded km/h and mph conversions may make knots more
 readable. It carries the exact historical source link before required safety,
 factual and critic checks. The writer still makes one sample for the shared
 single candidate slot, with no refill or revision loop; the automatic limit
