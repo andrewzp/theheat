@@ -10,6 +10,7 @@ from unittest.mock import Mock
 from freezegun import freeze_time
 import pytest
 import responses
+from requests import Timeout
 
 from src.data import river_gauges as river
 from src.data.source_status import SourceFetchError
@@ -71,9 +72,13 @@ def test_nonfinite_thresholds_are_integrity_failures(stage):
         river._parse_nwps_minor_flood_stage(threshold(stage=stage), STATIONS[0][0])
 
 
-@pytest.mark.parametrize("stage", [None, "", -9999, "-9999"])
+@pytest.mark.parametrize("stage", [None, "", -9999, "-9999", "-9999.0", " -9999 ", "-9.999e3"])
 def test_declared_absence_remains_unknown_instead_of_becoming_zero(stage):
     assert river._parse_nwps_minor_flood_stage(threshold(stage=stage), STATIONS[0][0]) is None
+
+
+def test_numeric_missing_threshold_does_not_require_a_unit_to_mean_unknown():
+    assert river._parse_nwps_minor_flood_stage(threshold(unit=None, stage="-9999.0"), STATIONS[0][0]) is None
 
 
 @responses.activate
@@ -84,6 +89,15 @@ def test_absent_threshold_cannot_turn_a_valid_height_into_a_flood(monkeypatch):
     assert reading.gauge_height_ft == 35.5 and reading.flood_stage_ft is None
     assert not reading.above_flood and river.detect_floods([reading]) == []
     witness.assert_not_called()
+
+
+@responses.activate
+def test_numeric_spelling_of_missing_threshold_never_reaches_a_false_writer_claim(monkeypatch):
+    install(monkeypatch, [gauge(STATIONS[0][0])], [threshold(stage="-9999.0")])
+    with freeze_time(NOW):
+        [reading] = river.fetch_river_levels(strict=True)
+    assert reading.flood_stage_ft is None and not reading.above_flood
+    assert river.detect_floods([reading]) == []
 
 
 @pytest.mark.parametrize("change", ["metres", "discharge", "missing-variable", "missing-unit", "wrong-code"])
@@ -117,6 +131,19 @@ def test_all_wrong_quantities_fail_explicitly_without_outage_substitution(monkey
     with freeze_time(NOW), pytest.raises(SourceFetchError, match="schema|unit|quantity"):
         river.fetch_river_levels(strict=True)
     witness.assert_not_called()
+
+
+@responses.activate
+def test_invalid_quantity_is_refused_before_metadata_timeout_can_start_the_model(monkeypatch):
+    witness = install(monkeypatch, [gauge(STATIONS[0][0], code="00060", unit="ft3/s")], [threshold()])
+    responses.replace(responses.GET, river.FLOOD_URL.format(site_id=STATIONS[0][0]),
+                      body=Timeout("Invented metadata timeout"))
+    with freeze_time(NOW), pytest.raises(SourceFetchError, match="schema|unit|quantity"):
+        river.fetch_river_levels(strict=True)
+    witness.assert_not_called()
+    assert len(responses.calls) == 1
+    url = responses.calls[0].request.url
+    assert url is not None and url.startswith(river.USGS_URL)
 
 
 @responses.activate

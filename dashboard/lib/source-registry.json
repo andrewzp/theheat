@@ -728,7 +728,7 @@
     "src/data/ozone_hole.py": "249d6d3c6c16c2350e45374248aa64f3f3eb7b126c6131b802a916d8b7d8d7f6",
     "src/data/reanalysis_anomaly.py": "396755069ccecfe73a17f3dd7a51d1b1a1d7e5ab6172d3826b440af14426b1fa",
     "src/data/regional_observations.py": "eef66077194e446991db077d558f3e2da664e6c1c7a1deb5e2b4ea9cec08d88e",
-    "src/data/river_gauges.py": "abadeb871a3ccca4dcda352854fe37cc8d09d8748efaa6daf502cfb3f79cc40c",
+    "src/data/river_gauges.py": "8468d2c22b4386bf1c430f2b05d643a3c67cc1210e51dcb84014b2de4b7ed208",
     "src/data/sea_ice.py": "373dc72240b8ee7439995cf194b9b190b9a1940df393723119849cdeeff455f8",
     "src/data/source_registry.py": "d996d5022dfb5716ccfedc5fb163f00b90d92ac06f67ddbe155e3febf623c8fc",
     "src/data/temperature_evidence.py": "940dfab7d54645262f16785b21532a18ffd6af6cbf7cf0c6e116463741192458",
@@ -779,5 +779,5 @@
     "src/two_bot/intern/warnings.py": "04e0a4506ffbb29124c8d2960a5e5025305699297fcf8f9178b23caac2cd7a37"
   },
   "evidence_scope": "Referenced local code inventory; not live/provider/transitive-source qualification.",
-  "registry_sha256": "ec8ed66bc5e4132cd530aaf5302ef1847d8582ff3def2219190d8972446c7e5e"
+  "registry_sha256": "3ee0b6ab301147dba5fd885c62ae1cf01fb4539ac950ed22da6273ff02c74820"
 }

@@ -136,7 +136,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/data/rainfall_observed.py": "e018a4a027653e339fc6e9f9500b7984779c0cfe3fd145c7264e7837aacbba18",
     "src/data/rainfall_supply.py": "ca68b5078f504437894fc19bffcdcf07e6b7b066f2649f640ea90f24458cde46",
     "src/data/regional_observations.py": "eef66077194e446991db077d558f3e2da664e6c1c7a1deb5e2b4ea9cec08d88e",
-    "src/data/river_gauges.py": "abadeb871a3ccca4dcda352854fe37cc8d09d8748efaa6daf502cfb3f79cc40c",
+    "src/data/river_gauges.py": "8468d2c22b4386bf1c430f2b05d643a3c67cc1210e51dcb84014b2de4b7ed208",
     "src/data/temperature_evidence.py": "940dfab7d54645262f16785b21532a18ffd6af6cbf7cf0c6e116463741192458",
     "src/data/temperature_history.py": "c1369f662d76b2a788e49f30bdc00a57377f686e08bcefd0e958322e3ed33d84",
     "src/data/water_levels.py": "4868999eaaf6a95800439c3455efa4d67753e7b328161598b11d140d75e93c9e",
@@ -319,5 +319,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "5c5ffcc95358c7df45ae838c228759ad0eb6275c8f9053c8130c0a8824b63d9e"
   },
   "schema_version": 1,
-  "source_sha256": "8e0d814e1f6d7a9fb01d66b8768e6f52c9936c63d7bce32850b6f0aaf7170119"
+  "source_sha256": "51d979dad3ba0efbe06ad447e660b858104f3f4e7802b9f2c06af137c3f1a35e"
 }
