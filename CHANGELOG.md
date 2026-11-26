@@ -1,3 +1,7 @@
+## 0.9.109.189 — 2026-11-25
+
+- Accept the validated source country code in an explicit observed-gust airport label, preserving exact source identity and every required check. Keep unrelated, lowercase, foreign and partial codes held.
+
 ## 0.9.109.188 — 2026-11-24
 
 - Require explicit feet for NOAA river flood thresholds and the returned USGS gauge-height quantity before comparing levels. Hold unsupported units and nonfinite thresholds as integrity failures, keep valid observation peers, and preserve measurement dates, unknown thresholds, model distinctions and the manual river-review policy.

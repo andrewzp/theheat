@@ -243,7 +243,16 @@ def claim_failures(text, bundle, *, now=None):
         point = evidence["points"][0]
         target = awc._time(point["valid_time"])
         location = re.sub(r"\b(?:Arpt|Airport)\b", "", point["airport"]).strip()
-        if (not re.search(re.escape(location), prose, re.I) or not re.search(re.escape(point["country"]), prose, re.I)
+        country_label = re.search(re.escape(point["country"]), prose, re.I)
+        if not country_label and any(char.isalnum() for char in location):
+            # A source-backed code is a country label only beside this airport.
+            # Keep it uppercase: bare pronouns/prepositions and substrings do
+            # not establish country scope. Required models still assess prose.
+            country_label = re.search(
+                rf"(?:\A|[.!?;:][ \t]+|\n[ \t]*|(?<!\S)(?i:at|from)[ \t]+)"
+                rf"(?i:{re.escape(location)}[ \t]+airport)[ \t]*,[ \t]*"
+                rf"{re.escape(point['country_code'])}(?=[ \t]*(?:[:,;]|\.(?=\s|\Z)|\Z))", prose.strip())
+        if (not re.search(re.escape(location), prose, re.I) or not country_label
                 or not re.search(r"\bairport\b", prose, re.I) or not re.search(r"\bgusts?\b", prose, re.I)):
             return ["awc_gust_scope_missing"]
         if (not re.search(rf"\b{target:%H:%M}\s*UTC\b", prose, re.I)
