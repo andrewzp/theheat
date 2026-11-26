@@ -1,3 +1,7 @@
+## 0.9.109.190 — 2026-11-26
+
+- Adopt the existing checksum-verified station-threshold maintenance candidate through November 17, with its matching inventory. Keep incomplete November 18 and later coverage explicit, exact database verification, existing scientific checks and all operating limits.
+
 ## 0.9.109.189 — 2026-11-25
 
 - Accept the validated source country code in an explicit observed-gust airport label, preserving exact source identity and every required check. Keep unrelated, lowercase, foreign and partial codes held.
