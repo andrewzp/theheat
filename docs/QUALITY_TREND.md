@@ -98,6 +98,7 @@ We grade drafts on an A through F rubric in `docs/DRAFT_CORPUS.md` (the longitud
 | 2026-11-22 | 0 | — | — | — | — | **N/A** | — | No fresh drafts. 1 carry-over (Sarh B, ~96.5h, strict stale, 3rd cycle). Tete/Magadan rejected `awc_source_window_elapsed`; Teresina/Yakutsk created 32s later and auto-posted (3/12 posted; ungraded). It uses "Arpt" in place of "airport", the 3rd raw station-name form. Yakutsk on the feed 3× in ~66h. P_metar_card +1, P_event_sat +1 (both observational). |
 | 2026-11-23 | 0 | — | — | — | — | **N/A** | — | No fresh drafts. 1 carry-over (Sarh B, ~120.5h, strict stale, 4th cycle). Tambacounda/Yakutsk auto-posted 11:20Z (4/13 posted; ungraded): "Arpt" on a 2nd consecutive post, card 9/9, 72°C gap same as Teresina. Yakutsk 4/4 posts, ~40h after the last. P_metar_card +1, P_event_sat +1 (both observational). |
 | 2026-11-24 | 0 | — | — | — | — | **N/A** | — | No fresh drafts; nothing drafted, posted or rejected since the Nov 23 pull. 1 carry-over (Sarh B, ~144.5h, strict stale, 5th cycle). 3 METAR candidates killed before pending (Kayes/Yakutsk pair, critic `weak_signal`; 2 `observed_metar_gust`, critic + fact_check). Their bundles carry "Arpt" in the `airport` field, so the label comes from upstream. P_metar_card +1, P_event_sat +1 (both observational). P_close not archived (0 graded cycles since Nov 21). |
+| 2026-11-26 | 1 | 0 | 0 | 1 | 0 | **0%** | ✗ | n=1 fresh: Charleston, SC `coastal_observed_report` C+ (first of the type). Leads with the 0.99 m MLLW gauge height; the 0.65 m residual comes second; "(MLLW)" in copy, "at that moment" padding, disclaimer close, metric-only on a US station. Autoship outcome `unknown`, no tweet_id. Sarh cleared by bot TTL (`staleness_ttl_7d`). Posted since Nov 24: Teresina/Yakutsk (exact pair repeat, ~101h after Nov 21) and the first `observed_metar_gust` (Ushuaia). No Nov 25 cycle on the branch. P_close +1, P_event_sat +1, P_metar_card +1 (obs.), new P_coastal_lead. |
 
 **Trend interpretation:**
 The Apr 25 jump to 43% was real but came from a small cohort (7 drafts) and didn't sustain into Apr 27. The Apr 27 regression has named causes (Sonnet rewrite path, verb-list gap in opener regex, era-anchor over-deployment, political anchor curation error). All four have proposed fixes documented in `docs/DRAFT_CORPUS.md` Apr 27 implications section. Next data point: tomorrow's scheduled grader (fires 2026-04-27 06:00 UTC) on the Apr 26-27 cycle output under v2.5 + post-humor-lens fixes.
@@ -107,6 +108,13 @@ We've been in the 9-43% band for three cycles. Need to clear 50% sustained.
 ## Rejection events
 
 Drafts that got rejected, with dates.
+
+### 2026-11-26 — Staleness bulk-reject: 0 candidates
+
+1 pending: Charleston `draft_20261126_053109_66` (~10h, under 48h). No gist write attempted. Sarh/Yakutsk
+`draft_20261118_143656_56`, the strict candidate flagged Nov 20–24, was rejected by the bot's own sweep
+(`staleness_ttl_7d`) between the Nov 24 and Nov 26 pulls. Charleston is not stale but has `publish_outcome:
+unknown`; operator should reconcile it (check for a live tweet) before any retry or reject.
 
 ### 2026-11-24 — Staleness bulk-reject: 1 strict candidate (5th cycle); write skipped
 

@@ -11,6 +11,89 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-11-26 — Daily corpus grading (1 fresh draft)
+
+**Context:** Gist read via git-clone path (success; gist HEAD Nov 26 13:52Z, `_state_rev` 3531,
+`publication_control.enabled=true`). 1 pending: `draft_20261126_053109_66`, Charleston `coastal_observed_report`,
+created 05:31Z (~10h). First `coastal_observed_report` in the corpus. No Nov 25 cycle landed on the rolling
+branch (last commit Nov 24), so this section covers the Nov 24 14:49Z pull to now.
+
+**Queue movement since Nov 24:** Sarh/Yakutsk left the queue, rejected by the bot's sweep (`staleness_ttl_7d`),
+so the 5-cycle carry-over is closed. Two drafts auto-posted between pulls (ungraded, never pending at a pull):
+- Teresina/Yakutsk `observed_metar_contrast`, Nov 26 00:19Z: "Teresina Arpt, Brazil: 35°C; Yakutsk Arpt, Russia:
+  −35°C — a 70°C airport gap at 00:00 UTC, 26 Nov."
+- Ushuaia `observed_metar_gust`, Nov 26 13:52Z, first gust post: "Ushuaia/Malvinas airport, Argentina: a 51-kt
+  (94 km/h) gust reported at 13:00 UTC, 26 Nov."
+
+**Charleston publish state:** `approval_policy` is `armed_auto`; an autoship attempt ran at 05:32Z and returned
+`publish_outcome: unknown` ("Publication outcome unknown; reconcile before another attempt"). The ledger has no
+`tweet_id`. The tweet may be live.
+
+**Grade distribution (fresh):** 0 A / 0 B / 1 C / 0 D-F. **A-rate 0% (n=1).**
+
+**Headline finding:** the new coastal type leads with the wrong number. "0.99 m (MLLW)" is gauge height above a
+low-tide datum, which means nothing to a reader. It is also low water for Charleston (NWS minor flooding there is
+around 7 ft / 2.1 m MLLW). The story is the residual, 0.65 m above predicted tide, and it comes second. The bundle
+carries `difference_ft_rounded: 2` for a US station; the copy is metric-only.
+
+### C grade
+
+**[1] Charleston, SC `coastal_observed_report` — C+**
+> Charleston, SC gauge read 0.99 m (MLLW) at 05:24 UTC 26 Nov — 0.65 m above the predicted tide at that moment,
+> preliminary NOAA reading.
+- Violation: moderate. Water 0.65 m (~2 ft) above the tide table is a real anomaly. The absolute reading
+  undercuts it: 0.99 m sounds like nothing because it is nothing.
+- Benign: yes. Calm, no cause or flood claim, inside the bundle's claim scope.
+- Setup→punchline: inverted. Absolute (non-event) first, residual mid-sentence, then a source caveat.
+- Mechanic: pure data delivery, with the lead buried.
+- Wodehouse: three faults. "(MLLW)" is datum jargon printed in copy, the same class as "METAR SPECI" and "Arpt".
+  "at that moment" restates a time already given. "preliminary NOAA reading" is the close, a disclaimer, the same
+  subtype as Riyadh (Nov 6) and Urumqi (Oct 31).
+- Score 64 (borderline, threshold 60); fact-check passed.
+- A cleaner shape from the same facts: "Charleston, SC: water ran 2 ft (0.65 m) above the predicted tide at
+  05:24 UTC. Preliminary NOAA gauge data." Residual first, US units first, datum gone, attribution in four words.
+
+### Observed (not graded)
+**Teresina/Yakutsk (posted)**
+- Card layout, 11/11 METAR pair texts. "Arpt" ×2, then "airport gap".
+- **Exact pair repeat:** Teresina/Yakutsk also posted Nov 21 19:18Z, ~101h earlier. Yakutsk is the cold half of
+  5/5 posted pairs. This one came ~61h after Tambacounda, so it clears the 48h station key from the Nov 22
+  addendum. Yakutsk was also the cold half of two capped Nov 25 candidates (Tete, Cook Isl/Manihiki).
+
+**Ushuaia gust (posted)**
+- Same "Place, Country:" label opener as the pairs. "Ushuaia/Malvinas" is the 3rd official-name slash.
+- Knots lead ("51-kt (94 km/h)"), an aviation unit as the headline number. No close.
+- Writes "airport", not "Arpt", though the Punta Arenas candidate summary in the same run reads "Punta Arenas
+  Arpt". Main has #891 ("Bind observed gust country codes to complete source airport labels"), so labels are
+  being worked on upstream; effect on copy not yet visible.
+
+**Charleston repeat at candidate level:** `coastal_report_8665530_2026-11-25` was capped twice on Nov 25
+(`global_cap=1`) before the Nov 26 event drafted. Seattle (`9447130`) was capped twice on Nov 26.
+
+### Patterns
+1. **P_close +1 (graded).** Disclaimer close ("preliminary NOAA reading"). First graded cycle since Nov 21.
+2. **P_event_sat +1 (11 cycles).** The same airport pair posted twice ~101h apart, and Yakutsk's 5th post came
+   ~61h after its 4th. A 48h station key doesn't hold either one.
+3. **P_metar_card +1 (8 cycles, observational).** Card 11/11 on pairs; gust post uses the same label opener,
+   adds a slash name and a knots lead.
+4. **New: P_coastal_lead** (n=1). Absolute datum reading leads, residual buried, datum code in copy, metric-only
+   on a US station. Shares the jargon-in-copy trait with P_metar_card, but the fix lives in different writer
+   guidance.
+5. No era-anchor, political-anchor, banned-opener (P3 regex) or plant-comparison hits. No A-grade mechanic to log.
+
+### Followups
+- **Operator: reconcile Charleston before any retry.** `publish_outcome: unknown`, no `tweet_id`. Check the
+  timeline for a 05:32Z Charleston post. If it's live, record the id; if not, reject (the 05:24Z residual is
+  already ~10h old).
+- Operator: decide whether `coastal_observed_report` copy should lead with the residual in ft for US stations
+  (the bundle already has `difference_ft_rounded`). See P_coastal_lead.
+- Watch: next coastal drafts (Seattle is queued behind the cap). If 2 more lead with the datum reading, the
+  proposal is confirmed.
+- Infra: no Nov 25 cycle on the rolling branch. Gist reject not needed (no candidate >48h). `gh` token state
+  carried from prior cycles.
+
+---
+
 ## 2026-11-24 — Daily corpus grading (0 fresh drafts; 1 carry-over, previously graded)
 
 **Context:** Gist read via git-clone path (success; gist HEAD Nov 24 14:49Z, `_state_rev` 3490,
