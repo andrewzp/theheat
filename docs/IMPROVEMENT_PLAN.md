@@ -2,6 +2,32 @@
 
 Living plan for closing the gap between the bot's current voice quality and the **resumption bar** (majority A-grade rate per cycle). Refined daily by the autonomous grading agent (cron `0 15 * * *`), reviewed and implemented by the human operator.
 
+> **Nov 27: 2 pending, 0% A-rate (n=2): The Battery, NY B, Charleston, SC C+.** Both are
+> `coastal_observed_report`, the type's first appearance in the corpus. A third sibling
+> (Baltimore) auto-posted within the hour. All three lead with the absolute gauge height above
+> MLLW, a datum figure readers can't interpret, and put the residual above the predicted tide
+> second, padded with "at that moment" and trailing provenance. The writer prompt already asks
+> for the residual as the context value, so this is an ordering habit, not a gate requirement.
+> **New proposal P_coastal, now P1** (3 of 3 instances; the type auto-posts, so the problem is
+> live). P_metar holds at 1 cycle: no pending instance, but the posted stream is 5 of 5 Yakutsk.
+> P_close / P_compound / P5 are untested (no matching types). 0 staleness candidates. The Nov 25
+> Sarh draft is now rejected. This branch carries the unmerged Nov 25 commit (PR #889).
+>
+> **Nov 25: 1 pending, graded B- → 0% A-rate (n=1). First graded cycle since Jul 6.** No cycles
+> are recorded Jul 7–Nov 24; 37 drafts passed through the queue ungraded, and automatic publication
+> has been live since the 2026-10-30 epoch. The single pending draft is a Sarh/Yakutsk
+> `observed_metar_contrast` (78°C simultaneous airport gap): accurate, benign, pure juxtaposition,
+> locked into a fixed template that bans any closing sentence. It belongs to a 13-draft run
+> (Nov 17–23) where Yakutsk is the cold pole 11 of 13 times and every draft scores exactly 80.
+> **New proposal P_metar, now P1** (the only type in today's queue and the dominant auto-posted
+> type). **P_tier, P_dust and P9 are marked SHIPPED** (Jul 7, front-page-parity rows 4/7, #386/#397
+> per BRIEFING.md). Posted-draft spot-checks are consistent: the Jul 10 Urumqi dust_event carries
+> the WHO anchor, the Jul 8–9 precip drafts drop the P9 template, and no tier jargon appears in
+> 37 drafts. P_close / P_compound / P5 are untested today and were filed against a writer prompt
+> since rewritten into a compact evidence-scope spec, so they need re-baselining. The pending
+> draft is 7 days old and a strict staleness candidate; the gist write and the beacon write both
+> returned proxy HTTP 403.
+>
 > **Jul 6: 0 fresh drafts — queue is an exact match to Jul 5's 15 graded drafts (same
 > `draft_id`s, scores, text); no re-grading performed, all grades stand at Jul 5's levels.**
 > No active-proposal evidence updates: P_close (16 cycles), P_tier (7 cycles/10 instances),
@@ -185,16 +211,35 @@ Living plan for closing the gap between the bot's current voice quality and the 
 |---|---|
 | Bot commit | `0.9.81.0`+ per BRIEFING.md 2026-06-28 (reganom recency window + honesty-gating, PR #347; world-half eval-gating fix, PR #345; reganom writer-voice upgrade, PR #349. Prior: 0.9.67.0, R-02 NOAA HMS independent fire witness; 30-item audit backlog complete [S-01..S-35]; source-redundancy lane R-00..R-09; bot active since 2026-06-01) |
 | Voice engine version | **two-bot + Attenborough/Economist voice + all-sources triage + evidence contract + diversity gate + automation dashboard** (Sonnet 4.6 writer prompt-cached + Gemini 2.5 Flash fact-checker [skips unknown kinds] + Gemini 2.5 Pro critic [assesses relative to available data]; all 23 sources on triage path via PR #150; evidence contract gates writer via 0.9.0.0; pending-type cap default 3 + per-type TTL sweep [fast 7d, coral/DHW 21d] via 0.9.6.0/0.9.16.0; `THEHEAT_TRIAGE_ENABLED=1` in CI; `THEHEAT_WRITER_SAMPLES=1` + `THEHEAT_CRITIC_REVISE_ENABLED=0` since 2026-07-14 (economics P0 paired flip; was 2/1 from 2026-06-13); reganom (`reanalysis_anomaly`) enabled `manual_only` since 2026-06-27 with 2-day recency + honesty-gating [PR #347]; routine beacon writes the `ROUTINE_BEACON` repo variable via `gh variable set` each cycle) |
-| Last cycle A-rate | **— (0 fresh drafts, Jul 6).** Most recent measured: **20% (1/5 fresh, Jul 5)** — eastern Siberia fire A- (4th confirmation of the permafrost-carbon fire mechanic), 1 B+, 1 B, 1 B-, 1 C+. Prior: 20% (2/10, Jul 4); 33% (1/3, Jul 3); 0% (0/3, Jul 2); 0% (0/4, Jul 1); 22% (2/9 non-stale, Jun 30); 80% Jun 29 [BAR CLEARED]. |
-| Resumption bar | majority A (>50%) sustained — **cleared Jun 29 (80%, n=5); Jun 30 returned 22%; Jul 1 0% (n=4); Jul 2 0% (n=3); Jul 3 33% (n=3); Jul 4 20% (n=10); Jul 5 20% (n=5); Jul 6 no fresh drafts to measure**. |
-| Gap | **30 pp below bar** (50% − 20%, most recent measured cycle Jul 5, n=5). No fresh measurement Jul 6. Seven cycles since the Jun 29 peak have ranged 0–33% depending on signal mix. P_tier and P_close remain the two most active-capping levers, both unchanged since Jul 5 (no fresh evidence Jul 6). |
-| Posting | paused; operator decision pending — Jun 29 cleared bar (80%), Jun 30–Jul 5 all below, Jul 6 no fresh drafts. **Queue unchanged at 15 pending as of Jul 6** (exact match to Jul 5's graded batch) — zero new drafts entered between the Jul 5 and Jul 6 pulls. |
+| Last cycle A-rate | **0% (0/2, Nov 27)** — The Battery `coastal_observed_report` B, Charleston C+. n=2, not statistically meaningful. Prior: 0% (0/1, Nov 25, Sarh/Yakutsk `observed_metar_contrast` B-); 20% (1/5, Jul 5); 20% (2/10, Jul 4); 80% Jun 29 [BAR CLEARED]. No graded cycles Jul 7–Nov 24. |
+| Resumption bar | majority A (>50%) sustained — **cleared once (Jun 29, 80%, n=5); every measured cycle since has been 0–33%**. Posting no longer waits on this bar: auto-publication is enabled (see Posting). |
+| Gap | **50 pp below bar** on Nov 27's n=2 (50% − 0%), same as Nov 25. The most recent meaningful sample (Jul 4, n=10) was 30 pp below. Current output is dominated by observed-report types (`observed_metar_contrast`, `coastal_observed_report`) whose single-sentence, no-close frames cap them around B. The A-rate can't move much until those frames lead with the violation (P_coastal, P_metar). |
+| Posting | **automatic publication ENABLED** — gist `publication_control.enabled=true`, epoch `live-20261030T005536Z…` (the `p00b-paused-2026-09-09` epoch is retired). 52 drafts posted in state as of Nov 27. Since Nov 19 the posts are 5 `observed_metar_contrast` (all Yakutsk), 1 `observed_metar_gust`, 1 `coastal_observed_report` (Baltimore, Nov 27). |
 | Coverage | **638 cities × 180 countries** (was 613 × 179; +25 via PR #81) |
-| Queue status | **15 pending as of Jul 6 grading, unchanged from Jul 5** (10 carry-overs from Jul 4: 2 A- [Typhoon Bavi, Loxahatchee FL], 2 B+ [Island Pond VT, Antwerpen], 6 B [Barrow, Astana, Basrah, Al Başrah al Qadīmah, Rocky Mountains CO fire, Urumqi Jul 4 reading]; 5 from Jul 5: 1 A- eastern Siberia fire, 1 B+ Johannesburg air_quality_hazard, 1 B Doha absolute_extreme, 1 B- Urumqi Jul 5 reading, 1 C+ Phalodi dust_event). **2 of the 15 ([4] Basrah, [6] Al Başrah al Qadīmah) are now strict staleness bulk-reject candidates** (>48h old, forecast date July 4 elapsed) — flagged for operator, write unavailable this session. Bot at 0.9.81.0+ (no newer BRIEFING.md handoff confirmed this cycle); reganom enabled post-PR #347 with writer-voice upgrade (PR #349); `THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live. |
+| Queue status | **2 pending as of Nov 27**: Charleston `coastal_observed_report` (C+, ~33.6h, crosses 48h ~05:30Z Nov 28) and The Battery (B, ~14.5h). No staleness candidates. _Nov 25 (superseded):_ 1 pending: `draft_20261118_143656_56` (Sarh/Yakutsk `observed_metar_contrast`, B-, ~7.0 days old). It is a strict staleness candidate; gist write is blocked (proxy 403), so the operator should reject it or let the fast-type 7-day TTL sweep take it. |
 
 ## Active proposals
 
-Ordered by leverage. Priority as of Jul 6 (unchanged from Jul 5 — zero fresh drafts means no
+Ordered by leverage. **Priority as of Nov 27:** **P_coastal** (new, 1 cycle, 3 of 3 instances,
+auto-posting, a one-paragraph prompt fix) > **P_metar** (1 cycle, 13-draft run; no pending
+instance today, but the posted stream is 5 of 5 Yakutsk) > **P_close** (16 cycles, last seen Jul 5;
+untested, and both observed-report frames ban a close, so it doesn't apply to them) >
+**P_compound** (5 cycles, last seen Jul 4; untested) > **P5** (last seen Jul 5; untested).
+Absence count for the 3-fresh-cycle archive bar: P_close/P5 = Nov 25, Nov 27 (2 fresh cycles
+since Jul 5); P_compound = Jul 5, Nov 25, Nov 27 (3, but none had a record-type draft, so the
+signal type was untested, not absent; kept active).
+
+_Superseded ordering, Nov 25:_ **P_metar** (new, 1 cycle, but 13 drafts in 7
+days, the only type in today's queue and all 4 posts since Nov 17 — highest live exposure) >
+**P_close** (16 cycles, last seen Jul 5; needs re-baselining against the rewritten writer prompt,
+and does not apply to `observed_metar_contrast`, whose template bans a close) > **P_compound**
+(5 cycles, last seen Jul 4; untested Nov 25) > **P5** (last seen Jul 5; untested Nov 25).
+P_tier / P_dust / P9 are marked SHIPPED (Jul 7) and kept in place until a graded cycle of the
+matching signal type confirms. None of P_close / P_compound / P5 meets the 3-consecutive-
+fresh-cycle absence bar yet (Jul 5, Nov 25 = 2 fresh cycles; Jul 6 had no fresh drafts). Their
+evidence is 4+ months old, though, so the operator should treat them as stale until re-observed.
+
+_Superseded ordering, Jul 6:_ Priority as of Jul 6 (unchanged from Jul 5 — zero fresh drafts means no
 new evidence to reorder against): **P_close** (16 cycles, last evidence Jul 5: 2 positive/3
 failing) > **P_tier** (7 cycles/10 instances across 4 signal types, 1st cross-location
 confirmation via Doha, Jul 5) > **P_dust** (9 cycles, last evidence Jul 5, 11 of 11
@@ -563,7 +608,7 @@ permafrost-carbon fire mechanic (4 instances, all B+/A-) is the clearest existen
 the corpus that a declarative-consequence close reliably lifts a draft once the mechanism is
 already sound.
 
-### P_dust — Dust_event drafts lack calibrating comparison anchor
+### ~~P_dust~~ — Dust_event drafts lack calibrating comparison anchor — **SHIPPED 2026-07-07 (#386, front-page-parity row 4)**
 
 **Observed:** 2026-06-13 — Riyadh, Saudi Arabia dust_event (2,083 μg/m³, score 75)
 reached pending with no comparison anchor. 2,083 μg/m³ is ≈ 139× the WHO PM2.5 daily
@@ -632,9 +677,12 @@ signal type, unprompted.
 **Status:** Drafted. **9 cycles confirmed** (Jun 13/17/25/28/30 ×2/Jul 1/Jul 4/Jul 5); template
 convergence 11 of 11 `dust_event` drafts. The `air_quality_hazard` sibling type doing this
 unprompted twice now is a useful existence-proof for how small the prompt change should need
-to be. Awaiting human implementation.
+to be. ~~Awaiting human implementation.~~ **SHIPPED 2026-07-07** (#386: co-measured PM10/WHO
+anchor, per BRIEFING.md). Post-ship spot-check (posted, ungraded): Jul 10 Urumqi "PM10 averaged
+17.7× the WHO 24-hour guideline" is the first dust_event in state with the anchor. Oct 30–Nov 5
+Riyadh/Urumqi dust drafts carry it too. Move to Resolved after one graded dust_event cycle confirms.
 
-### P_tier — Internal scoring-tier / threshold name leaks verbatim into copy (promoted from A3)
+### ~~P_tier~~ — Internal scoring-tier / threshold name leaks verbatim into copy (promoted from A3) — **SHIPPED 2026-07-07 (#386, front-page-parity row 4)**
 
 **Observed:** 2026-06-23 — Mediterranean SST regional_sst_anomaly draft states "exceeds the 2.5°C
 tier threshold in NOAA CRW's basin-wide anomaly index" with no explanation of what the tier
@@ -730,9 +778,13 @@ reference; P_tier's problem is an UNWANTED internal-only reference already prese
 **Status:** Drafted. Promoted from "Awaiting evidence" (A3) to active proposal 2026-07-01 — the
 Jun 23 filing's own promotion criterion ("if 2+ cycles observed") is met. 7 cycles / 10
 instances / 4 signal types as of Jul 5, now including confirmation outside the Basra-area
-cluster (plus 1 clean counter-instance). Awaiting human implementation.
+cluster (plus 1 clean counter-instance). ~~Awaiting human implementation.~~ **SHIPPED 2026-07-07**
+(#386 detection-plumbing ban + critic `internal_taxonomy_leak` kill, per BRIEFING.md). Post-ship
+spot-check: 0 tier-jargon phrases across the 37 Jul 7–Nov 23 drafts in state (informal,
+ungraded). Move to Resolved after one graded cycle containing an `absolute_extreme` /
+`fire_footprint` / cyclone draft confirms.
 
-### P9 — precipitation_extreme opener template convergence + restate-math (reopened)
+### ~~P9~~ — precipitation_extreme opener template convergence + restate-math (reopened) — **SHIPPED 2026-07-07 (#397, front-page-parity row 7)**
 
 **Observed:** First observed 2026-06-18. Archived 2026-07-03 after 3 consecutive fresh-draft
 cycles without a `precipitation_extreme` draft (Jul 1, Jul 2, Jul 3), with an explicit note
@@ -775,6 +827,10 @@ highest-value punchline available when the bundle supports a baseline comparison
 **Status:** Drafted. Awaiting human implementation. The Jul 3 archival's prediction was
 correct on the first test — this proposal should not be re-archived without at least 3
 consecutive `precipitation_extreme`-free cycles per the runbook, same as before.
+**SHIPPED 2026-07-07** (#397, precip four-moves; BRIEFING.md: "P9 retired"). Post-ship spot-check:
+Jul 8 Barrow and Jul 9 Amsterdam (posted) both lead with a ratio-as-punchline ("more than three
+years' worth in a single week"), not the opener-template + restate-math. Move to Resolved after
+one graded precipitation cycle confirms.
 
 ~~### P_new — Cold-record quality floor~~ → **[Archived 2026-06-21 — see Resolved section]**
 
@@ -917,6 +973,88 @@ monthly_high, country_record signal types where both archive depth and margin ar
 **Status:** Drafted. Awaiting human implementation. 5 cycles (Jun 28, Jun 29, Jun 30, Jul 2, Jul 4).
 
 ~~### P_precip_floor — Precipitation quality floor~~ → **[Archived 2026-07-02 — see Resolved section]**
+
+### P_metar — observed_metar_contrast: one cold anchor, one frame, no reason to care
+
+**Observed:** 2026-11-25. Today's only pending draft is `observed_metar_contrast`: "Sarh
+airport, Chad: 40°C; Yakutsk airport, Russia: −38°C — a 78°C airport gap at 14:00 UTC, 18 Nov."
+(B-). It sits in a 13-draft run, Nov 17–23. **Yakutsk is one pole in 11 of 13**, and 4 of 4
+posted. Kununurra is the warm pole in 3 of those. Every draft scores exactly 80. The writer is
+pinned to a literal frame (`src/two_bot/writer.py` `observed_airport_copy_requirements`, #858) that
+forbids a closing sentence, so the type cannot carry a mechanic beyond juxtaposition. The bundle's
+own `claim_scope` ("not a record or a global ranking") and the readings themselves (mid-November
+Yakutsk at −38°C is normal) mean the tweet's violation is geographic, not climatic. Read as a
+feed, the posted stream is one tweet with the warm airport swapped.
+
+**Cycles observed:** Nov 25 (1 cycle; 13-draft run Nov 17–23, 1 pending graded B-; 12
+posted/rejected siblings observed, not graded).
+**Last seen:** 2026-11-25.
+
+**Proposed fix (SELECTION RULE + PROMPT LANGUAGE — surgical):**
+1. *Pair-selection cooldown:* in the existing pair selector (`src/data/awc_observed.py`), don't
+   reuse either station of the last posted pair within N hours (suggest 72h). If Yakutsk is the
+   coldest reporting airport, take the next-coldest instead. This is a parameter on existing
+   selection, not a new source.
+2. *Optional context clause from bundle-carried fields only:* latitude is already in
+   `observed_airports[]` (9.1°N vs 62.1°N). Let the frame admit one compact latitude/hemisphere
+   aside when it fits `body_max_scalars` (e.g. "…a 78°C gap between 9°N and 62°N, 14:00 UTC 18
+   Nov."). Keep the no-closing-sentence and no-impact/no-record rules intact.
+3. *Drop the coined unit:* "a 78°C gap", not "a 78°C airport gap". The airport wording requirement
+   is already met by the two names.
+
+**Operator question (not a proposal):** the type is honest weather trivia on a climate account.
+Whether it should auto-post several times a day is an editorial call. The fixes above improve the
+copy but don't add a climate signal the bundle doesn't carry.
+
+**Expected impact:** Removes the visible repetition in the posted feed (fix 1). Lifts the best
+instances from B- to B/B+ (fixes 2–3). An A ceiling isn't realistic for this type without
+anomaly-vs-normal data, which would be a new data dependency and is out of scope here.
+
+**Status:** Drafted. Awaiting human implementation. 1 cycle. _Nov 27:_ no pending
+`observed_metar_contrast` draft, so the cycle count is unchanged. The posted stream adds the Nov 26
+00:17Z Teresina/Yakutsk post, making it 5 of 5 Yakutsk since Nov 19 (observed, not graded).
+
+### P_coastal — coastal_observed_report leads with the datum height, not the residual
+
+**Observed:** 2026-11-27. All three `coastal_observed_report` drafts so far open with the
+absolute gauge height above MLLW, then give the residual above the predicted tide:
+- The Battery (B): "water level read 2.20 m (MLLW) at 00:24 UTC 27 Nov — 1.12 m (~4 ft) above the
+  predicted tide at that moment (preliminary, NOAA)."
+- Charleston (C+): "gauge read 0.99 m (MLLW) at 05:24 UTC 26 Nov — 0.65 m above the predicted tide
+  at that moment, preliminary NOAA reading." No feet, though the bundle carries
+  `difference_ft_rounded: 2`.
+- Baltimore (posted, ungraded): "1.31 m above MLLW at 13:36 UTC, 27 Nov — 1.06 m (3 ft) above the
+  predicted tide."
+
+The absolute height is meaningless without the datum. The residual is the violation, and it's
+what the prompt asks for ("Use one supported residual value as intelligible context"). The
+coastal validator (`src/data/coastal_observed.py` `claim_failures`) requires "predicted tide",
+"preliminary", HH:MM UTC, the date and the station name. It doesn't require the MLLW figure or
+"at that moment". So the order and padding come from the writer, not from the gate. The critic
+scored all three `jargon: plain`.
+
+**Cycles observed:** Nov 27 (1 cycle; 2 pending graded B/C+, 1 posted sibling observed).
+**Last seen:** 2026-11-27.
+
+**Proposed fix (PROMPT LANGUAGE — surgical):** append to the coastal branch in
+`src/two_bot/writer.py`:
+
+> Lead with the residual: "<station> ran <difference_m> m (<ft> ft) above the predicted tide at
+> HH:MM UTC, DD Mon". Don't state the absolute gauge height or the datum name (MLLW) unless
+> space remains. Always pair metres with the supplied feet value. State preliminary NOAA status
+> once, at the end or as a short prefix. Don't add "at that moment"; the UTC clock already
+> fixes the time.
+
+Optional bundle-side note (operator call, not a voice change): `difference_ft_rounded` is whole
+feet. 3.49 ft is posted as "3 ft". One decimal would keep the conversion honest at these
+magnitudes.
+
+**Expected impact:** Moves the type's best instances from B to B+/A- on strong residuals (≥1 m),
+because the number becomes the first thing read. Removes the log-line register that capped
+Charleston at C+. Every validator-required token is still present, so there's no fact-check
+risk.
+
+**Status:** Drafted. Awaiting human implementation. 1 cycle.
 
 ### ~~P6~~ — Fire template convergence — **SHIPPED 2026-05-12 (PR #85)**
 

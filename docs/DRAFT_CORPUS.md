@@ -11,6 +11,196 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-11-27 — Daily corpus grading (2 drafts)
+
+**Context:** Gist read via git-clone path (success). State: 70 drafts (52 posted, 16 rejected,
+2 pending). Nov 25's lone pending draft (Sarh/Yakutsk `observed_metar_contrast`) is now
+`rejected`. No Nov 26 cycle is recorded. Both pending drafts are `coastal_observed_report`, the
+type's first appearance in the corpus. A third (Baltimore, created 13:48Z today) auto-posted
+before this pull and is cited as a sibling, not graded. This cycle builds on the unmerged Nov 25
+branch (PR #889); `main`'s copies of these docs still stop at Jul 6.
+
+**Grade distribution:** 0 A / 1 B / 1 C+ / 0 D-F → **0% A-rate (n=2)**
+
+**Headline finding:** The coastal frame works for compliance and gets the order wrong. The
+writer prompt (`src/two_bot/writer.py`, coastal branch) asks for "one supported residual value as
+intelligible context". All three drafts (2 pending + Baltimore posted) lead instead with the
+absolute gauge height above MLLW. That number means nothing to a reader without the datum: 2.20 m
+at The Battery is an ordinary-sounding figure until you learn the predicted tide was 1.07 m. The
+violation, the residual above the predicted tide, arrives second and gets qualifiers stacked
+after it. The critic scored all three `"jargon": "plain"`, so it doesn't count "(MLLW)" as
+jargon. → new proposal **P_coastal**.
+
+### B-range
+
+**[2] `draft_20261127_003535_68` — coastal_observed_report — The Battery, NY — score 70 — B**
+
+> The Battery, NY: water level read 2.20 m (MLLW) at 00:24 UTC 27 Nov — 1.12 m (~4 ft) above the predicted tide at that moment (preliminary, NOAA).
+> https://tidesandcurrents.noaa.gov/stationhome.html?id=8518750
+
+- Violation: real. 1.12 m above the predicted tide at Lower Manhattan is a large residual, and
+  the draft has the scope right: no storm, flood or record claim (the bundle's claim scope
+  forbids all three).
+- Benign: yes. Flat, instrument-voice register.
+- Setup→punchline: inverted. "2.20 m (MLLW)" is a setup that doesn't set anything up. The
+  punchline (1.12 m above prediction) lands mid-sentence and is then padded with "at that moment"
+  (already implied by "at 00:24 UTC") and a trailing provenance parenthetical.
+- Named mechanic: pure data delivery. Valid, and the number is strong enough to carry it if it
+  leads.
+- Wodehouse: mild violations. "At that moment" is restate-padding (P4-class). "~4 ft" is the
+  bundle's `difference_ft_rounded` (3.68 ft → 4), so the tilde is honest, but the reader gets a
+  hedge where 3.7 ft is available.
+- Fix shape: "The Battery, NY ran 1.12 m (3.7 ft) above the predicted tide at 00:24 UTC 27 Nov —
+  preliminary NOAA gauge data." Same facts and same checks (predicted tide, preliminary, clock,
+  date, station name all present). The absolute MLLW height is dropped.
+
+B and not B+: the strongest number in the batch is buried behind a datum figure.
+
+### C-range
+
+**[1] `draft_20261126_053109_66` — coastal_observed_report — Charleston, SC — score 64 — C+**
+
+> Charleston, SC gauge read 0.99 m (MLLW) at 05:24 UTC 26 Nov — 0.65 m above the predicted tide at that moment, preliminary NOAA reading.
+> https://tidesandcurrents.noaa.gov/stationhome.html?id=8665530
+
+- Violation: modest. 0.65 m is a meaningful residual but not a striking one for a reader with no
+  local baseline, and the draft gives none (none is in the bundle, so none is owed).
+- Benign: yes.
+- Setup→punchline: same inversion as [2]. Here there are three qualifiers in one clause:
+  "(MLLW)", "at that moment", ", preliminary NOAA reading". The sentence ends on provenance.
+- Named mechanic: none beyond data delivery, and the data is under-delivered: the bundle carries
+  `difference_ft_rounded: 2` and the draft omits feet entirely. Its two siblings include a feet
+  conversion, so the unit treatment is inconsistent across the type.
+- Wodehouse: "at that moment" again. Reads like a log line.
+- Staleness: created Nov 26 05:31Z, ~33.6h old at grading. It reports a dated past observation
+  ("05:24 UTC 26 Nov") and doesn't present it as current. Under 48h, so not a bulk-reject
+  candidate, but it will be stale by ~05:30Z tomorrow if still pending.
+
+C+: correct and scoped, but it reads as instrument output, not a tweet.
+
+### Sibling (posted, not graded)
+
+- `draft_20261127_134823_69` Baltimore, MD (auto-posted 13:48Z): "Baltimore, MD gauge (NOAA
+  preliminary): 1.31 m above MLLW at 13:36 UTC, 27 Nov — 1.06 m (3 ft) above the predicted
+  tide." Same absolute-first order. "(3 ft)" is `difference_ft_rounded` for 3.49 ft, which
+  under-reports by half a foot. Provenance moves to the front here, which reads better than [1].
+
+### Patterns named
+
+1. **Absolute-before-residual (new, 3 of 3).** Every coastal draft leads with gauge height above
+   MLLW, a datum-relative number the reader can't interpret, ahead of the residual the prompt
+   actually asks for. → **P_coastal**.
+2. **Qualifier pile-up at the close.** "(MLLW)", "at that moment" and "preliminary NOAA" are
+   stacked onto one clause. The coastal validator in `src/data/coastal_observed.py` requires
+   "predicted tide", "preliminary", the clock, the date and the station, and none of those forces
+   the MLLW figure or "at that moment". The padding is writer habit, not a gate requirement.
+3. **Coarse feet rounding.** `difference_ft_rounded` is whole feet (2.14→2, 3.49→3, 3.68→4). At
+   these magnitudes, ±0.5 ft is a 15–25% swing. Logged for the operator. The fix is a
+   bundle-field precision change (one decimal), not a voice change.
+4. **Critic jargon blind spot.** The critic marked all three `jargon: plain`. Logging only (no
+   evaluator-path proposals per standing constraint).
+5. **P_metar continues in the posted stream (not graded, not counted):** the Nov 26 00:17Z post
+   (Teresina/Yakutsk) makes the posted `observed_metar_contrast` run 5 of 5 Yakutsk since Nov 19.
+   The Nov 26 13:51Z `observed_metar_gust` (Ushuaia, 51 kt) was a different airport type and
+   doesn't count toward this run.
+
+### Followups
+
+- Operator: P_coastal is a one-paragraph prompt edit to the coastal branch of
+  `src/two_bot/writer.py`. It auto-posts (Baltimore posted within the hour), so the order
+  problem is already live.
+- Operator: consider one-decimal feet in `difference_ft_rounded` (bundle field).
+- Operator: [1] Charleston crosses 48h at ~05:30Z Nov 28. Post or reject before then.
+- Operator: many unmerged rolling PRs are open from earlier cycles (#207, #553–#730, #889). This
+  branch carries #889's Nov 25 commit; the older ones look superseded.
+
+---
+
+## 2026-11-25 — Daily corpus grading (1 draft; first graded cycle since Jul 6)
+
+**Context:** Gist read via git-clone path (success). Queue: **1 pending** of 65 drafts in state
+(49 posted, 15 rejected). `publication_control.enabled = true` — automatic publication has been
+live since the `live-20261030T005536Z` epoch (the `p00b-paused-2026-09-09` epoch is retired), so
+most drafts now leave the queue by auto-publish rather than operator review. **No graded cycle
+is recorded between 2026-07-06 and today** (`main`'s corpus stopped at Jul 6; no
+`daily-plan-current` branch exists on origin). The 37 drafts created Jul 7 → Nov 23 passed through
+the queue ungraded; they are not back-graded here (not pending), but a few are cited below as
+post-ship evidence for proposals whose fixes landed Jul 7.
+
+The one pending draft is 7 days old (created Nov 18 14:36Z). It is a member of a 13-draft
+`observed_metar_contrast` run (Nov 17–23: 4 posted, 8 rejected, this 1 pending) — the signal
+type's first appearance in the corpus.
+
+**Grade distribution:** 0 A / 1 B / 0 C / 0 D-F → **0% A-rate (n=1)**
+
+**Headline finding:** `observed_metar_contrast` is clean, accurate and benign, and has no
+voice at all. The writer is held to a fixed fill-in-the-blanks frame
+(`'<airport>, <country>: <reading>°C; <airport>, <country>: <reading>°C—a <gap>°C airport gap at
+HH:MM UTC, DD Mon.'`, `src/two_bot/writer.py` `observed_airport_copy_requirements`, tightened by
+#858 on Nov 21) with an explicit ban on any closing sentence. That frame makes the type
+fact-check-safe and caps it at B: the only mechanic available is the juxtaposition. And
+the juxtaposition is mostly the same one: Yakutsk is the cold pole in **11 of 13** drafts.
+
+### B-range
+
+**[1] `draft_20261118_143656_56` — observed_metar_contrast — score 80 — B-**
+
+> Sarh airport, Chad: 40°C; Yakutsk airport, Russia: −38°C — a 78°C airport gap at 14:00 UTC, 18 Nov.
+> https://aviationweather.gov/api/data/metar?ids=FTTA,UEEE&date=2026-11-18T14:00:00Z&hours=2
+
+- Violation: present, but geographic, not climatic. 78°C simultaneous spread is a striking
+  number, but neither reading is anomalous. Yakutsk at −38°C in mid-November is ordinary
+  Yakutsk, and Sarh at 40°C is a warm dry-season afternoon. Bundle `claim_scope` says so
+  itself: "not a record or a global ranking." The draft never claims otherwise. Honest scope,
+  thin stakes.
+- Benign: yes. Flat register, no alarm.
+- Setup→punchline: the two readings are the setup; "a 78°C airport gap" is the punchline, but it
+  is arithmetic the reader has already done. Math-out-loud by template (P4-class), mild.
+- Named mechanic: deadpan juxtaposition (pure data delivery). Valid, but it is the only move and
+  it repeats every few hours.
+- Wodehouse: passes. Doesn't try. "Airport gap" is a slightly coined unit; "a 78°C gap" alone
+  reads cleaner.
+- Citation: the appended link is a raw METAR API query. It's verifiable, but a reader who
+  clicks gets unformatted METAR text. Logged for the engineer (same class as the Jul 3 JTWC
+  `.txt` link), not folded into the grade.
+- Staleness: the event happened at 14:00 UTC Nov 18, and the draft is now 7 days old. Posting
+  it now would present a week-old snapshot as a live contrast. It is a strict bulk-reject
+  candidate (see QUALITY_TREND rejection events). At ~7.0 days it is also at the fast-type
+  7-day TTL boundary and will likely sweep on the next cycle anyway.
+
+B- rather than B: on its own it's a respectable B. But it is interchangeable with 12 siblings,
+and nothing in it tells a climate account's reader why this pair, today, matters.
+
+### Patterns named
+
+1. **Cold-anchor monoculture (new).** Yakutsk (UEEE) is one pole in 11 of 13
+   `observed_metar_contrast` drafts, and Kununurra (YPKU) is the warm pole in 3 of those 11. The
+   two non-Yakutsk drafts (Shepherd Bay/Tete, Tete/Magadan) were both rejected, so the posted
+   stream is 4 of 4 Yakutsk. Read as a feed, the series is one tweet repeated with different
+   warm airports. → new proposal **P_metar**.
+2. **Frame lock is deliberate and works for compliance.** All 13 drafts score exactly 80. The
+   first 4 (Nov 17–18 morning) varied their syntax ("At 04:30 UTC… logged… while… hit"); from
+   this draft onward all 9 use the identical frame. No fact-check failures in the run. The cost
+   is that the frame bans the one sentence where voice could live.
+3. **Flat score = scorer not discriminating.** 13 drafts, 13 × 80, 4 posted and 8 rejected. The
+   score carries no information about which ones the operator kept. Logging only.
+4. **Post-ship spot-checks (posted, ungraded drafts):** Jul 10 Urumqi dust_event states "PM10
+   averaged 17.7× the WHO 24-hour guideline". This is the first `dust_event` in state with the
+   WHO anchor, after 11 of 11 without, consistent with the Jul 7 P_dust fix (#386). Jul 8–9
+   Barrow/Amsterdam precipitation drafts lead with a ratio-as-punchline ("more than three years'
+   worth in a single week"), not the P9 opener+restate-math template, consistent with #397.
+   There are no tier-jargon phrases in any of the 37 Jul 7–Nov 23 drafts (P_tier fix, #386).
+   These are informal, posted-draft observations, not graded cycles.
+
+### Followups
+
+- Operator: reject `draft_20261118_143656_56` (stale; write path unavailable this session).
+- Operator: decide whether `observed_metar_contrast` should post at all at its current cadence.
+  It is the only type in today's queue and the dominant auto-posted type since Nov 17. See P_metar.
+- Operator: the plan's active proposals were all filed against the pre-Jul-7 writer prompt,
+  which has since been rewritten into a compact evidence-scope spec. P_close / P_compound / P5
+  need a fresh graded cycle against the current prompt before further investment.
+
 ## 2026-07-06 — Daily corpus grading (0 fresh drafts; 15 carry-overs from Jul 5, previously graded)
 
 **Context:** Gist read via git-clone path (success; no rate limit). Queue: 15 pending drafts —
