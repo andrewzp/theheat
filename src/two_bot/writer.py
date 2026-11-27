@@ -302,7 +302,12 @@ def build_writer_user_prompt(
         scope = ("Explicitly say 'one grid cell' within the supplied map region. "
                  "Do not invent a nearby city or imply a region-wide total. " if grid_cell else
                  "Use 'near' before the place: this is one satellite cell, not a city-wide total. ")
+        country = ("" if grid_cell else
+                   "For this named-place report, explicitly include the source country from bundle.country "
+                   "beside the place. A US state or region cannot replace that country; the general "
+                   "orientation choice does not apply here. Do not infer or add an unsupplied state or country. ")
         prompt += (f"\n\nLead with one daily precipitation amount and the {place}, with country context. "
+                   + country +
                    "Credit NASA satellites and say estimate and water-equivalent precipitation. Preserve the UTC calendar date and 24-hour period. "
                    "Use estimate or estimates; never say recorded or measured. "
                    + scope +

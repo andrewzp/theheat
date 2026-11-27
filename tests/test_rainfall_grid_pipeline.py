@@ -145,6 +145,7 @@ def test_actual_grid_through_real_writer_checks_save_and_fixture_x(monkeypatch, 
     assert "Explicitly say 'one grid cell' within the supplied map region." in actual_prompt
     assert "Do not invent a nearby city or imply a region-wide total." in actual_prompt
     assert "Use 'near' before the place" not in actual_prompt
+    assert "For this named-place report" not in actual_prompt
     [draft] = state["drafts"]
     assert draft["text"] == COPY + "\n" + gpm_public_url()
     assert len(draft["text"]) <= 200

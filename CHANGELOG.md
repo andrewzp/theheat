@@ -1,3 +1,7 @@
+## 0.9.109.191 — 2026-11-26
+
+- Make the sourced country explicit in named-place satellite precipitation writing: a US state or region cannot replace it. Preserve map-region instructions, required scientific checks, one writing attempt and all publication controls.
+
 ## 0.9.109.190 — 2026-11-26
 
 - Adopt the existing checksum-verified station-threshold maintenance candidate through November 17, with its matching inventory. Keep incomplete November 18 and later coverage explicit, exact database verification, existing scientific checks and all operating limits.
