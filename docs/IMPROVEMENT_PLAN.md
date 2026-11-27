@@ -2,6 +2,17 @@
 
 Living plan for closing the gap between the bot's current voice quality and the **resumption bar** (majority A-grade rate per cycle). Refined daily by the autonomous grading agent (cron `0 15 * * *`), reviewed and implemented by the human operator.
 
+> **Nov 27: 2 pending, 0% A-rate (n=2): The Battery, NY B, Charleston, SC C+.** Both are
+> `coastal_observed_report`, the type's first appearance in the corpus. A third sibling
+> (Baltimore) auto-posted within the hour. All three lead with the absolute gauge height above
+> MLLW, a datum figure readers can't interpret, and put the residual above the predicted tide
+> second, padded with "at that moment" and trailing provenance. The writer prompt already asks
+> for the residual as the context value, so this is an ordering habit, not a gate requirement.
+> **New proposal P_coastal, now P1** (3 of 3 instances; the type auto-posts, so the problem is
+> live). P_metar holds at 1 cycle: no pending instance, but the posted stream is 5 of 5 Yakutsk.
+> P_close / P_compound / P5 are untested (no matching types). 0 staleness candidates. The Nov 25
+> Sarh draft is now rejected. This branch carries the unmerged Nov 25 commit (PR #889).
+>
 > **Nov 25: 1 pending, graded B- → 0% A-rate (n=1). First graded cycle since Jul 6.** No cycles
 > are recorded Jul 7–Nov 24; 37 drafts passed through the queue ungraded, and automatic publication
 > has been live since the 2026-10-30 epoch. The single pending draft is a Sarh/Yakutsk
@@ -200,16 +211,25 @@ Living plan for closing the gap between the bot's current voice quality and the 
 |---|---|
 | Bot commit | `0.9.81.0`+ per BRIEFING.md 2026-06-28 (reganom recency window + honesty-gating, PR #347; world-half eval-gating fix, PR #345; reganom writer-voice upgrade, PR #349. Prior: 0.9.67.0, R-02 NOAA HMS independent fire witness; 30-item audit backlog complete [S-01..S-35]; source-redundancy lane R-00..R-09; bot active since 2026-06-01) |
 | Voice engine version | **two-bot + Attenborough/Economist voice + all-sources triage + evidence contract + diversity gate + automation dashboard** (Sonnet 4.6 writer prompt-cached + Gemini 2.5 Flash fact-checker [skips unknown kinds] + Gemini 2.5 Pro critic [assesses relative to available data]; all 23 sources on triage path via PR #150; evidence contract gates writer via 0.9.0.0; pending-type cap default 3 + per-type TTL sweep [fast 7d, coral/DHW 21d] via 0.9.6.0/0.9.16.0; `THEHEAT_TRIAGE_ENABLED=1` in CI; `THEHEAT_WRITER_SAMPLES=1` + `THEHEAT_CRITIC_REVISE_ENABLED=0` since 2026-07-14 (economics P0 paired flip; was 2/1 from 2026-06-13); reganom (`reanalysis_anomaly`) enabled `manual_only` since 2026-06-27 with 2-day recency + honesty-gating [PR #347]; routine beacon writes the `ROUTINE_BEACON` repo variable via `gh variable set` each cycle) |
-| Last cycle A-rate | **0% (0/1, Nov 25)** — Sarh/Yakutsk `observed_metar_contrast` B-. n=1, not statistically meaningful. Prior measured: 20% (1/5, Jul 5); 20% (2/10, Jul 4); 80% Jun 29 [BAR CLEARED]. No graded cycles Jul 7–Nov 24. |
+| Last cycle A-rate | **0% (0/2, Nov 27)** — The Battery `coastal_observed_report` B, Charleston C+. n=2, not statistically meaningful. Prior: 0% (0/1, Nov 25, Sarh/Yakutsk `observed_metar_contrast` B-); 20% (1/5, Jul 5); 20% (2/10, Jul 4); 80% Jun 29 [BAR CLEARED]. No graded cycles Jul 7–Nov 24. |
 | Resumption bar | majority A (>50%) sustained — **cleared once (Jun 29, 80%, n=5); every measured cycle since has been 0–33%**. Posting no longer waits on this bar: auto-publication is enabled (see Posting). |
-| Gap | **50 pp below bar** on today's n=1 (50% − 0%). The most recent meaningful sample (Jul 4, n=10) was 30 pp below. Current output is dominated by one template-locked type (`observed_metar_contrast`) whose ceiling is B, so the A-rate can't move while it dominates the queue. |
-| Posting | **automatic publication ENABLED** — gist `publication_control.enabled=true`, epoch `live-20261030T005536Z…` (the `p00b-paused-2026-09-09` epoch is retired). 49 drafts posted in state; since Nov 17, all 4 posts are `observed_metar_contrast`. |
+| Gap | **50 pp below bar** on Nov 27's n=2 (50% − 0%), same as Nov 25. The most recent meaningful sample (Jul 4, n=10) was 30 pp below. Current output is dominated by observed-report types (`observed_metar_contrast`, `coastal_observed_report`) whose single-sentence, no-close frames cap them around B. The A-rate can't move much until those frames lead with the violation (P_coastal, P_metar). |
+| Posting | **automatic publication ENABLED** — gist `publication_control.enabled=true`, epoch `live-20261030T005536Z…` (the `p00b-paused-2026-09-09` epoch is retired). 52 drafts posted in state as of Nov 27. Since Nov 19 the posts are 5 `observed_metar_contrast` (all Yakutsk), 1 `observed_metar_gust`, 1 `coastal_observed_report` (Baltimore, Nov 27). |
 | Coverage | **638 cities × 180 countries** (was 613 × 179; +25 via PR #81) |
-| Queue status | **1 pending as of Nov 25**: `draft_20261118_143656_56` (Sarh/Yakutsk `observed_metar_contrast`, B-, ~7.0 days old). It is a strict staleness candidate; gist write is blocked (proxy 403), so the operator should reject it or let the fast-type 7-day TTL sweep take it. |
+| Queue status | **2 pending as of Nov 27**: Charleston `coastal_observed_report` (C+, ~33.6h, crosses 48h ~05:30Z Nov 28) and The Battery (B, ~14.5h). No staleness candidates. _Nov 25 (superseded):_ 1 pending: `draft_20261118_143656_56` (Sarh/Yakutsk `observed_metar_contrast`, B-, ~7.0 days old). It is a strict staleness candidate; gist write is blocked (proxy 403), so the operator should reject it or let the fast-type 7-day TTL sweep take it. |
 
 ## Active proposals
 
-Ordered by leverage. **Priority as of Nov 25:** **P_metar** (new, 1 cycle, but 13 drafts in 7
+Ordered by leverage. **Priority as of Nov 27:** **P_coastal** (new, 1 cycle, 3 of 3 instances,
+auto-posting, a one-paragraph prompt fix) > **P_metar** (1 cycle, 13-draft run; no pending
+instance today, but the posted stream is 5 of 5 Yakutsk) > **P_close** (16 cycles, last seen Jul 5;
+untested, and both observed-report frames ban a close, so it doesn't apply to them) >
+**P_compound** (5 cycles, last seen Jul 4; untested) > **P5** (last seen Jul 5; untested).
+Absence count for the 3-fresh-cycle archive bar: P_close/P5 = Nov 25, Nov 27 (2 fresh cycles
+since Jul 5); P_compound = Jul 5, Nov 25, Nov 27 (3, but none had a record-type draft, so the
+signal type was untested, not absent; kept active).
+
+_Superseded ordering, Nov 25:_ **P_metar** (new, 1 cycle, but 13 drafts in 7
 days, the only type in today's queue and all 4 posts since Nov 17 — highest live exposure) >
 **P_close** (16 cycles, last seen Jul 5; needs re-baselining against the rewritten writer prompt,
 and does not apply to `observed_metar_contrast`, whose template bans a close) > **P_compound**
@@ -989,6 +1009,50 @@ copy but don't add a climate signal the bundle doesn't carry.
 **Expected impact:** Removes the visible repetition in the posted feed (fix 1). Lifts the best
 instances from B- to B/B+ (fixes 2–3). An A ceiling isn't realistic for this type without
 anomaly-vs-normal data, which would be a new data dependency and is out of scope here.
+
+**Status:** Drafted. Awaiting human implementation. 1 cycle. _Nov 27:_ no pending
+`observed_metar_contrast` draft, so the cycle count is unchanged. The posted stream adds the Nov 26
+00:17Z Teresina/Yakutsk post, making it 5 of 5 Yakutsk since Nov 19 (observed, not graded).
+
+### P_coastal — coastal_observed_report leads with the datum height, not the residual
+
+**Observed:** 2026-11-27. All three `coastal_observed_report` drafts so far open with the
+absolute gauge height above MLLW, then give the residual above the predicted tide:
+- The Battery (B): "water level read 2.20 m (MLLW) at 00:24 UTC 27 Nov — 1.12 m (~4 ft) above the
+  predicted tide at that moment (preliminary, NOAA)."
+- Charleston (C+): "gauge read 0.99 m (MLLW) at 05:24 UTC 26 Nov — 0.65 m above the predicted tide
+  at that moment, preliminary NOAA reading." No feet, though the bundle carries
+  `difference_ft_rounded: 2`.
+- Baltimore (posted, ungraded): "1.31 m above MLLW at 13:36 UTC, 27 Nov — 1.06 m (3 ft) above the
+  predicted tide."
+
+The absolute height is meaningless without the datum. The residual is the violation, and it's
+what the prompt asks for ("Use one supported residual value as intelligible context"). The
+coastal validator (`src/data/coastal_observed.py` `claim_failures`) requires "predicted tide",
+"preliminary", HH:MM UTC, the date and the station name. It doesn't require the MLLW figure or
+"at that moment". So the order and padding come from the writer, not from the gate. The critic
+scored all three `jargon: plain`.
+
+**Cycles observed:** Nov 27 (1 cycle; 2 pending graded B/C+, 1 posted sibling observed).
+**Last seen:** 2026-11-27.
+
+**Proposed fix (PROMPT LANGUAGE — surgical):** append to the coastal branch in
+`src/two_bot/writer.py`:
+
+> Lead with the residual: "<station> ran <difference_m> m (<ft> ft) above the predicted tide at
+> HH:MM UTC, DD Mon". Don't state the absolute gauge height or the datum name (MLLW) unless
+> space remains. Always pair metres with the supplied feet value. State preliminary NOAA status
+> once, at the end or as a short prefix. Don't add "at that moment"; the UTC clock already
+> fixes the time.
+
+Optional bundle-side note (operator call, not a voice change): `difference_ft_rounded` is whole
+feet. 3.49 ft is posted as "3 ft". One decimal would keep the conversion honest at these
+magnitudes.
+
+**Expected impact:** Moves the type's best instances from B to B+/A- on strong residuals (≥1 m),
+because the number becomes the first thing read. Removes the log-line register that capped
+Charleston at C+. Every validator-required token is still present, so there's no fact-check
+risk.
 
 **Status:** Drafted. Awaiting human implementation. 1 cycle.
 
