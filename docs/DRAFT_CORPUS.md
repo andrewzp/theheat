@@ -11,6 +11,87 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-11-28 — Daily corpus grading (1 fresh draft; 1 carry-over, previously graded)
+
+**Context:** Gist read via git-clone path (success; gist HEAD Nov 28 13:24Z, `_state_rev` 3571,
+`publication_control.enabled=true`). 2 pending: `draft_20261127_003535_68`, The Battery, NY `coastal_observed_report`
+(fresh, created Nov 27 00:35Z, ~38.5h), and the Charleston carry-over (graded C+ Nov 26, ~81.5h, not re-graded).
+No Nov 27 cycle landed on the rolling branch (last commit Nov 26), so this section covers the Nov 26 ~15:00Z pull to now.
+
+**Queue movement since Nov 26:** nothing rejected. Three drafts auto-posted between pulls (ungraded, never pending
+at a pull):
+- Baltimore, MD `coastal_observed_report`, Nov 27 13:49Z (tweet `2126312539990442457`, confirmed): "Baltimore, MD
+  gauge (NOAA preliminary): 1.31 m above MLLW at 13:36 UTC, 27 Nov — 1.06 m (3 ft) above the predicted tide."
+- Magadan/Newman `observed_metar_contrast`, Nov 28 07:43Z: "Magadan/Sokol Arpt, Russia: −31°C; Newman Arpt,
+  Australia: 40°C — a 71°C airport gap at 07:30 UTC, 28 Nov."
+- Sørvágur `observed_metar_gust`, Nov 28 13:22Z: "Sørvágur/Vágar airport, Faroe Islands: a 96 km/h (60 mph) gust
+  reported at 12:50 UTC, 28 Nov."
+
+**Battery publish state:** `armed_auto`, but held by `automatic_text_over_200_scalars` (207 chars incl. URL). No
+publish attempt. **Charleston** is unchanged since Nov 26: `publish_outcome: unknown`, no `tweet_id`.
+
+**Grade distribution (fresh):** 0 A / 0 B / 1 C / 0 D-F. **A-rate 0% (n=1).**
+
+**Headline finding:** the coastal type has the same shape on all 3 drafts so far (Charleston, Battery, Baltimore):
+absolute gauge height above MLLW first, residual second. The Battery residual is the biggest signal in the corpus
+this month, 1.12 m (3.7 ft) over the tide table at NYC, and it still sits behind "2.20 m (MLLW)". Feet now appear
+(Nov 26 had none) but in second place and rounded with a tilde. P_coastal_lead is confirmed at n=3.
+
+### C grade
+
+**[1] The Battery, NY `coastal_observed_report` — C+**
+> The Battery, NY: water level read 2.20 m (MLLW) at 00:24 UTC 27 Nov — 1.12 m (~4 ft) above the predicted tide at
+> that moment (preliminary, NOAA).
+- Violation: strong. Over a metre above predicted tide at the Battery is a real surge; the score flags it
+  ("major storm-surge threshold").
+- Benign: yes. Calm, no cause or flood claim, inside the claim scope.
+- Setup→punchline: inverted again. The datum reading leads, the residual is mid-sentence, a source caveat closes.
+- Mechanic: pure data delivery, lead buried.
+- Wodehouse: "(MLLW)" datum code in copy (2nd time). "at that moment" restates the time (2nd time). "(~4 ft)" is
+  approximation where the exact figure is in hand: 1.123 m is 3.7 ft, and the tilde plus round-up reads loose.
+  Baltimore, same day, rounds 1.06 m (3.5 ft) *down* to "3 ft", so the two posts aren't consistent. Close is a
+  parenthetical disclaimer, "(preliminary, NOAA)".
+- Same structure as Charleston; +ft is the only change. Score 70 (borderline, threshold 60); fact-check passed.
+- Over 200 scalars because of the absolute reading, the datum, and the restate. Dropping them fixes the hold too:
+  "The Battery, NY: water ran 3.7 ft (1.12 m) above the predicted tide at 00:24 UTC. Preliminary NOAA gauge data."
+
+### Observed (not graded)
+**Baltimore coastal (posted)** — attribution moved to the front ("gauge (NOAA preliminary):"), so it ends on the
+residual instead of a caveat. That's a better close than Charleston or Battery. It still leads with "1.31 m above
+MLLW". 3/3 coastal texts lead with the datum reading.
+
+**Coastal cluster:** Charleston (05:24Z Nov 26, +0.65 m), Battery (00:24Z Nov 27, +1.12 m), Baltimore (13:36Z
+Nov 27, +1.06 m). Three East Coast gauges in ~32h, likely one coastal system (not verified). Separate stations, so
+it isn't the P_event_sat dedupe case; noted as a watch only.
+
+**Magadan/Newman pair (posted)** — card 12/12, "Arpt" ×2, "Magadan/Sokol" slash name again. First posted pair
+without Yakutsk. Magadan was the cold half on Nov 21 (~163h earlier); inside 7 days but within the proposed 2-per-7d
+station cap, so not P_event_sat evidence.
+
+**Sørvágur gust (posted)** — km/h now leads, mph second, knots gone. That matches the Nov 26 P_metar_card gust
+addendum. The label opener and slash name ("Sørvágur/Vágar airport, Faroe Islands:") remain.
+
+### Patterns
+1. **P_coastal_lead +1 (2 cycles, 3/3 coastal texts).** Confirmed. Datum reading leads every time.
+2. **P_close +1 (graded).** Disclaimer close, parenthetical form. Baltimore (posted) is the first coastal text that
+   ends on the number.
+3. **P_metar_card +1 (9 cycles, observational).** Pair card 12/12 with "Arpt"; gust lead unit fixed, opener isn't.
+4. P_event_sat: no new evidence (Magadan repeat inside the proposed cap). Unseen 1 cycle.
+5. No era-anchor, political-anchor, banned-opener (P3 regex) or plant-comparison hits. No A-grade mechanic to log.
+
+### Followups
+- **Operator: reconcile Charleston** (still `publish_outcome: unknown`, no tweet_id, ~81.5h old). If it isn't live,
+  reject it; the residual is 3 days old. Strict staleness candidate (dated observation, >48h); routine can't write
+  the gist (see infra).
+- Operator: Battery is held by the 200-scalar gate and will be ~62h old by the next cycle. Reject unless a
+  rewrite is wanted; the P_coastal_lead shape fits under 200.
+- Operator: P_coastal_lead is ready. One line also fixes the ft rounding: give feet to one decimal from
+  `difference_m` (or round consistently), no tilde.
+- Infra: no Nov 27 cycle on the rolling branch. Gist API path returns 403 ("sessions are bound to their configured
+  repositories"), so the staleness write is skipped.
+
+---
+
 ## 2026-11-26 — Daily corpus grading (1 fresh draft)
 
 **Context:** Gist read via git-clone path (success; gist HEAD Nov 26 13:52Z, `_state_rev` 3531,

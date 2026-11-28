@@ -99,6 +99,7 @@ We grade drafts on an A through F rubric in `docs/DRAFT_CORPUS.md` (the longitud
 | 2026-11-23 | 0 | — | — | — | — | **N/A** | — | No fresh drafts. 1 carry-over (Sarh B, ~120.5h, strict stale, 4th cycle). Tambacounda/Yakutsk auto-posted 11:20Z (4/13 posted; ungraded): "Arpt" on a 2nd consecutive post, card 9/9, 72°C gap same as Teresina. Yakutsk 4/4 posts, ~40h after the last. P_metar_card +1, P_event_sat +1 (both observational). |
 | 2026-11-24 | 0 | — | — | — | — | **N/A** | — | No fresh drafts; nothing drafted, posted or rejected since the Nov 23 pull. 1 carry-over (Sarh B, ~144.5h, strict stale, 5th cycle). 3 METAR candidates killed before pending (Kayes/Yakutsk pair, critic `weak_signal`; 2 `observed_metar_gust`, critic + fact_check). Their bundles carry "Arpt" in the `airport` field, so the label comes from upstream. P_metar_card +1, P_event_sat +1 (both observational). P_close not archived (0 graded cycles since Nov 21). |
 | 2026-11-26 | 1 | 0 | 0 | 1 | 0 | **0%** | ✗ | n=1 fresh: Charleston, SC `coastal_observed_report` C+ (first of the type). Leads with the 0.99 m MLLW gauge height; the 0.65 m residual comes second; "(MLLW)" in copy, "at that moment" padding, disclaimer close, metric-only on a US station. Autoship outcome `unknown`, no tweet_id. Sarh cleared by bot TTL (`staleness_ttl_7d`). Posted since Nov 24: Teresina/Yakutsk (exact pair repeat, ~101h after Nov 21) and the first `observed_metar_gust` (Ushuaia). No Nov 25 cycle on the branch. P_close +1, P_event_sat +1, P_metar_card +1 (obs.), new P_coastal_lead. |
+| 2026-11-28 | 1 | 0 | 0 | 1 | 0 | **0%** | ✗ | n=1 fresh: The Battery, NY `coastal_observed_report` C+. Same shape as Charleston: 2.20 m MLLW gauge height leads, the 1.12 m residual second; "(MLLW)", "at that moment", "(~4 ft)" round-up of 3.7 ft, parenthetical disclaimer close. Held `automatic_text_over_200_scalars` (207 chars). Charleston carry-over still `publish_outcome: unknown` (~81.5h, strict stale). Posted since Nov 26: Baltimore coastal (datum lead, residual close), Magadan/Newman pair (card 12/12), Sørvágur gust (km/h now leads). No Nov 27 cycle on the branch. P_coastal_lead +1 (confirmed, 3/3 coastal texts), P_close +1, P_metar_card +1 (obs.). |
 
 **Trend interpretation:**
 The Apr 25 jump to 43% was real but came from a small cohort (7 drafts) and didn't sustain into Apr 27. The Apr 27 regression has named causes (Sonnet rewrite path, verb-list gap in opener regex, era-anchor over-deployment, political anchor curation error). All four have proposed fixes documented in `docs/DRAFT_CORPUS.md` Apr 27 implications section. Next data point: tomorrow's scheduled grader (fires 2026-04-27 06:00 UTC) on the Apr 26-27 cycle output under v2.5 + post-humor-lens fixes.
@@ -108,6 +109,13 @@ We've been in the 9-43% band for three cycles. Need to clear 50% sustained.
 ## Rejection events
 
 Drafts that got rejected, with dates.
+
+### 2026-11-28 — Staleness bulk-reject: 1 strict candidate; write skipped
+
+Charleston `draft_20261126_053109_66` (~81.5h, dated observation "05:24 UTC 26 Nov") crosses 48h. It also has
+`publish_outcome: unknown` with no tweet_id, so the operator should check the timeline before rejecting. Write
+skipped: `gh api gists/...` returns 403 ("sessions are bound to their configured repositories"). Battery
+`draft_20261127_003535_68` (~38.5h) is under 48h; it crosses before the next cycle.
 
 ### 2026-11-26 — Staleness bulk-reject: 0 candidates
 
