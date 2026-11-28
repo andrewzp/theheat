@@ -11,6 +11,1136 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-11-28 — Daily corpus grading (1 fresh draft; 1 carry-over, previously graded)
+
+**Context:** Gist read via git-clone path (success; gist HEAD Nov 28 13:24Z, `_state_rev` 3571,
+`publication_control.enabled=true`). 2 pending: `draft_20261127_003535_68`, The Battery, NY `coastal_observed_report`
+(fresh, created Nov 27 00:35Z, ~38.5h), and the Charleston carry-over (graded C+ Nov 26, ~81.5h, not re-graded).
+No Nov 27 cycle landed on the rolling branch (last commit Nov 26), so this section covers the Nov 26 ~15:00Z pull to now.
+
+**Queue movement since Nov 26:** nothing rejected. Three drafts auto-posted between pulls (ungraded, never pending
+at a pull):
+- Baltimore, MD `coastal_observed_report`, Nov 27 13:49Z (tweet `2126312539990442457`, confirmed): "Baltimore, MD
+  gauge (NOAA preliminary): 1.31 m above MLLW at 13:36 UTC, 27 Nov — 1.06 m (3 ft) above the predicted tide."
+- Magadan/Newman `observed_metar_contrast`, Nov 28 07:43Z: "Magadan/Sokol Arpt, Russia: −31°C; Newman Arpt,
+  Australia: 40°C — a 71°C airport gap at 07:30 UTC, 28 Nov."
+- Sørvágur `observed_metar_gust`, Nov 28 13:22Z: "Sørvágur/Vágar airport, Faroe Islands: a 96 km/h (60 mph) gust
+  reported at 12:50 UTC, 28 Nov."
+
+**Battery publish state:** `armed_auto`, but held by `automatic_text_over_200_scalars` (207 chars incl. URL). No
+publish attempt. **Charleston** is unchanged since Nov 26: `publish_outcome: unknown`, no `tweet_id`.
+
+**Grade distribution (fresh):** 0 A / 0 B / 1 C / 0 D-F. **A-rate 0% (n=1).**
+
+**Headline finding:** the coastal type has the same shape on all 3 drafts so far (Charleston, Battery, Baltimore):
+absolute gauge height above MLLW first, residual second. The Battery residual is the biggest signal in the corpus
+this month, 1.12 m (3.7 ft) over the tide table at NYC, and it still sits behind "2.20 m (MLLW)". Feet now appear
+(Nov 26 had none) but in second place and rounded with a tilde. P_coastal_lead is confirmed at n=3.
+
+### C grade
+
+**[1] The Battery, NY `coastal_observed_report` — C+**
+> The Battery, NY: water level read 2.20 m (MLLW) at 00:24 UTC 27 Nov — 1.12 m (~4 ft) above the predicted tide at
+> that moment (preliminary, NOAA).
+- Violation: strong. Over a metre above predicted tide at the Battery is a real surge; the score flags it
+  ("major storm-surge threshold").
+- Benign: yes. Calm, no cause or flood claim, inside the claim scope.
+- Setup→punchline: inverted again. The datum reading leads, the residual is mid-sentence, a source caveat closes.
+- Mechanic: pure data delivery, lead buried.
+- Wodehouse: "(MLLW)" datum code in copy (2nd time). "at that moment" restates the time (2nd time). "(~4 ft)" is
+  approximation where the exact figure is in hand: 1.123 m is 3.7 ft, and the tilde plus round-up reads loose.
+  Baltimore, same day, rounds 1.06 m (3.5 ft) *down* to "3 ft", so the two posts aren't consistent. Close is a
+  parenthetical disclaimer, "(preliminary, NOAA)".
+- Same structure as Charleston; +ft is the only change. Score 70 (borderline, threshold 60); fact-check passed.
+- Over 200 scalars because of the absolute reading, the datum, and the restate. Dropping them fixes the hold too:
+  "The Battery, NY: water ran 3.7 ft (1.12 m) above the predicted tide at 00:24 UTC. Preliminary NOAA gauge data."
+
+### Observed (not graded)
+**Baltimore coastal (posted)** — attribution moved to the front ("gauge (NOAA preliminary):"), so it ends on the
+residual instead of a caveat. That's a better close than Charleston or Battery. It still leads with "1.31 m above
+MLLW". 3/3 coastal texts lead with the datum reading.
+
+**Coastal cluster:** Charleston (05:24Z Nov 26, +0.65 m), Battery (00:24Z Nov 27, +1.12 m), Baltimore (13:36Z
+Nov 27, +1.06 m). Three East Coast gauges in ~32h, likely one coastal system (not verified). Separate stations, so
+it isn't the P_event_sat dedupe case; noted as a watch only.
+
+**Magadan/Newman pair (posted)** — card 12/12, "Arpt" ×2, "Magadan/Sokol" slash name again. First posted pair
+without Yakutsk. Magadan was the cold half on Nov 21 (~163h earlier); inside 7 days but within the proposed 2-per-7d
+station cap, so not P_event_sat evidence.
+
+**Sørvágur gust (posted)** — km/h now leads, mph second, knots gone. That matches the Nov 26 P_metar_card gust
+addendum. The label opener and slash name ("Sørvágur/Vágar airport, Faroe Islands:") remain.
+
+### Patterns
+1. **P_coastal_lead +1 (2 cycles, 3/3 coastal texts).** Confirmed. Datum reading leads every time.
+2. **P_close +1 (graded).** Disclaimer close, parenthetical form. Baltimore (posted) is the first coastal text that
+   ends on the number.
+3. **P_metar_card +1 (9 cycles, observational).** Pair card 12/12 with "Arpt"; gust lead unit fixed, opener isn't.
+4. P_event_sat: no new evidence (Magadan repeat inside the proposed cap). Unseen 1 cycle.
+5. No era-anchor, political-anchor, banned-opener (P3 regex) or plant-comparison hits. No A-grade mechanic to log.
+
+### Followups
+- **Operator: reconcile Charleston** (still `publish_outcome: unknown`, no tweet_id, ~81.5h old). If it isn't live,
+  reject it; the residual is 3 days old. Strict staleness candidate (dated observation, >48h); routine can't write
+  the gist (see infra).
+- Operator: Battery is held by the 200-scalar gate and will be ~62h old by the next cycle. Reject unless a
+  rewrite is wanted; the P_coastal_lead shape fits under 200.
+- Operator: P_coastal_lead is ready. One line also fixes the ft rounding: give feet to one decimal from
+  `difference_m` (or round consistently), no tilde.
+- Infra: no Nov 27 cycle on the rolling branch. Gist API path returns 403 ("sessions are bound to their configured
+  repositories"), so the staleness write is skipped.
+
+---
+
+## 2026-11-26 — Daily corpus grading (1 fresh draft)
+
+**Context:** Gist read via git-clone path (success; gist HEAD Nov 26 13:52Z, `_state_rev` 3531,
+`publication_control.enabled=true`). 1 pending: `draft_20261126_053109_66`, Charleston `coastal_observed_report`,
+created 05:31Z (~10h). First `coastal_observed_report` in the corpus. No Nov 25 cycle landed on the rolling
+branch (last commit Nov 24), so this section covers the Nov 24 14:49Z pull to now.
+
+**Queue movement since Nov 24:** Sarh/Yakutsk left the queue, rejected by the bot's sweep (`staleness_ttl_7d`),
+so the 5-cycle carry-over is closed. Two drafts auto-posted between pulls (ungraded, never pending at a pull):
+- Teresina/Yakutsk `observed_metar_contrast`, Nov 26 00:19Z: "Teresina Arpt, Brazil: 35°C; Yakutsk Arpt, Russia:
+  −35°C — a 70°C airport gap at 00:00 UTC, 26 Nov."
+- Ushuaia `observed_metar_gust`, Nov 26 13:52Z, first gust post: "Ushuaia/Malvinas airport, Argentina: a 51-kt
+  (94 km/h) gust reported at 13:00 UTC, 26 Nov."
+
+**Charleston publish state:** `approval_policy` is `armed_auto`; an autoship attempt ran at 05:32Z and returned
+`publish_outcome: unknown` ("Publication outcome unknown; reconcile before another attempt"). The ledger has no
+`tweet_id`. The tweet may be live.
+
+**Grade distribution (fresh):** 0 A / 0 B / 1 C / 0 D-F. **A-rate 0% (n=1).**
+
+**Headline finding:** the new coastal type leads with the wrong number. "0.99 m (MLLW)" is gauge height above a
+low-tide datum, which means nothing to a reader. It is also low water for Charleston (NWS minor flooding there is
+around 7 ft / 2.1 m MLLW). The story is the residual, 0.65 m above predicted tide, and it comes second. The bundle
+carries `difference_ft_rounded: 2` for a US station; the copy is metric-only.
+
+### C grade
+
+**[1] Charleston, SC `coastal_observed_report` — C+**
+> Charleston, SC gauge read 0.99 m (MLLW) at 05:24 UTC 26 Nov — 0.65 m above the predicted tide at that moment,
+> preliminary NOAA reading.
+- Violation: moderate. Water 0.65 m (~2 ft) above the tide table is a real anomaly. The absolute reading
+  undercuts it: 0.99 m sounds like nothing because it is nothing.
+- Benign: yes. Calm, no cause or flood claim, inside the bundle's claim scope.
+- Setup→punchline: inverted. Absolute (non-event) first, residual mid-sentence, then a source caveat.
+- Mechanic: pure data delivery, with the lead buried.
+- Wodehouse: three faults. "(MLLW)" is datum jargon printed in copy, the same class as "METAR SPECI" and "Arpt".
+  "at that moment" restates a time already given. "preliminary NOAA reading" is the close, a disclaimer, the same
+  subtype as Riyadh (Nov 6) and Urumqi (Oct 31).
+- Score 64 (borderline, threshold 60); fact-check passed.
+- A cleaner shape from the same facts: "Charleston, SC: water ran 2 ft (0.65 m) above the predicted tide at
+  05:24 UTC. Preliminary NOAA gauge data." Residual first, US units first, datum gone, attribution in four words.
+
+### Observed (not graded)
+**Teresina/Yakutsk (posted)**
+- Card layout, 11/11 METAR pair texts. "Arpt" ×2, then "airport gap".
+- **Exact pair repeat:** Teresina/Yakutsk also posted Nov 21 19:18Z, ~101h earlier. Yakutsk is the cold half of
+  5/5 posted pairs. This one came ~61h after Tambacounda, so it clears the 48h station key from the Nov 22
+  addendum. Yakutsk was also the cold half of two capped Nov 25 candidates (Tete, Cook Isl/Manihiki).
+
+**Ushuaia gust (posted)**
+- Same "Place, Country:" label opener as the pairs. "Ushuaia/Malvinas" is the 3rd official-name slash.
+- Knots lead ("51-kt (94 km/h)"), an aviation unit as the headline number. No close.
+- Writes "airport", not "Arpt", though the Punta Arenas candidate summary in the same run reads "Punta Arenas
+  Arpt". Main has #891 ("Bind observed gust country codes to complete source airport labels"), so labels are
+  being worked on upstream; effect on copy not yet visible.
+
+**Charleston repeat at candidate level:** `coastal_report_8665530_2026-11-25` was capped twice on Nov 25
+(`global_cap=1`) before the Nov 26 event drafted. Seattle (`9447130`) was capped twice on Nov 26.
+
+### Patterns
+1. **P_close +1 (graded).** Disclaimer close ("preliminary NOAA reading"). First graded cycle since Nov 21.
+2. **P_event_sat +1 (11 cycles).** The same airport pair posted twice ~101h apart, and Yakutsk's 5th post came
+   ~61h after its 4th. A 48h station key doesn't hold either one.
+3. **P_metar_card +1 (8 cycles, observational).** Card 11/11 on pairs; gust post uses the same label opener,
+   adds a slash name and a knots lead.
+4. **New: P_coastal_lead** (n=1). Absolute datum reading leads, residual buried, datum code in copy, metric-only
+   on a US station. Shares the jargon-in-copy trait with P_metar_card, but the fix lives in different writer
+   guidance.
+5. No era-anchor, political-anchor, banned-opener (P3 regex) or plant-comparison hits. No A-grade mechanic to log.
+
+### Followups
+- **Operator: reconcile Charleston before any retry.** `publish_outcome: unknown`, no `tweet_id`. Check the
+  timeline for a 05:32Z Charleston post. If it's live, record the id; if not, reject (the 05:24Z residual is
+  already ~10h old).
+- Operator: decide whether `coastal_observed_report` copy should lead with the residual in ft for US stations
+  (the bundle already has `difference_ft_rounded`). See P_coastal_lead.
+- Watch: next coastal drafts (Seattle is queued behind the cap). If 2 more lead with the datum reading, the
+  proposal is confirmed.
+- Infra: no Nov 25 cycle on the rolling branch. Gist reject not needed (no candidate >48h). `gh` token state
+  carried from prior cycles.
+
+---
+
+## 2026-11-24 — Daily corpus grading (0 fresh drafts; 1 carry-over, previously graded)
+
+**Context:** Gist read via git-clone path (success; gist HEAD Nov 24 14:49Z, `_state_rev` 3490,
+`publication_control.enabled=true`). 1 pending: `draft_20261118_143656_56` (Sarh/Yakutsk, graded B Nov 18,
+not re-graded). No fresh pending draft.
+
+**Why the queue is dry:** nothing was drafted, posted or rejected since the Nov 23 pull. Last draft of any
+status: Tambacounda/Yakutsk, created Nov 23 11:18Z (~28h). Alerts runs are succeeding (`drafted_count: 0`).
+The suppression ledger shows three METAR candidates that got as far as a writer text and were killed:
+- `metar_pair_GAKD_UEEE` (14:48Z, critic `weak_signal`): "Kayes Arpt, Mali: 40°C; Yakutsk Arpt, Russia:
+  −27°C — a 67°C airport gap at 14:30 UTC, 24 Nov."
+- `metar_gust_CYUS` (10:54Z, critic `weak_signal`): "Shepherd Bay airport, Canada: a 115 km/h (71 mph) gust
+  reported at 10:34 UTC, 24 Nov."
+- `metar_gust_CYZP` (02:56Z, fact_check `awc_gust_scope_missing`): "Sandspit Arpt, Canada: a gust of
+  122 km/h (76 mph) reported at 02:07 UTC, 24 Nov (METAR SPECI)."
+
+None reached pending, so none is graded. METAR pairs posted: still 4 of 13.
+
+**Staleness:** Sarh/Yakutsk is ~144.5h old with a dated observation ("14:00 UTC, 18 Nov"), a strict
+candidate for the 5th cycle. Still `not_sent`, `post_error` "NWS warning needs fresh source review:
+awc_current_source_unavailable". Gist PATCH 403 again ("Gist writes are not permitted through this proxy");
+reject skipped.
+
+**Grade distribution (fresh):** none. **A-rate N/A (n=0).**
+
+**Headline finding:** "Arpt" is in the bundle, not invented by the writer. The `airport` fact in all three
+killed candidates reads "Kayes Arpt", "Sandspit Arpt", "Shepherd Bay Arpt". Shepherd Bay was "Shepherd Bay
+airport" in the Nov 20 draft, so the catalog label changed upstream between Nov 20 and Nov 21. That answers
+the Nov 23 followup. The writer sometimes repairs it (CYUS gust: "Shepherd Bay airport") and sometimes copies
+it (Kayes, Sandspit). A name normaliser at the catalog field fixes it for both METAR types.
+
+### Observed (not graded)
+**Kayes / Yakutsk observed_metar_contrast (critic-killed)**
+- Card layout again, 10/10 METAR pair texts since Nov 18. "Arpt" ×2, then "airport gap".
+- Yakutsk is the cold half for the 12th time in 14 pairs, ~27h after the Tambacounda post. The critic
+  killed it as `weak_signal` (67°C, the smallest gap since Shepherd Bay's 68.2°C). Whether the critic
+  weighed the repeat is not visible in the stored verdict.
+
+**observed_metar_gust (new type in the ledger, 2 candidates)**
+- Same colon-label opener as the pairs: "Sandspit Arpt, Canada: a gust of …". "(METAR SPECI)" is report-type
+  jargon printed in copy. CYUS is cleaner ("a 115 km/h (71 mph) gust reported at …") but has no close.
+- n=2, both killed, neither graded. Logged as a watch under P_metar_card, not a new proposal.
+
+### Carry-over (not re-graded)
+- Sarh/Yakutsk — B (Nov 18). ~144.5h old; strict staleness candidate, 5th cycle.
+
+### Patterns
+1. **P_metar_card +1 cycle (observational; 7 cycles).** Card 10/10. "Arpt" source confirmed (bundle
+   `airport` field). The gust type opens with the same "Place, Country:" label, so the fix should cover
+   both METAR types.
+2. **P_event_sat +1 cycle (10 cycles).** Yakutsk drafted again ~27h after its 4th post. It was killed
+   before pending, so the critic caught this one, but not via a station key. The 48h station key would
+   have held it upstream at no model cost.
+3. **P_close:** not counted (no graded draft). Not archived: the 3-cycle rule counts graded cycles (see
+   Nov 16 note), and there has been none since Nov 21. The Nov 23 plan note ("archives if unseen Nov 24")
+   was wrong on this and is corrected in the plan.
+4. No era-anchor, political-anchor, banned-opener (P3 regex) or plant-comparison hits. No A-grade
+   mechanic to log.
+
+### Followups
+- **Operator: Sarh/Yakutsk is ~144h old.** Reject from the dashboard. 5th cycle flagged.
+- Operator: normalise the catalog `airport` field ("Arpt" → place name, or drop the suffix) before it
+  reaches the writer. This covers `observed_metar_contrast` and `observed_metar_gust`.
+- Watch: if `observed_metar_gust` drafts reach pending, grade them against P_metar_card (label opener,
+  "METAR SPECI" jargon, no close).
+- Infra (carried): `gh` token invalid; gist writes 403 at the proxy. Gist reject, `gh pr` and
+  `ROUTINE_BEACON` writes blocked.
+
+---
+
+## 2026-11-23 — Daily corpus grading (0 fresh drafts; 1 carry-over, previously graded)
+
+**Context:** Gist read via git-clone path (success; gist HEAD Nov 23 14:32Z, `_state_rev` 3474,
+`publication_control.enabled=true`). 1 pending: `draft_20261118_143656_56` (Sarh/Yakutsk, graded B Nov 18,
+not re-graded). No fresh pending draft.
+
+**Why the queue is dry:** one METAR pair was created since the Nov 22 pull and it auto-posted, so it never
+reached pending. Tambacounda/Yakutsk (`draft_20261123_111857_64`) was created 11:18:57Z and posted 11:20:30Z
+(tweet 2124825410018181304): "Tambacounda Arpt, Senegal: 36°C; Yakutsk Arpt, Russia: −36°C — a 72°C airport
+gap at 11:00 UTC, 23 Nov." Not graded, since it was never pending at a pull. Logged as observational
+evidence. No drafts were created and rejected between pulls. METAR pairs posted: 4 of 13.
+
+**Staleness:** Sarh/Yakutsk is ~120.5h old with a dated observation ("14:00 UTC, 18 Nov"), a strict
+candidate for the 4th cycle. Still `not_sent`, `post_error` "NWS warning needs fresh source review:
+awc_current_source_unavailable". Gist PATCH 403 again ("Gist writes are not permitted through this proxy");
+reject skipped.
+
+**Grade distribution (fresh):** none. **A-rate N/A (n=0).**
+
+**Headline finding:** "Arpt" is now on two posts in a row (Teresina Nov 21, Tambacounda Nov 23), on both
+stations each time. It looks like a pipeline change in the station-name field around Nov 21, not a one-off
+writer choice: every pair before Teresina wrote "airport". Yakutsk is the cold half of all 4 posted pairs,
+the latest ~40h after Teresina. A 24h station key misses it; the 48h key from the Nov 22 addendum holds it.
+
+### Observed (not graded)
+**Tambacounda / Yakutsk observed_metar_contrast (posted, auto)**
+- Same colon-label card, 9/9 since Nov 18. "Arpt" ×2, then "airport gap", the same mixed form as Teresina.
+- Repeats: Yakutsk 11/13 pairs, 4/4 posts. Senegal is a repeat country for the warm half (Saint Louis,
+  Nov 17). The 72°C gap matches Teresina's to the degree, so two consecutive posts read almost alike.
+- Whole-degree readings; no precision issue. Would likely grade B−, as Teresina would.
+
+### Carry-over (not re-graded)
+- Sarh/Yakutsk — B (Nov 18). ~120.5h old; strict staleness candidate, 4th cycle.
+
+### Patterns
+1. **P_metar_card +1 cycle (observational; 6 cycles).** 9/9 on the card. Raw station-name forms: 4
+   instances (slash ×2, "Arpt" ×2). Two "Arpt" posts in a row suggests the source label changed; the fix
+   should normalise the name before it reaches the writer, as well as telling the writer not to print it.
+2. **P_event_sat +1 cycle (9 cycles).** Yakutsk on the feed 4× in ~105h (Nov 19 01:56Z, Nov 20 07:10Z,
+   Nov 21 19:18Z, Nov 23 11:20Z). Intervals ~29h, ~36h, ~40h: every one clears a 24h key, none clears 48h.
+3. **P_close:** not counted (ungraded, folded into P_metar_card).
+4. No era-anchor, political-anchor, banned-opener (P3 regex) or plant-comparison hits. No A-grade
+   mechanic to log.
+
+### Followups
+- **Operator: Sarh/Yakutsk is ~120h old.** Reject from the dashboard. 4th cycle flagged; the AWC sweep
+  has not cleared it.
+- Operator: check where "Arpt" enters the station name (catalog field vs writer). If it's the field, a
+  name normaliser fixes all future pairs without a prompt change.
+- Infra (carried): `gh` token invalid; gist writes 403 at the proxy. Gist reject, `gh pr` and
+  `ROUTINE_BEACON` writes blocked.
+
+---
+
+## 2026-11-22 — Daily corpus grading (0 fresh drafts; 1 carry-over, previously graded)
+
+**Context:** Gist read via git-clone path (success; gist HEAD Nov 22 07:28Z, `_state_rev` 3455,
+`publication_control.enabled=true`). 1 pending: `draft_20261118_143656_56` (Sarh/Yakutsk, graded B Nov 18,
+not re-graded). No fresh pending draft.
+
+**Why the queue is dry:** one METAR pair was created since the Nov 21 pull and it auto-posted, so it never
+reached pending. Tete/Magadan was rejected `awc_source_window_elapsed` at 19:16:54Z. Teresina/Yakutsk
+(`draft_20261121_191726_63`) was created 32s later (19:17:26Z) and auto-posted at 19:18:55Z (tweet
+2124221032890261771): "Teresina Arpt, Brazil: 39°C; Yakutsk Arpt, Russia: −33°C — a 72°C airport gap at
+19:00 UTC, 21 Nov." It's not graded, since it was never pending at a pull. It's logged here as observational
+evidence. METAR pairs posted: 3 of 12.
+
+**Staleness:** Sarh/Yakutsk is ~96.5h old with a dated observation ("14:00 UTC, 18 Nov"), a strict candidate
+for the 3rd cycle. It's still `not_sent`, and its `post_error` reads "NWS warning needs fresh source review:
+awc_current_source_unavailable". That's an NWS label on a METAR draft, which looks like a shared error
+string. The AWC sweep has now cleared 6 other METAR drafts but not this one. Gist PATCH 403 again
+("Gist writes are not permitted through this proxy"); reject skipped.
+
+**Grade distribution (fresh):** none. **A-rate N/A (n=0).**
+
+**Headline finding:** the posted Teresina pair shows a new name form: "Arpt" in place of "airport" on both
+stations, while the gap clause still says "airport gap". The card is otherwise unchanged (8/8 since Nov 18).
+Yakutsk is back as the cold anchor (10/12) and on the feed for the 3rd time in ~66h (Nov 19 01:56Z, Nov 20
+07:10Z, Nov 21 19:18Z).
+
+### Observed (not graded)
+**Teresina / Yakutsk observed_metar_contrast (posted, auto)**
+- Same colon-label card. "Arpt" is a station-database abbreviation pasted into copy, the 3rd raw-name
+  artifact after "Nouakchott/Oumtounsy" (Nov 19) and "Magadan/Sokol" (Nov 21). It's also inconsistent inside
+  one sentence: "Arpt" ×2, then "airport gap".
+- It auto-posted, while Tete/Magadan (111 chars before the URL) was held `automatic_text_over_200_scalars`.
+  Teresina is 99 chars. Whether the abbreviation is what got it under the hold is unverified.
+- Would likely grade B−: the same B ceiling, plus a visible abbreviation on the timeline.
+
+### Carry-over (not re-graded)
+- Sarh/Yakutsk — B (Nov 18). ~96.5h old; strict staleness candidate, 3rd cycle.
+
+### Patterns
+1. **P_metar_card +1 cycle (observational; 5 cycles).** 8/8 METAR drafts on the card. Raw station-name
+   forms are now 3 instances across 3 different shapes (slash ×2, "Arpt" ×1). The proposed fix's "name each
+   place once, as a place" covers all three.
+2. **P_event_sat +1 cycle (8 cycles).** Yakutsk is the cold anchor of all 3 posted METAR pairs, and the 3
+   posts are ~29h and ~36h apart. The two-station 24h key would not have held this one (Yakutsk's previous
+   post was >24h earlier). A 48h repeat window per station would have held it.
+3. **P_close:** not counted. Teresina ends on the gap, but it's ungraded and the type is already folded
+   into P_metar_card.
+4. No era-anchor, political-anchor, banned-opener (P3 regex) or plant-comparison hits. No A-grade
+   mechanic to log.
+
+### Followups
+- **Operator: Sarh/Yakutsk is ~96h old.** Reject from the dashboard. It's the only `not_sent` METAR draft,
+  and the AWC sweep has missed it for 3 cycles. Its `post_error` says "NWS warning", which is worth a look
+  when checking that path.
+- Operator: when P_metar_card ships, include the "Arpt" case. Station names come from a database field and
+  need normalising before they reach copy.
+- Infra (carried): `gh` token invalid; gist writes 403 at the proxy. Gist reject, `gh pr` and
+  `ROUTINE_BEACON` writes blocked.
+
+---
+
+## 2026-11-21 — Daily corpus grading (1 fresh draft; 1 carry-over, previously graded)
+
+**Context:** Gist read via git-clone path (success; gist HEAD Nov 21 12:37Z, `_state_rev` 3442,
+`publication_control.enabled=true`). 2 pending: fresh `draft_20261121_123609_62` (`observed_metar_contrast`,
+created Nov 21 12:36Z, ~2.5h old at grading, score 80, held `automatic_text_over_200_scalars`) and
+`draft_20261118_143656_56` (Sarh/Yakutsk, graded B Nov 18, not re-graded).
+
+**Since the Nov 20 pull:** Shepherd Bay/Tete rejected `awc_source_window_elapsed`. No new posts and no
+drafts created and rejected between pulls. METAR pairs posted: still 2 of 11.
+
+**Staleness:** Sarh/Yakutsk is now ~72.5h old with a dated observation ("14:00 UTC, 18 Nov"). It's a strict
+candidate for the 2nd cycle running. The AWC sweep has now cleared five other METAR drafts but still not
+this one, the only one with `publish_outcome: not_sent`. That supports Nov 20's guess that a failed publish
+attempt exempts a draft from the sweep. Gist write 403 again ("Gist writes are not permitted through this
+proxy"); reject skipped.
+
+**Grade distribution (fresh):** 0 A / 1 B / 0 C / 0 D-F. **A-rate 0% (n=1)**; bar not cleared.
+
+**Headline finding:** the card skeleton is now 7 for 7. Mixed precision is gone (both readings whole
+degrees), and Magadan is a new cold anchor. But Tete is the warm half again, ~23h after Shepherd Bay/Tete.
+So the repeat-anchor problem isn't just Yakutsk: either end of the pair can recur.
+
+### B
+**[2] Tete / Magadan observed_metar_contrast (score 80)** — "Tete airport, Mozambique: 42°C; Magadan/Sokol
+airport, Russia: −31°C — a 73°C airport gap at 12:00 UTC, 21 Nov." + source URL.
+- Violation: yes. 42°C in the Zambezi valley and −31°C on the Sea of Okhotsk coast in the same hour.
+- Benign: yes. Flat, no record claim, scope held to two observations.
+- Setup→punchline: correct (readings, then gap). Mechanic: deadpan juxtaposition / pure data delivery.
+- Wodehouse: clean. Whole degrees on both sides, so the "73°C" gap reads as a fact, not a calculation.
+  Fixes Nov 20's "68.2°C".
+- Caps: same colon-label card; "airport" ×3; "airport gap" noun stack. "Magadan/Sokol" is the official
+  station name pasted in with a slash, the 2nd time after "Nouakchott/Oumtounsy" (Nov 19). Nothing past
+  the gap.
+- Grade parity with Sarh/Nouakchott/Shepherd Bay (B). Clean precision and a new cold anchor, offset by
+  the slash name and the repeat warm anchor.
+
+### Carry-over (not re-graded)
+- Sarh/Yakutsk — B (Nov 18). ~72.5h old; strict staleness candidate, 2nd cycle (see above).
+
+### Patterns
+1. **P_metar_card +1 cycle (4 graded cycles).** 7/7 METAR drafts since Nov 18 on the card layout, every
+   graded instance B. The station-name slash is a 2nd instance; the proposed fix already covers it
+   ("name each place once, as a place").
+2. **P_event_sat +1 cycle, warm-anchor subtype.** Tete is the warm half of 2 pairs in ~23h (Shepherd Bay
+   Nov 20 13:42Z, Magadan Nov 21 12:36Z). The Nov 18 addendum keys on "the anchor station"; the fix should
+   key on both stations of the pair. Yakutsk 9/11.
+3. **P_close +1 (weak).** Ends on the gap again. Same caveat as before; folded into P_metar_card's fix.
+4. Mixed-precision gap (Nov 20) did not recur. One instance, not a proposal; the rounding line in
+   P_metar_card's fix stays.
+5. No era-anchor, political-anchor, banned-opener (P3 regex) or plant-comparison hits. No A-grade
+   mechanic to log.
+
+### Followups
+- **Operator: Sarh/Yakutsk is ~72h old** with a dated observation. Reject from the dashboard, and check
+  whether `not_sent` drafts are excluded from the `awc_source_window_elapsed` sweep. It's now the only
+  METAR draft the sweep has missed, 2 cycles running.
+- Operator: when P_event_sat ships, key the METAR repeat window on both stations, not only the cold one.
+- Infra (carried): `gh` token invalid; gist writes 403 at the proxy. Gist reject, `gh pr` and
+  `ROUTINE_BEACON` writes blocked.
+
+---
+
+## 2026-11-20 — Daily corpus grading (1 fresh draft; 1 carry-over, previously graded)
+
+**Context:** Gist read via git-clone path (success; gist HEAD Nov 20 13:43Z, `_state_rev` 3425,
+`publication_control.enabled=true`). 2 pending: fresh `draft_20261120_134223_61` (`observed_metar_contrast`,
+created Nov 20 13:42Z, ~1.5h old at grading, score 80, held `automatic_text_over_200_scalars`) and
+`draft_20261118_143656_56` (Sarh/Yakutsk, graded B Nov 18, not re-graded).
+
+**Since the Nov 19 pull:** Nouakchott/Yakutsk rejected `awc_source_window_elapsed` (Nov 19 20:36Z).
+San José de Chiquitos/Yakutsk created Nov 19 20:36Z and rejected the same way 23:04Z — never pending at a
+pull, not graded. **Kununurra/Yakutsk posted again** (`draft_20261120_070904_60`, auto, Nov 20 07:10Z):
+"Yakutsk airport, Russia: −33°C; Kununurra airport, Australia: 40°C — a 73°C airport gap at 06:30 UTC,
+20 Nov." Same pair as the Nov 19 01:56Z post, ~29h apart. The writer's own reasoning cleared it as "gap
+widened 69°C → 73°C … a material update". METAR pairs posted: 2 of 10.
+
+**Staleness:** Sarh/Yakutsk is ~48.5h old with a dated observation ("14:00 UTC, 18 Nov"), so it's the first
+strict candidate since Nov 15. The bot's AWC window sweep cleared Nouakchott and San José within ~8h but
+has not cleared Sarh. Sarh is the only METAR draft carrying a failed publish attempt (`publish_outcome:
+not_sent`, `awc_current_source_unavailable`), so a failed attempt may exempt a draft from the sweep.
+Gist write 403 ("Gist writes are not permitted through this proxy"); reject skipped.
+
+**Grade distribution (fresh):** 0 A / 1 B / 0 C / 0 D-F. **A-rate 0% (n=1)**; bar not cleared.
+
+**Headline finding:** first METAR pair without Yakutsk (now 9 of 10), but the layout hasn't moved: six
+METAR drafts in a row (Sarh, Kununurra ×2, Nouakchott, San José, Shepherd Bay) use the same colon-label
+card. It's clean and grades B every time, so the card itself is now the B ceiling for this type.
+
+### B
+**[1] Shepherd Bay / Tete observed_metar_contrast (score 80)** — "Shepherd Bay airport, Canada: −28.2°C;
+Tete airport, Mozambique: 40°C — a 68.2°C airport gap at 13:00 UTC, 20 Nov." + source URL.
+- Violation: yes — Nunavut at −28°C and the Zambezi valley at 40°C in the same hour.
+- Benign: yes — flat, no record claim, scope held to two observations.
+- Setup→punchline: correct (readings, then gap). Mechanic: deadpan juxtaposition / pure data delivery.
+- Wodehouse: mostly clean. One new cost: mixed precision. One reading has a decimal and one doesn't, so
+  the gap comes out "68.2°C", which reads like a calculator result rather than a fact. "−28°C … 40°C —
+  a 68°C gap" is the same claim with the arithmetic hidden.
+- Caps: same card skeleton; "airport" ×3; "airport gap" noun stack. Smallest gap of the ten pairs, posted
+  ~6.5h after a 73°C one, so on the feed it reads as a step down.
+- Plus: a new cold anchor. Breaks the Yakutsk run, and Shepherd Bay is a real place most readers can't
+  picture, which helps the juxtaposition.
+- Grade parity with Sarh/Nouakchott (B). The new anchor and the decimal roughly cancel.
+
+### Carry-over (not re-graded)
+- Sarh/Yakutsk — B (Nov 18). ~48.5h old; strict staleness candidate (see above).
+
+### Patterns
+1. **Card skeleton promoted to proposal (P_metar_card).** 6/6 consecutive METAR drafts, 3 graded cycles
+   (Nov 18, 19, 20), 2 posted. Every graded instance is a B, held there by the same things: the
+   field-value layout, "airport" ×3 and nothing past the gap. The Mount Isa sentence form (Nov 18, not
+   graded) is the only variant on record.
+2. **P_event_sat +1 cycle.** Same airport pair (Kununurra/Yakutsk) on the timeline twice in ~29h. The
+   writer justified the repeat as material because the gap widened by 4°C. Yakutsk 9/10. The fix already
+   drafted (one pair per anchor station per 24h) would have held it.
+3. **P_close +1 (weak).** Ends on the gap again. Same caveat as before; folded into P_metar_card's fix.
+4. No era-anchor, political-anchor, banned-opener (P3 regex) or plant-comparison hits. No A-grade
+   mechanic to log.
+
+### Followups
+- **Operator: Sarh/Yakutsk is >48h** with a dated observation. Reject from the dashboard. Also check
+  whether `not_sent` drafts are excluded from the `awc_source_window_elapsed` sweep; this is the only
+  METAR draft the sweep hasn't cleared.
+- Operator: Kununurra/Yakutsk is now on the feed twice. Before the next auto-post, decide whether
+  "gap widened" should count as material for a repeat pair.
+- Operator: round both METAR readings to the same precision (integer) before the gap is computed.
+- Infra (carried): `gh` token invalid; gist writes 403 at the proxy. Gist reject, `gh pr` and
+  `ROUTINE_BEACON` writes all blocked.
+
+---
+
+## 2026-11-19 — Daily corpus grading (1 fresh draft; 1 carry-over, previously graded)
+
+**Context:** Gist read via git-clone path (success; gist HEAD Nov 19 13:52Z, `_state_rev` 3410,
+`publication_control.enabled=true`). 2 pending: `draft_20261118_143656_56` (Sarh/Yakutsk, graded B
+Nov 18, not re-graded) and fresh `draft_20261119_125829_58` (`observed_metar_contrast`, created
+Nov 19 12:58Z, ~2h old at grading, score 80). Fresh draft held from auto-publish
+(`automatic_text_hold: automatic_text_over_200_scalars`; policy `armed_auto`, mode manual).
+
+**Publish path: first METAR pair posted.** `draft_20261119_015524_57` (Yakutsk −35°C / Kununurra 34°C,
+"a 69°C airport gap at 01:30 UTC, 19 Nov.") auto-published Nov 19 01:56Z (`publish_outcome:
+confirmed`, ~85s after creation). Ends the 0-for-5 run logged Nov 18 — now 1 of 7. It went straight
+from creation to posted, so it never sat in pending at a pull and isn't graded into the A-rate.
+Sarh/Yakutsk is still pending with its Nov 18 `awc_current_source_unavailable` error and no retry.
+
+**Staleness:** none. Sarh is ~24h old (dated observation, "14:00 UTC, 18 Nov"), under the 48h line.
+Fresh draft ~2h old.
+
+**Grade distribution (fresh):** 0 A / 1 B / 0 C / 0 D-F. **A-rate 0% (n=1)**; bar not cleared.
+
+**Headline finding:** the skeleton has settled — on the weaker form. Nov 18's "4 skeletons in 5
+drafts" is now 3 identical colon-label cards in a row (Sarh, Kununurra, Nouakchott): "A airport,
+Country: X°C; B airport, Country: Y°C — a Z°C airport gap at HH:MM UTC, DD Mon." The Mount Isa sentence
+shape ("logged … while … hit … a 74°C gap at the same hour") hasn't come back. Yakutsk is the cold
+half of 7/7 pairs, 3 of them in the last 22h, one now on the timeline.
+
+### B
+**[2] Nouakchott / Yakutsk observed_metar_contrast (score 80)** — "Nouakchott/Oumtounsy airport,
+Mauritania: 37°C; Yakutsk airport, Russia: −35°C — a 72°C airport gap at 12:30 UTC, 19 Nov." + source URL.
+- Violation: yes — 37°C and −35°C at the same half-hour.
+- Benign: yes — flat, no adjectives, no record claim; matches the two-observation scope.
+- Setup→punchline: correct (readings, then gap). Mechanic: deadpan juxtaposition / pure data delivery.
+- Wodehouse: clean. Exact figures, one derived number, no restate.
+- Caps: same data-card layout as Sarh; "airport" ×3 again, "airport gap" noun stack again. New
+  wrinkle: "Nouakchott/Oumtounsy" — the station's official name pasted in with a slash, which reads
+  as a field value, not a place. "Nouakchott airport" would do. No close past the gap.
+- Grade parity with Sarh (B): same skeleton, same strengths; the slash name is a small extra cost,
+  not a full step.
+
+### Carry-over (not re-graded)
+- [1] Sarh/Yakutsk — B (Nov 18). ~24h old; the AWC reread failed Nov 18 14:38Z and nothing has
+  retried it. Probably ages out on `awc_source_window_elapsed` like the four before it.
+
+### Patterns
+1. **Skeleton convergence on the card form (n=3).** Nov 18 closed the telegraphic-skeleton watch as
+   "not a template". Three in a row since then use one layout, including the posted one. Watch
+   reopened. Not a proposal yet: the form is Wodehouse-clean and grades B, and the fix (prefer the
+   Mount Isa sentence form) is already in the Nov 18 followups.
+2. **P_event_sat +1 cycle.** Yakutsk anchor: 7/7 METAR pairs since Nov 17, 3 inside 22h
+   (Sarh Nov 18 14:36Z, Kununurra Nov 19 01:55Z [posted], Nouakchott Nov 19 12:58Z). With one live,
+   the next Yakutsk pair to post will read as a repeat on the feed. The Nov 18 addendum (one pair per
+   anchor station per 24h) would have held the Nouakchott draft.
+3. **P_close +1 (weak).** Ends on the gap again. Same caveat as Nov 18: for a pure juxtaposition the
+   gap may be the right close.
+4. No era-anchor, political-anchor, banned-opener (P3 regex) or plant-comparison hits. No P4
+   violations. No A-grade mechanic to log.
+
+### Followups
+- **Operator: METAR pair now posting (1/7).** Kununurra/Yakutsk went out 01:56Z. Next, look at the
+  feed before another Yakutsk pair posts. Nouakchott/Yakutsk is held by `automatic_text_over_200_scalars`,
+  so it won't auto-publish; reject it or post it by hand.
+- Operator: Sarh/Yakutsk still pending ~24h after its failed reread. Reject, or confirm the AWC
+  sweep will clear it.
+- Operator (carried): if this type stays on, pin the sentence form and the station display name
+  (drop the "/Oumtounsy"-style official suffix).
+- Infra (carried): `gh` token invalid ("Failed to log in to github.com using token (GH_TOKEN)") — gist
+  write, `gh pr` and `ROUTINE_BEACON` write all blocked.
+
+---
+
+## 2026-11-18 — Daily corpus grading (1 fresh draft)
+
+**Context:** Gist read via git-clone path (success; gist HEAD Nov 18 14:38Z). 1 pending, fresh:
+`draft_20261118_143656_56` (`observed_metar_contrast`, created Nov 18 14:36Z, <1h old at grading,
+score 80). Yesterday's Saint Louis/Yakutsk draft left the queue — rejected `awc_source_window_elapsed`.
+Three more METAR-pair drafts were created and rejected between pulls (Neiva/Yakutsk Nov 17 23:34Z,
+Mount Isa/Yakutsk Nov 18 04:44Z, Kununurra/Yakutsk Nov 18 07:18Z), all `awc_source_window_elapsed`.
+They never sat in pending at a grading pull, so they're logged below as context, not in the A-rate.
+
+**Publish path:** today's draft is `armed_auto` (`observed_airport_pair`, `can_auto_approve: true`)
+but its 14:38Z publish attempt returned `not_sent` — `post_error`: "NWS warning needs fresh source
+review: awc_current_source_unavailable". **0 of 5 METAR-pair drafts have posted.** Four aged out on
+the AWC source window; the fifth failed the current-source reread. Unless the reread recovers inside
+the window, this one goes the same way.
+
+**Staleness:** none. Observed reading, <1h old.
+
+**Grade distribution (fresh):** 0 A / 1 B / 0 C / 0 D-F. **A-rate 0% (n=1)**; bar not cleared.
+
+**Headline finding:** the writer isn't locked into a template for this type — 5 drafts, 4 different
+skeletons. Today's version puts the readings first and the gap last, which fixes yesterday's inverted
+setup→punchline. But the colon-label layout ("Sarh airport, Chad: 40°C; Yakutsk airport, Russia:
+−38°C") is still a data card, and "a 78°C airport gap" stacks nouns. Yakutsk is the cold half of all
+five pairs.
+
+### B
+**[1] Sarh / Yakutsk observed_metar_contrast (score 80)** — "Sarh airport, Chad: 40°C; Yakutsk
+airport, Russia: −38°C — a 78°C airport gap at 14:00 UTC, 18 Nov." + source URL.
+- Violation: yes — 40°C and −38°C at the same minute.
+- Benign: yes — no adjectives, no record claim, scoped to two observations.
+- Setup→punchline: correct this time. Readings set up, the gap lands after the dash.
+- Mechanic: deadpan juxtaposition / pure data delivery. Wodehouse-clean: exact figures, no restate,
+  no math-out-loud beyond the single derived gap.
+- Caps: "airport" three times (twice in labels, once as an adjective on "gap"); "airport gap" is a
+  noun stack that reads like a field name. Colon-label + semicolon format is a spreadsheet row. No
+  close beyond the gap — for this type the gap may be the right close, so P_close is weak here.
+- Best version in the set is the rejected Mount Isa draft: "Yakutsk airport (Russia) logged −36°C
+  while Mount Isa airport (Australia) hit 38°C — a 74°C gap at the same hour." Full sentence, verbs
+  ("logged"/"hit"), gap last, no repeat. That's the shape to keep for this type.
+
+### Context — METAR-pair drafts rejected between pulls (not graded into A-rate)
+| created | text skeleton | note |
+|---|---|---|
+| Nov 17 23:34Z | "74°C gap at 23:00 UTC 17 Nov: Neiva/Salas airport, Colombia 34°C; Yakutsk … −40°C — same hour, two METAR observations." | gap-first, like Saint Louis; appended scope clause |
+| Nov 18 04:44Z | "At 04:30 UTC on 18 Nov, Yakutsk airport (Russia) logged −36°C while Mount Isa airport (Australia) hit 38°C — a 74°C gap at the same hour." | sentence form; best of the five |
+| Nov 18 07:18Z | "At 07:00 UTC on 18 Nov, Yakutsk airport (Russia) read −36°C while Kununurra airport (Australia) read +39°C — a 75°C gap at the same hour (NOAA METAR)." | same as Mount Isa; "read/read" flat, "+39°C" sign prefix back |
+
+### Patterns
+1. **Telegraphic-skeleton watch (opened Nov 17): closed.** Not a fixed template — 4 skeletons in 5
+   drafts. The variance is the issue now: sentence form (Mount Isa) is clearly stronger than the
+   data-card forms, and nothing pins the writer to it.
+2. **P_event_sat +1 cycle (new subtype: fixed anchor station).** Yakutsk is the cold half of 5/5
+   METAR pairs in ~25h. Each draft is a different event_id, so dedupe doesn't see it; on the feed it
+   would read as the same tweet with the warm city swapped. Logged under P_event_sat rather than a new
+   proposal.
+3. **P_close +1 (weak).** No close past the gap. For a pure juxtaposition the gap probably is the
+   punchline; flagged so the operator can decide whether this type should be exempt.
+4. No era-anchor, political-anchor, banned-opener (P3 regex) or plant-comparison hits. No P4
+   violations. No named humor move beyond deadpan juxtaposition (P5 not observed → archived).
+
+### Followups
+- **Operator: METAR-pair publish path is 0 for 5.** Four aged out on `awc_source_window_elapsed`; today's
+  failed the current-source reread (`awc_current_source_unavailable`). Either the source window is
+  shorter than the writer→review→publish latency or the AWC reread is failing. The voice work on this
+  type doesn't matter until one posts.
+- Operator: if METAR pairs stay on, consider pinning the Mount Isa sentence shape ("A logged X while B
+  hit Y — a Z gap at the same hour") and rotating the cold anchor so Yakutsk isn't in every pair.
+- Infra (carried): `gh` token invalid — gist write, PR edit via `gh`, and `ROUTINE_BEACON` write all blocked.
+- Operator (carried): `daily-plan-current` (PR #207) still unmerged.
+
+---
+
+## 2026-11-17 — Daily corpus grading (1 fresh draft)
+
+**Context:** Gist read via git-clone path (success). 1 pending, fresh: `draft_20261117_131754_52`
+(`observed_metar_contrast`, created Nov 17 13:17Z, ~2h old at grading, score 80). **First
+`observed_metar_contrast` draft in the corpus.** Ends a 7-cycle no-fresh-draft run (Nov 10–16).
+Held from auto-publish (`automatic_text_hold: automatic_text_over_200_scalars`; policy `armed_auto`,
+mode manual).
+
+**Staleness:** none. Observed reading, ~2h old; no forecast day to elapse. Nothing to reject.
+
+**Grade distribution (fresh):** 0 A / 1 B / 0 C / 0 D-F. **A-rate 0% (n=1)**; bar not cleared.
+
+**Headline finding:** the new type's skeleton is a data-feed line, not a sentence. The contrast
+itself is a sound benign violation (same minute, 77°C apart) and the writer doesn't try to sell it —
+Wodehouse-clean. But slash-separated, sign-prefixed figures ("+39°C / −38°C") read as a ticker, and
+there is no close.
+
+### B
+**[1] Saint Louis / Yakutsk observed_metar_contrast (score 80)** — "77°C gap at 13:00 UTC 17 Nov:
+Saint Louis airport, Senegal +39°C / Yakutsk airport, Russia −38°C (NOAA METAR observations)." + source URL.
+- Violation: yes — simultaneous 39°C and −38°C on one planet is the setup and the punchline at once.
+- Benign: yes — flat register, no adjectives, scoped to "two reported observations" (matches bundle
+  `claim_scope`, no record claim).
+- Setup→punchline: inverted — the gap (derived figure) leads, the readings follow. Defensible; the gap
+  is the hook. The juxtaposition is the mechanic (deadpan/pure data delivery).
+- Wodehouse: clean. Exact figures, no restate, no math-out-loud, no poetry.
+- Caps: telegraphic slash syntax and "+39°C" sign notation read as a data feed rather than the voice;
+  "airport" twice; no close. The more surprising half — 39°C at a coastal Senegal station in
+  mid-November — is left unremarked, but the bundle carries no normal for it, so not a writer strand.
+- Source URL in tweet text is by design for this type (`docs/AWC_OBSERVATIONS.md`: exact target
+  citation required), unlike the Jul 3 Typhoon Bavi leak. Not graded against.
+
+### Patterns
+1. **P_close** +1 cycle (closeless data delivery; same shape as Nov 4/9 hot10).
+2. New type, n=1: telegraphic contrast skeleton ("N°C gap at HH:MM UTC DD Mon: A +x / B −y (source)").
+   Logged as a watch, not a proposal; needs a second draft to tell template from one-off.
+3. No era-anchor, political-anchor, banned-opener (P3 regex) or plant-comparison hits. No P4 violations.
+
+### Followups
+- Operator: Saint Louis/Yakutsk is clean and same-day; post or reject manually (it won't auto-publish).
+- Operator: if this pair type will run often, consider whether the slash format is the intended
+  house style before it accumulates.
+
+---
+
+## 2026-11-16 — Daily corpus grading (0 fresh drafts; queue empty)
+
+**Context:** Gist read via git-clone path (success; gist HEAD Nov 16 12:11Z, `_state_rev` 3362 — bot
+running, `publication_control.enabled=true`, epoch `live-20261030…`). **0 pending.** 52 drafts in state:
+45 posted, 7 rejected. Shymkent hot10 (`draft_20261108_180324_55`, B Nov 9) moved to `rejected` at
+Nov 15 18:56Z — the bot's 7-day TTL sweep, as forecast yesterday. Rejected count fell 8→7 net, so two
+older rejected records were also pruned from state.
+
+**Why the queue is dry:** still zero new drafts of any status since the Nov 13 06:15Z
+monthly_climate_report (~81h). Run history shows candidates are reaching selection but are held:
+`automatic_selection` reports 9 candidates at 06:16Z and 4 at 12:02Z, all `held_manual_types`
+(absolute_extreme ×1, fire ×8 / ×3), 0 auto-eligible. One writer attempt in the last 24h
+(water_levels, Nov 15 23:21Z) left no draft in state. `open_meteo_extreme_signals` reports `degraded`
+every alerts run (ghcn verification `diff_missing:1`). So the drought is policy holds + no hot10
+trigger, not a dead scheduler.
+
+**Staleness:** nothing pending — no candidates.
+
+**A-rate:** N/A (no fresh drafts). Last graded cycle: 0% (n=1, Nov 9).
+
+### Patterns
+1. No new graded evidence for any active proposal. 7th consecutive no-fresh-draft cycle (Nov 10–16).
+2. First fully empty queue since Oct 30. With auto-publish on and fire/absolute_extreme held
+   manual-only, the pending queue — the only thing this routine grades — gets nothing unless an
+   operator promotes a held candidate.
+
+### Followups
+- Operator: the held fire/absolute_extreme candidates are where today's drafts would be. If you want
+  grading signal, promote one or more through the manual path.
+- Operator: `open_meteo_extreme_signals` degraded on every alerts run Nov 15–16 (ghcn `diff_missing:1`).
+- Operator (carried): decide whether this routine should grade `posted` drafts from the last 24h.
+- Operator (carried): `daily-plan-current` still unmerged; `main` lacks graded cycles since 2026-07-06.
+- Infra (carried): `gh` token in the routine env is invalid — blocks gist write, PR create/edit, and the
+  `ROUTINE_BEACON` variable write.
+
+## 2026-11-15 — Daily corpus grading (0 fresh drafts; 1 carry-over, previously graded)
+
+**Context:** Gist read via git-clone path (success; gist HEAD Nov 15 11:28Z, `_state_rev` 3345 — bot
+is running, `publication_control.enabled=true`, epoch `live-20261030…`). 1 pending:
+`draft_20261108_180324_55` (Shymkent hot10, B Nov 9) — same id/text/score, not re-graded. 54 drafts in
+state: 45 posted, 8 rejected, 1 pending — identical counts to Nov 14.
+
+**Why the queue is dry:** no draft has entered state since the Nov 13 06:15Z monthly_climate_report.
+No auto-publishes either — hot10 skeleton watch holds at n=5. Second straight day of zero intake, not
+just zero pending.
+
+**Staleness (~15:10 UTC Nov 15):** Shymkent ~165h, "Sunday" (Nov 8) elapsed — strict bulk-reject
+candidate, 7th day running. Gist write skipped (`gh` token invalid). Bot's `staleness_ttl_7d` sweep is
+due ~18:03Z today; next cycle should find the queue empty.
+
+**A-rate:** N/A (no fresh drafts). Last graded cycle: 0% (n=1, Nov 9).
+
+### Patterns
+1. No new graded evidence for any active proposal. 6th consecutive no-fresh-draft cycle (Nov 10–15).
+2. Intake has been zero for ~57h. Under auto-publish this is the only signal the routine can see;
+   whether that's a quiet weather window or a stalled writer path isn't visible from state alone.
+
+### Followups
+- Operator: confirm the zero-intake stretch since Nov 13 is signal-driven, not a pipeline stall.
+- Operator (carried): decide whether this routine should grade `posted` drafts from the last 24h.
+- Operator (carried): `daily-plan-current` still unmerged; `main` lacks graded cycles since 2026-07-06.
+- Infra (carried): `gh` token in the routine env is invalid — blocks gist write, PR create/edit, and the
+  `ROUTINE_BEACON` variable write.
+
+## 2026-11-14 — Daily corpus grading (0 fresh drafts; 1 carry-over, previously graded)
+
+**Context:** Gist read via git-clone path (success; gist HEAD Nov 14 15:04Z — bot is running,
+`publication_control.enabled=true`, epoch `live-20261030…`). 1 pending: `draft_20261108_180324_55`
+(Shymkent hot10, B Nov 9) — same id/text/score, not re-graded. 54 drafts in state: 45 posted,
+8 rejected, 1 pending.
+
+**Why the queue is dry:** nothing new entered the draft list since the Nov 13 06:15Z
+monthly_climate_report (already logged Nov 13). No new auto-published drafts either — the hot10
+skeleton watch stays at n=5. Latest run_history entries are `auto_publish_due` sweeps with "No drafts
+due for auto-approval."
+
+**Staleness (~15:05 UTC Nov 14):** Shymkent ~141h, "Sunday" (Nov 8) elapsed — strict bulk-reject
+candidate, 6th day running. Gist write skipped (`gh` token invalid). Bot's 7d TTL sweep should clear it
+~Nov 15 18:03Z.
+
+**A-rate:** N/A (no fresh drafts). Last graded cycle: 0% (n=1, Nov 9).
+
+### Patterns
+1. No new graded evidence for any active proposal. 5th consecutive no-fresh-draft cycle (Nov 10–14).
+2. First day since Nov 9 with no auto-published draft either — intake itself was quiet, not just
+   bypassing pending.
+
+### Followups
+- Operator: reject Shymkent via dashboard, or let TTL clear it Nov 15.
+- Operator (carried): decide whether this routine should grade `posted` drafts from the last 24h —
+  under auto-publish, pending-only grading measures almost nothing.
+- Operator (carried): `daily-plan-current` still unmerged; `main` lacks graded cycles since 2026-07-06.
+- Infra (carried): `gh` token in the routine env is invalid — blocks gist write, PR create/edit, and the
+  `ROUTINE_BEACON` variable write.
+
+## 2026-11-13 — Daily corpus grading (0 fresh drafts; 1 carry-over, previously graded)
+
+**Context:** Gist read via git-clone path (success; gist HEAD Nov 13 12:11Z). 1 pending:
+`draft_20261108_180324_55` (Shymkent hot10, B Nov 9) — same id/text/score, not re-graded. Riyadh dust_event
+(`draft_20261105_121936_65`, B- Nov 6) left the queue: `rejected_reason: staleness_ttl_7d`, rejected
+Nov 12 16:52Z — the bot's own 7d TTL sweep, not an operator action.
+
+**Why the queue is dry:** same as Nov 12 — auto-publish (`publication_control.enabled=true`, epoch
+`live-20261030…`) routes new drafts straight to posted. Two more since the last run, not graded here
+(routine grades pending only):
+- Tunis hot10, Nov 12 21:06Z: "Tunis, Tunisia is forecast to reach 32.1°C Thursday — 10.6°C above its
+  November normal, the largest departure among 417 sampled cities (Open-Meteo/Meteostat)." Same skeleton
+  as Verkhoyansk / Shymkent / Ulan Bator ×2 — hot10 convergence watch now **n=5 consecutive**, 3 live.
+- monthly_climate_report, Nov 13 06:20Z: "October 2026 was the warmest October on record in Copernicus/ERA5
+  data — 1.75°C above the 1850–1900 pre-industrial average, 0.9°C above the 1991–2020 baseline." Pure data
+  delivery, source URL on its own line. Has `approved_at`/`publish_requested_at` (dashboard path), so the
+  operator saw it before it went out.
+
+**Staleness (~16:00 UTC Nov 13):** Shymkent ~118h, "Sunday" (Nov 8) elapsed — strict bulk-reject
+candidate. Gist write skipped (`gh` token invalid). The 7d TTL sweep should clear it ~Nov 15 18:03Z if the
+operator doesn't first.
+
+**A-rate:** N/A (no fresh drafts). Last graded cycle: 0% (n=1, Nov 9).
+
+### Patterns
+1. No new graded evidence for any active proposal.
+2. hot10 skeleton (watch, n=5): "[City] is forecast to [hit/reach] X°C [Day] — Y°C above its November
+   normal …, the largest departure among 417 sampled cities (Open-Meteo/Meteostat[, forecast])." Tunis drops
+   the trailing ", forecast" — only variation in five drafts. Pure data delivery is valid, but five
+   identical frames in a row on a live account is the template-convergence failure P6/P7/P9 named for
+   other types. Logged as a watch, not a proposal: the evidence is auto-published, not graded.
+3. TTL sweep is now doing the staleness job this routine can't (Riyadh cleared at 7d). Strict 48h policy
+   still unenforced for the 2–7d window.
+
+### Followups
+- Operator: reject Shymkent via dashboard (forecast day elapsed), or let TTL clear it Nov 15.
+- Operator: auto-published drafts bypass grading — 5 hot10 + 1 monthly report since Nov 9 have no corpus
+  grade. Decide whether this routine should grade `posted` drafts from the last 24h too.
+- Operator: `daily-plan-current` still unmerged; `main` lacks graded cycles since 2026-07-06.
+
+## 2026-11-12 — Daily corpus grading (0 fresh drafts; 2 carry-overs, previously graded)
+
+**Context:** Gist read via git-clone path (success; gist HEAD Nov 12 13:14Z). 2 pending, exact match to
+Nov 11: `draft_20261105_121936_65` (Riyadh dust_event, B- Nov 6) and `draft_20261108_180324_55` (Shymkent
+hot10, B Nov 9) — same ids/text/scores, not re-graded.
+
+**Why the queue is dry:** not an intake drought. Two newer `hot10` drafts were created and auto-published
+without passing through pending (`publication_control.enabled=true`, live epoch since Oct 30): Ulan Bator
+Nov 9 22:27Z ("forecast to hit 9.7°C Tuesday — 14.2°C above its November normal …") and Ulan Bator Nov 10
+19:48Z ("forecast to reach 8.4°C Wednesday — 12.9°C above its November normal …"). Not graded here (routine
+grades pending only), but both reuse the Verkhoyansk/Shymkent hot10 skeleton verbatim — template-convergence
+watch now n=4 across 4 consecutive hot10 drafts, two of them already live. Same location two days running.
+
+**Staleness (~15:00 UTC Nov 12):** both strict bulk-reject candidates — Riyadh ~7.1d ("Thursday", Nov 5),
+Shymkent ~93h ("Sunday", Nov 8). Gist write skipped (`gh` token invalid).
+
+**A-rate:** N/A (no fresh drafts). Last graded cycle: 0% (n=1, Nov 9).
+
+### Patterns
+1. No new graded evidence for any active proposal.
+2. hot10 skeleton convergence (watch, n=4, incl. 2 auto-published): "[City] is forecast to [hit/reach] X°C
+   [Day] — Y°C above its November normal …, the largest departure among N sampled cities
+   (Open-Meteo/Meteostat, forecast)." If the operator wants this graded, auto-published posts need a
+   corpus path; logged only.
+3. State gist still logging `state_size` warnings (7.89 MB at 13:14Z, up from 7.79 MB Nov 11).
+
+### Followups
+- Operator: reject Riyadh and Shymkent via dashboard (forecast days elapsed).
+- Operator: decide whether auto-published drafts should be graded — the pending queue no longer
+  reflects writer output while auto-publish is enabled.
+- Operator: `daily-plan-current` still unmerged; `main` lacks graded cycles since 2026-07-06.
+
+## 2026-11-11 — Daily corpus grading (0 fresh drafts; 2 carry-overs, previously graded)
+
+**Context:** Gist read via git-clone path (success). 2 pending: `draft_20261105_121936_65` (Riyadh
+dust_event, B- Nov 6) and `draft_20261108_180324_55` (Shymkent hot10, B Nov 9) — same ids/text, not
+re-graded. Verkhoyansk hot10 (B, Nov 4) has left the queue (cause unconfirmed; likely operator reject or
+TTL sweep). No new pending drafts since Nov 8 18:03Z (~2.9 days).
+
+**Staleness (~15:00 UTC Nov 11):** both now strict bulk-reject candidates — Riyadh ~6.1d ("Thursday",
+Nov 5 elapsed), Shymkent ~69h ("Sunday", Nov 8 elapsed). Gist write skipped (`gh` token invalid).
+
+**A-rate:** N/A (no fresh drafts). Last graded cycle: 0% (n=1, Nov 9).
+
+### Patterns
+No new evidence for any active proposal. Infra note: the state gist logs repeated `state_size` warnings
+(7.79 MB, "approaching gist inline cliff") through Nov 11 08:22Z — if it crosses the cliff, this routine's
+git-clone read path may still work but the bot's own writes may not; operator should check.
+
+### Followups
+- Operator: reject Riyadh and Shymkent via dashboard (forecast days elapsed).
+- Operator: `daily-plan-current` still unmerged; `main` lacks graded cycles since 2026-07-06.
+
+## 2026-11-10 — Daily corpus grading (0 fresh drafts; 3 carry-overs, previously graded)
+
+**Context:** Gist read via git-clone path (success). 3 pending, exact match to Nov 9's queue: Verkhoyansk
+hot10 (B, Nov 4), Riyadh dust_event (B-, Nov 5), Shymkent hot10 (B, Nov 8). No re-grading; grades stand.
+
+**Staleness (~15:00 UTC Nov 10):** Verkhoyansk (~6.5d, "Wednesday") and Riyadh (~5.1d, "Thursday") are
+strict bulk-reject candidates (>48h, forecast day elapsed). Shymkent is ~45h (crosses 48h at ~18:00Z today;
+"Sunday" already elapsed). Gist write skipped: `gh` token invalid and gist API path blocked by the sandbox.
+
+**A-rate:** N/A (no fresh drafts). Last graded cycle: 0% (n=1, Nov 9).
+
+### Patterns
+No new evidence for any active proposal; queue static for 24h (cycle-cadence note only).
+
+## 2026-11-09 — Daily corpus grading (1 fresh draft; 2 carry-overs, previously graded)
+
+**Context:** Gist read via git-clone path (success). 3 pending: `draft_20261104_022119_64` (Verkhoyansk
+hot10, B Nov 4) and `draft_20261105_121936_65` (Riyadh dust_event, B- Nov 6) — same ids/text, not
+re-graded. **1 fresh:** `hot10` Shymkent (created Nov 8 18:03Z, ~21h old).
+
+**Staleness (~15:00 UTC Nov 9):** Verkhoyansk (~5.5d, "Wednesday") and Riyadh (~3.1d, "Thursday") are strict
+candidates (>48h, forecast day elapsed). Shymkent is <48h but its "Sunday" (Nov 8) forecast day has
+already elapsed; it crosses the threshold Nov 10. Gist write skipped (`gh` token invalid; gist API
+blocked by sandbox proxy).
+
+**Grade distribution (fresh):** 0 A / 1 B / 0 C. **A-rate 0% (n=1)**; bar not cleared.
+
+### B
+**[3] Shymkent hot10 (score 87)** — "Shymkent, Kazakhstan is forecast to hit 27°C Sunday — 14.7°C above
+its November normal, the largest departure among 417 sampled cities (Open-Meteo/Meteostat, forecast)."
+Pure data delivery, valid register: forecast status and sample scope stated, no banned opener, no
+Wodehouse violation. Violation is real but milder than Verkhoyansk (27°C is a warm day, not a
+physically strange one) and the normal is left implicit (~12.3°C), so the reader does the subtraction.
+Ends on a parenthetical source tag, not a close. Capped at B; arguably the low end of B.
+
+### Patterns
+1. **P_close** +1 cycle (hot10 closeless, 2nd consecutive hot10 draft; 0 positive).
+2. Template convergence watch: Shymkent and Verkhoyansk share an identical skeleton ("is forecast to
+   [verb] X — Y°C above its November normal, the largest departure among N sampled cities
+   (Open-Meteo/Meteostat, forecast)"). n=2, logged only; not yet a proposal.
+3. No era-anchor, political-anchor, banned-opener or plant-comparison hits.
+
+### Followups
+- Operator: reject Verkhoyansk and Riyadh (forecast days elapsed); Shymkent next cycle.
+- Operator: `daily-plan-current` still unmerged; `main` lacks graded cycles since 2026-06-08.
+
+---
+
+## 2026-11-08 — Daily corpus grading (0 fresh drafts; 2 carry-overs, previously graded)
+
+**Context:** Gist read via git-clone path (success). 2 pending, both already graded: `draft_20261104_022119_64`
+(Verkhoyansk hot10, B Nov 4) and `draft_20261105_121936_65` (Riyadh dust_event, B- Nov 6) — same ids/text/scores,
+not re-graded. Brazil fire (Oct 31, B-) is gone from the queue (cause unconfirmed). No new drafts since Nov 5 12:19Z.
+
+**Staleness (~Nov 8):** Both now strict bulk-reject candidates (>48h, dated forecast day elapsed):
+Verkhoyansk ~4.5d ("Wednesday", Nov 4); Riyadh ~2.5d ("Thursday", Nov 5). Gist write attempted/skipped
+(`gh` token invalid; gist API blocked) — operator should reject via dashboard.
+
+**Grade distribution:** none fresh. No proposal evidence updates. `daily-plan-current` remains unmerged to `main`.
+
+---
+
+## 2026-11-06 — Daily corpus grading (1 fresh draft; 2 carry-overs from Oct 31 / Nov 4, previously graded)
+
+**Context:** Gist read via git-clone path (success). 3 pending: `draft_20261031_032828_68` (Brazil fire,
+B- Oct 31) and `draft_20261104_022119_64` (Verkhoyansk hot10, B Nov 4) — same ids/text, not re-graded.
+**1 fresh:** `draft_20261105_121936_65`, `dust_event` (created Nov 5 12:19Z).
+
+**Staleness (~15:00 UTC Nov 6):** Brazil fire ~132h, past-tense/dated — not a strict candidate, but
+low news value. Verkhoyansk ~109h, "Wednesday" (Nov 4) forecast day now elapsed — strict candidate
+(>48h, dated forecast). Riyadh dust ~27h, "Thursday" (Nov 5) peak day elapsed but under 48h — watch
+next cycle. Gist write skipped (`gh` token invalid; gist API blocked by sandbox proxy).
+
+**Grade distribution (fresh):** 0 A / 0 B / 1 B-. **A-rate 0% (n=1)**; bar not cleared.
+
+### B-
+**[3] Riyadh dust_event (score 78)** — "dust is forecast to peak near 6,015 µg/m³ Thursday, with PM10
+averaging ~55× the WHO 24-hour guideline — CAMS model forecast, not station-measured." WHO multiple
+stated unprompted (55×45 = 2,475 µg/m³ mean, checks; P_dust counter-evidence, 3rd consecutive dust
+cycle). Peak-vs-mean gap is the implicit violation and the setup is strong, but the draft spends its
+close on a source disclaimer — same subtype as Urumqi Oct 31 (C+) and Riyadh Oct 31 [B-]. "near 6,015"
+hedges an exact figure (mild P4). No mechanism named (no source region, no why-now). Pure data
+delivery, valid register; capped by P_close.
+
+### Patterns
+1. **P_close** +1 cycle (disclaimer close, 0 positive of 2 drafts evaluated across Nov 4–6).
+2. **P_dust** counter-evidence cycle 3: WHO anchor present again (4 of 4 recent dust_event drafts).
+3. **P_event_sat** +1: Riyadh dust_event is the 4th Riyadh dust draft since Oct 28 (Jun 13, Oct 28,
+   Oct 31, Nov 5) — same city repeats across cycles, though not same-day this time.
+4. No era-anchor, political-anchor, banned-opener or plant-comparison hits.
+
+### Followups
+- Operator: reject Verkhoyansk (forecast day elapsed) and consider the Oct 31 Brazil fire.
+- Operator: `daily-plan-current` still unmerged; `main` lacks graded cycles since 2026-06-08.
+
+---
+
+## 2026-11-04 — Daily corpus grading (1 fresh draft; 1 carry-over from Oct 31, previously graded)
+
+**Context:** Gist read via git-clone path (success). 2 pending: `draft_20261031_032828_68` (Brazil
+fire, 978.7 MW) — same id/text as Oct 31/Nov 3, graded B- then; no re-grading. **1 fresh:**
+`draft_20261104_022119_64`, `hot10` (created 02:21Z; first hot10 in this corpus section run).
+Intake resumed after the Oct 31 → Nov 4 dry spell.
+
+**Staleness (~15:00 UTC Nov 4):** Brazil fire ~98h old, past-tense, dated "Oct 31", no forecast
+language — not a strict candidate, but weak news value; operator may reject. Gist write skipped
+(`gh` token invalid; gist API blocked by sandbox proxy).
+
+**Grade distribution (fresh):** 0 A / 1 B. **A-rate 0% (n=1)**; bar not cleared.
+
+### B
+**[2] Verkhoyansk hot10 (score 87)** — "Verkhoyansk, Russia is forecast to reach −9.9°C Wednesday —
+20.2°C above its November normal of −30.1°C, the largest departure among 440 sampled cities
+(Open-Meteo/Meteostat, forecast)." Pure data delivery, valid register: exact figures, forecast
+status and sample scope stated, no Wodehouse violations, no banned opener. Capped at B: violation
+is real (a −30°C town forecast to 20° above normal) but the voice never takes a turn — ends on a
+parenthetical source tag, not a close. P_close failing (data stops at the comparison).
+
+### Patterns
+1. **P_close** +1 cycle (hot10 closeless). Other proposals untested (no dust/NWS/tier-jargon/
+   event-saturation content).
+2. No era-anchor, political-anchor, banned-opener or plant-comparison hits.
+
+### Followups
+- Operator: consider rejecting the Oct 31 Brazil fire (98h, dated).
+- Operator: `daily-plan-current` still unmerged; `main` lacks graded cycles since 2026-06-08.
+
+---
+
+## 2026-11-03 — Daily corpus grading (0 fresh drafts; 1 carry-over from Oct 31, previously graded)
+
+**Context:** Gist read via git-clone path (success). 1 pending: `draft_20261031_032828_68` (Brazil fire,
+978.7 MW) — same text/id as Oct 31's [4], graded B- then. No re-grading; grade stands. The other 3 Nov 2
+carry-overs (Riyadh dust, Riyadh PM2.5, Urumqi) are no longer pending — removed by an operator
+reject/publish or sweep outside this routine (cause unconfirmed). Intake: nothing new since Oct 31
+03:28 UTC (~3.5 days; third dry-spell day in a row — check source health / suppression ledger).
+
+**Staleness (~15:00 UTC Nov 3):** Brazil fire is ~83.5h old, past-tense ("detected … 00:09 UTC Oct 31"),
+no forecast language — not a strict candidate, but a 3.5-day-old satellite pass has little news value;
+operator may reject. Gist write skipped (`gh` token invalid; not attempted further).
+
+**A-rate:** — (no fresh drafts). Last graded cycle: 0% (0/4, Oct 31).
+
+### Notes
+- No proposal evidence updates (P_close, P_dust, P_event_sat, P4, P_tier, P_nws unchanged).
+- Operator: `daily-plan-current` still unmerged; `main` has no graded cycles since 2026-06-08.
+
+---
+
+## 2026-11-02 — Daily corpus grading (0 fresh drafts; 4 carry-overs from Oct 30–31, previously graded)
+
+**Context:** Gist read via git-clone path (success). 4 pending, identical to the Oct 31 queue (same
+`draft_id`s `_20261030_034425_67`, `_104126_68`, `_175304_69`, `_20261031_032828_68`; same text). Nothing new
+since Oct 31 03:28 UTC. No re-grading; Oct 31 grades stand (0 A · 3 B- · 1 C+). The pre-run main sync
+(`reset --hard` / `clean -fd`) was denied by the sandbox classifier; the checkout was verified clean with
+HEAD == origin/main instead, then the rolling branch was used.
+
+**Staleness (as of ~15:20 UTC Nov 2):** [1] Riyadh dust 83.6h, [2] Riyadh PM2.5 76.7h, [3] Urumqi 69.5h —
+all >48h, all "forecast … on Oct 30", forecast date now 3 days elapsed → **3 strict bulk-reject candidates**.
+[4] Brazil fire is 59.9h old but past-tense ("detected … 00:09 UTC Oct 31"), no forecast language — not a
+mechanical candidate, though a 3-day-old satellite pass is weak news value. Gist write skipped: `gh` token
+invalid and the sandbox blocks the gist API path (403). Operator should reject via dashboard.
+
+**A-rate:** — (no fresh drafts). Last graded cycle: 0% (0/4, 2026-10-31).
+
+### Patterns / notes
+1. No proposal evidence updates (P_close, P_dust, P_event_sat, P4, P_tier, P_nws unchanged from Oct 31).
+2. Intake after Oct 31 03:28 UTC: nothing for ~2.5 days. Second dry spell in a month (Oct 17–30 earlier);
+   worth checking source health / suppression ledger.
+
+### Followups
+- Operator: bulk-reject [1][2][3] (elapsed Oct 30 forecasts); consider [4] too.
+- Operator: merge `daily-plan-current` — `main` has no graded cycles since 2026-06-08.
+
+### Numbers
+- Pending: 4 (0 fresh) · A-rate N/A · staleness candidates: 3 (write skipped)
+
+---
+
+## 2026-10-31 — Daily corpus grading (4 fresh drafts; 0 carry-overs)
+
+**Context:** Gist read via git-clone path (success). 4 pending, all new to the corpus; none of Oct 28's
+15 remain (queue turned over — intake resumed Oct 30 after a 12-day drought; cause of the old 15
+leaving unconfirmed, likely operator reject). Oldest 35h, newest 12h. Graded cold against the Oct 28 baseline.
+
+**Distribution:** 0 A · 0 B · 3 B- · 1 C+ · 0 D → **A-rate 0% (0/4)**. Bar (50%) missed by 50 pp.
+
+**Headline:** Accurate, number-led data delivery with a WHO anchor on all three PM drafts (second
+consecutive cycle of P_dust counter-evidence), but still no close and no mechanic. Two of four are
+the same city on the same day (Riyadh ×2). "A CAMS air-quality model forecast puts…" is now a shared
+opener template across 3 of 3 PM drafts.
+
+### B- (3)
+- **[1] Riyadh dust_event** — peak ~4,227 µg/m³, 24h PM10 mean ~35× WHO (35×45 ≈ 1,575 checks). Peak-vs-mean gap is the implicit violation and the biggest numbers in the corpus for the type. But "~4,227" puts a tilde on an exact figure (P4 approximation tell), and the draft ends on the date. No close. B-.
+- **[2] Riyadh air_quality_hazard** — PM2.5 173 µg/m³, 11.5× WHO (173/15 = 11.5 ✓). Same city, same day as [1]; "co-reported dust values above 3,000" is jargon and just restates [1]. Em-dash aside, no close. B-.
+- **[4] Brazil fire (MODIS)** — 978.7 MW, then "Two nearby signals registered 624 and 465 MW the same pass" — exact numbers, deadpan cluster, the best raw material of the batch. But located by lat/lon ("near 3.7°S, 45.7°W") not a place name (geographic-orientation miss), "satellite confidence 100%" is filler, and nothing says what the fire is burning or what season it is. B-.
+
+### C+ (1)
+- **[3] Urumqi dust_event** — 668 µg/m³, PM10 ~5.8× WHO. Modest multiple, "Urumqi, China:" colon opener, "up to", and a disclaimer close ("model estimates, not station readings") that spends the punchline slot on hedging. C+.
+
+### Patterns named
+1. **P_close:** 0 of 4 positive. Disclaimer close ([3]), date/none ([1], [2], [4]).
+2. **P_dust:** 2 of 2 dust_event drafts carry WHO multiples (Oct 28: 3 of 3). Anchor now holds 2 cycles; archive at 3.
+3. **P_event_sat:** Riyadh ×2 (dust_event + air_quality_hazard, same forecast day).
+4. **P4 (Wodehouse):** tilde on exact number in [1]; hedging disclaimer in [3].
+5. **Opener template:** "A CAMS air-quality model forecast puts X's…" in [1], [2], [3 variant].
+6. **P_tier / P_nws:** not observed (no cyclone/severe_weather drafts).
+7. **No A-grade mechanic** this cycle; nothing to promote.
+
+### Followups
+- Operator: P_close and P_event_sat are the leverage points; a per-city/day dedupe would have cut [2] outright.
+- Staleness: none >48h; Oct 30-dated forecasts will cross the elapsed-date line in the next cycle. Gist write still blocked (gh token invalid) — skipped.
+
+## 2026-10-29 — Daily corpus grading (0 fresh drafts; 15 carry-overs from Oct 28, previously graded)
+
+**Context:** Gist read via git-clone path (success). 15 pending, identical to the Oct 28 queue
+(same text, same created_at timestamps Oct 7–17; newest is 12 days old, oldest 22). No new drafts
+reached pending since Oct 17. No re-grading performed; all Oct 28 grades stand
+(0 A · 2 B · 5 B- · 6 C+ · 2 D).
+
+**Headline:** Queue static for 12+ days. Nothing new to grade, so no evidence updates to any active
+proposal. All 15 remain staleness bulk-reject candidates (time-baked: Oct 8 forecasts, live NHC
+advisories, Guam "tonight"); the gist write is still blocked (`gh` token invalid, gist API 403).
+
+### Followups
+- Operator: reject all 15 via the dashboard (stale, time-baked). Guam pair first (manual proposals, D).
+- Operator: check suppression ledger / source health for why nothing has reached pending since Oct 17.
+
+## 2026-10-28 — Daily corpus grading (15 fresh drafts; 0 carry-overs)
+
+**Context:** Gist read via git-clone path (success). 15 pending, all new to the corpus (draft_ids
+`draft_20261007_*`–`draft_20261009_*` plus two manual severe_weather proposals from Oct 16–17).
+Newest is 11 days old, oldest 21. `main`'s corpus ended at Jul 6, so there is no documented grading
+for Jul 7 – Oct 27; this section is graded cold against the Jul 5 baseline. The rolling
+`daily-plan-current` branch no longer exists on remote (merged/deleted); this cycle starts fresh from `main`.
+
+**Distribution:** 0 A · 2 B · 5 B- · 6 C+ · 2 D → **A-rate 0% (0/15)**. Bar (50%) missed by 50 pp.
+
+**Headline:** Cyclone, PM2.5/dust and fire drafts are accurate but flat data delivery with no
+mechanic and weak closes. Two things are new: (1) `dust_event` drafts now state a WHO multiple
+unprompted (3 of 3), breaking the 11-of-11 no-anchor run; (2) 7 of 15 drafts are same-event or
+same-text duplicates (Isaias ×3, Klang/Shah Alam, Guam ×2, Quetta/Arequipa template twins).
+
+### B (2)
+- **[2] Quetta dust_event** (523 µg/m³ peak, PM10 mean 173, "nearly 4× the WHO daily guideline") — 173/45 = 3.8, checks. First WHO-anchored dust_event; peak-vs-mean gap is the implicit violation. Close is a bare source credit (P_close failing). B.
+- **[4] Riyadh dust_event** (peak 2,347 µg/m³ vs mean ~10.7× WHO) — same anchor, plus the peak/mean contrast is the best setup in the batch. Ends on a disclaimer ("model estimates, not station measurements") that spends the punchline slot on hedging. B.
+
+### B- (5)
+- **[3] Arequipa dust_event** — 2.7× WHO anchor present, near-template twin of [2]; close is "(CAMS global model, 45 km resolution)", a parenthetical, not a close. B-.
+- **[6] Shah Alam air_quality_hazard** — 152 µg/m³, ~10× WHO; ends "No station data to verify; model forecast only." Honest, not a close. B-.
+- **[7] Kano air_quality_hazard** — 230 µg/m³, 15× WHO, dust >300 in the same run; biggest multiple of the batch but no named cause (harmattan) and no close. B-.
+- **[9] Eastern Mongolian steppe fire** — three anomalies 600.5/568.6/543.6 MW within 10 km at 01:13 UTC. Cluster is vivid, exact numbers (no approximation), deadpan; no consequence/mechanism. B-.
+- **[10] Isaias Cat 3 tier_crossing** — 105 kt, 959 mb, "up from Category 2 within the same advisory cycle". Clean, but "Advisory 012a" is bureaucratic and the URL sits in the text. B-.
+
+### C+ (6)
+- **[1] Papua New Guinea fire** — "is radiating 1,026 MW" (banned-formula verb family; P3 class), plus tier label "very-high-intensity". No mechanic, no close. C+.
+- **[5] Isaias rapid_intensification (35 kt)** — "surpassing the NHC rapid intensification threshold of 30 kt" + advisory number + lat/lon + URL: P_tier leak and dispatcher register. C+.
+- **[8] Klang air_quality_hazard** — same ~152 µg/m³ forecast as [6] (adjacent city, same day): redundant, would read as a repeat. C+.
+- **[11] Isaias rapid_intensification (Cat 1→3)** — "exactly the NHC rapid-intensification threshold": P_tier. Third Isaias draft; same event as [5] and [10]. C+.
+- **[12] East Pacific Simon** — "meeting the NHC threshold for rapid intensification (NHC advisory 009a)": P_tier plus advisory ID. C+.
+- **[13] Brazil Cerrado fire** — "intense enough to register in the top tier of VIIRS detections": P_tier ("top tier"). Also undercut by the second hotspot (529 MW) being larger than the lead (519 MW). C+.
+
+### D (2)
+- **[14] / [15] Guam, Typhoon Champi (severe_weather, manual proposals, identical text)** — "Guam's preparation window is closing: life-threatening winds could arrive tonight" is NWS urgency paraphrase: no figure, no distance, panic register (violates HUMOR_RESEARCH §8.4 benign-violation), and "tonight" is 11–12 days old. [15] also has no score object (`score: ?`). D ×2.
+
+### Patterns named
+1. **P_tier, 5 instances in one cycle** ([1], [5], [11], [12], [13]) across fire + both cyclone types. Threshold/tier names leak as the "so what".
+2. **P_dust partial counter-evidence:** 3/3 dust_event drafts carry a WHO multiple. Unknown whether a fix shipped in the gap; hold open until it repeats.
+3. **P_close:** 0 of 15 close on mechanism/consequence. Disclaimer closes ([4], [6], [8]), source-credit closes ([2], [3]), and no close ([1], [7], [9], [10]).
+4. **Same-event saturation:** Isaias ×3 (Oct 8–9), Shah Alam/Klang, Guam ×2. Per-event cap not working across draft types.
+5. **Mechanic census:** no comic triple, idiom flip, or era anchor in any draft. Pure data delivery everywhere; Mongolia cluster and Riyadh peak/mean are the only stranded setups.
+6. **Political anchors:** none. **Plant-comparison regex:** no hits. **Wodehouse:** no approximation where exact available; disclaimers read as defensive.
+
+### Followups
+- Operator: P_tier fix now covers cyclone + VIIRS "tier" phrases (see plan).
+- Operator: Guam pair are manual proposals; reject both (stale, panic register).
+
 ## 2026-07-06 — Daily corpus grading (0 fresh drafts; 15 carry-overs from Jul 5, previously graded)
 
 **Context:** Gist read via git-clone path (success; no rate limit). Queue: 15 pending drafts —
